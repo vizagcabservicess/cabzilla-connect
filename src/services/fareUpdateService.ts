@@ -92,7 +92,9 @@ export async function getAllAirportFares(): Promise<Record<string, any>> {
     const results = await directVehicleOperation('/api/admin/direct-airport-fares.php', 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
+        'X-Debug': 'true',
+        'X-Force-Creation': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
     
@@ -111,6 +113,34 @@ export async function getAllAirportFares(): Promise<Record<string, any>> {
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     return {};
+  }
+}
+
+export async function syncAirportFares(forceRefresh: boolean = false): Promise<boolean> {
+  try {
+    const response = await directVehicleOperation('/api/airport-fares-sync.php', 'POST', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'X-Force-Creation': forceRefresh ? 'true' : 'false',
+        'Content-Type': 'application/json'
+      },
+      data: {
+        applyDefaults: true,
+        forceRefresh: forceRefresh
+      }
+    });
+    
+    if (response && response.status === 'success') {
+      console.log('Successfully synced airport fares:', response);
+      return true;
+    } else {
+      console.error('Failed to sync airport fares:', response);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error syncing airport fares:', error);
+    return false;
   }
 }
 
@@ -269,6 +299,7 @@ export async function updateAirportFares(
         headers: {
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
+          'X-Force-Creation': 'true',
           'Content-Type': 'application/json'
         },
         data: updatedFareData
@@ -293,6 +324,7 @@ export async function updateAirportFares(
           headers: {
             'X-Admin-Mode': 'true',
             'X-Debug': 'true',
+            'X-Force-Creation': 'true',
             'Content-Type': 'application/json'
           },
           data: updatedFareData

@@ -5,7 +5,7 @@
 // Set CORS headers to allow all origins and methods
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, Accept');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Force-Creation, Accept');
 header('Content-Type: application/json');
 
 // For OPTIONS preflight requests - CRITICAL for browser CORS compliance
@@ -33,6 +33,13 @@ if (preg_match('/\/(api\/)?(login|signup|register)(\.php)?$/i', $_SERVER['REQUES
     exit;
 }
 
+// If the path is /api/airport-fares-sync, forward to airport-fares-sync.php
+if (preg_match('/\/(api\/)?(airport-fares-sync)(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
+    error_log("Forwarding to airport-fares-sync.php from path: " . $_SERVER['REQUEST_URI']);
+    require_once __DIR__ . '/airport-fares-sync.php';
+    exit;
+}
+
 // Return API information
 echo json_encode([
     'status' => 'success',
@@ -43,6 +50,7 @@ echo json_encode([
         'signup' => '/api/signup.php',
         'status' => '/api/status.php',
         'admin' => '/api/admin/status.php',
+        'airport-fares-sync' => '/api/airport-fares-sync.php',
     ],
     'requestDetails' => $requestData,
     'serverTime' => date('Y-m-d H:i:s'),

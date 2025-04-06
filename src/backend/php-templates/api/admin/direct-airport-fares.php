@@ -1,13 +1,19 @@
 
 <?php
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
-header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate');
-header('Pragma: no-cache');
-header('X-Debug-Endpoint: direct-airport-fares');
+/**
+ * Direct Airport Fares API
+ * 
+ * This API endpoint retrieves airport transfer fares for vehicles.
+ */
 
+// Set CORS headers
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Debug, X-Force-Creation');
+header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+// Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -19,243 +25,257 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
+// Include database connection
+require_once dirname(__FILE__) . '/../../config.php';
+
+// Check for vehicle ID in GET parameters
+$vehicleId = isset($_GET['id']) ? $_GET['id'] : null;
+$forceCreation = isset($_SERVER['HTTP_X_FORCE_CREATION']) && $_SERVER['HTTP_X_FORCE_CREATION'] === 'true';
+
+// Log the request
 $logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
+file_put_contents($logFile, "[$timestamp] Direct airport fares request received" . ($vehicleId ? " for vehicle: $vehicleId" : " for all vehicles") . "\n", FILE_APPEND);
 
-// Log this request
-file_put_contents($logFile, "[$timestamp] Direct airport fares request received\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] POST params: " . json_encode($_POST) . "\n", FILE_APPEND);
-
-// Try to get raw input for more detailed logging
-$rawInput = file_get_contents('php://input');
-if (!empty($rawInput)) {
-    file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
-}
-
-// Get vehicle ID from query parameters - support multiple parameter names
-$vehicleId = null;
-$possibleKeys = ['vehicleId', 'vehicle_id', 'id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type'];
-
-// First check URL parameters
-foreach ($possibleKeys as $key) {
-    if (isset($_GET[$key]) && !empty($_GET[$key])) {
-        $vehicleId = $_GET[$key];
-        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
-        break;
+try {
+    // Connect to database
+    $conn = getDbConnection();
+    
+    // Check if the airport_transfer_fares table exists
+    $tableResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+    $tableExists = $tableResult->num_rows > 0;
+    
+    // If table doesn't exist or force creation is requested, sync from vehicles
+    if (!$tableExists || $forceCreation) {
+        // Make an internal request to sync-airport-fares.php
+        $syncUrl = 'http' . (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 's' : '') . 
+                  '://' . $_SERVER['HTTP_HOST'] . 
+                  str_replace(basename($_SERVER['PHP_SELF']), 'sync-airport-fares.php', $_SERVER['PHP_SELF']);
+        
+        $ch = curl_init($syncUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-Admin-Mode: true',
+            'X-Force-Creation: true'
+        ]);
+        $syncResponse = curl_exec($ch);
+        curl_close($ch);
+        
+        file_put_contents($logFile, "[$timestamp] Synced airport fares: $syncResponse\n", FILE_APPEND);
+        
+        // Reload the table data
+        $tableResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+        $tableExists = $tableResult->num_rows > 0;
     }
-}
-
-// Then check POST data if still not found
-if (!$vehicleId) {
-    foreach ($possibleKeys as $key) {
-        if (isset($_POST[$key]) && !empty($_POST[$key])) {
-            $vehicleId = $_POST[$key];
-            file_put_contents($logFile, "[$timestamp] Found vehicle ID in POST data '$key': $vehicleId\n", FILE_APPEND);
-            break;
-        }
-    }
-}
-
-// If still not found, check JSON input
-if (!$vehicleId && !empty($rawInput)) {
-    $jsonData = json_decode($rawInput, true);
-    if (json_last_error() === JSON_ERROR_NONE) {
-        foreach ($possibleKeys as $key) {
-            if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
-                $vehicleId = $jsonData[$key];
-                file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data '$key': $vehicleId\n", FILE_APPEND);
-                break;
-            }
+    
+    // If table still doesn't exist, create it
+    if (!$tableExists) {
+        $createTableQuery = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                night_charges DECIMAL(10,2) DEFAULT 0,
+                extra_waiting_charges DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        
+        if (!$conn->query($createTableQuery)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
         }
         
-        // Check if there's a nested data property
-        if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
-            foreach ($possibleKeys as $key) {
-                if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
-                    $vehicleId = $jsonData['data'][$key];
-                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
-                    break;
-                }
-            }
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+    }
+    
+    // Check if there are any records in the table
+    $countQuery = "SELECT COUNT(*) as total FROM airport_transfer_fares";
+    $countResult = $conn->query($countQuery);
+    $count = $countResult->fetch_assoc()['total'];
+    
+    // If no records, try to sync from vehicles
+    if ($count == 0) {
+        // Make an internal request to sync-airport-fares.php
+        $syncUrl = 'http' . (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 's' : '') . 
+                  '://' . $_SERVER['HTTP_HOST'] . 
+                  str_replace(basename($_SERVER['PHP_SELF']), 'sync-airport-fares.php', $_SERVER['PHP_SELF']);
+        
+        $ch = curl_init($syncUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-Admin-Mode: true',
+            'X-Force-Creation: true'
+        ]);
+        $syncResponse = curl_exec($ch);
+        curl_close($ch);
+        
+        file_put_contents($logFile, "[$timestamp] Auto-synced airport fares due to empty table: $syncResponse\n", FILE_APPEND);
+    }
+    
+    // Prepare the query based on whether a specific vehicle ID was requested
+    if ($vehicleId) {
+        $query = "SELECT 
+                    id, 
+                    vehicle_id,
+                    base_price,
+                    price_per_km,
+                    pickup_price,
+                    drop_price,
+                    tier1_price,
+                    tier2_price,
+                    tier3_price,
+                    tier4_price,
+                    extra_km_charge,
+                    night_charges,
+                    extra_waiting_charges,
+                    created_at,
+                    updated_at
+                FROM 
+                    airport_transfer_fares
+                WHERE 
+                    vehicle_id = ?";
+        
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("s", $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows === 0) {
+            // If no record found for this vehicle, try to create it by syncing
+            $syncUrl = 'http' . (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 's' : '') . 
+                      '://' . $_SERVER['HTTP_HOST'] . 
+                      str_replace(basename($_SERVER['PHP_SELF']), 'sync-airport-fares.php', $_SERVER['PHP_SELF']);
+            
+            $postData = json_encode(['vehicleId' => $vehicleId]);
+            
+            $ch = curl_init($syncUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'X-Admin-Mode: true',
+                'X-Force-Creation: true'
+            ]);
+            $syncResponse = curl_exec($ch);
+            curl_close($ch);
+            
+            file_put_contents($logFile, "[$timestamp] Created airport fare for vehicle $vehicleId: $syncResponse\n", FILE_APPEND);
+            
+            // Try to fetch again
+            $stmt->execute();
+            $result = $stmt->get_result();
+        }
+        
+        $fare = $result->fetch_assoc();
+        
+        // Format the API response
+        $response = [
+            'status' => 'success',
+            'fare' => $fare ? [
+                'id' => $fare['id'],
+                'vehicleId' => $fare['vehicle_id'],
+                'vehicle_id' => $fare['vehicle_id'],
+                'basePrice' => (float)$fare['base_price'],
+                'pricePerKm' => (float)$fare['price_per_km'],
+                'pickupPrice' => (float)$fare['pickup_price'],
+                'dropPrice' => (float)$fare['drop_price'],
+                'tier1Price' => (float)$fare['tier1_price'],
+                'tier2Price' => (float)$fare['tier2_price'],
+                'tier3Price' => (float)$fare['tier3_price'],
+                'tier4Price' => (float)$fare['tier4_price'],
+                'extraKmCharge' => (float)$fare['extra_km_charge'],
+                'nightCharges' => (float)$fare['night_charges'],
+                'extraWaitingCharges' => (float)$fare['extra_waiting_charges'],
+                'createdAt' => $fare['created_at'],
+                'updatedAt' => $fare['updated_at']
+            ] : null,
+            'timestamp' => time()
+        ];
+        
+        if (!$fare) {
+            $response['message'] = "No airport fare found for vehicle ID: $vehicleId";
         }
     } else {
-        file_put_contents($logFile, "[$timestamp] Invalid JSON input: " . json_last_error_msg() . "\n", FILE_APPEND);
+        // Fetch all fares
+        $query = "SELECT 
+                    id, 
+                    vehicle_id,
+                    base_price,
+                    price_per_km,
+                    pickup_price,
+                    drop_price,
+                    tier1_price,
+                    tier2_price,
+                    tier3_price,
+                    tier4_price,
+                    extra_km_charge,
+                    night_charges,
+                    extra_waiting_charges,
+                    created_at,
+                    updated_at
+                FROM 
+                    airport_transfer_fares
+                ORDER BY 
+                    vehicle_id";
+        
+        $result = $conn->query($query);
+        $fares = [];
+        
+        while ($fare = $result->fetch_assoc()) {
+            $fares[] = [
+                'id' => $fare['id'],
+                'vehicleId' => $fare['vehicle_id'],
+                'vehicle_id' => $fare['vehicle_id'],
+                'basePrice' => (float)$fare['base_price'],
+                'pricePerKm' => (float)$fare['price_per_km'],
+                'pickupPrice' => (float)$fare['pickup_price'],
+                'dropPrice' => (float)$fare['drop_price'],
+                'tier1Price' => (float)$fare['tier1_price'],
+                'tier2Price' => (float)$fare['tier2_price'],
+                'tier3Price' => (float)$fare['tier3_price'],
+                'tier4Price' => (float)$fare['tier4_price'],
+                'extraKmCharge' => (float)$fare['extra_km_charge'],
+                'nightCharges' => (float)$fare['night_charges'],
+                'extraWaitingCharges' => (float)$fare['extra_waiting_charges'],
+                'createdAt' => $fare['created_at'],
+                'updatedAt' => $fare['updated_at']
+            ];
+        }
+        
+        // Format the API response
+        $response = [
+            'status' => 'success',
+            'fares' => $fares,
+            'count' => count($fares),
+            'timestamp' => time()
+        ];
     }
-}
-
-// Clean up vehicle ID if it has a prefix like 'item-'
-if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
-    $vehicleId = substr($vehicleId, 5);
-    file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
-}
-
-// For Lovable preview mode, just use a default vehicle ID if not provided
-$isPreviewMode = false;
-if (isset($_SERVER['HTTP_HOST']) && (
-    strpos($_SERVER['HTTP_HOST'], 'lovableproject.com') !== false ||
-    strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
-    strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false
-)) {
-    $isPreviewMode = true;
-    if (!$vehicleId) {
-        $vehicleId = 'sedan';
-        file_put_contents($logFile, "[$timestamp] Using default vehicleId 'sedan' in preview mode\n", FILE_APPEND);
-    }
-}
-
-if (!$vehicleId) {
-    file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found in request\n", FILE_APPEND);
-    http_response_code(400);
-    echo json_encode([
+    
+    echo json_encode($response);
+    
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Error: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    // Format the error response
+    $response = [
         'status' => 'error',
-        'message' => 'Vehicle ID is required',
-        'debug' => [
-            'get_params' => $_GET,
-            'post_params' => $_POST,
-            'timestamp' => $timestamp
-        ]
-    ]);
-    exit;
-}
-
-// Create cache directory if needed
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
-
-// Load persistent vehicle data
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$persistentData = [];
-
-if (file_exists($persistentCacheFile)) {
-    $persistentJson = file_get_contents($persistentCacheFile);
-    if ($persistentJson) {
-        try {
-            $persistentData = json_decode($persistentJson, true);
-            file_put_contents($logFile, "[$timestamp] Loaded persistent data with " . count($persistentData) . " vehicles\n", FILE_APPEND);
-        } catch (Exception $e) {
-            file_put_contents($logFile, "[$timestamp] Error parsing persistent data: " . $e->getMessage() . "\n", FILE_APPEND);
-        }
-    }
-}
-
-// Check if vehicle exists in persistent data
-$vehicleExists = false;
-$savedFares = null;
-
-foreach ($persistentData as $vehicle) {
-    if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
-        $vehicleExists = true;
-        // Check if airport fares are stored directly in vehicle data
-        if (isset($vehicle['airportFares'])) {
-            $savedFares = $vehicle['airportFares'];
-            file_put_contents($logFile, "[$timestamp] Found existing airport fares in vehicle data\n", FILE_APPEND);
-        }
-        break;
-    }
-}
-
-// Define default fares based on vehicle type
-$defaultFares = [
-    'sedan' => [
-        'pickupPrice' => 800,
-        'dropPrice' => 800,
-        'tier1Price' => 600,
-        'tier2Price' => 800,
-        'tier3Price' => 1000,
-        'tier4Price' => 1200,
-        'extraKmCharge' => 12
-    ],
-    'ertiga' => [
-        'pickupPrice' => 1000,
-        'dropPrice' => 1000,
-        'tier1Price' => 800,
-        'tier2Price' => 1000,
-        'tier3Price' => 1200,
-        'tier4Price' => 1400,
-        'extraKmCharge' => 15
-    ],
-    'innova_crysta' => [
-        'pickupPrice' => 1200,
-        'dropPrice' => 1200,
-        'tier1Price' => 1000,
-        'tier2Price' => 1200,
-        'tier3Price' => 1400,
-        'tier4Price' => 1600,
-        'extraKmCharge' => 17
-    ],
-    'luxury' => [
-        'pickupPrice' => 2500,
-        'dropPrice' => 2500,
-        'tier1Price' => 2000,
-        'tier2Price' => 2200,
-        'tier3Price' => 2500,
-        'tier4Price' => 3000,
-        'extraKmCharge' => 22
-    ],
-    'tempo_traveller' => [
-        'pickupPrice' => 2000,
-        'dropPrice' => 2000,
-        'tier1Price' => 1600,
-        'tier2Price' => 1800,
-        'tier3Price' => 2000,
-        'tier4Price' => 2500,
-        'extraKmCharge' => 19
-    ],
-    'tempo' => [
-        'pickupPrice' => 2000,
-        'dropPrice' => 2000,
-        'tier1Price' => 1600,
-        'tier2Price' => 1800,
-        'tier3Price' => 2000,
-        'tier4Price' => 2500,
-        'extraKmCharge' => 19
-    ]
-];
-
-// If we have saved fares, use them; otherwise get default fares for the vehicle
-if ($savedFares) {
-    $fare = $savedFares;
-    file_put_contents($logFile, "[$timestamp] Using saved fares for vehicle $vehicleId\n", FILE_APPEND);
-} else {
-    // Get default fare for the vehicle, or create empty fare if vehicle type not found
-    $fare = isset($defaultFares[$vehicleId]) ? $defaultFares[$vehicleId] : [
-        'pickupPrice' => 0,
-        'dropPrice' => 0,
-        'tier1Price' => 0,
-        'tier2Price' => 0,
-        'tier3Price' => 0,
-        'tier4Price' => 0,
-        'extraKmCharge' => 0
-    ];
-    file_put_contents($logFile, "[$timestamp] Using default fares for vehicle $vehicleId\n", FILE_APPEND);
-}
-
-// Add vehicle ID to fare data (include both formats for compatibility)
-$fare['vehicleId'] = $vehicleId;
-$fare['vehicle_id'] = $vehicleId;
-
-// Also add pickup/drop in alternate format for compatibility
-$fare['pickup'] = $fare['pickupPrice'];
-$fare['drop'] = $fare['dropPrice'];
-$fare['tier1'] = $fare['tier1Price'];
-$fare['tier2'] = $fare['tier2Price'];
-$fare['tier3'] = $fare['tier3Price'];
-$fare['tier4'] = $fare['tier4Price'];
-
-// Log the response
-file_put_contents($logFile, "[$timestamp] Responding with fare data: " . json_encode($fare) . "\n", FILE_APPEND);
-
-// Return fare data
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Airport fares retrieved successfully',
-    'fares' => [$fare],
-    'debug' => [
-        'vehicle_id' => $vehicleId,
-        'vehicleId' => $vehicleId,
+        'message' => $e->getMessage(),
         'timestamp' => time()
-    ]
-], JSON_PARTIAL_OUTPUT_ON_ERROR);
+    ];
+    
+    echo json_encode($response);
+}
+
