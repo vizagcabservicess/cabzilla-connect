@@ -2,7 +2,7 @@
 <?php
 /**
  * Direct Airport Fares API - Public facing version
- * Forwards to the admin endpoint for compatibility
+ * Retrieves airport fare data for vehicles
  */
 
 // Set CORS headers
@@ -51,9 +51,56 @@ file_put_contents($logFile, "[$timestamp] Direct airport fares request received.
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 $_SERVER['HTTP_X_FORCE_CREATION'] = 'true';
 
+// If no vehicle ID is provided, return error
+if (!$vehicleId) {
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Vehicle ID is required',
+        'timestamp' => time()
+    ]);
+    exit;
+}
+
+// Simple mock data generator for testing purposes
+function generateMockFare($vehicleId) {
+    $basePrice = rand(1000, 3000);
+    return [
+        'id' => rand(1, 1000),
+        'vehicleId' => $vehicleId,
+        'vehicle_id' => $vehicleId,
+        'basePrice' => $basePrice,
+        'pricePerKm' => rand(10, 25),
+        'pickupPrice' => $basePrice + rand(200, 500),
+        'dropPrice' => $basePrice + rand(100, 400),
+        'tier1Price' => $basePrice - rand(100, 200),
+        'tier2Price' => $basePrice,
+        'tier3Price' => $basePrice + rand(100, 300),
+        'tier4Price' => $basePrice + rand(400, 600),
+        'extraKmCharge' => rand(10, 20),
+        'nightCharges' => rand(200, 500),
+        'extraWaitingCharges' => rand(50, 150),
+        'createdAt' => date('Y-m-d H:i:s'),
+        'updatedAt' => date('Y-m-d H:i:s')
+    ];
+}
+
 try {
-    // Forward the request to the admin endpoint
-    require_once __DIR__ . '/admin/direct-airport-fares.php';
+    // Try to include the admin endpoint safely
+    if (file_exists(__DIR__ . '/admin/direct-airport-fares.php')) {
+        include_once __DIR__ . '/admin/direct-airport-fares.php';
+    } else {
+        // If the admin file doesn't exist, use mock data for preview
+        $fare = generateMockFare($vehicleId);
+        
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Mock fare data generated for preview',
+            'fare' => $fare,
+            'isMock' => true,
+            'timestamp' => time()
+        ]);
+    }
 } catch (Exception $e) {
     // Log the error
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
@@ -64,5 +111,5 @@ try {
         'status' => 'error',
         'message' => 'Internal server error: ' . $e->getMessage(),
         'timestamp' => time()
-    ], JSON_PRETTY_PRINT);
+    ]);
 }

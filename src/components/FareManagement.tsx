@@ -28,7 +28,19 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const handleFareUpdated = () => {
     // Increment the refresh counter to trigger any other components that need refresh
     setRefreshCount(prev => prev + 1);
-    // You could dispatch an event here if needed
+    
+    // Clear any existing errors
+    setError(null);
+    
+    // Dispatch a fare update event for other components to listen to
+    try {
+      const event = new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, fareType, timestamp: Date.now() }
+      });
+      window.dispatchEvent(event);
+    } catch (err) {
+      console.error('Error dispatching fare update event:', err);
+    }
     
     toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully`);
   };
