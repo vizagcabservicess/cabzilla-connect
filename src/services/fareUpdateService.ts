@@ -50,6 +50,10 @@ export interface FareUpdateResponse {
   timestamp: number;
 }
 
+// Use a boolean flag to prevent recursive calls
+let isUpdatingFare = false;
+let isSyncingFares = false;
+
 /**
  * Updates the fare for a vehicle with outstation fare data
  */
@@ -86,7 +90,14 @@ export const updateOutstationFare = async (data: OutstationFare): Promise<FareUp
  * Updates the fare for a vehicle with airport fare data
  */
 export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateResponse> => {
+  if (isUpdatingFare) {
+    console.log('Already updating airport fare, skipping duplicate call');
+    return { status: 'error', message: 'Update already in progress', timestamp: Date.now() };
+  }
+
   try {
+    isUpdatingFare = true;
+    
     // Ensure both vehicleId properties are set
     const fareData = {
       ...data,
@@ -120,6 +131,8 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
   } catch (error: any) {
     console.error('Error updating airport fare:', error);
     throw error;
+  } finally {
+    isUpdatingFare = false;
   }
 };
 
@@ -168,7 +181,13 @@ export const updateLocalFare = async (data: LocalFare): Promise<FareUpdateRespon
  * Sync airport fares from vehicle data
  */
 export const syncAirportFares = async (applyDefaults: boolean = true): Promise<boolean> => {
+  if (isSyncingFares) {
+    console.log('Already syncing airport fares, skipping duplicate call');
+    return false;
+  }
+  
   try {
+    isSyncingFares = true;
     console.log('Syncing airport fares with applyDefaults =', applyDefaults);
     
     const response = await directVehicleOperation(
@@ -195,6 +214,8 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
   } catch (error: any) {
     console.error('Error syncing airport fares:', error);
     return false;
+  } finally {
+    isSyncingFares = false;
   }
 };
 
