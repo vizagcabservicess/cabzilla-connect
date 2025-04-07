@@ -36,6 +36,7 @@ export const initializeDatabaseTables = async (): Promise<boolean> => {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
+        'X-Debug': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
@@ -48,10 +49,15 @@ export const initializeDatabaseTables = async (): Promise<boolean> => {
         headers: {
           'X-Admin-Mode': 'true',
           'X-Force-Refresh': 'true',
+          'X-Debug': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       });
       console.log('Fix vehicle tables result:', fixResult);
+      
+      // Also ensure airport_transfer_fares table is synced
+      await syncAirportFares();
+      
     } catch (fixError) {
       console.warn('Warning: Fix vehicle tables failed, continuing anyway:', fixError);
     }
@@ -137,8 +143,30 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
       } else if (Array.isArray(result)) {
         return result;
       } else {
-        // If no valid format is found, return an empty array
-        console.warn('No valid fare data in response, returning empty array');
+        // Try one more sync attempt if no valid data
+        console.warn('No valid fare data in response, trying to sync airport fares');
+        await syncAirportFares();
+        
+        // Try fetching again after sync
+        const retryResult = await directVehicleOperation(endpoint, 'GET', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'X-Debug': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        
+        if (retryResult && retryResult.fares) {
+          if (Array.isArray(retryResult.fares)) {
+            return retryResult.fares;
+          } else {
+            return Object.values(retryResult.fares);
+          }
+        }
+        
+        // If still no valid format is found, return an empty array
+        console.warn('No valid fare data after retry, returning empty array');
         return [];
       }
     }
@@ -147,6 +175,12 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
+    // Try to sync and repair before giving up
+    try {
+      await syncAirportFares();
+    } catch (syncError) {
+      console.error('Error syncing airport fares during error recovery:', syncError);
+    }
     // Return empty array instead of throwing to avoid breaking the UI
     return [];
   }
@@ -298,6 +332,24 @@ export const syncAirportFares = async (): Promise<any> => {
     });
     
     console.log('Airport fares sync response:', result);
+    
+    // If sync was successful, trigger vehicle resync
+    if (result && result.status === 'success') {
+      try {
+        // Make a call to reload-vehicles to ensure everything is in sync
+        await directVehicleOperation('api/admin/reload-vehicles.php', 'GET', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'X-Debug': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+      } catch (resyncError) {
+        console.warn('Warning: Vehicle resync during airport fares sync failed:', resyncError);
+      }
+    }
+    
     return result;
   } catch (error) {
     console.error('Error syncing airport fares:', error);

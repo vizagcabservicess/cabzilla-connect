@@ -35,7 +35,7 @@ file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "
 // Initialize response array
 $response = [
     'status' => 'success',
-    'message' => 'No vehicle ID provided, returning empty fares array',
+    'message' => 'No vehicle ID provided, returning all fares',
     'fares' => [],
     'debug' => [
         'get_params' => $_GET,
@@ -98,38 +98,145 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
 
-    // If no vehicle ID provided, return all fares
+    // Ensure the vehicles table exists and has data
+    $vehiclesTableCheck = $conn->query("SHOW TABLES LIKE 'vehicles'");
+    if ($vehiclesTableCheck->num_rows === 0) {
+        // Create vehicles table if it doesn't exist
+        $createVehiclesTableSql = "
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id VARCHAR(50) NOT NULL,
+                vehicle_id VARCHAR(50) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) DEFAULT NULL,
+                capacity INT(11) DEFAULT 4,
+                luggage_capacity INT(11) DEFAULT 2,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        $conn->query($createVehiclesTableSql);
+        file_put_contents($logFile, "[$timestamp] Created vehicles table\n", FILE_APPEND);
+    }
+
+    // Add default vehicles if the table is empty
+    $checkVehiclesCount = $conn->query("SELECT COUNT(*) as count FROM vehicles");
+    $vehiclesCount = $checkVehiclesCount->fetch_assoc();
+    
+    if ($vehiclesCount['count'] == 0) {
+        // Insert default vehicles
+        $defaultVehicles = [
+            ['sedan', 'Sedan', 'Standard', 4, 2],
+            ['ertiga', 'Ertiga', 'Standard', 6, 3],
+            ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
+            ['luxury', 'Luxury', 'Luxury', 4, 2],
+            ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
+        ];
+        
+        $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+        
+        foreach ($defaultVehicles as $vehicle) {
+            $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
+            $insertVehicleStmt->execute();
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Inserted default vehicles\n", FILE_APPEND);
+    }
+
+    // If no vehicle ID provided, return all fares with vehicle info
     if (!$vehicleId) {
-        $allFaresQuery = "SELECT * FROM airport_transfer_fares";
-        $allFaresResult = $conn->query($allFaresQuery);
+        // Get all vehicles to ensure we have complete data
+        $allVehiclesQuery = "SELECT id, vehicle_id, name, category, capacity, luggage_capacity, is_active FROM vehicles WHERE is_active = 1";
+        $allVehiclesResult = $conn->query($allVehiclesQuery);
         
         $allFares = [];
         
-        if ($allFaresResult && $allFaresResult->num_rows > 0) {
-            while ($row = $allFaresResult->fetch_assoc()) {
-                $allFares[] = [
-                    'vehicleId' => $row['vehicle_id'],
-                    'vehicle_id' => $row['vehicle_id'],
-                    'basePrice' => floatval($row['base_price']),
-                    'pricePerKm' => floatval($row['price_per_km']),
-                    'pickupPrice' => floatval($row['pickup_price']),
-                    'dropPrice' => floatval($row['drop_price']),
-                    'tier1Price' => floatval($row['tier1_price']),
-                    'tier2Price' => floatval($row['tier2_price']),
-                    'tier3Price' => floatval($row['tier3_price']),
-                    'tier4Price' => floatval($row['tier4_price']),
-                    'extraKmCharge' => floatval($row['extra_km_charge'])
-                ];
+        if ($allVehiclesResult && $allVehiclesResult->num_rows > 0) {
+            while ($vehicle = $allVehiclesResult->fetch_assoc()) {
+                $vid = $vehicle['vehicle_id'];
+                
+                // Try to get fare data for this vehicle
+                $fareQuery = "SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?";
+                $fareStmt = $conn->prepare($fareQuery);
+                
+                if (!$fareStmt) {
+                    file_put_contents($logFile, "[$timestamp] Failed to prepare fare query for vehicle: $vid, error: " . $conn->error . "\n", FILE_APPEND);
+                    continue;
+                }
+                
+                $fareStmt->bind_param("s", $vid);
+                $fareStmt->execute();
+                $fareResult = $fareStmt->get_result();
+                
+                if ($fareResult && $fareResult->num_rows > 0) {
+                    $fare = $fareResult->fetch_assoc();
+                    
+                    $allFares[] = [
+                        'vehicleId' => $vid,
+                        'vehicle_id' => $vid,
+                        'name' => $vehicle['name'],
+                        'category' => $vehicle['category'],
+                        'capacity' => (int)$vehicle['capacity'],
+                        'luggage' => (int)$vehicle['luggage_capacity'],
+                        'active' => (bool)$vehicle['is_active'],
+                        'basePrice' => floatval($fare['base_price']),
+                        'pricePerKm' => floatval($fare['price_per_km']),
+                        'pickupPrice' => floatval($fare['pickup_price']),
+                        'dropPrice' => floatval($fare['drop_price']),
+                        'tier1Price' => floatval($fare['tier1_price']),
+                        'tier2Price' => floatval($fare['tier2_price']),
+                        'tier3Price' => floatval($fare['tier3_price']),
+                        'tier4Price' => floatval($fare['tier4_price']),
+                        'extraKmCharge' => floatval($fare['extra_km_charge'])
+                    ];
+                } else {
+                    // Create default fare entry for this vehicle
+                    $insertFareQuery = "
+                        INSERT INTO airport_transfer_fares 
+                        (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) 
+                        VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+                    ";
+                    $insertFareStmt = $conn->prepare($insertFareQuery);
+                    
+                    if ($insertFareStmt) {
+                        $insertFareStmt->bind_param("s", $vid);
+                        $insertFareStmt->execute();
+                        
+                        $allFares[] = [
+                            'vehicleId' => $vid,
+                            'vehicle_id' => $vid,
+                            'name' => $vehicle['name'],
+                            'category' => $vehicle['category'],
+                            'capacity' => (int)$vehicle['capacity'],
+                            'luggage' => (int)$vehicle['luggage_capacity'],
+                            'active' => (bool)$vehicle['is_active'],
+                            'basePrice' => 0,
+                            'pricePerKm' => 0,
+                            'pickupPrice' => 0,
+                            'dropPrice' => 0,
+                            'tier1Price' => 0,
+                            'tier2Price' => 0,
+                            'tier3Price' => 0,
+                            'tier4Price' => 0,
+                            'extraKmCharge' => 0
+                        ];
+                    }
+                }
             }
         }
         
         $response['fares'] = $allFares;
+        $response['count'] = count($allFares);
+        $response['message'] = 'Retrieved all airport fares for all vehicles';
+        
         echo json_encode($response);
         exit;
     }
 
     // First ensure the vehicle exists in vehicles table
-    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
+    $checkVehicleQuery = "SELECT id, vehicle_id, name, category, capacity, luggage_capacity, is_active FROM vehicles WHERE vehicle_id = ? OR id = ?";
     $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
     
     if (!$checkVehicleStmt) {
@@ -139,6 +246,8 @@ try {
     $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
     $checkVehicleStmt->execute();
     $checkVehicleResult = $checkVehicleStmt->get_result();
+    
+    $vehicleData = null;
     
     // If vehicle doesn't exist, create it
     if ($checkVehicleResult->num_rows === 0) {
@@ -155,9 +264,19 @@ try {
         $insertVehicleStmt->execute();
         
         file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
+        
+        $vehicleData = [
+            'id' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'name' => $vehicleName,
+            'category' => 'Standard',
+            'capacity' => 4,
+            'luggage_capacity' => 2,
+            'is_active' => 1
+        ];
     } else {
-        $vehicleRow = $checkVehicleResult->fetch_assoc();
-        file_put_contents($logFile, "[$timestamp] Found existing vehicle: " . json_encode($vehicleRow) . "\n", FILE_APPEND);
+        $vehicleData = $checkVehicleResult->fetch_assoc();
+        file_put_contents($logFile, "[$timestamp] Found existing vehicle: " . json_encode($vehicleData) . "\n", FILE_APPEND);
     }
     
     // Now get airport fare for this vehicle from airport_transfer_fares table
@@ -195,8 +314,13 @@ try {
         // Fetch existing fare data
         $row = $result->fetch_assoc();
         $fare = [
-            'vehicleId' => $row['vehicle_id'],
-            'vehicle_id' => $row['vehicle_id'],
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'name' => $vehicleData['name'],
+            'category' => $vehicleData['category'],
+            'capacity' => (int)$vehicleData['capacity'],
+            'luggage' => (int)$vehicleData['luggage_capacity'],
+            'active' => (bool)$vehicleData['is_active'],
             'basePrice' => floatval($row['base_price']),
             'pricePerKm' => floatval($row['price_per_km']),
             'pickupPrice' => floatval($row['pickup_price']),
@@ -225,10 +349,15 @@ try {
         $insertStmt->bind_param("s", $vehicleId);
         $insertStmt->execute();
         
-        // Define default fare data
+        // Define default fare data with vehicle info
         $fare = [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
+            'name' => $vehicleData['name'],
+            'category' => $vehicleData['category'],
+            'capacity' => (int)$vehicleData['capacity'],
+            'luggage' => (int)$vehicleData['luggage_capacity'],
+            'active' => (bool)$vehicleData['is_active'],
             'basePrice' => 0,
             'pricePerKm' => 0,
             'pickupPrice' => 0,
@@ -241,6 +370,56 @@ try {
         ];
         
         file_put_contents($logFile, "[$timestamp] Created default fare data for vehicle: $vehicleId\n", FILE_APPEND);
+    }
+    
+    // Also make sure vehicle_pricing is in sync for compatibility
+    $syncVehiclePricingQuery = "
+        INSERT INTO vehicle_pricing 
+        (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
+        airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
+        airport_tier4_price, airport_extra_km_charge, updated_at)
+        VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE
+        airport_base_price = VALUES(airport_base_price),
+        airport_price_per_km = VALUES(airport_price_per_km),
+        airport_pickup_price = VALUES(airport_pickup_price),
+        airport_drop_price = VALUES(airport_drop_price),
+        airport_tier1_price = VALUES(airport_tier1_price),
+        airport_tier2_price = VALUES(airport_tier2_price),
+        airport_tier3_price = VALUES(airport_tier3_price),
+        airport_tier4_price = VALUES(airport_tier4_price),
+        airport_extra_km_charge = VALUES(airport_extra_km_charge),
+        updated_at = NOW()
+    ";
+    
+    $syncStmt = $conn->prepare($syncVehiclePricingQuery);
+    if ($syncStmt) {
+        $basePrice = $fare['basePrice'];
+        $pricePerKm = $fare['pricePerKm'];
+        $pickupPrice = $fare['pickupPrice'];
+        $dropPrice = $fare['dropPrice'];
+        $tier1Price = $fare['tier1Price'];
+        $tier2Price = $fare['tier2Price'];
+        $tier3Price = $fare['tier3Price'];
+        $tier4Price = $fare['tier4Price'];
+        $extraKmCharge = $fare['extraKmCharge'];
+        
+        $syncStmt->bind_param(
+            "sddddddddd", 
+            $vehicleId, 
+            $basePrice, 
+            $pricePerKm, 
+            $pickupPrice, 
+            $dropPrice, 
+            $tier1Price, 
+            $tier2Price, 
+            $tier3Price, 
+            $tier4Price, 
+            $extraKmCharge
+        );
+        $syncStmt->execute();
+        
+        file_put_contents($logFile, "[$timestamp] Synced data to vehicle_pricing table for vehicle: $vehicleId\n", FILE_APPEND);
     }
     
     // Close database connection

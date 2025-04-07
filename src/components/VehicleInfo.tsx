@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 interface VehicleInfoProps {
@@ -21,7 +21,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
           <CardTitle>Vehicle: {displayVehicleId}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Alert variant="warning" className="mb-4">
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               No vehicle data available. Vehicle may not be synced in the database.
@@ -33,12 +33,15 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
     );
   }
 
+  // Determine if vehicle is active
+  const isActive = vehicleData.active || vehicleData.is_active || false;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex justify-between">
           <span>{vehicleData.name || displayVehicleId}</span>
-          <Badge>{vehicleData.active ? 'Active' : 'Inactive'}</Badge>
+          <Badge variant={isActive ? "default" : "outline"}>{isActive ? 'Active' : 'Inactive'}</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -49,7 +52,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
           </div>
           <div>
             <h4 className="font-medium text-sm">Category</h4>
-            <p>{vehicleData.category || 'Unknown'}</p>
+            <p>{vehicleData.category || 'Standard'}</p>
           </div>
           <div>
             <h4 className="font-medium text-sm">Capacity</h4>
@@ -57,7 +60,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
           </div>
           <div>
             <h4 className="font-medium text-sm">Luggage</h4>
-            <p>{vehicleData.luggage || 'Unknown'}</p>
+            <p>{vehicleData.luggage || vehicleData.luggage_capacity || 'Standard'}</p>
           </div>
         </div>
       </CardContent>

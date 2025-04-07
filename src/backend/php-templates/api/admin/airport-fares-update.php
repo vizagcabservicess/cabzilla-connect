@@ -150,6 +150,40 @@ try {
         
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
+
+    // Check if vehicle_pricing table exists
+    $checkVPTableQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
+    $checkVPResult = $conn->query($checkVPTableQuery);
+    
+    if (!$checkVPResult || $checkVPResult->num_rows === 0) {
+        // Create the table if it doesn't exist
+        $createVPTableSql = "
+            CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(20) NOT NULL,
+                airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createVPTableSql)) {
+            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Created vehicle_pricing table\n", FILE_APPEND);
+    }
     
     // First ensure the vehicle exists in vehicles table
     $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";

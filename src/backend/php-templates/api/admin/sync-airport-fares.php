@@ -43,29 +43,6 @@ require_once __DIR__ . '/../utils/database.php';
 include_once __DIR__ . '/db_setup.php';
 
 try {
-    // Prevent multiple executions within a short time window (anti-loop protection)
-    $lockFile = $logDir . '/sync_airport_fares.lock';
-    $now = time();
-
-    if (file_exists($lockFile)) {
-        $lastRun = (int)file_get_contents($lockFile);
-        if ($now - $lastRun < 5) { // 5-second cooldown (reduced from 10)
-            logMessage('Sync operation throttled - last run was less than 5 seconds ago');
-            
-            echo json_encode([
-                'status' => 'throttled',
-                'message' => 'Airport fares sync was recently performed. Please wait at least 5 seconds between syncs.',
-                'lastSync' => $lastRun,
-                'nextAvailable' => $lastRun + 5,
-                'currentTime' => $now
-            ]);
-            exit;
-        }
-    }
-
-    // Update lock file with current timestamp
-    file_put_contents($lockFile, $now);
-    
     // Connect to database
     $conn = getDbConnection();
     
@@ -139,6 +116,52 @@ try {
         }
         
         logMessage("Created vehicle_pricing table");
+    }
+    
+    // Ensure vehicles table exists
+    $checkVehiclesStmt = $conn->query("SHOW TABLES LIKE 'vehicles'");
+    $vehiclesTableExists = $checkVehiclesStmt && $checkVehiclesStmt->num_rows > 0;
+    
+    if (!$vehiclesTableExists) {
+        $createVehiclesSql = "
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id VARCHAR(50) NOT NULL,
+                vehicle_id VARCHAR(50) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) DEFAULT NULL,
+                capacity INT(11) DEFAULT 4,
+                luggage_capacity INT(11) DEFAULT 2,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createVehiclesSql)) {
+            throw new Exception("Failed to create vehicles table: " . $conn->error);
+        }
+        
+        logMessage("Created vehicles table");
+        
+        // Add default vehicles
+        $defaultVehicles = [
+            ['sedan', 'Sedan', 'Standard', 4, 2],
+            ['ertiga', 'Ertiga', 'Standard', 6, 3],
+            ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
+            ['luxury', 'Luxury', 'Luxury', 4, 2],
+            ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
+        ];
+        
+        $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+        
+        foreach ($defaultVehicles as $vehicle) {
+            $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
+            $insertVehicleStmt->execute();
+        }
+        
+        logMessage("Added default vehicles");
     }
     
     // Initialize vehicles array to track synced vehicles
