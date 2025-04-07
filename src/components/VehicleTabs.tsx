@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
-import { clearVehicleDataCache } from '@/services/vehicleDataCache';
+import { clearVehicleDataCache } from '@/services/vehicleDataService';
 import { Button } from "@/components/ui/button";
 
 interface VehicleTabsProps {
