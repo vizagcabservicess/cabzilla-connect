@@ -1,0 +1,56 @@
+
+# Enable rewrite engine
+RewriteEngine On
+RewriteBase /api/admin/
+
+# Set PHP handler (critical)
+AddHandler application/x-httpd-php .php
+
+# Enable CORS with comprehensive headers
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Database-First"
+Header always set Access-Control-Max-Age "86400"
+Header always set Access-Control-Expose-Headers "*"
+Header always set X-Content-Type-Options "nosniff"
+
+# Handle OPTIONS preflight requests
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Critical: Don't apply rewriting to actual PHP files
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^(.+)\.php$ $1.php [L,QSA]
+
+# Set PHP handler for all PHP files (redundant but comprehensive)
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</FilesMatch>
+
+# CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
+# Make sure these are at the top, before any other rules
+RewriteRule ^vehicles/create$ direct-vehicle-create.php [L,QSA]
+RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L,QSA]
+RewriteRule ^add-vehicle$ add-vehicle-simple.php [L,QSA]
+RewriteRule ^vehicle-create$ direct-vehicle-create.php [L,QSA] 
+RewriteRule ^add-vehicle-simple$ add-vehicle-simple.php [L,QSA]
+
+# Vehicle update endpoints
+RewriteRule ^vehicle-update$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^update-vehicle$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^vehicles-update$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^direct-vehicle-update$ direct-vehicle-modify.php [L,QSA]
+
+# Reload endpoints (make these accessible via multiple paths)
+RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
+RewriteRule ^reload$ reload-vehicles.php [L,QSA]
+RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
+RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
+
+# Force no caching for PHP files
+<FilesMatch "\.php$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>

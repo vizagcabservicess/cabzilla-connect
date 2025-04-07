@@ -1,6 +1,6 @@
 
 <?php
-// direct-airport-fares.php - Redirect to the admin endpoint for backward compatibility
+// airport-fares-update.php - Redirect to admin endpoint for backward compatibility
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -15,16 +15,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Create log directory
-$logDir = __DIR__ . '/../logs';
+$logDir = __DIR__ . '/logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-$logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/airport_fares_update_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Log the redirect for debugging
-file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Redirecting airport-fares-update.php to admin/airport-fares-update.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 
 // Capture raw input for debugging
@@ -121,4 +121,4 @@ if ($vehicleId) {
 }
 
 // Forward the request to the admin endpoint
-require_once __DIR__ . '/admin/direct-airport-fares.php';
+require_once __DIR__ . '/admin/airport-fares-update.php';

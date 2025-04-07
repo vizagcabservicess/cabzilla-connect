@@ -1,60 +1,61 @@
 
-// Base API URL configuration
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+// Base URL for API requests
+export const apiBaseUrl = import.meta.env.VITE_API_URL || '';
 
-// Function to get properly formatted API URL
-export function getApiUrl(endpoint: string): string {
-  // Handle absolute URLs
-  if (endpoint.startsWith('http')) {
-    return endpoint;
-  }
-  
-  // Clean any double slashes in the URL
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const fullUrl = `${apiBaseUrl}${cleanEndpoint}`;
-  
-  // Always log the URL being accessed for debugging
-  console.log(`API request to: ${fullUrl}`);
-  
-  return fullUrl;
-}
-
-// Increase default timeout for stability
-export const apiTimeout = 60000; // 60 seconds for maximum reliability
-
-// Enhanced default headers with CORS support
-export const defaultHeaders: Record<string, string> = {
+// Default headers for API requests
+export const defaultHeaders = {
   'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest',
+  'Cache-Control': 'no-cache, no-store, must-revalidate'
+};
+
+// Headers to force fresh data (no caching)
+export const forceRefreshHeaders = {
+  ...defaultHeaders,
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
   'Expires': '0',
-  'Origin': typeof window !== 'undefined' ? window.location.origin : '*',
-  'X-Requested-With': 'XMLHttpRequest',
-  'Accept': '*/*'
+  'X-Force-Refresh': 'true'
 };
 
-// Force refresh headers
-export const forceRefreshHeaders: Record<string, string> = {
-  ...defaultHeaders,
-  'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+/**
+ * Get a properly formatted API URL by combining the base URL with an endpoint
+ * Handles cases with or without trailing/leading slashes
+ * 
+ * @param endpoint - The API endpoint path
+ * @returns Full API URL
+ */
+export const getApiUrl = (endpoint: string): string => {
+  // If endpoint already includes http/https, return it as is
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  
+  // IMPORTANT: Never use external domains for API calls from the browser
+  // This prevents calls to external domains like vizagup.com
+  
+  // For all environments, use relative URLs to avoid CORS and external domain issues
+  if (window.location.hostname.includes('localhost') || 
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com') ||
+      true) { // Always use relative URLs
+    
+    // Remove leading slash if present for relative URLs
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    
+    // Ensure API directory paths are preserved
+    if (!cleanEndpoint.startsWith('api/') && !cleanEndpoint.startsWith('data/')) {
+      return `api/${cleanEndpoint}`;
+    }
+    
+    return cleanEndpoint;
+  }
+  
+  // This code path should never be reached due to 'true' condition above
+  // but kept for backward compatibility
+  const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
+  const cleanBase = (base || '').endsWith('/') ? base.slice(0, -1) : base;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  return `${cleanBase}${cleanEndpoint}`;
 };
-
-// Direct vehicle API headers - more aggressive CORS settings
-export const directVehicleHeaders: Record<string, string> = {
-  ...forceRefreshHeaders,
-  'X-Admin-Mode': 'true', 
-  'Origin': typeof window !== 'undefined' ? window.location.origin : '*',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Request-Method': 'POST, GET, OPTIONS',
-  'Access-Control-Request-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh'
-};
-
-// Check if we should use direct vehicle API
-export const useDirectVehicleApi = import.meta.env.VITE_USE_DIRECT_VEHICLE_API === 'true';
-
-// Maximum vehicle retry attempts
-export const maxVehicleRetries = Number(import.meta.env.VITE_MAX_VEHICLE_RETRIES || 3);
-
-// Enable offline fallback for vehicle operations
-export const enableOfflineFallback = import.meta.env.VITE_ENABLE_OFFLINE_FALLBACK === 'true';
