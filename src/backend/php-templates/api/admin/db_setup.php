@@ -1,305 +1,211 @@
 
 <?php
 /**
- * This is a utility script for setting up the driver management tables.
- * It should be executed once to create the necessary tables if they don't exist.
+ * Database setup script to ensure all required tables exist
+ * This script is included by various API endpoints to ensure database consistency
  */
 
-// Set correct headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Include database utilities
+if (!function_exists('getDbConnection')) {
+    require_once __DIR__ . '/../utils/database.php';
+}
 
-// Error reporting
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+// Create log directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
 
-// Initialize response
-$response = [
-    'status' => 'error',
-    'message' => 'Unknown error',
-    'tables_created' => [],
-    'tables_failed' => [],
-    'messages' => [],
-    'timestamp' => time()
-];
+// Set up logging
+$setupLogFile = $logDir . '/db_setup_' . date('Y-m-d') . '.log';
+$setupTimestamp = date('Y-m-d H:i:s');
+
+// Log setup message
+file_put_contents($setupLogFile, "[$setupTimestamp] Running database setup\n", FILE_APPEND);
 
 try {
-    // Define database connection with updated credentials
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    // Connect to database
+    $conn = getDbConnection();
     
-    // Create connection
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    
-    // Check connection
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
+    if (!$conn) {
+        throw new Exception("Database connection failed during setup");
     }
     
-    $response['messages'][] = "Connected to database successfully";
-
-    // Create drivers table if it doesn't exist
-    $query = "
-    CREATE TABLE IF NOT EXISTS drivers (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        phone VARCHAR(20) NOT NULL,
-        email VARCHAR(100),
-        vehicle_type VARCHAR(50),
-        vehicle_number VARCHAR(20),
-        status ENUM('Available', 'Busy', 'Offline') DEFAULT 'Available',
-        location VARCHAR(100),
-        rating DECIMAL(3,1) DEFAULT 0,
-        rides INT DEFAULT 0,
-        earnings DECIMAL(10,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    ";
+    // Verify vehicles table
+    $checkVehiclesTable = $conn->query("SHOW TABLES LIKE 'vehicles'");
     
-    if ($conn->query($query)) {
-        $response['tables_created'][] = 'drivers';
-    } else {
-        $response['tables_failed'][] = 'drivers';
-        $response['messages'][] = "Error creating drivers table: " . $conn->error;
-    }
-    
-    // CREATE LOCAL PACKAGE FARES TABLE WITH CORRECTED COLUMN NAMES AND NOT NULL VALUES
-    $local_fares_query = "
-    CREATE TABLE IF NOT EXISTS local_package_fares (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB;
-    ";
-    
-    if ($conn->query($local_fares_query)) {
-        $response['tables_created'][] = 'local_package_fares';
-    } else {
-        $response['tables_failed'][] = 'local_package_fares';
-        $response['messages'][] = "Error creating local_package_fares table: " . $conn->error;
-    }
-    
-    // CREATE AIRPORT TRANSFER FARES TABLE WITH NOT NULL VALUES
-    $airport_fares_query = "
-    CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB;
-    ";
-    
-    if ($conn->query($airport_fares_query)) {
-        $response['tables_created'][] = 'airport_transfer_fares';
-    } else {
-        $response['tables_failed'][] = 'airport_transfer_fares';
-        $response['messages'][] = "Error creating airport_transfer_fares table: " . $conn->error;
-    }
-    
-    // CREATE OUTSTATION FARES TABLE WITH NON NULL VALUES FOR CRITICAL FIELDS
-    $outstation_fares_query = "
-    CREATE TABLE IF NOT EXISTS outstation_fares (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
-        roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
-        roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB;
-    ";
-    
-    if ($conn->query($outstation_fares_query)) {
-        $response['tables_created'][] = 'outstation_fares';
-    } else {
-        $response['tables_failed'][] = 'outstation_fares';
-        $response['messages'][] = "Error creating outstation_fares table: " . $conn->error;
-    }
-    
-    // CREATE VEHICLES TABLE IF NOT EXISTS
-    $vehicles_query = "
-    CREATE TABLE IF NOT EXISTS vehicles (
-        id VARCHAR(50) NOT NULL PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-        name VARCHAR(100) NOT NULL,
-        capacity INT NOT NULL DEFAULT 4,
-        luggage_capacity INT NOT NULL DEFAULT 2,
-        ac TINYINT(1) NOT NULL DEFAULT 1,
-        is_active TINYINT(1) NOT NULL DEFAULT 1,
-        image VARCHAR(255) NOT NULL DEFAULT '/cars/sedan.png',
-        amenities TEXT,
-        description TEXT,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-    ";
-    
-    if ($conn->query($vehicles_query)) {
-        $response['tables_created'][] = 'vehicles';
-    } else {
-        $response['tables_failed'][] = 'vehicles';
-        $response['messages'][] = "Error creating vehicles table: " . $conn->error;
-    }
-    
-    // Fix any existing tables with NULL values in critical fields
-    $fix_outstation_fares = "
-    ALTER TABLE outstation_fares 
-    MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250;
-    ";
-    
-    try {
-        $conn->query($fix_outstation_fares);
-        $response['messages'][] = "Fixed outstation_fares table constraints";
-    } catch (Exception $e) {
-        $response['messages'][] = "Error fixing outstation_fares table: " . $e->getMessage();
-    }
-    
-    // Update any NULL values in existing tables
-    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-    $response['messages'][] = "Updated NULL values in outstation_fares";
-    
-    // Check for vehicles table and fix it if exists
-    $check_vehicles = $conn->query("SHOW TABLES LIKE 'vehicles'");
-    if ($check_vehicles->num_rows > 0) {
-        try {
-            // Fix night_halt_charge and driver_allowance to be NOT NULL with default values
-            $conn->query("
-                ALTER TABLE vehicles 
-                MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250
-            ");
+    if (!$checkVehiclesTable || $checkVehiclesTable->num_rows === 0) {
+        // Create vehicles table
+        $createVehiclesSQL = "
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id VARCHAR(50) NOT NULL,
+                vehicle_id VARCHAR(50) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) DEFAULT 'Standard',
+                capacity INT(11) DEFAULT 4,
+                luggage_capacity INT(11) DEFAULT 2,
+                base_price DECIMAL(10,2) DEFAULT 0.00,
+                price_per_km DECIMAL(5,2) DEFAULT 0.00,
+                image VARCHAR(255) DEFAULT '',
+                description TEXT,
+                amenities TEXT,
+                ac TINYINT(1) DEFAULT 1,
+                is_active TINYINT(1) DEFAULT 1,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0.00,
+                driver_allowance DECIMAL(10,2) DEFAULT 0.00,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createVehiclesSQL)) {
+            throw new Exception("Failed to create vehicles table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created vehicles table\n", FILE_APPEND);
+        
+        // Add default vehicles
+        $defaultVehicles = [
+            ['sedan', 'Sedan', 'Standard', 4, 2],
+            ['ertiga', 'Ertiga', 'Standard', 6, 3],
+            ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
+            ['luxury', 'Luxury', 'Luxury', 4, 2],
+            ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
+        ];
+        
+        $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+        
+        if ($insertVehicleStmt) {
+            foreach ($defaultVehicles as $vehicle) {
+                $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
+                $insertVehicleStmt->execute();
+            }
             
-            // Update any NULL values
-            $conn->query("UPDATE vehicles SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-            $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-            $response['messages'][] = "Fixed vehicles table constraints and updated NULL values";
-        } catch (Exception $e) {
-            $response['messages'][] = "Error fixing vehicles table: " . $e->getMessage();
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added default vehicles\n", FILE_APPEND);
+        }
+    } else {
+        // Ensure vehicles table has all required columns
+        $vehiclesColumns = [
+            ['vehicle_id', "ALTER TABLE vehicles ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id"],
+            ['base_price', "ALTER TABLE vehicles ADD COLUMN base_price DECIMAL(10,2) DEFAULT 0.00 AFTER luggage_capacity"],
+            ['price_per_km', "ALTER TABLE vehicles ADD COLUMN price_per_km DECIMAL(5,2) DEFAULT 0.00 AFTER base_price"],
+            ['night_halt_charge', "ALTER TABLE vehicles ADD COLUMN night_halt_charge DECIMAL(10,2) DEFAULT 0.00 AFTER is_active"],
+            ['driver_allowance', "ALTER TABLE vehicles ADD COLUMN driver_allowance DECIMAL(10,2) DEFAULT 0.00 AFTER night_halt_charge"]
+        ];
+        
+        foreach ($vehiclesColumns as $column) {
+            $checkColumn = $conn->query("SHOW COLUMNS FROM vehicles LIKE '{$column[0]}'");
+            if (!$checkColumn || $checkColumn->num_rows === 0) {
+                $conn->query($column[1]);
+                file_put_contents($setupLogFile, "[$setupTimestamp] Added {$column[0]} column to vehicles table\n", FILE_APPEND);
+            }
         }
     }
     
-    // Insert sample data if the drivers table is empty
-    $result = $conn->query("SELECT COUNT(*) as count FROM drivers");
-    $row = $result->fetch_assoc();
+    // Verify airport_transfer_fares table
+    $checkAirportTable = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
     
-    if ($row['count'] == 0) {
-        // Insert sample drivers
-        $conn->query("
-            INSERT INTO drivers (name, phone, email, vehicle_type, vehicle_number, status, location, rating, rides, earnings) VALUES
-            ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'Sedan', 'AP 31 XX 1234', 'Available', 'Hyderabad Central', 4.8, 352, 120000),
-            ('Pavan Reddy', '8765432109', 'pavan@example.com', 'SUV', 'AP 32 XX 5678', 'Busy', 'Gachibowli', 4.6, 215, 85500),
-            ('Suresh Verma', '7654321098', 'suresh@example.com', 'Sedan', 'AP 33 XX 9012', 'Offline', 'Offline', 4.5, 180, 72000),
-            ('Venkatesh S', '9876543211', 'venkat@example.com', 'Hatchback', 'AP 34 XX 3456', 'Available', 'Kukatpally', 4.7, 298, 110000),
-            ('Ramesh Babu', '8765432108', 'ramesh@example.com', 'Tempo', 'AP 35 XX 7890', 'Busy', 'Ameerpet', 4.4, 175, 65000)
-        ");
+    if (!$checkAirportTable || $checkAirportTable->num_rows === 0) {
+        // Create airport_transfer_fares table
+        $createAirportFaresSQL = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
-        $response['messages'][] = "Sample drivers added";
+        if (!$conn->query($createAirportFaresSQL)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
     
-    // Add sample data to local_package_fares if it's empty
-    $local_result = $conn->query("SELECT COUNT(*) as count FROM local_package_fares");
-    $local_row = $local_result->fetch_assoc();
+    // Verify vehicle_pricing table
+    $checkVehiclePricingTable = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
     
-    if ($local_row['count'] == 0) {
-        // Insert default local package fares
-        $conn->query("
-            INSERT INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour) VALUES
-            ('sedan', 1200, 2200, 2500, 14, 250),
-            ('ertiga', 1500, 2700, 3000, 18, 250),
-            ('innova_crysta', 1800, 3000, 3500, 20, 250),
-            ('tempo', 3000, 4500, 5500, 22, 300),
-            ('luxury', 3500, 5500, 6500, 25, 300)
-        ");
+    if (!$checkVehiclePricingTable || $checkVehiclePricingTable->num_rows === 0) {
+        // Create vehicle_pricing table
+        $createVehiclePricingSQL = "
+            CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(20) NOT NULL,
+                airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
-        $response['messages'][] = "Sample local package fares added";
+        if (!$conn->query($createVehiclePricingSQL)) {
+            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created vehicle_pricing table\n", FILE_APPEND);
     }
     
-    // Add sample data to airport_transfer_fares if it's empty
-    $airport_result = $conn->query("SELECT COUNT(*) as count FROM airport_transfer_fares");
-    $airport_row = $airport_result->fetch_assoc();
+    // Populate tables with synced data
+    $syncQuery = "
+        INSERT IGNORE INTO vehicle_pricing (vehicle_id, trip_type)
+        SELECT vehicle_id, 'airport' FROM vehicles
+    ";
     
-    if ($airport_row['count'] == 0) {
-        // Insert default airport transfer fares
-        $conn->query("
-            INSERT INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                                              tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) VALUES
-            ('sedan', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
-            ('ertiga', 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
-            ('innova_crysta', 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
-            ('tempo', 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
-            ('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22)
-        ");
-        
-        $response['messages'][] = "Sample airport transfer fares added";
+    $conn->query($syncQuery);
+    
+    $syncAirportQuery = "
+        INSERT IGNORE INTO airport_transfer_fares (vehicle_id)
+        SELECT vehicle_id FROM vehicles
+    ";
+    
+    $conn->query($syncAirportQuery);
+    
+    file_put_contents($setupLogFile, "[$setupTimestamp] Database setup completed successfully\n", FILE_APPEND);
+    
+    // If this was called directly as an API, return success response
+    if (basename($_SERVER['PHP_SELF']) == 'db_setup.php') {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Database setup completed successfully',
+            'timestamp' => time()
+        ]);
     }
-    
-    // Add sample data to outstation_fares if it's empty
-    $outstation_result = $conn->query("SELECT COUNT(*) as count FROM outstation_fares");
-    $outstation_row = $outstation_result->fetch_assoc();
-    
-    if ($outstation_row['count'] == 0) {
-        // Insert default outstation fares with non-NULL values for night_halt_charge and driver_allowance
-        $conn->query("
-            INSERT INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
-                                        roundtrip_base_price, roundtrip_price_per_km) VALUES
-            ('sedan', 4200, 14, 700, 250, 4000, 12),
-            ('ertiga', 5400, 18, 1000, 250, 5000, 15),
-            ('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
-            ('tempo', 9000, 22, 1500, 300, 8500, 19),
-            ('luxury', 10500, 25, 1500, 300, 10000, 22)
-        ");
-        
-        $response['messages'][] = "Sample outstation fares added";
-    }
-    
-    // Verify and fix any NULL values in these important fields
-    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-    $response['messages'][] = "Verified and fixed any remaining NULL values";
-    
-    // Success response
-    $response['status'] = 'success';
-    $response['message'] = "Database setup complete";
     
 } catch (Exception $e) {
-    $response['status'] = 'error';
-    $response['message'] = "Error: " . $e->getMessage();
+    file_put_contents($setupLogFile, "[$setupTimestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    // If this was called directly as an API, return error response
+    if (basename($_SERVER['PHP_SELF']) == 'db_setup.php') {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'timestamp' => time()
+        ]);
+    }
 }
-
-// Send JSON response
-echo json_encode($response);

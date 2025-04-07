@@ -25,9 +25,6 @@ $timestamp = date('Y-m-d H:i:s');
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
 
-// Run the database setup to ensure all tables exist
-include_once __DIR__ . '/db_setup.php';
-
 // Log this request
 file_put_contents($logFile, "[$timestamp] Direct airport fares request received\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
@@ -98,9 +95,43 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
 
+    // Also check for vehicle_pricing table and sync with it
+    $checkVPTableQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
+    $checkVPResult = $conn->query($checkVPTableQuery);
+    
+    if (!$checkVPResult || $checkVPResult->num_rows === 0) {
+        // Create the vehicle_pricing table if it doesn't exist
+        $createVPTableSql = "
+            CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(20) NOT NULL,
+                airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createVPTableSql)) {
+            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Created vehicle_pricing table\n", FILE_APPEND);
+    }
+
     // Ensure the vehicles table exists and has data
     $vehiclesTableCheck = $conn->query("SHOW TABLES LIKE 'vehicles'");
-    if ($vehiclesTableCheck->num_rows === 0) {
+    if (!$vehiclesTableCheck || $vehiclesTableCheck->num_rows === 0) {
         // Create vehicles table if it doesn't exist
         $createVehiclesTableSql = "
             CREATE TABLE IF NOT EXISTS vehicles (
@@ -123,26 +154,30 @@ try {
 
     // Add default vehicles if the table is empty
     $checkVehiclesCount = $conn->query("SELECT COUNT(*) as count FROM vehicles");
-    $vehiclesCount = $checkVehiclesCount->fetch_assoc();
-    
-    if ($vehiclesCount['count'] == 0) {
-        // Insert default vehicles
-        $defaultVehicles = [
-            ['sedan', 'Sedan', 'Standard', 4, 2],
-            ['ertiga', 'Ertiga', 'Standard', 6, 3],
-            ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
-            ['luxury', 'Luxury', 'Luxury', 4, 2],
-            ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
-        ];
+    if ($checkVehiclesCount) {
+        $vehiclesCount = $checkVehiclesCount->fetch_assoc();
         
-        $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
-        
-        foreach ($defaultVehicles as $vehicle) {
-            $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
-            $insertVehicleStmt->execute();
+        if ($vehiclesCount['count'] == 0) {
+            // Insert default vehicles
+            $defaultVehicles = [
+                ['sedan', 'Sedan', 'Standard', 4, 2],
+                ['ertiga', 'Ertiga', 'Standard', 6, 3],
+                ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
+                ['luxury', 'Luxury', 'Luxury', 4, 2],
+                ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
+            ];
+            
+            $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+            
+            if ($insertVehicleStmt) {
+                foreach ($defaultVehicles as $vehicle) {
+                    $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
+                    $insertVehicleStmt->execute();
+                }
+                
+                file_put_contents($logFile, "[$timestamp] Inserted default vehicles\n", FILE_APPEND);
+            }
         }
-        
-        file_put_contents($logFile, "[$timestamp] Inserted default vehicles\n", FILE_APPEND);
     }
 
     // If no vehicle ID provided, return all fares with vehicle info
@@ -372,7 +407,7 @@ try {
         file_put_contents($logFile, "[$timestamp] Created default fare data for vehicle: $vehicleId\n", FILE_APPEND);
     }
     
-    // Also make sure vehicle_pricing is in sync for compatibility
+    // Also sync with vehicle_pricing table for compatibility
     $syncVehiclePricingQuery = "
         INSERT INTO vehicle_pricing 
         (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
@@ -421,9 +456,6 @@ try {
         
         file_put_contents($logFile, "[$timestamp] Synced data to vehicle_pricing table for vehicle: $vehicleId\n", FILE_APPEND);
     }
-    
-    // Close database connection
-    $conn->close();
     
     // Return fare data
     $response = [

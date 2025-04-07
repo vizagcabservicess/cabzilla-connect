@@ -23,13 +23,16 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
-require_once __DIR__ . '/../utils/response.php';
 
 // Run the DB setup SQL to ensure all tables exist
 include_once __DIR__ . '/db_setup.php';
 
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
+
+// Get request data and debug
+$rawInput = file_get_contents('php://input');
+file_put_contents($logFile, "[$timestamp] Raw input: $rawInput\n", FILE_APPEND);
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -42,7 +45,6 @@ try {
     // If no POST data, try to get it from the request body
     if (empty($postData)) {
         $json = file_get_contents('php://input');
-        file_put_contents($logFile, "[$timestamp] Raw input: $json\n", FILE_APPEND);
         
         if (!empty($json)) {
             $postData = json_decode($json, true);
@@ -88,16 +90,11 @@ try {
     }
 
     if (!$vehicleId) {
-        // Detailed logging of all available keys to debug the issue
         file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
             implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
-            
-        // Try to log the entire request data for debugging
         file_put_contents($logFile, "[$timestamp] Full request data: " . json_encode($postData) . "\n", FILE_APPEND);
         throw new Exception('Vehicle ID is required');
     }
-
-    file_put_contents($logFile, "[$timestamp] Found vehicle ID: $vehicleId\n", FILE_APPEND);
 
     // Extract fare data - support various naming conventions
     $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : 0;

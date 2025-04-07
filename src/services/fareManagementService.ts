@@ -6,6 +6,18 @@ import { toast } from 'sonner';
 export interface FareData {
   vehicleId: string;
   vehicle_id?: string;
+  // Local fare fields
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  // Airport fare fields
+  priceOneWay?: number;
+  priceRoundTrip?: number;
+  nightCharges?: number;
+  extraWaitingCharges?: number;
+  // Additional fields for multi-tier pricing
   basePrice?: number;
   pricePerKm?: number;
   pickupPrice?: number;
@@ -15,16 +27,6 @@ export interface FareData {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
-  price4hrs40km?: number;
-  price8hrs80km?: number;
-  price10hrs100km?: number;
-  priceExtraHour?: number;
-  priceExtraKm?: number;
-  // Airport specific fields
-  priceOneWay?: number;
-  priceRoundTrip?: number;
-  nightCharges?: number;
-  extraWaitingCharges?: number;
   // For flexible property access
   [key: string]: any;
 }
