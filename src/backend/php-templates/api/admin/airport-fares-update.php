@@ -274,23 +274,20 @@ try {
             'timestamp' => time()
         ];
         
-        // Output valid JSON
-        echo json_encode($response);
+        echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
     } catch (Exception $e) {
-        // Rollback transaction on error
+        // Roll back the transaction on error
         $conn->rollback();
         throw $e;
-    } finally {
-        // Close database connection
-        if ($conn) {
-            $conn->close();
-        }
     }
+    
+    // Close database connection
+    $conn->close();
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     
-    http_response_code(400); // Bad Request is more accurate for missing vehicle ID
+    http_response_code(500);
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),

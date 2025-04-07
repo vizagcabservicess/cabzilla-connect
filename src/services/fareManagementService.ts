@@ -57,7 +57,14 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
 
     console.log('Airport fares response:', result);
     
-    return result.fares || [];
+    if (result && result.status === 'success' && Array.isArray(result.fares)) {
+      return result.fares;
+    } else if (result && result.fares && typeof result.fares === 'object' && !Array.isArray(result.fares)) {
+      // Convert object with keys to array
+      return Object.values(result.fares);
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     throw error;
