@@ -127,9 +127,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           size="sm" 
           onClick={handleSyncTable} 
           disabled={isSyncing}
-          className="flex items-center"
+          className="flex items-center gap-2"
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
           {isSyncing ? 'Syncing...' : 'Sync Table'}
         </Button>
       </CardHeader>

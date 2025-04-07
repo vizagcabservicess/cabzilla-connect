@@ -96,8 +96,8 @@ try {
         file_put_contents($logFile, "[$timestamp] Added extra_waiting_charges column\n", FILE_APPEND);
     }
     
-    // Get all active vehicles
-    $vehiclesQuery = "SELECT * FROM vehicles WHERE is_active = 1 ORDER BY id ASC LIMIT 100";
+    // Get all vehicles, including inactive ones to ensure complete sync
+    $vehiclesQuery = "SELECT * FROM vehicles ORDER BY id ASC";
     try {
         $vehiclesResult = $conn->query($vehiclesQuery);
         
@@ -110,7 +110,7 @@ try {
             $vehicles[] = $vehicle;
         }
         
-        file_put_contents($logFile, "[$timestamp] Found " . count($vehicles) . " active vehicles\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Found " . count($vehicles) . " vehicles\n", FILE_APPEND);
     } catch (Exception $e) {
         // If there's an error with the query, try a simpler approach
         file_put_contents($logFile, "[$timestamp] Error with vehicles query, trying simpler approach: " . $e->getMessage() . "\n", FILE_APPEND);
@@ -130,6 +130,7 @@ try {
     $synced = 0;
     $updated = 0;
     $created = 0;
+    $syncedVehicles = [];
     
     // Process each vehicle
     foreach ($vehicles as $vehicle) {
@@ -146,6 +147,7 @@ try {
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
         $exists = $checkResult && $checkResult->num_rows > 0;
+        $fare = $exists ? $checkResult->fetch_assoc() : null;
         $checkStmt->close();
         
         file_put_contents($logFile, "[$timestamp] Vehicle $vehicleId fare entry exists: " . ($exists ? 'yes' : 'no') . "\n", FILE_APPEND);
@@ -260,6 +262,12 @@ try {
                 if ($insertStmt->execute()) {
                     $created++;
                     file_put_contents($logFile, "[$timestamp] Created fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+                    
+                    $syncedVehicles[] = [
+                        'id' => $vehicleId,
+                        'name' => $vehicle['name'],
+                        'action' => 'created'
+                    ];
                 } else {
                     file_put_contents($logFile, "[$timestamp] Failed to create fare entry for vehicle: $vehicleId - " . $insertStmt->error . "\n", FILE_APPEND);
                 }
@@ -269,9 +277,6 @@ try {
                 file_put_contents($logFile, "[$timestamp] Exception creating fare entry: " . $insertEx->getMessage() . "\n", FILE_APPEND);
             }
         } else if ($applyDefaults || $forceRefresh) {
-            // Get existing fare entry
-            $fare = $checkResult->fetch_assoc();
-            
             // If updating, only update zero values unless forced
             if (!$forceRefresh) {
                 if ($fare['base_price'] > 0) $basePrice = $fare['base_price'];
@@ -307,6 +312,12 @@ try {
                 if ($updateStmt->execute()) {
                     $updated++;
                     file_put_contents($logFile, "[$timestamp] Updated fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+                    
+                    $syncedVehicles[] = [
+                        'id' => $vehicleId,
+                        'name' => $vehicle['name'],
+                        'action' => 'updated'
+                    ];
                 } else {
                     file_put_contents($logFile, "[$timestamp] Failed to update fare entry for vehicle: $vehicleId - " . $updateStmt->error . "\n", FILE_APPEND);
                 }
@@ -318,6 +329,12 @@ try {
         } else {
             $synced++;
             file_put_contents($logFile, "[$timestamp] Vehicle $vehicleId fares already exist and up to date\n", FILE_APPEND);
+            
+            $syncedVehicles[] = [
+                'id' => $vehicleId,
+                'name' => $vehicle['name'],
+                'action' => 'synced'
+            ];
         }
     }
     
@@ -331,6 +348,7 @@ try {
             'updated' => $updated,
             'synced' => $synced
         ],
+        'vehicles' => $syncedVehicles,
         'timestamp' => time()
     ];
     

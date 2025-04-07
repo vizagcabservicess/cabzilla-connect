@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Database Configuration and Connection Helper
@@ -44,6 +45,13 @@ function getDbConnection() {
         return $conn;
     } catch (Exception $e) {
         file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
+        
+        // For development or preview environment only, create a mock connection
+        if (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'lovableproject.com') !== false) {
+            file_put_contents($logFile, "[$timestamp] Using mock connection for preview environment\n", FILE_APPEND);
+            return createMockConnection();
+        }
+        
         throw $e;
     }
 }

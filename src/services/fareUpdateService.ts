@@ -32,7 +32,6 @@ export interface OutstationFareUpdate {
   pricePerKm: number;
   driverAllowance: number;
   nightHaltCharge: number;
-  // Add these properties to fix the TypeScript error
   roundTripBasePrice?: number;
   roundTripPricePerKm?: number;
 }
@@ -118,17 +117,22 @@ export async function updateAirportFare(data: AirportFareUpdate) {
       extraWaitingCharges: data.extraWaitingCharges || 0
     };
     
+    console.log('Sending airport fare data to API:', fareData);
+    
     try {
       // First try the direct-airport-fares-update endpoint which is more reliable
       const directResponse = await apiCall('api/admin/direct-airport-fares-update.php', {
         data: fareData,
         method: 'POST',
         headers: {
-          'X-Admin-Mode': 'true'
+          'X-Admin-Mode': 'true',
+          'Content-Type': 'application/json'
         }
       });
       
-      if (directResponse.status === 'success') {
+      console.log('Direct endpoint response:', directResponse);
+      
+      if (directResponse && directResponse.status === 'success') {
         // Clear vehicle cache to ensure updated data is fetched next time
         clearVehicleDataCache();
         
@@ -142,22 +146,26 @@ export async function updateAirportFare(data: AirportFareUpdate) {
       }
       
       // If direct endpoint fails, try the original endpoint
-      console.log('Direct endpoint failed, trying original endpoint...');
-    } catch (directError) {
+      console.log('Direct endpoint failed or returned error, trying original endpoint...');
+    } catch (directError: any) {
       console.error('Error with direct endpoint:', directError);
       // Continue to try original endpoint
     }
     
     // Original endpoint as fallback
+    console.log('Trying fallback endpoint...');
     const response = await apiCall('api/admin/update-airport-fare.php', {
       data: fareData,
       method: 'POST',
       headers: {
-        'X-Admin-Mode': 'true'
+        'X-Admin-Mode': 'true',
+        'Content-Type': 'application/json'
       }
     });
     
-    if (response.status === 'success') {
+    console.log('Fallback endpoint response:', response);
+    
+    if (response && response.status === 'success') {
       // Clear vehicle cache to ensure updated data is fetched next time
       clearVehicleDataCache();
       
@@ -169,9 +177,9 @@ export async function updateAirportFare(data: AirportFareUpdate) {
       toast.success('Airport fares updated successfully');
       return response;
     } else {
-      console.error('Error updating airport fare:', response.message);
-      toast.error(response.message || 'Failed to update airport fare');
-      throw new Error(response.message || 'Failed to update airport fare');
+      console.error('Error updating airport fare:', response?.message || 'Unknown error');
+      toast.error(response?.message || 'Failed to update airport fare');
+      throw new Error(response?.message || 'Failed to update airport fare');
     }
   } catch (error: any) {
     console.error('Error in updateAirportFare:', error);
@@ -202,7 +210,6 @@ export async function updateOutstationFare(data: OutstationFareUpdate) {
       pricePerKm: data.pricePerKm || 0,
       driverAllowance: data.driverAllowance || 0,
       nightHaltCharge: data.nightHaltCharge || 0,
-      // Include the optional round trip parameters if they exist
       ...(data.roundTripBasePrice !== undefined && { roundTripBasePrice: data.roundTripBasePrice }),
       ...(data.roundTripPricePerKm !== undefined && { roundTripPricePerKm: data.roundTripPricePerKm })
     };
@@ -316,31 +323,39 @@ export async function getAllAirportFares() {
 export async function syncAirportFares(forceRefresh: boolean = false): Promise<boolean> {
   try {
     console.log('Syncing airport fares table');
+    toast.info('Syncing airport fares table...');
     
     const response = await apiCall('api/admin/sync-airport-fares.php', {
       method: 'POST',
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+        'X-Force-Refresh': forceRefresh ? 'true' : 'false',
+        'Content-Type': 'application/json'
       }
     });
     
-    if (response.status === 'success') {
+    console.log('Sync airport fares response:', response);
+    
+    if (response && response.status === 'success') {
       // Clear vehicle cache to ensure updated data is fetched next time
       clearVehicleDataCache();
       
       // Dispatch an event to notify components that fares changed
       window.dispatchEvent(new CustomEvent('airport-fares-updated', {
-        detail: { timestamp: Date.now() }
+        detail: { timestamp: Date.now(), vehicles: response.vehicles || [] }
       }));
       
+      const { created, updated, synced } = response.stats || { created: 0, updated: 0, synced: 0 };
+      toast.success(`Airport fares synced: ${created} created, ${updated} updated, ${synced} verified`);
       return true;
     }
     
-    console.error('Failed to sync airport fares:', response.message);
+    console.error('Failed to sync airport fares:', response?.message || 'Unknown error');
+    toast.error(response?.message || 'Failed to sync airport fares');
     return false;
   } catch (error: any) {
     console.error('Error syncing airport fares:', error);
+    toast.error(`Error syncing airport fares: ${error.message || 'Unknown error'}`);
     return false;
   }
 }
