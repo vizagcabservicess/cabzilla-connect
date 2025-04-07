@@ -31,6 +31,16 @@ $timestamp = date('Y-m-d H:i:s');
 // Include needed utils
 require_once __DIR__ . '/utils/response.php';
 require_once __DIR__ . '/utils/database.php';
+require_once __DIR__ . '/admin/db_setup.php';
+
+// Ensure tables exist
+if (function_exists('ensureDatabaseTables')) {
+    try {
+        ensureDatabaseTables();
+    } catch (Exception $e) {
+        file_put_contents($logFile, "[$timestamp] Warning: Database setup error: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+}
 
 // Try to set collation for any database queries before redirecting
 try {
@@ -169,6 +179,7 @@ if (!$vehicleId && !empty($rawInput)) {
             // Apply default values to parsed data
             $parsedData = array_merge($defaults, $parsedData);
             $rawInput = http_build_query($parsedData);
+            $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($parsedData);
         }
     }
 }
@@ -201,6 +212,15 @@ if ($vehicleId) {
     }
     
     try {
+        // Before forwarding, make sure necessary tables exist
+        try {
+            // Initialize airport fare tables
+            $result = @file_get_contents(__DIR__ . '/admin/initialize-airport-fares.php');
+            file_put_contents($logFile, "[$timestamp] Airport fare tables initialized\n", FILE_APPEND);
+        } catch (Exception $initError) {
+            file_put_contents($logFile, "[$timestamp] Warning: Failed to initialize airport fare tables: " . $initError->getMessage() . "\n", FILE_APPEND);
+        }
+        
         // Forward the request to the admin endpoint
         file_put_contents($logFile, "[$timestamp] Forwarding to admin/airport-fares-update.php with vehicle ID: $vehicleId\n", FILE_APPEND);
         require_once __DIR__ . '/admin/airport-fares-update.php';

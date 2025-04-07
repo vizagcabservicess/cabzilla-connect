@@ -295,16 +295,74 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
       trip_type: 'airport'
     };
     
-    console.log("Sending update data to server:", normalizedFareData);
+    // Ensure all required fields have default values
+    const completeData = {
+      basePrice: 0,
+      pricePerKm: 0,
+      pickupPrice: 0,
+      dropPrice: 0,
+      tier1Price: 0,
+      tier2Price: 0,
+      tier3Price: 0,
+      tier4Price: 0,
+      extraKmCharge: 0,
+      base_price: 0,
+      price_per_km: 0,
+      pickup_price: 0,
+      drop_price: 0,
+      tier1_price: 0,
+      tier2_price: 0,
+      tier3_price: 0,
+      tier4_price: 0,
+      extra_km_charge: 0,
+      ...normalizedFareData
+    };
+    
+    console.log("Sending update data to server:", completeData);
+    
+    // Initialize database tables first to ensure they exist
+    try {
+      await initializeDatabaseTables();
+      console.log("Database tables initialized before update");
+    } catch (initError) {
+      console.warn("Failed to initialize tables, continuing with update anyway:", initError);
+    }
     
     // Approach 1: Try direct JSON POST to the airport-fares-update endpoint
+    try {
+      console.log("Trying direct update via: api/airport-fares-update.php");
+      const rootEndpointResponse = await directVehicleOperation(
+        'api/airport-fares-update.php',
+        'POST',
+        {
+          data: completeData,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Force-Refresh': 'true'
+          }
+        }
+      );
+      
+      console.log("Root endpoint response:", rootEndpointResponse);
+      
+      if (rootEndpointResponse?.status === 'success') {
+        handleSuccessfulUpdate(fareData.vehicleId);
+        return true;
+      }
+    } catch (rootEndpointError) {
+      console.error("Root endpoint update failed:", rootEndpointError);
+    }
+    
+    // Approach 2: Try direct JSON POST to the admin airport-fares-update endpoint
     try {
       console.log("Trying direct update via: api/admin/airport-fares-update.php");
       const directResponse = await directVehicleOperation(
         'api/admin/airport-fares-update.php',
         'POST',
         {
-          data: normalizedFareData,
+          data: completeData,
           headers: {
             'X-Admin-Mode': 'true',
             'Content-Type': 'application/json',
@@ -324,14 +382,14 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
       console.error("Direct endpoint update failed:", directError);
     }
     
-    // Approach 2: Try the fare-update.php endpoint with tripType parameter
+    // Approach 3: Try the fare-update.php endpoint with tripType parameter
     try {
       console.log("Trying fare-update endpoint: api/admin/fare-update.php?tripType=airport");
       const fareUpdateResponse = await directVehicleOperation(
         'api/admin/fare-update.php?tripType=airport',
         'POST',
         {
-          data: normalizedFareData,
+          data: completeData,
           headers: {
             'X-Admin-Mode': 'true',
             'Content-Type': 'application/json',
@@ -351,20 +409,20 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
       console.error("fare-update endpoint failed:", fareUpdateError);
     }
     
-    // Approach 3: Try using URLSearchParams for guaranteed compatibility
+    // Approach 4: Try using URLSearchParams for guaranteed compatibility
     try {
       console.log("Trying with URLSearchParams format");
       
       const params = new URLSearchParams();
       // Add all properties as individual parameters
-      Object.entries(normalizedFareData).forEach(([key, value]) => {
+      Object.entries(completeData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           params.append(key, String(value));
         }
       });
       
       const urlEncodedResponse = await directVehicleOperation(
-        'api/admin/airport-fares-update.php',
+        'api/airport-fares-update.php',
         'POST',
         {
           data: params,
@@ -387,20 +445,20 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
       console.error("URLSearchParams approach failed:", urlEncodedError);
     }
     
-    // Approach 4: Try FormData as a last resort
+    // Approach 5: Try FormData as a last resort
     try {
       console.log("Trying FormData format as last resort");
       
       // Convert fare data to FormData
       const formData = new FormData();
-      Object.entries(normalizedFareData).forEach(([key, value]) => {
+      Object.entries(completeData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           formData.append(key, String(value));
         }
       });
       
       const formDataResponse = await directVehicleOperation(
-        'api/admin/airport-fares-update.php',
+        'api/airport-fares-update.php',
         'POST',
         {
           data: formData,
@@ -434,7 +492,7 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
           'api/admin/airport-fares-update.php',
           'POST',
           {
-            data: normalizedFareData,
+            data: completeData,
             headers: {
               'X-Admin-Mode': 'true',
               'Content-Type': 'application/json',
