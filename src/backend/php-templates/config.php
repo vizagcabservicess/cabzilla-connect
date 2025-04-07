@@ -55,6 +55,18 @@ function getDbConnection() {
         // Log error
         $timestamp = date('Y-m-d H:i:s');
         file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', "[$timestamp] " . $e->getMessage() . "\n", FILE_APPEND);
+        
+        // For debugging only
+        if (API_DEBUG) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Database connection failed: ' . $e->getMessage(),
+                'debug' => true
+            ]);
+            exit;
+        }
+        
         return null;
     }
 }

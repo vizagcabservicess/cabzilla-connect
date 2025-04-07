@@ -114,14 +114,23 @@ try {
     }
     
     // Return success response
-    sendSuccessResponse([
-        'fixedTables' => $fixedTables,
-        'standardCollation' => $standardCollation,
-        'standardCharset' => $standardCharset,
-        'timestamp' => $timestamp
-    ], 'Database collation fixed successfully');
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Database collation fixed successfully',
+        'data' => [
+            'fixedTables' => $fixedTables,
+            'standardCollation' => $standardCollation,
+            'standardCharset' => $standardCharset,
+            'timestamp' => $timestamp
+        ]
+    ]);
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    sendErrorResponse($e->getMessage());
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage()
+    ]);
 }

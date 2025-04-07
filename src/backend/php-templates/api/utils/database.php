@@ -44,6 +44,16 @@ function getDbConnection() {
         $timestamp = date('Y-m-d H:i:s');
         file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
         
+        // Send JSON error response during API calls
+        if (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/api/') !== false) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Database connection error: ' . $e->getMessage()
+            ]);
+            exit;
+        }
+        
         return null;
     }
 }

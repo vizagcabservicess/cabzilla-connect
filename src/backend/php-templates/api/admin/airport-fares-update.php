@@ -319,21 +319,30 @@ try {
     }
     
     // Create a response with all relevant data
-    sendSuccessResponse([
-        'vehicleId' => $vehicleId,
-        'vehicle_id' => $vehicleId,
-        'basePrice' => (float)$basePrice,
-        'pricePerKm' => (float)$pricePerKm,
-        'pickupPrice' => (float)$pickupPrice,
-        'dropPrice' => (float)$dropPrice,
-        'tier1Price' => (float)$tier1Price,
-        'tier2Price' => (float)$tier2Price,
-        'tier3Price' => (float)$tier3Price,
-        'tier4Price' => (float)$tier4Price,
-        'extraKmCharge' => (float)$extraKmCharge
-    ], 'Airport fare updated successfully');
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Airport fare updated successfully',
+        'data' => [
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'basePrice' => (float)$basePrice,
+            'pricePerKm' => (float)$pricePerKm,
+            'pickupPrice' => (float)$pickupPrice,
+            'dropPrice' => (float)$dropPrice,
+            'tier1Price' => (float)$tier1Price,
+            'tier2Price' => (float)$tier2Price,
+            'tier3Price' => (float)$tier3Price,
+            'tier4Price' => (float)$tier4Price,
+            'extraKmCharge' => (float)$extraKmCharge
+        ]
+    ]);
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    sendErrorResponse($e->getMessage());
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage()
+    ]);
 }
