@@ -59,7 +59,7 @@ export {
   getVehicle as getVehicleById
 } from '@/services/directVehicleService';
 
-// Export fare update service functions - removed updateOutstationFares which doesn't exist
+// Export fare update service functions
 export {
   updateLocalFares,
   updateAirportFares,

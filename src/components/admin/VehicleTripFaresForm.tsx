@@ -263,8 +263,17 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           const vehicleTypes = await getVehicleTypes();
           
           vehicleTypes.forEach(vType => {
-            if (!allVehicles.some(v => v.id === vType.id)) {
-              allVehicles.push(vType);
+            if (typeof vType === 'string') {
+              if (!allVehicles.some(v => v.id === vType)) {
+                allVehicles.push({
+                  id: vType,
+                  name: vType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                });
+              }
+            } else if (vType && typeof vType === 'object' && 'id' in vType) {
+              if (!allVehicles.some(v => v.id === vType.id)) {
+                allVehicles.push(vType);
+              }
             }
           });
         } catch (error) {
