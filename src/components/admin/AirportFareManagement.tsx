@@ -14,23 +14,25 @@ const AirportFareManagement: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [initialized, setInitialized] = useState<boolean>(false);
+  const [refreshKey, setRefreshKey] = useState<number>(0); // Add a refresh key to force re-render without continuous refresh
   const { toast } = useToast();
 
-  // Load fares when vehicle selection changes
+  // Load fares when vehicle selection changes or refresh key changes
   useEffect(() => {
     if (selectedVehicleId) {
       loadFares(selectedVehicleId);
     } else {
       setFares(null);
     }
-  }, [selectedVehicleId]);
+  }, [selectedVehicleId, refreshKey]);
 
-  // Listen for fare data updates from other components
+  // Separate effect for preventing continuous reload
   useEffect(() => {
     const handleFareDataUpdated = (event: CustomEvent) => {
       if (event.detail?.fareType === 'airport' && 
           event.detail?.vehicleId === selectedVehicleId) {
-        loadFares(selectedVehicleId);
+        // Instead of directly loading fares, update the refresh key
+        setRefreshKey(prev => prev + 1);
       }
     };
 
@@ -111,6 +113,8 @@ const AirportFareManagement: React.FC = () => {
         title: "Success",
         description: "Airport fares saved successfully.",
       });
+      // Update refresh key instead of directly reloading
+      setRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('Error saving fares:', error);
       toast({
@@ -132,10 +136,8 @@ const AirportFareManagement: React.FC = () => {
         description: "Airport fare tables synchronized successfully.",
       });
       
-      // Reload fares for current vehicle
-      if (selectedVehicleId) {
-        await loadFares(selectedVehicleId);
-      }
+      // Update refresh key instead of directly reloading
+      setRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('Error syncing airport fare tables:', error);
       toast({
@@ -175,10 +177,8 @@ const AirportFareManagement: React.FC = () => {
         // Sync tables after fixing collation
         await syncAirportFares();
         
-        // Reload fares for current vehicle
-        if (selectedVehicleId) {
-          await loadFares(selectedVehicleId);
-        }
+        // Update refresh key instead of directly reloading
+        setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(result.message || 'Failed to fix database collation');
       }
@@ -204,7 +204,7 @@ const AirportFareManagement: React.FC = () => {
           <Button
             variant="outline"
             onClick={handleFixDatabase}
-            disabled={syncing}
+            disabled={syncing || loading}
             className="flex items-center gap-1"
           >
             {syncing ? <Loader className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
@@ -213,7 +213,7 @@ const AirportFareManagement: React.FC = () => {
           <Button
             variant="outline"
             onClick={handleSyncTables}
-            disabled={syncing}
+            disabled={syncing || loading}
             className="flex items-center gap-1"
           >
             {syncing ? <Loader className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -253,7 +253,7 @@ const AirportFareManagement: React.FC = () => {
           <Button 
             className="w-full flex items-center justify-center gap-2"
             onClick={handleSaveFare}
-            disabled={loading || !fares}
+            disabled={loading || syncing || !fares}
           >
             {loading ? (
               <>
