@@ -32,6 +32,9 @@ require_once __DIR__ . '/../utils/response.php';
 // Run database setup to ensure tables exist
 require_once __DIR__ . '/db_setup.php';
 
+// For debugging
+error_log("Direct airport fares API called with: " . json_encode($_GET));
+
 try {
     // Get database connection
     $conn = getDbConnection();
@@ -51,6 +54,9 @@ try {
             break;
         }
     }
+    
+    // Debug: Log the vehicle ID found
+    error_log("Processing airport fares for vehicle ID: $vehicleId");
     
     // Build query based on whether a specific vehicle ID was provided
     if ($vehicleId) {
@@ -106,6 +112,7 @@ try {
     $result = $conn->query($query);
     
     if (!$result) {
+        error_log("Database query failed: " . $conn->error);
         throw new Exception("Database query failed: " . $conn->error);
     }
     
@@ -132,8 +139,13 @@ try {
         $fares[] = $fare;
     }
     
+    // Debug: Log the query results
+    error_log("Airport fares query returned " . count($fares) . " results");
+    
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
+        error_log("No fares found for vehicleId $vehicleId, inserting default entry");
+        
         // Before inserting, check if the vehicle exists in the vehicles table
         $checkVehicleQuery = "SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?";
         $checkStmt = $conn->prepare($checkVehicleQuery);
@@ -152,6 +164,7 @@ try {
                 if ($insertVehicleStmt) {
                     $insertVehicleStmt->bind_param('ss', $vehicleId, $vehicleName);
                     $insertVehicleStmt->execute();
+                    error_log("Inserted new vehicle: $vehicleId with name $vehicleName");
                 }
             }
         }
@@ -167,7 +180,8 @@ try {
         $stmt = $conn->prepare($insertQuery);
         if ($stmt) {
             $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
+            $result = $stmt->execute();
+            error_log("Result of inserting default fare: " . ($result ? "success" : "failed"));
             
             // Now try to get the data again
             $refetchQuery = "
@@ -216,6 +230,7 @@ try {
                     ];
                     
                     $fares[] = $fare;
+                    error_log("Successfully fetched newly inserted fare data");
                 }
             }
         }
@@ -223,6 +238,7 @@ try {
     
     // If still no fares found for a specific vehicle, create a default response
     if (empty($fares) && $vehicleId) {
+        error_log("No fares found even after attempted insert, using default object");
         $defaultFare = [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,

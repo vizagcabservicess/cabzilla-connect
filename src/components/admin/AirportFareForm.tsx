@@ -1,6 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { FareData } from '@/services/fareManagementService';
 
 interface AirportFareFormProps {
@@ -24,7 +25,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="space-y-2">
-        <label htmlFor="basePrice" className="font-medium">Base Price (₹)</label>
+        <Label htmlFor="basePrice" className="font-medium">Base Price (₹)</Label>
         <Input
           id="basePrice"
           type="number"
@@ -36,7 +37,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="pricePerKm" className="font-medium">Price Per KM (₹)</label>
+        <Label htmlFor="pricePerKm" className="font-medium">Price Per KM (₹)</Label>
         <Input
           id="pricePerKm"
           type="number"
@@ -49,7 +50,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="pickupPrice" className="font-medium">Pickup Price (₹)</label>
+        <Label htmlFor="pickupPrice" className="font-medium">Pickup Price (₹)</Label>
         <Input
           id="pickupPrice"
           type="number"
@@ -61,7 +62,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="dropPrice" className="font-medium">Drop Price (₹)</label>
+        <Label htmlFor="dropPrice" className="font-medium">Drop Price (₹)</Label>
         <Input
           id="dropPrice"
           type="number"
@@ -73,7 +74,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="tier1Price" className="font-medium">Tier 1 Price (₹)</label>
+        <Label htmlFor="tier1Price" className="font-medium">Tier 1 Price (₹)</Label>
         <Input
           id="tier1Price"
           type="number"
@@ -85,7 +86,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="tier2Price" className="font-medium">Tier 2 Price (₹)</label>
+        <Label htmlFor="tier2Price" className="font-medium">Tier 2 Price (₹)</Label>
         <Input
           id="tier2Price"
           type="number"
@@ -97,7 +98,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="tier3Price" className="font-medium">Tier 3 Price (₹)</label>
+        <Label htmlFor="tier3Price" className="font-medium">Tier 3 Price (₹)</Label>
         <Input
           id="tier3Price"
           type="number"
@@ -109,7 +110,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="tier4Price" className="font-medium">Tier 4 Price (₹)</label>
+        <Label htmlFor="tier4Price" className="font-medium">Tier 4 Price (₹)</Label>
         <Input
           id="tier4Price"
           type="number"
@@ -121,7 +122,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2 md:col-span-2">
-        <label htmlFor="extraKmCharge" className="font-medium">Extra KM Charge (₹)</label>
+        <Label htmlFor="extraKmCharge" className="font-medium">Extra KM Charge (₹)</Label>
         <Input
           id="extraKmCharge"
           type="number"

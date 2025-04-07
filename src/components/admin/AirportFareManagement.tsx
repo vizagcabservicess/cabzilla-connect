@@ -36,9 +36,10 @@ const AirportFareManagement: React.FC = () => {
       
       if (fareDatas && fareDatas.length > 0) {
         console.log('Retrieved fare data:', fareDatas[0]);
-        // Convert all values to numbers explicitly to avoid potential string values
-        const cleanedFareData = {
-          ...fareDatas[0],
+        // Create a new object to ensure we have fresh values
+        const cleanedFareData: FareData = {
+          vehicleId: vehicleId,
+          vehicle_id: vehicleId,
           basePrice: Number(fareDatas[0].basePrice || 0),
           pricePerKm: Number(fareDatas[0].pricePerKm || 0),
           pickupPrice: Number(fareDatas[0].pickupPrice || 0),
@@ -49,6 +50,7 @@ const AirportFareManagement: React.FC = () => {
           tier4Price: Number(fareDatas[0].tier4Price || 0),
           extraKmCharge: Number(fareDatas[0].extraKmCharge || 0)
         };
+        console.log('Cleaned fare data to display:', cleanedFareData);
         setFares(cleanedFareData);
         setInitialized(true);
       } else {
