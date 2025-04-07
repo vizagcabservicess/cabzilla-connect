@@ -76,12 +76,14 @@ try {
 
     // Check required fields - look for vehicle ID in multiple possible fields
     $vehicleId = null;
-    if (isset($postData['vehicleId']) && !empty($postData['vehicleId'])) {
-        $vehicleId = trim($postData['vehicleId']);
-    } elseif (isset($postData['vehicle_id']) && !empty($postData['vehicle_id'])) {
-        $vehicleId = trim($postData['vehicle_id']);
-    } elseif (isset($postData['id']) && !empty($postData['id'])) {
-        $vehicleId = trim($postData['id']);
+    $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'id'];
+    
+    foreach ($possibleKeys as $key) {
+        if (isset($postData[$key]) && !empty($postData[$key])) {
+            $vehicleId = trim($postData[$key]);
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in key '$key': $vehicleId\n", FILE_APPEND);
+            break;
+        }
     }
 
     if (!$vehicleId) {
@@ -185,6 +187,46 @@ try {
     }
     
     file_put_contents($logFile, "[$timestamp] Updated airport_transfer_fares for vehicle: $vehicleId\n", FILE_APPEND);
+    
+    // Now sync with vehicle_pricing table (for compatibility)
+    $syncVPSql = "
+        INSERT INTO vehicle_pricing 
+        (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
+        airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
+        airport_tier4_price, airport_extra_km_charge, updated_at) 
+        VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE 
+        airport_base_price = VALUES(airport_base_price),
+        airport_price_per_km = VALUES(airport_price_per_km),
+        airport_pickup_price = VALUES(airport_pickup_price),
+        airport_drop_price = VALUES(airport_drop_price),
+        airport_tier1_price = VALUES(airport_tier1_price),
+        airport_tier2_price = VALUES(airport_tier2_price),
+        airport_tier3_price = VALUES(airport_tier3_price),
+        airport_tier4_price = VALUES(airport_tier4_price),
+        airport_extra_km_charge = VALUES(airport_extra_km_charge),
+        updated_at = NOW()
+    ";
+    
+    $syncVPStmt = $conn->prepare($syncVPSql);
+    if ($syncVPStmt) {
+        $syncVPStmt->bind_param(
+            "sddddddddd", 
+            $vehicleId, 
+            $basePrice, 
+            $pricePerKm, 
+            $pickupPrice, 
+            $dropPrice, 
+            $tier1Price, 
+            $tier2Price, 
+            $tier3Price, 
+            $tier4Price, 
+            $extraKmCharge
+        );
+        
+        $syncVPStmt->execute();
+        file_put_contents($logFile, "[$timestamp] Synced data to vehicle_pricing table for vehicle: $vehicleId\n", FILE_APPEND);
+    }
     
     // Create a response with all relevant data
     $response = [

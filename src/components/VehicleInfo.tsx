@@ -2,6 +2,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface VehicleInfoProps {
   vehicleId: string;
@@ -16,7 +18,13 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
           <CardTitle>Vehicle: {vehicleId}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No vehicle data available</p>
+          <Alert variant="warning" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No vehicle data available. Vehicle may not be synced in the database.
+            </AlertDescription>
+          </Alert>
+          <p className="text-muted-foreground">ID: {vehicleId}</p>
         </CardContent>
       </Card>
     );

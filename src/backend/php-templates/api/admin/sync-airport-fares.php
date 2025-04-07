@@ -10,6 +10,10 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+header('X-Debug-Endpoint: sync-airport-fares');
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -23,16 +27,20 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
+$logFile = $logDir . '/sync_airport_fares_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+
 // Log function to help with debugging
 function logMessage($message) {
-    global $logDir;
-    $logFile = $logDir . '/sync_airport_fares_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
+    global $logDir, $logFile, $timestamp;
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
 }
 
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
+
+// Run the database setup to ensure all tables exist
+include_once __DIR__ . '/db_setup.php';
 
 try {
     // Prevent multiple executions within a short time window (anti-loop protection)
@@ -41,14 +49,14 @@ try {
 
     if (file_exists($lockFile)) {
         $lastRun = (int)file_get_contents($lockFile);
-        if ($now - $lastRun < 30) { // 30-second cooldown
-            logMessage('Sync operation throttled - last run was less than 30 seconds ago');
+        if ($now - $lastRun < 10) { // 10-second cooldown
+            logMessage('Sync operation throttled - last run was less than 10 seconds ago');
             
             echo json_encode([
                 'status' => 'throttled',
-                'message' => 'Airport fares sync was recently performed. Please wait at least 30 seconds between syncs.',
+                'message' => 'Airport fares sync was recently performed. Please wait at least 10 seconds between syncs.',
                 'lastSync' => $lastRun,
-                'nextAvailable' => $lastRun + 30,
+                'nextAvailable' => $lastRun + 10,
                 'currentTime' => $now
             ]);
             exit;
@@ -133,93 +141,150 @@ try {
         logMessage("Created vehicle_pricing table");
     }
     
+    // Initialize vehicles array to track synced vehicles
+    $vehicles = [];
+    $syncedCount = 0;
+    
+    // First, sync from vehicle_pricing to airport_transfer_fares (if data exists in vehicle_pricing)
+    logMessage("Syncing data from vehicle_pricing to airport_transfer_fares");
+    $syncFromVPQuery = "
+        INSERT INTO airport_transfer_fares (
+            vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at
+        )
+        SELECT 
+            vp.vehicle_id,
+            vp.airport_base_price,
+            vp.airport_price_per_km,
+            vp.airport_pickup_price,
+            vp.airport_drop_price,
+            vp.airport_tier1_price,
+            vp.airport_tier2_price,
+            vp.airport_tier3_price,
+            vp.airport_tier4_price,
+            vp.airport_extra_km_charge,
+            NOW()
+        FROM 
+            vehicle_pricing vp
+        WHERE
+            vp.trip_type = 'airport'
+        ON DUPLICATE KEY UPDATE
+            base_price = vp.airport_base_price,
+            price_per_km = vp.airport_price_per_km,
+            pickup_price = vp.airport_pickup_price,
+            drop_price = vp.airport_drop_price,
+            tier1_price = vp.airport_tier1_price,
+            tier2_price = vp.airport_tier2_price,
+            tier3_price = vp.airport_tier3_price,
+            tier4_price = vp.airport_tier4_price,
+            extra_km_charge = vp.airport_extra_km_charge,
+            updated_at = NOW()
+    ";
+    
+    $conn->query($syncFromVPQuery);
+    logMessage("Synced from vehicle_pricing to airport_transfer_fares");
+    
+    // Now, sync from airport_transfer_fares to vehicle_pricing
+    logMessage("Syncing data from airport_transfer_fares to vehicle_pricing");
+    $syncToVPQuery = "
+        INSERT INTO vehicle_pricing (
+            vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
+            airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
+            airport_tier4_price, airport_extra_km_charge, updated_at
+        )
+        SELECT 
+            atf.vehicle_id,
+            'airport',
+            atf.base_price,
+            atf.price_per_km,
+            atf.pickup_price,
+            atf.drop_price,
+            atf.tier1_price,
+            atf.tier2_price,
+            atf.tier3_price,
+            atf.tier4_price,
+            atf.extra_km_charge,
+            NOW()
+        FROM 
+            airport_transfer_fares atf
+        ON DUPLICATE KEY UPDATE
+            airport_base_price = atf.base_price,
+            airport_price_per_km = atf.price_per_km,
+            airport_pickup_price = atf.pickup_price,
+            airport_drop_price = atf.drop_price,
+            airport_tier1_price = atf.tier1_price,
+            airport_tier2_price = atf.tier2_price,
+            airport_tier3_price = atf.tier3_price,
+            airport_tier4_price = atf.tier4_price,
+            airport_extra_km_charge = atf.extra_km_charge,
+            updated_at = NOW()
+    ";
+    
+    $conn->query($syncToVPQuery);
+    logMessage("Synced from airport_transfer_fares to vehicle_pricing");
+    
     // Get vehicles from vehicles table
     $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
-    $vehicles = [];
-    $syncedCount = 0;
-    
     if ($vehiclesResult && $vehiclesResult->num_rows > 0) {
         while ($row = $vehiclesResult->fetch_assoc()) {
             $vehicleId = $row['vehicle_id'] ?? $row['id'];
-            $vehicles[] = $vehicleId;
-            
-            // Insert default values if no data exists
-            $stmt = $conn->prepare("
-                INSERT IGNORE INTO airport_transfer_fares 
-                (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
-                VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
-            ");
-            
-            if (!$stmt) {
-                logMessage("Prepare statement failed for vehicle $vehicleId: " . $conn->error);
-                continue;
+            if (!empty($vehicleId)) {
+                $vehicles[] = $vehicleId;
+                
+                // Insert default values if no data exists in airport_transfer_fares
+                $stmt = $conn->prepare("
+                    INSERT IGNORE INTO airport_transfer_fares 
+                    (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
+                    VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
+                ");
+                
+                if (!$stmt) {
+                    logMessage("Prepare statement failed for vehicle $vehicleId: " . $conn->error);
+                    continue;
+                }
+                
+                $stmt->bind_param("s", $vehicleId);
+                $stmt->execute();
+                
+                if ($stmt->affected_rows > 0) {
+                    $syncedCount++;
+                    logMessage("Added default airport fare for vehicle: $vehicleId");
+                }
+                
+                // Insert default values if no data exists in vehicle_pricing
+                $vpStmt = $conn->prepare("
+                    INSERT IGNORE INTO vehicle_pricing 
+                    (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, 
+                    airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
+                    airport_extra_km_charge, updated_at)
+                    VALUES (?, 'airport', 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
+                ");
+                
+                if (!$vpStmt) {
+                    logMessage("Prepare vehicle_pricing statement failed for vehicle $vehicleId: " . $conn->error);
+                    continue;
+                }
+                
+                $vpStmt->bind_param("s", $vehicleId);
+                $vpStmt->execute();
+                
+                if ($vpStmt->affected_rows > 0) {
+                    logMessage("Added default vehicle_pricing airport data for vehicle: $vehicleId");
+                }
             }
-            
-            $stmt->bind_param("s", $vehicleId);
-            $stmt->execute();
-            
-            if ($stmt->affected_rows > 0) {
-                $syncedCount++;
-                logMessage("Added default airport fare for vehicle: $vehicleId");
-            }
-            
-            // Now sync with vehicle_pricing table (for compatibility)
-            $updateVehiclePricing = $conn->prepare("
-                INSERT INTO vehicle_pricing 
-                (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, 
-                airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
-                airport_extra_km_charge, updated_at)
-                SELECT 
-                    atf.vehicle_id, 
-                    'airport',
-                    atf.base_price,
-                    atf.price_per_km,
-                    atf.pickup_price,
-                    atf.drop_price,
-                    atf.tier1_price,
-                    atf.tier2_price,
-                    atf.tier3_price,
-                    atf.tier4_price,
-                    atf.extra_km_charge,
-                    NOW()
-                FROM 
-                    airport_transfer_fares atf
-                WHERE 
-                    atf.vehicle_id = ?
-                ON DUPLICATE KEY UPDATE
-                    airport_base_price = atf.base_price,
-                    airport_price_per_km = atf.price_per_km,
-                    airport_pickup_price = atf.pickup_price,
-                    airport_drop_price = atf.drop_price,
-                    airport_tier1_price = atf.tier1_price,
-                    airport_tier2_price = atf.tier2_price,
-                    airport_tier3_price = atf.tier3_price,
-                    airport_tier4_price = atf.tier4_price,
-                    airport_extra_km_charge = atf.extra_km_charge,
-                    updated_at = NOW()
-            ");
-            
-            if (!$updateVehiclePricing) {
-                logMessage("Prepare update statement failed for vehicle $vehicleId: " . $conn->error);
-                continue;
-            }
-            
-            $updateVehiclePricing->bind_param("s", $vehicleId);
-            $updateVehiclePricing->execute();
-            
-            logMessage("Synced airport fare for vehicle $vehicleId with vehicle_pricing table");
         }
     } else {
         logMessage("No vehicles found in database or query failed: " . $conn->error);
         
         // Fallback to hardcoded vehicles if database query failed
-        $vehicles = ['sedan', 'ertiga', 'innova_crysta', 'luxury', 'tempo_traveller'];
+        $defaultVehicles = ['sedan', 'ertiga', 'innova_crysta', 'luxury', 'tempo_traveller'];
         
         // Ensure these default vehicles exist in the vehicles table
-        foreach ($vehicles as $vehicleId) {
+        foreach ($defaultVehicles as $vehicleId) {
             $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+            $vehicles[] = $vehicleId;
             
             $checkVehicle = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?");
             if (!$checkVehicle) {
@@ -266,12 +331,11 @@ try {
             
             // Sync with vehicle_pricing for fallback vehicles
             $syncFallback = $conn->prepare("
-                INSERT INTO vehicle_pricing 
+                INSERT IGNORE INTO vehicle_pricing 
                 (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, 
                 airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
                 airport_extra_km_charge, updated_at)
                 VALUES (?, 'airport', 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
-                ON DUPLICATE KEY UPDATE updated_at = NOW()
             ");
             
             if (!$syncFallback) {

@@ -37,6 +37,21 @@ export const initializeDatabaseTables = async (): Promise<boolean> => {
     });
     
     console.log('Database initialization result:', result);
+    
+    // If successful, also run fix-vehicle-tables to ensure all columns are properly set
+    try {
+      const fixResult = await directVehicleOperation('api/admin/fix-vehicle-tables.php', 'GET', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      console.log('Fix vehicle tables result:', fixResult);
+    } catch (fixError) {
+      console.warn('Warning: Fix vehicle tables failed, continuing anyway:', fixError);
+    }
+    
     return result && result.status === 'success';
   } catch (error) {
     console.error('Error initializing database tables:', error);
@@ -46,7 +61,13 @@ export const initializeDatabaseTables = async (): Promise<boolean> => {
 
 export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> => {
   try {
-    const endpoint = `api/admin/direct-local-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
+    // Ensure we have database tables initialized
+    await initializeDatabaseTables();
+    
+    // Clean and encode vehicleId
+    const cleanVehicleId = vehicleId ? encodeURIComponent(vehicleId.trim()) : '';
+    const endpoint = `api/admin/direct-local-fares.php${cleanVehicleId ? `?vehicle_id=${cleanVehicleId}` : ''}`;
+    
     const result = await directVehicleOperation(endpoint, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
@@ -57,7 +78,20 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
 
     console.log('Local fares response:', result);
     
-    return result.fares || [];
+    if (result && result.status === 'success' && Array.isArray(result.fares)) {
+      return result.fares;
+    } else if (result && result.fares && typeof result.fares === 'object') {
+      if (Array.isArray(result.fares)) {
+        return result.fares;
+      } else {
+        // Convert object with keys to array
+        return Object.values(result.fares);
+      }
+    } else if (result && Array.isArray(result)) {
+      return result;
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching local fares:', error);
     throw error;
@@ -117,6 +151,9 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
 
 export const updateLocalFares = async (fareData: FareData): Promise<void> => {
   try {
+    // Make sure database tables are initialized before updating
+    await initializeDatabaseTables();
+    
     console.log('Updating local fares with data:', fareData);
     
     const result = await directVehicleOperation('api/admin/local-fares-update.php', 'POST', {
@@ -132,6 +169,13 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
 
     if (result.status === 'error') {
       throw new Error(result.message || 'Failed to update local fares');
+    }
+    
+    // Sync local fares after update to ensure consistency
+    try {
+      await syncLocalFares();
+    } catch (syncError) {
+      console.warn('Warning: Post-update local fare sync failed:', syncError);
     }
   } catch (error) {
     console.error('Error updating local fares:', error);
@@ -211,7 +255,8 @@ export const syncLocalFares = async (): Promise<any> => {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
-        'X-Debug': 'true'
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
     

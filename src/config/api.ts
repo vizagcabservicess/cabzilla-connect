@@ -1,6 +1,6 @@
 
 // Base URL for API requests
-export const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
 // Default headers for API requests
 export const defaultHeaders = {
@@ -31,8 +31,21 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // IMPORTANT: Never use external domains for API calls from the browser
-  // This prevents calls to external domains like vizagup.com
+  // Check for direct API access via environment variable
+  if (import.meta.env.VITE_USE_DIRECT_API === 'true') {
+    // If running on a production domain, allow direct API calls to the same domain
+    if (window.location.hostname.includes('vizagup.com')) {
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+      return `${window.location.origin}/${cleanEndpoint}`;
+    }
+    
+    // If we have a defined API base URL, use it
+    if (apiBaseUrl) {
+      const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      return `${cleanBase}${cleanEndpoint}`;
+    }
+  }
   
   // For all environments, use relative URLs to avoid CORS and external domain issues
   if (window.location.hostname.includes('localhost') || 
