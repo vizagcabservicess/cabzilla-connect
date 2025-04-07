@@ -69,15 +69,15 @@ try {
                 atf.id, 
                 atf.vehicle_id AS vehicleId,
                 v.name,
-                atf.base_price AS basePrice,
-                atf.price_per_km AS pricePerKm,
-                atf.pickup_price AS pickupPrice,
-                atf.drop_price AS dropPrice,
-                atf.tier1_price AS tier1Price,
-                atf.tier2_price AS tier2Price,
-                atf.tier3_price AS tier3Price,
-                atf.tier4_price AS tier4Price,
-                atf.extra_km_charge AS extraKmCharge
+                CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
+                CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
+                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
+                CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
+                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
+                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
+                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
+                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
+                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
@@ -92,15 +92,15 @@ try {
                 atf.id, 
                 atf.vehicle_id AS vehicleId,
                 v.name,
-                atf.base_price AS basePrice,
-                atf.price_per_km AS pricePerKm,
-                atf.pickup_price AS pickupPrice,
-                atf.drop_price AS dropPrice,
-                atf.tier1_price AS tier1Price,
-                atf.tier2_price AS tier2Price,
-                atf.tier3_price AS tier3Price,
-                atf.tier4_price AS tier4Price,
-                atf.extra_km_charge AS extraKmCharge
+                CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
+                CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
+                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
+                CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
+                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
+                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
+                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
+                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
+                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
@@ -141,6 +141,7 @@ try {
     
     // Debug: Log the query results
     error_log("Airport fares query returned " . count($fares) . " results");
+    error_log("Fares data: " . json_encode($fares));
     
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
@@ -189,15 +190,15 @@ try {
                     atf.id, 
                     atf.vehicle_id AS vehicleId,
                     v.name,
-                    atf.base_price AS basePrice,
-                    atf.price_per_km AS pricePerKm,
-                    atf.pickup_price AS pickupPrice,
-                    atf.drop_price AS dropPrice,
-                    atf.tier1_price AS tier1Price,
-                    atf.tier2_price AS tier2Price,
-                    atf.tier3_price AS tier3Price,
-                    atf.tier4_price AS tier4Price,
-                    atf.extra_km_charge AS extraKmCharge
+                    CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
+                    CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
+                    CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
+                    CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
+                    CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
+                    CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
+                    CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
+                    CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
+                    CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
                 FROM 
                     airport_transfer_fares atf
                 LEFT JOIN 
@@ -243,15 +244,15 @@ try {
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
             'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
-            'basePrice' => 0,
-            'pricePerKm' => 0,
-            'pickupPrice' => 0,
-            'dropPrice' => 0,
-            'tier1Price' => 0,
-            'tier2Price' => 0,
-            'tier3Price' => 0,
-            'tier4Price' => 0,
-            'extraKmCharge' => 0
+            'basePrice' => 0.00,
+            'pricePerKm' => 0.00,
+            'pickupPrice' => 0.00,
+            'dropPrice' => 0.00,
+            'tier1Price' => 0.00,
+            'tier2Price' => 0.00,
+            'tier3Price' => 0.00,
+            'tier4Price' => 0.00,
+            'extraKmCharge' => 0.00
         ];
         
         $fares[] = $defaultFare;
@@ -264,7 +265,8 @@ try {
     sendSuccessResponse([
         'fares' => $fares,
         'count' => count($fares),
-        'debug' => true
+        'debug' => true,
+        'timestamp' => time()
     ], 'Airport fares retrieved successfully');
     
 } catch (Exception $e) {

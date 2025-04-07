@@ -35,20 +35,21 @@ const AirportFareManagement: React.FC = () => {
       const fareDatas = await fetchAirportFares(vehicleId);
       
       if (fareDatas && fareDatas.length > 0) {
-        console.log('Retrieved fare data:', fareDatas[0]);
-        // Create a new object to ensure we have fresh values
+        const fareData = fareDatas[0];
+        console.log('Retrieved fare data:', fareData);
+        // Create a new object with explicit number conversions to ensure numeric values
         const cleanedFareData: FareData = {
           vehicleId: vehicleId,
           vehicle_id: vehicleId,
-          basePrice: Number(fareDatas[0].basePrice || 0),
-          pricePerKm: Number(fareDatas[0].pricePerKm || 0),
-          pickupPrice: Number(fareDatas[0].pickupPrice || 0),
-          dropPrice: Number(fareDatas[0].dropPrice || 0),
-          tier1Price: Number(fareDatas[0].tier1Price || 0),
-          tier2Price: Number(fareDatas[0].tier2Price || 0),
-          tier3Price: Number(fareDatas[0].tier3Price || 0),
-          tier4Price: Number(fareDatas[0].tier4Price || 0),
-          extraKmCharge: Number(fareDatas[0].extraKmCharge || 0)
+          basePrice: parseFloat(String(fareData.basePrice || 0)),
+          pricePerKm: parseFloat(String(fareData.pricePerKm || 0)),
+          pickupPrice: parseFloat(String(fareData.pickupPrice || 0)),
+          dropPrice: parseFloat(String(fareData.dropPrice || 0)),
+          tier1Price: parseFloat(String(fareData.tier1Price || 0)),
+          tier2Price: parseFloat(String(fareData.tier2Price || 0)),
+          tier3Price: parseFloat(String(fareData.tier3Price || 0)),
+          tier4Price: parseFloat(String(fareData.tier4Price || 0)),
+          extraKmCharge: parseFloat(String(fareData.extraKmCharge || 0))
         };
         console.log('Cleaned fare data to display:', cleanedFareData);
         setFares(cleanedFareData);
@@ -92,6 +93,7 @@ const AirportFareManagement: React.FC = () => {
   };
 
   const handleFareChange = (fareData: FareData) => {
+    console.log("Fare data changed:", fareData);
     setFares(fareData);
   };
 
@@ -105,13 +107,24 @@ const AirportFareManagement: React.FC = () => {
       return;
     }
 
-    // Ensure vehicle ID is set correctly
-    const fareToSave = {
+    // Ensure vehicle ID is set correctly and all values are numbers
+    const fareToSave: FareData = {
       ...fares,
       vehicleId: selectedVehicleId,
-      vehicle_id: selectedVehicleId
+      vehicle_id: selectedVehicleId,
+      basePrice: parseFloat(String(fares.basePrice || 0)),
+      pricePerKm: parseFloat(String(fares.pricePerKm || 0)),
+      pickupPrice: parseFloat(String(fares.pickupPrice || 0)),
+      dropPrice: parseFloat(String(fares.dropPrice || 0)),
+      tier1Price: parseFloat(String(fares.tier1Price || 0)),
+      tier2Price: parseFloat(String(fares.tier2Price || 0)),
+      tier3Price: parseFloat(String(fares.tier3Price || 0)),
+      tier4Price: parseFloat(String(fares.tier4Price || 0)),
+      extraKmCharge: parseFloat(String(fares.extraKmCharge || 0))
     };
 
+    console.log("Saving fare data:", fareToSave);
+    
     setLoading(true);
     try {
       await updateAirportFares(fareToSave);
@@ -125,7 +138,7 @@ const AirportFareManagement: React.FC = () => {
       setTimeout(() => {
         // Increment refresh key to trigger a reload
         setRefreshKey(prev => prev + 1);
-      }, 500);
+      }, 1000);
     } catch (error) {
       console.error('Error saving fares:', error);
       toast({
