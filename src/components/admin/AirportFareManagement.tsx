@@ -14,7 +14,7 @@ const AirportFareManagement: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [initialized, setInitialized] = useState<boolean>(false);
-  const [refreshKey, setRefreshKey] = useState<number>(0); // Add a refresh key to force re-render without continuous refresh
+  const [refreshKey, setRefreshKey] = useState<number>(0);
   const { toast } = useToast();
 
   // Load fares when vehicle selection changes or refresh key changes
@@ -26,23 +26,6 @@ const AirportFareManagement: React.FC = () => {
     }
   }, [selectedVehicleId, refreshKey]);
 
-  // Separate effect for preventing continuous reload
-  useEffect(() => {
-    const handleFareDataUpdated = (event: CustomEvent) => {
-      if (event.detail?.fareType === 'airport' && 
-          (event.detail?.vehicleId === selectedVehicleId || event.detail?.allVehicles === true)) {
-        // Instead of directly loading fares, update the refresh key
-        setRefreshKey(prev => prev + 1);
-      }
-    };
-
-    window.addEventListener('fare-data-updated', handleFareDataUpdated as EventListener);
-    
-    return () => {
-      window.removeEventListener('fare-data-updated', handleFareDataUpdated as EventListener);
-    };
-  }, [selectedVehicleId]);
-
   const loadFares = async (vehicleId: string) => {
     if (!vehicleId) return;
     
@@ -53,8 +36,20 @@ const AirportFareManagement: React.FC = () => {
       
       if (fareDatas && fareDatas.length > 0) {
         console.log('Retrieved fare data:', fareDatas[0]);
-        setFares(fareDatas[0]);
-        // Force the component to recognize the data has changed
+        // Convert all values to numbers explicitly to avoid potential string values
+        const cleanedFareData = {
+          ...fareDatas[0],
+          basePrice: Number(fareDatas[0].basePrice || 0),
+          pricePerKm: Number(fareDatas[0].pricePerKm || 0),
+          pickupPrice: Number(fareDatas[0].pickupPrice || 0),
+          dropPrice: Number(fareDatas[0].dropPrice || 0),
+          tier1Price: Number(fareDatas[0].tier1Price || 0),
+          tier2Price: Number(fareDatas[0].tier2Price || 0),
+          tier3Price: Number(fareDatas[0].tier3Price || 0),
+          tier4Price: Number(fareDatas[0].tier4Price || 0),
+          extraKmCharge: Number(fareDatas[0].extraKmCharge || 0)
+        };
+        setFares(cleanedFareData);
         setInitialized(true);
       } else {
         // If no fare data found, create a default entry
@@ -122,8 +117,11 @@ const AirportFareManagement: React.FC = () => {
         title: "Success",
         description: "Airport fares saved successfully.",
       });
-      // Update refresh key instead of directly reloading
-      setRefreshKey(prev => prev + 1);
+      
+      // Force a reload of data to ensure we have the latest values
+      setTimeout(() => {
+        loadFares(selectedVehicleId);
+      }, 500);
     } catch (error) {
       console.error('Error saving fares:', error);
       toast({
@@ -145,8 +143,12 @@ const AirportFareManagement: React.FC = () => {
         description: "Airport fare tables synchronized successfully.",
       });
       
-      // Update refresh key instead of directly reloading
-      setRefreshKey(prev => prev + 1);
+      // Reload data if we have a selected vehicle
+      if (selectedVehicleId) {
+        setTimeout(() => {
+          loadFares(selectedVehicleId);
+        }, 500);
+      }
     } catch (error) {
       console.error('Error syncing airport fare tables:', error);
       toast({
@@ -186,8 +188,12 @@ const AirportFareManagement: React.FC = () => {
         // Sync tables after fixing collation
         await syncAirportFares();
         
-        // Update refresh key instead of directly reloading
-        setRefreshKey(prev => prev + 1);
+        // Reload data if we have a selected vehicle
+        if (selectedVehicleId) {
+          setTimeout(() => {
+            loadFares(selectedVehicleId);
+          }, 500);
+        }
       } else {
         throw new Error(result.message || 'Failed to fix database collation');
       }

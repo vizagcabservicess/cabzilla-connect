@@ -112,7 +112,7 @@ try {
     // Fetch results
     $fares = [];
     while ($row = $result->fetch_assoc()) {
-        // Clean up data - convert numeric values properly
+        // Clean up data - ensure values are properly cast to numeric values
         $fare = [
             'id' => (int)$row['id'],
             'vehicleId' => $row['vehicleId'],
@@ -134,6 +134,28 @@ try {
     
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
+        // Before inserting, check if the vehicle exists in the vehicles table
+        $checkVehicleQuery = "SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?";
+        $checkStmt = $conn->prepare($checkVehicleQuery);
+        
+        if ($checkStmt) {
+            $checkStmt->bind_param('s', $vehicleId);
+            $checkStmt->execute();
+            $checkResult = $checkStmt->get_result();
+            
+            if ($checkResult->num_rows === 0) {
+                // Vehicle doesn't exist, try to insert it first with a default name
+                $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+                $insertVehicleQuery = "INSERT IGNORE INTO vehicles (vehicle_id, name, status) VALUES (?, ?, 'active')";
+                $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+                
+                if ($insertVehicleStmt) {
+                    $insertVehicleStmt->bind_param('ss', $vehicleId, $vehicleName);
+                    $insertVehicleStmt->execute();
+                }
+            }
+        }
+        
         // Insert default entry for this vehicle and then fetch it again
         $insertQuery = "
             INSERT IGNORE INTO airport_transfer_fares 
