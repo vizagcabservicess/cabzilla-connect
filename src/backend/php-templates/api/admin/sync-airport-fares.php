@@ -31,89 +31,166 @@ function logMessage($message) {
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
 }
 
-// Prevent multiple executions within a short time window (anti-loop protection)
-$lockFile = $logDir . '/sync_airport_fares.lock';
-$now = time();
+// Include database utilities
+require_once __DIR__ . '/../utils/database.php';
 
-if (file_exists($lockFile)) {
-    $lastRun = (int)file_get_contents($lockFile);
-    if ($now - $lastRun < 30) { // 30-second cooldown
-        logMessage('Sync operation throttled - last run was less than 30 seconds ago');
-        
-        echo json_encode([
-            'status' => 'throttled',
-            'message' => 'Airport fares sync was recently performed. Please wait at least 30 seconds between syncs.',
-            'lastSync' => $lastRun,
-            'nextAvailable' => $lastRun + 30,
-            'currentTime' => $now
-        ]);
-        exit;
-    }
-}
+try {
+    // Prevent multiple executions within a short time window (anti-loop protection)
+    $lockFile = $logDir . '/sync_airport_fares.lock';
+    $now = time();
 
-// Update lock file with current timestamp
-file_put_contents($lockFile, $now);
-
-// Create cache directory if needed
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
-
-// Load persistent vehicle data
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$persistentData = [];
-
-if (file_exists($persistentCacheFile)) {
-    $persistentJson = file_get_contents($persistentCacheFile);
-    if ($persistentJson) {
-        try {
-            $persistentData = json_decode($persistentJson, true);
-            if (!is_array($persistentData)) {
-                $persistentData = [];
-                logMessage("Error: Persistent data is not an array");
-            } else {
-                logMessage("Loaded " . count($persistentData) . " vehicles from persistent data");
-            }
-        } catch (Exception $e) {
-            logMessage("Error parsing persistent data: " . $e->getMessage());
-            $persistentData = [];
+    if (file_exists($lockFile)) {
+        $lastRun = (int)file_get_contents($lockFile);
+        if ($now - $lastRun < 30) { // 30-second cooldown
+            logMessage('Sync operation throttled - last run was less than 30 seconds ago');
+            
+            echo json_encode([
+                'status' => 'throttled',
+                'message' => 'Airport fares sync was recently performed. Please wait at least 30 seconds between syncs.',
+                'lastSync' => $lastRun,
+                'nextAvailable' => $lastRun + 30,
+                'currentTime' => $now
+            ]);
+            exit;
         }
     }
-}
 
-// Get all vehicle IDs from persistent data
-$vehicleIds = [];
-foreach ($persistentData as $vehicle) {
-    if (isset($vehicle['id']) && !empty($vehicle['id'])) {
-        $vehicleIds[] = $vehicle['id'];
+    // Update lock file with current timestamp
+    file_put_contents($lockFile, $now);
+    
+    // Connect to database
+    $conn = getDbConnection();
+    
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
+    
+    logMessage("Database connection successful");
+    
+    // Check if airport_transfer_fares table exists
+    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+    $airportFaresTableExists = $checkTableStmt->num_rows > 0;
+    
+    // If airport_transfer_fares table doesn't exist, create it
+    if (!$airportFaresTableExists) {
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        $conn->query($createTableSql);
+        logMessage("Created airport_transfer_fares table");
+    }
+    
+    // Get vehicles from vehicles table
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
+    $vehiclesResult = $conn->query($vehiclesQuery);
+    
+    $vehicles = [];
+    $syncedCount = 0;
+    
+    if ($vehiclesResult) {
+        while ($row = $vehiclesResult->fetch_assoc()) {
+            $vehicleId = $row['vehicle_id'] ?? $row['id'];
+            $vehicles[] = $vehicleId;
+            
+            // Insert default values if no data exists
+            $stmt = $conn->prepare("
+                INSERT IGNORE INTO airport_transfer_fares 
+                (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
+                VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
+            ");
+            
+            $stmt->bind_param("s", $vehicleId);
+            $stmt->execute();
+            
+            if ($stmt->affected_rows > 0) {
+                $syncedCount++;
+                logMessage("Added default airport fare for vehicle: $vehicleId");
+            }
+            
+            // Now sync with vehicle_pricing table (for compatibility)
+            $updateVehiclePricing = $conn->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, 
+                airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
+                airport_extra_km_charge, updated_at)
+                SELECT 
+                    atf.vehicle_id, 
+                    'airport',
+                    atf.base_price,
+                    atf.price_per_km,
+                    atf.pickup_price,
+                    atf.drop_price,
+                    atf.tier1_price,
+                    atf.tier2_price,
+                    atf.tier3_price,
+                    atf.tier4_price,
+                    atf.extra_km_charge,
+                    NOW()
+                FROM 
+                    airport_transfer_fares atf
+                WHERE 
+                    atf.vehicle_id = ?
+                ON DUPLICATE KEY UPDATE
+                    airport_base_price = atf.base_price,
+                    airport_price_per_km = atf.price_per_km,
+                    airport_pickup_price = atf.pickup_price,
+                    airport_drop_price = atf.drop_price,
+                    airport_tier1_price = atf.tier1_price,
+                    airport_tier2_price = atf.tier2_price,
+                    airport_tier3_price = atf.tier3_price,
+                    airport_tier4_price = atf.tier4_price,
+                    airport_extra_km_charge = atf.extra_km_charge,
+                    updated_at = NOW()
+            ");
+            
+            $updateVehiclePricing->bind_param("s", $vehicleId);
+            $updateVehiclePricing->execute();
+            
+            logMessage("Synced airport fare for vehicle $vehicleId with vehicle_pricing table");
+        }
+    } else {
+        logMessage("No vehicles found in database");
+        $vehicles = ['sedan', 'ertiga', 'innova_crysta', 'luxury', 'tempo_traveller'];
+    }
+    
+    // Close database connection
+    $conn->close();
+    
+    logMessage("Synced airport fares for " . count($vehicles) . " vehicles");
+    
+    // Return success response with proper JSON encoding
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Airport fares synced successfully',
+        'synced' => $syncedCount,
+        'vehicles' => $vehicles,
+        'timestamp' => $now
+    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
+} catch (Exception $e) {
+    logMessage("Error: " . $e->getMessage());
+    
+    // Return error response
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'timestamp' => time()
+    ]);
 }
-
-// If no vehicles in persistent data, use hardcoded list as fallback
-if (empty($vehicleIds)) {
-    $vehicleIds = [
-        'sedan',
-        'ertiga',
-        'innova_crysta', 
-        'luxury',
-        'tempo_traveller'
-    ];
-    logMessage("No vehicles found in persistent data, using default list");
-} else {
-    logMessage("Using " . count($vehicleIds) . " vehicles from persistent data");
-}
-
-// In a real environment, we would now sync the airport fares table with these vehicle IDs
-// For this mock implementation, we'll just log that the sync would occur
-logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
-logMessage("Synced fares for " . count($vehicleIds) . " vehicles");
-
-// Return success response with proper JSON encoding
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Airport fares synced successfully',
-    'synced' => count($vehicleIds),
-    'vehicles' => $vehicleIds,
-    'timestamp' => $now
-], JSON_PARTIAL_OUTPUT_ON_ERROR);

@@ -71,7 +71,8 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
     const result = await directVehicleOperation('api/admin/local-fares-update.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
+        'X-Force-Refresh': 'true',
+        'Content-Type': 'application/json'
       },
       data: fareData
     });
@@ -98,10 +99,13 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
       vehicle_id: fareData.vehicleId
     };
     
+    console.log('Data being sent to API:', JSON.stringify(dataToSend));
+    
     const result = await directVehicleOperation('api/admin/airport-fares-update.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true', 
-        'X-Force-Refresh': 'true'
+        'X-Force-Refresh': 'true',
+        'Content-Type': 'application/json'
       },
       data: dataToSend
     });
@@ -111,8 +115,50 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
     if (result.status === 'error') {
       throw new Error(result.message || 'Failed to update airport fares');
     }
+    
+    // Trigger a sync after updating fares
+    try {
+      await syncAirportFares();
+    } catch (syncError) {
+      console.warn('Warning: Airport fare sync failed after update:', syncError);
+      // Continue anyway, the update was successful
+    }
   } catch (error) {
     console.error('Error updating airport fares:', error);
+    throw error;
+  }
+};
+
+export const syncLocalFares = async (): Promise<any> => {
+  try {
+    const result = await directVehicleOperation('api/admin/sync-local-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+    
+    console.log('Local fares sync response:', result);
+    return result;
+  } catch (error) {
+    console.error('Error syncing local fares:', error);
+    throw error;
+  }
+};
+
+export const syncAirportFares = async (): Promise<any> => {
+  try {
+    const result = await directVehicleOperation('api/admin/sync-airport-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+    
+    console.log('Airport fares sync response:', result);
+    return result;
+  } catch (error) {
+    console.error('Error syncing airport fares:', error);
     throw error;
   }
 };

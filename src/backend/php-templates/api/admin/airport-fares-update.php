@@ -21,6 +21,9 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/airport_fares_update_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
+// Include database utilities
+require_once __DIR__ . '/../utils/database.php';
+
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
 
@@ -88,16 +91,6 @@ try {
     file_put_contents($logFile, "[$timestamp] Found vehicle ID: $vehicleId\n", FILE_APPEND);
 
     // Extract fare data - support various naming conventions
-    $priceOneWay = isset($postData['priceOneWay']) ? floatval($postData['priceOneWay']) : 
-                  (isset($postData['oneWayPrice']) ? floatval($postData['oneWayPrice']) : 0);
-    
-    $priceRoundTrip = isset($postData['priceRoundTrip']) ? floatval($postData['priceRoundTrip']) : 
-                     (isset($postData['roundTripPrice']) ? floatval($postData['roundTripPrice']) : 0);
-    
-    $nightCharges = isset($postData['nightCharges']) ? floatval($postData['nightCharges']) : 0;
-    $extraWaitingCharges = isset($postData['extraWaitingCharges']) ? floatval($postData['extraWaitingCharges']) : 0;
-    
-    // Support for standard field naming from airport_transfer_fares table
     $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : 0;
     $pricePerKm = isset($postData['pricePerKm']) ? floatval($postData['pricePerKm']) : 0;
     $pickupPrice = isset($postData['pickupPrice']) ? floatval($postData['pickupPrice']) : 0;
@@ -107,48 +100,197 @@ try {
     $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : 0;
     $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : 0;
     $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 0;
-
-    // This is a mock implementation for the Lovable preview
-    // In a real environment, this would connect to a database
     
-    file_put_contents($logFile, "[$timestamp] Successfully processed fare update for vehicle: $vehicleId\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] OneWay: $priceOneWay, RoundTrip: $priceRoundTrip, Night: $nightCharges, Waiting: $extraWaitingCharges\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] BasePrice: $basePrice, PricePerKm: $pricePerKm, Tier1: $tier1Price, Tier2: $tier2Price, Tier3: $tier3Price, Tier4: $tier4Price\n", FILE_APPEND);
-
-    // Create a lock file to prevent immediate syncing after an update
-    // (helps prevent infinite loops)
-    file_put_contents($logDir . '/airport_fares_updated.lock', time());
+    // Connect to the database
+    $conn = getDbConnection();
     
-    // Create a response with all relevant data
-    $response = [
-        'status' => 'success',
-        'message' => 'Airport fare updated successfully',
-        'vehicle_id' => $vehicleId,
-        'data' => [
-            'priceOneWay' => $priceOneWay,
-            'priceRoundTrip' => $priceRoundTrip,
-            'nightCharges' => $nightCharges,
-            'extraWaitingCharges' => $extraWaitingCharges,
-            'basePrice' => $basePrice,
-            'pricePerKm' => $pricePerKm,
-            'pickupPrice' => $pickupPrice,
-            'dropPrice' => $dropPrice,
-            'tier1Price' => $tier1Price,
-            'tier2Price' => $tier2Price,
-            'tier3Price' => $tier3Price,
-            'tier4Price' => $tier4Price,
-            'extraKmCharge' => $extraKmCharge
-        ],
-        'timestamp' => time()
-    ];
+    if (!$conn) {
+        throw new Exception("Database connection failed");
+    }
     
-    // Output valid JSON
-    echo json_encode($response);
+    file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
+    
+    // Check if airport_transfer_fares table exists
+    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+    $airportTableExists = $checkTableStmt->num_rows > 0;
+    
+    if (!$airportTableExists) {
+        // Create the table if it doesn't exist
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+    }
+    
+    // Check if vehicle exists in vehicles table, add it if it doesn't
+    $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?");
+    $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+    $checkVehicleStmt->execute();
+    $checkResult = $checkVehicleStmt->get_result();
+    
+    if ($checkResult->num_rows === 0) {
+        // Create a default vehicle entry if it doesn't exist
+        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+        $insertVehicleSql = "
+            INSERT INTO vehicles 
+            (vehicle_id, name, is_active) 
+            VALUES (?, ?, 1)
+        ";
+        
+        $insertVehicleStmt = $conn->prepare($insertVehicleSql);
+        $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
+        $insertVehicleStmt->execute();
+        
+        file_put_contents($logFile, "[$timestamp] Created new vehicle entry for: $vehicleId\n", FILE_APPEND);
+    }
+    
+    // Begin a transaction to ensure data integrity
+    $conn->begin_transaction();
+    
+    try {
+        // Update airport_transfer_fares table
+        $updateAirportFaresSql = "
+            INSERT INTO airport_transfer_fares 
+            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_price = VALUES(base_price),
+            price_per_km = VALUES(price_per_km),
+            pickup_price = VALUES(pickup_price),
+            drop_price = VALUES(drop_price),
+            tier1_price = VALUES(tier1_price),
+            tier2_price = VALUES(tier2_price),
+            tier3_price = VALUES(tier3_price),
+            tier4_price = VALUES(tier4_price),
+            extra_km_charge = VALUES(extra_km_charge),
+            updated_at = NOW()
+        ";
+        
+        $updateAirportFaresStmt = $conn->prepare($updateAirportFaresSql);
+        $updateAirportFaresStmt->bind_param(
+            "sddddddddd", 
+            $vehicleId, 
+            $basePrice, 
+            $pricePerKm, 
+            $pickupPrice, 
+            $dropPrice, 
+            $tier1Price, 
+            $tier2Price, 
+            $tier3Price, 
+            $tier4Price, 
+            $extraKmCharge
+        );
+        
+        if (!$updateAirportFaresStmt->execute()) {
+            throw new Exception("Failed to update airport_transfer_fares: " . $updateAirportFaresStmt->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Updated airport_transfer_fares for vehicle: $vehicleId\n", FILE_APPEND);
+        
+        // Also update vehicle_pricing table for compatibility
+        $updateVehiclePricingSql = "
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
+            airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
+            airport_tier4_price, airport_extra_km_charge, updated_at) 
+            VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            airport_base_price = VALUES(airport_base_price),
+            airport_price_per_km = VALUES(airport_price_per_km),
+            airport_pickup_price = VALUES(airport_pickup_price),
+            airport_drop_price = VALUES(airport_drop_price),
+            airport_tier1_price = VALUES(airport_tier1_price),
+            airport_tier2_price = VALUES(airport_tier2_price),
+            airport_tier3_price = VALUES(airport_tier3_price),
+            airport_tier4_price = VALUES(airport_tier4_price),
+            airport_extra_km_charge = VALUES(airport_extra_km_charge),
+            updated_at = NOW()
+        ";
+        
+        $updateVehiclePricingStmt = $conn->prepare($updateVehiclePricingSql);
+        $updateVehiclePricingStmt->bind_param(
+            "sddddddddd", 
+            $vehicleId, 
+            $basePrice, 
+            $pricePerKm, 
+            $pickupPrice, 
+            $dropPrice, 
+            $tier1Price, 
+            $tier2Price, 
+            $tier3Price, 
+            $tier4Price, 
+            $extraKmCharge
+        );
+        
+        if (!$updateVehiclePricingStmt->execute()) {
+            throw new Exception("Failed to update vehicle_pricing: " . $updateVehiclePricingStmt->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Updated vehicle_pricing for vehicle: $vehicleId\n", FILE_APPEND);
+        
+        // Commit the transaction
+        $conn->commit();
+        
+        file_put_contents($logFile, "[$timestamp] Successfully updated airport fares for vehicle: $vehicleId\n", FILE_APPEND);
+        
+        // Create a response with all relevant data
+        $response = [
+            'status' => 'success',
+            'message' => 'Airport fare updated successfully',
+            'vehicle_id' => $vehicleId,
+            'data' => [
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'pickupPrice' => $pickupPrice,
+                'dropPrice' => $dropPrice,
+                'tier1Price' => $tier1Price,
+                'tier2Price' => $tier2Price,
+                'tier3Price' => $tier3Price,
+                'tier4Price' => $tier4Price,
+                'extraKmCharge' => $extraKmCharge
+            ],
+            'timestamp' => time()
+        ];
+        
+        // Output valid JSON
+        echo json_encode($response);
+    } catch (Exception $e) {
+        // Rollback transaction on error
+        $conn->rollback();
+        throw $e;
+    } finally {
+        // Close database connection
+        if ($conn) {
+            $conn->close();
+        }
+    }
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     
-    http_response_code(400); // Changed from 500 to 400 for "Bad Request" which is more accurate for missing vehicle ID
+    http_response_code(400); // Bad Request is more accurate for missing vehicle ID
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),

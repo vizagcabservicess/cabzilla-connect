@@ -22,6 +22,9 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
+// Include database utilities
+require_once __DIR__ . '/../utils/database.php';
+
 // Log this request
 file_put_contents($logFile, "[$timestamp] Direct airport fares request received\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
@@ -51,107 +54,148 @@ if (!$vehicleId) {
     exit;
 }
 
-// Create cache directory if needed
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
-
-// Load persistent vehicle data
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$persistentData = [];
-
-if (file_exists($persistentCacheFile)) {
-    $persistentJson = file_get_contents($persistentCacheFile);
-    if ($persistentJson) {
-        try {
-            $persistentData = json_decode($persistentJson, true);
-            file_put_contents($logFile, "[$timestamp] Loaded persistent data with " . count($persistentData) . " vehicles\n", FILE_APPEND);
-        } catch (Exception $e) {
-            file_put_contents($logFile, "[$timestamp] Error parsing persistent data: " . $e->getMessage() . "\n", FILE_APPEND);
-        }
+try {
+    // Connect to database
+    $conn = getDbConnection();
+    
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
-}
-
-// Check if vehicle exists in persistent data
-$vehicleExists = false;
-$savedFares = null;
-
-foreach ($persistentData as $vehicle) {
-    if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
-        $vehicleExists = true;
-        // Check if airport fares are stored directly in vehicle data
-        if (isset($vehicle['airportFares'])) {
-            $savedFares = $vehicle['airportFares'];
-            file_put_contents($logFile, "[$timestamp] Found existing airport fares in vehicle data\n", FILE_APPEND);
+    
+    file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
+    
+    // Check if airport_transfer_fares table exists
+    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+    $airportTableExists = $checkTableStmt->num_rows > 0;
+    
+    if (!$airportTableExists) {
+        // Create the table if it doesn't exist
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
         }
-        break;
+        
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
+    
+    // Query airport fares from database
+    $query = "
+        SELECT 
+            id,
+            vehicle_id,
+            base_price,
+            price_per_km,
+            pickup_price,
+            drop_price,
+            tier1_price,
+            tier2_price,
+            tier3_price,
+            tier4_price,
+            extra_km_charge
+        FROM 
+            airport_transfer_fares
+        WHERE 
+            vehicle_id = ?
+    ";
+    
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("s", $vehicleId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $fare = null;
+    
+    if ($result->num_rows > 0) {
+        // Fetch existing fare data
+        $row = $result->fetch_assoc();
+        $fare = [
+            'vehicleId' => $row['vehicle_id'],
+            'vehicle_id' => $row['vehicle_id'],
+            'basePrice' => floatval($row['base_price']),
+            'pricePerKm' => floatval($row['price_per_km']),
+            'pickupPrice' => floatval($row['pickup_price']),
+            'dropPrice' => floatval($row['drop_price']),
+            'tier1Price' => floatval($row['tier1_price']),
+            'tier2Price' => floatval($row['tier2_price']),
+            'tier3Price' => floatval($row['tier3_price']),
+            'tier4Price' => floatval($row['tier4_price']),
+            'extraKmCharge' => floatval($row['extra_km_charge'])
+        ];
+        
+        file_put_contents($logFile, "[$timestamp] Found existing fare data for vehicle: $vehicleId\n", FILE_APPEND);
+    } else {
+        // No existing data, insert default values
+        $insertQuery = "
+            INSERT INTO airport_transfer_fares 
+            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at) 
+            VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
+        ";
+        
+        $insertStmt = $conn->prepare($insertQuery);
+        $insertStmt->bind_param("s", $vehicleId);
+        $insertStmt->execute();
+        
+        // Define default fare data
+        $fare = [
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'basePrice' => 0,
+            'pricePerKm' => 0,
+            'pickupPrice' => 0,
+            'dropPrice' => 0,
+            'tier1Price' => 0,
+            'tier2Price' => 0,
+            'tier3Price' => 0,
+            'tier4Price' => 0,
+            'extraKmCharge' => 0
+        ];
+        
+        file_put_contents($logFile, "[$timestamp] Created default fare data for vehicle: $vehicleId\n", FILE_APPEND);
+    }
+    
+    // Close database connection
+    $conn->close();
+    
+    // Return fare data
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Airport fares retrieved successfully',
+        'fares' => [$fare],
+        'debug' => [
+            'vehicle_id' => $vehicleId,
+            'timestamp' => time()
+        ]
+    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
+    
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'debug' => [
+            'vehicle_id' => $vehicleId,
+            'timestamp' => time()
+        ]
+    ]);
 }
-
-// Define default fares based on vehicle type
-$defaultFares = [
-    'sedan' => [
-        'priceOneWay' => 1500,
-        'priceRoundTrip' => 2800,
-        'nightCharges' => 300,
-        'extraWaitingCharges' => 150
-    ],
-    'ertiga' => [
-        'priceOneWay' => 1800,
-        'priceRoundTrip' => 3400,
-        'nightCharges' => 350,
-        'extraWaitingCharges' => 200
-    ],
-    'innova_crysta' => [
-        'priceOneWay' => 2200,
-        'priceRoundTrip' => 4000,
-        'nightCharges' => 400,
-        'extraWaitingCharges' => 250
-    ],
-    'luxury' => [
-        'priceOneWay' => 2600,
-        'priceRoundTrip' => 4800, 
-        'nightCharges' => 500,
-        'extraWaitingCharges' => 300
-    ],
-    'tempo_traveller' => [
-        'priceOneWay' => 3500,
-        'priceRoundTrip' => 6000,
-        'nightCharges' => 600,
-        'extraWaitingCharges' => 350
-    ]
-];
-
-// If we have saved fares, use them; otherwise get default fares for the vehicle
-if ($savedFares) {
-    $fare = $savedFares;
-    file_put_contents($logFile, "[$timestamp] Using saved fares for vehicle $vehicleId\n", FILE_APPEND);
-} else {
-    // Get default fare for the vehicle, or create empty fare if vehicle type not found
-    $fare = isset($defaultFares[$vehicleId]) ? $defaultFares[$vehicleId] : [
-        'priceOneWay' => 0,
-        'priceRoundTrip' => 0,
-        'nightCharges' => 0,
-        'extraWaitingCharges' => 0
-    ];
-    file_put_contents($logFile, "[$timestamp] Using default fares for vehicle $vehicleId\n", FILE_APPEND);
-}
-
-// Add vehicle ID to fare data (include both formats for compatibility)
-$fare['vehicleId'] = $vehicleId;
-$fare['vehicle_id'] = $vehicleId;
-
-// Log the response
-file_put_contents($logFile, "[$timestamp] Responding with fare data: " . json_encode($fare) . "\n", FILE_APPEND);
-
-// Return fare data
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Airport fares retrieved successfully',
-    'fares' => [$fare],
-    'debug' => [
-        'vehicle_id' => $vehicleId,
-        'timestamp' => time()
-    ]
-], JSON_PARTIAL_OUTPUT_ON_ERROR);
