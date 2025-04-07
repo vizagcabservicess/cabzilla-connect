@@ -61,14 +61,24 @@ export interface Vehicle {
 /**
  * Interface representing a Cab Type (Vehicle with additional properties)
  */
-export interface CabType extends Vehicle {
+export interface CabType {
+  id: string;
+  vehicle_id: string;
   vehicleId?: string; // For backward compatibility
+  name: string;
+  capacity?: number;
+  luggage_capacity?: number;
   luggageCapacity?: number;
+  image?: string;
+  amenities?: string[];
+  description?: string;
+  is_active?: boolean;
+  isActive?: boolean; // For backward compatibility
   ac?: boolean;
   price?: number;
   pricePerKm?: number;
   basePrice?: number; // For backward compatibility
-  isActive?: boolean; // For backward compatibility
+  base_price?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
   localPackageFares?: {

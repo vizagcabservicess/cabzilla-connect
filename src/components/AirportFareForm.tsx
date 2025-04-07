@@ -11,6 +11,8 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
 import { FareUpdateError } from './cab-options/FareUpdateError';
+import { directApiPost, directApiPostWithFallback } from '@/utils/directApiHelper';
+import { fareService, updateAirportFare } from '@/services/fareService';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -77,90 +79,6 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     }
   }, [initialData, form]);
 
-  // Direct database update function (more reliable than the service)
-  const updateAirportFareDirectly = async (data: AirportFareFormValues): Promise<any> => {
-    console.log("Directly updating airport fares with data:", data);
-    
-    try {
-      // Create FormData object for reliable transmission
-      const formData = new FormData();
-      formData.append('vehicleId', vehicleId);
-      Object.entries(data).forEach(([key, value]) => {
-        formData.append(key, String(value));
-      });
-      
-      // Make the direct API call
-      const response = await fetch('/api/direct-airport-fares.php', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Debug': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      
-      // Get the text first to make debugging easier
-      const responseText = await response.text();
-      console.log("Direct API response text:", responseText);
-      
-      try {
-        // Try to parse it as JSON
-        const responseData = JSON.parse(responseText);
-        return responseData;
-      } catch (jsonError) {
-        console.error("Error parsing JSON response:", jsonError);
-        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
-      }
-    } catch (error) {
-      console.error("Direct API call failed:", error);
-      throw error;
-    }
-  };
-
-  // Backend API update function
-  const updateAirportFareViaAdminAPI = async (data: AirportFareFormValues): Promise<any> => {
-    console.log("Updating airport fares via admin API:", data);
-    
-    try {
-      const jsonData = {
-        vehicleId: vehicleId,
-        ...data
-      };
-      
-      const response = await fetch('/api/admin/direct-airport-fares-update.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug': 'true',
-          'X-Admin-Mode': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
-        body: JSON.stringify(jsonData)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      
-      const responseText = await response.text();
-      console.log("Admin API response text:", responseText);
-      
-      try {
-        return JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error("Error parsing admin JSON response:", jsonError);
-        throw new Error(`Invalid JSON from admin API: ${responseText.substring(0, 100)}...`);
-      }
-    } catch (error) {
-      console.error("Admin API call failed:", error);
-      throw error;
-    }
-  };
-
   async function onSubmit(values: AirportFareFormValues) {
     // Prevent double submissions
     const now = Date.now();
@@ -184,46 +102,13 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
       console.log("Submitting airport fare form for vehicle:", vehicleId);
       console.log("Form values:", values);
       
-      let errorMsg = "";
-      let success = false;
+      const fareData: AirportFare = {
+        vehicleId,
+        ...values
+      };
       
-      // Try all available methods to update the fare
-      try {
-        // Method 1: Direct API call
-        console.log("Attempting direct API update...");
-        const directResponse = await updateAirportFareDirectly(values);
-        if (directResponse && directResponse.status === 'success') {
-          console.log("Direct API update successful:", directResponse);
-          success = true;
-        } else {
-          errorMsg += "Direct API failed: " + (directResponse?.message || "Unknown error") + ". ";
-        }
-      } catch (directError: any) {
-        console.error("Direct API update failed:", directError);
-        errorMsg += "Direct API failed: " + (directError?.message || directError) + ". ";
-      }
-      
-      // If direct method failed, try admin API
-      if (!success) {
-        try {
-          console.log("Attempting admin API update...");
-          const adminResponse = await updateAirportFareViaAdminAPI(values);
-          if (adminResponse && adminResponse.status === 'success') {
-            console.log("Admin API update successful:", adminResponse);
-            success = true;
-          } else {
-            errorMsg += "Fare Update API failed: " + (adminResponse?.message || "Unknown error") + ". ";
-          }
-        } catch (adminError: any) {
-          console.error("Admin API update failed:", adminError);
-          errorMsg += "Fare Update API failed: " + (adminError?.message || adminError) + ". ";
-        }
-      }
-      
-      // If both methods failed, throw an error
-      if (!success) {
-        throw new Error(errorMsg || "Failed to update airport fares through all available methods");
-      }
+      // Use the fareService to update the fare
+      const response = await updateAirportFare(fareData);
       
       toast.success(`Airport fare for ${vehicleId} updated successfully`);
       if (onSuccess) onSuccess();
@@ -252,47 +137,27 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         description="There was a problem updating the airport fares. Please try again."
         fixDatabaseHandler={async () => {
           try {
-            const response = await fetch('/api/admin/fix-database.php', {
-              method: 'GET',
-              headers: {
-                'X-Admin-Mode': 'true',
-                'X-Debug': 'true'
-              }
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Failed with status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-              toast.success('Database fixed successfully');
-              handleRetry();
-            } else {
-              toast.error(`Database fix failed: ${data.message}`);
-            }
+            await fareService.fixDatabase();
+            toast.success('Database fixed successfully');
+            handleRetry();
           } catch (err: any) {
             toast.error(`Database fix error: ${err.message}`);
           }
         }}
         directDatabaseAccess={async () => {
           try {
-            const response = await fetch(`/api/admin/direct-db-access.php?table=airport_transfer_fares&vehicle_id=${vehicleId}`, {
-              method: 'GET',
+            const response = await directApiPost('/api/admin/direct-db-access.php', {
+              table: 'airport_transfer_fares',
+              vehicle_id: vehicleId
+            }, {
               headers: {
                 'X-Admin-Mode': 'true',
                 'X-Debug': 'true'
               }
             });
             
-            if (!response.ok) {
-              throw new Error(`Failed with status: ${response.status}`);
-            }
-            
-            const data = await response.json();
             toast.info('Direct database access results available in console');
-            console.log('Direct DB access results:', data);
+            console.log('Direct DB access results:', response);
           } catch (err: any) {
             toast.error(`Direct DB access error: ${err.message}`);
           }
