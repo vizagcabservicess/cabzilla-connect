@@ -25,11 +25,25 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-$logFile = $logDir . '/airport_fares_update_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/airport_fares_update_redirect_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Include needed utils
 require_once __DIR__ . '/utils/response.php';
+require_once __DIR__ . '/utils/database.php';
+
+// Try to set collation for any database queries before redirecting
+try {
+    $conn = getDbConnection();
+    if ($conn) {
+        // Set collation explicitly for the entire connection
+        $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        $conn->query("SET CHARACTER SET utf8mb4");
+    }
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
+}
 
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting airport-fares-update.php to admin/airport-fares-update.php\n", FILE_APPEND);
@@ -68,7 +82,9 @@ if (!$vehicleId) {
 // If still not found, check JSON data
 if (!$vehicleId && !empty($rawInput)) {
     $jsonData = json_decode($rawInput, true);
-    if (json_last_error() === JSON_ERROR_NONE) {
+    $jsonError = json_last_error();
+    
+    if ($jsonError === JSON_ERROR_NONE) {
         foreach ($possibleKeys as $key) {
             if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
                 $vehicleId = $jsonData[$key];
@@ -83,6 +99,20 @@ if (!$vehicleId && !empty($rawInput)) {
                 if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
                     $vehicleId = $jsonData['data'][$key];
                     file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
+                    break;
+                }
+            }
+        }
+    } else {
+        file_put_contents($logFile, "[$timestamp] Failed to parse JSON: " . json_last_error_msg() . "\n", FILE_APPEND);
+        
+        // Try to parse as URL-encoded data
+        parse_str($rawInput, $parsedData);
+        if (!empty($parsedData)) {
+            foreach ($possibleKeys as $key) {
+                if (isset($parsedData[$key]) && !empty($parsedData[$key])) {
+                    $vehicleId = $parsedData[$key];
+                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL-encoded data $key: $vehicleId\n", FILE_APPEND);
                     break;
                 }
             }
@@ -112,14 +142,22 @@ if ($vehicleId) {
         $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
         file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
     }
+    
+    // If we have raw JSON, reconstruct it to include the vehicle ID
+    if (!empty($rawInput) && json_decode($rawInput) !== null) {
+        $jsonData = json_decode($rawInput, true);
+        if (is_array($jsonData)) {
+            $jsonData['vehicleId'] = $vehicleId;
+            $jsonData['vehicle_id'] = $vehicleId;
+            // Don't redefine php://input, but set a global variable that can be read
+            $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
+            file_put_contents($logFile, "[$timestamp] Updated JSON input with vehicle ID\n", FILE_APPEND);
+        }
+    }
 } else {
     // No valid vehicle ID found, return an error
     file_put_contents($logFile, "[$timestamp] ERROR: No valid vehicle ID found in request\n", FILE_APPEND);
-    sendErrorResponse('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.', [
-        'post' => $_POST,
-        'get' => $_GET,
-        'rawInput' => $rawInput
-    ]);
+    sendErrorResponse('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.');
     exit;
 }
 

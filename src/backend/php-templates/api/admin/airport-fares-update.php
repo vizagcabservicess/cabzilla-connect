@@ -13,15 +13,15 @@ header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
-// Clear any existing output buffers to prevent contamination
-while (ob_get_level()) {
-    ob_end_clean();
-}
-
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
+}
+
+// Clear any existing output buffers to prevent contamination
+while (ob_get_level()) {
+    ob_end_clean();
 }
 
 // Create log directory
@@ -59,18 +59,25 @@ try {
     // If no POST data, try to get it from the request body
     if (empty($postData)) {
         $json = file_get_contents('php://input');
+        file_put_contents($logFile, "[$timestamp] Raw JSON input: $json\n", FILE_APPEND);
         
         if (!empty($json)) {
             $postData = json_decode($json, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
+            $jsonError = json_last_error();
+            
+            if ($jsonError !== JSON_ERROR_NONE) {
+                file_put_contents($logFile, "[$timestamp] JSON decode error: " . json_last_error_msg() . "\n", FILE_APPEND);
+                
                 // Try to handle non-JSON data (might be URL encoded or form data)
                 parse_str($json, $parsedData);
                 if (!empty($parsedData)) {
                     $postData = $parsedData;
                     file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
                 } else {
-                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($json, 0, 100));
+                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($json, 0, 200));
                 }
+            } else {
+                file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
             }
         } else {
             throw new Exception('No data received in request body');
@@ -104,14 +111,35 @@ try {
     }
 
     if (!$vehicleId) {
-        file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
+        // Check if there are any other keys that might contain the vehicle ID
+        file_put_contents($logFile, "[$timestamp] WARNING: Vehicle ID not found in standard keys. Available keys: " . 
             implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
-        throw new Exception('Vehicle ID is required');
+            
+        // If no vehicle ID found but we have at least some data, try checking URL parameters
+        foreach ($possibleKeys as $key) {
+            if (isset($_GET[$key]) && !empty($_GET[$key])) {
+                $vehicleId = trim($_GET[$key]);
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
+                
+                // Also add to post data for consistency
+                $postData['vehicleId'] = $vehicleId;
+                $postData['vehicle_id'] = $vehicleId;
+                break;
+            }
+        }
+        
+        if (!$vehicleId) {
+            throw new Exception('Vehicle ID is required but not found in request data or URL');
+        }
     }
 
     // Normalize vehicle ID
     $originalVehicleId = $vehicleId;
-    $vehicleId = normalizeVehicleId($vehicleId);
+    
+    // If it has a prefix like 'item-', remove it
+    if (strpos($vehicleId, 'item-') === 0) {
+        $vehicleId = substr($vehicleId, 5);
+    }
     
     if ($originalVehicleId !== $vehicleId) {
         file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
@@ -136,12 +164,14 @@ try {
     }
     
     // Set collation explicitly for this connection - CRITICAL FIX
+    $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
     $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+    $conn->query("SET CHARACTER SET utf8mb4");
     
     file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
     
     // First ensure the vehicle exists in vehicles table
-    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
+    $checkVehicleQuery = "SELECT vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
     $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
     
     if (!$checkVehicleStmt) {
@@ -259,9 +289,10 @@ try {
         
         // Commit the transaction
         $conn->commit();
+        file_put_contents($logFile, "[$timestamp] Transaction committed successfully\n", FILE_APPEND);
         
         // Create a response with all relevant data
-        sendSuccessResponse([
+        $responseData = [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
             'basePrice' => (float)$basePrice,
@@ -273,14 +304,19 @@ try {
             'tier3Price' => (float)$tier3Price,
             'tier4Price' => (float)$tier4Price,
             'extraKmCharge' => (float)$extraKmCharge
-        ], 'Airport fare updated successfully');
+        ];
+        
+        file_put_contents($logFile, "[$timestamp] Success response: " . json_encode($responseData) . "\n", FILE_APPEND);
+        sendSuccessResponse($responseData, 'Airport fare updated successfully');
     } catch (Exception $e) {
         // Rollback on error
         $conn->rollback();
+        file_put_contents($logFile, "[$timestamp] Transaction rolled back due to error: " . $e->getMessage() . "\n", FILE_APPEND);
         throw $e;
     }
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] ERROR TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
     sendErrorResponse($e->getMessage());
 }

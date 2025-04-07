@@ -45,6 +45,7 @@ try {
         // Set collation explicitly for the entire connection
         $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        $conn->query("SET CHARACTER SET utf8mb4");
     }
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);

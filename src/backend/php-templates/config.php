@@ -44,7 +44,9 @@ function getDbConnection() {
         $conn->set_charset("utf8mb4");
         
         // Set collation explicitly to ensure consistency
+        $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        $conn->query("SET CHARACTER SET utf8mb4");
         
         return $conn;
     } catch (Exception $e) {
@@ -80,6 +82,19 @@ function ensureDatabaseTables() {
             if ($checkResult->num_rows > 0) {
                 // Fix table collation
                 $conn->query("ALTER TABLE `$table` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                
+                // Fix collation on all text/string columns
+                $columnsResult = $conn->query("SHOW COLUMNS FROM `$table`");
+                while ($column = $columnsResult->fetch_assoc()) {
+                    $columnName = $column['Field'];
+                    $dataType = $column['Type'];
+                    
+                    // Only modify string-type columns
+                    if (strpos($dataType, 'varchar') !== false || strpos($dataType, 'text') !== false || 
+                        strpos($dataType, 'char') !== false || strpos($dataType, 'enum') !== false) {
+                        $conn->query("ALTER TABLE `$table` MODIFY COLUMN `$columnName` $dataType CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    }
+                }
             }
         }
         
@@ -153,6 +168,30 @@ function ensureDatabaseTables() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
         
+        // Create or update vehicle_types table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS `vehicle_types` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `type_id` VARCHAR(50) NOT NULL,
+                `name` VARCHAR(100) NOT NULL,
+                `description` TEXT,
+                `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `type_id` (`type_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        
+        // Insert common vehicle types if they don't exist
+        $conn->query("
+            INSERT IGNORE INTO `vehicle_types` (`type_id`, `name`, `description`, `is_active`) VALUES
+            ('sedan', 'Sedan', 'Standard sedan car', 1),
+            ('ertiga', 'Ertiga', 'Comfortable mid-sized SUV', 1),
+            ('innova', 'Innova', 'Premium SUV', 1),
+            ('tempo', 'Tempo Traveller', 'Large group vehicle', 1)
+        ");
+        
         return true;
     } catch (Exception $e) {
         error_log("Error ensuring database tables: " . $e->getMessage());
@@ -160,4 +199,19 @@ function ensureDatabaseTables() {
     } finally {
         $conn->close();
     }
+}
+
+/**
+ * Helper function to normalize vehicle ID (remove prefixes, etc.)
+ */
+function normalizeVehicleId($vehicleId) {
+    // Remove 'item-' prefix if present
+    if (strpos($vehicleId, 'item-') === 0) {
+        $vehicleId = substr($vehicleId, 5);
+    }
+    
+    // Trim any whitespace
+    $vehicleId = trim($vehicleId);
+    
+    return $vehicleId;
 }

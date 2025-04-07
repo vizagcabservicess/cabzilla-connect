@@ -30,6 +30,15 @@ require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../../config.php';
 
+// Create log directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+$logFile = $logDir . '/airport_fares_api_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+
 // Run database setup to ensure tables exist
 ensureDatabaseTables();
 
@@ -42,7 +51,11 @@ try {
     }
     
     // Set collation explicitly for this connection - CRITICAL FIX
+    $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
     $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+    $conn->query("SET CHARACTER SET utf8mb4");
+    
+    file_put_contents($logFile, "[$timestamp] Database connection established successfully\n", FILE_APPEND);
     
     // Get vehicle ID from query parameters (if provided)
     $vehicleId = null;
@@ -52,14 +65,21 @@ try {
     foreach ($possibleParams as $param) {
         if (isset($_GET[$param]) && !empty($_GET[$param])) {
             $vehicleId = $_GET[$param];
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in parameter '$param': $vehicleId\n", FILE_APPEND);
             break;
         }
     }
     
     // Normalize vehicle ID
     if ($vehicleId) {
-        $vehicleId = normalizeVehicleId($vehicleId);
+        // If it has a prefix like 'item-', remove it
+        if (strpos($vehicleId, 'item-') === 0) {
+            $vehicleId = substr($vehicleId, 5);
+            file_put_contents($logFile, "[$timestamp] Removed 'item-' prefix from vehicle ID: $vehicleId\n", FILE_APPEND);
+        }
     }
+    
+    file_put_contents($logFile, "[$timestamp] Using vehicle ID: " . ($vehicleId ?: "none (fetching all)") . "\n", FILE_APPEND);
     
     // Build query based on whether a specific vehicle ID was provided
     if ($vehicleId) {
@@ -90,9 +110,15 @@ try {
         ";
         
         $stmt = $conn->prepare($query);
+        if (!$stmt) {
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
+        
         $stmt->bind_param("s", $vehicleId);
         $stmt->execute();
         $result = $stmt->get_result();
+        
+        file_put_contents($logFile, "[$timestamp] Executed query for vehicle ID: $vehicleId\n", FILE_APPEND);
     } else {
         // Query for all vehicles
         $query = "
@@ -116,10 +142,11 @@ try {
         ";
         
         $result = $conn->query($query);
-    }
-    
-    if (!$result) {
-        throw new Exception("Database query failed: " . $conn->error);
+        if (!$result) {
+            throw new Exception("Failed to execute query: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Executed query for all vehicles\n", FILE_APPEND);
     }
     
     // Fetch results
@@ -145,8 +172,12 @@ try {
         $fares[] = $fare;
     }
     
+    file_put_contents($logFile, "[$timestamp] Fetched " . count($fares) . " fare record(s)\n", FILE_APPEND);
+    
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
+        file_put_contents($logFile, "[$timestamp] No fares found for vehicle ID: $vehicleId, creating default entry\n", FILE_APPEND);
+        
         // Insert default entry for this vehicle and then fetch it again
         $insertQuery = "
             INSERT IGNORE INTO airport_transfer_fares 
@@ -159,6 +190,8 @@ try {
         if ($stmt) {
             $stmt->bind_param('s', $vehicleId);
             $stmt->execute();
+            
+            file_put_contents($logFile, "[$timestamp] Created default fare entry for vehicle ID: $vehicleId\n", FILE_APPEND);
             
             // Now try to get the data again
             $refetchQuery = "
@@ -207,6 +240,7 @@ try {
                     ];
                     
                     $fares[] = $fare;
+                    file_put_contents($logFile, "[$timestamp] Refetched fare data successfully\n", FILE_APPEND);
                 }
             }
         }
@@ -214,6 +248,8 @@ try {
     
     // If still no fares found for a specific vehicle, create a default response
     if (empty($fares) && $vehicleId) {
+        file_put_contents($logFile, "[$timestamp] Creating fallback default fare entry for vehicle ID: $vehicleId\n", FILE_APPEND);
+        
         $defaultFare = [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
@@ -232,16 +268,24 @@ try {
         $fares[] = $defaultFare;
     }
     
+    // Check fare data before sending
+    file_put_contents($logFile, "[$timestamp] Final fare count: " . count($fares) . "\n", FILE_APPEND);
+    
     // Return success response
-    sendSuccessResponse([
+    $responseData = [
         'fares' => $fares,
         'count' => count($fares)
-    ], 'Airport fares retrieved successfully');
+    ];
+    
+    // Ensure proper JSON encoding 
+    file_put_contents($logFile, "[$timestamp] Sending response: " . json_encode($responseData) . "\n", FILE_APPEND);
+    
+    sendSuccessResponse($responseData, 'Airport fares retrieved successfully');
     
 } catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] ERROR TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
+    
     // Return error response
-    sendErrorResponse($e->getMessage(), [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ]);
+    sendErrorResponse($e->getMessage());
 }

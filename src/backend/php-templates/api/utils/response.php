@@ -1,136 +1,91 @@
 
 <?php
 /**
- * API response utility functions for standardized JSON responses
+ * Response utility functions
+ * Handles standardized API responses
  */
 
-// Function to send a success response
-function sendSuccessResponse($data = [], $message = 'Operation completed successfully', $statusCode = 200) {
-    // Clear any previous output to prevent contamination
-    while (ob_get_level()) ob_end_clean();
-    
-    // Set HTTP response code
+/**
+ * Send a success response
+ * 
+ * @param mixed $data Data to include in the response
+ * @param string $message Success message
+ * @param int $statusCode HTTP status code (default: 200)
+ */
+function sendSuccessResponse($data = null, $message = 'Operation successful', $statusCode = 200) {
+    // Set HTTP status code
     http_response_code($statusCode);
     
-    // Set content type header
-    header('Content-Type: application/json');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    header('Pragma: no-cache');
-    
+    // Create response array
     $response = [
         'status' => 'success',
         'message' => $message,
-        'data' => $data,
         'timestamp' => time()
     ];
     
-    echo json_encode($response);
+    // Add data if provided
+    if ($data !== null) {
+        $response['data'] = $data;
+    }
+    
+    // Ensure proper encoding for special characters
+    echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// Function to send an error response
-function sendErrorResponse($message = 'An error occurred', $data = [], $statusCode = 500) {
-    // Clear any previous output to prevent contamination
-    while (ob_get_level()) ob_end_clean();
-    
-    // Set HTTP response code
+/**
+ * Send an error response
+ * 
+ * @param string $message Error message
+ * @param mixed $errors Optional detailed errors
+ * @param int $statusCode HTTP status code (default: 400)
+ */
+function sendErrorResponse($message = 'An error occurred', $errors = null, $statusCode = 400) {
+    // Set HTTP status code
     http_response_code($statusCode);
     
-    // Set content type header
-    header('Content-Type: application/json');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    header('Pragma: no-cache');
-    
+    // Create response array
     $response = [
         'status' => 'error',
         'message' => $message,
-        'data' => $data,
         'timestamp' => time()
     ];
     
-    echo json_encode($response);
+    // Add errors if provided
+    if ($errors !== null) {
+        $response['errors'] = $errors;
+    }
+    
+    // Ensure proper encoding for special characters
+    echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// Function to log API requests and responses
-function logApiActivity($endpoint, $requestData, $responseData, $status = 'success') {
-    $logDir = __DIR__ . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
+/**
+ * Send a response with custom status
+ * 
+ * @param string $status Status code (e.g., 'warning', 'info')
+ * @param string $message Response message
+ * @param mixed $data Optional data to include
+ * @param int $statusCode HTTP status code
+ */
+function sendCustomResponse($status, $message, $data = null, $statusCode = 200) {
+    // Set HTTP status code
+    http_response_code($statusCode);
     
-    $logFile = $logDir . '/api_activity_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    
-    $logData = [
-        'timestamp' => $timestamp,
-        'endpoint' => $endpoint,
-        'request' => $requestData,
-        'response' => $responseData,
+    // Create response array
+    $response = [
         'status' => $status,
-        'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+        'message' => $message,
+        'timestamp' => time()
     ];
     
-    file_put_contents($logFile, json_encode($logData) . "\n", FILE_APPEND);
-}
-
-// Function to validate required fields in request data
-function validateRequiredFields($data, $requiredFields) {
-    $missingFields = [];
-    
-    foreach ($requiredFields as $field) {
-        if (!isset($data[$field]) || (empty($data[$field]) && $data[$field] !== 0 && $data[$field] !== '0')) {
-            $missingFields[] = $field;
-        }
+    // Add data if provided
+    if ($data !== null) {
+        $response['data'] = $data;
     }
     
-    if (!empty($missingFields)) {
-        return [
-            'valid' => false,
-            'missing' => $missingFields
-        ];
-    }
-    
-    return [
-        'valid' => true
-    ];
-}
-
-// Function to normalize vehicle ID to prevent issues
-function normalizeVehicleId($rawVehicleId) {
-    // If no ID provided, return null
-    if (empty($rawVehicleId)) {
-        return null;
-    }
-    
-    // Remove 'item-' prefix if present
-    if (strpos($rawVehicleId, 'item-') === 0) {
-        $rawVehicleId = substr($rawVehicleId, 5);
-    }
-    
-    // Known numeric ID mappings to prevent duplicates
-    $numericIdMap = [
-        '1' => 'sedan',
-        '2' => 'ertiga',
-        '3' => 'innova_crysta',
-        '4' => 'tempo',
-        '5' => 'luxury',
-        '6' => 'MPV',
-        '7' => 'Toyota',
-        '8' => 'Dzire CNG',
-        '9' => 'tempo_traveller',
-        '180' => 'etios',
-        '592' => 'Urbania',
-        '1266' => 'MPV',
-        '1270' => 'MPV',
-        '1271' => 'etios',
-        '1272' => 'etios'
-    ];
-    
-    // If this is a mapped numeric ID, convert it
-    if (isset($numericIdMap[$rawVehicleId])) {
-        return $numericIdMap[$rawVehicleId];
-    }
-    
-    return $rawVehicleId;
+    // Ensure proper encoding for special characters
+    echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }

@@ -1,49 +1,222 @@
-
 <?php
 /**
- * Database utility functions for establishing connections
+ * Database utility functions
+ * Handles database connections and common operations
  */
 
-// Get database connection
+// Include configuration file
+if (file_exists(dirname(__FILE__) . '/../../config.php')) {
+    require_once dirname(__FILE__) . '/../../config.php';
+}
+
+/**
+ * Get a database connection
+ * Uses configuration from config.php or falls back to hardcoded credentials
+ * 
+ * @return mysqli|null Database connection or null on failure
+ */
 function getDbConnection() {
-    // Database credentials
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
     try {
-        // Create connection
+        // First try to use the function from config.php if available
+        if (function_exists('getDbConnection') && !defined('DB_UTILS_INTERNAL')) {
+            define('DB_UTILS_INTERNAL', true);
+            $conn = \getDbConnection();
+            if ($conn instanceof mysqli && !$conn->connect_error) {
+                // Success, return the connection
+                return $conn;
+            }
+        }
+
+        // If we reach here, we need to establish the connection ourselves
+        $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
+        $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+        $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+        $dbPass = defined('DB_PASS') ? DB_PASS : 'Vizag@1213';
+        
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
-        // Check connection
         if ($conn->connect_error) {
-            throw new Exception("Connection failed: " . $conn->connect_error);
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
-        // Set charset - CRITICAL: This must be utf8mb4 with collation utf8mb4_unicode_ci
+        // Set charset and collation explicitly to ensure consistency
         $conn->set_charset("utf8mb4");
-        
-        // Set collation explicitly to ensure consistency
+        $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        $conn->query("SET CHARACTER SET utf8mb4");
         
         return $conn;
     } catch (Exception $e) {
-        // Log error
-        $logDir = __DIR__ . '/../../logs';
-        if (!file_exists($logDir)) {
-            mkdir($logDir, 0777, true);
-        }
-        
-        $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
-        
+        error_log("Database connection error: " . $e->getMessage());
         return null;
     }
 }
 
-// Function to safely escape a value for database queries
+/**
+ * Check if a table exists in the database
+ * 
+ * @param mysqli $conn Database connection
+ * @param string $tableName Table name to check
+ * @return bool True if table exists, false otherwise
+ */
+function tableExists($conn, $tableName) {
+    $result = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($tableName) . "'");
+    return $result && $result->num_rows > 0;
+}
+
+/**
+ * Fix collation for a table and its columns
+ * 
+ * @param mysqli $conn Database connection
+ * @param string $tableName Table name to fix
+ * @return bool True if successful, false otherwise
+ */
+function fixTableCollation($conn, $tableName) {
+    try {
+        // First fix the table itself
+        $conn->query("ALTER TABLE `" . $conn->real_escape_string($tableName) . "` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        
+        // Then fix all string columns
+        $columnsResult = $conn->query("SHOW COLUMNS FROM `" . $conn->real_escape_string($tableName) . "`");
+        if ($columnsResult) {
+            while ($column = $columnsResult->fetch_assoc()) {
+                $columnName = $column['Field'];
+                $dataType = $column['Type'];
+                
+                // Only modify string-type columns
+                if (strpos($dataType, 'varchar') !== false || strpos($dataType, 'text') !== false || 
+                    strpos($dataType, 'char') !== false || strpos($dataType, 'enum') !== false) {
+                    $conn->query("ALTER TABLE `" . $conn->real_escape_string($tableName) . "` 
+                        MODIFY COLUMN `" . $conn->real_escape_string($columnName) . "` $dataType 
+                        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                }
+            }
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error fixing table collation: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Ensure that all required tables exist
+ * 
+ * @return bool True if successful, false otherwise
+ */
+function ensureDatabaseTables() {
+    // If the function exists in config.php, use that
+    if (function_exists('ensureDatabaseTables') && !defined('DB_UTILS_ENSURE_TABLES')) {
+        define('DB_UTILS_ENSURE_TABLES', true);
+        return \ensureDatabaseTables();
+    }
+    
+    // Otherwise, do a minimal check
+    $conn = getDbConnection();
+    if (!$conn) {
+        return false;
+    }
+    
+    try {
+        // Check airport_transfer_fares table
+        if (!tableExists($conn, 'airport_transfer_fares')) {
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS `airport_transfer_fares` (
+                    `id` INT(11) NOT NULL AUTO_INCREMENT,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `base_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `pickup_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `drop_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier1_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier2_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier3_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier4_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `extra_km_charge` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `vehicle_id` (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            fixTableCollation($conn, 'airport_transfer_fares');
+        }
+        
+        // Check vehicles table
+        if (!tableExists($conn, 'vehicles')) {
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS `vehicles` (
+                    `id` VARCHAR(50) NOT NULL,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `name` VARCHAR(100) NOT NULL,
+                    `capacity` INT NOT NULL DEFAULT 4,
+                    `luggage_capacity` INT NOT NULL DEFAULT 2,
+                    `price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `base_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `image` VARCHAR(255),
+                    `amenities` TEXT,
+                    `description` TEXT,
+                    `ac` TINYINT(1) NOT NULL DEFAULT 1,
+                    `night_halt_charge` DECIMAL(10,2) NOT NULL DEFAULT 700,
+                    `driver_allowance` DECIMAL(10,2) NOT NULL DEFAULT 250,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `vehicle_id` (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            fixTableCollation($conn, 'vehicles');
+        }
+        
+        // Check vehicle_pricing table
+        if (!tableExists($conn, 'vehicle_pricing')) {
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
+                    `id` INT(11) NOT NULL AUTO_INCREMENT,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `trip_type` VARCHAR(50) NOT NULL,
+                    `base_fare` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `airport_base_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `airport_pickup_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_drop_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_tier1_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_tier2_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_tier3_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_tier4_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `airport_extra_km_charge` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `vehicle_trip_type` (`vehicle_id`, `trip_type`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } else {
+            fixTableCollation($conn, 'vehicle_pricing');
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error ensuring database tables: " . $e->getMessage());
+        return false;
+    } finally {
+        $conn->close();
+    }
+}
+
+/**
+ * Function to safely escape a value for database queries
+ * 
+ * @param mysqli $conn Database connection
+ * @param mixed $value Value to escape
+ * @return mixed Escaped value
+ */
 function dbEscape($conn, $value) {
     if ($conn) {
         return $conn->real_escape_string($value);
@@ -53,7 +226,15 @@ function dbEscape($conn, $value) {
     return str_replace(["'", "\""], ["\'", "\\\""], $value);
 }
 
-// Function to safely prepare a query if prepared statements are available
+/**
+ * Function to safely prepare a query if prepared statements are available
+ * 
+ * @param mysqli $conn Database connection
+ * @param string $query Query to prepare
+ * @param array $params Parameters for the query
+ * @param string $types Type string for prepared statement
+ * @return bool|mysqli_stmt Prepared statement or false on failure
+ */
 function safePrepare($conn, $query, $params = [], $types = '') {
     if (!$conn) {
         return false;
