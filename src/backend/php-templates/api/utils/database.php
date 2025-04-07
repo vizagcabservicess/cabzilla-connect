@@ -4,13 +4,18 @@
  * Database utility functions for establishing connections
  */
 
+// Include configuration file to get consistent collation settings
+require_once __DIR__ . '/../../config.php';
+
 // Get database connection
 function getDbConnection() {
-    // Database credentials
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    // Use values from config file if available
+    $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
+    $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+    $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+    $dbPass = defined('DB_PASS') ? DB_PASS : 'Vizag@1213';
+    $dbCharset = defined('DB_CHARSET') ? DB_CHARSET : 'utf8mb4';
+    $dbCollation = defined('DB_COLLATION') ? DB_COLLATION : 'utf8mb4_unicode_ci';
     
     try {
         // Create connection
@@ -22,7 +27,10 @@ function getDbConnection() {
         }
         
         // Set charset
-        $conn->set_charset("utf8mb4");
+        $conn->set_charset($dbCharset);
+        
+        // Ensure consistent collation for this session
+        $conn->query("SET NAMES $dbCharset COLLATE $dbCollation");
         
         return $conn;
     } catch (Exception $e) {

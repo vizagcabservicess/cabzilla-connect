@@ -18,6 +18,10 @@ define('LOG_DIR', __DIR__ . '/logs');
 define('CACHE_DIR', __DIR__ . '/cache');
 define('DATA_DIR', __DIR__ . '/data');
 
+// Database collation - ensure consistent collation across all tables
+define('DB_CHARSET', 'utf8mb4');
+define('DB_COLLATION', 'utf8mb4_unicode_ci');
+
 // Create necessary directories if they don't exist
 if (!file_exists(LOG_DIR)) {
     mkdir(LOG_DIR, 0777, true);
@@ -40,7 +44,12 @@ function getDbConnection() {
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
-        $conn->set_charset("utf8mb4");
+        // Set charset consistently
+        $conn->set_charset(DB_CHARSET);
+        
+        // Set collation at session level to ensure consistency
+        $conn->query("SET NAMES " . DB_CHARSET . " COLLATE " . DB_COLLATION);
+        
         return $conn;
     } catch (Exception $e) {
         // Log error

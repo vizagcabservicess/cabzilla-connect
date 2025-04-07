@@ -57,7 +57,7 @@ try {
         // Clean up vehicle ID for SQL query
         $vehicleId = $conn->real_escape_string($vehicleId);
         
-        // Query for specific vehicle
+        // Query for specific vehicle - using the same collation for both tables
         $query = "
             SELECT 
                 atf.id, 
@@ -75,12 +75,12 @@ try {
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
-                vehicles v ON atf.vehicle_id = v.vehicle_id
+                vehicles v ON atf.vehicle_id = v.vehicle_id COLLATE " . DB_COLLATION . "
             WHERE 
                 atf.vehicle_id = '$vehicleId'
         ";
     } else {
-        // Query for all vehicles
+        // Query for all vehicles - using the same collation for both tables
         $query = "
             SELECT 
                 atf.id, 
@@ -98,7 +98,7 @@ try {
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
-                vehicles v ON atf.vehicle_id = v.vehicle_id
+                vehicles v ON atf.vehicle_id = v.vehicle_id COLLATE " . DB_COLLATION . "
         ";
     }
     
@@ -165,7 +165,7 @@ try {
                 FROM 
                     airport_transfer_fares atf
                 LEFT JOIN 
-                    vehicles v ON atf.vehicle_id = v.vehicle_id
+                    vehicles v ON atf.vehicle_id = v.vehicle_id COLLATE " . DB_COLLATION . "
                 WHERE 
                     atf.vehicle_id = ?
             ";
