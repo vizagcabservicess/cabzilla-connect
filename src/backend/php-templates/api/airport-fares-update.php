@@ -55,6 +55,28 @@ $postData = $_POST;
 file_put_contents($logFile, "[$timestamp] POST data: " . print_r($_POST, true) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
 
+// Ensure default values for all required fields - THIS IS THE KEY FIX
+$defaults = [
+    'basePrice' => 0,
+    'base_price' => 0,
+    'pricePerKm' => 0,
+    'price_per_km' => 0,
+    'pickupPrice' => 0,
+    'pickup_price' => 0,
+    'dropPrice' => 0,
+    'drop_price' => 0,
+    'tier1Price' => 0,
+    'tier1_price' => 0,
+    'tier2Price' => 0,
+    'tier2_price' => 0,
+    'tier3Price' => 0,
+    'tier3_price' => 0,
+    'tier4Price' => 0,
+    'tier4_price' => 0,
+    'extraKmCharge' => 0,
+    'extra_km_charge' => 0
+];
+
 // Get request data - check various sources
 $vehicleId = null;
 $jsonData = null;
@@ -117,6 +139,16 @@ if (!$vehicleId && !empty($rawInput)) {
                 }
             }
         }
+        
+        // Apply the default values to the JSON data
+        if (isset($jsonData['data']) && is_array($jsonData['data'])) {
+            $jsonData['data'] = array_merge($defaults, $jsonData['data']);
+        } else if (is_array($jsonData)) {
+            $jsonData = array_merge($defaults, $jsonData);
+        }
+        
+        $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
+        file_put_contents($logFile, "[$timestamp] Updated JSON with defaults: " . $GLOBALS['__UPDATED_RAW_INPUT'] . "\n", FILE_APPEND);
     } else {
         file_put_contents($logFile, "[$timestamp] Failed to parse JSON: " . json_last_error_msg() . "\n", FILE_APPEND);
         
@@ -130,6 +162,10 @@ if (!$vehicleId && !empty($rawInput)) {
                     break;
                 }
             }
+            
+            // Apply default values to parsed data
+            $parsedData = array_merge($defaults, $parsedData);
+            $rawInput = http_build_query($parsedData);
         }
     }
 }
@@ -142,6 +178,10 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
 
 // If we found a vehicle ID, add it to $_GET, $_POST, and $_REQUEST for the forwarded request
 if ($vehicleId) {
+    // Apply the default values to $_POST and $_GET
+    $_POST = array_merge($defaults, $_POST);
+    $_GET = array_merge($defaults, $_GET);
+    
     $_GET['vehicleId'] = $vehicleId;
     $_GET['vehicle_id'] = $vehicleId;
     $_POST['vehicleId'] = $vehicleId;
@@ -155,18 +195,6 @@ if ($vehicleId) {
         $_SERVER['QUERY_STRING'] = ($_SERVER['QUERY_STRING'] ? $_SERVER['QUERY_STRING'] . '&' : '') . 'vehicle_id=' . urlencode($vehicleId);
         $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
         file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
-    }
-    
-    // If we have raw JSON, reconstruct it to include the vehicle ID
-    if (!empty($rawInput) && $jsonData !== null) {
-        if (is_array($jsonData)) {
-            $jsonData['vehicleId'] = $vehicleId;
-            $jsonData['vehicle_id'] = $vehicleId;
-            $jsonData['cabType'] = $vehicleId;
-            // Set a global variable that can be read by the admin script
-            $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
-            file_put_contents($logFile, "[$timestamp] Updated JSON input with vehicle ID: " . $GLOBALS['__UPDATED_RAW_INPUT'] . "\n", FILE_APPEND);
-        }
     }
     
     try {

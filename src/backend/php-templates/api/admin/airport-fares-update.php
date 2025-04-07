@@ -50,6 +50,28 @@ file_put_contents($logFile, "[$timestamp] Airport fares update request received\
 $rawInput = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] Raw input: $rawInput\n", FILE_APPEND);
 
+// Define default values for all fields
+$defaultValues = [
+    'basePrice' => 0,
+    'base_price' => 0,
+    'pricePerKm' => 0,
+    'price_per_km' => 0,
+    'pickupPrice' => 0,
+    'pickup_price' => 0,
+    'dropPrice' => 0,
+    'drop_price' => 0,
+    'tier1Price' => 0,
+    'tier1_price' => 0,
+    'tier2Price' => 0,
+    'tier2_price' => 0,
+    'tier3Price' => 0,
+    'tier3_price' => 0,
+    'tier4Price' => 0,
+    'tier4_price' => 0,
+    'extraKmCharge' => 0,
+    'extra_km_charge' => 0
+];
+
 // Check if an updated raw input was provided by the forwarding script
 if (isset($GLOBALS['__UPDATED_RAW_INPUT']) && !empty($GLOBALS['__UPDATED_RAW_INPUT'])) {
     $rawInput = $GLOBALS['__UPDATED_RAW_INPUT'];
@@ -65,6 +87,9 @@ try {
     $postData = $_POST;
     $jsonData = null;
     
+    // Add default values to POST data
+    $postData = array_merge($defaultValues, $postData);
+    
     file_put_contents($logFile, "[$timestamp] POST data: " . print_r($postData, true) . "\n", FILE_APPEND);
     file_put_contents($logFile, "[$timestamp] GET data: " . print_r($_GET, true) . "\n", FILE_APPEND);
     
@@ -75,7 +100,11 @@ try {
         
         if ($jsonError === JSON_ERROR_NONE) {
             file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] JSON data: " . print_r($jsonData, true) . "\n", FILE_APPEND);
+            
+            // Add default values to JSON data
+            $jsonData = array_merge($defaultValues, $jsonData);
+            
+            file_put_contents($logFile, "[$timestamp] JSON data with defaults: " . print_r($jsonData, true) . "\n", FILE_APPEND);
         } else {
             file_put_contents($logFile, "[$timestamp] JSON parse error: " . json_last_error_msg() . "\n", FILE_APPEND);
             
@@ -83,7 +112,11 @@ try {
             parse_str($rawInput, $parsedData);
             if (!empty($parsedData)) {
                 file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
-                file_put_contents($logFile, "[$timestamp] URL encoded data: " . print_r($parsedData, true) . "\n", FILE_APPEND);
+                
+                // Add default values to parsed data
+                $parsedData = array_merge($defaultValues, $parsedData);
+                
+                file_put_contents($logFile, "[$timestamp] URL encoded data with defaults: " . print_r($parsedData, true) . "\n", FILE_APPEND);
                 
                 // Add this data to our collection
                 $postData = array_merge($postData, $parsedData);
@@ -100,9 +133,13 @@ try {
         
         // Check for nested data within JSON
         if (isset($jsonData['data']) && is_array($jsonData['data'])) {
+            // Add default values to nested data
+            $jsonData['data'] = array_merge($defaultValues, $jsonData['data']);
             $mergedData = array_merge($mergedData, $jsonData['data']);
         }
         if (isset($jsonData['__data']) && is_array($jsonData['__data'])) {
+            // Add default values to nested data
+            $jsonData['__data'] = array_merge($defaultValues, $jsonData['__data']);
             $mergedData = array_merge($mergedData, $jsonData['__data']);
         }
     }
@@ -111,7 +148,12 @@ try {
     $mergedData = array_merge($mergedData, $postData);
     
     // 3. GET parameters (lowest priority, but might contain vehicleId)
+    // Add default values to GET data
+    $_GET = array_merge($defaultValues, $_GET);
     $mergedData = array_merge($_GET, $mergedData);
+    
+    // Make sure all merged data has default values
+    $mergedData = array_merge($defaultValues, $mergedData);
     
     file_put_contents($logFile, "[$timestamp] Merged data from all sources: " . print_r($mergedData, true) . "\n", FILE_APPEND);
 
@@ -239,6 +281,44 @@ try {
         $insertVehicleStmt->execute();
         
         file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
+    }
+    
+    // Check if airport_transfer_fares table exists, create it if not
+    try {
+        $tableCheckSql = "SHOW TABLES LIKE 'airport_transfer_fares'";
+        $tableResult = $conn->query($tableCheckSql);
+        
+        if ($tableResult->num_rows == 0) {
+            // Table doesn't exist, create it
+            $createTableSql = "
+                CREATE TABLE IF NOT EXISTS `airport_transfer_fares` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `vehicle_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+                  `base_price` decimal(10,2) DEFAULT 0.00,
+                  `price_per_km` decimal(10,2) DEFAULT 0.00,
+                  `pickup_price` decimal(10,2) DEFAULT 0.00,
+                  `drop_price` decimal(10,2) DEFAULT 0.00,
+                  `tier1_price` decimal(10,2) DEFAULT 0.00,
+                  `tier2_price` decimal(10,2) DEFAULT 0.00,
+                  `tier3_price` decimal(10,2) DEFAULT 0.00,
+                  `tier4_price` decimal(10,2) DEFAULT 0.00,
+                  `extra_km_charge` decimal(10,2) DEFAULT 0.00,
+                  `created_at` timestamp NULL DEFAULT current_timestamp(),
+                  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `vehicle_id` (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ";
+            
+            if (!$conn->query($createTableSql)) {
+                throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+            }
+            
+            file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+        }
+    } catch (Exception $e) {
+        // Just log the error but continue - we'll attempt the insert anyway
+        file_put_contents($logFile, "[$timestamp] Warning: Table check failed: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
     // Use a transaction to ensure all updates happen together
