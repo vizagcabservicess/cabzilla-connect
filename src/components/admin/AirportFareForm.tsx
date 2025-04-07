@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FareData } from '@/services/fareManagementService';
+import { parseNumericValue } from '@/utils/safeStringUtils';
 
 interface AirportFareFormProps {
   fareData: FareData;
@@ -28,17 +29,6 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
     onChange(updatedFareData);
   };
 
-  // Helper function to safely get numeric values
-  const getNumericValue = (value: any): number => {
-    if (value === null || value === undefined) return 0;
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      return isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
-  };
-
   // Debug the actual values being displayed
   useEffect(() => {
     console.log("AirportFareForm fields breakdown:");
@@ -60,7 +50,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="basePrice"
           type="number"
-          value={getNumericValue(fareData.basePrice)}
+          value={parseNumericValue(fareData.basePrice, 0)}
           onChange={(e) => handleInputChange('basePrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -72,7 +62,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="pricePerKm"
           type="number"
-          value={getNumericValue(fareData.pricePerKm)}
+          value={parseNumericValue(fareData.pricePerKm, 0)}
           onChange={(e) => handleInputChange('pricePerKm', e.target.value)}
           placeholder="0"
           min="0"
@@ -85,7 +75,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="pickupPrice"
           type="number"
-          value={getNumericValue(fareData.pickupPrice)}
+          value={parseNumericValue(fareData.pickupPrice, 0)}
           onChange={(e) => handleInputChange('pickupPrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -97,7 +87,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="dropPrice"
           type="number"
-          value={getNumericValue(fareData.dropPrice)}
+          value={parseNumericValue(fareData.dropPrice, 0)}
           onChange={(e) => handleInputChange('dropPrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -109,7 +99,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier1Price"
           type="number"
-          value={getNumericValue(fareData.tier1Price)}
+          value={parseNumericValue(fareData.tier1Price, 0)}
           onChange={(e) => handleInputChange('tier1Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -121,7 +111,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier2Price"
           type="number"
-          value={getNumericValue(fareData.tier2Price)}
+          value={parseNumericValue(fareData.tier2Price, 0)}
           onChange={(e) => handleInputChange('tier2Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -133,7 +123,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier3Price"
           type="number"
-          value={getNumericValue(fareData.tier3Price)}
+          value={parseNumericValue(fareData.tier3Price, 0)}
           onChange={(e) => handleInputChange('tier3Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -145,7 +135,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier4Price"
           type="number"
-          value={getNumericValue(fareData.tier4Price)}
+          value={parseNumericValue(fareData.tier4Price, 0)}
           onChange={(e) => handleInputChange('tier4Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -157,7 +147,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="extraKmCharge"
           type="number"
-          value={getNumericValue(fareData.extraKmCharge)}
+          value={parseNumericValue(fareData.extraKmCharge, 0)}
           onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
           placeholder="0"
           min="0"
