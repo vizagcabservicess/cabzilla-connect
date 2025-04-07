@@ -119,8 +119,10 @@ const AirportFareManagement: React.FC = () => {
       });
       
       // Force a reload of data to ensure we have the latest values
+      // Add a short delay to allow the backend to process the update
       setTimeout(() => {
-        loadFares(selectedVehicleId);
+        // Increment refresh key to trigger a reload
+        setRefreshKey(prev => prev + 1);
       }, 500);
     } catch (error) {
       console.error('Error saving fares:', error);
@@ -145,9 +147,8 @@ const AirportFareManagement: React.FC = () => {
       
       // Reload data if we have a selected vehicle
       if (selectedVehicleId) {
-        setTimeout(() => {
-          loadFares(selectedVehicleId);
-        }, 500);
+        // Increment refresh key to trigger a reload
+        setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
       console.error('Error syncing airport fare tables:', error);
@@ -188,12 +189,8 @@ const AirportFareManagement: React.FC = () => {
         // Sync tables after fixing collation
         await syncAirportFares();
         
-        // Reload data if we have a selected vehicle
-        if (selectedVehicleId) {
-          setTimeout(() => {
-            loadFares(selectedVehicleId);
-          }, 500);
-        }
+        // Increment refresh key to trigger a reload
+        setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(result.message || 'Failed to fix database collation');
       }
