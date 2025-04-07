@@ -86,6 +86,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const fetchAvailableVehicles = async () => {
     try {
       console.log("Fetching available vehicles...");
+      // Fix the parameters order: method first, then endpoint, then options
       const response = await directVehicleOperation('GET', 'admin/get-vehicles.php', {});
       
       if (response && response.vehicles && Array.isArray(response.vehicles)) {
