@@ -55,9 +55,10 @@ $postData = $_POST;
 file_put_contents($logFile, "[$timestamp] POST data: " . print_r($_POST, true) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
 
-// Make sure we have a vehicle ID from any possible source before forwarding
+// Get request data - check various sources
 $vehicleId = null;
-$possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type', 'id'];
+$jsonData = null;
+$possibleKeys = ['vehicleId', 'vehicle_id', 'vehicleid', 'vehicle-id', 'id', 'cabType', 'cab_type'];
 
 // First check URL parameters (highest priority)
 foreach ($possibleKeys as $key) {
@@ -157,14 +158,14 @@ if ($vehicleId) {
     }
     
     // If we have raw JSON, reconstruct it to include the vehicle ID
-    if (!empty($rawInput) && json_decode($rawInput) !== null) {
-        $jsonData = json_decode($rawInput, true);
+    if (!empty($rawInput) && $jsonData !== null) {
         if (is_array($jsonData)) {
             $jsonData['vehicleId'] = $vehicleId;
             $jsonData['vehicle_id'] = $vehicleId;
-            // Don't redefine php://input, but set a global variable that can be read
+            $jsonData['cabType'] = $vehicleId;
+            // Set a global variable that can be read by the admin script
             $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
-            file_put_contents($logFile, "[$timestamp] Updated JSON input with vehicle ID\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Updated JSON input with vehicle ID: " . $GLOBALS['__UPDATED_RAW_INPUT'] . "\n", FILE_APPEND);
         }
     }
     

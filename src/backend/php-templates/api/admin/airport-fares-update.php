@@ -61,63 +61,73 @@ try {
         throw new Exception('Only POST method is allowed');
     }
 
-    // Get request data - check various sources
+    // Extract data from all possible sources
     $postData = $_POST;
-    file_put_contents($logFile, "[$timestamp] POST data: " . print_r($postData, true) . "\n", FILE_APPEND);
+    $jsonData = null;
     
-    // If no POST data, try to get it from the request body
-    if (empty($postData)) {
-        if (!empty($rawInput)) {
-            $jsonData = json_decode($rawInput, true);
-            $jsonError = json_last_error();
-            
-            if ($jsonError !== JSON_ERROR_NONE) {
-                file_put_contents($logFile, "[$timestamp] JSON decode error: " . json_last_error_msg() . "\n", FILE_APPEND);
-                
-                // Try to handle non-JSON data (might be URL encoded or form data)
-                parse_str($rawInput, $parsedData);
-                if (!empty($parsedData)) {
-                    $postData = $parsedData;
-                    file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
-                } else {
-                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($rawInput, 0, 200));
-                }
-            } else {
-                $postData = $jsonData;
-                file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
-            }
+    file_put_contents($logFile, "[$timestamp] POST data: " . print_r($postData, true) . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] GET data: " . print_r($_GET, true) . "\n", FILE_APPEND);
+    
+    // If there's raw input, try to parse it as JSON
+    if (!empty($rawInput)) {
+        $jsonData = json_decode($rawInput, true);
+        $jsonError = json_last_error();
+        
+        if ($jsonError === JSON_ERROR_NONE) {
+            file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] JSON data: " . print_r($jsonData, true) . "\n", FILE_APPEND);
         } else {
-            throw new Exception('No data received in request body');
+            file_put_contents($logFile, "[$timestamp] JSON parse error: " . json_last_error_msg() . "\n", FILE_APPEND);
+            
+            // Try to parse as URL encoded data
+            parse_str($rawInput, $parsedData);
+            if (!empty($parsedData)) {
+                file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
+                file_put_contents($logFile, "[$timestamp] URL encoded data: " . print_r($parsedData, true) . "\n", FILE_APPEND);
+                
+                // Add this data to our collection
+                $postData = array_merge($postData, $parsedData);
+            }
         }
     }
     
-    // Check if data is in a nested 'data' property (common when sent from frontend)
-    if (isset($postData['data']) && is_array($postData['data'])) {
-        $postData = $postData['data'];
-        file_put_contents($logFile, "[$timestamp] Using nested data property\n", FILE_APPEND);
+    // Collect data from all sources in order of preference
+    $mergedData = [];
+    
+    // 1. JSON data (highest priority)
+    if ($jsonData) {
+        $mergedData = $jsonData;
+        
+        // Check for nested data within JSON
+        if (isset($jsonData['data']) && is_array($jsonData['data'])) {
+            $mergedData = array_merge($mergedData, $jsonData['data']);
+        }
+        if (isset($jsonData['__data']) && is_array($jsonData['__data'])) {
+            $mergedData = array_merge($mergedData, $jsonData['__data']);
+        }
     }
     
-    // Check if __data field exists (used by directVehicleOperation)
-    if (isset($postData['__data']) && is_array($postData['__data'])) {
-        $postData = $postData['__data'];
-        file_put_contents($logFile, "[$timestamp] Using __data field\n", FILE_APPEND);
-    }
+    // 2. POST data
+    $mergedData = array_merge($mergedData, $postData);
     
-    file_put_contents($logFile, "[$timestamp] Parsed data: " . json_encode($postData) . "\n", FILE_APPEND);
+    // 3. GET parameters (lowest priority, but might contain vehicleId)
+    $mergedData = array_merge($_GET, $mergedData);
+    
+    file_put_contents($logFile, "[$timestamp] Merged data from all sources: " . print_r($mergedData, true) . "\n", FILE_APPEND);
 
-    // Check required fields - look for vehicle ID in multiple possible fields
+    // Find the vehicle ID in the merged data or any of the possible sources
     $vehicleId = null;
-    $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'id', 'cabType'];
+    $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicleid', 'vehicle-id', 'id', 'cabType', 'cab_type', 'carId', 'car_id'];
     
     foreach ($possibleKeys as $key) {
-        if (isset($postData[$key]) && !empty($postData[$key])) {
-            $vehicleId = trim($postData[$key]);
-            file_put_contents($logFile, "[$timestamp] Found vehicle ID in key '$key': $vehicleId\n", FILE_APPEND);
+        if (isset($mergedData[$key]) && !empty($mergedData[$key])) {
+            $vehicleId = trim($mergedData[$key]);
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in merged data key '$key': $vehicleId\n", FILE_APPEND);
             break;
         }
     }
 
-    // If still no vehicle ID found, check in request parameters
+    // If still no vehicle ID, check in request parameters and headers
     if (!$vehicleId) {
         foreach ($possibleKeys as $key) {
             if (isset($_REQUEST[$key]) && !empty($_REQUEST[$key])) {
@@ -127,11 +137,21 @@ try {
             }
         }
     }
+    
+    // Check in HTTP headers as a last resort
+    if (!$vehicleId) {
+        foreach ($_SERVER as $key => $value) {
+            if (strpos($key, 'HTTP_X_VEHICLE') === 0 && !empty($value)) {
+                $vehicleId = trim($value);
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in HTTP header: $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
+    }
 
     if (!$vehicleId) {
         // Detailed error message with all available data
-        file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found. POST:" . print_r($_POST, true) . 
-            " GET:" . print_r($_GET, true) . " REQUEST:" . print_r($_REQUEST, true) . "\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found in any source\n", FILE_APPEND);
         throw new Exception('Vehicle ID is required but not found in request data or URL');
     }
 
@@ -146,20 +166,24 @@ try {
     if ($originalVehicleId !== $vehicleId) {
         file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
     }
+    
+    // Add the vehicleId to mergedData to ensure it's available for later use
+    $mergedData['vehicleId'] = $vehicleId;
+    $mergedData['vehicle_id'] = $vehicleId;
 
-    // Extract fare data - support various naming conventions
-    $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : 0;
-    $pricePerKm = isset($postData['pricePerKm']) ? floatval($postData['pricePerKm']) : 0;
-    $pickupPrice = isset($postData['pickupPrice']) ? floatval($postData['pickupPrice']) : 0;
-    $dropPrice = isset($postData['dropPrice']) ? floatval($postData['dropPrice']) : 0;
-    $tier1Price = isset($postData['tier1Price']) ? floatval($postData['tier1Price']) : 0;
-    $tier2Price = isset($postData['tier2Price']) ? floatval($postData['tier2Price']) : 0;
-    $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : 0;
-    $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : 0;
-    $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 0;
+    // Extract fare data with defaults - check all possible variations of field names
+    $basePrice = getNumberValue($mergedData, ['basePrice', 'base_price', 'baseprice', 'base-price'], 0);
+    $pricePerKm = getNumberValue($mergedData, ['pricePerKm', 'price_per_km', 'priceperkm', 'price-per-km'], 0);
+    $pickupPrice = getNumberValue($mergedData, ['pickupPrice', 'pickup_price', 'pickupprice', 'pickup-price'], 0);
+    $dropPrice = getNumberValue($mergedData, ['dropPrice', 'drop_price', 'dropprice', 'drop-price'], 0);
+    $tier1Price = getNumberValue($mergedData, ['tier1Price', 'tier_1_price', 'tier1price', 'tier-1-price'], 0);
+    $tier2Price = getNumberValue($mergedData, ['tier2Price', 'tier_2_price', 'tier2price', 'tier-2-price'], 0);
+    $tier3Price = getNumberValue($mergedData, ['tier3Price', 'tier_3_price', 'tier3price', 'tier-3-price'], 0);
+    $tier4Price = getNumberValue($mergedData, ['tier4Price', 'tier_4_price', 'tier4price', 'tier-4-price'], 0);
+    $extraKmCharge = getNumberValue($mergedData, ['extraKmCharge', 'extra_km_charge', 'extrakmcharge', 'extra-km-charge'], 0);
 
     // Log fare data for debugging
-    file_put_contents($logFile, "[$timestamp] Fare data to save: " . json_encode([
+    $fareData = [
         'vehicleId' => $vehicleId,
         'basePrice' => $basePrice,
         'pricePerKm' => $pricePerKm,
@@ -170,7 +194,9 @@ try {
         'tier3Price' => $tier3Price,
         'tier4Price' => $tier4Price,
         'extraKmCharge' => $extraKmCharge
-    ]) . "\n", FILE_APPEND);
+    ];
+    
+    file_put_contents($logFile, "[$timestamp] Extracted fare data: " . json_encode($fareData) . "\n", FILE_APPEND);
     
     // Connect to the database
     $conn = getDbConnection();
@@ -335,4 +361,20 @@ try {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     file_put_contents($logFile, "[$timestamp] ERROR TRACE: " . $e->getTraceAsString() . "\n", FILE_APPEND);
     sendErrorResponse($e->getMessage());
+}
+
+/**
+ * Helper function to get a numeric value from an array using multiple possible keys
+ */
+function getNumberValue($data, $possibleKeys, $default = 0) {
+    foreach ($possibleKeys as $key) {
+        if (isset($data[$key]) && (is_numeric($data[$key]) || is_string($data[$key]))) {
+            $value = $data[$key];
+            if (is_string($value) && trim($value) === '') {
+                return $default;
+            }
+            return floatval($value);
+        }
+    }
+    return $default;
 }

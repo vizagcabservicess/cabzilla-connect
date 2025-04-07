@@ -295,110 +295,188 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
       trip_type: 'airport'
     };
     
-    // Try multiple endpoints to maximize chance of success
-    const endpoints = [
-      'api/admin/airport-fares-update.php',
-      'api/airport-fares-update.php'
-    ];
+    console.log("Sending update data to server:", normalizedFareData);
     
-    let success = false;
-    let finalResponse;
-    let allErrors = [];
+    // Approach 1: Try direct JSON POST to the airport-fares-update endpoint
+    try {
+      console.log("Trying direct update via: api/admin/airport-fares-update.php");
+      const directResponse = await directVehicleOperation(
+        'api/admin/airport-fares-update.php',
+        'POST',
+        {
+          data: normalizedFareData,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Force-Refresh': 'true'
+          }
+        }
+      );
+      
+      console.log("Direct endpoint response:", directResponse);
+      
+      if (directResponse?.status === 'success') {
+        handleSuccessfulUpdate(fareData.vehicleId);
+        return true;
+      }
+    } catch (directError) {
+      console.error("Direct endpoint update failed:", directError);
+    }
     
-    // Try each endpoint in sequence until one succeeds
-    for (const endpoint of endpoints) {
+    // Approach 2: Try the fare-update.php endpoint with tripType parameter
+    try {
+      console.log("Trying fare-update endpoint: api/admin/fare-update.php?tripType=airport");
+      const fareUpdateResponse = await directVehicleOperation(
+        'api/admin/fare-update.php?tripType=airport',
+        'POST',
+        {
+          data: normalizedFareData,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Force-Refresh': 'true'
+          }
+        }
+      );
+      
+      console.log("fare-update.php response:", fareUpdateResponse);
+      
+      if (fareUpdateResponse?.status === 'success') {
+        handleSuccessfulUpdate(fareData.vehicleId);
+        return true;
+      }
+    } catch (fareUpdateError) {
+      console.error("fare-update endpoint failed:", fareUpdateError);
+    }
+    
+    // Approach 3: Try using URLSearchParams for guaranteed compatibility
+    try {
+      console.log("Trying with URLSearchParams format");
+      
+      const params = new URLSearchParams();
+      // Add all properties as individual parameters
+      Object.entries(normalizedFareData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+      
+      const urlEncodedResponse = await directVehicleOperation(
+        'api/admin/airport-fares-update.php',
+        'POST',
+        {
+          data: params,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+            'X-Force-Refresh': 'true'
+          }
+        }
+      );
+      
+      console.log("URLSearchParams response:", urlEncodedResponse);
+      
+      if (urlEncodedResponse?.status === 'success') {
+        handleSuccessfulUpdate(fareData.vehicleId);
+        return true;
+      }
+    } catch (urlEncodedError) {
+      console.error("URLSearchParams approach failed:", urlEncodedError);
+    }
+    
+    // Approach 4: Try FormData as a last resort
+    try {
+      console.log("Trying FormData format as last resort");
+      
+      // Convert fare data to FormData
+      const formData = new FormData();
+      Object.entries(normalizedFareData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, String(value));
+        }
+      });
+      
+      const formDataResponse = await directVehicleOperation(
+        'api/admin/airport-fares-update.php',
+        'POST',
+        {
+          data: formData,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Accept': 'application/json',
+            'X-Force-Refresh': 'true'
+            // Don't set Content-Type here, browser will set it with boundary for FormData
+          }
+        }
+      );
+      
+      console.log("FormData response:", formDataResponse);
+      
+      if (formDataResponse?.status === 'success') {
+        handleSuccessfulUpdate(fareData.vehicleId);
+        return true;
+      }
+    } catch (formDataError) {
+      console.error("FormData approach failed:", formDataError);
+    }
+    
+    // All approaches failed - try to fix the database as a last resort
+    console.error("All update approaches failed. Attempting to fix database...");
+    const fixed = await fixDatabaseTables();
+    
+    if (fixed) {
+      console.log("Database fixed, attempting update one more time");
       try {
-        console.log(`Trying to update airport fares using endpoint: ${endpoint}`);
-        
-        const response = await directVehicleOperation(
-          endpoint,
+        const finalAttemptResponse = await directVehicleOperation(
+          'api/admin/airport-fares-update.php',
           'POST',
           {
             data: normalizedFareData,
             headers: {
               'X-Admin-Mode': 'true',
               'Content-Type': 'application/json',
-              'Accept': 'application/json'
+              'Accept': 'application/json',
+              'X-Force-Refresh': 'true'
             }
           }
         );
         
-        console.log(`Response from ${endpoint}:`, response);
-        
-        if (response?.status === 'success') {
-          success = true;
-          finalResponse = response;
-          console.log(`Successfully updated fares with ${endpoint}`);
-          break;
-        } else {
-          allErrors.push(`${endpoint}: ${response?.message || 'Unknown error'}`);
+        if (finalAttemptResponse?.status === 'success') {
+          handleSuccessfulUpdate(fareData.vehicleId);
+          return true;
         }
-      } catch (endpointError) {
-        console.warn(`Error with endpoint ${endpoint}:`, endpointError);
-        allErrors.push(`${endpoint}: ${endpointError instanceof Error ? endpointError.message : String(endpointError)}`);
-        // Continue to next endpoint
+      } catch (finalError) {
+        console.error("Final attempt failed after database fix:", finalError);
       }
     }
     
-    if (!success) {
-      // Try sending as form data instead of JSON
-      try {
-        console.log("Trying form data format as fallback");
-        
-        // Convert fare data to FormData
-        const formData = new FormData();
-        Object.entries(normalizedFareData).forEach(([key, value]) => {
-          formData.append(key, String(value));
-        });
-        
-        const formDataResponse = await directVehicleOperation(
-          'api/admin/airport-fares-update.php',
-          'POST',
-          {
-            // Fix: use 'data' property instead of 'formData'
-            data: formData,
-            headers: {
-              'X-Admin-Mode': 'true',
-              'Accept': 'application/json'
-              // Remove Content-Type to let browser set it with boundary for FormData
-            }
-          }
-        );
-        
-        console.log("Form data response:", formDataResponse);
-        
-        if (formDataResponse?.status === 'success') {
-          success = true;
-          finalResponse = formDataResponse;
-        } else {
-          allErrors.push(`Form data: ${formDataResponse?.message || 'Unknown error'}`);
-        }
-      } catch (formDataError) {
-        console.warn("Error with form data approach:", formDataError);
-        allErrors.push(`Form data: ${formDataError instanceof Error ? formDataError.message : String(formDataError)}`);
-      }
-    }
+    throw new Error("All update methods failed. Please try again or contact support.");
     
-    if (success) {
-      // Dispatch event to notify other components of the update
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { 
-          fareType: 'airport',
-          vehicleId: fareData.vehicleId
-        } 
-      }));
-      
-      // Clear fare cache
-      localStorage.removeItem(`airport_fares_${fareData.vehicleId}`);
-      
-      return true;
-    }
-    
-    throw new Error(`Failed to update airport fares. Errors: ${allErrors.join('; ')}`);
   } catch (error) {
     console.error(`Error updating airport fares: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
+};
+
+/**
+ * Helper function to handle successful updates
+ */
+const handleSuccessfulUpdate = (vehicleId: string) => {
+  // Dispatch event to notify other components of the update
+  window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+    detail: { 
+      fareType: 'airport',
+      vehicleId: vehicleId
+    } 
+  }));
+  
+  // Clear fare cache
+  localStorage.removeItem(`airport_fares_${vehicleId}`);
+  
+  toast.success('Airport fares updated successfully');
 };
 
 /**
