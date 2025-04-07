@@ -2,7 +2,7 @@
 import { CabType } from '@/types/cab';
 import { toast } from 'sonner';
 import { directApiCall } from '@/utils/directApiHelper';
-import { forceRefreshVehicles } from '@/utils/apiHelper';
+import { forceRefreshVehicles, isPreviewMode } from '@/utils/apiHelper';
 
 // Cache for vehicle data
 let vehicleDataCache: CabType[] | null = null;
@@ -92,33 +92,73 @@ export async function getVehicleData(forceRefresh = false, includeInactive = fal
     try {
       console.log('Fetching fresh vehicle data');
       
-      const response = await directApiCall(`/api/vehicles-data.php?includeInactive=${includeInactive}&_t=${Date.now()}`);
-      
-      if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
-        // Process the vehicles to ensure they have the required fields
-        const processedVehicles = response.vehicles.map((vehicle: any) => ({
-          ...vehicle,
-          // Ensure all required fields are present
-          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
-          vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '', // Make sure vehicle_id is set
-          isActive: vehicle.isActive !== undefined ? vehicle.isActive : vehicle.is_active !== false
-        }));
-        
-        // Update the cache
-        vehicleDataCache = processedVehicles;
-        vehicleDataTimestamp = now;
-        
-        // Dispatch an event to notify other components
-        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
-          detail: { count: processedVehicles.length, source: 'api' }
-        }));
-        
-        // Return the filtered list if needed
-        if (includeInactive) {
-          return processedVehicles;
-        } else {
-          return processedVehicles.filter(v => v.isActive !== false && v.is_active !== false);
+      // Explicitly provide error handling fallback for the preview environment
+      const endpoints = [
+        `/api/vehicles-data.php?includeInactive=${includeInactive}&_t=${Date.now()}`,
+        `/api/admin/vehicles.php?includeInactive=${includeInactive}&_t=${Date.now()}`,
+        `/api/vehicles.php?includeInactive=${includeInactive}&_t=${Date.now()}`
+      ];
+
+      let response = null;
+      let errorMessages = [];
+
+      // Try each endpoint until one succeeds
+      for (const endpoint of endpoints) {
+        try {
+          response = await directApiCall(endpoint);
+          if (response && response.vehicles) {
+            console.log(`Successfully loaded vehicle data from ${endpoint}`);
+            break;
+          }
+        } catch (err: any) {
+          errorMessages.push(`${endpoint}: ${err.message}`);
+          console.log(`Failed to fetch from ${endpoint}, trying next endpoint`);
         }
+      }
+      
+      // If we don't have a valid response after trying all endpoints
+      if (!response || !response.vehicles || !Array.isArray(response.vehicles)) {
+        if (isPreviewMode()) {
+          console.log('In preview mode, using default vehicles');
+          // If in preview mode, just use the default vehicles
+          vehicleDataCache = defaultVehicles;
+          vehicleDataTimestamp = now;
+          
+          if (includeInactive) {
+            return defaultVehicles;
+          } else {
+            return defaultVehicles.filter(v => v.isActive !== false);
+          }
+        }
+        
+        throw new Error(`Failed to fetch vehicle data from all endpoints: ${errorMessages.join('; ')}`);
+      }
+      
+      // Process the vehicles to ensure they have the required fields
+      const processedVehicles = response.vehicles.map((vehicle: any) => ({
+        ...vehicle,
+        // Ensure all required fields are present
+        id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
+        vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '', // Make sure vehicle_id is set
+        isActive: vehicle.isActive !== undefined ? vehicle.isActive : vehicle.is_active !== false
+      }));
+      
+      // Update the cache
+      vehicleDataCache = processedVehicles;
+      vehicleDataTimestamp = now;
+      
+      // Dispatch an event to notify other components
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
+        detail: { count: processedVehicles.length, source: 'api' }
+      }));
+      
+      console.log(`Successfully loaded and cached ${processedVehicles.length} vehicles`);
+      
+      // Return the filtered list if needed
+      if (includeInactive) {
+        return processedVehicles;
+      } else {
+        return processedVehicles.filter(v => v.isActive !== false && v.is_active !== false);
       }
     } catch (apiError) {
       console.error('Error fetching vehicle data from API:', apiError);
@@ -146,10 +186,29 @@ export async function getVehicleData(forceRefresh = false, includeInactive = fal
     
     // As a last resort, return the default vehicles
     console.log('Using default vehicle data');
-    return defaultVehicles;
+    
+    // Store default vehicles in cache
+    vehicleDataCache = defaultVehicles;
+    vehicleDataTimestamp = now;
+    
+    if (includeInactive) {
+      return defaultVehicles;
+    } else {
+      return defaultVehicles.filter(v => v.isActive !== false);
+    }
   } catch (error) {
     console.error('Error in getVehicleData:', error);
-    toast.error('Failed to load vehicle data');
+    
+    // Always return something usable, even in case of error
+    if (isPreviewMode()) {
+      console.log('In preview mode, returning default vehicles');
+      return defaultVehicles;
+    }
+    
+    if (vehicleDataCache) {
+      return vehicleDataCache;
+    }
+    
     return defaultVehicles;
   }
 }
@@ -160,9 +219,9 @@ export async function getVehicleData(forceRefresh = false, includeInactive = fal
 export const getVehicleTypes = async (): Promise<string[]> => {
   try {
     const vehicles = await getVehicleData();
-    return vehicles.map(v => v.id);
+    return [...new Set(vehicles.map(v => v.id))];
   } catch (error) {
     console.error('Error getting vehicle types:', error);
-    return defaultVehicles.map(v => v.id);
+    return [...new Set(defaultVehicles.map(v => v.id))];
   }
 };
