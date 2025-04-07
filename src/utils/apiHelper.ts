@@ -280,6 +280,13 @@ export const directVehicleOperation = async (
       }
       
       if (headers['Content-Type'] === 'application/json') {
+        // Ensure vehicle ID is included in both formats for compatibility
+        if (options.data.vehicleId && !options.data.vehicle_id) {
+          options.data.vehicle_id = options.data.vehicleId;
+        } else if (options.data.vehicle_id && !options.data.vehicleId) {
+          options.data.vehicleId = options.data.vehicle_id;
+        }
+        
         // Stringify the data properly
         requestOptions.body = JSON.stringify(options.data);
         console.log('JSON request body:', requestOptions.body);
@@ -311,7 +318,8 @@ export const directVehicleOperation = async (
     }
     
     // Check if response is HTML instead of JSON (common error with PHP endpoints)
-    if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+    if (text.includes('<!DOCTYPE html>') || text.includes('<html>') || 
+        text.startsWith('<') || text.includes('<?php')) {
       console.error('Received HTML response instead of JSON:', text.substring(0, 200));
       throw new Error('Received HTML instead of JSON. The API endpoint is not configured correctly.');
     }
@@ -333,6 +341,11 @@ export const directVehicleOperation = async (
       // If we received HTML but failed to detect it earlier, throw a more specific error
       if (text.includes('<') && text.includes('>')) {
         throw new Error('Received invalid response format (possibly HTML). Check server configuration.');
+      }
+      
+      // If the text starts with any non-JSON character, provide a more descriptive error
+      if (text.trim() && !text.trim().startsWith('{') && !text.trim().startsWith('[')) {
+        throw new Error(`Invalid JSON response format. Response starts with: ${text.substring(0, 20)}...`);
       }
       
       throw new Error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);

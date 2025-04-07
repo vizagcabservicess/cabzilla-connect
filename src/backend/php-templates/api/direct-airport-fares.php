@@ -25,6 +25,11 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
+// Clear any previous output buffers to prevent contamination
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
@@ -42,6 +47,22 @@ foreach ($possibleKeys as $key) {
         $vehicleId = $_GET[$key];
         file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter $key: $vehicleId\n", FILE_APPEND);
         break;
+    }
+}
+
+// Check in request body if it's POST request
+if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $inputJSON = file_get_contents('php://input');
+    $input = json_decode($inputJSON, TRUE);
+    
+    if ($input) {
+        foreach ($possibleKeys as $key) {
+            if (isset($input[$key]) && !empty($input[$key])) {
+                $vehicleId = $input[$key];
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in request body $key: $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
     }
 }
 
@@ -64,6 +85,29 @@ if ($vehicleId) {
         file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
     }
 }
+
+// Register a shutdown function to ensure we always return JSON
+register_shutdown_function(function() use ($logFile, $timestamp) {
+    $error = error_get_last();
+    if ($error !== null && $error['type'] === E_ERROR) {
+        // Clean any existing output
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Log the fatal error
+        file_put_contents($logFile, "[$timestamp] FATAL ERROR: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line'] . "\n", FILE_APPEND);
+        
+        // Return a JSON error response
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'PHP Fatal Error: ' . $error['message'],
+            'file' => basename($error['file']),
+            'line' => $error['line']
+        ]);
+    }
+});
 
 // Forward the request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';
