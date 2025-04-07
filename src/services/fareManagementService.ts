@@ -47,6 +47,8 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
 export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]> => {
   try {
     const endpoint = `api/admin/direct-airport-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
+    console.log(`Fetching airport fares from: ${endpoint}`);
+    
     const result = await directVehicleOperation(endpoint, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
@@ -55,15 +57,23 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
       }
     });
 
-    console.log('Airport fares response:', result);
+    console.log('Airport fares raw response:', result);
     
+    // Handle different response formats
     if (result && result.status === 'success' && Array.isArray(result.fares)) {
       return result.fares;
-    } else if (result && result.fares && typeof result.fares === 'object' && !Array.isArray(result.fares)) {
-      // Convert object with keys to array
-      return Object.values(result.fares);
+    } else if (result && result.fares && typeof result.fares === 'object') {
+      if (Array.isArray(result.fares)) {
+        return result.fares;
+      } else {
+        // Convert object with keys to array
+        return Object.values(result.fares);
+      }
+    } else if (result && Array.isArray(result)) {
+      return result;
     }
     
+    console.warn('No valid fare data in response:', result);
     return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
@@ -97,16 +107,22 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
 
 export const updateAirportFares = async (fareData: FareData): Promise<void> => {
   try {
-    console.log('Updating airport fares with data:', fareData);
-    
-    // Ensure we have both field formats (for compatibility with different backends)
+    // Ensure we have both vehicle ID formats for compatibility
     const dataToSend = {
       ...fareData,
       vehicleId: fareData.vehicleId,
       vehicle_id: fareData.vehicleId
     };
     
-    console.log('Data being sent to API:', JSON.stringify(dataToSend));
+    console.log('Updating airport fares with data:', dataToSend);
+    
+    // First ensure the tables are synchronized before updating
+    try {
+      await syncAirportFares();
+    } catch (syncError) {
+      console.warn('Warning: Pre-update airport fare sync failed:', syncError);
+      // Continue with update anyway
+    }
     
     const result = await directVehicleOperation('api/admin/airport-fares-update.php', 'POST', {
       headers: {
@@ -127,7 +143,7 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
     try {
       await syncAirportFares();
     } catch (syncError) {
-      console.warn('Warning: Airport fare sync failed after update:', syncError);
+      console.warn('Warning: Post-update airport fare sync failed:', syncError);
       // Continue anyway, the update was successful
     }
   } catch (error) {
@@ -155,10 +171,12 @@ export const syncLocalFares = async (): Promise<any> => {
 
 export const syncAirportFares = async (): Promise<any> => {
   try {
+    console.log('Starting airport fares sync');
     const result = await directVehicleOperation('api/admin/sync-airport-fares.php', 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
     

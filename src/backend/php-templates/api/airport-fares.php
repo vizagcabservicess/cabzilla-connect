@@ -1,6 +1,9 @@
 
 <?php
-require_once '../config.php';
+// Include config to get database connection functions
+if (file_exists(__DIR__ . '/../config.php')) {
+    require_once __DIR__ . '/../config.php';
+}
 
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
@@ -13,7 +16,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: airport-fares.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -34,6 +37,24 @@ $timestamp = date('Y-m-d H:i:s');
 file_put_contents($logFile, "[$timestamp] Airport fares request received\n", FILE_APPEND);
 
 try {
+    // Function to get database connection if not found in config.php
+    if (!function_exists('getDbConnection')) {
+        function getDbConnection() {
+            $dbHost = 'localhost';
+            $dbName = isset($GLOBALS['DB_NAME']) ? $GLOBALS['DB_NAME'] : 'u644605165_new_bookingdb';
+            $dbUser = isset($GLOBALS['DB_USER']) ? $GLOBALS['DB_USER'] : 'u644605165_new_bookingusr';
+            $dbPass = isset($GLOBALS['DB_PASS']) ? $GLOBALS['DB_PASS'] : 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            return $conn;
+        }
+    }
+    
     $conn = getDbConnection();
     
     // Check if the connection was successful
@@ -178,43 +199,32 @@ try {
     
     // Process and structure the data
     $fares = [];
-    while ($row = $result->fetch_assoc()) {
-        $id = $row['vehicle_id'] ?? null;
-        
-        // Skip entries with null ID
-        if (!$id) continue;
-        
-        file_put_contents($logFile, "[$timestamp] Processing row for vehicle: $id\n", FILE_APPEND);
-        
-        // Check if this row has any useful fare data
-        $hasData = false;
-        foreach (['basePrice', 'pickupPrice', 'dropPrice', 'tier1Price', 'tier2Price'] as $key) {
-            if (isset($row[$key]) && $row[$key] > 0) {
-                $hasData = true;
-                break;
-            }
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $id = $row['vehicle_id'] ?? null;
+            
+            // Skip entries with null ID
+            if (!$id) continue;
+            
+            file_put_contents($logFile, "[$timestamp] Processing row for vehicle: $id\n", FILE_APPEND);
+            
+            // Map to standardized properties
+            $fares[$id] = [
+                'vehicleId' => $id,
+                'basePrice' => floatval($row['basePrice'] ?? 0),
+                'pricePerKm' => floatval($row['pricePerKm'] ?? 0),
+                'pickupPrice' => floatval($row['pickupPrice'] ?? 0),
+                'dropPrice' => floatval($row['dropPrice'] ?? 0),
+                'tier1Price' => floatval($row['tier1Price'] ?? 0),
+                'tier2Price' => floatval($row['tier2Price'] ?? 0),
+                'tier3Price' => floatval($row['tier3Price'] ?? 0),
+                'tier4Price' => floatval($row['tier4Price'] ?? 0),
+                'extraKmCharge' => floatval($row['extraKmCharge'] ?? 0)
+            ];
+            
+            file_put_contents($logFile, "[$timestamp] Fare data for $id: " . json_encode($fares[$id]) . "\n", FILE_APPEND);
         }
-        
-        if (!$hasData) {
-            file_put_contents($logFile, "[$timestamp] Skipping row for $id as it has no useful data\n", FILE_APPEND);
-            continue;
-        }
-        
-        // Map to standardized properties
-        $fares[$id] = [
-            'vehicleId' => $id,
-            'basePrice' => floatval($row['basePrice'] ?? 0),
-            'pricePerKm' => floatval($row['pricePerKm'] ?? 0),
-            'pickupPrice' => floatval($row['pickupPrice'] ?? 0),
-            'dropPrice' => floatval($row['dropPrice'] ?? 0),
-            'tier1Price' => floatval($row['tier1Price'] ?? 0),
-            'tier2Price' => floatval($row['tier2Price'] ?? 0),
-            'tier3Price' => floatval($row['tier3Price'] ?? 0),
-            'tier4Price' => floatval($row['tier4Price'] ?? 0),
-            'extraKmCharge' => floatval($row['extraKmCharge'] ?? 0)
-        ];
-        
-        file_put_contents($logFile, "[$timestamp] Fare data for $id: " . json_encode($fares[$id]) . "\n", FILE_APPEND);
     }
     
     // If we have no fares but the vehicle ID was provided, try to create a default entry
@@ -224,6 +234,10 @@ try {
         // First check if the vehicle exists
         $checkVehicleQuery = "SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?";
         $checkStmt = $conn->prepare($checkVehicleQuery);
+        if (!$checkStmt) {
+            throw new Exception("Prepare check vehicle statement failed: " . $conn->error);
+        }
+        
         $checkStmt->bind_param("ss", $vehicleId, $vehicleId);
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
@@ -233,6 +247,10 @@ try {
             $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
             $insertVehicleQuery = "INSERT INTO vehicles (vehicle_id, name, is_active) VALUES (?, ?, 1)";
             $insertStmt = $conn->prepare($insertVehicleQuery);
+            if (!$insertStmt) {
+                throw new Exception("Prepare insert vehicle statement failed: " . $conn->error);
+            }
+            
             $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
             $insertStmt->execute();
             file_put_contents($logFile, "[$timestamp] Created vehicle: $vehicleId\n", FILE_APPEND);
@@ -246,6 +264,10 @@ try {
                 VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
             ";
             $insertStmt = $conn->prepare($insertFareQuery);
+            if (!$insertStmt) {
+                throw new Exception("Prepare insert fare statement failed: " . $conn->error);
+            }
+            
             $insertStmt->bind_param("s", $vehicleId);
             $insertStmt->execute();
             file_put_contents($logFile, "[$timestamp] Created default airport fare entry in airport_transfer_fares\n", FILE_APPEND);
@@ -257,6 +279,10 @@ try {
                 VALUES (?, 'airport', 0, 0, 0, 0, 0, 0, 0, 0, 0)
             ";
             $insertStmt = $conn->prepare($insertFareQuery);
+            if (!$insertStmt) {
+                throw new Exception("Prepare insert fare statement failed: " . $conn->error);
+            }
+            
             $insertStmt->bind_param("s", $vehicleId);
             $insertStmt->execute();
             file_put_contents($logFile, "[$timestamp] Created default airport fare entry in vehicle_pricing\n", FILE_APPEND);
@@ -289,7 +315,7 @@ try {
         'vehicleId' => $vehicleId
     ];
     
-    echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
+    echo json_encode($response);
     file_put_contents($logFile, "[$timestamp] Response sent successfully\n", FILE_APPEND);
     
 } catch (Exception $e) {

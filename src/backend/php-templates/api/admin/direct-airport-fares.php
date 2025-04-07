@@ -66,7 +66,7 @@ try {
     
     // Check if airport_transfer_fares table exists
     $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $airportTableExists = $checkTableStmt->num_rows > 0;
+    $airportTableExists = $checkTableStmt && $checkTableStmt->num_rows > 0;
     
     if (!$airportTableExists) {
         // Create the table if it doesn't exist
@@ -118,13 +118,17 @@ try {
     ";
     
     $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
+    }
+    
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     $fare = null;
     
-    if ($result->num_rows > 0) {
+    if ($result && $result->num_rows > 0) {
         // Fetch existing fare data
         $row = $result->fetch_assoc();
         $fare = [
@@ -151,6 +155,10 @@ try {
         ";
         
         $insertStmt = $conn->prepare($insertQuery);
+        if (!$insertStmt) {
+            throw new Exception("Prepare insert statement failed: " . $conn->error);
+        }
+        
         $insertStmt->bind_param("s", $vehicleId);
         $insertStmt->execute();
         
@@ -184,7 +192,7 @@ try {
             'vehicle_id' => $vehicleId,
             'timestamp' => time()
         ]
-    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
+    ]);
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);

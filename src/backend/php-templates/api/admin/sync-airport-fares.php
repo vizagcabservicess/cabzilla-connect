@@ -45,7 +45,7 @@ try {
             logMessage('Sync operation throttled - last run was less than 30 seconds ago');
             
             echo json_encode([
-                'status' => 'success', // Changed to success to avoid error state in UI
+                'status' => 'throttled',
                 'message' => 'Airport fares sync was recently performed. Please wait at least 30 seconds between syncs.',
                 'lastSync' => $lastRun,
                 'nextAvailable' => $lastRun + 30,
@@ -69,7 +69,7 @@ try {
     
     // Check if airport_transfer_fares table exists
     $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $airportFaresTableExists = $checkTableStmt->num_rows > 0;
+    $airportFaresTableExists = $checkTableStmt && $checkTableStmt->num_rows > 0;
     
     // If airport_transfer_fares table doesn't exist, create it
     if (!$airportFaresTableExists) {
@@ -93,13 +93,16 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
-        $conn->query($createTableSql);
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        }
+        
         logMessage("Created airport_transfer_fares table");
     }
     
     // Also ensure vehicle_pricing table exists
     $checkVehiclePricingStmt = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-    $vehiclePricingExists = $checkVehiclePricingStmt->num_rows > 0;
+    $vehiclePricingExists = $checkVehiclePricingStmt && $checkVehiclePricingStmt->num_rows > 0;
     
     if (!$vehiclePricingExists) {
         $createVehiclePricingSql = "
@@ -123,7 +126,10 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
-        $conn->query($createVehiclePricingSql);
+        if (!$conn->query($createVehiclePricingSql)) {
+            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
+        }
+        
         logMessage("Created vehicle_pricing table");
     }
     
@@ -145,6 +151,11 @@ try {
                 (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
                 VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
             ");
+            
+            if (!$stmt) {
+                logMessage("Prepare statement failed for vehicle $vehicleId: " . $conn->error);
+                continue;
+            }
             
             $stmt->bind_param("s", $vehicleId);
             $stmt->execute();
@@ -190,13 +201,18 @@ try {
                     updated_at = NOW()
             ");
             
+            if (!$updateVehiclePricing) {
+                logMessage("Prepare update statement failed for vehicle $vehicleId: " . $conn->error);
+                continue;
+            }
+            
             $updateVehiclePricing->bind_param("s", $vehicleId);
             $updateVehiclePricing->execute();
             
             logMessage("Synced airport fare for vehicle $vehicleId with vehicle_pricing table");
         }
     } else {
-        logMessage("No vehicles found in database or query failed");
+        logMessage("No vehicles found in database or query failed: " . $conn->error);
         
         // Fallback to hardcoded vehicles if database query failed
         $vehicles = ['sedan', 'ertiga', 'innova_crysta', 'luxury', 'tempo_traveller'];
@@ -206,6 +222,11 @@ try {
             $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
             
             $checkVehicle = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?");
+            if (!$checkVehicle) {
+                logMessage("Prepare check statement failed for vehicle $vehicleId: " . $conn->error);
+                continue;
+            }
+            
             $checkVehicle->bind_param("ss", $vehicleId, $vehicleId);
             $checkVehicle->execute();
             $checkResult = $checkVehicle->get_result();
@@ -213,6 +234,11 @@ try {
             if ($checkResult->num_rows === 0) {
                 // Create vehicle
                 $insertVehicle = $conn->prepare("INSERT INTO vehicles (vehicle_id, name, is_active) VALUES (?, ?, 1)");
+                if (!$insertVehicle) {
+                    logMessage("Prepare insert statement failed for vehicle $vehicleId: " . $conn->error);
+                    continue;
+                }
+                
                 $insertVehicle->bind_param("ss", $vehicleId, $vehicleName);
                 $insertVehicle->execute();
                 logMessage("Created missing vehicle: $vehicleId");
@@ -224,6 +250,12 @@ try {
                 (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
                 VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
             ");
+            
+            if (!$insertFare) {
+                logMessage("Prepare insert fares statement failed for vehicle $vehicleId: " . $conn->error);
+                continue;
+            }
+            
             $insertFare->bind_param("s", $vehicleId);
             $insertFare->execute();
             
@@ -241,6 +273,12 @@ try {
                 VALUES (?, 'airport', 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
                 ON DUPLICATE KEY UPDATE updated_at = NOW()
             ");
+            
+            if (!$syncFallback) {
+                logMessage("Prepare sync fallback statement failed for vehicle $vehicleId: " . $conn->error);
+                continue;
+            }
+            
             $syncFallback->bind_param("s", $vehicleId);
             $syncFallback->execute();
         }
@@ -258,7 +296,7 @@ try {
         'synced' => $syncedCount,
         'vehicles' => $vehicles,
         'timestamp' => $now
-    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
+    ]);
 } catch (Exception $e) {
     logMessage("Error: " . $e->getMessage());
     
