@@ -20,7 +20,7 @@ export const popularTours: TourInfo[] = [
     description: 'Relax at the pristine Yarada Beach with golden sands and beautiful sunset views.',
     duration: 6, // hours
     distance: 40,
-    locations: ['Yarada Beach', 'Dolphin's Nose', 'Ross Hill Church'],
+    locations: ['Yarada Beach', 'Dolphin\'s Nose', 'Ross Hill Church'],
     basePrice: 1800,
     days: 1,
     image: '/images/tours/yarada-beach.jpg'
