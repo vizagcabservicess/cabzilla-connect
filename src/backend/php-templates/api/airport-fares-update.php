@@ -55,7 +55,7 @@ $postData = $_POST;
 file_put_contents($logFile, "[$timestamp] POST data: " . print_r($_POST, true) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
 
-// Ensure default values for all required fields - THIS IS THE KEY FIX
+// Ensure default values for all required fields
 $defaults = [
     'basePrice' => 0,
     'base_price' => 0,
@@ -76,6 +76,9 @@ $defaults = [
     'extraKmCharge' => 0,
     'extra_km_charge' => 0
 ];
+
+// Apply default values to POST data
+$_POST = array_merge($defaults, $_POST);
 
 // Get request data - check various sources
 $vehicleId = null;
