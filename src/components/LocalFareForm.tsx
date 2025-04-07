@@ -27,9 +27,10 @@ interface LocalFareFormProps {
   vehicleId: string;
   initialData: LocalFare | null;
   onSuccess?: () => void;
+  onError?: (err: any) => void; // Add this line to include the onError prop
 }
 
-export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFormProps) {
+export function LocalFareForm({ vehicleId, initialData, onSuccess, onError }: LocalFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -60,7 +61,9 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
 
   async function onSubmit(values: LocalFareFormValues) {
     if (!vehicleId) {
-      setError(new Error("Vehicle ID is required"));
+      const newError = new Error("Vehicle ID is required");
+      setError(newError);
+      if (onError) onError(newError); // Call the onError callback if provided
       return;
     }
 
@@ -93,11 +96,13 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
         const errorMessage = response?.message || "Failed to update local fares";
         const newError = new Error(errorMessage);
         setError(newError);
+        if (onError) onError(newError); // Call the onError callback if provided
         toast.error(errorMessage);
       }
     } catch (err: any) {
       console.error("Error updating local fares:", err);
       setError(err);
+      if (onError) onError(err); // Call the onError callback if provided
       toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);
