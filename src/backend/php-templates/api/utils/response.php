@@ -7,13 +7,15 @@
 // Function to send a success response
 function sendSuccessResponse($data = [], $message = 'Operation completed successfully', $statusCode = 200) {
     // Clear any previous output to prevent contamination
-    if (ob_get_length()) ob_clean();
+    while (ob_get_level()) ob_end_clean();
     
     // Set HTTP response code
     http_response_code($statusCode);
     
     // Set content type header
     header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
     
     $response = [
         'status' => 'success',
@@ -29,13 +31,15 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
 // Function to send an error response
 function sendErrorResponse($message = 'An error occurred', $data = [], $statusCode = 500) {
     // Clear any previous output to prevent contamination
-    if (ob_get_length()) ob_clean();
+    while (ob_get_level()) ob_end_clean();
     
     // Set HTTP response code
     http_response_code($statusCode);
     
     // Set content type header
     header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
     
     $response = [
         'status' => 'error',
@@ -90,4 +94,43 @@ function validateRequiredFields($data, $requiredFields) {
     return [
         'valid' => true
     ];
+}
+
+// Function to normalize vehicle ID to prevent issues
+function normalizeVehicleId($rawVehicleId) {
+    // If no ID provided, return null
+    if (empty($rawVehicleId)) {
+        return null;
+    }
+    
+    // Remove 'item-' prefix if present
+    if (strpos($rawVehicleId, 'item-') === 0) {
+        $rawVehicleId = substr($rawVehicleId, 5);
+    }
+    
+    // Known numeric ID mappings to prevent duplicates
+    $numericIdMap = [
+        '1' => 'sedan',
+        '2' => 'ertiga',
+        '3' => 'innova_crysta',
+        '4' => 'tempo',
+        '5' => 'luxury',
+        '6' => 'MPV',
+        '7' => 'Toyota',
+        '8' => 'Dzire CNG',
+        '9' => 'tempo_traveller',
+        '180' => 'etios',
+        '592' => 'Urbania',
+        '1266' => 'MPV',
+        '1270' => 'MPV',
+        '1271' => 'etios',
+        '1272' => 'etios'
+    ];
+    
+    // If this is a mapped numeric ID, convert it
+    if (isset($numericIdMap[$rawVehicleId])) {
+        return $numericIdMap[$rawVehicleId];
+    }
+    
+    return $rawVehicleId;
 }

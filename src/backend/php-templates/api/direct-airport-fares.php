@@ -10,6 +10,11 @@ header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
+// Clear any output buffers to ensure clean response
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -28,6 +33,9 @@ $timestamp = date('Y-m-d H:i:s');
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+
+// Include needed utils
+require_once __DIR__ . '/utils/response.php';
 
 // Capture URL parameters
 file_put_contents($logFile, "[$timestamp] URL parameters: " . json_encode($_GET) . "\n", FILE_APPEND);

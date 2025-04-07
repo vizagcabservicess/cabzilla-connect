@@ -8,6 +8,11 @@ header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 
+// Clear any output buffers to ensure clean response
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -22,6 +27,9 @@ if (!file_exists($logDir)) {
 
 $logFile = $logDir . '/airport_fares_update_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
+
+// Include needed utils
+require_once __DIR__ . '/utils/response.php';
 
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting airport-fares-update.php to admin/airport-fares-update.php\n", FILE_APPEND);
@@ -107,15 +115,10 @@ if ($vehicleId) {
 } else {
     // No valid vehicle ID found, return an error
     file_put_contents($logFile, "[$timestamp] ERROR: No valid vehicle ID found in request\n", FILE_APPEND);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.',
-        'debug' => [
-            'post' => $_POST,
-            'get' => $_GET,
-            'rawInput' => $rawInput
-        ]
+    sendErrorResponse('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.', [
+        'post' => $_POST,
+        'get' => $_GET,
+        'rawInput' => $rawInput
     ]);
     exit;
 }

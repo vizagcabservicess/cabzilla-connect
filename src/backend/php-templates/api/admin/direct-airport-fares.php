@@ -28,9 +28,10 @@ while (ob_get_level()) {
 // Include utility files
 require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
+require_once __DIR__ . '/../../config.php';
 
 // Run database setup to ensure tables exist
-require_once __DIR__ . '/db_setup.php';
+ensureDatabaseTables();
 
 try {
     // Get database connection
@@ -40,11 +41,14 @@ try {
         throw new Exception("Database connection failed");
     }
     
+    // Set collation explicitly for this connection - CRITICAL FIX
+    $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+    
     // Get vehicle ID from query parameters (if provided)
     $vehicleId = null;
     
     // Check for vehicle ID in various possible parameters
-    $possibleParams = ['vehicleId', 'vehicle_id', 'id'];
+    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'cabType'];
     foreach ($possibleParams as $param) {
         if (isset($_GET[$param]) && !empty($_GET[$param])) {
             $vehicleId = $_GET[$param];
@@ -52,12 +56,17 @@ try {
         }
     }
     
+    // Normalize vehicle ID
+    if ($vehicleId) {
+        $vehicleId = normalizeVehicleId($vehicleId);
+    }
+    
     // Build query based on whether a specific vehicle ID was provided
     if ($vehicleId) {
-        // Clean up vehicle ID for SQL query
+        // Escape vehicle ID for SQL query
         $vehicleId = $conn->real_escape_string($vehicleId);
         
-        // Query for specific vehicle
+        // Query for specific vehicle using prepared statement
         $query = "
             SELECT 
                 atf.id, 
@@ -77,8 +86,13 @@ try {
             LEFT JOIN 
                 vehicles v ON atf.vehicle_id = v.vehicle_id
             WHERE 
-                atf.vehicle_id = '$vehicleId'
+                atf.vehicle_id = ?
         ";
+        
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("s", $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
     } else {
         // Query for all vehicles
         $query = "
@@ -100,10 +114,9 @@ try {
             LEFT JOIN 
                 vehicles v ON atf.vehicle_id = v.vehicle_id
         ";
+        
+        $result = $conn->query($query);
     }
-    
-    // Execute query
-    $result = $conn->query($query);
     
     if (!$result) {
         throw new Exception("Database query failed: " . $conn->error);
