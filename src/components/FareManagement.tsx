@@ -86,7 +86,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const fetchAvailableVehicles = async () => {
     try {
       console.log("Fetching available vehicles...");
-      const response = await directVehicleOperation('GET', 'admin/get-vehicles.php', {});
+      const response = await directVehicleOperation(
+        'api/admin/get-vehicles.php', 
+        'GET', 
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
       
       if (response && response.vehicles && Array.isArray(response.vehicles)) {
         const vehicles = response.vehicles.map((v: any) => ({
