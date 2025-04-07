@@ -30,7 +30,7 @@ const AirportFareManagement: React.FC = () => {
   useEffect(() => {
     const handleFareDataUpdated = (event: CustomEvent) => {
       if (event.detail?.fareType === 'airport' && 
-          event.detail?.vehicleId === selectedVehicleId) {
+          (event.detail?.vehicleId === selectedVehicleId || event.detail?.allVehicles === true)) {
         // Instead of directly loading fares, update the refresh key
         setRefreshKey(prev => prev + 1);
       }
@@ -48,12 +48,15 @@ const AirportFareManagement: React.FC = () => {
     
     setLoading(true);
     try {
+      console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
       const fareDatas = await fetchAirportFares(vehicleId);
       
       if (fareDatas && fareDatas.length > 0) {
+        console.log('Retrieved fare data:', fareDatas[0]);
         setFares(fareDatas[0]);
       } else {
         // If no fare data found, create a default entry
+        console.log('No fare data found, creating default');
         setFares({
           vehicleId: vehicleId,
           vehicle_id: vehicleId,
@@ -82,6 +85,7 @@ const AirportFareManagement: React.FC = () => {
   };
 
   const handleVehicleChange = (vehicleId: string) => {
+    console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
   };
 

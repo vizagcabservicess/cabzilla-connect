@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -174,6 +175,8 @@ export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> 
     // Append a timestamp to prevent browser caching
     const timestamp = new Date().getTime();
     
+    console.log(`Fetching airport fares for vehicle ${vehicleId} at ${timestamp}`);
+    
     const response = await fetch(`${apiBaseUrl}/api/admin/direct-airport-fares.php?vehicleId=${vehicleId}&_t=${timestamp}`, {
       method: 'GET',
       headers: {
@@ -189,9 +192,31 @@ export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> 
     }
     
     const responseData = await response.json();
+    console.log('Airport fares response:', responseData);
     
     if (responseData && responseData.status === 'success' && responseData.fares) {
-      return Array.isArray(responseData.fares) ? responseData.fares : [responseData.fares];
+      // Transform the response data to match our FareData interface
+      let fares = Array.isArray(responseData.fares) ? responseData.fares : [responseData.fares];
+      
+      // Ensure all fares have the necessary properties
+      fares = fares.map(fare => ({
+        ...fare,
+        vehicleId: vehicleId,
+        vehicle_id: vehicleId,
+        // Make sure all required fields have at least a default value
+        basePrice: fare.basePrice || fare.base_price || 0,
+        pricePerKm: fare.pricePerKm || fare.price_per_km || 0,
+        pickupPrice: fare.pickupPrice || fare.pickup_price || 0,
+        dropPrice: fare.dropPrice || fare.drop_price || 0,
+        tier1Price: fare.tier1Price || fare.tier1_price || 0,
+        tier2Price: fare.tier2Price || fare.tier2_price || 0,
+        tier3Price: fare.tier3Price || fare.tier3_price || 0,
+        tier4Price: fare.tier4Price || fare.tier4_price || 0,
+        extraKmCharge: fare.extraKmCharge || fare.extra_km_charge || 0
+      }));
+      
+      console.log('Transformed fares data:', fares);
+      return fares;
     }
     
     return [];
