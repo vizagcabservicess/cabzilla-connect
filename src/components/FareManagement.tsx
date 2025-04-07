@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -509,7 +510,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
+              <Label htmlFor="tier4Price">Tier 4 Price (&gt; 30km) (₹)</Label>
               <Input
                 id="tier4Price"
                 name="tier4Price"
