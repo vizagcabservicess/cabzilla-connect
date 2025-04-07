@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { FareData } from '@/services/fareManagementService';
 
@@ -9,6 +9,10 @@ interface AirportFareFormProps {
 }
 
 const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange }) => {
+  useEffect(() => {
+    console.log("AirportFareForm received data:", fareData);
+  }, [fareData]);
+
   const handleInputChange = (field: keyof FareData, value: string) => {
     const numericValue = value === '' ? 0 : parseFloat(value);
     onChange({
@@ -24,7 +28,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="basePrice"
           type="number"
-          value={fareData.basePrice || 0}
+          value={fareData.basePrice !== undefined ? fareData.basePrice : 0}
           onChange={(e) => handleInputChange('basePrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -36,7 +40,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="pricePerKm"
           type="number"
-          value={fareData.pricePerKm || 0}
+          value={fareData.pricePerKm !== undefined ? fareData.pricePerKm : 0}
           onChange={(e) => handleInputChange('pricePerKm', e.target.value)}
           placeholder="0"
           min="0"
@@ -49,7 +53,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="pickupPrice"
           type="number"
-          value={fareData.pickupPrice || 0}
+          value={fareData.pickupPrice !== undefined ? fareData.pickupPrice : 0}
           onChange={(e) => handleInputChange('pickupPrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -61,7 +65,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="dropPrice"
           type="number"
-          value={fareData.dropPrice || 0}
+          value={fareData.dropPrice !== undefined ? fareData.dropPrice : 0}
           onChange={(e) => handleInputChange('dropPrice', e.target.value)}
           placeholder="0"
           min="0"
@@ -73,7 +77,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier1Price"
           type="number"
-          value={fareData.tier1Price || 0}
+          value={fareData.tier1Price !== undefined ? fareData.tier1Price : 0}
           onChange={(e) => handleInputChange('tier1Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -85,7 +89,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier2Price"
           type="number"
-          value={fareData.tier2Price || 0}
+          value={fareData.tier2Price !== undefined ? fareData.tier2Price : 0}
           onChange={(e) => handleInputChange('tier2Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -97,7 +101,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier3Price"
           type="number"
-          value={fareData.tier3Price || 0}
+          value={fareData.tier3Price !== undefined ? fareData.tier3Price : 0}
           onChange={(e) => handleInputChange('tier3Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -109,7 +113,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="tier4Price"
           type="number"
-          value={fareData.tier4Price || 0}
+          value={fareData.tier4Price !== undefined ? fareData.tier4Price : 0}
           onChange={(e) => handleInputChange('tier4Price', e.target.value)}
           placeholder="0"
           min="0"
@@ -121,7 +125,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         <Input
           id="extraKmCharge"
           type="number"
-          value={fareData.extraKmCharge || 0}
+          value={fareData.extraKmCharge !== undefined ? fareData.extraKmCharge : 0}
           onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
           placeholder="0"
           min="0"

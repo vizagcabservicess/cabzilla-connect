@@ -114,7 +114,7 @@ try {
     while ($row = $result->fetch_assoc()) {
         // Clean up data - convert numeric values properly
         $fare = [
-            'id' => $row['id'],
+            'id' => (int)$row['id'],
             'vehicleId' => $row['vehicleId'],
             'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
             'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
@@ -178,7 +178,7 @@ try {
                 $refetchResult = $refetchStmt->get_result();
                 if ($refetchResult && $row = $refetchResult->fetch_assoc()) {
                     $fare = [
-                        'id' => $row['id'],
+                        'id' => (int)$row['id'],
                         'vehicleId' => $row['vehicleId'],
                         'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
                         'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
@@ -219,13 +219,20 @@ try {
         $fares[] = $defaultFare;
     }
     
+    // Debug: Log the fares for troubleshooting
+    error_log("Airport fares response for vehicleId $vehicleId: " . json_encode($fares));
+    
     // Return success response
     sendSuccessResponse([
         'fares' => $fares,
-        'count' => count($fares)
+        'count' => count($fares),
+        'debug' => true
     ], 'Airport fares retrieved successfully');
     
 } catch (Exception $e) {
+    // Log error for troubleshooting
+    error_log("Error fetching airport fares: " . $e->getMessage());
+    
     // Return error response
     sendErrorResponse($e->getMessage(), [
         'error' => $e->getMessage(),

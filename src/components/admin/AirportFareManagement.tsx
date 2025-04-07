@@ -54,6 +54,8 @@ const AirportFareManagement: React.FC = () => {
       if (fareDatas && fareDatas.length > 0) {
         console.log('Retrieved fare data:', fareDatas[0]);
         setFares(fareDatas[0]);
+        // Force the component to recognize the data has changed
+        setInitialized(true);
       } else {
         // If no fare data found, create a default entry
         console.log('No fare data found, creating default');
@@ -70,8 +72,8 @@ const AirportFareManagement: React.FC = () => {
           tier4Price: 0,
           extraKmCharge: 0
         });
+        setInitialized(true);
       }
-      setInitialized(true);
     } catch (error) {
       console.error('Error loading airport fares:', error);
       toast({
@@ -87,6 +89,9 @@ const AirportFareManagement: React.FC = () => {
   const handleVehicleChange = (vehicleId: string) => {
     console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
+    // Clear current fares to prevent old data showing while loading
+    setFares(null);
+    setInitialized(false);
   };
 
   const handleFareChange = (fareData: FareData) => {
