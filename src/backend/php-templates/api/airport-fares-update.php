@@ -55,6 +55,15 @@ try {
     file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
 }
 
+// Initialize airport fare tables
+try {
+    // This will create and initialize all needed tables
+    require_once __DIR__ . '/admin/initialize-airport-fares.php';
+    file_put_contents($logFile, "[$timestamp] Airport fare tables initialized\n", FILE_APPEND);
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Warning: Failed to initialize airport fare tables: " . $e->getMessage() . "\n", FILE_APPEND);
+}
+
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting airport-fares-update.php to admin/airport-fares-update.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
@@ -117,70 +126,74 @@ if (!$vehicleId) {
 
 // If still not found, check JSON data
 if (!$vehicleId && !empty($rawInput)) {
-    $jsonData = json_decode($rawInput, true);
-    $jsonError = json_last_error();
-    
-    if ($jsonError === JSON_ERROR_NONE) {
-        file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
+    try {
+        $jsonData = json_decode($rawInput, true);
+        $jsonError = json_last_error();
         
-        foreach ($possibleKeys as $key) {
-            if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
-                $vehicleId = $jsonData[$key];
-                file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data $key: $vehicleId\n", FILE_APPEND);
-                break;
-            }
-        }
-        
-        // Check if there's a nested data property
-        if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
+        if ($jsonError === JSON_ERROR_NONE) {
+            file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
+            
             foreach ($possibleKeys as $key) {
-                if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
-                    $vehicleId = $jsonData['data'][$key];
-                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
-                    break;
-                }
-            }
-        }
-        
-        // Also check __data field
-        if (!$vehicleId && isset($jsonData['__data']) && is_array($jsonData['__data'])) {
-            foreach ($possibleKeys as $key) {
-                if (isset($jsonData['__data'][$key]) && !empty($jsonData['__data'][$key])) {
-                    $vehicleId = $jsonData['__data'][$key];
-                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in __data[$key]: $vehicleId\n", FILE_APPEND);
-                    break;
-                }
-            }
-        }
-        
-        // Apply the default values to the JSON data
-        if (isset($jsonData['data']) && is_array($jsonData['data'])) {
-            $jsonData['data'] = array_merge($defaults, $jsonData['data']);
-        } else if (is_array($jsonData)) {
-            $jsonData = array_merge($defaults, $jsonData);
-        }
-        
-        $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
-        file_put_contents($logFile, "[$timestamp] Updated JSON with defaults: " . $GLOBALS['__UPDATED_RAW_INPUT'] . "\n", FILE_APPEND);
-    } else {
-        file_put_contents($logFile, "[$timestamp] Failed to parse JSON: " . json_last_error_msg() . "\n", FILE_APPEND);
-        
-        // Try to parse as URL-encoded data
-        parse_str($rawInput, $parsedData);
-        if (!empty($parsedData)) {
-            foreach ($possibleKeys as $key) {
-                if (isset($parsedData[$key]) && !empty($parsedData[$key])) {
-                    $vehicleId = $parsedData[$key];
-                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL-encoded data $key: $vehicleId\n", FILE_APPEND);
+                if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
+                    $vehicleId = $jsonData[$key];
+                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data $key: $vehicleId\n", FILE_APPEND);
                     break;
                 }
             }
             
-            // Apply default values to parsed data
-            $parsedData = array_merge($defaults, $parsedData);
-            $rawInput = http_build_query($parsedData);
-            $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($parsedData);
+            // Check if there's a nested data property
+            if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
+                foreach ($possibleKeys as $key) {
+                    if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
+                        $vehicleId = $jsonData['data'][$key];
+                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+            
+            // Also check __data field
+            if (!$vehicleId && isset($jsonData['__data']) && is_array($jsonData['__data'])) {
+                foreach ($possibleKeys as $key) {
+                    if (isset($jsonData['__data'][$key]) && !empty($jsonData['__data'][$key])) {
+                        $vehicleId = $jsonData['__data'][$key];
+                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in __data[$key]: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+            
+            // Apply the default values to the JSON data
+            if (isset($jsonData['data']) && is_array($jsonData['data'])) {
+                $jsonData['data'] = array_merge($defaults, $jsonData['data']);
+            } else if (is_array($jsonData)) {
+                $jsonData = array_merge($defaults, $jsonData);
+            }
+            
+            $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($jsonData);
+            file_put_contents($logFile, "[$timestamp] Updated JSON with defaults: " . $GLOBALS['__UPDATED_RAW_INPUT'] . "\n", FILE_APPEND);
+        } else {
+            file_put_contents($logFile, "[$timestamp] Failed to parse JSON: " . json_last_error_msg() . "\n", FILE_APPEND);
+            
+            // Try to parse as URL-encoded data
+            parse_str($rawInput, $parsedData);
+            if (!empty($parsedData)) {
+                foreach ($possibleKeys as $key) {
+                    if (isset($parsedData[$key]) && !empty($parsedData[$key])) {
+                        $vehicleId = $parsedData[$key];
+                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL-encoded data $key: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+                
+                // Apply default values to parsed data
+                $parsedData = array_merge($defaults, $parsedData);
+                $rawInput = http_build_query($parsedData);
+                $GLOBALS['__UPDATED_RAW_INPUT'] = json_encode($parsedData);
+            }
         }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "[$timestamp] Error processing raw input: " . $e->getMessage() . "\n", FILE_APPEND);
     }
 }
 
@@ -212,18 +225,9 @@ if ($vehicleId) {
     }
     
     try {
-        // Before forwarding, make sure necessary tables exist
-        try {
-            // Initialize airport fare tables
-            $result = @file_get_contents(__DIR__ . '/admin/initialize-airport-fares.php');
-            file_put_contents($logFile, "[$timestamp] Airport fare tables initialized\n", FILE_APPEND);
-        } catch (Exception $initError) {
-            file_put_contents($logFile, "[$timestamp] Warning: Failed to initialize airport fare tables: " . $initError->getMessage() . "\n", FILE_APPEND);
-        }
-        
         // Forward the request to the admin endpoint
-        file_put_contents($logFile, "[$timestamp] Forwarding to admin/airport-fares-update.php with vehicle ID: $vehicleId\n", FILE_APPEND);
-        require_once __DIR__ . '/admin/airport-fares-update.php';
+        file_put_contents($logFile, "[$timestamp] Forwarding to admin/fare-update.php?tripType=airport with vehicle ID: $vehicleId\n", FILE_APPEND);
+        require_once __DIR__ . '/admin/fare-update.php';
     } catch (Exception $e) {
         file_put_contents($logFile, "[$timestamp] Exception during forwarding: " . $e->getMessage() . "\n", FILE_APPEND);
         file_put_contents($logFile, "[$timestamp] Exception trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
