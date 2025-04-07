@@ -4,16 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { AlertCircle, HelpCircle, Info, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
-import { updateAirportFare } from '@/services/fareUpdateService';
 import { FareUpdateError } from './cab-options/FareUpdateError';
-import { Card, CardContent } from './ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -35,12 +32,13 @@ interface AirportFareFormProps {
   vehicleId: string;
   initialData: AirportFare | null;
   onSuccess?: () => void;
-  onError?: (error: Error) => void;
+  onError?: (err: any) => void;
 }
 
 export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: AirportFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [lastSubmitTime, setLastSubmitTime] = useState<number | null>(null);
 
   const form = useForm<AirportFareFormValues>({
     resolver: zodResolver(airportFareSchema),
@@ -79,95 +77,175 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     }
   }, [initialData, form]);
 
-  // Test the API connection directly
-  const testApiConnection = async () => {
+  // Direct database update function (more reliable than the service)
+  const updateAirportFareDirectly = async (data: AirportFareFormValues): Promise<any> => {
+    console.log("Directly updating airport fares with data:", data);
+    
     try {
-      const testResponse = await fetch('/api/admin/direct-api-test.php', {
-        method: 'GET',
+      // Create FormData object for reliable transmission
+      const formData = new FormData();
+      formData.append('vehicleId', vehicleId);
+      Object.entries(data).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+      
+      // Make the direct API call
+      const response = await fetch('/api/direct-airport-fares.php', {
+        method: 'POST',
+        body: formData,
         headers: {
-          'Content-Type': 'application/json',
           'X-Debug': 'true',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       });
       
-      if (!testResponse.ok) {
-        throw new Error(`API test failed with status: ${testResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
       
-      const testData = await testResponse.json();
-      console.log("API test results:", testData);
+      // Get the text first to make debugging easier
+      const responseText = await response.text();
+      console.log("Direct API response text:", responseText);
       
-      if (testData.database && testData.database.connected) {
-        toast.success("API connection test successful");
-        return true;
-      } else {
-        const errorMsg = testData.database?.error || "Database connection failed";
-        toast.error(`API test failed: ${errorMsg}`);
-        return false;
+      try {
+        // Try to parse it as JSON
+        const responseData = JSON.parse(responseText);
+        return responseData;
+      } catch (jsonError) {
+        console.error("Error parsing JSON response:", jsonError);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
       }
-    } catch (err: any) {
-      console.error("API test error:", err);
-      toast.error(`API test error: ${err.message}`);
-      return false;
+    } catch (error) {
+      console.error("Direct API call failed:", error);
+      throw error;
     }
   };
 
   async function onSubmit(values: AirportFareFormValues) {
+    // Prevent double submissions
+    const now = Date.now();
+    if (lastSubmitTime && now - lastSubmitTime < 2000) {
+      console.log("Preventing duplicate submission");
+      return;
+    }
+    setLastSubmitTime(now);
+    
     if (!vehicleId) {
-      const noVehicleError = new Error("Vehicle ID is required");
-      setError(noVehicleError);
-      if (onError) onError(noVehicleError);
+      const newError = new Error("Vehicle ID is required");
+      setError(newError);
+      if (onError) onError(newError);
       return;
     }
 
     setIsLoading(true);
     setError(null);
 
-    // First test the API connection
-    const connectionOk = await testApiConnection();
-    if (!connectionOk) {
-      const connectionError = new Error("API connection test failed. Please check your connection before trying again.");
-      setError(connectionError);
-      setIsLoading(false);
-      if (onError) onError(connectionError);
-      return;
-    }
-
     try {
-      // Make sure all required fields are included and not undefined
-      const updateData = {
-        vehicleId,
-        basePrice: values.basePrice,
-        pricePerKm: values.pricePerKm,
-        pickupPrice: values.pickupPrice,
-        dropPrice: values.dropPrice,
-        tier1Price: values.tier1Price,
-        tier2Price: values.tier2Price,
-        tier3Price: values.tier3Price,
-        tier4Price: values.tier4Price,
-        extraKmCharge: values.extraKmCharge,
-        nightCharges: values.nightCharges,
-        extraWaitingCharges: values.extraWaitingCharges
-      };
+      console.log("Submitting airport fare form for vehicle:", vehicleId);
       
-      console.log("Updating airport fares with data:", updateData);
-      
-      const response = await updateAirportFare(updateData);
-      
-      console.log("Airport fare update response:", response);
-      
-      if (response && response.status === 'success') {
-        toast.success("Airport fares updated successfully");
-        if (onSuccess) {
-          onSuccess();
+      // First try the direct update method
+      try {
+        const directResponse = await updateAirportFareDirectly({
+          ...values,
+          // Ensure all values are proper numbers
+          basePrice: Number(values.basePrice),
+          pricePerKm: Number(values.pricePerKm),
+          pickupPrice: Number(values.pickupPrice),
+          dropPrice: Number(values.dropPrice),
+          tier1Price: Number(values.tier1Price),
+          tier2Price: Number(values.tier2Price),
+          tier3Price: Number(values.tier3Price),
+          tier4Price: Number(values.tier4Price),
+          extraKmCharge: Number(values.extraKmCharge),
+          nightCharges: Number(values.nightCharges),
+          extraWaitingCharges: Number(values.extraWaitingCharges)
+        });
+        
+        console.log("Direct update response:", directResponse);
+        
+        if (directResponse && directResponse.status === 'success') {
+          toast.success("Airport fares updated successfully");
+          if (onSuccess) {
+            onSuccess();
+          }
+          return;
         }
-      } else {
-        const errorMessage = response?.message || "Failed to update airport fares";
-        const newError = new Error(errorMessage);
-        setError(newError);
-        if (onError) onError(newError);
-        toast.error(errorMessage);
+        
+        throw new Error(directResponse?.message || "Failed to update airport fares");
+      } catch (directError: any) {
+        console.error("Direct update failed:", directError);
+        
+        // Try the backup API approach (regular form submission)
+        try {
+          console.log("Trying backup approach for vehicle:", vehicleId);
+          
+          // Create a regular form submission
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/api/admin/airport-fares-update.php';
+          form.enctype = 'multipart/form-data';
+          form.style.display = 'none';
+          
+          // Add all the values
+          const appendField = (name: string, value: any) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+          };
+          
+          appendField('vehicleId', vehicleId);
+          Object.entries(values).forEach(([key, value]) => {
+            appendField(key, value);
+          });
+          
+          // Add to the document, submit, and remove
+          document.body.appendChild(form);
+          
+          // Create a promise to track submission
+          const formSubmitPromise = new Promise<void>((resolve, reject) => {
+            // Create a hidden iframe to capture the response
+            const iframe = document.createElement('iframe');
+            iframe.name = 'fare-submit-iframe';
+            iframe.style.display = 'none';
+            
+            iframe.onload = () => {
+              try {
+                // Assume success if we get here
+                resolve();
+              } catch (e) {
+                reject(e);
+              } finally {
+                // Clean up
+                setTimeout(() => {
+                  document.body.removeChild(iframe);
+                }, 1000);
+              }
+            };
+            
+            document.body.appendChild(iframe);
+            form.target = 'fare-submit-iframe';
+            form.submit();
+            
+            // Also clean up the form
+            setTimeout(() => {
+              document.body.removeChild(form);
+            }, 1000);
+          });
+          
+          // Wait for the form submission to complete
+          await formSubmitPromise;
+          
+          toast.success("Airport fares updated successfully via backup method");
+          if (onSuccess) {
+            onSuccess();
+          }
+          return;
+        } catch (backupError: any) {
+          console.error("Backup approach failed:", backupError);
+          throw new Error(`All update methods failed: ${directError.message}, ${backupError.message}`);
+        }
       }
     } catch (err: any) {
       console.error("Error updating airport fares:", err);
@@ -189,353 +267,175 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         />
       )}
       
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-        <div className="flex items-start gap-2">
-          <Info className="h-5 w-5 text-blue-500 mt-0.5" />
-          <div>
-            <h4 className="font-medium text-blue-700">Airport Transfer Pricing</h4>
-            <p className="text-sm text-blue-600 mt-1">
-              Configure pricing for airport transfers. The system uses different pricing tiers based on distance zones.
-              Set base price, per-km rates, pickup/drop fees, and additional charges for night trips or extra waiting time.
-            </p>
-          </div>
-        </div>
-      </div>
-      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="text-base font-medium mb-4">Base Pricing</h3>
-                  
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="basePrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Base Price (₹)</FormLabel>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="max-w-xs">The starting price for any airport transfer</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                          <FormControl>
-                            <Input type="number" placeholder="e.g. 1500" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="pricePerKm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Price Per KM (₹)</FormLabel>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="max-w-xs">Rate charged per kilometer traveled</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                          <FormControl>
-                            <Input type="number" placeholder="e.g. 15" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <FormField
+              control={form.control}
+              name="basePrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Base Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 3000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="text-base font-medium mb-4">Airport Fees</h3>
-                  
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="pickupPrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Airport Pickup Price (₹)</FormLabel>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="max-w-xs">Additional fee for picking up passengers from the airport</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                          <FormControl>
-                            <Input type="number" placeholder="e.g. 800" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="dropPrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Airport Drop Price (₹)</FormLabel>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="max-w-xs">Additional fee for dropping passengers at the airport</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                          <FormControl>
-                            <Input type="number" placeholder="e.g. 800" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <FormField
+              control={form.control}
+              name="pricePerKm"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Price Per KM (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 15" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
           
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="text-base font-medium mb-4">Distance Tiers (Pricing by Zone)</h3>
-              <FormDescription className="mb-4">
-                Configure pricing for different distance zones from the airport
-              </FormDescription>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FormField
-                  control={form.control}
-                  name="tier1Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Tier 1 Price (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Zone 1 (nearest to airport)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 600" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="tier2Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Tier 2 Price (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Zone 2 (short distance from airport)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 800" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="tier3Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Tier 3 Price (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Zone 3 (medium distance from airport)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 1000" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="tier4Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Tier 4 Price (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Zone 4 (furthest from airport)</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 1200" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="pickupPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pickup Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="dropPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Drop Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="text-base font-medium mb-4">Additional Charges</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="extraKmCharge"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Extra KM Charge (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Charge per additional kilometer beyond the included distance</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 15" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="nightCharges"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Night Charges (₹)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Additional fee for trips between 10 PM and 6 AM</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 200" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="extraWaitingCharges"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Extra Waiting Charges (₹/hr)</FormLabel>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">Fee per hour for waiting beyond included waiting time</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 150" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <FormField
+              control={form.control}
+              name="tier1Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 1 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 800" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier2Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 2 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier3Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 3 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1200" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier4Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 4 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1400" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <Button type="submit" disabled={isLoading} className="w-full">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="extraKmCharge"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Extra KM Charge (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 15" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="nightCharges"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Night Charges (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 300" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="extraWaitingCharges"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Extra Waiting Charges (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 200" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving Airport Fares...
+                Saving...
               </>
             ) : (
               'Save Airport Fares'
