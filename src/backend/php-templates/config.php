@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Database Configuration and Connection Helper
@@ -17,11 +16,11 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/database_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
-// DB Config - in a real application these would be in .env or similar
+// DB Config - using real database credentials
 $DB_HOST = 'localhost';
-$DB_USER = 'root'; // Change as needed
-$DB_PASS = ''; // Change as needed
-$DB_NAME = 'cabzilla_db'; // Change as needed
+$DB_USER = 'u644605165_usr_be';
+$DB_PASS = 'Vizag@1213';
+$DB_NAME = 'u644605165_db_be';
 
 /**
  * Gets a database connection
@@ -40,15 +39,11 @@ function getDbConnection() {
         // Set UTF-8 charset
         $conn->set_charset("utf8mb4");
         
+        file_put_contents($logFile, "[$timestamp] Successfully connected to the real database\n", FILE_APPEND);
+        
         return $conn;
     } catch (Exception $e) {
         file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
-        
-        // For preview/development purposes, create a fake connection that logs operations
-        if (preg_match('/localhost|lovableproject\.com/', $_SERVER['HTTP_HOST'] ?? '')) {
-            return createMockConnection();
-        }
-        
         throw $e;
     }
 }

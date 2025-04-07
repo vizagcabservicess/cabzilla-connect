@@ -115,19 +115,6 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
     
-    // Check if columns exist and add them if they don't
-    $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
-    if ($columnsResult && $columnsResult->num_rows === 0) {
-        $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0");
-        file_put_contents($logFile, "[$timestamp] Added night_charges column\n", FILE_APPEND);
-    }
-    
-    $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
-    if ($columnsResult && $columnsResult->num_rows === 0) {
-        $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0");
-        file_put_contents($logFile, "[$timestamp] Added extra_waiting_charges column\n", FILE_APPEND);
-    }
-    
     // Extract values from the input, supporting multiple naming conventions
     $basePrice = isset($input['basePrice']) ? floatval($input['basePrice']) : 0;
     $pricePerKm = isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0;
@@ -177,7 +164,7 @@ try {
         
         $updateStmt = $conn->prepare($updateQuery);
         $updateStmt->bind_param(
-            "dddddddddddss", 
+            "ddddddddddds", 
             $basePrice, 
             $pricePerKm, 
             $pickupPrice, 
