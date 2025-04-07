@@ -1,3 +1,4 @@
+
 // We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
@@ -12,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { cabTypes, formatPrice } from "@/lib/cabData";
-import { popularTours, tourFares, getAvailableTours } from "@/lib/tourData";
+import { availableTours, tourFares } from "@/lib/tourData";
 import { TripType } from "@/lib/tripTypes";
 import { CabType } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
@@ -116,7 +117,7 @@ const ToursPage = () => {
     try {
       setIsSubmitting(true);
       
-      const selectedTourDetails = popularTours.find(tour => tour.id === selectedTour);
+      const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
       
       if (!selectedTourDetails || !selectedCab || !pickupLocation || !pickupDate) {
         toast({
@@ -209,7 +210,7 @@ const ToursPage = () => {
               <h2 className="text-2xl font-bold text-gray-800 mb-6">Available Tour Packages</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {popularTours.map((tour) => (
+                {availableTours.map((tour) => (
                   <div 
                     key={tour.id}
                     className={cn(
@@ -275,7 +276,7 @@ const ToursPage = () => {
                     cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
                     selectedCab={selectedCab}
                     onSelectCab={setSelectedCab}
-                    distance={popularTours.find(t => t.id === selectedTour)?.distance || 0}
+                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     tripType="tour"
                     tripMode="one-way" // Tours are considered one-way
                     pickupDate={pickupDate}
@@ -309,7 +310,7 @@ const ToursPage = () => {
                     dropLocation={null} // Tours don't have drop locations
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
-                    distance={popularTours.find(t => t.id === selectedTour)?.distance || 0}
+                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     totalPrice={getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
                   />

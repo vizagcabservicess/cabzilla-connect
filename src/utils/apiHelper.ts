@@ -1,320 +1,264 @@
+import { toast } from 'sonner';
 
-import { apiBaseUrl } from '@/config/api';
+interface ApiResponse {
+  status: 'success' | 'error';
+  message?: string;
+  [key: string]: any;
+}
 
-// Basic request options for API calls
-export interface ApiRequestOptions extends RequestInit {
+interface ApiOptions {
+  headers?: Record<string, string>;
   data?: any;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  timeout?: number;
+}
+
+export interface DatabaseConnectionResponse {
+  connection: boolean;
+  message?: string;
+  version?: string;
+  tables?: string[];
+}
+
+const API_TIMEOUT = 20000; // 20 seconds default timeout
+
+/**
+ * Logs API operations to console and/or storage
+ */
+export function logOperation(endpoint: string, method: string, success: boolean, data?: any, error?: any) {
+  console.log(`API ${method} ${endpoint}: ${success ? 'Success' : 'Failed'}`, data || error);
+  
+  // Append to in-memory log
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    endpoint,
+    method,
+    success,
+    data: data || null,
+    error: error ? (typeof error === 'string' ? error : error.message || 'Unknown error') : null
+  };
+  
+  // Save to sessionStorage with some limit
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('api_logs') || '[]');
+    logs.unshift(logEntry);
+    // Keep only last 100 logs
+    if (logs.length > 100) logs.length = 100;
+    sessionStorage.setItem('api_logs', JSON.stringify(logs));
+  } catch (e) {
+    console.error('Error saving logs to sessionStorage', e);
+  }
 }
 
 /**
- * Make an API call with the provided options
- * @param endpoint The API endpoint to call
- * @param options Request options
- * @returns JSON response
+ * Enhanced fetch with timeout and retries
  */
-export async function apiCall(endpoint: string, options?: ApiRequestOptions): Promise<any> {
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeout?: number } = {}
+): Promise<Response> {
+  const { timeout = API_TIMEOUT } = options;
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
   try {
-    const url = endpoint.startsWith('http') 
-      ? endpoint 
-      : endpoint.startsWith('/') 
-        ? `${apiBaseUrl}${endpoint}` 
-        : `${apiBaseUrl}/${endpoint}`;
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
     
-    const processedOptions: RequestInit = { ...options };
-    
-    // If data is provided and body is not, convert data to JSON body
-    if (options?.data && !options.body) {
-      processedOptions.body = JSON.stringify(options.data);
-      processedOptions.headers = {
+    return response;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Make an API call to the backend 
+ */
+export async function apiCall(endpoint: string, options: ApiOptions = {}): Promise<ApiResponse> {
+  const { 
+    headers = {}, 
+    data = null, 
+    method = data ? 'POST' : 'GET',
+    timeout = API_TIMEOUT
+  } = options;
+  
+  const url = endpoint.startsWith('http') ? endpoint : `/${endpoint}`;
+  
+  try {
+    const fetchOptions: RequestInit = {
+      method,
+      headers: {
         'Content-Type': 'application/json',
-        ...(options.headers || {})
+        'Cache-Control': 'no-cache',
+        ...headers
+      },
+      cache: 'no-store',
+      timeout
+    };
+    
+    if (data && (method === 'POST' || method === 'PUT')) {
+      fetchOptions.body = JSON.stringify(data);
+    }
+    
+    const response = await fetchWithTimeout(url, fetchOptions);
+    
+    try {
+      // First try to get the response as text
+      const textResponse = await response.text();
+      
+      try {
+        // Then try to parse as JSON
+        const jsonResponse = JSON.parse(textResponse);
+        
+        // Log the successful operation
+        logOperation(endpoint, method, true, jsonResponse);
+        
+        return jsonResponse;
+      } catch (jsonError) {
+        // If parsing fails, log the raw response
+        console.error('Error parsing JSON response:', textResponse);
+        
+        logOperation(endpoint, method, false, null, `Invalid JSON: ${textResponse.substring(0, 200)}`);
+        
+        throw new Error(`Invalid JSON response: ${textResponse.substring(0, 200)}...`);
+      }
+    } catch (textError) {
+      console.error('Error reading response text:', textError);
+      logOperation(endpoint, method, false, null, 'Error reading response');
+      throw new Error('Error reading API response');
+    }
+  } catch (error: any) {
+    console.error(`API call failed for ${endpoint}:`, error);
+    
+    logOperation(endpoint, method, false, null, error.message || 'Unknown error');
+    
+    // Return a structured error response
+    return {
+      status: 'error',
+      message: error.message || 'API call failed with unknown error',
+      error: error.toString()
+    };
+  }
+}
+
+/**
+ * Check database connection status
+ */
+export async function checkDatabaseConnection(): Promise<DatabaseConnectionResponse> {
+  try {
+    const response = await apiCall('api/admin/check-connection.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true'
+      },
+      timeout: 10000
+    });
+    
+    if (response.status === 'success') {
+      return {
+        connection: true,
+        message: response.message || 'Connected successfully',
+        version: response.version,
+        tables: response.tables
+      };
+    } else {
+      return {
+        connection: false,
+        message: response.message || 'Connection failed'
       };
     }
+  } catch (error: any) {
+    console.error('Error checking database connection:', error);
+    return {
+      connection: false,
+      message: error.message || 'Error checking connection'
+    };
+  }
+}
+
+/**
+ * Fix database tables
+ */
+export async function fixDatabaseTables(): Promise<boolean> {
+  try {
+    const response = await apiCall('api/admin/fix-database.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': Date.now().toString()
+      },
+      timeout: 20000
+    });
     
-    console.log(`Making API call to ${url}`);
-    const response = await fetch(url, processedOptions);
+    console.log('Fix database response:', response);
     
-    if (!response.ok) {
-      // If we're in preview mode and get a 404, return mock data if available
-      if (response.status === 404 && isPreviewMode()) {
-        console.log(`API endpoint ${url} not found in preview mode. Using mock data.`);
-        const mockData = getMockDataForEndpoint(endpoint);
-        if (mockData) {
-          console.log(`Returning mock data for ${endpoint}`);
-          return mockData;
-        }
+    if (response.status === 'success') {
+      // If there were tables fixed, log them
+      if (response.fixed && Array.isArray(response.fixed) && response.fixed.length > 0) {
+        console.log('Fixed tables:', response.fixed);
       }
-      throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+      
+      return true;
     }
     
-    return await response.json();
+    console.error('Failed to fix database tables:', response.message || 'Unknown error');
+    return false;
+  } catch (error: any) {
+    console.error('Error fixing database tables:', error);
+    return false;
+  }
+}
+
+/**
+ * Force refresh vehicles data
+ */
+export async function forceRefreshVehicles(): Promise<boolean> {
+  try {
+    const response = await apiCall('api/admin/reload-vehicles.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': Date.now().toString()
+      }
+    });
+    
+    return response.status === 'success';
   } catch (error) {
-    console.error('API call error:', error);
+    console.error('Error refreshing vehicles:', error);
+    return false;
+  }
+}
+
+/**
+ * Direct operation on vehicle data
+ */
+export async function directVehicleOperation(endpoint: string, method: string = 'GET', options: ApiOptions = {}): Promise<any> {
+  try {
+    const response = await apiCall(endpoint, {
+      method: method as 'GET' | 'POST' | 'PUT' | 'DELETE',
+      ...options
+    });
     
-    // In preview mode, return mock data if available
-    if (isPreviewMode()) {
-      const mockData = getMockDataForEndpoint(endpoint);
-      if (mockData) {
-        console.log(`Returning mock data for failed call to ${endpoint}`);
-        return mockData;
-      }
-    }
-    
+    return response;
+  } catch (error) {
+    console.error(`Error in direct vehicle operation (${endpoint}):`, error);
     throw error;
   }
 }
 
 /**
- * Perform a direct vehicle operation through the API
+ * Returns true if the application is in preview mode
  */
-export function directVehicleOperation(endpoint: string, method: string = 'GET', options: ApiRequestOptions = {}): Promise<any> {
-  const processedOptions: ApiRequestOptions = {
-    method,
-    ...options,
-    headers: {
-      'X-Admin-Mode': 'true',
-      'X-Debug': 'true',
-      ...options.headers
-    }
-  };
-  
-  return apiCall(endpoint, processedOptions);
-}
-
-// Utility function to check if we're in preview mode
 export function isPreviewMode(): boolean {
-  return process.env.NODE_ENV === 'development' || 
-         window.location.hostname.includes('localhost') || 
-         window.location.hostname.includes('preview') ||
-         window.location.hostname.includes('lovable');
-}
-
-// Force refresh of vehicle data
-export async function forceRefreshVehicles(): Promise<boolean> {
-  try {
-    const response = await apiCall('/api/admin/reload-vehicles.php', {
-      method: 'GET',
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    return response && response.status === 'success';
-  } catch (error) {
-    console.error('Failed to force refresh vehicles:', error);
-    
-    // In preview mode, pretend it worked
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful vehicle refresh');
-      return true;
-    }
-    
-    return false;
-  }
-}
-
-// Fix database tables if needed
-export async function fixDatabaseTables(): Promise<boolean> {
-  try {
-    const response = await apiCall('/api/admin/fix-database.php', {
-      method: 'GET',
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
-      }
-    });
-    
-    return response && response.status === 'success';
-  } catch (error) {
-    console.error('Failed to fix database tables:', error);
-    
-    // In preview mode, pretend it worked
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database fix');
-      return true;
-    }
-    
-    return false;
-  }
-}
-
-// Export formatDataForMultipart function
-export function formatDataForMultipart(data: Record<string, any>): FormData {
-  const formData = new FormData();
-  
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined && value !== null) {
-      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, value);
-      }
-    }
-  }
-  
-  return formData;
-}
-
-/**
- * Checks the database connection
- * @returns Promise that resolves to true if connection is successful, false otherwise
- */
-export async function checkDatabaseConnection(): Promise<boolean> {
-  try {
-    const response = await apiCall('/api/admin/check-connection.php', {
-      method: 'GET',
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    return response && response.connection === true;
-  } catch (error) {
-    console.error('Failed to check database connection:', error);
-    
-    // In preview mode, pretend it worked
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database connection');
-      return true;
-    }
-    
-    return false;
-  }
-}
-
-/**
- * Get mock data for specific endpoints to use in preview mode
- */
-function getMockDataForEndpoint(endpoint: string): any {
-  // Strip any URL parameters
-  const baseEndpoint = endpoint.split('?')[0];
-  
-  // Check for specific endpoints
-  if (baseEndpoint.includes('vehicles') || baseEndpoint.includes('vehicle-data')) {
-    return {
-      status: 'success',
-      message: 'Mock vehicles retrieved successfully',
-      vehicles: [
-        {
-          id: 'sedan',
-          vehicle_id: 'sedan',
-          name: 'Sedan',
-          capacity: 4,
-          luggageCapacity: 2,
-          price: 2500,
-          basePrice: 2500,
-          pricePerKm: 14,
-          image: '/cars/sedan.png',
-          amenities: ['AC', 'Bottle Water', 'Music System'],
-          description: 'Comfortable sedan suitable for 4 passengers.',
-          ac: true,
-          nightHaltCharge: 700,
-          driverAllowance: 250,
-          isActive: true
-        },
-        {
-          id: 'ertiga',
-          vehicle_id: 'ertiga',
-          name: 'Ertiga',
-          capacity: 6,
-          luggageCapacity: 3,
-          price: 3200,
-          basePrice: 3200,
-          pricePerKm: 18,
-          image: '/cars/ertiga.png',
-          amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-          description: 'Spacious SUV suitable for 6 passengers.',
-          ac: true,
-          nightHaltCharge: 1000,
-          driverAllowance: 250,
-          isActive: true
-        },
-        {
-          id: 'innova_crysta',
-          vehicle_id: 'innova_crysta',
-          name: 'Innova Crysta',
-          capacity: 7,
-          luggageCapacity: 4,
-          price: 3800,
-          basePrice: 3800,
-          pricePerKm: 20,
-          image: '/cars/innova.png',
-          amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-          description: 'Premium SUV with ample space for 7 passengers.',
-          ac: true,
-          nightHaltCharge: 1000,
-          driverAllowance: 250,
-          isActive: true
-        }
-      ]
-    };
-  } else if (baseEndpoint.includes('fix-database') || baseEndpoint.includes('reload')) {
-    return {
-      status: 'success',
-      message: 'Operation completed successfully',
-      timestamp: new Date().toISOString()
-    };
-  } else if (baseEndpoint.includes('check-connection')) {
-    return {
-      status: 'success',
-      connection: true,
-      database: 'mock_db',
-      version: '1.0.0'
-    };
-  } else if (baseEndpoint.includes('airport-fares')) {
-    return {
-      status: 'success',
-      message: 'Mock airport fares retrieved successfully',
-      fares: {
-        basePrice: 1500,
-        pricePerKm: 12,
-        pickupPrice: 200,
-        dropPrice: 200,
-        tier1Price: 300,
-        tier2Price: 500,
-        tier3Price: 700,
-        tier4Price: 900,
-        extraKmCharge: 15,
-        nightCharges: 200,
-        extraWaitingCharges: 100
-      }
-    };
-  } else if (baseEndpoint.includes('local-fares')) {
-    return {
-      status: 'success',
-      message: 'Mock local fares retrieved successfully',
-      fares: {
-        price4hrs40km: 1200,
-        price8hrs80km: 2200,
-        price10hrs100km: 2800,
-        priceExtraKm: 15,
-        priceExtraHour: 200
-      }
-    };
-  } else if (baseEndpoint.includes('outstation-fares')) {
-    return {
-      status: 'success',
-      message: 'Mock outstation fares retrieved successfully',
-      fares: {
-        basePrice: 3000,
-        pricePerKm: 16,
-        driverAllowance: 300,
-        nightHaltCharge: 800,
-        minDays: 1,
-        extraKmCharge: 18
-      }
-    };
-  }
-  
-  // Default mock data for unknown endpoints
-  return {
-    status: 'success',
-    message: 'Mock data for preview mode',
-    data: {},
-    timestamp: new Date().toISOString()
-  };
+  return window.location.hostname.includes('preview') ||
+         window.location.hostname.includes('lovable.app') ||
+         window.location.hostname.includes('localhost');
 }

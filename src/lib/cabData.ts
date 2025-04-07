@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
@@ -17,24 +18,17 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
         // Validate cache has required fields
         if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
           console.log('Retrieved', parsed.length, 'active vehicle types from cache');
-          
-          // Ensure all cab types have vehicle_id
-          const validatedCabs = parsed.map(cab => ({
-            ...cab,
-            vehicle_id: cab.vehicle_id || cab.id || cab.vehicleId || ''
-          }));
-          
-          cabTypesCache = validatedCabs;
+          cabTypesCache = parsed;
           
           // Update the cabTypes array in-place to keep the same reference
           cabTypes.length = 0;
-          cabTypes.push(...validatedCabs);
+          cabTypes.push(...parsed);
           
           // Filter out inactive ones if not including inactive
           if (!includeInactive) {
-            return validatedCabs.filter(vehicle => vehicle.isActive !== false);
+            return parsed.filter(vehicle => vehicle.isActive !== false);
           }
-          return validatedCabs;
+          return parsed;
         }
       } catch (e) {
         console.error('Error parsing cached cab data:', e);
@@ -49,7 +43,6 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
     // Process the data to ensure it conforms to CabType
     const processedVehicles = vehicles.map(vehicle => ({
       id: vehicle.id || vehicle.vehicleId || '',
-      vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '', // Make sure vehicle_id is set
       name: vehicle.name || '',
       capacity: Number(vehicle.capacity) || 4,
       luggageCapacity: Number(vehicle.luggageCapacity) || 2,
@@ -96,7 +89,6 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
     const defaultCabs = [
       {
         id: 'sedan',
-        vehicle_id: 'sedan', // Add vehicle_id
         name: 'Sedan',
         capacity: 4,
         luggageCapacity: 2,
@@ -112,7 +104,6 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
       },
       {
         id: 'ertiga',
-        vehicle_id: 'ertiga', // Add vehicle_id
         name: 'Ertiga',
         capacity: 6,
         luggageCapacity: 3,
@@ -128,7 +119,6 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
       },
       {
         id: 'innova_crysta',
-        vehicle_id: 'innova_crysta', // Add vehicle_id
         name: 'Innova Crysta',
         capacity: 7,
         luggageCapacity: 4,
@@ -160,7 +150,6 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
 export const cabTypes: CabType[] = [
   {
     id: 'sedan',
-    vehicle_id: 'sedan', // Add vehicle_id
     name: 'Sedan',
     capacity: 4,
     luggageCapacity: 2,
@@ -176,7 +165,6 @@ export const cabTypes: CabType[] = [
   },
   {
     id: 'ertiga',
-    vehicle_id: 'ertiga', // Add vehicle_id
     name: 'Ertiga',
     capacity: 6,
     luggageCapacity: 3,
@@ -192,7 +180,6 @@ export const cabTypes: CabType[] = [
   },
   {
     id: 'innova_crysta',
-    vehicle_id: 'innova_crysta', // Add vehicle_id
     name: 'Innova Crysta',
     capacity: 7,
     luggageCapacity: 4,
@@ -256,7 +243,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         // Process the data to ensure it conforms to CabType
         const processedVehicles = freshVehicles.map(vehicle => ({
           id: vehicle.id || vehicle.vehicleId || '',
-          vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '', // Make sure vehicle_id is set
           name: vehicle.name || '',
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggageCapacity) || 2,
@@ -317,7 +303,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         // Process data into CabType format
         const processedVehicles = data.map(vehicle => ({
           id: vehicle.id || vehicle.vehicle_id || '',
-          vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '',
           name: vehicle.name || '',
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggage_capacity) || 2,
@@ -376,7 +361,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         // Process vehicles from the dedicated endpoint
         const processedVehicles = responseData.vehicles.map(vehicle => ({
           id: vehicle.id || vehicle.vehicleId || '',
-          vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || '',
           name: vehicle.name || '',
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggageCapacity) || 2,
@@ -418,7 +402,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
     const defaultCabs = [
       {
         id: 'sedan',
-        vehicle_id: 'sedan', // Add vehicle_id
         name: 'Sedan',
         capacity: 4,
         luggageCapacity: 2,
@@ -434,7 +417,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
       },
       {
         id: 'ertiga',
-        vehicle_id: 'ertiga', // Add vehicle_id
         name: 'Ertiga',
         capacity: 6,
         luggageCapacity: 3,
@@ -450,7 +432,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
       },
       {
         id: 'innova_crysta',
-        vehicle_id: 'innova_crysta', // Add vehicle_id
         name: 'Innova Crysta',
         capacity: 7,
         luggageCapacity: 4,
@@ -482,7 +463,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
     const defaultCabs = [
       {
         id: 'sedan',
-        vehicle_id: 'sedan', // Add vehicle_id
         name: 'Sedan',
         capacity: 4,
         luggageCapacity: 2,
@@ -498,7 +478,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
       },
       {
         id: 'ertiga',
-        vehicle_id: 'ertiga', // Add vehicle_id
         name: 'Ertiga',
         capacity: 6,
         luggageCapacity: 3,
@@ -514,7 +493,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
       },
       {
         id: 'innova_crysta',
-        vehicle_id: 'innova_crysta', // Add vehicle_id
         name: 'Innova Crysta',
         capacity: 7,
         luggageCapacity: 4,

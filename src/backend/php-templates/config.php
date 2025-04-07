@@ -1,227 +1,96 @@
 
 <?php
 /**
- * Database Configuration and Connection Helper
+ * Main configuration file for Vizag Taxi Hub backend
+ * Contains database credentials and global settings
  */
 
-// Error reporting for development - remove in production
-error_reporting(E_ALL);
-ini_set('display_errors', 0); // Don't display errors directly, log them instead
+// Database configuration
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'u644605165_db_be');
+define('DB_USER', 'u644605165_usr_be');
+define('DB_PASS', 'Vizag@1213');
 
-// Create log directory
-$logDir = __DIR__ . '/logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0777, true);
+// API configuration
+define('API_DEBUG_MODE', true);
+define('API_LOG_REQUESTS', true);
+define('API_ALLOW_CORS', true);
+
+// Cache configuration
+define('CACHE_ENABLED', true);
+define('CACHE_LIFETIME', 3600); // Default cache lifetime in seconds (1 hour)
+define('CACHE_DIR', __DIR__ . '/cache');
+
+// File paths
+define('LOG_DIR', __DIR__ . '/logs');
+define('UPLOAD_DIR', __DIR__ . '/uploads');
+
+// Ensure log directory exists
+if (!file_exists(LOG_DIR)) {
+    mkdir(LOG_DIR, 0755, true);
 }
 
-$logFile = $logDir . '/database_' . date('Y-m-d') . '.log';
-$timestamp = date('Y-m-d H:i:s');
+// Ensure cache directory exists
+if (!file_exists(CACHE_DIR)) {
+    mkdir(CACHE_DIR, 0755, true);
+}
 
-// DB Config - using real database credentials
-$DB_HOST = 'localhost';
-$DB_USER = 'u644605165_usr_be';
-$DB_PASS = 'Vizag@1213';
-$DB_NAME = 'u644605165_db_be';
+// Ensure upload directory exists
+if (!file_exists(UPLOAD_DIR)) {
+    mkdir(UPLOAD_DIR, 0755, true);
+}
 
 /**
- * Gets a database connection
+ * Get database connection using the configured credentials
+ *
+ * @return mysqli|null Database connection or null on failure
  */
 function getDbConnection() {
-    global $DB_HOST, $DB_USER, $DB_PASS, $DB_NAME, $logFile, $timestamp;
-    
     try {
-        $conn = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         
         if ($conn->connect_error) {
-            file_put_contents($logFile, "[$timestamp] Database connection failed: " . $conn->connect_error . "\n", FILE_APPEND);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
+            logToFile('Database connection failed: ' . $conn->connect_error, 'db_error.log');
+            return null;
         }
         
-        // Set UTF-8 charset
+        // Set proper charset
         $conn->set_charset("utf8mb4");
-        
-        file_put_contents($logFile, "[$timestamp] Successfully connected to the real database\n", FILE_APPEND);
         
         return $conn;
     } catch (Exception $e) {
-        file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
-        
-        // For development or preview environment only, create a mock connection
-        if (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'lovableproject.com') !== false) {
-            file_put_contents($logFile, "[$timestamp] Using mock connection for preview environment\n", FILE_APPEND);
-            return createMockConnection();
-        }
-        
-        throw $e;
+        logToFile('Database connection exception: ' . $e->getMessage(), 'db_error.log');
+        return null;
     }
 }
 
 /**
- * Creates a mock database connection for development/preview
+ * Log message to file
+ * 
+ * @param string $message Message to log
+ * @param string $filename Filename to log to
+ * @return void
  */
-function createMockConnection() {
-    global $logFile, $timestamp;
+function logToFile($message, $filename = 'general.log') {
+    $timestamp = date('Y-m-d H:i:s');
+    $logFile = LOG_DIR . '/' . $filename;
     
-    file_put_contents($logFile, "[$timestamp] Creating mock database connection for preview/dev\n", FILE_APPEND);
-    
-    // Create an object that will pretend to be a mysqli connection
-    // but actually just log operations to a file
-    $mock = new class {
-        public $connect_error = null;
-        public $error = null;
-        private $logFile;
-        
-        public function __construct($logFile) {
-            $this->logFile = $logFile;
-        }
-        
-        public function query($sql) {
-            $timestamp = date('Y-m-d H:i:s');
-            file_put_contents($this->logFile, "[$timestamp] MOCK QUERY: $sql\n", FILE_APPEND);
-            
-            // Pretend all table exists checks are successful
-            if (stripos($sql, 'SHOW TABLES LIKE') !== false) {
-                return $this->createMockResult(1);
-            }
-            
-            // Pretend all column checks are successful
-            if (stripos($sql, 'SHOW COLUMNS') !== false) {
-                return $this->createMockResult(1);
-            }
-            
-            // Pretend all creates and alters succeed
-            if (stripos($sql, 'CREATE TABLE') !== false || stripos($sql, 'ALTER TABLE') !== false) {
-                return true;
-            }
-            
-            return $this->createMockResult(5); // Default 5 mock rows
-        }
-        
-        public function prepare($sql) {
-            $timestamp = date('Y-m-d H:i:s');
-            file_put_contents($this->logFile, "[$timestamp] MOCK PREPARE: $sql\n", FILE_APPEND);
-            return $this->createMockStatement($sql, $this->logFile);
-        }
-        
-        public function set_charset($charset) {
-            $timestamp = date('Y-m-d H:i:s');
-            file_put_contents($this->logFile, "[$timestamp] MOCK SET CHARSET: $charset\n", FILE_APPEND);
-            return true;
-        }
-        
-        private function createMockResult($numRows) {
-            return new class($numRows) {
-                private $numRows;
-                
-                public function __construct($numRows) {
-                    $this->numRows = $numRows;
-                }
-                
-                public function fetch_assoc() {
-                    static $counter = 0;
-                    
-                    if ($counter < $this->numRows) {
-                        $counter++;
-                        return ['id' => $counter, 'name' => 'Mock Item ' . $counter];
-                    }
-                    
-                    $counter = 0; // Reset for next time
-                    return null;
-                }
-                
-                public function __get($name) {
-                    if ($name === 'num_rows') {
-                        return $this->numRows;
-                    }
-                    return null;
-                }
-            };
-        }
-        
-        private function createMockStatement($sql, $logFile) {
-            return new class($sql, $logFile) {
-                private $sql;
-                private $logFile;
-                private $params = [];
-                private $types = '';
-                
-                public function __construct($sql, $logFile) {
-                    $this->sql = $sql;
-                    $this->logFile = $logFile;
-                }
-                
-                public function bind_param($types, ...$params) {
-                    $this->types = $types;
-                    $this->params = $params;
-                    
-                    $timestamp = date('Y-m-d H:i:s');
-                    file_put_contents($this->logFile, "[$timestamp] MOCK BIND_PARAM: types=$types, params=" . json_encode($params) . "\n", FILE_APPEND);
-                    return true;
-                }
-                
-                public function execute() {
-                    $timestamp = date('Y-m-d H:i:s');
-                    file_put_contents($this->logFile, "[$timestamp] MOCK EXECUTE: " . $this->sql . " with params: " . json_encode($this->params) . "\n", FILE_APPEND);
-                    return true;
-                }
-                
-                public function get_result() {
-                    $timestamp = date('Y-m-d H:i:s');
-                    file_put_contents($this->logFile, "[$timestamp] MOCK GET_RESULT\n", FILE_APPEND);
-                    
-                    // If this is a SELECT query checking for existence, return 1 row
-                    if (stripos($this->sql, 'SELECT') !== false) {
-                        $mockNumRows = 1;
-                        if (stripos($this->sql, 'vehicle_id') !== false && !empty($this->params)) {
-                            // Extract vehicle ID to make mock data more accurate
-                            $vehicleId = $this->params[0] ?? null;
-                            if ($vehicleId == 'new_vehicle') {
-                                $mockNumRows = 0; // Pretend this is a new vehicle
-                            }
-                        }
-                        return $this->createMockResult($mockNumRows);
-                    }
-                    
-                    return $this->createMockResult(0);
-                }
-                
-                public function close() {
-                    $timestamp = date('Y-m-d H:i:s');
-                    file_put_contents($this->logFile, "[$timestamp] MOCK CLOSE\n", FILE_APPEND);
-                    return true;
-                }
-                
-                private function createMockResult($numRows) {
-                    return new class($numRows) {
-                        private $numRows;
-                        
-                        public function __construct($numRows) {
-                            $this->numRows = $numRows;
-                        }
-                        
-                        public function fetch_assoc() {
-                            static $counter = 0;
-                            
-                            if ($counter < $this->numRows) {
-                                $counter++;
-                                return ['id' => $counter, 'name' => 'Mock Item ' . $counter];
-                            }
-                            
-                            $counter = 0; // Reset for next time
-                            return null;
-                        }
-                        
-                        public function __get($name) {
-                            if ($name === 'num_rows') {
-                                return $this->numRows;
-                            }
-                            return null;
-                        }
-                    };
-                }
-            };
-        }
-    };
-    
-    return new $mock($logFile);
+    file_put_contents(
+        $logFile, 
+        "[$timestamp] $message" . PHP_EOL, 
+        FILE_APPEND
+    );
+}
+
+/**
+ * Send JSON response and exit
+ * 
+ * @param array $data Response data
+ * @param int $statusCode HTTP status code
+ * @return void
+ */
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data);
+    exit;
 }

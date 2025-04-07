@@ -1,7 +1,6 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl } from '@/config/api';
-import { directVehicleOperation, forceRefreshVehicles, formatDataForMultipart } from '@/utils/apiHelper';
+import { directVehicleOperation, formatDataForMultipart, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
 /**

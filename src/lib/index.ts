@@ -8,7 +8,9 @@ export * from './tourData';
 
 // Export fare calculation functions
 export { 
-  calculateFare
+  calculateFare, 
+  calculateAirportFare,
+  clearFareCache
 } from './fareCalculationService';
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
@@ -30,16 +32,21 @@ export {
 
 // Re-export all methods from fareService
 export { 
-  fareService,
+  directFareUpdate,  
+  initializeDatabase,
+  forceSyncOutstationFares,
+  syncOutstationFares,
+  getOutstationFares,
+  getLocalFares,
   getAirportFares,
+  getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getOutstationFaresForVehicle,
-  clearFareCache,
-  syncAirportFares,
-  initializeDatabase,
+  getFaresByTripType,
+  clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
-  directFareUpdate
+  syncLocalFareTables,
+  fareService
 } from '@/services/fareService';
 
 // Export vehicle service functions (use only what's available)
@@ -51,6 +58,15 @@ export {
   getVehicles as syncVehicleData,
   getVehicle as getVehicleById
 } from '@/services/directVehicleService';
+
+// Export fare update service functions from fareUpdateService
+export {
+  updateOutstationFares,
+  updateLocalFares,
+  updateAirportFares,
+  syncAirportFares,
+  syncLocalFares
+} from '@/services/fareUpdateService';
 
 // Export getData function from vehicleDataService
 export { 

@@ -1,26 +1,64 @@
 
-/**
- * Interface representing a Local Fare package
- */
-export interface LocalFare {
-  vehicleId: string;
-  price4hrs40km: number;
-  price8hrs80km: number;
-  price10hrs100km: number;
-  priceExtraKm: number;
-  priceExtraHour: number;
-  // Additional fields needed by LocalFareManagement
-  extraKmRate?: number;
-  extraHourRate?: number;
-  // Backwards compatibility for different property names
-  package4hr40km?: number; 
-  package8hr80km?: number;
-  package10hr100km?: number;
+export interface CabType {
+  id: string;
+  name: string;
+  capacity: number;
+  luggageCapacity: number;
+  image: string;
+  amenities: string[];
+  description: string;
+  ac: boolean;
+  price?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  isActive?: boolean;
+  basePrice?: number;
+  vehicleId?: string;
+  vehicleType?: string;
+  // Fare properties
+  outstationFares?: OutstationFare;
+  localPackageFares?: LocalFare;
+  airportFares?: AirportFare;
 }
 
-/**
- * Interface representing an Airport Transfer Fare
- */
+export interface OutstationFare {
+  basePrice: number;
+  pricePerKm: number;
+  driverAllowance: number;
+  nightHaltCharge: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  // Alias properties for compatibility with different component usages
+  nightHalt?: number;  // Alias for nightHaltCharge
+}
+
+export interface LocalFare {
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number; 
+  priceExtraKm: number;
+  priceExtraHour: number;
+  // Alias properties for compatibility with different component usages
+  package4hr40km?: number;  // Alias for price4hrs40km
+  package8hr80km?: number;  // Alias for price8hrs80km
+  package10hr100km?: number;  // Alias for price10hrs100km
+  extraKmRate?: number;  // Alias for priceExtraKm
+  extraHourRate?: number;  // Alias for priceExtraHour
+  // Additional aliases for database column name variations
+  local_package_4hr?: number;  // For vehicle_pricing table
+  local_package_8hr?: number;  // For vehicle_pricing table
+  local_package_10hr?: number; // For vehicle_pricing table
+  extra_km_charge?: number;    // For vehicle_pricing table
+  extra_hour_charge?: number;  // For vehicle_pricing table
+  // Raw database column names from local_package_fares
+  price_4hrs_40km?: number;    // From local_package_fares table
+  price_8hrs_80km?: number;    // From local_package_fares table
+  price_10hrs_100km?: number;  // From local_package_fares table
+  price_extra_km?: number;     // From local_package_fares table
+  price_extra_hour?: number;   // From local_package_fares table
+}
+
 export interface AirportFare {
   vehicleId: string;
   basePrice: number;
@@ -36,86 +74,7 @@ export interface AirportFare {
   extraWaitingCharges: number;
 }
 
-/**
- * Interface representing an Outstation Fare
- */
-export interface OutstationFare {
-  vehicleId: string;
-  basePrice: number;
-  pricePerKm: number;
-  driverAllowance: number;
-  nightHaltCharge?: number;
-  nightHalt?: number; // Backwards compatibility
-  minDays?: number; // Added missing property
-  extraKmCharge?: number; // Added missing property
-  roundTripBasePrice?: number;
-  roundTripPricePerKm?: number;
-}
-
-/**
- * Interface representing a Vehicle
- */
-export interface Vehicle {
-  id: string;
-  vehicle_id: string;
-  name: string;
-  capacity?: number;
-  luggage_capacity?: number;
-  image?: string;
-  amenities?: string[];
-  description?: string;
-  is_active?: boolean;
-  base_price?: number;
-}
-
-/**
- * Interface representing a Cab Type (Vehicle with additional properties)
- */
-export interface CabType {
-  id: string;
-  vehicle_id: string;  // Required field that's missing in many places
-  vehicleId?: string; // For backward compatibility
-  name: string;
-  capacity?: number;
-  luggage_capacity?: number;
-  luggageCapacity?: number;
-  image?: string;
-  amenities?: string[];
-  description?: string;
-  is_active?: boolean;
-  isActive?: boolean; // For backward compatibility
-  ac?: boolean;
-  price?: number;
-  pricePerKm?: number;
-  basePrice?: number; // For backward compatibility
-  base_price?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
-  localPackageFares?: {
-    price4hrs40km?: number;
-    price8hrs80km?: number;
-    price10hrs100km?: number;
-  };
-  airportFares?: AirportFare;
-  outstationFares?: OutstationFare;
-}
-
-/**
- * Interface representing an Hourly Package
- */
-export interface HourlyPackage {
-  id: string;
-  name: string;
-  hours: number;
-  kilometers: number;
-  basePrice: number;
-  description?: string;
-  multiplier?: number; // Add for backward compatibility
-}
-
-/**
- * Interface for fare calculation parameters
- */
+// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
@@ -123,74 +82,88 @@ export interface FareCalculationParams {
   tripMode?: string;
   hourlyPackage?: string;
   pickupDate?: Date;
-  returnDate?: Date | null;
-  forceRefresh?: boolean;
+  returnDate?: Date;
+  forceRefresh?: boolean;  // Added this property
 }
 
-/**
- * Interface for tour information
- */
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  description?: string;
+  basePrice?: number;
+  multiplier?: number;
+}
+
+export interface FareCache {
+  timestamp: number;
+  fares: Record<string, any>;
+}
+
 export interface TourInfo {
   id: string;
   name: string;
-  description: string;
-  duration: number;
   distance: number;
-  locations: string[];
-  basePrice: number;
-  days?: number; // Add for backward compatibility
-  image?: string; // Add for backward compatibility
-}
-
-/**
- * Interface for tour fares
- */
-export interface TourFares {
-  tourId: string;
-  vehicleId: string;
-  basePrice: number;
-  perKmPrice: number;
-  [key: string]: any; // Allow for string indexing
-}
-
-/**
- * Interface for extra charges
- */
-export interface ExtraCharges {
-  name: string;
-  price: number;
+  days: number;
   description?: string;
-  isOptional?: boolean;
+  image?: string;
 }
 
-/**
- * Interface for local package price matrix
- */
-export interface LocalPackagePriceMatrix {
-  [vehicleId: string]: {
-    [packageId: string]: number;
+export interface TourFares {
+  [tourId: string]: {
+    sedan: number;
+    ertiga: number;
+    innova: number;
+    tempo?: number;
+    luxury?: number;
   };
 }
 
-/**
- * Interface for vehicle pricing
- */
+export interface ExtraCharges {
+  gst?: number;
+  serviceTax?: number;
+  driverAllowance?: number;
+  parkingCharges?: number;
+  stateTax?: number;
+  tollCharges?: number;
+}
+
+export interface LocalPackagePriceMatrix {
+  [packageId: string]: {
+    [cabType: string]: number;
+  };
+}
+
 export interface VehiclePricing {
-  vehicleId: string;
+  vehicleType: string;
+  vehicleId?: string;  // Added to support both column names
   basePrice: number;
   pricePerKm: number;
-  minDistance: number;
-}
-
-/**
- * Interface for fare cache
- */
-export interface FareCache {
-  [cabId: string]: {
-    [tripType: string]: {
-      [tripMode: string]: {
-        [distance: string]: number;
-      };
-    };
-  };
+  nightHaltCharge: number;
+  driverAllowance: number;
+  roundtripBasePrice?: number;
+  roundtripPricePerKm?: number;
+  // Local package fare properties in both naming conventions
+  localPackage4hr?: number;
+  localPackage8hr?: number;
+  localPackage10hr?: number;
+  extraKmCharge?: number;
+  extraHourCharge?: number;
+  // Local package fare properties in alternative naming conventions
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  // Airport fare properties
+  airportBasePrice?: number;
+  airportPricePerKm?: number;
+  airportDropPrice?: number;
+  airportPickupPrice?: number;
+  airportTier1Price?: number;
+  airportTier2Price?: number;
+  airportTier3Price?: number;
+  airportTier4Price?: number;
+  airportExtraKmCharge?: number;
 }

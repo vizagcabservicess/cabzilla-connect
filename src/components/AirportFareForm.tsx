@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -6,12 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
+import { updateAirportFare } from '@/services/fareUpdateService';
 import { FareUpdateError } from './cab-options/FareUpdateError';
-import { fareService } from '@/services/fareService';
-import { updateAirportFares } from '@/services/fareManagementService';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -33,13 +33,11 @@ interface AirportFareFormProps {
   vehicleId: string;
   initialData: AirportFare | null;
   onSuccess?: () => void;
-  onError?: (err: any) => void;
 }
 
-export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: AirportFareFormProps) {
+export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [lastSubmitTime, setLastSubmitTime] = useState<number | null>(null);
 
   const form = useForm<AirportFareFormValues>({
     resolver: zodResolver(airportFareSchema),
@@ -58,6 +56,7 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     },
   });
 
+  // Update form when initial data changes
   useEffect(() => {
     if (initialData) {
       console.log("Setting initial airport fare data:", initialData);
@@ -78,17 +77,8 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
   }, [initialData, form]);
 
   async function onSubmit(values: AirportFareFormValues) {
-    const now = Date.now();
-    if (lastSubmitTime && now - lastSubmitTime < 2000) {
-      console.log("Preventing duplicate submission");
-      return;
-    }
-    setLastSubmitTime(now);
-    
     if (!vehicleId) {
-      const newError = new Error("Vehicle ID is required");
-      setError(newError);
-      if (onError) onError(newError);
+      setError(new Error("Vehicle ID is required"));
       return;
     }
 
@@ -96,10 +86,8 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     setError(null);
 
     try {
-      console.log("Submitting airport fare form for vehicle:", vehicleId);
-      console.log("Form values:", values);
-      
-      const fareData: AirportFare = {
+      // Make sure all required fields are included and not undefined
+      const updateData = {
         vehicleId,
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
@@ -114,248 +102,218 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         extraWaitingCharges: values.extraWaitingCharges
       };
       
-      const response = await updateAirportFares(fareData);
+      console.log("Updating airport fares with data:", updateData);
       
-      toast.success(`Airport fare for ${vehicleId} updated successfully`);
-      if (onSuccess) onSuccess();
+      const response = await updateAirportFare(updateData);
+      
+      console.log("Airport fare update response:", response);
+      
+      if (response && response.status === 'success') {
+        toast.success("Airport fares updated successfully");
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        const errorMessage = response?.message || "Failed to update airport fares";
+        const newError = new Error(errorMessage);
+        setError(newError);
+        toast.error(errorMessage);
+      }
     } catch (err: any) {
       console.error("Error updating airport fares:", err);
       setError(err);
-      if (onError) onError(err);
-      toast.error(`Failed to update airport fares: ${err.message}`);
+      toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
   }
 
-  const handleRetry = () => {
-    setError(null);
-    form.handleSubmit(onSubmit)();
-  };
-
-  if (error) {
-    return (
-      <FareUpdateError 
-        error={error} 
-        onRetry={handleRetry} 
-        isAdmin={true}
-        title="Error Updating Airport Fares"
-        description="There was a problem updating the airport fares. Please try again."
-        fixDatabaseHandler={async () => {
-          try {
-            const response = await fareService.initializeDatabase();
-            
-            if (response) {
-              toast.success('Database fixed successfully');
-              handleRetry();
-            } else {
-              toast.error('Database fix failed');
-            }
-          } catch (err: any) {
-            toast.error(`Database fix error: ${err.message}`);
-          }
-        }}
-        directDatabaseAccess={async () => {
-          try {
-            const response = await fetch(`/api/admin/direct-db-access.php?table=airport_fares&vehicle_id=${vehicleId}`, {
-              method: 'GET',
-              headers: {
-                'X-Admin-Mode': 'true',
-                'X-Debug': 'true'
-              }
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Failed with status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            toast.info('Direct database access results available in console');
-            console.log('Direct DB access results:', data);
-          } catch (err: any) {
-            toast.error(`Direct DB access error: ${err.message}`);
-          }
-        }}
-      />
-    );
-  }
-
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="basePrice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Base Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+    <div className="space-y-4">
+      {error && (
+        <FareUpdateError 
+          error={error} 
+          onRetry={() => form.handleSubmit(onSubmit)()} 
+          isAdmin={true}
+        />
+      )}
+      
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="basePrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Base Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1500" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="pricePerKm"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Price Per KM (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 15" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <FormField
-            control={form.control}
-            name="pricePerKm"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Price Per KM (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="0.5" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="pickupPrice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Pickup Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="pickupPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Airport Pickup Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 800" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="dropPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Airport Drop Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 800" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <FormField
-            control={form.control}
-            name="dropPrice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Drop Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="tier1Price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tier 1 Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FormField
+              control={form.control}
+              name="tier1Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 1 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 600" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier2Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 2 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 800" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier3Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 3 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="tier4Price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tier 4 Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 1200" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <FormField
-            control={form.control}
-            name="tier2Price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tier 2 Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="tier3Price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tier 3 Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="extraKmCharge"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Extra KM Charge (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 15" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="nightCharges"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Night Charges (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 200" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="extraWaitingCharges"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Extra Waiting Charges (₹/hr)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g. 150" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           
-          <FormField
-            control={form.control}
-            name="tier4Price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tier 4 Price (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Airport Fares'
             )}
-          />
-
-          <FormField
-            control={form.control}
-            name="extraKmCharge"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Extra KM Charge (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="0.5" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="nightCharges"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Night Charges (₹)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="extraWaitingCharges"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Extra Waiting Charges (₹/hr)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="0" step="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {form.formState.isDirty && (
-          <Alert className="bg-amber-50 text-amber-800 border-amber-200">
-            <AlertDescription>
-              You have unsaved changes to the airport fare settings.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <Button 
-          type="submit" 
-          className="w-full"
-          disabled={isLoading || !form.formState.isDirty}
-        >
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Airport Fare
-        </Button>
-      </form>
-    </Form>
+          </Button>
+        </form>
+      </Form>
+    </div>
   );
 }

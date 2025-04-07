@@ -5,57 +5,6 @@ import { TripType, TripMode, isAdminTripType, isTourTripType, isRegularTripType 
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
 
-const defaultVehicles: CabType[] = [
-  {
-    id: 'sedan',
-    vehicle_id: 'sedan',
-    name: 'Sedan',
-    capacity: 4,
-    luggageCapacity: 2,
-    price: 2500,
-    pricePerKm: 14,
-    image: '/cars/sedan.png',
-    amenities: ['AC', 'Bottle Water', 'Music System'],
-    description: 'Comfortable sedan suitable for 4 passengers.',
-    ac: true,
-    nightHaltCharge: 700,
-    driverAllowance: 250,
-    isActive: true
-  },
-  {
-    id: 'ertiga',
-    vehicle_id: 'ertiga',
-    name: 'Ertiga',
-    capacity: 6,
-    luggageCapacity: 3,
-    price: 3200,
-    pricePerKm: 18,
-    image: '/cars/ertiga.png',
-    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-    description: 'Spacious SUV suitable for 6 passengers.',
-    ac: true,
-    nightHaltCharge: 1000,
-    driverAllowance: 250,
-    isActive: true
-  },
-  {
-    id: 'innova_crysta',
-    vehicle_id: 'innova_crysta',
-    name: 'Innova Crysta',
-    capacity: 7,
-    luggageCapacity: 4,
-    price: 3800,
-    pricePerKm: 20,
-    image: '/cars/innova.png',
-    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-    description: 'Premium SUV with ample space for 7 passengers.',
-    ac: true,
-    nightHaltCharge: 1000,
-    driverAllowance: 250,
-    isActive: true
-  }
-];
-
 interface CabOptionsProps {
   tripType: TripType;
   tripMode?: TripMode;
@@ -276,7 +225,53 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
           return cabOptions;
         }
         
-        vehicles = defaultVehicles;
+        vehicles = [
+          {
+            id: 'sedan',
+            name: 'Sedan',
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: '/cars/sedan.png',
+            amenities: ['AC', 'Bottle Water', 'Music System'],
+            description: 'Comfortable sedan suitable for 4 passengers.',
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'ertiga',
+            name: 'Ertiga',
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: '/cars/ertiga.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+            description: 'Spacious SUV suitable for 6 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'innova_crysta',
+            name: 'Innova Crysta',
+            capacity: 7,
+            luggageCapacity: 4,
+            price: 3800,
+            pricePerKm: 20,
+            image: '/cars/innova.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+            description: 'Premium SUV with ample space for 7 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ];
         
         console.log('Using default vehicles:', vehicles.length);
       }

@@ -4,126 +4,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info, RefreshCw, Loader2 } from "lucide-react";
+import { AlertCircle, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
 import { syncAirportFares } from '@/services/fareUpdateService';
 
-interface Vehicle {
-  id: string;
-  vehicle_id: string;
-  name: string;
-}
-
 interface VehicleManagementProps {
-  vehicleId?: string;
+  vehicleId: string;
 }
 
-export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId: initialVehicleId }) => {
+export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId }) => {
   const [error, setError] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
   const [isSyncingAirport, setIsSyncingAirport] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(initialVehicleId || '');
   const maxAttempts = 3;
-  
-  // Function to load vehicles
-  const loadVehicles = useCallback(async () => {
-    setLoadingVehicles(true);
-    try {
-      // First try to fetch from the standard endpoint
-      let response;
-      try {
-        response = await fetch('/api/vehicles.php', {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-      } catch (e) {
-        console.error('Error fetching from main endpoint:', e);
-        // Try fallback
-        response = await fetch('/api/admin/vehicles.php', {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch vehicles: ${response.status}`);
-      }
-      
-      const responseText = await response.text();
-      console.log('Vehicles response:', responseText);
-      
-      try {
-        const data = JSON.parse(responseText);
-        
-        if (data.status === 'success' && Array.isArray(data.vehicles)) {
-          const formattedVehicles = data.vehicles.map((v: any) => ({
-            id: v.vehicle_id || v.id,
-            vehicle_id: v.vehicle_id || v.id,
-            name: v.name || `Vehicle ${v.id}`
-          }));
-          
-          setVehicles(formattedVehicles);
-          console.log('Loaded vehicles:', formattedVehicles);
-          
-          // Set the selected vehicle if not already set
-          if (!selectedVehicleId && formattedVehicles.length > 0) {
-            setSelectedVehicleId(formattedVehicles[0].id);
-          }
-          
-          return formattedVehicles;
-        } else {
-          throw new Error('Invalid vehicle data format');
-        }
-      } catch (jsonError) {
-        console.error('Error parsing vehicles JSON:', jsonError);
-        throw new Error(`Invalid response format: ${responseText.substring(0, 100)}`);
-      }
-    } catch (error) {
-      console.error('Failed to load vehicles:', error);
-      toast.error('Failed to load vehicles. Using default values.');
-      
-      // Create some default vehicles for testing
-      const defaultVehicles = [
-        { id: 'sedan', vehicle_id: 'sedan', name: 'Sedan' },
-        { id: 'ertiga', vehicle_id: 'ertiga', name: 'Ertiga' },
-        { id: 'innova_crysta', vehicle_id: 'innova_crysta', name: 'Innova Crysta' },
-        { id: 'tempo_traveller', vehicle_id: 'tempo_traveller', name: 'Tempo Traveller' },
-        { id: 'luxury', vehicle_id: 'luxury', name: 'Luxury Sedan' }
-      ];
-      
-      setVehicles(defaultVehicles);
-      
-      // Set the selected vehicle if not already set
-      if (!selectedVehicleId) {
-        setSelectedVehicleId(defaultVehicles[0].id);
-      }
-      
-      return defaultVehicles;
-    } finally {
-      setLoadingVehicles(false);
-    }
-  }, [selectedVehicleId]);
   
   // Function to force a reload of vehicles from persistent storage
   const resyncVehicles = useCallback(async () => {
@@ -136,24 +35,41 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
       // Clear the cache first
       clearVehicleDataCache();
       
-      // Try to reload vehicles via both paths
-      await loadVehicles();
-      
       // Use the enhanced forceRefreshVehicles function
-      try {
-        const success = await forceRefreshVehicles();
-        
-        if (success) {
-          toast.success(`Successfully resynced vehicles from persistent storage`);
-          setRefreshCount(prev => prev + 1); // Increment to trigger a fresh check
-          setError(null); // Clear any errors
+      const success = await forceRefreshVehicles();
+      
+      if (success) {
+        toast.success(`Successfully resynced vehicles from persistent storage`);
+        setRefreshCount(prev => prev + 1); // Increment to trigger a fresh check
+        setError(null); // Clear any errors
+      } else {
+        // Try direct API call as fallback
+        try {
+          const response = await directVehicleOperation(
+            `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
+            'GET',
+            {
+              headers: {
+                'X-Admin-Mode': 'true',
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+              }
+            }
+          );
           
-          // Reload vehicles again to get fresh data
-          await loadVehicles();
+          console.log('Vehicle resync result:', response);
+          
+          if (response && response.status === 'success') {
+            toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
+            setRefreshCount(prev => prev + 1); // Increment to trigger a fresh check
+            setError(null); // Clear any errors
+          } else {
+            toast.error('Failed to resync vehicles from persistent storage');
+          }
+        } catch (directError) {
+          console.error('Direct API call failed:', directError);
+          toast.error('Failed to resync vehicles from persistent storage');
         }
-      } catch (refreshError) {
-        console.error('Error refreshing vehicles:', refreshError);
-        // Already loaded vehicles in first step, so not critical
       }
     } catch (err) {
       console.error('Error resyncing vehicles:', err);
@@ -161,7 +77,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
     } finally {
       setIsResyncing(false);
     }
-  }, [isResyncing, loadVehicles]);
+  }, [isResyncing]);
   
   const handleSyncAirportFares = async () => {
     if (isSyncingAirport) return;
@@ -187,6 +103,68 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
     }
   };
   
+  // Check if vehicle exists
+  useEffect(() => {
+    const checkVehicle = async () => {
+      // Only try to check a few times to avoid infinite loops
+      if (refreshCount >= maxAttempts) {
+        console.log(`Max refresh attempts (${maxAttempts}) reached, skipping vehicle check`);
+        return;
+      }
+
+      try {
+        // Add timestamp to URL to prevent caching
+        const endpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+        console.log(`Checking vehicle with endpoint: ${endpoint}`);
+        
+        const result = await directVehicleOperation(endpoint, 'GET', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        
+        console.log('Vehicle check result:', result);
+        
+        if (result && result.status === 'success') {
+          setError(null);
+        } else {
+          setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+          
+          // Try resyncing from persistent storage
+          await resyncVehicles();
+          
+          // Check again after resync
+          const retryEndpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+          const retryResult = await directVehicleOperation(retryEndpoint, 'GET', {
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          if (retryResult && retryResult.status === 'success') {
+            setError(null);
+          }
+        }
+      } catch (err) {
+        console.error('Error checking vehicle:', err);
+        setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+      } finally {
+        // Increment refresh count regardless of outcome
+        setRefreshCount(prev => prev + 1);
+      }
+    };
+    
+    if (vehicleId) {
+      checkVehicle();
+    }
+  }, [vehicleId, refreshCount, resyncVehicles]);
+  
   const handleFixDatabase = async () => {
     setIsFixing(true);
     setError(null);
@@ -210,13 +188,12 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
         // Force a reload of vehicles after fixing the database
         await resyncVehicles();
       } else {
-        toast.error('Failed to fix database through standard method, trying direct API call');
+        toast.error('Failed to fix database');
         
         // Try alternate method - direct API call
         try {
           console.log('Trying alternate fix method...');
-          const response = await fetch('/api/admin/fix-database.php', {
-            method: 'GET',
+          const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
             headers: {
               'X-Admin-Mode': 'true',
               'X-Debug': 'true',
@@ -225,61 +202,31 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
             }
           });
           
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-          
-          const responseText = await response.text();
-          console.log('Database fix response:', responseText);
-          
-          try {
-            const data = JSON.parse(responseText);
+          if (result && result.status === 'success') {
+            toast.success('Database fixed successfully with alternate method');
+            setError(null);
+            setRefreshCount(0);
             
-            if (data.status === 'success') {
-              toast.success('Database fixed successfully with alternate method');
-              setError(null);
-              setRefreshCount(0);
-              
-              // Force a reload of vehicles after fixing the database
-              await resyncVehicles();
-            } else {
-              throw new Error(data.message || 'Unknown error');
-            }
-          } catch (jsonError) {
-            console.error('Error parsing fix database response:', jsonError);
-            throw new Error(`Invalid response format: ${responseText.substring(0, 100)}`);
+            // Force a reload of vehicles after fixing the database
+            await resyncVehicles();
+          } else {
+            // Try one last method - reload from persistent storage
+            await resyncVehicles();
           }
         } catch (altError) {
           console.error('Error with alternate fix:', altError);
-          toast.error(`Database fix failed: ${altError.message}`);
           // Try resyncing as a last resort
           await resyncVehicles();
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fixing database:', err);
-      toast.error(`Failed to fix database tables: ${err.message}`);
+      toast.error('Failed to fix database tables');
       // Try resyncing as a last resort
       await resyncVehicles();
     } finally {
       setIsFixing(false);
     }
-  };
-  
-  // Load vehicles on initial render
-  useEffect(() => {
-    loadVehicles();
-  }, [loadVehicles]);
-  
-  // Set initial vehicle ID if provided
-  useEffect(() => {
-    if (initialVehicleId) {
-      setSelectedVehicleId(initialVehicleId);
-    }
-  }, [initialVehicleId]);
-  
-  const handleVehicleChange = (value: string) => {
-    setSelectedVehicleId(value);
   };
   
   return (
@@ -312,68 +259,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
         </Alert>
       )}
       
-      <div className="mb-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold">Fare Management</h2>
-            <p className="text-muted-foreground">
-              Manage pricing for local packages and airport transfers
-            </p>
-          </div>
-          
-          <div className="flex flex-col gap-2 md:flex-row">
-            <Button
-              variant="outline"
-              onClick={handleFixDatabase}
-              disabled={isFixing}
-              className="flex items-center gap-2"
-            >
-              <Loader2 className={`h-4 w-4 ${isFixing ? 'animate-spin' : ''}`} />
-              {isFixing ? 'Fixing Database...' : 'Fix Database'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleSyncAirportFares}
-              disabled={isSyncingAirport}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isSyncingAirport ? 'animate-spin' : ''}`} />
-              {isSyncingAirport ? 'Syncing...' : 'Sync Airport Fares'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={resyncVehicles}
-              disabled={isResyncing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isResyncing ? 'animate-spin' : ''}`} />
-              {isResyncing ? 'Syncing...' : 'Sync Vehicles'}
-            </Button>
-          </div>
-        </div>
-      </div>
-      
-      <Card className="mb-6">
-        <CardHeader>
-          <h3 className="text-lg font-medium">Select Vehicle</h3>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedVehicleId} onValueChange={handleVehicleChange} disabled={loadingVehicles}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={loadingVehicles ? "Loading vehicles..." : "Select a vehicle"} />
-            </SelectTrigger>
-            <SelectContent>
-              {vehicles.map((vehicle) => (
-                <SelectItem key={vehicle.id} value={vehicle.id}>
-                  {vehicle.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-      
-      {!selectedVehicleId && (
+      {!vehicleId && (
         <Card className="mb-4">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
@@ -389,23 +275,50 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId:
         </Card>
       )}
       
-      {selectedVehicleId && (
-        <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab} 
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="local">Local Fares</TabsTrigger>
-            <TabsTrigger value="airport">Airport Fares</TabsTrigger>
-          </TabsList>
-          <TabsContent value="local">
-            <FareManagement vehicleId={selectedVehicleId} fareType="local" key={`local-${selectedVehicleId}-${refreshCount}`} />
-          </TabsContent>
-          <TabsContent value="airport">
-            <FareManagement vehicleId={selectedVehicleId} fareType="airport" key={`airport-${selectedVehicleId}-${refreshCount}`} />
-          </TabsContent>
-        </Tabs>
+      {vehicleId && (
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Fare Management</h2>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncAirportFares}
+                disabled={isSyncingAirport}
+                className="flex items-center"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncingAirport ? 'animate-spin' : ''}`} />
+                {isSyncingAirport ? 'Syncing...' : 'Sync Airport Fares'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resyncVehicles}
+                disabled={isResyncing}
+                className="flex items-center"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isResyncing ? 'animate-spin' : ''}`} />
+                {isResyncing ? 'Syncing...' : 'Sync Vehicles'}
+              </Button>
+            </div>
+          </div>
+          <Tabs 
+            value={activeTab} 
+            onValueChange={setActiveTab} 
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="local">Local Fares</TabsTrigger>
+              <TabsTrigger value="airport">Airport Fares</TabsTrigger>
+            </TabsList>
+            <TabsContent value="local">
+              <FareManagement vehicleId={vehicleId} fareType="local" key={`local-${refreshCount}`} />
+            </TabsContent>
+            <TabsContent value="airport">
+              <FareManagement vehicleId={vehicleId} fareType="airport" key={`airport-${refreshCount}`} />
+            </TabsContent>
+          </Tabs>
+        </>
       )}
     </div>
   );
