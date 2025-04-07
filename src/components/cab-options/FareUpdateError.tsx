@@ -8,7 +8,6 @@ interface FareUpdateErrorProps {
   error: Error;
   onRetry: () => void;
   isAdmin?: boolean;
-  // Add missing properties
   title?: string;
   description?: string;
   fixDatabaseHandler?: () => Promise<void>;

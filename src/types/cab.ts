@@ -62,14 +62,22 @@ export interface Vehicle {
  * Interface representing a Cab Type (Vehicle with additional properties)
  */
 export interface CabType extends Vehicle {
+  vehicleId?: string; // For backward compatibility
   luggageCapacity?: number;
   ac?: boolean;
   price?: number;
+  pricePerKm?: number;
+  basePrice?: number; // For backward compatibility
+  isActive?: boolean; // For backward compatibility
+  nightHaltCharge?: number;
+  driverAllowance?: number;
   localPackageFares?: {
     price4hrs40km?: number;
     price8hrs80km?: number;
     price10hrs100km?: number;
   };
+  airportFares?: AirportFare;
+  outstationFares?: OutstationFare;
 }
 
 /**
@@ -82,6 +90,7 @@ export interface HourlyPackage {
   kilometers: number;
   basePrice: number;
   description?: string;
+  multiplier?: number; // Add for backward compatibility
 }
 
 /**
@@ -109,6 +118,8 @@ export interface TourInfo {
   distance: number;
   locations: string[];
   basePrice: number;
+  days?: number; // Add for backward compatibility
+  image?: string; // Add for backward compatibility
 }
 
 /**
@@ -119,6 +130,7 @@ export interface TourFares {
   vehicleId: string;
   basePrice: number;
   perKmPrice: number;
+  [key: string]: any; // Allow for string indexing
 }
 
 /**

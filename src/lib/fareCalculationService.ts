@@ -603,3 +603,38 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     return 0;
   }
 };
+
+// Calculate local package fare
+export function calculateLocalPackageFare(fare: LocalFare, packageType: string): number {
+  if (!fare) return 0;
+
+  console.log("Calculating local package fare for", packageType, "with fare:", fare);
+  
+  switch (packageType) {
+    case '4hr_40km':
+      return fare.price4hrs40km || 0;
+    case '8hr_80km':
+      return fare.price8hrs80km || 0;
+    case '10hr_100km':
+      return fare.price10hrs100km || 0;
+    default:
+      console.warn("Unknown package type:", packageType);
+      return 0;
+  }
+}
+
+// Get lower level price
+export function getLowerLevelPrice(cabType: CabType, hourlyPackage: string): number {
+  if (!cabType || !cabType.localPackageFares) return 0;
+  
+  switch (hourlyPackage) {
+    case '4hr_40km':
+      return cabType.localPackageFares.price4hrs40km || 0;
+    case '8hr_80km':
+      return cabType.localPackageFares.price8hrs80km || 0;
+    case '10hr_100km':
+      return cabType.localPackageFares.price10hrs100km || 0;
+    default:
+      return 0;
+  }
+}

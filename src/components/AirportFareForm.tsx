@@ -121,6 +121,46 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     }
   };
 
+  // Backend API update function
+  const updateAirportFareViaAdminAPI = async (data: AirportFareFormValues): Promise<any> => {
+    console.log("Updating airport fares via admin API:", data);
+    
+    try {
+      const jsonData = {
+        vehicleId: vehicleId,
+        ...data
+      };
+      
+      const response = await fetch('/api/admin/direct-airport-fares-update.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: JSON.stringify(jsonData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const responseText = await response.text();
+      console.log("Admin API response text:", responseText);
+      
+      try {
+        return JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("Error parsing admin JSON response:", jsonError);
+        throw new Error(`Invalid JSON from admin API: ${responseText.substring(0, 100)}...`);
+      }
+    } catch (error) {
+      console.error("Admin API call failed:", error);
+      throw error;
+    }
+  };
+
   async function onSubmit(values: AirportFareFormValues) {
     // Prevent double submissions
     const now = Date.now();
@@ -142,307 +182,301 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
 
     try {
       console.log("Submitting airport fare form for vehicle:", vehicleId);
+      console.log("Form values:", values);
       
-      // First try the direct update method
+      let errorMsg = "";
+      let success = false;
+      
+      // Try all available methods to update the fare
       try {
-        const directResponse = await updateAirportFareDirectly({
-          ...values,
-          // Ensure all values are proper numbers
-          basePrice: Number(values.basePrice),
-          pricePerKm: Number(values.pricePerKm),
-          pickupPrice: Number(values.pickupPrice),
-          dropPrice: Number(values.dropPrice),
-          tier1Price: Number(values.tier1Price),
-          tier2Price: Number(values.tier2Price),
-          tier3Price: Number(values.tier3Price),
-          tier4Price: Number(values.tier4Price),
-          extraKmCharge: Number(values.extraKmCharge),
-          nightCharges: Number(values.nightCharges),
-          extraWaitingCharges: Number(values.extraWaitingCharges)
-        });
-        
-        console.log("Direct update response:", directResponse);
-        
+        // Method 1: Direct API call
+        console.log("Attempting direct API update...");
+        const directResponse = await updateAirportFareDirectly(values);
         if (directResponse && directResponse.status === 'success') {
-          toast.success("Airport fares updated successfully");
-          if (onSuccess) {
-            onSuccess();
-          }
-          return;
+          console.log("Direct API update successful:", directResponse);
+          success = true;
+        } else {
+          errorMsg += "Direct API failed: " + (directResponse?.message || "Unknown error") + ". ";
         }
-        
-        throw new Error(directResponse?.message || "Failed to update airport fares");
       } catch (directError: any) {
-        console.error("Direct update failed:", directError);
-        
-        // Try the backup API approach (regular form submission)
+        console.error("Direct API update failed:", directError);
+        errorMsg += "Direct API failed: " + (directError?.message || directError) + ". ";
+      }
+      
+      // If direct method failed, try admin API
+      if (!success) {
         try {
-          console.log("Trying backup approach for vehicle:", vehicleId);
-          
-          // Create a regular form submission
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = '/api/admin/airport-fares-update.php';
-          form.enctype = 'multipart/form-data';
-          form.style.display = 'none';
-          
-          // Add all the values
-          const appendField = (name: string, value: any) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-          };
-          
-          appendField('vehicleId', vehicleId);
-          Object.entries(values).forEach(([key, value]) => {
-            appendField(key, value);
-          });
-          
-          // Add to the document, submit, and remove
-          document.body.appendChild(form);
-          
-          // Create a promise to track submission
-          const formSubmitPromise = new Promise<void>((resolve, reject) => {
-            // Create a hidden iframe to capture the response
-            const iframe = document.createElement('iframe');
-            iframe.name = 'fare-submit-iframe';
-            iframe.style.display = 'none';
-            
-            iframe.onload = () => {
-              try {
-                // Assume success if we get here
-                resolve();
-              } catch (e) {
-                reject(e);
-              } finally {
-                // Clean up
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                }, 1000);
-              }
-            };
-            
-            document.body.appendChild(iframe);
-            form.target = 'fare-submit-iframe';
-            form.submit();
-            
-            // Also clean up the form
-            setTimeout(() => {
-              document.body.removeChild(form);
-            }, 1000);
-          });
-          
-          // Wait for the form submission to complete
-          await formSubmitPromise;
-          
-          toast.success("Airport fares updated successfully via backup method");
-          if (onSuccess) {
-            onSuccess();
+          console.log("Attempting admin API update...");
+          const adminResponse = await updateAirportFareViaAdminAPI(values);
+          if (adminResponse && adminResponse.status === 'success') {
+            console.log("Admin API update successful:", adminResponse);
+            success = true;
+          } else {
+            errorMsg += "Fare Update API failed: " + (adminResponse?.message || "Unknown error") + ". ";
           }
-          return;
-        } catch (backupError: any) {
-          console.error("Backup approach failed:", backupError);
-          throw new Error(`All update methods failed: ${directError.message}, ${backupError.message}`);
+        } catch (adminError: any) {
+          console.error("Admin API update failed:", adminError);
+          errorMsg += "Fare Update API failed: " + (adminError?.message || adminError) + ". ";
         }
       }
+      
+      // If both methods failed, throw an error
+      if (!success) {
+        throw new Error(errorMsg || "Failed to update airport fares through all available methods");
+      }
+      
+      toast.success(`Airport fare for ${vehicleId} updated successfully`);
+      if (onSuccess) onSuccess();
     } catch (err: any) {
       console.error("Error updating airport fares:", err);
       setError(err);
       if (onError) onError(err);
-      toast.error(err?.message || "An unexpected error occurred");
+      toast.error(`Failed to update airport fares: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   }
 
+  const handleRetry = () => {
+    setError(null);
+    form.handleSubmit(onSubmit)();
+  };
+
+  if (error) {
+    return (
+      <FareUpdateError 
+        error={error} 
+        onRetry={handleRetry} 
+        isAdmin={true}
+        title="Error Updating Airport Fares"
+        description="There was a problem updating the airport fares. Please try again."
+        fixDatabaseHandler={async () => {
+          try {
+            const response = await fetch('/api/admin/fix-database.php', {
+              method: 'GET',
+              headers: {
+                'X-Admin-Mode': 'true',
+                'X-Debug': 'true'
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed with status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+              toast.success('Database fixed successfully');
+              handleRetry();
+            } else {
+              toast.error(`Database fix failed: ${data.message}`);
+            }
+          } catch (err: any) {
+            toast.error(`Database fix error: ${err.message}`);
+          }
+        }}
+        directDatabaseAccess={async () => {
+          try {
+            const response = await fetch(`/api/admin/direct-db-access.php?table=airport_transfer_fares&vehicle_id=${vehicleId}`, {
+              method: 'GET',
+              headers: {
+                'X-Admin-Mode': 'true',
+                'X-Debug': 'true'
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed with status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            toast.info('Direct database access results available in console');
+            console.log('Direct DB access results:', data);
+          } catch (err: any) {
+            toast.error(`Direct DB access error: ${err.message}`);
+          }
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {error && (
-        <FareUpdateError 
-          error={error} 
-          onRetry={() => form.handleSubmit(onSubmit)()} 
-          isAdmin={true}
-        />
-      )}
-      
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="basePrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Base Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 3000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="pricePerKm"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Price Per KM (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 15" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="pickupPrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Pickup Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 1000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="dropPrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Drop Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 1000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <FormField
-              control={form.control}
-              name="tier1Price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tier 1 Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 800" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="tier2Price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tier 2 Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 1000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="tier3Price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tier 3 Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 1200" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="tier4Price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tier 4 Price (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 1400" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField
-              control={form.control}
-              name="extraKmCharge"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Extra KM Charge (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 15" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="nightCharges"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Night Charges (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 300" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="extraWaitingCharges"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Extra Waiting Charges (₹)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g. 200" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Airport Fares'
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormField
+            control={form.control}
+            name="basePrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Base Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )}
-          </Button>
-        </form>
-      </Form>
-    </div>
+          />
+          
+          <FormField
+            control={form.control}
+            name="pricePerKm"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Price Per KM (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="0.5" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="pickupPrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Pickup Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="dropPrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Drop Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tier1Price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tier 1 Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="tier2Price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tier 2 Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tier3Price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tier 3 Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="tier4Price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tier 4 Price (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="extraKmCharge"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Extra KM Charge (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="0.5" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="nightCharges"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Night Charges (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="extraWaitingCharges"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Extra Waiting Charges (₹/hr)</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} min="0" step="1" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {form.formState.isDirty && (
+          <Alert className="bg-amber-50 text-amber-800 border-amber-200">
+            <AlertDescription>
+              You have unsaved changes to the airport fare settings.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Button 
+          type="submit" 
+          className="w-full"
+          disabled={isLoading || !form.formState.isDirty}
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Airport Fare
+        </Button>
+      </form>
+    </Form>
   );
 }
