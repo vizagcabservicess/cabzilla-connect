@@ -239,11 +239,11 @@ function calculateLocalPackageFare(cabType: CabType, packageId: string): number 
     
     switch (packageId) {
       case '4hr40km':
-        return fare.price4hrs40km || 0;
+        return fare.price4hrs40km || fare.package4hr40km || 0;
       case '8hr80km':
-        return fare.price8hrs80km || 0;
+        return fare.price8hrs80km || fare.package8hr80km || 0;
       case '10hr100km':
-        return fare.price10hrs100km || 0;
+        return fare.price10hrs100km || fare.package10hr100km || 0;
       default:
         // If package not found, return 0 or a default price
         return 0;
@@ -280,4 +280,13 @@ function calculateLocalPackageFare(cabType: CabType, packageId: string): number 
   
   // If all else fails, return a reasonable default price
   return 2500;
+}
+
+// Export for index.ts
+export { calculateAirportFare };
+
+// Export a function to clear fare cache
+export function clearFareCache() {
+  console.log('Clearing fare calculation cache');
+  // This will be implemented if needed
 }

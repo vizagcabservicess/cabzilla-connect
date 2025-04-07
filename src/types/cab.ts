@@ -9,6 +9,10 @@ export interface LocalFare {
   price10hrs100km: number;
   priceExtraKm: number;
   priceExtraHour: number;
+  // Backwards compatibility for different property names
+  package4hr40km?: number; 
+  package8hr80km?: number;
+  package10hr100km?: number;
 }
 
 /**
@@ -38,6 +42,7 @@ export interface OutstationFare {
   pricePerKm: number;
   driverAllowance: number;
   nightHaltCharge: number;
+  nightHalt?: number; // Backwards compatibility
   roundTripBasePrice?: number;
   roundTripPricePerKm?: number;
 }
