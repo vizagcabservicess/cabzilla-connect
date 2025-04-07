@@ -118,6 +118,37 @@ export async function updateAirportFare(data: AirportFareUpdate) {
       extraWaitingCharges: data.extraWaitingCharges || 0
     };
     
+    try {
+      // First try the direct-airport-fares-update endpoint which is more reliable
+      const directResponse = await apiCall('api/admin/direct-airport-fares-update.php', {
+        data: fareData,
+        method: 'POST',
+        headers: {
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      if (directResponse.status === 'success') {
+        // Clear vehicle cache to ensure updated data is fetched next time
+        clearVehicleDataCache();
+        
+        // Dispatch an event to notify components that fares changed
+        window.dispatchEvent(new CustomEvent('airport-fares-updated', {
+          detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
+        }));
+        
+        toast.success('Airport fares updated successfully');
+        return directResponse;
+      }
+      
+      // If direct endpoint fails, try the original endpoint
+      console.log('Direct endpoint failed, trying original endpoint...');
+    } catch (directError) {
+      console.error('Error with direct endpoint:', directError);
+      // Continue to try original endpoint
+    }
+    
+    // Original endpoint as fallback
     const response = await apiCall('api/admin/update-airport-fare.php', {
       data: fareData,
       method: 'POST',
@@ -135,13 +166,16 @@ export async function updateAirportFare(data: AirportFareUpdate) {
         detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
       }));
       
+      toast.success('Airport fares updated successfully');
       return response;
     } else {
       console.error('Error updating airport fare:', response.message);
+      toast.error(response.message || 'Failed to update airport fare');
       throw new Error(response.message || 'Failed to update airport fare');
     }
   } catch (error: any) {
     console.error('Error in updateAirportFare:', error);
+    toast.error(error.message || 'Error updating airport fare');
     throw error;
   }
 }
