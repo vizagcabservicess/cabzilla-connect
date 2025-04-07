@@ -1,6 +1,5 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
-import { CabType, FareCalculationParams } from '@/types/cab';
+import { CabType, FareCalculationParams, LocalFare } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
 import { getLocalPackagePrice } from './packageData';
 import { tourFares } from './tourData';
@@ -327,17 +326,17 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         const packageId = hourlyPackage || '8hrs-80km';
         
         if (packageId === '4hrs-40km') {
-          calculatedFare = localFares.price4hrs40km || localFares.package4hr40km || 0;
+          calculatedFare = localFares.price4hrs40km || localFares.price4hr40km || 0;
         } else if (packageId === '8hrs-80km') {
-          calculatedFare = localFares.price8hrs80km || localFares.package8hr80km || 0;
+          calculatedFare = localFares.price8hrs80km || localFares.price8hr80km || 0;
         } else if (packageId === '10hrs-100km') {
-          calculatedFare = localFares.price10hrs100km || localFares.package10hr100km || 0;
+          calculatedFare = localFares.price10hrs100km || localFares.price10hr100km || 0;
         }
         
         // If we couldn't get from API, try to get from package price matrix
         if (calculatedFare <= 0) {
           try {
-            calculatedFare = getLocalPackagePrice(packageId, cabType.id);
+            calculatedFare = getLocalPackagePrice(localFares, packageId);
             console.log(`Retrieved local package price from matrix: ₹${calculatedFare}`);
           } catch (error) {
             console.error('Error getting local package price:', error);
@@ -373,11 +372,11 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
           const packageId = hourlyPackage || '8hrs-80km';
           
           if (packageId === '4hrs-40km') {
-            calculatedFare = cabType.localPackageFares.price4hrs40km || cabType.localPackageFares.package4hr40km || 0;
+            calculatedFare = cabType.localPackageFares.price4hrs40km || cabType.localPackageFares.price4hr40km || 0;
           } else if (packageId === '8hrs-80km') {
-            calculatedFare = cabType.localPackageFares.price8hrs80km || cabType.localPackageFares.package8hr80km || 0;
+            calculatedFare = cabType.localPackageFares.price8hrs80km || cabType.localPackageFares.price8hr80km || 0;
           } else if (packageId === '10hrs-100km') {
-            calculatedFare = cabType.localPackageFares.price10hrs100km || cabType.localPackageFares.package10hr100km || 0;
+            calculatedFare = cabType.localPackageFares.price10hrs100km || cabType.localPackageFares.price10hr100km || 0;
           }
         }
         

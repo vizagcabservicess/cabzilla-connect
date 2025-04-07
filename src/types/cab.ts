@@ -57,3 +57,108 @@ export interface Vehicle {
   is_active?: boolean;
   base_price?: number;
 }
+
+/**
+ * Interface representing a Cab Type (Vehicle with additional properties)
+ */
+export interface CabType extends Vehicle {
+  luggageCapacity?: number;
+  ac?: boolean;
+  price?: number;
+  localPackageFares?: {
+    price4hrs40km?: number;
+    price8hrs80km?: number;
+    price10hrs100km?: number;
+  };
+}
+
+/**
+ * Interface representing an Hourly Package
+ */
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  basePrice: number;
+  description?: string;
+}
+
+/**
+ * Interface for fare calculation parameters
+ */
+export interface FareCalculationParams {
+  cabType: CabType;
+  distance: number;
+  tripType: string;
+  tripMode?: string;
+  hourlyPackage?: string;
+  pickupDate?: Date;
+  returnDate?: Date | null;
+  forceRefresh?: boolean;
+}
+
+/**
+ * Interface for tour information
+ */
+export interface TourInfo {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  distance: number;
+  locations: string[];
+  basePrice: number;
+}
+
+/**
+ * Interface for tour fares
+ */
+export interface TourFares {
+  tourId: string;
+  vehicleId: string;
+  basePrice: number;
+  perKmPrice: number;
+}
+
+/**
+ * Interface for extra charges
+ */
+export interface ExtraCharges {
+  name: string;
+  price: number;
+  description?: string;
+  isOptional?: boolean;
+}
+
+/**
+ * Interface for local package price matrix
+ */
+export interface LocalPackagePriceMatrix {
+  [vehicleId: string]: {
+    [packageId: string]: number;
+  };
+}
+
+/**
+ * Interface for vehicle pricing
+ */
+export interface VehiclePricing {
+  vehicleId: string;
+  basePrice: number;
+  pricePerKm: number;
+  minDistance: number;
+}
+
+/**
+ * Interface for fare cache
+ */
+export interface FareCache {
+  [cabId: string]: {
+    [tripType: string]: {
+      [tripMode: string]: {
+        [distance: string]: number;
+      };
+    };
+  };
+}

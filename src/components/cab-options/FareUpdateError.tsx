@@ -8,9 +8,22 @@ interface FareUpdateErrorProps {
   error: Error;
   onRetry: () => void;
   isAdmin?: boolean;
+  // Add missing properties
+  title?: string;
+  description?: string;
+  fixDatabaseHandler?: () => Promise<void>;
+  directDatabaseAccess?: () => Promise<void>;
 }
 
-export function FareUpdateError({ error, onRetry, isAdmin = false }: FareUpdateErrorProps) {
+export function FareUpdateError({ 
+  error, 
+  onRetry, 
+  isAdmin = false,
+  title = 'Error Updating Fares',
+  description,
+  fixDatabaseHandler,
+  directDatabaseAccess
+}: FareUpdateErrorProps) {
   // Check if error is likely related to database connection
   const isDatabaseError = error.message.toLowerCase().includes('database') || 
                          error.message.toLowerCase().includes('sql') ||
@@ -27,20 +40,20 @@ export function FareUpdateError({ error, onRetry, isAdmin = false }: FareUpdateE
                         error.message.toLowerCase().includes('status code');
   
   // Generate appropriate error message based on error type
-  let errorTitle = 'Error Updating Fares';
-  let errorMessage = error.message;
+  let errorTitle = title || 'Error Updating Fares';
+  let errorMessage = description || error.message;
   
-  if (isDatabaseError) {
+  if (isDatabaseError && !description) {
     errorTitle = 'Database Connection Error';
     errorMessage = isAdmin 
       ? `There was a problem connecting to the database: ${error.message}`
       : 'There was a problem connecting to the database. Please try again later or contact support.';
-  } else if (isJsonError) {
+  } else if (isJsonError && !description) {
     errorTitle = 'Server Response Error';
     errorMessage = isAdmin
       ? `Error processing server response: ${error.message}`
       : 'There was a problem processing the response from the server. Please try again later.';
-  } else if (isNetworkError) {
+  } else if (isNetworkError && !description) {
     errorTitle = 'Network Error';
     errorMessage = isAdmin
       ? `Network request failed: ${error.message}`
@@ -64,7 +77,29 @@ export function FareUpdateError({ error, onRetry, isAdmin = false }: FareUpdateE
             )}
           </div>
         )}
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-end mt-2 gap-2">
+          {fixDatabaseHandler && isAdmin && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fixDatabaseHandler}
+              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700"
+            >
+              Fix Database
+            </Button>
+          )}
+          
+          {directDatabaseAccess && isAdmin && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={directDatabaseAccess}
+              className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700"
+            >
+              Direct Access
+            </Button>
+          )}
+          
           <Button 
             variant="outline" 
             size="sm" 
