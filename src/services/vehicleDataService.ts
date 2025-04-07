@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { toast } from 'sonner';
 import { directApiCall } from '@/utils/directApiHelper';
@@ -58,6 +59,15 @@ const defaultVehicles: CabType[] = [
     isActive: true
   }
 ];
+
+/**
+ * Clear the vehicle data cache
+ */
+export function clearVehicleDataCache(): void {
+  console.log('Clearing vehicle data cache');
+  vehicleDataCache = null;
+  vehicleDataTimestamp = 0;
+}
 
 /**
  * Get vehicle data with optional cache and refresh

@@ -1,20 +1,26 @@
 
 import { apiBaseUrl } from '@/config/api';
-import { getBypassHeaders, formatDataForMultipart } from '@/config/requestConfig';
+import { getBypassHeaders } from '@/config/requestConfig';
 
 /**
  * Directly perform a vehicle operation via API
  */
-export async function directVehicleOperation(endpoint: string, method: string = 'GET', options?: RequestInit): Promise<any> {
+export async function directVehicleOperation(endpoint: string, method: string = 'GET', config: RequestInit & { body?: any } = {}): Promise<any> {
   try {
     const url = endpoint.startsWith('/') 
       ? `${apiBaseUrl}${endpoint}` 
       : `${apiBaseUrl}/${endpoint}`;
     
+    // Create a copy of the config to avoid modifying the original
     const fetchOptions: RequestInit = {
       method,
-      ...options
+      ...config
     };
+    
+    // If body is provided and it's not already a string, stringify it
+    if (config.body && typeof config.body !== 'string' && !(config.body instanceof FormData)) {
+      fetchOptions.body = JSON.stringify(config.body);
+    }
     
     const response = await fetch(url, fetchOptions);
     
@@ -25,6 +31,28 @@ export async function directVehicleOperation(endpoint: string, method: string = 
     return await response.json();
   } catch (error) {
     console.error('Error in vehicle operation:', error);
+    throw error;
+  }
+}
+
+/**
+ * API call helper
+ */
+export async function apiCall(endpoint: string, options?: RequestInit): Promise<any> {
+  try {
+    const url = endpoint.startsWith('/') 
+      ? `${apiBaseUrl}${endpoint}` 
+      : `${apiBaseUrl}/${endpoint}`;
+    
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in API call:', error);
     throw error;
   }
 }
@@ -102,4 +130,28 @@ export async function checkDatabaseConnection(): Promise<boolean> {
     console.error('Failed to check database connection:', error);
     return false;
   }
+}
+
+/**
+ * Format data for multipart form submission
+ */
+export function formatDataForMultipart(data: Record<string, any>): FormData {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      if (Array.isArray(value)) {
+        // Handle arrays by stringifying them
+        formData.append(key, JSON.stringify(value));
+      } else if (typeof value === 'object' && !(value instanceof File)) {
+        // Handle objects by stringifying them
+        formData.append(key, JSON.stringify(value));
+      } else {
+        // Handle primitives and files directly
+        formData.append(key, value);
+      }
+    }
+  });
+  
+  return formData;
 }
