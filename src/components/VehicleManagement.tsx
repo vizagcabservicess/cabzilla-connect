@@ -2,14 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
-import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info, RefreshCw } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
-import { syncAirportFares } from '@/services/fareUpdateService';
 
 interface VehicleManagementProps {
   vehicleId: string;
@@ -19,7 +18,6 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [error, setError] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
-  const [isSyncingAirport, setIsSyncingAirport] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
@@ -78,30 +76,6 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       setIsResyncing(false);
     }
   }, [isResyncing]);
-  
-  const handleSyncAirportFares = async () => {
-    if (isSyncingAirport) return;
-    
-    try {
-      setIsSyncingAirport(true);
-      toast.info('Syncing airport fares data...');
-      
-      const success = await syncAirportFares(true);
-      
-      if (success) {
-        toast.success('Airport fares synced successfully');
-        // Refresh to get updated data
-        setRefreshCount(prev => prev + 1);
-      } else {
-        toast.error('Failed to sync airport fares');
-      }
-    } catch (err: any) {
-      console.error('Error syncing airport fares:', err);
-      toast.error(`Error syncing airport fares: ${err.message}`);
-    } finally {
-      setIsSyncingAirport(false);
-    }
-  };
   
   // Check if vehicle exists
   useEffect(() => {
@@ -276,49 +250,22 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       )}
       
       {vehicleId && (
-        <>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Fare Management</h2>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSyncAirportFares}
-                disabled={isSyncingAirport}
-                className="flex items-center"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncingAirport ? 'animate-spin' : ''}`} />
-                {isSyncingAirport ? 'Syncing...' : 'Sync Airport Fares'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={resyncVehicles}
-                disabled={isResyncing}
-                className="flex items-center"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isResyncing ? 'animate-spin' : ''}`} />
-                {isResyncing ? 'Syncing...' : 'Sync Vehicles'}
-              </Button>
-            </div>
-          </div>
-          <Tabs 
-            value={activeTab} 
-            onValueChange={setActiveTab} 
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="local">Local Fares</TabsTrigger>
-              <TabsTrigger value="airport">Airport Fares</TabsTrigger>
-            </TabsList>
-            <TabsContent value="local">
-              <FareManagement vehicleId={vehicleId} fareType="local" key={`local-${refreshCount}`} />
-            </TabsContent>
-            <TabsContent value="airport">
-              <FareManagement vehicleId={vehicleId} fareType="airport" key={`airport-${refreshCount}`} />
-            </TabsContent>
-          </Tabs>
-        </>
+        <Tabs 
+          value={activeTab} 
+          onValueChange={setActiveTab} 
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="local">Local Fares</TabsTrigger>
+            <TabsTrigger value="airport">Airport Fares</TabsTrigger>
+          </TabsList>
+          <TabsContent value="local">
+            <FareManagement vehicleId={vehicleId} fareType="local" key={`local-${refreshCount}`} />
+          </TabsContent>
+          <TabsContent value="airport">
+            <FareManagement vehicleId={vehicleId} fareType="airport" key={`airport-${refreshCount}`} />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

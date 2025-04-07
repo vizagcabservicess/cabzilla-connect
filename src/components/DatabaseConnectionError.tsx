@@ -40,12 +40,6 @@ export function DatabaseConnectionError({
     errorMessage.toLowerCase().includes('connection refused') || 
     errorMessage.toLowerCase().includes('could not connect');
 
-  // Check for JSON parsing errors
-  const isJsonError =
-    errorMessage.toLowerCase().includes('json') ||
-    errorMessage.toLowerCase().includes('syntax error') ||
-    errorMessage.toLowerCase().includes('unexpected token');
-
   const handleCheckConnection = async () => {
     setIsChecking(true);
     try {
@@ -120,13 +114,6 @@ export function DatabaseConnectionError({
           <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
             <strong>Connection Refused:</strong> Cannot establish a connection to the database server. 
             Please check that the database server is running and accessible.
-          </div>
-        )}
-
-        {isJsonError && (
-          <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
-            <strong>Invalid JSON Response:</strong> The server returned invalid JSON data.
-            This could be caused by a PHP syntax error or incorrect output format.
           </div>
         )}
         

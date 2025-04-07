@@ -19,63 +19,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Turn off displaying errors directly, but log them
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-error_reporting(E_ALL);
-
-// Create log directory
-$logDir = dirname(__FILE__) . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0777, true);
-}
-
-$logFile = $logDir . '/airport_fares_update.log';
-ini_set('error_log', $logFile);
-$timestamp = date('Y-m-d H:i:s');
+// Include database connection
+require_once dirname(__FILE__) . '/../../config.php';
 
 // Get JSON data
 $inputJSON = file_get_contents('php://input');
-file_put_contents($logFile, "[$timestamp] Raw input: " . $inputJSON . "\n", FILE_APPEND);
+$input = json_decode($inputJSON, true);
+
+// Check for required fields
+if (!isset($input['vehicleId']) && !isset($input['vehicle_id'])) {
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Vehicle ID is required'
+    ]);
+    exit;
+}
+
+// Get vehicle ID from either format
+$vehicleId = $input['vehicleId'] ?? $input['vehicle_id'];
+
+// Log the request
+$logFile = dirname(__FILE__) . '/../../logs/airport_fares_update.log';
+$timestamp = date('Y-m-d H:i:s');
+
+// Create log directory if it doesn't exist
+if (!file_exists(dirname($logFile))) {
+    mkdir(dirname($logFile), 0777, true);
+}
+
+file_put_contents($logFile, "[$timestamp] Update airport fares request for vehicle: $vehicleId\n", FILE_APPEND);
 
 try {
-    $input = json_decode($inputJSON, true);
-    
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        throw new Exception('Invalid JSON: ' . json_last_error_msg());
-    }
-    
-    // Log the parsed JSON for debugging
-    file_put_contents($logFile, "[$timestamp] Parsed input: " . print_r($input, true) . "\n", FILE_APPEND);
-    
-    // Check for required fields
-    if (!isset($input['vehicleId']) && !isset($input['vehicle_id'])) {
-        throw new Exception('Vehicle ID is required');
-    }
-    
-    // Get vehicle ID from either format
-    $vehicleId = $input['vehicleId'] ?? $input['vehicle_id'];
-    
-    // Ensure vehicleId is not empty
-    if (empty($vehicleId)) {
-        throw new Exception('Vehicle ID cannot be empty');
-    }
-    
-    file_put_contents($logFile, "[$timestamp] Update airport fares request for vehicle: $vehicleId\n", FILE_APPEND);
-    
-    // Include database connection
-    require_once dirname(__FILE__) . '/../../config.php';
-    
     // Connect to database
     $conn = getDbConnection();
     
-    if (!$conn) {
-        throw new Exception('Failed to connect to database');
-    }
-    
     // Check if the airport_transfer_fares table exists
     $tableResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $tableExists = $tableResult && $tableResult->num_rows > 0;
+    $tableExists = $tableResult->num_rows > 0;
     
     // Create the table if it doesn't exist
     if (!$tableExists) {
@@ -96,7 +76,7 @@ try {
                 extra_waiting_charges DECIMAL(10,2) DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_vehicle_id (vehicle_id)
+                UNIQUE KEY vehicle_id (vehicle_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         
@@ -109,13 +89,13 @@ try {
     
     // Check if columns exist and add them if they don't
     $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
-    if ($columnsResult && $columnsResult->num_rows === 0) {
+    if ($columnsResult->num_rows === 0) {
         $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0");
         file_put_contents($logFile, "[$timestamp] Added night_charges column\n", FILE_APPEND);
     }
     
     $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
-    if ($columnsResult && $columnsResult->num_rows === 0) {
+    if ($columnsResult->num_rows === 0) {
         $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0");
         file_put_contents($logFile, "[$timestamp] Added extra_waiting_charges column\n", FILE_APPEND);
     }
@@ -134,102 +114,99 @@ try {
     $extraWaitingCharges = isset($input['extraWaitingCharges']) ? floatval($input['extraWaitingCharges']) : 0;
     
     // Apply default values if any important values are zero
-    if ($basePrice <= 0 || $pricePerKm <= 0 || $pickupPrice <= 0 || $dropPrice <= 0 ||
-        $tier1Price <= 0 || $tier2Price <= 0 || $tier3Price <= 0 || $tier4Price <= 0 || $extraKmCharge <= 0) {
+    if ($basePrice == 0 || $pricePerKm == 0 || $pickupPrice == 0 || $dropPrice == 0 ||
+        $tier1Price == 0 || $tier2Price == 0 || $tier3Price == 0 || $tier4Price == 0 || $extraKmCharge == 0) {
         
         $vehicleIdLower = strtolower($vehicleId);
         
         // Determine default values based on vehicle type
         if (strpos($vehicleIdLower, 'sedan') !== false) {
-            if ($basePrice <= 0) $basePrice = 3000;
-            if ($pricePerKm <= 0) $pricePerKm = 12;
-            if ($pickupPrice <= 0) $pickupPrice = 800;
-            if ($dropPrice <= 0) $dropPrice = 800;
-            if ($tier1Price <= 0) $tier1Price = 600;
-            if ($tier2Price <= 0) $tier2Price = 800;
-            if ($tier3Price <= 0) $tier3Price = 1000;
-            if ($tier4Price <= 0) $tier4Price = 1200;
-            if ($extraKmCharge <= 0) $extraKmCharge = 12;
-            if ($nightCharges <= 0) $nightCharges = 250;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 150;
+            if ($basePrice == 0) $basePrice = 3000;
+            if ($pricePerKm == 0) $pricePerKm = 12;
+            if ($pickupPrice == 0) $pickupPrice = 800;
+            if ($dropPrice == 0) $dropPrice = 800;
+            if ($tier1Price == 0) $tier1Price = 600;
+            if ($tier2Price == 0) $tier2Price = 800;
+            if ($tier3Price == 0) $tier3Price = 1000;
+            if ($tier4Price == 0) $tier4Price = 1200;
+            if ($extraKmCharge == 0) $extraKmCharge = 12;
+            if ($nightCharges == 0) $nightCharges = 250;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 150;
         } elseif (strpos($vehicleIdLower, 'ertiga') !== false) {
-            if ($basePrice <= 0) $basePrice = 3500;
-            if ($pricePerKm <= 0) $pricePerKm = 15;
-            if ($pickupPrice <= 0) $pickupPrice = 1000;
-            if ($dropPrice <= 0) $dropPrice = 1000;
-            if ($tier1Price <= 0) $tier1Price = 800;
-            if ($tier2Price <= 0) $tier2Price = 1000;
-            if ($tier3Price <= 0) $tier3Price = 1200;
-            if ($tier4Price <= 0) $tier4Price = 1400;
-            if ($extraKmCharge <= 0) $extraKmCharge = 15;
-            if ($nightCharges <= 0) $nightCharges = 300;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 200;
+            if ($basePrice == 0) $basePrice = 3500;
+            if ($pricePerKm == 0) $pricePerKm = 15;
+            if ($pickupPrice == 0) $pickupPrice = 1000;
+            if ($dropPrice == 0) $dropPrice = 1000;
+            if ($tier1Price == 0) $tier1Price = 800;
+            if ($tier2Price == 0) $tier2Price = 1000;
+            if ($tier3Price == 0) $tier3Price = 1200;
+            if ($tier4Price == 0) $tier4Price = 1400;
+            if ($extraKmCharge == 0) $extraKmCharge = 15;
+            if ($nightCharges == 0) $nightCharges = 300;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 200;
         } elseif (strpos($vehicleIdLower, 'innova') !== false && strpos($vehicleIdLower, 'hycross') !== false) {
-            if ($basePrice <= 0) $basePrice = 4500;
-            if ($pricePerKm <= 0) $pricePerKm = 18;
-            if ($pickupPrice <= 0) $pickupPrice = 1200;
-            if ($dropPrice <= 0) $dropPrice = 1200;
-            if ($tier1Price <= 0) $tier1Price = 1000;
-            if ($tier2Price <= 0) $tier2Price = 1200;
-            if ($tier3Price <= 0) $tier3Price = 1400;
-            if ($tier4Price <= 0) $tier4Price = 1600;
-            if ($extraKmCharge <= 0) $extraKmCharge = 18;
-            if ($nightCharges <= 0) $nightCharges = 350;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 250;
+            if ($basePrice == 0) $basePrice = 4500;
+            if ($pricePerKm == 0) $pricePerKm = 18;
+            if ($pickupPrice == 0) $pickupPrice = 1200;
+            if ($dropPrice == 0) $dropPrice = 1200;
+            if ($tier1Price == 0) $tier1Price = 1000;
+            if ($tier2Price == 0) $tier2Price = 1200;
+            if ($tier3Price == 0) $tier3Price = 1400;
+            if ($tier4Price == 0) $tier4Price = 1600;
+            if ($extraKmCharge == 0) $extraKmCharge = 18;
+            if ($nightCharges == 0) $nightCharges = 350;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 250;
         } elseif (strpos($vehicleIdLower, 'innova') !== false || strpos($vehicleIdLower, 'crysta') !== false) {
-            if ($basePrice <= 0) $basePrice = 4000;
-            if ($pricePerKm <= 0) $pricePerKm = 17;
-            if ($pickupPrice <= 0) $pickupPrice = 1200;
-            if ($dropPrice <= 0) $dropPrice = 1200;
-            if ($tier1Price <= 0) $tier1Price = 1000;
-            if ($tier2Price <= 0) $tier2Price = 1200;
-            if ($tier3Price <= 0) $tier3Price = 1400;
-            if ($tier4Price <= 0) $tier4Price = 1600;
-            if ($extraKmCharge <= 0) $extraKmCharge = 17;
-            if ($nightCharges <= 0) $nightCharges = 350;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 250;
+            if ($basePrice == 0) $basePrice = 4000;
+            if ($pricePerKm == 0) $pricePerKm = 17;
+            if ($pickupPrice == 0) $pickupPrice = 1200;
+            if ($dropPrice == 0) $dropPrice = 1200;
+            if ($tier1Price == 0) $tier1Price = 1000;
+            if ($tier2Price == 0) $tier2Price = 1200;
+            if ($tier3Price == 0) $tier3Price = 1400;
+            if ($tier4Price == 0) $tier4Price = 1600;
+            if ($extraKmCharge == 0) $extraKmCharge = 17;
+            if ($nightCharges == 0) $nightCharges = 350;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 250;
         } elseif (strpos($vehicleIdLower, 'tempo') !== false) {
-            if ($basePrice <= 0) $basePrice = 6000;
-            if ($pricePerKm <= 0) $pricePerKm = 19;
-            if ($pickupPrice <= 0) $pickupPrice = 2000;
-            if ($dropPrice <= 0) $dropPrice = 2000;
-            if ($tier1Price <= 0) $tier1Price = 1600;
-            if ($tier2Price <= 0) $tier2Price = 1800;
-            if ($tier3Price <= 0) $tier3Price = 2000;
-            if ($tier4Price <= 0) $tier4Price = 2500;
-            if ($extraKmCharge <= 0) $extraKmCharge = 19;
-            if ($nightCharges <= 0) $nightCharges = 400;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 300;
+            if ($basePrice == 0) $basePrice = 6000;
+            if ($pricePerKm == 0) $pricePerKm = 19;
+            if ($pickupPrice == 0) $pickupPrice = 2000;
+            if ($dropPrice == 0) $dropPrice = 2000;
+            if ($tier1Price == 0) $tier1Price = 1600;
+            if ($tier2Price == 0) $tier2Price = 1800;
+            if ($tier3Price == 0) $tier3Price = 2000;
+            if ($tier4Price == 0) $tier4Price = 2500;
+            if ($extraKmCharge == 0) $extraKmCharge = 19;
+            if ($nightCharges == 0) $nightCharges = 400;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 300;
         } elseif (strpos($vehicleIdLower, 'luxury') !== false) {
-            if ($basePrice <= 0) $basePrice = 7000;
-            if ($pricePerKm <= 0) $pricePerKm = 22;
-            if ($pickupPrice <= 0) $pickupPrice = 2500;
-            if ($dropPrice <= 0) $dropPrice = 2500;
-            if ($tier1Price <= 0) $tier1Price = 2000;
-            if ($tier2Price <= 0) $tier2Price = 2200;
-            if ($tier3Price <= 0) $tier3Price = 2500;
-            if ($tier4Price <= 0) $tier4Price = 3000;
-            if ($extraKmCharge <= 0) $extraKmCharge = 22;
-            if ($nightCharges <= 0) $nightCharges = 450;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 350;
+            if ($basePrice == 0) $basePrice = 7000;
+            if ($pricePerKm == 0) $pricePerKm = 22;
+            if ($pickupPrice == 0) $pickupPrice = 2500;
+            if ($dropPrice == 0) $dropPrice = 2500;
+            if ($tier1Price == 0) $tier1Price = 2000;
+            if ($tier2Price == 0) $tier2Price = 2200;
+            if ($tier3Price == 0) $tier3Price = 2500;
+            if ($tier4Price == 0) $tier4Price = 3000;
+            if ($extraKmCharge == 0) $extraKmCharge = 22;
+            if ($nightCharges == 0) $nightCharges = 450;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 350;
         } else {
             // Default values for other vehicle types
-            if ($basePrice <= 0) $basePrice = 3000;
-            if ($pricePerKm <= 0) $pricePerKm = 15;
-            if ($pickupPrice <= 0) $pickupPrice = 1000;
-            if ($dropPrice <= 0) $dropPrice = 1000;
-            if ($tier1Price <= 0) $tier1Price = 800;
-            if ($tier2Price <= 0) $tier2Price = 1000;
-            if ($tier3Price <= 0) $tier3Price = 1200;
-            if ($tier4Price <= 0) $tier4Price = 1400;
-            if ($extraKmCharge <= 0) $extraKmCharge = 15;
-            if ($nightCharges <= 0) $nightCharges = 300;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 200;
+            if ($basePrice == 0) $basePrice = 3000;
+            if ($pricePerKm == 0) $pricePerKm = 15;
+            if ($pickupPrice == 0) $pickupPrice = 1000;
+            if ($dropPrice == 0) $dropPrice = 1000;
+            if ($tier1Price == 0) $tier1Price = 800;
+            if ($tier2Price == 0) $tier2Price = 1000;
+            if ($tier3Price == 0) $tier3Price = 1200;
+            if ($tier4Price == 0) $tier4Price = 1400;
+            if ($extraKmCharge == 0) $extraKmCharge = 15;
+            if ($nightCharges == 0) $nightCharges = 300;
+            if ($extraWaitingCharges == 0) $extraWaitingCharges = 200;
         }
     }
-    
-    // Log all values for debugging
-    file_put_contents($logFile, "[$timestamp] Using values: base_price=$basePrice, price_per_km=$pricePerKm, pickup_price=$pickupPrice, drop_price=$dropPrice, tier1_price=$tier1Price, tier2_price=$tier2Price, tier3_price=$tier3Price, tier4_price=$tier4Price, extra_km_charge=$extraKmCharge, night_charges=$nightCharges, extra_waiting_charges=$extraWaitingCharges\n", FILE_APPEND);
     
     // Check if record exists
     $checkQuery = "SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?";
@@ -237,82 +214,78 @@ try {
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
-    $exists = $result && $result->num_rows > 0;
+    $exists = $result->num_rows > 0;
     $stmt->close();
     
-    // Use INSERT ... ON DUPLICATE KEY UPDATE to handle both insert and update cases
-    $query = "
-        INSERT INTO airport_transfer_fares 
-        (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-         tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
-         night_charges, extra_waiting_charges, updated_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE 
-        base_price = VALUES(base_price),
-        price_per_km = VALUES(price_per_km),
-        pickup_price = VALUES(pickup_price),
-        drop_price = VALUES(drop_price),
-        tier1_price = VALUES(tier1_price),
-        tier2_price = VALUES(tier2_price),
-        tier3_price = VALUES(tier3_price),
-        tier4_price = VALUES(tier4_price),
-        extra_km_charge = VALUES(extra_km_charge),
-        night_charges = VALUES(night_charges),
-        extra_waiting_charges = VALUES(extra_waiting_charges),
-        updated_at = CURRENT_TIMESTAMP
-    ";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("sddddddddddd", 
-        $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
-        $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
-        $nightCharges, $extraWaitingCharges);
-    
-    $success = $stmt->execute();
-    $stmt->close();
-    
-    if ($success) {
-        file_put_contents($logFile, "[$timestamp] Successfully " . ($exists ? "updated" : "created") . " airport fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+    if ($exists) {
+        // Update existing record
+        $updateQuery = "UPDATE airport_transfer_fares
+                        SET base_price = ?, price_per_km = ?, pickup_price = ?, drop_price = ?,
+                            tier1_price = ?, tier2_price = ?, tier3_price = ?, tier4_price = ?, 
+                            extra_km_charge = ?, night_charges = ?, extra_waiting_charges = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE vehicle_id = ?";
         
-        // Return success response
-        $response = [
-            'status' => 'success',
-            'message' => 'Airport fares ' . ($exists ? 'updated' : 'created') . ' successfully',
-            'vehicle_id' => $vehicleId,
-            'vehicleId' => $vehicleId,
-            'data' => [
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'pickupPrice' => $pickupPrice,
-                'dropPrice' => $dropPrice,
-                'tier1Price' => $tier1Price,
-                'tier2Price' => $tier2Price,
-                'tier3Price' => $tier3Price,
-                'tier4Price' => $tier4Price,
-                'extraKmCharge' => $extraKmCharge,
-                'nightCharges' => $nightCharges,
-                'extraWaitingCharges' => $extraWaitingCharges
-            ]
-        ];
+        $stmt = $conn->prepare($updateQuery);
+        $stmt->bind_param("ddddddddddds", 
+            $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
+            $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
+            $nightCharges, $extraWaitingCharges, $vehicleId);
+        
+        if ($stmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Updated airport fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+            
+            // Return success response
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Airport fares updated successfully',
+                'vehicle_id' => $vehicleId
+            ]);
+        } else {
+            throw new Exception("Failed to update airport fares: " . $stmt->error);
+        }
+        
+        $stmt->close();
     } else {
-        throw new Exception("Failed to " . ($exists ? "update" : "create") . " airport fares: " . $conn->error);
+        // Insert new record
+        $insertQuery = "INSERT INTO airport_transfer_fares 
+                        (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                         tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+                         night_charges, extra_waiting_charges) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $conn->prepare($insertQuery);
+        $stmt->bind_param("sddddddddddd", 
+            $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
+            $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
+            $nightCharges, $extraWaitingCharges);
+        
+        if ($stmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Created airport fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+            
+            // Return success response
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Airport fares created successfully',
+                'vehicle_id' => $vehicleId
+            ]);
+        } else {
+            throw new Exception("Failed to create airport fares: " . $stmt->error);
+        }
+        
+        $stmt->close();
     }
     
     // Close the database connection
     $conn->close();
     
-    // Output response
-    echo json_encode($response, JSON_PRETTY_PRINT);
-    
 } catch (Exception $e) {
     // Log error
     file_put_contents($logFile, "[$timestamp] Error: " . $e->getMessage() . "\n", FILE_APPEND);
     
-    // Return error response with HTTP 400 status code
-    http_response_code(400);
+    // Return error response
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage(),
-        'timestamp' => time()
-    ], JSON_PRETTY_PRINT);
+        'message' => $e->getMessage()
+    ]);
 }

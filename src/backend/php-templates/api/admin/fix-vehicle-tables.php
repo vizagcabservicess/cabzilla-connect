@@ -14,9 +14,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Disable displaying errors directly, but log them
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // Create log directory if it doesn't exist
@@ -24,9 +23,6 @@ $logDir = dirname(__FILE__) . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
-
-// Set error log file
-ini_set('error_log', $logDir . '/php_errors.log');
 
 // Logging function
 function logMessage($message) {
@@ -289,9 +285,10 @@ try {
     $errorMessage = "Error fixing database tables: " . $e->getMessage();
     $response['message'] = $errorMessage;
     $response['error'] = $e->getMessage();
+    $response['trace'] = $e->getTraceAsString();
     logMessage($errorMessage);
 }
 
-// Send response - ensure valid JSON even if error occurs
+// Send response
 echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
 exit;

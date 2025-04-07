@@ -1,11 +1,10 @@
 
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson, DownloadCloud } from "lucide-react";
+import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { fixDatabaseTables, checkDatabaseConnection, DatabaseConnectionResponse, forceRefreshVehicles } from "@/utils/apiHelper";
+import { fixDatabaseTables, checkDatabaseConnection, DatabaseConnectionResponse } from "@/utils/apiHelper";
 import { toast } from "sonner";
 import { clearVehicleDataCache } from "@/services/vehicleDataService";
-import { syncAirportFares } from "@/services/fareUpdateService";
 
 interface FareUpdateErrorProps {
   error: Error;
@@ -57,9 +56,6 @@ export function FareUpdateError({
           detail: { timestamp: Date.now() }
         }));
         
-        // Force refresh vehicles
-        await forceRefreshVehicles();
-        
         if (onRetry) {
           setTimeout(onRetry, 800); // Give a bit more time for the event to be processed
         }
@@ -100,30 +96,6 @@ export function FareUpdateError({
       toast.error(`Error checking credentials: ${err.message || 'Unknown error'}`);
     }
   };
-  
-  // Handle syncing airport fares
-  const handleSyncAirportFares = async () => {
-    try {
-      toast.loading("Syncing airport fares...");
-      
-      // Clear vehicle data cache first
-      clearVehicleDataCache();
-      
-      const success = await syncAirportFares(true);
-      
-      if (success) {
-        toast.success("Airport fares synced successfully");
-        // If we have a retry handler, call it
-        if (onRetry) {
-          setTimeout(onRetry, 800);
-        }
-      } else {
-        toast.error("Failed to sync airport fares");
-      }
-    } catch (err: any) {
-      toast.error(`Error syncing airport fares: ${err.message || 'Unknown error'}`);
-    }
-  };
 
   // Look for specific SQL errors in the message
   const hasSqlError = errorMessage.includes('MySQL') || 
@@ -136,12 +108,6 @@ export function FareUpdateError({
   const hasConnectionError = errorMessage.includes('connect') || 
     errorMessage.includes('Access denied') ||
     errorMessage.includes('localhost');
-    
-  const hasColumnError = errorMessage.includes('Unknown column') ||
-    errorMessage.includes('night_charges');
-    
-  const hasMissingParamError = errorMessage.includes('Missing required parameter') ||
-    errorMessage.includes('vehicleId');
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -152,38 +118,11 @@ export function FareUpdateError({
         <div className="bg-red-50 p-3 rounded text-red-900 text-sm overflow-x-auto">
           {errorMessage}
         </div>
-        
-        {hasColumnError && (
-          <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
-            <strong>Column Error Detected:</strong> The database is missing columns needed for airport fares.
-            Please use the "Sync Airport Fares" or "Fix Database" button below to add the required columns.
-          </div>
-        )}
-        
-        {hasMissingParamError && (
-          <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
-            <strong>Missing Parameter Error:</strong> The vehicle ID wasn't properly passed to the API.
-            This could be due to a data format issue. Try using the "Sync Airport Fares" button below.
-          </div>
-        )}
-        
         <div className="flex flex-wrap gap-2 mt-2">
           {onRetry && (
             <Button size="sm" variant="outline" onClick={onRetry} className="flex items-center">
               <RefreshCcw className="mr-2 h-4 w-4" />
               Retry
-            </Button>
-          )}
-          
-          {isAdmin && (
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={handleSyncAirportFares} 
-              className="flex items-center"
-            >
-              <DownloadCloud className="mr-2 h-4 w-4" />
-              Sync Airport Fares
             </Button>
           )}
           
