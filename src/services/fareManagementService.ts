@@ -1,14 +1,13 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Define common fare data interface
+// Define common fare data interface with optional fields to support different fare types
 export interface FareData {
   vehicleId: string;
-  vehicle_id: string;
-  basePrice: number;
-  pricePerKm: number;
+  vehicle_id?: string; // Make this optional since we'll set it from vehicleId
+  basePrice?: number; // Make these optional since not all fare types need them
+  pricePerKm?: number;
   pickupPrice?: number;
   dropPrice?: number;
   tier1Price?: number;
@@ -111,6 +110,9 @@ export const updateLocalFares = async (fareData: FareData): Promise<any> => {
       throw new Error('Vehicle ID is required');
     }
     
+    // Ensure vehicle_id is set
+    fareData.vehicle_id = fareData.vehicleId;
+    
     // Create form data to pass to the API
     const formData = new FormData();
     formData.append('vehicleId', fareData.vehicleId);
@@ -206,29 +208,24 @@ export const updateAirportFares = async (fareData: FareData): Promise<any> => {
       throw new Error('Vehicle ID is required');
     }
     
-    // Ensure required fields are present with default values if not provided
-    const updatedFareData = {
-      ...fareData,
-      basePrice: fareData.basePrice || 0,
-      pricePerKm: fareData.pricePerKm || 0,
-      vehicle_id: fareData.vehicleId
-    };
+    // Ensure vehicle_id is set
+    fareData.vehicle_id = fareData.vehicleId;
     
     // Create form data to pass to the API
     const formData = new FormData();
-    formData.append('vehicleId', updatedFareData.vehicleId);
-    formData.append('vehicle_id', updatedFareData.vehicleId);
+    formData.append('vehicleId', fareData.vehicleId);
+    formData.append('vehicle_id', fareData.vehicleId);
     
-    // Append all fare fields
-    formData.append('basePrice', String(updatedFareData.basePrice || 0));
-    formData.append('pricePerKm', String(updatedFareData.pricePerKm || 0));
-    formData.append('pickupPrice', String(updatedFareData.pickupPrice || 0));
-    formData.append('dropPrice', String(updatedFareData.dropPrice || 0));
-    formData.append('tier1Price', String(updatedFareData.tier1Price || 0));
-    formData.append('tier2Price', String(updatedFareData.tier2Price || 0));
-    formData.append('tier3Price', String(updatedFareData.tier3Price || 0));
-    formData.append('tier4Price', String(updatedFareData.tier4Price || 0));
-    formData.append('extraKmCharge', String(updatedFareData.extraKmCharge || 0));
+    // Append all fare fields (handling optionals with defaults)
+    formData.append('basePrice', String(fareData.basePrice || 0));
+    formData.append('pricePerKm', String(fareData.pricePerKm || 0));
+    formData.append('pickupPrice', String(fareData.pickupPrice || 0));
+    formData.append('dropPrice', String(fareData.dropPrice || 0));
+    formData.append('tier1Price', String(fareData.tier1Price || 0));
+    formData.append('tier2Price', String(fareData.tier2Price || 0));
+    formData.append('tier3Price', String(fareData.tier3Price || 0));
+    formData.append('tier4Price', String(fareData.tier4Price || 0));
+    formData.append('extraKmCharge', String(fareData.extraKmCharge || 0));
     
     // Append a timestamp to prevent caching
     const timestamp = new Date().getTime();
