@@ -28,9 +28,10 @@ export const clearVehicleDataCache = () => {
 /**
  * Get vehicle data from API or cache
  * @param forceRefresh Force a refresh from API even if cache exists
+ * @param includeInactive Include inactive vehicles in the results
  * @returns Promise with vehicle data
  */
-export const getVehicleData = async (forceRefresh = false): Promise<any[]> => {
+export const getVehicleData = async (forceRefresh = false, includeInactive = false): Promise<any[]> => {
   // If we have cached data and don't need to force refresh, return it
   if (!forceRefresh && Object.keys(vehicleDataCache).length > 0) {
     console.log('Returning cached vehicle data');
@@ -43,7 +44,7 @@ export const getVehicleData = async (forceRefresh = false): Promise<any[]> => {
     // Add timestamp parameter to prevent browser caching
     const timestamp = Date.now();
     const result = await directVehicleOperation(
-      `api/admin/vehicles-data.php?_t=${timestamp}`,
+      `api/admin/vehicles-data.php?_t=${timestamp}&includeInactive=${includeInactive ? 'true' : 'false'}`,
       'GET',
       {
         headers: {
@@ -157,5 +158,52 @@ export const updateVehicleCache = (vehicle: any): void => {
     localStorage.setItem(VEHICLE_DATA_CACHE_KEY, JSON.stringify(vehicleDataCache));
   } catch (e) {
     // Ignore localStorage errors
+  }
+};
+
+/**
+ * Get all available vehicle types
+ * @returns Promise with list of vehicle types
+ */
+export const getVehicleTypes = async (): Promise<any[]> => {
+  try {
+    // Try to get vehicle types from the cache first
+    const cachedData = await getVehicleData(false);
+    if (cachedData && cachedData.length > 0) {
+      // Extract unique vehicle types from cached data
+      const vehicleTypes = Array.from(new Set(
+        cachedData.map(vehicle => ({
+          id: vehicle.id,
+          name: vehicle.name || vehicle.id
+        }))
+      ));
+      
+      return vehicleTypes;
+    }
+
+    // If no cached data, fetch directly from API
+    const timestamp = Date.now();
+    const result = await directVehicleOperation(
+      `api/admin/vehicle-types.php?_t=${timestamp}`,
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }
+    );
+    
+    if (result && result.status === 'success' && result.types) {
+      return result.types;
+    } else if (result && Array.isArray(result)) {
+      return result;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error fetching vehicle types:', error);
+    return [];
   }
 };

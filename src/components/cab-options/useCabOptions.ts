@@ -128,7 +128,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         console.log('Admin trip - clearing cache and fetching fresh data');
         clearVehicleDataCache();
         
-        const vehicles = await getVehicleData(true, true);
+        const vehicles = await getVehicleData(true);
         
         if (!vehicles || vehicles.length === 0) {
           setError('No vehicles found. Please try refreshing the data.');
@@ -190,14 +190,14 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 5000);
       });
       
-      const dataPromise = getVehicleData(forceRefresh, includeInactive);
+      const dataPromise = getVehicleData(forceRefresh);
       
       let vehicles: CabType[];
       try {
         vehicles = await Promise.race([dataPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Fetch with timeout failed, falling back to direct API call');
-        vehicles = await getVehicleData(true, includeInactive);
+        vehicles = await getVehicleData(true);
       }
       
       console.log(`Received ${vehicles?.length || 0} vehicles from getVehicleData:`, vehicles);
