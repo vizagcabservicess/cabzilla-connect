@@ -26,7 +26,8 @@ export function useVehicleList() {
         const processedVehicles = response.vehicles.map((vehicle: any) => {
           return {
             ...vehicle,
-            vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId
+            // Ensure vehicle_id is always present
+            vehicle_id: vehicle.vehicle_id || vehicle.id || vehicle.vehicleId || ''
           };
         });
         

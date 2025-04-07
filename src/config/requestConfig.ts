@@ -44,3 +44,19 @@ export function formatDataForMultipart(data: Record<string, any>): FormData {
   
   return formData;
 }
+
+/**
+ * Safe fetch wrapper
+ */
+export async function safeFetch(url: string, options?: RequestInit) {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error in API request:', error);
+    throw error;
+  }
+}

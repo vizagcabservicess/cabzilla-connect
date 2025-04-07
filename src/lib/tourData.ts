@@ -2,6 +2,7 @@
 import { getVehicleData } from '@/services/vehicleDataService';
 import { TourInfo, TourFares } from '@/types/cab';
 
+// Export the tours array directly with proper typing
 export const popularTours: TourInfo[] = [
   {
     id: 'araku_valley',
@@ -95,6 +96,9 @@ export const tourFares: Record<string, TourFares> = {
     perKmPrice: 18
   }
 };
+
+// Make the popularTours array available as availableTours for backwards compatibility
+export const availableTours = popularTours;
 
 /**
  * Get available tours

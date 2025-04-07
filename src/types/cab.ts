@@ -9,6 +9,9 @@ export interface LocalFare {
   price10hrs100km: number;
   priceExtraKm: number;
   priceExtraHour: number;
+  // Additional fields needed by LocalFareManagement
+  extraKmRate?: number;
+  extraHourRate?: number;
   // Backwards compatibility for different property names
   package4hr40km?: number; 
   package8hr80km?: number;
@@ -68,7 +71,7 @@ export interface Vehicle {
  */
 export interface CabType {
   id: string;
-  vehicle_id: string;
+  vehicle_id: string;  // Required field that's missing in many places
   vehicleId?: string; // For backward compatibility
   name: string;
   capacity?: number;
