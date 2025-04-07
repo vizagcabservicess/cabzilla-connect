@@ -355,10 +355,12 @@ export const updateAirportFares = async (fareData: AirportFareData): Promise<boo
           'api/admin/airport-fares-update.php',
           'POST',
           {
-            formData: formData,
+            // Fix: use 'data' property instead of 'formData'
+            data: formData,
             headers: {
               'X-Admin-Mode': 'true',
               'Accept': 'application/json'
+              // Remove Content-Type to let browser set it with boundary for FormData
             }
           }
         );
