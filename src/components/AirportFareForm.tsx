@@ -10,8 +10,8 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
 import { FareUpdateError } from './cab-options/FareUpdateError';
-import { directApiPost, directApiPostWithFallback } from '@/utils/directApiHelper';
-import { fareService, updateAirportFare } from '@/services/fareService';
+import { directApiPost } from '@/utils/directApiHelper';
+import { fareService } from '@/services/fareService';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -58,7 +58,6 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
     },
   });
 
-  // Update form when initial data changes
   useEffect(() => {
     if (initialData) {
       console.log("Setting initial airport fare data:", initialData);
@@ -79,7 +78,6 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
   }, [initialData, form]);
 
   async function onSubmit(values: AirportFareFormValues) {
-    // Prevent double submissions
     const now = Date.now();
     if (lastSubmitTime && now - lastSubmitTime < 2000) {
       console.log("Preventing duplicate submission");
@@ -101,7 +99,6 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
       console.log("Submitting airport fare form for vehicle:", vehicleId);
       console.log("Form values:", values);
       
-      // Create AirportFare object with all required fields
       const fareData: AirportFare = {
         vehicleId,
         basePrice: values.basePrice,
@@ -117,7 +114,6 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         extraWaitingCharges: values.extraWaitingCharges
       };
       
-      // Use the fareService to update the fare
       const response = await updateAirportFare(fareData);
       
       toast.success(`Airport fare for ${vehicleId} updated successfully`);
@@ -147,27 +143,35 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         description="There was a problem updating the airport fares. Please try again."
         fixDatabaseHandler={async () => {
           try {
-            await fareService.fixDatabase();
-            toast.success('Database fixed successfully');
-            handleRetry();
+            const response = await fareService.initializeDatabase();
+            
+            if (response) {
+              toast.success('Database fixed successfully');
+              handleRetry();
+            } else {
+              toast.error('Database fix failed');
+            }
           } catch (err: any) {
             toast.error(`Database fix error: ${err.message}`);
           }
         }}
         directDatabaseAccess={async () => {
           try {
-            const response = await directApiPost('/api/admin/direct-db-access.php', {
-              table: 'airport_transfer_fares',
-              vehicle_id: vehicleId
-            }, {
+            const response = await fetch(`/api/admin/direct-db-access.php?table=airport_fares&vehicle_id=${vehicleId}`, {
+              method: 'GET',
               headers: {
                 'X-Admin-Mode': 'true',
                 'X-Debug': 'true'
               }
             });
             
+            if (!response.ok) {
+              throw new Error(`Failed with status: ${response.status}`);
+            }
+            
+            const data = await response.json();
             toast.info('Direct database access results available in console');
-            console.log('Direct DB access results:', response);
+            console.log('Direct DB access results:', data);
           } catch (err: any) {
             toast.error(`Direct DB access error: ${err.message}`);
           }

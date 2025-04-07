@@ -43,6 +43,45 @@ export async function syncAirportFares(forceCreation = false): Promise<boolean> 
 }
 
 /**
+ * Sync local fares
+ */
+export async function syncLocalFares(forceCreation = false): Promise<boolean> {
+  try {
+    const response = await fetch('/api/admin/sync-local-fares.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getBypassHeaders()
+      },
+      body: JSON.stringify({
+        forceCreation
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Clear the cache if successful
+    if (data && data.status === 'success') {
+      try {
+        clearVehicleDataCache();
+      } catch (e) {
+        console.warn('Error clearing cache:', e);
+      }
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error syncing local fares:', error);
+    return false;
+  }
+}
+
+/**
  * Fix local fares
  */
 export async function fixLocalFares(): Promise<boolean> {

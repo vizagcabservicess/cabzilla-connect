@@ -43,21 +43,23 @@ export async function directApiPost(endpoint: string, data: any, options?: Reque
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...options?.headers
+        ...(options?.headers || {})
       },
       body: JSON.stringify(data),
       ...options
     };
     
-    // Remove the headers from the copy to avoid duplication
-    delete fetchOptions.headers;
+    // Remove headers to avoid duplication since we merged them above
+    const { headers, ...restOptions } = options || {};
     
     const response = await fetch(url, {
-      ...fetchOptions,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...options?.headers
-      }
+        ...(headers || {})
+      },
+      body: JSON.stringify(data),
+      ...restOptions
     });
     
     if (!response.ok) {
