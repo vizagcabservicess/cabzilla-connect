@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,13 +10,11 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { 
-  updateOutstationFares, 
   updateLocalFares, 
   updateAirportFares,
-  getAllOutstationFares,
-  getAllLocalFares,
-  getAllAirportFares
-} from "@/services/fareUpdateService";
+  syncLocalFares,
+  syncAirportFares
+} from "@/services/fareManagementService";
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from 'sonner';
@@ -23,6 +22,91 @@ import { directVehicleOperation } from '@/utils/apiHelper';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Define missing functions that are referenced in the form
+// These would typically come from fareUpdateService, but since they're not available
+// we need to implement them here to fix the TypeScript errors
+const updateOutstationFares = async (
+  vehicleId: string,
+  basePrice: number,
+  pricePerKm: number,
+  roundTripBasePrice: number,
+  roundTripPricePerKm: number,
+  driverAllowance: number,
+  nightHaltCharge: number
+) => {
+  try {
+    const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'POST', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'Content-Type': 'application/json'
+      },
+      data: {
+        vehicleId,
+        basePrice,
+        pricePerKm,
+        roundTripBasePrice,
+        roundTripPricePerKm,
+        driverAllowance,
+        nightHaltCharge
+      }
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating outstation fares:', error);
+    throw error;
+  }
+};
+
+// Define missing functions for getting all fares
+const getAllOutstationFares = async () => {
+  try {
+    const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+    
+    return result.fares || {};
+  } catch (error) {
+    console.error('Error getting all outstation fares:', error);
+    return {};
+  }
+};
+
+const getAllLocalFares = async () => {
+  try {
+    const result = await directVehicleOperation('/api/admin/direct-local-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+    
+    return result.fares || {};
+  } catch (error) {
+    console.error('Error getting all local fares:', error);
+    return {};
+  }
+};
+
+const getAllAirportFares = async () => {
+  try {
+    const result = await directVehicleOperation('/api/admin/direct-airport-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+    
+    return result.fares || {};
+  } catch (error) {
+    console.error('Error getting all airport fares:', error);
+    return {};
+  }
+};
 
 interface VehicleTripFaresFormProps {
   tripType: 'outstation' | 'local' | 'airport';
@@ -336,12 +420,14 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           { hours: 12, km: 120, price: package12hr120km }
         ];
         
-        await updateLocalFares(
-          selectedVehicle,
-          extraKmRate,
-          extraHourRate,
-          packages
-        );
+        await updateLocalFares({
+          vehicleId: selectedVehicle,
+          priceExtraKm: extraKmRate,
+          priceExtraHour: extraHourRate,
+          price4hrs40km: package4hr40km,
+          price8hrs80km: package8hr80km,
+          price10hrs100km: package12hr120km
+        });
         
         toast.success(`Updated local fares for ${selectedVehicle}`);
       } else if (tripType === 'airport') {
@@ -351,19 +437,15 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        const locationFares = {
-          pickup: pickupPrice,
-          drop: dropPrice,
-          tier1: tier1Price,
-          tier2: tier2Price,
-          tier3: tier3Price,
-          tier4: tier4Price
-        };
-        
-        await updateAirportFares(
-          selectedVehicle,
-          locationFares
-        );
+        await updateAirportFares({
+          vehicleId: selectedVehicle,
+          priceOneWay: pickupPrice,
+          priceRoundTrip: dropPrice,
+          tier1Price: tier1Price,
+          tier2Price: tier2Price,
+          tier3Price: tier3Price,
+          tier4Price: tier4Price
+        });
         
         toast.success(`Updated airport fares for ${selectedVehicle}`);
       }
