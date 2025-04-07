@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FareManagement } from "@/components/admin/FareManagement";
-import { AirportFareManagement } from "@/components/admin/AirportFareManagement";
+import AirportFareManagement from "@/components/admin/AirportFareManagement";
 import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
 import { OutstationFareManagement } from "@/components/admin/OutstationFareManagement";
 import { DashboardMetrics } from "@/components/admin/DashboardMetrics";
