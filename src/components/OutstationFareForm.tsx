@@ -49,7 +49,7 @@ export function OutstationFareForm({ vehicleId, initialData, onSuccess, onError 
       basePrice: initialData?.basePrice || 0,
       pricePerKm: initialData?.pricePerKm || 0,
       driverAllowance: initialData?.driverAllowance || 0,
-      nightHalt: initialData?.nightHalt || 0,
+      nightHalt: initialData?.nightHalt || initialData?.nightHaltCharge || 0,
       minDays: initialData?.minDays || 1,
       extraKmCharge: initialData?.extraKmCharge || 0
     }

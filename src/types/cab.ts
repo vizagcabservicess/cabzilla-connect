@@ -44,8 +44,10 @@ export interface OutstationFare {
   basePrice: number;
   pricePerKm: number;
   driverAllowance: number;
-  nightHaltCharge: number;
+  nightHaltCharge?: number;
   nightHalt?: number; // Backwards compatibility
+  minDays?: number; // Added missing property
+  extraKmCharge?: number; // Added missing property
   roundTripBasePrice?: number;
   roundTripPricePerKm?: number;
 }
