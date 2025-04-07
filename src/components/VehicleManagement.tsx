@@ -20,6 +20,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [isFixing, setIsFixing] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
   const [isInitializingDB, setIsInitializingDB] = useState(false);
+  const [isSyncingTables, setIsSyncingTables] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
@@ -144,6 +145,55 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       setIsResyncing(false);
     }
   }, [isResyncing]);
+  
+  // Function to sync tables
+  const handleSyncTables = async () => {
+    if (isSyncingTables) return;
+    
+    setIsSyncingTables(true);
+    setError(null);
+    
+    try {
+      toast.info('Syncing database tables...');
+      console.log('Syncing database tables...');
+      
+      // Clear the cache first
+      clearVehicleDataCache();
+      
+      // Call the fix-collation endpoint to repair all table collations
+      const response = await directVehicleOperation(
+        'api/admin/fix-collation.php',
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+      
+      if (response && response.status === 'success') {
+        const count = response.data?.fixedTables?.length || 0;
+        toast.success(`Successfully synced ${count} database tables`);
+        setError(null);
+        // Reset refresh count to trigger a new check
+        setRefreshCount(0);
+        
+        // Force a reload of vehicles after syncing the tables
+        await resyncVehicles();
+      } else {
+        toast.error('Failed to sync database tables');
+        console.error('Sync tables response:', response);
+      }
+    } catch (err) {
+      console.error('Error syncing tables:', err);
+      toast.error('Failed to sync database tables');
+    } finally {
+      setIsSyncingTables(false);
+    }
+  };
   
   const handleFixDatabase = async () => {
     setIsFixing(true);
@@ -307,18 +357,18 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={resyncVehicles}
-                disabled={isResyncing}
+                onClick={handleSyncTables}
+                disabled={isSyncingTables}
               >
-                {isResyncing ? 'Syncing...' : 'Resync Data'}
+                {isSyncingTables ? 'Syncing...' : 'Sync Tables'}
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={initializeDatabase}
-                disabled={isInitializingDB}
+                onClick={resyncVehicles}
+                disabled={isResyncing}
               >
-                {isInitializingDB ? 'Initializing...' : 'Initialize DB'}
+                {isResyncing ? 'Syncing...' : 'Resync Data'}
               </Button>
             </div>
           </AlertDescription>

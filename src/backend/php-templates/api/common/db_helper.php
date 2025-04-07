@@ -37,8 +37,9 @@ function getDbConnectionWithRetry($maxRetries = 3) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);
             }
             
-            // Set proper charset
+            // Set proper charset and collation
             $conn->set_charset("utf8mb4");
+            $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             
             return $conn;
         } catch (Exception $e) {
@@ -113,4 +114,42 @@ function logMessage($message, $logFile = 'api.log') {
     
     $timestamp = date('Y-m-d H:i:s');
     error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/' . $logFile);
+}
+
+/**
+ * Safely output a JSON response and exit
+ * 
+ * @param array $data Data to encode as JSON
+ * @param string $status Status of the response (success or error)
+ * @param string $message Optional message
+ * @return void This function exits the script
+ */
+function outputJsonResponse($data, $status = 'success', $message = '') {
+    // Clear any previous output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    // Set necessary headers
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    
+    $response = [
+        'status' => $status,
+        'timestamp' => time()
+    ];
+    
+    if (!empty($message)) {
+        $response['message'] = $message;
+    }
+    
+    if ($status === 'success') {
+        $response['data'] = $data;
+    } else {
+        $response['error'] = $data;
+    }
+    
+    echo json_encode($response);
+    exit;
 }
