@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,8 @@ import {
   updateLocalFares, 
   updateAirportFares,
   syncLocalFares,
-  syncAirportFares
+  syncAirportFares,
+  FareData
 } from "@/services/fareManagementService";
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2, AlertTriangle } from "lucide-react";
@@ -23,9 +23,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Define missing functions that are referenced in the form
-// These would typically come from fareUpdateService, but since they're not available
-// we need to implement them here to fix the TypeScript errors
 const updateOutstationFares = async (
   vehicleId: string,
   basePrice: number,
@@ -59,7 +56,6 @@ const updateOutstationFares = async (
   }
 };
 
-// Define missing functions for getting all fares
 const getAllOutstationFares = async () => {
   try {
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
@@ -121,7 +117,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
   const [allFares, setAllFares] = useState<Record<string, any>>({});
   const [loadingError, setLoadingError] = useState<string | null>(null);
   
-  // Outstation fare state
   const [basePrice, setBasePrice] = useState<number>(0);
   const [pricePerKm, setPricePerKm] = useState<number>(0);
   const [roundTripBasePrice, setRoundTripBasePrice] = useState<number>(0);
@@ -129,14 +124,12 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
   const [driverAllowance, setDriverAllowance] = useState<number>(300);
   const [nightHaltCharge, setNightHaltCharge] = useState<number>(700);
   
-  // Local fare state
   const [extraKmRate, setExtraKmRate] = useState<number>(0);
   const [extraHourRate, setExtraHourRate] = useState<number>(0);
   const [package4hr40km, setPackage4hr40km] = useState<number>(0);
   const [package8hr80km, setPackage8hr80km] = useState<number>(0);
   const [package12hr120km, setPackage12hr120km] = useState<number>(0);
   
-  // Airport fare state
   const [pickupPrice, setPickupPrice] = useState<number>(0);
   const [dropPrice, setDropPrice] = useState<number>(0);
   const [tier1Price, setTier1Price] = useState<number>(0);
@@ -151,10 +144,8 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
       try {
         console.log(`Loading vehicles for ${tripType} management...`);
         
-        // Array to collect all vehicles from different sources
         let allVehicles: {id: string, name: string}[] = [];
         
-        // First try to get vehicles from the direct API endpoint
         try {
           const apiResponse = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', {
             headers: {
@@ -164,7 +155,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
             data: {
               includeInactive: 'true',
               force_sync: 'true',
-              _t: Date.now() // Add timestamp to prevent caching
+              _t: Date.now()
             }
           });
           
@@ -185,7 +176,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           console.error("Error fetching from direct API:", apiError);
         }
         
-        // Try to get specific fare vehicles next
         if (tripType === 'outstation') {
           try {
             console.log("Fetching outstation fares directly");
@@ -193,7 +183,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
             console.log('Loaded outstation fares:', outFares);
             setAllFares(outFares);
             
-            // Add outstation fare vehicles that aren't already in the list
             Object.keys(outFares).forEach(vehicleId => {
               if (vehicleId && !allVehicles.some(v => v.id === vehicleId)) {
                 allVehicles.push({
@@ -207,7 +196,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
             console.error("Error loading outstation fares:", fareError);
           }
           
-          // If still not enough vehicles, try legacy endpoint
           if (allVehicles.length < 3) {
             try {
               const legacyResult = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'GET', {
@@ -240,7 +228,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
             const localFares = await getAllLocalFares();
             setAllFares(localFares);
             
-            // Add local fare vehicles that aren't already in the list
             Object.keys(localFares).forEach(vehicleId => {
               if (!allVehicles.some(v => v.id === vehicleId)) {
                 allVehicles.push({
@@ -258,7 +245,6 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
             const airportFares = await getAllAirportFares();
             setAllFares(airportFares);
             
-            // Add airport fare vehicles that aren't already in the list
             Object.keys(airportFares).forEach(vehicleId => {
               if (!allVehicles.some(v => v.id === vehicleId)) {
                 allVehicles.push({
@@ -273,11 +259,9 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           }
         }
         
-        // Also get the standard vehicle types as fallback
         try {
-          const vehicleTypes = await getVehicleTypes(true, true);
+          const vehicleTypes = await getVehicleTypes();
           
-          // Add vehicle types that aren't already in the list
           vehicleTypes.forEach(vType => {
             if (!allVehicles.some(v => v.id === vType.id)) {
               allVehicles.push(vType);
@@ -287,10 +271,8 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           console.error('Error loading vehicle types:', error);
         }
         
-        // Sort vehicles by name for better UX
         allVehicles.sort((a, b) => a.name.localeCompare(b.name));
         
-        // Remove any duplicates by ID
         const uniqueVehicles = allVehicles.filter((v, i, self) => 
           self.findIndex(x => x.id === v.id) === i
         );
@@ -414,19 +396,13 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        const packages = [
-          { hours: 4, km: 40, price: package4hr40km },
-          { hours: 8, km: 80, price: package8hr80km },
-          { hours: 12, km: 120, price: package12hr120km }
-        ];
-        
         await updateLocalFares({
           vehicleId: selectedVehicle,
-          priceExtraKm: extraKmRate,
-          priceExtraHour: extraHourRate,
           price4hrs40km: package4hr40km,
           price8hrs80km: package8hr80km,
-          price10hrs100km: package12hr120km
+          price10hrs100km: package12hr120km,
+          priceExtraHour: extraHourRate,
+          extraKmCharge: extraKmRate
         });
         
         toast.success(`Updated local fares for ${selectedVehicle}`);
@@ -439,8 +415,8 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         
         await updateAirportFares({
           vehicleId: selectedVehicle,
-          priceOneWay: pickupPrice,
-          priceRoundTrip: dropPrice,
+          pickupPrice: pickupPrice,
+          dropPrice: dropPrice,
           tier1Price: tier1Price,
           tier2Price: tier2Price,
           tier3Price: tier3Price,
