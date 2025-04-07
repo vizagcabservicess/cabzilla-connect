@@ -67,7 +67,7 @@ export {
   syncAirportFares
 } from '@/services/fareManagementService';
 
-// Export functions from vehicleDataService
+// Export getData function from vehicleDataService
 export { 
   getVehicleData,
   clearVehicleDataCache,

@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Info, Database } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
@@ -19,9 +20,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
   const [isFixing, setIsFixing] = useState(false);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [isResyncing, setIsResyncing] = useState(false);
-  const [isSyncingTables, setIsSyncingTables] = useState(false);
   const maxAttempts = 3;
 
+  // Function to force a reload of vehicles from persistent storage
   const resyncVehicles = useCallback(async () => {
     if (isResyncing) return;
     
@@ -29,8 +30,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       setIsResyncing(true);
       toast.info('Syncing vehicle data from persistent storage...');
       
+      // Clear the cache first
       clearVehicleDataCache();
       
+      // Call the reload-vehicles.php endpoint to force a reload from persistent storage
       const response = await directVehicleOperation(
         `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
         'GET',
@@ -47,9 +50,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       
       if (response && response.status === 'success') {
         toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
-        setRefreshAttempts(0);
-        setError(null);
+        setRefreshAttempts(0); // Reset attempts counter
+        setError(null); // Clear any errors
         
+        // Force a refresh of the current view
         setTimeout(() => {
           setLoaded(false);
           setLoaded(true);
@@ -65,50 +69,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
     }
   }, [isResyncing]);
 
-  const handleSyncTables = async () => {
-    if (isSyncingTables) return;
-    
-    setIsSyncingTables(true);
-    setError(null);
-    
-    try {
-      toast.info('Syncing database tables...');
-      console.log('Syncing database tables...');
-      
-      clearVehicleDataCache();
-      
-      const response = await directVehicleOperation(
-        'api/admin/fix-collation.php',
-        'GET',
-        {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        }
-      );
-      
-      if (response && response.status === 'success') {
-        const count = response.data?.fixedTables?.length || 0;
-        toast.success(`Successfully synced ${count} database tables`);
-        setError(null);
-        setRefreshAttempts(0);
-        
-        await resyncVehicles();
-      } else {
-        toast.error('Failed to sync database tables');
-        console.error('Sync tables response:', response);
-      }
-    } catch (err) {
-      console.error('Error syncing tables:', err);
-      toast.error('Failed to sync database tables');
-    } finally {
-      setIsSyncingTables(false);
-    }
-  };
-
+  // Function to fix database tables
   const tryFixDatabase = async () => {
     if (isFixing) return;
     
@@ -116,12 +77,14 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
     toast.info('Attempting to fix database tables...');
     
     try {
+      // Clear the vehicle data cache before fixing
       clearVehicleDataCache();
       
       const fixed = await fixDatabaseTables();
       
       if (fixed) {
         toast.success('Database tables fixed successfully. Try again.');
+        // Try loading data again
         try {
           const vehicleData = await directVehicleOperation(
             `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
@@ -138,17 +101,19 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           setLoaded(true);
           setError(null);
           
+          // Force a resync from persistent storage to ensure we have the latest data
           await resyncVehicles();
         } catch (loadErr) {
           console.error('Error loading vehicle data after fix:', loadErr);
+          // Try a resync as a backup plan
           await resyncVehicles();
         }
       } else {
+        // Try to resync from persistent storage even if the fix fails
         toast.warning('Database fix not fully successful. Trying to sync from persistent storage...');
         await resyncVehicles();
         
-        await handleSyncTables();
-        
+        // Even if fix fails, still show the management screen in preview mode
         if (isPreviewMode()) {
           console.log('In preview mode, proceeding despite database fix failure');
           setLoaded(true);
@@ -160,9 +125,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
     } catch (fixErr) {
       console.error('Error fixing database tables:', fixErr);
       
+      // Try to resync from persistent storage as a fallback
       toast.warning('Database fix failed. Trying to sync from persistent storage...');
       await resyncVehicles();
       
+      // Even if fix fails, still show the management screen in preview mode
       if (isPreviewMode()) {
         setLoaded(true);
         setError(null);
@@ -183,6 +150,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         setError(null);
         console.log(`Loading data for vehicle: ${vehicleId}`);
         
+        // Check if the vehicle exists first
         const response = await directVehicleOperation(
           `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
           'GET',
@@ -206,8 +174,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             return;
           }
           
+          // Try to resync from persistent storage before showing error
           await resyncVehicles();
           
+          // Check again after resync
           const retryResponse = await directVehicleOperation(
             `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
             'GET',
@@ -227,6 +197,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           
           setError('Failed to load vehicle data. The vehicle may not exist.');
           
+          // Try to fix database tables if we haven't exceeded max attempts
           if (refreshAttempts < maxAttempts) {
             setRefreshAttempts(prev => prev + 1);
             tryFixDatabase();
@@ -241,10 +212,12 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           return;
         }
         
+        // Try to resync from persistent storage before showing error
         await resyncVehicles();
         
         setError('Failed to load vehicle data. The vehicle may not exist.');
         
+        // Try to fix database tables if we haven't exceeded max attempts
         if (refreshAttempts < maxAttempts) {
           setRefreshAttempts(prev => prev + 1);
           tryFixDatabase();
@@ -273,18 +246,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleSyncTables}
-              disabled={isSyncingTables}
-            >
-              {isSyncingTables ? 'Syncing...' : 'Sync Tables'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
               onClick={resyncVehicles}
               disabled={isResyncing}
             >
-              {isResyncing ? 'Syncing...' : 'Sync Data'}
+              {isResyncing ? 'Syncing...' : 'Sync from Persistent Storage'}
             </Button>
           </div>
         </AlertDescription>
@@ -314,17 +279,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           >
             {isResyncing ? 'Syncing...' : 'Sync from Persistent Storage'}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncTables}
-            disabled={isSyncingTables}
-          >
-            {isSyncingTables ? 'Syncing...' : 'Sync Tables'}
-          </Button>
           <Info 
             className="h-4 w-4 text-blue-500 cursor-help" 
-            aria-label="If changes don't persist after refresh, click these buttons to reload data from persistent storage and fix database tables"
+            aria-label="If changes don't persist after refresh, click this button to reload data from persistent storage"
           />
         </div>
       </CardHeader>

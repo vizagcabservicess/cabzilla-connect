@@ -52,7 +52,7 @@ try {
         throw new Exception('Only POST method is allowed');
     }
 
-    // Get request data - check multiple sources to ensure we find the vehicle ID
+    // Get request data
     $postData = $_POST;
     
     // If no POST data, try to get it from the request body
@@ -94,23 +94,11 @@ try {
     $vehicleId = null;
     $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'id'];
     
-    // First check the direct data
     foreach ($possibleKeys as $key) {
         if (isset($postData[$key]) && !empty($postData[$key])) {
             $vehicleId = trim($postData[$key]);
             file_put_contents($logFile, "[$timestamp] Found vehicle ID in key '$key': $vehicleId\n", FILE_APPEND);
             break;
-        }
-    }
-    
-    // If still not found, check URL parameters
-    if (!$vehicleId) {
-        foreach ($possibleKeys as $key) {
-            if (isset($_GET[$key]) && !empty($_GET[$key])) {
-                $vehicleId = trim($_GET[$key]);
-                file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
-                break;
-            }
         }
     }
 
@@ -145,7 +133,7 @@ try {
     $checkResult = $conn->query($checkTableQuery);
     
     if (!$checkResult || $checkResult->num_rows === 0) {
-        // Create the table if it doesn't exist with the correct collation
+        // Create the table if it doesn't exist
         $createTableSql = "
             CREATE TABLE IF NOT EXISTS airport_transfer_fares (
                 id INT(11) NOT NULL AUTO_INCREMENT,
@@ -163,7 +151,8 @@ try {
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=" . DB_CHARSET . " COLLATE=" . DB_COLLATION;
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
         if (!$conn->query($createTableSql)) {
             throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
@@ -177,7 +166,7 @@ try {
     $checkVPResult = $conn->query($checkVPTableQuery);
     
     if (!$checkVPResult || $checkVPResult->num_rows === 0) {
-        // Create the table if it doesn't exist with the correct collation
+        // Create the table if it doesn't exist
         $createVPTableSql = "
             CREATE TABLE IF NOT EXISTS vehicle_pricing (
                 id INT(11) NOT NULL AUTO_INCREMENT,
@@ -196,7 +185,8 @@ try {
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
-            ) ENGINE=InnoDB DEFAULT CHARSET=" . DB_CHARSET . " COLLATE=" . DB_COLLATION;
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
         if (!$conn->query($createVPTableSql)) {
             throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
@@ -205,7 +195,7 @@ try {
         file_put_contents($logFile, "[$timestamp] Created vehicle_pricing table\n", FILE_APPEND);
     }
     
-    // First ensure the vehicle exists in vehicles table - with consistent collation
+    // First ensure the vehicle exists in vehicles table
     $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
     $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
     
@@ -319,30 +309,21 @@ try {
     }
     
     // Create a response with all relevant data
-    header('Content-Type: application/json');
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Airport fare updated successfully',
-        'data' => [
-            'vehicleId' => $vehicleId,
-            'vehicle_id' => $vehicleId,
-            'basePrice' => (float)$basePrice,
-            'pricePerKm' => (float)$pricePerKm,
-            'pickupPrice' => (float)$pickupPrice,
-            'dropPrice' => (float)$dropPrice,
-            'tier1Price' => (float)$tier1Price,
-            'tier2Price' => (float)$tier2Price,
-            'tier3Price' => (float)$tier3Price,
-            'tier4Price' => (float)$tier4Price,
-            'extraKmCharge' => (float)$extraKmCharge
-        ]
-    ]);
+    sendSuccessResponse([
+        'vehicleId' => $vehicleId,
+        'vehicle_id' => $vehicleId,
+        'basePrice' => (float)$basePrice,
+        'pricePerKm' => (float)$pricePerKm,
+        'pickupPrice' => (float)$pickupPrice,
+        'dropPrice' => (float)$dropPrice,
+        'tier1Price' => (float)$tier1Price,
+        'tier2Price' => (float)$tier2Price,
+        'tier3Price' => (float)$tier3Price,
+        'tier4Price' => (float)$tier4Price,
+        'extraKmCharge' => (float)$extraKmCharge
+    ], 'Airport fare updated successfully');
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage()
-    ]);
+    sendErrorResponse($e->getMessage());
 }
