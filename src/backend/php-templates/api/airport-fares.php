@@ -1,5 +1,11 @@
 
 <?php
+/**
+ * Airport Fares API
+ * 
+ * This endpoint retrieves airport transfer fare data for one or all vehicles.
+ */
+
 require_once '../config.php';
 
 // Set headers for CORS
@@ -13,7 +19,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: airport-fares.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -21,6 +27,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+// Setup error handling to return proper JSON responses
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
+// Create log directory
+$logDir = dirname(__FILE__) . '/../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+
+$logFile = $logDir . '/airport_fares_' . date('Y-m-d') . '.log';
+ini_set('error_log', $logFile);
+$timestamp = date('Y-m-d H:i:s');
 
 try {
     $conn = getDbConnection();
@@ -31,12 +52,12 @@ try {
     }
     
     // Get vehicle_id parameter if present
-    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
     
     // Log the request parameters
-    error_log("Airport fares request: " . json_encode([
+    file_put_contents($logFile, "[$timestamp] Airport fares request: " . json_encode([
         'vehicle_id' => $vehicleId
-    ]));
+    ]) . "\n", FILE_APPEND);
     
     // Check if airport_transfer_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
@@ -45,28 +66,28 @@ try {
     $airportTableExists = $checkResult && $checkResult->num_rows > 0;
     
     // Log which table will be used
-    error_log("Checking airport_transfer_fares table exists: " . ($airportTableExists ? 'yes' : 'no'));
+    file_put_contents($logFile, "[$timestamp] Checking airport_transfer_fares table exists: " . ($airportTableExists ? 'yes' : 'no') . "\n", FILE_APPEND);
     
     $query = "";
     $useAirportTable = false;
     
     if ($airportTableExists) {
-        // Check if the required columns exist
+        // Check if required columns exist
         $columnCheck = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
         $nightChargesExists = $columnCheck && $columnCheck->num_rows > 0;
         
         if (!$nightChargesExists) {
             // Add the missing columns if they don't exist
-            error_log("Adding missing night_charges column to airport_transfer_fares table");
-            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0");
+            file_put_contents($logFile, "[$timestamp] Adding missing night_charges column to airport_transfer_fares table\n", FILE_APPEND);
+            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
         }
         
         $columnCheck = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
         $extraWaitingChargesExists = $columnCheck && $columnCheck->num_rows > 0;
         
         if (!$extraWaitingChargesExists) {
-            error_log("Adding missing extra_waiting_charges column to airport_transfer_fares table");
-            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0");
+            file_put_contents($logFile, "[$timestamp] Adding missing extra_waiting_charges column to airport_transfer_fares table\n", FILE_APPEND);
+            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
         }
         
         // First check if the airport_transfer_fares table has data
@@ -75,7 +96,7 @@ try {
         $row = $countResult->fetch_assoc();
         $hasData = $row['count'] > 0;
         
-        error_log("airport_transfer_fares table has data: " . ($hasData ? 'yes' : 'no'));
+        file_put_contents($logFile, "[$timestamp] airport_transfer_fares table has data: " . ($hasData ? 'yes' : 'no') . "\n", FILE_APPEND);
         
         if ($hasData) {
             $useAirportTable = true;
@@ -93,8 +114,8 @@ try {
                     atf.tier3_price AS tier3Price,
                     atf.tier4_price AS tier4Price,
                     atf.extra_km_charge AS extraKmCharge,
-                    atf.night_charges AS nightCharges,
-                    atf.extra_waiting_charges AS extraWaitingCharges
+                    COALESCE(atf.night_charges, 150) AS nightCharges,
+                    COALESCE(atf.extra_waiting_charges, 100) AS extraWaitingCharges
                 FROM 
                     airport_transfer_fares atf
             ";
@@ -104,13 +125,13 @@ try {
                 $query .= " WHERE atf.vehicle_id = '$vehicleId'";
             }
             
-            error_log("Using airport_transfer_fares table with query: $query");
+            file_put_contents($logFile, "[$timestamp] Using airport_transfer_fares table with query: $query\n", FILE_APPEND);
         }
     }
     
     // Fallback to vehicle_pricing table if needed
     if (!$useAirportTable) {
-        error_log("Falling back to vehicle_pricing table");
+        file_put_contents($logFile, "[$timestamp] Falling back to vehicle_pricing table\n", FILE_APPEND);
         // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
@@ -125,8 +146,8 @@ try {
                 vp.airport_tier3_price AS tier3Price,
                 vp.airport_tier4_price AS tier4Price,
                 vp.airport_extra_km_charge AS extraKmCharge,
-                vp.airport_night_charges AS nightCharges,
-                vp.airport_extra_waiting_charges AS extraWaitingCharges
+                COALESCE(vp.airport_night_charges, 150) AS nightCharges,
+                COALESCE(vp.airport_extra_waiting_charges, 100) AS extraWaitingCharges
             FROM 
                 vehicle_pricing vp
             WHERE 
@@ -138,15 +159,15 @@ try {
             $query .= " AND vp.vehicle_id = '$vehicleId'";
         }
         
-        error_log("Using vehicle_pricing table with query: $query");
+        file_put_contents($logFile, "[$timestamp] Using vehicle_pricing table with query: $query\n", FILE_APPEND);
     }
     
     // Execute the query with error handling
-    error_log("Executing airport query: " . $query);
+    file_put_contents($logFile, "[$timestamp] Executing airport query: " . $query . "\n", FILE_APPEND);
     $result = $conn->query($query);
     
     if (!$result) {
-        error_log("Query failed: " . $conn->error);
+        file_put_contents($logFile, "[$timestamp] Query failed: " . $conn->error . "\n", FILE_APPEND);
         throw new Exception("Database query failed: " . $conn->error);
     }
     
@@ -158,7 +179,7 @@ try {
         // Skip entries with null ID
         if (!$id) continue;
         
-        error_log("Processing row for vehicle: $id");
+        file_put_contents($logFile, "[$timestamp] Processing row for vehicle: $id\n", FILE_APPEND);
         
         // Check if this row has any useful fare data
         $hasData = false;
@@ -170,7 +191,7 @@ try {
         }
         
         if (!$hasData) {
-            error_log("Skipping row for $id as it has no useful data");
+            file_put_contents($logFile, "[$timestamp] Skipping row for $id as it has no useful data\n", FILE_APPEND);
             continue;
         }
         
@@ -185,29 +206,31 @@ try {
             'tier3Price' => floatval($row['tier3Price'] ?? 0),
             'tier4Price' => floatval($row['tier4Price'] ?? 0),
             'extraKmCharge' => floatval($row['extraKmCharge'] ?? 0),
-            'nightCharges' => floatval($row['nightCharges'] ?? 0),
-            'extraWaitingCharges' => floatval($row['extraWaitingCharges'] ?? 0)
+            'nightCharges' => floatval($row['nightCharges'] ?? 150),
+            'extraWaitingCharges' => floatval($row['extraWaitingCharges'] ?? 100)
         ];
         
-        error_log("Fare data for $id: " . json_encode($fares[$id]));
+        file_put_contents($logFile, "[$timestamp] Fare data for $id: " . json_encode($fares[$id]) . "\n", FILE_APPEND);
     }
     
-    error_log("Total fares found: " . count($fares));
+    file_put_contents($logFile, "[$timestamp] Total fares found: " . count($fares) . "\n", FILE_APPEND);
     
     // Return response with debugging info
     echo json_encode([
+        'status' => 'success',
         'fares' => $fares,
         'timestamp' => time(),
         'sourceTable' => $useAirportTable ? 'airport_transfer_fares' : 'vehicle_pricing',
         'fareCount' => count($fares),
         'vehicleId' => $vehicleId
-    ]);
+    ], JSON_PRETTY_PRINT);
     
 } catch (Exception $e) {
-    error_log("Error in airport-fares.php: " . $e->getMessage());
+    file_put_contents($logFile, "[$timestamp] Error in airport-fares.php: " . $e->getMessage() . "\n", FILE_APPEND);
     http_response_code(500);
     echo json_encode([
-        'error' => $e->getMessage(),
+        'status' => 'error',
+        'message' => $e->getMessage(),
         'timestamp' => time()
-    ]);
+    ], JSON_PRETTY_PRINT);
 }

@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -776,30 +777,19 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
       localStorage.setItem('airport_fares', JSON.stringify(fares));
       localStorage.setItem('airport_fares_timestamp', now.toString());
       
-      return {
-        ...response.data.fares[vehicleId],
-        vehicleId,
-        nightCharges: response.data.fares[vehicleId].nightCharges || 0,
-        extraWaitingCharges: response.data.fares[vehicleId].extraWaitingCharges || 0
-      };
+      return response.data.fares[vehicleId];
     }
     
     // If direct fetch failed, try to get all fares
     console.warn(`No specific airport fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getAirportFares();
     if (allFares && allFares[vehicleId]) {
-      return {
-        ...allFares[vehicleId],
-        vehicleId,
-        nightCharges: allFares[vehicleId].nightCharges || 0,
-        extraWaitingCharges: allFares[vehicleId].extraWaitingCharges || 0
-      };
+      return allFares[vehicleId];
     }
     
     console.warn(`No airport fare found for vehicle ${vehicleId}`);
     // Return default values if no data found
     return {
-      vehicleId,
       basePrice: 0,
       pricePerKm: 0,
       pickupPrice: 0,
@@ -808,9 +798,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
       tier2Price: 0,
       tier3Price: 0,
       tier4Price: 0,
-      extraKmCharge: 0,
-      nightCharges: 0,
-      extraWaitingCharges: 0
+      extraKmCharge: 0
     };
   } catch (error) {
     console.error(`Error fetching airport fares for vehicle ${vehicleId}:`, error);
@@ -820,18 +808,12 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
     if (cachedFares) {
       const fares = JSON.parse(cachedFares);
       if (fares[vehicleId]) {
-        return {
-          ...fares[vehicleId],
-          vehicleId,
-          nightCharges: fares[vehicleId].nightCharges || 0,
-          extraWaitingCharges: fares[vehicleId].extraWaitingCharges || 0
-        };
+        return fares[vehicleId];
       }
     }
     
     // Return default values if error
     return {
-      vehicleId,
       basePrice: 0,
       pricePerKm: 0,
       pickupPrice: 0,
@@ -840,9 +822,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
       tier2Price: 0,
       tier3Price: 0,
       tier4Price: 0,
-      extraKmCharge: 0,
-      nightCharges: 0,
-      extraWaitingCharges: 0
+      extraKmCharge: 0
     };
   }
 }

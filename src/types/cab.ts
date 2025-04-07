@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -60,18 +59,15 @@ export interface LocalFare {
 }
 
 export interface AirportFare {
-  vehicleId: string;
   basePrice: number;
   pricePerKm: number;
-  pickupPrice: number;
   dropPrice: number;
-  tier1Price: number;
-  tier2Price: number;
-  tier3Price: number;
-  tier4Price: number;
+  pickupPrice: number;
+  tier1Price: number;   // 0-10 KM
+  tier2Price: number;   // 11-20 KM
+  tier3Price: number;   // 21-30 KM
+  tier4Price: number;   // 31+ KM
   extraKmCharge: number;
-  nightCharges: number;
-  extraWaitingCharges: number;
 }
 
 // Additional interfaces needed for the application
