@@ -31,7 +31,10 @@ export interface OutstationFareUpdate {
   basePrice: number;
   pricePerKm: number;
   driverAllowance: number;
-  nightHaltCharges: number;
+  nightHaltCharge: number;
+  // Add these properties to fix the TypeScript error
+  roundTripBasePrice?: number;
+  roundTripPricePerKm?: number;
 }
 
 /**
@@ -164,7 +167,10 @@ export async function updateOutstationFare(data: OutstationFareUpdate) {
       basePrice: data.basePrice || 0,
       pricePerKm: data.pricePerKm || 0,
       driverAllowance: data.driverAllowance || 0,
-      nightHaltCharges: data.nightHaltCharges || 0
+      nightHaltCharge: data.nightHaltCharge || 0,
+      // Include the optional round trip parameters if they exist
+      ...(data.roundTripBasePrice !== undefined && { roundTripBasePrice: data.roundTripBasePrice }),
+      ...(data.roundTripPricePerKm !== undefined && { roundTripPricePerKm: data.roundTripPricePerKm })
     };
     
     const response = await apiCall('api/admin/update-outstation-fare.php', {
