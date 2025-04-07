@@ -37,6 +37,7 @@ const AirportFareManagement: React.FC = () => {
       if (fareDatas && fareDatas.length > 0) {
         const fareData = fareDatas[0];
         console.log('Retrieved fare data:', fareData);
+        
         // Create a new object with explicit number conversions to ensure numeric values
         const cleanedFareData: FareData = {
           vehicleId: vehicleId,
@@ -51,6 +52,7 @@ const AirportFareManagement: React.FC = () => {
           tier4Price: parseFloat(String(fareData.tier4Price || 0)),
           extraKmCharge: parseFloat(String(fareData.extraKmCharge || 0))
         };
+        
         console.log('Cleaned fare data to display:', cleanedFareData);
         setFares(cleanedFareData);
         setInitialized(true);

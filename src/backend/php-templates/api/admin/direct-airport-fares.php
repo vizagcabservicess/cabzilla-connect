@@ -67,17 +67,17 @@ try {
         $query = "
             SELECT 
                 atf.id, 
-                atf.vehicle_id AS vehicleId,
+                atf.vehicle_id,
                 v.name,
-                CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
-                CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
-                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
-                CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
-                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
-                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
-                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
-                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
-                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
+                CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
+                CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
+                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
+                CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
+                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
+                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
+                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
+                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
+                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
@@ -90,17 +90,17 @@ try {
         $query = "
             SELECT 
                 atf.id, 
-                atf.vehicle_id AS vehicleId,
+                atf.vehicle_id,
                 v.name,
-                CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
-                CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
-                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
-                CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
-                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
-                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
-                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
-                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
-                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
+                CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
+                CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
+                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
+                CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
+                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
+                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
+                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
+                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
+                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
             FROM 
                 airport_transfer_fares atf
             LEFT JOIN 
@@ -122,18 +122,18 @@ try {
         // Clean up data - ensure values are properly cast to numeric values
         $fare = [
             'id' => (int)$row['id'],
-            'vehicleId' => $row['vehicleId'],
-            'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
-            'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
-            'basePrice' => (float)$row['basePrice'],
-            'pricePerKm' => (float)$row['pricePerKm'],
-            'pickupPrice' => (float)$row['pickupPrice'],
-            'dropPrice' => (float)$row['dropPrice'],
-            'tier1Price' => (float)$row['tier1Price'],
-            'tier2Price' => (float)$row['tier2Price'],
-            'tier3Price' => (float)$row['tier3Price'],
-            'tier4Price' => (float)$row['tier4Price'],
-            'extraKmCharge' => (float)$row['extraKmCharge']
+            'vehicleId' => $row['vehicle_id'],
+            'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
+            'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
+            'basePrice' => (float)$row['base_price'],
+            'pricePerKm' => (float)$row['price_per_km'],
+            'pickupPrice' => (float)$row['pickup_price'],
+            'dropPrice' => (float)$row['drop_price'],
+            'tier1Price' => (float)$row['tier1_price'],
+            'tier2Price' => (float)$row['tier2_price'],
+            'tier3Price' => (float)$row['tier3_price'],
+            'tier4Price' => (float)$row['tier4_price'],
+            'extraKmCharge' => (float)$row['extra_km_charge']
         ];
         
         $fares[] = $fare;
@@ -188,17 +188,17 @@ try {
             $refetchQuery = "
                 SELECT 
                     atf.id, 
-                    atf.vehicle_id AS vehicleId,
+                    atf.vehicle_id,
                     v.name,
-                    CAST(atf.base_price AS DECIMAL(10,2)) AS basePrice,
-                    CAST(atf.price_per_km AS DECIMAL(10,2)) AS pricePerKm,
-                    CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickupPrice,
-                    CAST(atf.drop_price AS DECIMAL(10,2)) AS dropPrice,
-                    CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1Price,
-                    CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2Price,
-                    CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3Price,
-                    CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4Price,
-                    CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extraKmCharge
+                    CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
+                    CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
+                    CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
+                    CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
+                    CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
+                    CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
+                    CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
+                    CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
+                    CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
                 FROM 
                     airport_transfer_fares atf
                 LEFT JOIN 
@@ -216,18 +216,18 @@ try {
                 if ($refetchResult && $row = $refetchResult->fetch_assoc()) {
                     $fare = [
                         'id' => (int)$row['id'],
-                        'vehicleId' => $row['vehicleId'],
-                        'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
-                        'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
-                        'basePrice' => (float)$row['basePrice'],
-                        'pricePerKm' => (float)$row['pricePerKm'],
-                        'pickupPrice' => (float)$row['pickupPrice'],
-                        'dropPrice' => (float)$row['dropPrice'],
-                        'tier1Price' => (float)$row['tier1Price'],
-                        'tier2Price' => (float)$row['tier2Price'],
-                        'tier3Price' => (float)$row['tier3Price'],
-                        'tier4Price' => (float)$row['tier4Price'],
-                        'extraKmCharge' => (float)$row['extraKmCharge']
+                        'vehicleId' => $row['vehicle_id'],
+                        'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
+                        'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
+                        'basePrice' => (float)$row['base_price'],
+                        'pricePerKm' => (float)$row['price_per_km'],
+                        'pickupPrice' => (float)$row['pickup_price'],
+                        'dropPrice' => (float)$row['drop_price'],
+                        'tier1Price' => (float)$row['tier1_price'],
+                        'tier2Price' => (float)$row['tier2_price'],
+                        'tier3Price' => (float)$row['tier3_price'],
+                        'tier4Price' => (float)$row['tier4_price'],
+                        'extraKmCharge' => (float)$row['extra_km_charge']
                     ];
                     
                     $fares[] = $fare;
