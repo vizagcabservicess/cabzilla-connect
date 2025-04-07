@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save, Database } from "lucide-react";
+import { AlertCircle, RefreshCw, Save, Database, ChevronDown } from "lucide-react";
 import { 
   fetchLocalFares, 
   fetchAirportFares, 
@@ -18,6 +18,13 @@ import {
   syncAirportFares, 
   initializeDatabaseTables 
 } from '@/services/fareManagementService';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface FareManagementProps {
   vehicleId: string;
@@ -62,6 +69,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     vehicleId: vehicleId,
     vehicle_id: vehicleId
   });
+  const [selectedVehicle, setSelectedVehicle] = useState<string>(vehicleId || '');
+  const [availableVehicles, setAvailableVehicles] = useState<{id: string, name: string}[]>([]);
   
   const lastFetchTime = useRef<number>(0);
   const requestInProgress = useRef<boolean>(false);
@@ -72,6 +81,39 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const lastSaveTimeRef = useRef<number>(0);
   const refreshCooldownMs = 5000; // 5 seconds between refreshes
   const saveCooldownMs = 2000; // 2 seconds between saves
+  
+  // Fetch available vehicles for selection
+  const fetchAvailableVehicles = async () => {
+    try {
+      console.log("Fetching available vehicles...");
+      const response = await directVehicleOperation('GET', 'admin/get-vehicles.php', {});
+      
+      if (response && response.vehicles && Array.isArray(response.vehicles)) {
+        const vehicles = response.vehicles.map((v: any) => ({
+          id: v.vehicle_id || v.id,
+          name: v.name || v.vehicle_id || v.id
+        }));
+        console.log("Available vehicles:", vehicles);
+        setAvailableVehicles(vehicles);
+        
+        // If no vehicle is selected but we have vehicles available, select the first one
+        if ((!selectedVehicle || selectedVehicle === '') && vehicles.length > 0) {
+          const firstVehicle = vehicles[0].id;
+          console.log("Auto-selecting first vehicle:", firstVehicle);
+          setSelectedVehicle(firstVehicle);
+          setFareData(prev => ({
+            ...prev,
+            vehicleId: firstVehicle,
+            vehicle_id: firstVehicle
+          }));
+        }
+      } else {
+        console.warn("No vehicles returned or invalid format:", response);
+      }
+    } catch (err) {
+      console.error("Error fetching vehicles:", err);
+    }
+  };
   
   const loadFareData = async () => {
     const now = Date.now();
@@ -90,7 +132,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
-    if (!vehicleId || vehicleId.trim() === '') {
+    const effectiveVehicleId = selectedVehicle || vehicleId;
+    
+    if (!effectiveVehicleId || effectiveVehicleId.trim() === '') {
       setError('No vehicle selected');
       return;
     }
@@ -106,10 +150,12 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     try {
       let result: FareData[] = [];
       
+      console.log(`Loading ${fareType} fare data for vehicle ID: ${effectiveVehicleId}`);
+      
       if (fareType === 'local') {
-        result = await fetchLocalFares(vehicleId);
+        result = await fetchLocalFares(effectiveVehicleId);
       } else if (fareType === 'airport') {
-        result = await fetchAirportFares(vehicleId);
+        result = await fetchAirportFares(effectiveVehicleId);
       }
       
       if (result && result.length > 0) {
@@ -118,8 +164,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         
         const updatedFare = {
           ...loadedFare,
-          vehicleId: vehicleId,
-          vehicle_id: vehicleId
+          vehicleId: effectiveVehicleId,
+          vehicle_id: effectiveVehicleId
         };
         
         setFareData(updatedFare);
@@ -128,8 +174,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         console.warn('No fare data returned:', result);
         
         setFareData({ 
-          vehicleId,
-          vehicle_id: vehicleId 
+          vehicleId: effectiveVehicleId,
+          vehicle_id: effectiveVehicleId 
         });
         
         setError(`No ${fareType} fare data found for this vehicle.`);
@@ -139,8 +185,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       setError(`Failed to load fare data. ${err instanceof Error ? err.message : ''}`);
       
       setFareData({ 
-        vehicleId,
-        vehicle_id: vehicleId 
+        vehicleId: effectiveVehicleId,
+        vehicle_id: effectiveVehicleId
       });
     } finally {
       if (mountedRef.current) {
@@ -157,8 +203,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
-    if (!vehicleId || vehicleId.trim() === '' || isSaving) {
-      if (!vehicleId || vehicleId.trim() === '') {
+    const effectiveVehicleId = selectedVehicle || vehicleId;
+    
+    if (!effectiveVehicleId || effectiveVehicleId.trim() === '' || isSaving) {
+      if (!effectiveVehicleId || effectiveVehicleId.trim() === '') {
         setError("Vehicle ID is missing. Cannot save fares.");
       }
       return;
@@ -171,8 +219,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     try {
       const dataToSave = {
         ...fareData,
-        vehicleId: vehicleId,
-        vehicle_id: vehicleId
+        vehicleId: effectiveVehicleId,
+        vehicle_id: effectiveVehicleId
       };
       
       console.log(`Saving ${fareType} fare data:`, dataToSave);
@@ -232,6 +280,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         } else {
           toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
           
+          // Refresh vehicle list after sync
+          await fetchAvailableVehicles();
+          
           fetchAttempts.current = 0;
           
           setTimeout(() => {
@@ -278,6 +329,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             await syncLocalFares();
           }
           toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced after initialization`);
+          
+          // Refresh vehicle list after initialization
+          await fetchAvailableVehicles();
         } catch (syncError) {
           console.warn('Warning: Post-init sync failed:', syncError);
           // Continue anyway
@@ -312,28 +366,49 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setFareData(prev => ({
       ...prev,
       [name]: numericValue,
-      vehicleId: vehicleId,
-      vehicle_id: vehicleId
+      vehicleId: selectedVehicle || vehicleId,
+      vehicle_id: selectedVehicle || vehicleId
     }));
+  };
+  
+  const handleVehicleChange = (value: string) => {
+    console.log("Selected vehicle changed to:", value);
+    setSelectedVehicle(value);
+    setFareData(prev => ({
+      ...prev,
+      vehicleId: value,
+      vehicle_id: value
+    }));
+    
+    // Load fare data for the selected vehicle
+    fetchAttempts.current = 0;
+    setTimeout(() => loadFareData(), 100);
   };
   
   useEffect(() => {
     mountedRef.current = true;
     fetchAttempts.current = 0;
     
+    // Initialize vehicle selection
+    setSelectedVehicle(vehicleId || '');
     setFareData(prev => ({
       ...prev,
       vehicleId: vehicleId,
       vehicle_id: vehicleId
     }));
     
-    if (vehicleId && vehicleId.trim() !== '') {
-      initializeDatabaseTables().then(() => {
+    // First fetch available vehicles
+    fetchAvailableVehicles().then(() => {
+      // Then initialize database tables
+      return initializeDatabaseTables();
+    }).then(() => {
+      // Finally load fare data
+      if (vehicleId && vehicleId.trim() !== '') {
         loadFareData();
-      }).catch(err => {
-        console.error('Error during component initialization:', err);
-      });
-    }
+      }
+    }).catch(err => {
+      console.error('Error during component initialization:', err);
+    });
     
     const handleFareDataUpdated = (event: Event) => {
       if (!mountedRef.current) return;
@@ -341,7 +416,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       const customEvent = event as CustomEvent;
       const detail = customEvent.detail;
       
-      if (detail && detail.fareType === fareType && detail.vehicleId === vehicleId) {
+      if (detail && detail.fareType === fareType && detail.vehicleId === (selectedVehicle || vehicleId)) {
         console.log('Fare data updated externally, reloading...');
         fetchAttempts.current = 0;
         loadFareData();
@@ -355,6 +430,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       window.removeEventListener('fare-data-updated', handleFareDataUpdated);
     };
   }, [vehicleId, fareType]);
+  
+  useEffect(() => {
+    // When selectedVehicle changes, update the fare data
+    if (selectedVehicle) {
+      setFareData(prev => ({
+        ...prev,
+        vehicleId: selectedVehicle,
+        vehicle_id: selectedVehicle
+      }));
+    }
+  }, [selectedVehicle]);
   
   const renderFareFields = () => {
     if (fareType === 'local') {
@@ -552,6 +638,29 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         )}
         
         <div className="space-y-6">
+          <div className="mb-6">
+            <Label htmlFor="vehicle-select">Select Vehicle</Label>
+            <Select 
+              value={selectedVehicle} 
+              onValueChange={handleVehicleChange}
+            >
+              <SelectTrigger id="vehicle-select" className="w-full">
+                <SelectValue placeholder="Select a vehicle" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableVehicles.length > 0 ? (
+                  availableVehicles.map(vehicle => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-vehicles" disabled>No vehicles available</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          
           {renderFareFields()}
         </div>
       </CardContent>
@@ -561,7 +670,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           <Button 
             variant="outline"
             onClick={loadFareData}
-            disabled={isLoading || !vehicleId}
+            disabled={isLoading || !selectedVehicle}
           >
             {isLoading ? <Spinner className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Refresh
@@ -570,7 +679,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           <Button 
             variant="outline"
             onClick={syncFares}
-            disabled={isSyncingFares || !vehicleId}
+            disabled={isSyncingFares}
           >
             {isSyncingFares ? <Spinner className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Sync Tables
@@ -588,7 +697,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         
         <Button 
           onClick={saveFareData}
-          disabled={isSaving || !vehicleId}
+          disabled={isSaving || !selectedVehicle}
         >
           {isSaving ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
           Save Changes
