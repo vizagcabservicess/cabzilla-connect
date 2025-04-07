@@ -24,6 +24,9 @@ $timestamp = date('Y-m-d H:i:s');
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
 
+// Run the DB setup SQL to ensure all tables exist
+include_once __DIR__ . '/db_setup.php';
+
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
 
@@ -74,11 +77,11 @@ try {
     // Check required fields - look for vehicle ID in multiple possible fields
     $vehicleId = null;
     if (isset($postData['vehicleId']) && !empty($postData['vehicleId'])) {
-        $vehicleId = $postData['vehicleId'];
+        $vehicleId = trim($postData['vehicleId']);
     } elseif (isset($postData['vehicle_id']) && !empty($postData['vehicle_id'])) {
-        $vehicleId = $postData['vehicle_id'];
+        $vehicleId = trim($postData['vehicle_id']);
     } elseif (isset($postData['id']) && !empty($postData['id'])) {
-        $vehicleId = $postData['id'];
+        $vehicleId = trim($postData['id']);
     }
 
     if (!$vehicleId) {
@@ -110,67 +113,33 @@ try {
     
     file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
     
-    // Check if airport_transfer_fares table exists
-    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $airportTableExists = $checkTableStmt && $checkTableStmt->num_rows > 0;
+    // First ensure the vehicle exists in vehicles table
+    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
+    $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
     
-    if (!$airportTableExists) {
-        // Create the table if it doesn't exist
-        $createTableSql = "
-            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        if (!$conn->query($createTableSql)) {
-            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
-        }
-        
-        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
-    }
-    
-    // Check if vehicle exists in vehicles table, add it if it doesn't
-    $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?");
     if (!$checkVehicleStmt) {
-        throw new Exception("Prepare check vehicle statement failed: " . $conn->error);
+        throw new Exception("Prepare statement failed for vehicle check: " . $conn->error);
     }
     
     $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
     $checkVehicleStmt->execute();
-    $checkResult = $checkVehicleStmt->get_result();
+    $checkVehicleResult = $checkVehicleStmt->get_result();
     
-    if ($checkResult->num_rows === 0) {
-        // Create a default vehicle entry if it doesn't exist
+    // If vehicle doesn't exist, create it
+    if ($checkVehicleResult->num_rows === 0) {
         $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-        $insertVehicleSql = "
-            INSERT INTO vehicles 
-            (vehicle_id, name, is_active) 
-            VALUES (?, ?, 1)
-        ";
         
-        $insertVehicleStmt = $conn->prepare($insertVehicleSql);
+        $insertVehicleQuery = "INSERT INTO vehicles (id, vehicle_id, name, is_active) VALUES (?, ?, ?, 1)";
+        $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+        
         if (!$insertVehicleStmt) {
-            throw new Exception("Prepare insert vehicle statement failed: " . $conn->error);
+            throw new Exception("Prepare statement failed for vehicle insert: " . $conn->error);
         }
         
-        $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
+        $insertVehicleStmt->bind_param("sss", $vehicleId, $vehicleId, $vehicleName);
         $insertVehicleStmt->execute();
         
-        file_put_contents($logFile, "[$timestamp] Created new vehicle entry for: $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
     }
     
     // Insert or update airport_transfer_fares table
@@ -216,87 +185,6 @@ try {
     }
     
     file_put_contents($logFile, "[$timestamp] Updated airport_transfer_fares for vehicle: $vehicleId\n", FILE_APPEND);
-    
-    // Check if vehicle_pricing table exists and create it if it doesn't
-    $checkVehiclePricingStmt = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-    $vehiclePricingExists = $checkVehiclePricingStmt && $checkVehiclePricingStmt->num_rows > 0;
-    
-    if (!$vehiclePricingExists) {
-        $createVehiclePricingSql = "
-            CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                trip_type VARCHAR(20) NOT NULL,
-                airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        if (!$conn->query($createVehiclePricingSql)) {
-            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
-        }
-        
-        file_put_contents($logFile, "[$timestamp] Created vehicle_pricing table\n", FILE_APPEND);
-    }
-    
-    // Also update vehicle_pricing table for compatibility
-    $updateVehiclePricingSql = "
-        INSERT INTO vehicle_pricing 
-        (vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price, 
-        airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
-        airport_tier4_price, airport_extra_km_charge, updated_at) 
-        VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        ON DUPLICATE KEY UPDATE 
-        airport_base_price = VALUES(airport_base_price),
-        airport_price_per_km = VALUES(airport_price_per_km),
-        airport_pickup_price = VALUES(airport_pickup_price),
-        airport_drop_price = VALUES(airport_drop_price),
-        airport_tier1_price = VALUES(airport_tier1_price),
-        airport_tier2_price = VALUES(airport_tier2_price),
-        airport_tier3_price = VALUES(airport_tier3_price),
-        airport_tier4_price = VALUES(airport_tier4_price),
-        airport_extra_km_charge = VALUES(airport_extra_km_charge),
-        updated_at = NOW()
-    ";
-    
-    $updateVehiclePricingStmt = $conn->prepare($updateVehiclePricingSql);
-    if (!$updateVehiclePricingStmt) {
-        throw new Exception("Prepare vehicle_pricing update statement failed: " . $conn->error);
-    }
-    
-    $updateVehiclePricingStmt->bind_param(
-        "sddddddddd", 
-        $vehicleId, 
-        $basePrice, 
-        $pricePerKm, 
-        $pickupPrice, 
-        $dropPrice, 
-        $tier1Price, 
-        $tier2Price, 
-        $tier3Price, 
-        $tier4Price, 
-        $extraKmCharge
-    );
-    
-    if (!$updateVehiclePricingStmt->execute()) {
-        throw new Exception("Failed to update vehicle_pricing: " . $updateVehiclePricingStmt->error);
-    }
-    
-    file_put_contents($logFile, "[$timestamp] Updated vehicle_pricing for vehicle: $vehicleId\n", FILE_APPEND);
-    
-    // Close database connection
-    $conn->close();
     
     // Create a response with all relevant data
     $response = [

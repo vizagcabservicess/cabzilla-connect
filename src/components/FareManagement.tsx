@@ -7,8 +7,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save } from "lucide-react";
-import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares } from '@/services/fareManagementService';
+import { AlertCircle, RefreshCw, Save, Database } from "lucide-react";
+import { 
+  fetchLocalFares, 
+  fetchAirportFares, 
+  updateLocalFares, 
+  updateAirportFares, 
+  syncLocalFares, 
+  syncAirportFares, 
+  initializeDatabaseTables 
+} from '@/services/fareManagementService';
 
 interface FareManagementProps {
   vehicleId: string;
@@ -47,6 +55,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingFares, setIsSyncingFares] = useState(false);
+  const [isInitializingDB, setIsInitializingDB] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fareData, setFareData] = useState<FareData>({
     vehicleId: vehicleId,
@@ -208,22 +217,13 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      let endpoint = '';
+      let result;
       
       if (fareType === 'local') {
-        endpoint = 'api/admin/sync-local-fares.php';
+        result = await syncLocalFares();
       } else if (fareType === 'airport') {
-        endpoint = 'api/admin/sync-airport-fares.php';
+        result = await syncAirportFares();
       }
-      
-      console.log(`Syncing ${fareType} fares from database tables`);
-      
-      const result = await directVehicleOperation(endpoint, 'GET', {
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Debug': 'true'
-        }
-      });
       
       if (result && (result.status === 'success' || result.status === 'throttled')) {
         if (result.status === 'throttled') {
@@ -255,6 +255,54 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
+  const initializeDatabase = async () => {
+    if (isInitializingDB) return;
+    
+    setIsInitializingDB(true);
+    setError(null);
+    toast.info("Initializing database tables...");
+    
+    try {
+      const success = await initializeDatabaseTables();
+      
+      if (success) {
+        toast.success("Database tables initialized successfully");
+        fetchAttempts.current = 0;
+        
+        // After successful initialization, sync fares
+        try {
+          if (fareType === 'airport') {
+            await syncAirportFares();
+          } else {
+            await syncLocalFares();
+          }
+          toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced after initialization`);
+        } catch (syncError) {
+          console.warn('Warning: Post-init sync failed:', syncError);
+          // Continue anyway
+        }
+        
+        // Then reload fare data
+        setTimeout(() => {
+          if (mountedRef.current) {
+            loadFareData();
+          }
+        }, 1500);
+      } else {
+        toast.error("Failed to initialize database tables");
+        setError("Failed to initialize database tables");
+      }
+    } catch (err) {
+      console.error('Error initializing database:', err);
+      toast.error('Failed to initialize database');
+      setError(`Failed to initialize database. ${err instanceof Error ? err.message : ''}`);
+    } finally {
+      if (mountedRef.current) {
+        setIsInitializingDB(false);
+      }
+    }
+  };
+  
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     
@@ -279,7 +327,11 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }));
     
     if (vehicleId && vehicleId.trim() !== '') {
-      loadFareData();
+      initializeDatabaseTables().then(() => {
+        loadFareData();
+      }).catch(err => {
+        console.error('Error during component initialization:', err);
+      });
     }
     
     const handleFareDataUpdated = (event: Event) => {
@@ -374,23 +426,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         <>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="priceOneWay">One Way Transfer (₹)</Label>
+              <Label htmlFor="basePrice">Base Price (₹)</Label>
               <Input
-                id="priceOneWay"
-                name="priceOneWay"
+                id="basePrice"
+                name="basePrice"
                 type="number"
-                value={fareData.priceOneWay || 0}
+                value={fareData.basePrice || 0}
                 onChange={handleInputChange}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="priceRoundTrip">Round Trip Transfer (₹)</Label>
+              <Label htmlFor="pricePerKm">Price Per KM (₹)</Label>
               <Input
-                id="priceRoundTrip"
-                name="priceRoundTrip"
+                id="pricePerKm"
+                name="pricePerKm"
                 type="number"
-                value={fareData.priceRoundTrip || 0}
+                value={fareData.pricePerKm || 0}
                 onChange={handleInputChange}
               />
             </div>
@@ -398,23 +450,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+              <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
               <Input
-                id="nightCharges"
-                name="nightCharges"
+                id="pickupPrice"
+                name="pickupPrice"
                 type="number"
-                value={fareData.nightCharges || 0}
+                value={fareData.pickupPrice || 0}
                 onChange={handleInputChange}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹/hr)</Label>
+              <Label htmlFor="dropPrice">Drop Price (₹)</Label>
               <Input
-                id="extraWaitingCharges"
-                name="extraWaitingCharges"
+                id="dropPrice"
+                name="dropPrice"
                 type="number"
-                value={fareData.extraWaitingCharges || 0}
+                value={fareData.dropPrice || 0}
                 onChange={handleInputChange}
               />
             </div>
@@ -433,7 +485,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tier2Price">Tier 2 Price (≤ 20km) (₹)</Label>
+              <Label htmlFor="tier2Price">Tier 2 Price (11-20km) (₹)</Label>
               <Input
                 id="tier2Price"
                 name="tier2Price"
@@ -446,7 +498,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="tier3Price">Tier 3 Price (≤ 30km) (₹)</Label>
+              <Label htmlFor="tier3Price">Tier 3 Price (21-30km) (₹)</Label>
               <Input
                 id="tier3Price"
                 name="tier3Price"
@@ -457,7 +509,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tier4Price">Tier 4 Price ({'>'}30km) (₹)</Label>
+              <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
               <Input
                 id="tier4Price"
                 name="tier4Price"
@@ -488,8 +540,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   };
   
   return (
-    <Card>
-      <CardContent className="p-6 space-y-4">
+    <Card className="w-full">
+      <CardContent className="p-6">
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
@@ -498,59 +550,48 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           </Alert>
         )}
         
-        {isLoading ? (
-          <div className="flex justify-center items-center py-8">
-            <Spinner size="lg" />
-            <span className="ml-2">Loading fare data...</span>
-          </div>
-        ) : (
-          <>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold capitalize">
-                {fareType} Fare Configuration
-              </h3>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={syncFares}
-                disabled={isSyncingFares || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingFares ? 'animate-spin' : ''}`} />
-                Sync Fares
-              </Button>
-            </div>
-            
-            {renderFareFields()}
-            
-            {!vehicleId && (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">Please select a vehicle to manage fares.</p>
-              </div>
-            )}
-          </>
-        )}
+        <div className="space-y-6">
+          {renderFareFields()}
+        </div>
       </CardContent>
       
-      <CardFooter className="bg-muted/50 px-6 py-4 border-t">
-        <div className="flex justify-end w-full">
-          <Button
-            onClick={saveFareData}
-            disabled={isSaving || isLoading || !vehicleId || (Date.now() - lastSaveTimeRef.current < saveCooldownMs)}
-            className="mr-2"
-          >
-            {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Changes
-          </Button>
-          <Button
+      <CardFooter className="px-6 py-4 border-t flex justify-between">
+        <div className="flex gap-2">
+          <Button 
             variant="outline"
             onClick={loadFareData}
-            disabled={isLoading || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
+            disabled={isLoading || !vehicleId}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? <Spinner className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Refresh
           </Button>
+          
+          <Button 
+            variant="outline"
+            onClick={syncFares}
+            disabled={isSyncingFares || !vehicleId}
+          >
+            {isSyncingFares ? <Spinner className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Sync Tables
+          </Button>
+          
+          <Button 
+            variant="outline"
+            onClick={initializeDatabase}
+            disabled={isInitializingDB}
+          >
+            {isInitializingDB ? <Spinner className="mr-2 h-4 w-4" /> : <Database className="mr-2 h-4 w-4" />}
+            Initialize DB
+          </Button>
         </div>
+        
+        <Button 
+          onClick={saveFareData}
+          disabled={isSaving || !vehicleId}
+        >
+          {isSaving ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+          Save Changes
+        </Button>
       </CardFooter>
     </Card>
   );

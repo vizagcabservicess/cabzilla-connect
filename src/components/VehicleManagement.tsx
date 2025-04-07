@@ -4,11 +4,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle, Info, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
+import { initializeDatabaseTables } from '@/services/fareManagementService';
 
 interface VehicleManagementProps {
   vehicleId: string;
@@ -18,9 +19,76 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [error, setError] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
+  const [isInitializingDB, setIsInitializingDB] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
+  
+  // Initialize database tables
+  const initializeDatabase = useCallback(async () => {
+    if (isInitializingDB) return;
+    
+    setIsInitializingDB(true);
+    setError(null);
+    
+    try {
+      toast.info('Initializing database tables...');
+      
+      // Clear the cache first
+      clearVehicleDataCache();
+      
+      // Use the initializeDatabaseTables function
+      const success = await initializeDatabaseTables();
+      
+      if (success) {
+        toast.success('Database tables initialized successfully');
+        setError(null);
+        // Reset refresh count to trigger a new check
+        setRefreshCount(0);
+        
+        // Force a reload of vehicles after fixing the database
+        await resyncVehicles();
+      } else {
+        toast.error('Failed to initialize database tables');
+        
+        // Try alternate method - direct API call
+        try {
+          console.log('Trying alternate init method...');
+          const result = await directVehicleOperation('api/admin/db_setup.php', 'GET', {
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          if (result && result.status === 'success') {
+            toast.success('Database initialized successfully with alternate method');
+            setError(null);
+            setRefreshCount(0);
+            
+            // Force a reload of vehicles after fixing the database
+            await resyncVehicles();
+          } else {
+            // Try one last method - reload from persistent storage
+            await resyncVehicles();
+          }
+        } catch (altError) {
+          console.error('Error with alternate init:', altError);
+          // Try resyncing as a last resort
+          await resyncVehicles();
+        }
+      }
+    } catch (err) {
+      console.error('Error initializing database:', err);
+      toast.error('Failed to initialize database tables');
+      // Try resyncing as a last resort
+      await resyncVehicles();
+    } finally {
+      setIsInitializingDB(false);
+    }
+  }, [isInitializingDB]);
   
   // Function to force a reload of vehicles from persistent storage
   const resyncVehicles = useCallback(async () => {
@@ -76,6 +144,86 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       setIsResyncing(false);
     }
   }, [isResyncing]);
+  
+  const handleFixDatabase = async () => {
+    setIsFixing(true);
+    setError(null);
+    
+    try {
+      toast.info('Attempting to fix database...');
+      console.log('Fixing database...');
+      
+      // Clear the vehicle data cache before fixing the database
+      clearVehicleDataCache();
+      
+      // First try to initialize database tables
+      await initializeDatabase();
+      
+      // Use the enhanced fixDatabaseTables function
+      const fixed = await fixDatabaseTables();
+      
+      if (fixed) {
+        toast.success('Database fixed successfully');
+        setError(null);
+        // Reset refresh count to trigger a new check
+        setRefreshCount(0);
+        
+        // Force a reload of vehicles after fixing the database
+        await resyncVehicles();
+      } else {
+        toast.error('Failed to fix database');
+        
+        // Try alternate method - direct API call
+        try {
+          console.log('Trying alternate fix method...');
+          const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          if (result && result.status === 'success') {
+            toast.success('Database fixed successfully with alternate method');
+            setError(null);
+            setRefreshCount(0);
+            
+            // Force a reload of vehicles after fixing the database
+            await resyncVehicles();
+          } else {
+            // Try one last method - reload from persistent storage
+            await resyncVehicles();
+          }
+        } catch (altError) {
+          console.error('Error with alternate fix:', altError);
+          // Try resyncing as a last resort
+          await resyncVehicles();
+        }
+      }
+    } catch (err) {
+      console.error('Error fixing database:', err);
+      toast.error('Failed to fix database tables');
+      // Try resyncing as a last resort
+      await resyncVehicles();
+    } finally {
+      setIsFixing(false);
+    }
+  };
+  
+  // Initialize database on component mount
+  useEffect(() => {
+    const runInitialization = async () => {
+      try {
+        await initializeDatabase();
+      } catch (err) {
+        console.error('Failed to initialize database on mount:', err);
+      }
+    };
+    
+    runInitialization();
+  }, [initializeDatabase]);
   
   // Check if vehicle exists
   useEffect(() => {
@@ -139,70 +287,6 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     }
   }, [vehicleId, refreshCount, resyncVehicles]);
   
-  const handleFixDatabase = async () => {
-    setIsFixing(true);
-    setError(null);
-    
-    try {
-      toast.info('Attempting to fix database...');
-      console.log('Fixing database...');
-      
-      // Clear the vehicle data cache before fixing the database
-      clearVehicleDataCache();
-      
-      // Use the enhanced fixDatabaseTables function
-      const fixed = await fixDatabaseTables();
-      
-      if (fixed) {
-        toast.success('Database fixed successfully');
-        setError(null);
-        // Reset refresh count to trigger a new check
-        setRefreshCount(0);
-        
-        // Force a reload of vehicles after fixing the database
-        await resyncVehicles();
-      } else {
-        toast.error('Failed to fix database');
-        
-        // Try alternate method - direct API call
-        try {
-          console.log('Trying alternate fix method...');
-          const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
-            headers: {
-              'X-Admin-Mode': 'true',
-              'X-Debug': 'true',
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
-            }
-          });
-          
-          if (result && result.status === 'success') {
-            toast.success('Database fixed successfully with alternate method');
-            setError(null);
-            setRefreshCount(0);
-            
-            // Force a reload of vehicles after fixing the database
-            await resyncVehicles();
-          } else {
-            // Try one last method - reload from persistent storage
-            await resyncVehicles();
-          }
-        } catch (altError) {
-          console.error('Error with alternate fix:', altError);
-          // Try resyncing as a last resort
-          await resyncVehicles();
-        }
-      }
-    } catch (err) {
-      console.error('Error fixing database:', err);
-      toast.error('Failed to fix database tables');
-      // Try resyncing as a last resort
-      await resyncVehicles();
-    } finally {
-      setIsFixing(false);
-    }
-  };
-  
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
       {error && (
@@ -227,6 +311,14 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
                 disabled={isResyncing}
               >
                 {isResyncing ? 'Syncing...' : 'Resync Data'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={initializeDatabase}
+                disabled={isInitializingDB}
+              >
+                {isInitializingDB ? 'Initializing...' : 'Initialize DB'}
               </Button>
             </div>
           </AlertDescription>

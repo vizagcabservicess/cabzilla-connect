@@ -29,28 +29,31 @@ require_once __DIR__ . '/../utils/database.php';
 file_put_contents($logFile, "[$timestamp] Direct airport fares request received\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
 
+// Initialize response array
+$response = [
+    'status' => 'error',
+    'message' => 'No vehicle ID provided',
+    'debug' => [
+        'get_params' => $_GET,
+        'timestamp' => $timestamp
+    ]
+];
+
 // Get vehicle ID from query parameters - support multiple parameter names
 $vehicleId = null;
 $possibleKeys = ['vehicleId', 'vehicle_id', 'id'];
 
 foreach ($possibleKeys as $key) {
     if (isset($_GET[$key]) && !empty($_GET[$key])) {
-        $vehicleId = $_GET[$key];
+        $vehicleId = trim($_GET[$key]);
         file_put_contents($logFile, "[$timestamp] Found vehicle ID in '$key': $vehicleId\n", FILE_APPEND);
         break;
     }
 }
 
 if (!$vehicleId) {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID is required',
-        'debug' => [
-            'get_params' => $_GET,
-            'timestamp' => $timestamp
-        ]
-    ]);
+    file_put_contents($logFile, "[$timestamp] No vehicle ID found in request\n", FILE_APPEND);
+    echo json_encode($response);
     exit;
 }
 
@@ -64,40 +67,43 @@ try {
     
     file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
     
-    // Check if airport_transfer_fares table exists
-    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $airportTableExists = $checkTableStmt && $checkTableStmt->num_rows > 0;
+    // Run the DB setup SQL to ensure all tables exist
+    include_once __DIR__ . '/db_setup.php';
+    file_put_contents($logFile, "[$timestamp] Initialized database tables\n", FILE_APPEND);
+
+    // First ensure the vehicle exists in vehicles table
+    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
+    $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
     
-    if (!$airportTableExists) {
-        // Create the table if it doesn't exist
-        $createTableSql = "
-            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        if (!$conn->query($createTableSql)) {
-            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
-        }
-        
-        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+    if (!$checkVehicleStmt) {
+        throw new Exception("Prepare statement failed for vehicle check: " . $conn->error);
     }
     
-    // Query airport fares from database
+    $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+    $checkVehicleStmt->execute();
+    $checkVehicleResult = $checkVehicleStmt->get_result();
+    
+    // If vehicle doesn't exist, create it
+    if ($checkVehicleResult->num_rows === 0) {
+        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+        
+        $insertVehicleQuery = "INSERT INTO vehicles (id, vehicle_id, name, is_active) VALUES (?, ?, ?, 1)";
+        $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+        
+        if (!$insertVehicleStmt) {
+            throw new Exception("Prepare statement failed for vehicle insert: " . $conn->error);
+        }
+        
+        $insertVehicleStmt->bind_param("sss", $vehicleId, $vehicleId, $vehicleName);
+        $insertVehicleStmt->execute();
+        
+        file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
+    } else {
+        $vehicleRow = $checkVehicleResult->fetch_assoc();
+        file_put_contents($logFile, "[$timestamp] Found existing vehicle: " . json_encode($vehicleRow) . "\n", FILE_APPEND);
+    }
+    
+    // Now get airport fare for this vehicle
     $query = "
         SELECT 
             id,
@@ -184,7 +190,7 @@ try {
     $conn->close();
     
     // Return fare data
-    echo json_encode([
+    $response = [
         'status' => 'success',
         'message' => 'Airport fares retrieved successfully',
         'fares' => [$fare],
@@ -192,7 +198,9 @@ try {
             'vehicle_id' => $vehicleId,
             'timestamp' => time()
         ]
-    ]);
+    ];
+    
+    echo json_encode($response);
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
