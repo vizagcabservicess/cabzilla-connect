@@ -15,6 +15,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { authAPI } from '@/services/api';
+import { SignupRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { toast } from 'sonner';
 
@@ -31,7 +33,7 @@ export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const form = useForm<z.infer<typeof signupSchema>>({
+  const form = useForm<SignupRequest>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
       name: "",
@@ -41,7 +43,7 @@ export function SignupForm() {
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof signupSchema>) => {
+  const onSubmit = async (values: SignupRequest) => {
     setIsLoading(true);
     setError(null);
     
@@ -49,49 +51,8 @@ export function SignupForm() {
       // Show a toast to indicate signup is in progress
       const loadingToastId = toast.loading("Creating your account...");
       
-      console.log("Attempting signup with debug-login.php endpoint directly...");
-      
-      // Direct fetch call to debug-login.php with explicit parameters
-      const response = await fetch('/api/debug-login.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Cache-Control': 'no-cache'
-        },
-        body: JSON.stringify(values)
-      });
-      
-      console.log("Signup response status:", response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Signup failed with status: ${response.status}`);
-      }
-      
-      // Get the response text for debugging
-      const responseText = await response.text();
-      console.log("Signup response text:", responseText);
-      
-      // Parse the response
-      let data;
       try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
-      }
-      
-      console.log("Signup response data:", data);
-      
-      if (data.token) {
-        // Store auth data
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify({
-          ...data.user,
-          name: values.name,
-          email: values.email,
-          phone: values.phone
-        }));
+        const response = await authAPI.signup(values);
         
         // Success - update the loading toast
         toast.success("Account created successfully!", { id: loadingToastId });
@@ -106,8 +67,10 @@ export function SignupForm() {
         setTimeout(() => {
           navigate('/dashboard');
         }, 1000);
-      } else {
-        throw new Error("Signup failed: No token received");
+      } catch (signupError) {
+        // Update the loading toast to show error
+        toast.error("Signup failed", { id: loadingToastId });
+        throw signupError;
       }
     } catch (error) {
       console.error("Signup error:", error);

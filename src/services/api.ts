@@ -6,7 +6,6 @@ import {
   DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest,
   BookingUpdateRequest
 } from '@/types/api';
-import { getApiUrl } from '@/config/api';
 
 const API_BASE_URL = '/api';
 
@@ -87,109 +86,16 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      console.log('Starting login attempt with credentials:', { email: credentials.email, passwordLength: credentials.password?.length });
+      const response = await api.post('/login.php', credentials);
+      const data = response.data;
       
-      // HARDCODED PATH: Use the most direct and reliable path possible for login
-      const loginUrl = '/api/login.php';
-      
-      console.log(`Attempting login with hardcoded endpoint: ${loginUrl}`);
-      
-      // Try a fetch request to test if the endpoint is accessible
-      try {
-        const testResponse = await fetch(loginUrl, {
-          method: 'OPTIONS',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          },
-          cache: 'no-store'
-        });
-        
-        console.log('Login preflight check:', {
-          status: testResponse.status,
-          statusText: testResponse.statusText,
-        });
-      } catch (e) {
-        console.warn('Preflight check failed, proceeding anyway:', e);
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
       }
       
-      // Try direct fetch first for maximum reliability
-      try {
-        console.log('Attempting direct fetch to login endpoint');
-        const response = await fetch(loginUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(credentials),
-          cache: 'no-store'
-        });
-        
-        console.log('Direct fetch login response:', {
-          status: response.status,
-          statusText: response.statusText,
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Login response data:', data);
-          
-          if (data.token) {
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
-            console.log('Auth token and user data saved to localStorage');
-            return data;
-          } else {
-            throw new Error('No token in response');
-          }
-        }
-        throw new Error(`Login failed with status: ${response.status}`);
-      } catch (fetchError) {
-        console.warn('Direct fetch login failed, falling back to axios:', fetchError);
-        
-        // If direct fetch fails, try axios
-        const response = await axios.post(loginUrl, credentials, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Accept': 'application/json'
-          }
-        });
-        
-        const data = response.data;
-        console.log('Axios login response received:', { 
-          status: response.status,
-          hasToken: !!data.token,
-          userData: data.user ? 'User data present' : 'No user data'
-        });
-        
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          console.log('Auth token and user data saved to localStorage');
-        }
-        
-        return data;
-      }
+      return data;
     } catch (error) {
-      console.error('Login error details:', error);
-      
-      // More detailed error logging
-      if (axios.isAxiosError(error)) {
-        console.error('Axios error details:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          url: error.config?.url,
-          headers: error.config?.headers,
-          data: error.response?.data
-        });
-      }
-      
       return handleApiError(error);
     }
   },

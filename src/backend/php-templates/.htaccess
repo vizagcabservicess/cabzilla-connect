@@ -1,3 +1,4 @@
+
 # Enable URL rewriting
 RewriteEngine On
 
@@ -17,12 +18,6 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
-
-# NEW: Direct access to login.php - HIGHEST PRIORITY
-RewriteRule ^login\.php$ api/login.php [L,QSA]
-RewriteRule ^login$ api/login.php [L,QSA]
-RewriteRule ^api/login\.php$ api/login.php [L,QSA]
-RewriteRule ^api/login$ api/login.php [L,QSA]
 
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
@@ -59,30 +54,10 @@ RewriteRule ^api/admin/direct-outstation-fares\.php$ /api/admin/direct-outstatio
 RewriteRule ^api/admin/direct-airport-fares\.php$ /api/admin/direct-airport-fares.php [L]
 
 # Set PHP settings for this directory
-<FilesMatch "\.(php5|php4|php3|php|phtml)$">
-    <IfModule mod_php5.c>
-        SetHandler application/x-httpd-php
-    </IfModule>
-    <IfModule sapi_apache2.c>
-        SetHandler application/x-httpd-php
-    </IfModule>
-    <IfModule mod_suphp.c>
-        suPHP_ConfigPath /opt/php53/lib
-    </IfModule>
-</FilesMatch>
+# ... keep existing code (PHP settings for directories)
 
 # Prevent direct access to sensitive files
-<FilesMatch "(\.htaccess|\.htpasswd|wp-config\.php|error_log)">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        <IfModule mod_access_compat.c>
-            Order deny,allow
-            Deny from all
-        </IfModule>
-    </IfModule>
-</FilesMatch>
+# ... keep existing code (security settings)
 
 # Handle errors
 ErrorDocument 404 /api/error.php

@@ -14,7 +14,7 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Expires': '0',
     'Origin': window.location.origin,
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': 'application/json, */*'
+    'Accept': '*/*'
   };
 };
 
@@ -27,7 +27,7 @@ export const getForcedRequestConfig = () => {
     timeout: 60000, // Increased timeout for maximum reliability
     cache: 'no-store' as const,
     mode: 'cors' as const,
-    credentials: 'include' as const, // Send credentials for same-origin requests
+    credentials: 'omit' as const, // Don't send credentials for CORS
     keepalive: true, // Keep connection alive
     redirect: 'follow' as const, // Follow redirects
     referrerPolicy: 'no-referrer' as const // Don't send referrer for CORS
@@ -67,20 +67,15 @@ export const isOnline = (): boolean => {
  */
 export const safeFetch = async (endpoint: string, options: RequestInit = {}): Promise<Response> => {
   // Check if online
-  if (!navigator.onLine) {
+  if (!isOnline()) {
     throw new Error('No internet connection');
-  }
-  
-  // Special handling for login endpoint
-  if (endpoint.includes('login')) {
-    endpoint = '/api/login.php';
   }
   
   // Prepare enhanced options with CORS headers
   const enhancedOptions: RequestInit = {
     ...options,
     mode: 'cors',
-    credentials: 'include', // Changed to include for same-origin requests
+    credentials: 'omit',
     headers: {
       ...getBypassHeaders(),
       ...(options.headers || {})

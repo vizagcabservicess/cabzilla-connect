@@ -16,6 +16,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { authAPI } from '@/services/api';
+import { LoginRequest } from '@/types/api';
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -29,21 +32,28 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
+    // Display API URL for debugging
+    const url = import.meta.env.VITE_API_BASE_URL || '';
+    setApiUrl(url);
+    
     // Clear any stale tokens on login page load
     localStorage.removeItem('authToken');
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
     localStorage.removeItem('user');
     
-    // Test connection on component mount
-    testApiConnection();
+    // Only test connection on component mount if we have an API URL
+    if (url) {
+      testApiConnection();
+    }
   }, []);
 
-  const form = useForm<{email: string, password: string}>({
+  const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
@@ -55,25 +65,41 @@ export function LoginForm() {
     try {
       setConnectionStatus('testing');
       setIsTesting(true);
-      console.log('Testing API connection to /api/debug-login.php');
+      console.log(`Testing API connection to ${apiUrl}`);
       
-      // Make a simple GET request to test connection
-      const response = await fetch('/api/debug-login.php');
+      // Try OPTIONS request first (preflight)
+      const response = await fetch(`${apiUrl}/api/login`, {
+        method: 'OPTIONS',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        },
+        // Add cache busting
+        cache: 'no-store'
+      });
       
+      // Log response information for debugging
       console.log('API connection test response:', {
         status: response.status,
         statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
       });
       
       if (response.ok) {
         setConnectionStatus('success');
+        console.log('API connection test successful');
+        
         toast.success('API connection successful', {
           duration: 3000,
+          description: `Connected to ${apiUrl}`
         });
       } else {
         setConnectionStatus('failed');
+        console.error('API connection test failed with status:', response.status);
+        
         toast.error('API connection failed', {
-          description: `Server returned status ${response.status}`,
+          description: `Server returned status ${response.status}: ${response.statusText}`,
           duration: 5000,
         });
       }
@@ -90,62 +116,42 @@ export function LoginForm() {
     }
   };
 
-  const onSubmit = async (values: {email: string, password: string}) => {
+  const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
     setError(null);
     
     try {
+      // Display a toast to show login is in progress
       toast.loading('Logging in...', { id: 'login-toast' });
       
-      // Clear any existing tokens
+      // Clear any existing tokens first
       localStorage.removeItem('authToken');
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       
+      // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
-      // Use simplified debug login endpoint
-      const loginUrl = '/api/debug-login.php';
-      console.log(`Attempting login with endpoint: ${loginUrl}`);
+      // Use HTTP-only cookies to store authentication token
+      const response = await authAPI.login(values);
       
-      // Make the login request
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(values)
-      });
-      
-      console.log('Login response status:', response.status);
-      
-      // Get the response text for debugging
-      const responseText = await response.text();
-      console.log('Response text:', responseText);
-      
-      // Parse the response
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
-      }
-      
-      console.log('Login response data:', data);
-      
-      if (data.token) {
-        // Store the token and user data
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
+      if (response.token) {
+        // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
-          description: `Welcome back, ${data.user?.name || 'User'}!` 
+          description: `Welcome back, ${response.user?.name || 'User'}!` 
         });
         
-        // Redirect to dashboard
+        console.log("Login successful, token saved", { 
+          tokenLength: response.token.length,
+          tokenParts: response.token.split('.').length,
+          user: response.user?.id
+        });
+        
+        // Force a page reload to ensure fresh state
         setTimeout(() => {
-          navigate('/dashboard');
+          window.location.href = '/dashboard';
         }, 500);
       } else {
         throw new Error("Authentication failed: No token received");
@@ -153,19 +159,58 @@ export function LoginForm() {
     } catch (error) {
       console.error("Login error details:", error);
       
+      // Update toast to show error
       toast.error('Login Failed', {
         id: 'login-toast',
         description: error instanceof Error ? error.message : "Authentication failed"
       });
       
+      // Set error state for UI display
       setError(error as Error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleRetry = () => {
+    setError(null);
+    testApiConnection();
+  };
+
+  if (error) {
+    return (
+      <ApiErrorFallback 
+        error={error} 
+        onRetry={handleRetry}
+        title="Login Failed" 
+      />
+    );
+  }
+
   return (
     <>
+      {apiUrl && (
+        <div className="mb-4 p-2 bg-blue-50 rounded-md text-xs text-blue-700 flex items-center justify-between">
+          <div className="flex items-center">
+            <AlertCircle className="w-4 h-4 mr-1" />
+            <span>API URL: {apiUrl}</span>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={testApiConnection}
+            disabled={isTesting}
+            className="gap-1"
+          >
+            {isTesting ? (
+              <>Testing <RefreshCw className="ml-1 w-3 h-3 animate-spin" /></>
+            ) : (
+              <>Test <ExternalLink className="ml-1 w-3 h-3" /></>
+            )}
+          </Button>
+        </div>
+      )}
+      
       {connectionStatus !== 'untested' && (
         <Alert 
           className={`mb-4 ${
@@ -188,7 +233,7 @@ export function LoginForm() {
               ? 'Testing server connection...' 
               : connectionStatus === 'success' 
                 ? 'Server connection successful. You can proceed with login.' 
-                : 'Server connection failed. Using local mock login instead.'}
+                : 'Server connection failed. The API may be unavailable.'}
           </AlertDescription>
         </Alert>
       )}
@@ -233,7 +278,7 @@ export function LoginForm() {
           <Button 
             type="submit" 
             className="w-full" 
-            disabled={isLoading}
+            disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
           >
             {isLoading ? "Logging in..." : "Login"}
           </Button>

@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -18,7 +17,7 @@ RewriteBase /api/
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
-    # Always set CORS headers for maximum compatibility
+    # Set CORS headers unconditionally for all responses
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -33,25 +32,52 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
-# NEW HIGHEST PRIORITY: Always use the debug login for reliability
-RewriteRule ^login$ debug-login.php [L,QSA]
-RewriteRule ^login\.php$ debug-login.php [L,QSA]
-RewriteRule ^api/login$ debug-login.php [L,QSA]
-RewriteRule ^api/login\.php$ debug-login.php [L,QSA]
-RewriteRule ^auth/login$ debug-login.php [L,QSA]
-RewriteRule ^auth/login\.php$ debug-login.php [L,QSA]
+# CRITICAL VEHICLE ENDPOINTS - HIGHEST PRIORITY
+# Direct mappings for add vehicle endpoint with multiple variants
+RewriteRule ^admin/direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
 
-# Add signup redirect to debug-login.php
-RewriteRule ^signup$ debug-login.php [L,QSA]
-RewriteRule ^signup\.php$ debug-login.php [L,QSA]
-RewriteRule ^api/signup$ debug-login.php [L,QSA]
-RewriteRule ^api/signup\.php$ debug-login.php [L,QSA]
-RewriteRule ^auth/signup$ debug-login.php [L,QSA]
-RewriteRule ^auth/signup\.php$ debug-login.php [L,QSA]
-RewriteRule ^register$ debug-login.php [L,QSA]
-RewriteRule ^register\.php$ debug-login.php [L,QSA]
+# Make add-vehicle-simple accessible from multiple paths
+RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^admin/add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
 
-# Other API endpoints - keep all existing rules
+# Legacy aliases for vehicle creation
+RewriteRule ^admin/vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^admin/vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^admin/add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^admin/add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
+RewriteRule ^add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
+
+# Debug endpoint for troubleshooting (explicit mapping)
+RewriteRule ^admin/vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
+RewriteRule ^admin/vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
+RewriteRule ^vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
+RewriteRule ^vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
+
+# Diagnostic endpoint for PHP testing
+RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
+
+# Allow access to all PHP files directly
+<Files "*.php">
+    Require all granted
+</Files>
+
+# Critical: Prevent HTML error responses for PHP files
+<FilesMatch "\.php$">
+    # Force PHP processing even if system wants to serve as plain text
+    SetHandler application/x-httpd-php
+    # Set JSON content type for API responses
+    Header always set Content-Type "application/json" env=REDIRECT_STATUS=200
+</FilesMatch>
+
+# Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
@@ -121,6 +147,7 @@ RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
 RewriteRule ^update-booking$ update-booking.php [L,QSA]
 RewriteRule ^update-booking/([^/]+)$ update-booking.php?id=$1 [L,QSA]
 RewriteRule ^search-bookings$ search-bookings.php [L,QSA]
+RewriteRule ^login$ login.php [L,QSA]
 RewriteRule ^register$ register.php [L,QSA]
 RewriteRule ^user$ user.php [L,QSA]
 RewriteRule ^user/([^/]+)$ user.php?id=$1 [L,QSA]
@@ -138,7 +165,7 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
 # Protect PHP files from direct access
 <Files "*.php">
-    # Allow all requests through
+    # Allow all requests through - critical for CORS
     Require all granted
 </Files>
 

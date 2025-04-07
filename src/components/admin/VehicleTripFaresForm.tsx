@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,16 +29,10 @@ interface VehicleTripFaresFormProps {
   onSuccess?: () => void;
 }
 
-// Define a vehicle type interface to ensure consistency
-interface VehicleType {
-  id: string;
-  name: string;
-}
-
 export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [vehicles, setVehicles] = useState<VehicleType[]>([]);
+  const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [allFares, setAllFares] = useState<Record<string, any>>({});
   const [loadingError, setLoadingError] = useState<string | null>(null);
@@ -75,7 +68,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         console.log(`Loading vehicles for ${tripType} management...`);
         
         // Array to collect all vehicles from different sources
-        let allVehicles: VehicleType[] = [];
+        let allVehicles: {id: string, name: string}[] = [];
         
         // First try to get vehicles from the direct API endpoint
         try {
@@ -198,41 +191,10 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         
         // Also get the standard vehicle types as fallback
         try {
-          // Call getVehicleTypes without arguments
-          const vehicleTypes = await getVehicleTypes();
-          
-          // Make sure the returned vehicle types conform to our VehicleType interface
-          const typedVehicleTypes: VehicleType[] = [];
-          
-          if (Array.isArray(vehicleTypes)) {
-            vehicleTypes.forEach(vType => {
-              // Handle if vType is just a string (vehicle ID)
-              if (typeof vType === 'string') {
-                typedVehicleTypes.push({
-                  id: vType,
-                  name: vType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                });
-              } 
-              // Handle if vType is an object
-              else if (typeof vType === 'object' && vType !== null) {
-                const vTypeObj = vType as any;
-                typedVehicleTypes.push({
-                  id: vTypeObj.id || vTypeObj.vehicleId || vTypeObj.vehicle_id || String(vType),
-                  name: vTypeObj.name || vTypeObj.id || vTypeObj.vehicleId || vTypeObj.vehicle_id || String(vType)
-                });
-              }
-              // Fallback for any other case
-              else {
-                typedVehicleTypes.push({
-                  id: String(vType),
-                  name: String(vType)
-                });
-              }
-            });
-          }
+          const vehicleTypes = await getVehicleTypes(true, true);
           
           // Add vehicle types that aren't already in the list
-          typedVehicleTypes.forEach(vType => {
+          vehicleTypes.forEach(vType => {
             if (!allVehicles.some(v => v.id === vType.id)) {
               allVehicles.push(vType);
             }
@@ -296,12 +258,12 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           setPackage12hr120km(pkg12hr ? Number(pkg12hr.price) : 0);
         }
       } else if (tripType === 'airport') {
-        setPickupPrice(Number(fares.pickup) || Number(fares.pickupPrice) || 0);
-        setDropPrice(Number(fares.drop) || Number(fares.dropPrice) || 0);
-        setTier1Price(Number(fares.tier1) || Number(fares.tier1Price) || 0);
-        setTier2Price(Number(fares.tier2) || Number(fares.tier2Price) || 0);
-        setTier3Price(Number(fares.tier3) || Number(fares.tier3Price) || 0);
-        setTier4Price(Number(fares.tier4) || Number(fares.tier4Price) || 0);
+        setPickupPrice(Number(fares.pickup) || 0);
+        setDropPrice(Number(fares.drop) || 0);
+        setTier1Price(Number(fares.tier1) || 0);
+        setTier2Price(Number(fares.tier2) || 0);
+        setTier3Price(Number(fares.tier3) || 0);
+        setTier4Price(Number(fares.tier4) || 0);
       }
     } else {
       resetFormValues();
@@ -389,22 +351,13 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        // Make sure we explicitly include both vehicleId and vehicle_id
         const locationFares = {
-          vehicleId: selectedVehicle,
-          vehicle_id: selectedVehicle,
           pickup: pickupPrice,
-          pickupPrice: pickupPrice,
           drop: dropPrice,
-          dropPrice: dropPrice,
           tier1: tier1Price,
-          tier1Price: tier1Price,
           tier2: tier2Price,
-          tier2Price: tier2Price,
           tier3: tier3Price,
-          tier3Price: tier3Price,
-          tier4: tier4Price,
-          tier4Price: tier4Price
+          tier4: tier4Price
         };
         
         await updateAirportFares(
