@@ -1,4 +1,3 @@
-
 import { apiCall } from '@/utils/apiHelper';
 import { clearVehicleDataCache } from './vehicleDataService';
 import { toast } from 'sonner';
@@ -25,6 +24,14 @@ export interface AirportFareUpdate {
   extraKmCharge: number;
   nightCharges: number;
   extraWaitingCharges: number;
+}
+
+export interface OutstationFareUpdate {
+  vehicleId: string;
+  basePrice: number;
+  pricePerKm: number;
+  driverAllowance: number;
+  nightHaltCharges: number;
 }
 
 /**
@@ -76,6 +83,9 @@ export async function updateLocalFare(data: LocalFareUpdate) {
     throw error;
   }
 }
+
+// Add alias for updateLocalFare as updateLocalFares for compatibility
+export const updateLocalFares = updateLocalFare;
 
 /**
  * Updates airport transfer fares for a vehicle
@@ -130,6 +140,133 @@ export async function updateAirportFare(data: AirportFareUpdate) {
   } catch (error: any) {
     console.error('Error in updateAirportFare:', error);
     throw error;
+  }
+}
+
+// Add alias for updateAirportFare as updateAirportFares for compatibility
+export const updateAirportFares = updateAirportFare;
+
+/**
+ * Updates outstation fares for a vehicle
+ */
+export async function updateOutstationFare(data: OutstationFareUpdate) {
+  console.log('Updating outstation fare:', data);
+  
+  try {
+    // Validate data
+    if (!data.vehicleId) {
+      throw new Error('Vehicle ID is required');
+    }
+    
+    // Make sure all numeric values are properly set (not undefined)
+    const fareData = {
+      vehicleId: data.vehicleId,
+      basePrice: data.basePrice || 0,
+      pricePerKm: data.pricePerKm || 0,
+      driverAllowance: data.driverAllowance || 0,
+      nightHaltCharges: data.nightHaltCharges || 0
+    };
+    
+    const response = await apiCall('api/admin/update-outstation-fare.php', {
+      data: fareData,
+      method: 'POST',
+      headers: {
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    if (response.status === 'success') {
+      // Clear vehicle cache to ensure updated data is fetched next time
+      clearVehicleDataCache();
+      
+      // Dispatch an event to notify components that fares changed
+      window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+        detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
+      }));
+      
+      return response;
+    } else {
+      console.error('Error updating outstation fare:', response.message);
+      throw new Error(response.message || 'Failed to update outstation fare');
+    }
+  } catch (error: any) {
+    console.error('Error in updateOutstationFare:', error);
+    throw error;
+  }
+}
+
+// Add alias for updateOutstationFare as updateOutstationFares for compatibility
+export const updateOutstationFares = updateOutstationFare;
+
+/**
+ * Gets all outstation fares from the backend
+ */
+export async function getAllOutstationFares() {
+  try {
+    const response = await apiCall('api/admin/outstation-fares.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    if (response.status === 'success') {
+      return response.fares || [];
+    }
+    
+    console.error('Error getting outstation fares:', response.message);
+    return [];
+  } catch (error: any) {
+    console.error('Error in getAllOutstationFares:', error);
+    return [];
+  }
+}
+
+/**
+ * Gets all local fares from the backend
+ */
+export async function getAllLocalFares() {
+  try {
+    const response = await apiCall('api/admin/local-fares.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    if (response.status === 'success') {
+      return response.fares || [];
+    }
+    
+    console.error('Error getting local fares:', response.message);
+    return [];
+  } catch (error: any) {
+    console.error('Error in getAllLocalFares:', error);
+    return [];
+  }
+}
+
+/**
+ * Gets all airport fares from the backend
+ */
+export async function getAllAirportFares() {
+  try {
+    const response = await apiCall('api/admin/airport-fares.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    if (response.status === 'success') {
+      return response.fares || [];
+    }
+    
+    console.error('Error getting airport fares:', response.message);
+    return [];
+  } catch (error: any) {
+    console.error('Error in getAllAirportFares:', error);
+    return [];
   }
 }
 
@@ -199,6 +336,41 @@ export async function syncLocalFares(forceRefresh: boolean = false): Promise<boo
     return false;
   } catch (error: any) {
     console.error('Error syncing local fares:', error);
+    return false;
+  }
+}
+
+/**
+ * Syncs the outstation fares table from a reliable source
+ */
+export async function syncOutstationFares(forceRefresh: boolean = false): Promise<boolean> {
+  try {
+    console.log('Syncing outstation fares table');
+    
+    const response = await apiCall('api/admin/sync-outstation-fares.php', {
+      method: 'POST',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+      }
+    });
+    
+    if (response.status === 'success') {
+      // Clear vehicle cache to ensure updated data is fetched next time
+      clearVehicleDataCache();
+      
+      // Dispatch an event to notify components that fares changed
+      window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      return true;
+    }
+    
+    console.error('Failed to sync outstation fares:', response.message);
+    return false;
+  } catch (error: any) {
+    console.error('Error syncing outstation fares:', error);
     return false;
   }
 }

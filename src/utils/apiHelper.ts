@@ -51,6 +51,26 @@ export function logOperation(endpoint: string, method: string, success: boolean,
 }
 
 /**
+ * Format data for multipart form submission
+ * This is more reliable for PHP endpoints than JSON
+ */
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    // Handle arrays and objects
+    if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      // Convert other values to string
+      formData.append(key, String(value ?? ''));
+    }
+  });
+  
+  return formData;
+};
+
+/**
  * Enhanced fetch with timeout and retries
  */
 export async function fetchWithTimeout(
@@ -59,12 +79,19 @@ export async function fetchWithTimeout(
 ): Promise<Response> {
   const { timeout = API_TIMEOUT } = options;
   
+  // Create a new options object without the timeout property
+  const fetchOptions: RequestInit = { ...options };
+  // Remove timeout from fetchOptions since it's not part of RequestInit
+  if ('timeout' in fetchOptions) {
+    delete (fetchOptions as any).timeout;
+  }
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       signal: controller.signal
     });
     
@@ -93,7 +120,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}): Promi
   const url = endpoint.startsWith('http') ? endpoint : `/${endpoint}`;
   
   try {
-    const fetchOptions: RequestInit = {
+    const fetchOptions: RequestInit & { timeout?: number } = {
       method,
       headers: {
         'Content-Type': 'application/json',
