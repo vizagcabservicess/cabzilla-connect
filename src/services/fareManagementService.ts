@@ -35,7 +35,10 @@ export interface FareData {
 export const initializeDatabaseTables = async (): Promise<boolean> => {
   try {
     console.log('Initializing database tables...');
-    const result = await directVehicleOperation('api/admin/db_setup.php', 'GET', {
+    
+    // Add timestamp to prevent caching
+    const timestamp = new Date().getTime();
+    const result = await directVehicleOperation(`api/admin/db_setup.php?_t=${timestamp}`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
@@ -48,7 +51,7 @@ export const initializeDatabaseTables = async (): Promise<boolean> => {
     
     // If successful, also run fix-vehicle-tables to ensure all columns are properly set
     try {
-      const fixResult = await directVehicleOperation('api/admin/fix-vehicle-tables.php', 'GET', {
+      const fixResult = await directVehicleOperation(`api/admin/fix-vehicle-tables.php?_t=${timestamp}`, 'GET', {
         headers: {
           'X-Admin-Mode': 'true',
           'X-Force-Refresh': 'true',
@@ -79,7 +82,8 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
     
     // Clean and encode vehicleId
     const cleanVehicleId = vehicleId ? encodeURIComponent(vehicleId.trim()) : '';
-    const endpoint = `api/admin/direct-local-fares.php${cleanVehicleId ? `?vehicle_id=${cleanVehicleId}` : ''}`;
+    const timestamp = new Date().getTime();
+    const endpoint = `api/admin/direct-local-fares.php${cleanVehicleId ? `?vehicle_id=${cleanVehicleId}` : ''}&_t=${timestamp}`;
     
     const result = await directVehicleOperation(endpoint, 'GET', {
       headers: {
@@ -91,8 +95,8 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
 
     console.log('Local fares response:', result);
     
-    if (result && result.status === 'success' && Array.isArray(result.fares)) {
-      return result.fares;
+    if (result && result.status === 'success' && Array.isArray(result.data?.fares)) {
+      return result.data.fares;
     } else if (result && result.fares && typeof result.fares === 'object') {
       if (Array.isArray(result.fares)) {
         return result.fares;
@@ -102,6 +106,8 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
       }
     } else if (result && Array.isArray(result)) {
       return result;
+    } else if (result && result.data && Array.isArray(result.data)) {
+      return result.data;
     }
     
     return [];
@@ -118,11 +124,16 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     
     // Clean up vehicle ID and ensure it's properly formatted
     const cleanVehicleId = vehicleId ? encodeURIComponent(vehicleId.trim()) : '';
+    const timestamp = new Date().getTime();
+    
+    // Use the new direct-airport-fares.php endpoint
     let endpoint = `api/admin/direct-airport-fares.php`;
     
     if (cleanVehicleId) {
       endpoint += `?vehicle_id=${cleanVehicleId}`;
     }
+    
+    endpoint += `&_t=${timestamp}`;
     
     console.log(`Fetching airport fares from: ${endpoint}`);
     
@@ -139,8 +150,14 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     
     // Properly handle different response formats
     if (result) {
-      if (result.status === 'success' && Array.isArray(result.fares)) {
-        return result.fares;
+      if (result.status === 'success' && Array.isArray(result.data?.fares)) {
+        return result.data.fares;
+      } else if (result.status === 'success' && result.data && typeof result.data === 'object') {
+        if (Array.isArray(result.data)) {
+          return result.data;
+        } else if (result.data.fares && Array.isArray(result.data.fares)) {
+          return result.data.fares;
+        }
       } else if (result.fares && typeof result.fares === 'object') {
         if (Array.isArray(result.fares)) {
           return result.fares;
@@ -165,11 +182,19 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
           }
         });
         
-        if (retryResult && retryResult.fares) {
+        if (retryResult && retryResult.status === 'success' && retryResult.data?.fares) {
+          return retryResult.data.fares;
+        } else if (retryResult && retryResult.fares) {
           if (Array.isArray(retryResult.fares)) {
             return retryResult.fares;
           } else {
             return Object.values(retryResult.fares);
+          }
+        } else if (retryResult && retryResult.data) {
+          if (Array.isArray(retryResult.data)) {
+            return retryResult.data;
+          } else if (retryResult.data.fares && Array.isArray(retryResult.data.fares)) {
+            return retryResult.data.fares;
           }
         }
         
@@ -245,7 +270,17 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
     await initializeDatabaseTables();
     
     // Ensure we have both vehicle ID formats for compatibility and clean any whitespace
-    const vehicleId = fareData.vehicleId ? fareData.vehicleId.trim() : (fareData.vehicle_id ? fareData.vehicle_id.trim() : '');
+    if (!fareData.vehicleId && fareData.vehicle_id) {
+      fareData.vehicleId = fareData.vehicle_id.trim();
+    } else if (fareData.vehicleId && !fareData.vehicle_id) {
+      fareData.vehicle_id = fareData.vehicleId.trim();
+    } else if (fareData.vehicleId) {
+      // Just clean up both values
+      fareData.vehicleId = fareData.vehicleId.trim();
+      fareData.vehicle_id = fareData.vehicle_id?.trim() || fareData.vehicleId.trim();
+    }
+    
+    const vehicleId = fareData.vehicleId || fareData.vehicle_id;
     
     if (!vehicleId) {
       throw new Error("Vehicle ID is required");
@@ -267,7 +302,11 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
       // Continue with update anyway
     }
     
-    const result = await directVehicleOperation('api/admin/airport-fares-update.php', 'POST', {
+    // Add timestamp to URL to prevent caching
+    const timestamp = new Date().getTime();
+    const endpoint = `api/admin/airport-fares-update.php?_t=${timestamp}`;
+    
+    const result = await directVehicleOperation(endpoint, 'POST', {
       headers: {
         'X-Admin-Mode': 'true', 
         'X-Force-Refresh': 'true',
@@ -315,7 +354,9 @@ export const syncLocalFares = async (): Promise<any> => {
     // Initialize database tables first to ensure they exist
     await initializeDatabaseTables();
     
-    const result = await directVehicleOperation('api/admin/sync-local-fares.php', 'GET', {
+    // Add timestamp to prevent caching
+    const timestamp = new Date().getTime();
+    const result = await directVehicleOperation(`api/admin/sync-local-fares.php?_t=${timestamp}`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
@@ -345,7 +386,10 @@ export const syncAirportFares = async (): Promise<any> => {
     await initializeDatabaseTables();
     
     console.log('Starting airport fares sync');
-    const result = await directVehicleOperation('api/admin/sync-airport-fares.php', 'GET', {
+    
+    // Add timestamp to prevent caching
+    const timestamp = new Date().getTime();
+    const result = await directVehicleOperation(`api/admin/sync-airport-fares.php?_t=${timestamp}`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
@@ -358,14 +402,14 @@ export const syncAirportFares = async (): Promise<any> => {
     
     // Show success toast if the operation was successful
     if (result && result.status === 'success') {
-      toast.success(`Airport fares synchronized successfully for ${result.vehicles_synced || 0} vehicles`);
+      toast.success(`Airport fares synchronized successfully for ${result.data?.vehicles_synced || 0} vehicles`);
     }
     
     // If sync was successful, trigger vehicle resync
     if (result && result.status === 'success') {
       try {
         // Make a call to reload-vehicles to ensure everything is in sync
-        await directVehicleOperation('api/admin/reload-vehicles.php', 'GET', {
+        await directVehicleOperation(`api/admin/reload-vehicles.php?_t=${timestamp}`, 'GET', {
           headers: {
             'X-Admin-Mode': 'true',
             'X-Force-Refresh': 'true',

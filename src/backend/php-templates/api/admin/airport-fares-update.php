@@ -1,5 +1,11 @@
 
 <?php
+/**
+ * Airport fares update API endpoint
+ * Updates airport transfer fares for a specific vehicle
+ */
+
+// Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
@@ -7,6 +13,12 @@ header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
+// Clear any existing output buffers to prevent contamination
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -23,9 +35,10 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../utils/response.php';
 
-// Run the DB setup SQL to ensure all tables exist
-include_once __DIR__ . '/db_setup.php';
+// Run the DB setup to ensure all tables exist
+require_once __DIR__ . '/db_setup.php';
 
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
@@ -92,7 +105,6 @@ try {
     if (!$vehicleId) {
         file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
             implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
-        file_put_contents($logFile, "[$timestamp] Full request data: " . json_encode($postData) . "\n", FILE_APPEND);
         throw new Exception('Vehicle ID is required');
     }
 
@@ -297,35 +309,21 @@ try {
     }
     
     // Create a response with all relevant data
-    $response = [
-        'status' => 'success',
-        'message' => 'Airport fare updated successfully',
+    sendSuccessResponse([
+        'vehicleId' => $vehicleId,
         'vehicle_id' => $vehicleId,
-        'data' => [
-            'vehicleId' => $vehicleId,
-            'vehicle_id' => $vehicleId,
-            'basePrice' => (float)$basePrice,
-            'pricePerKm' => (float)$pricePerKm,
-            'pickupPrice' => (float)$pickupPrice,
-            'dropPrice' => (float)$dropPrice,
-            'tier1Price' => (float)$tier1Price,
-            'tier2Price' => (float)$tier2Price,
-            'tier3Price' => (float)$tier3Price,
-            'tier4Price' => (float)$tier4Price,
-            'extraKmCharge' => (float)$extraKmCharge
-        ],
-        'timestamp' => time()
-    ];
-    
-    echo json_encode($response);
+        'basePrice' => (float)$basePrice,
+        'pricePerKm' => (float)$pricePerKm,
+        'pickupPrice' => (float)$pickupPrice,
+        'dropPrice' => (float)$dropPrice,
+        'tier1Price' => (float)$tier1Price,
+        'tier2Price' => (float)$tier2Price,
+        'tier3Price' => (float)$tier3Price,
+        'tier4Price' => (float)$tier4Price,
+        'extraKmCharge' => (float)$extraKmCharge
+    ], 'Airport fare updated successfully');
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage(),
-        'timestamp' => time()
-    ]);
+    sendErrorResponse($e->getMessage());
 }

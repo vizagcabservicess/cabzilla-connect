@@ -6,7 +6,14 @@
 
 // Function to send a success response
 function sendSuccessResponse($data = [], $message = 'Operation completed successfully', $statusCode = 200) {
+    // Clear any previous output to prevent contamination
+    if (ob_get_length()) ob_clean();
+    
+    // Set HTTP response code
     http_response_code($statusCode);
+    
+    // Set content type header
+    header('Content-Type: application/json');
     
     $response = [
         'status' => 'success',
@@ -21,7 +28,14 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
 
 // Function to send an error response
 function sendErrorResponse($message = 'An error occurred', $data = [], $statusCode = 500) {
+    // Clear any previous output to prevent contamination
+    if (ob_get_length()) ob_clean();
+    
+    // Set HTTP response code
     http_response_code($statusCode);
+    
+    // Set content type header
+    header('Content-Type: application/json');
     
     $response = [
         'status' => 'error',
