@@ -41,6 +41,10 @@ function getDbConnection() {
         }
         
         $conn->set_charset("utf8mb4");
+        
+        // Set collation to ensure consistency
+        $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        
         return $conn;
     } catch (Exception $e) {
         // Log error
