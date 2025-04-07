@@ -1,504 +1,462 @@
+
 <?php
 /**
  * direct-vehicle-update.php - Update an existing vehicle and sync across all vehicle tables
- * ENHANCED: Now prioritizes database operations and ensures proper synchronization
  */
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug, Origin');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting for debugging
-error_reporting(E_ALL);
+// Enable error reporting for debug
 ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
-// Create logs directory
-$logDir = __DIR__ . '/../../logs';
+// Include the database helper
+require_once dirname(__FILE__) . '/../common/db_helper.php';
+
+// Create log directory if it doesn't exist
+$logDir = dirname(__FILE__) . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
 
-// Create cache directory
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
+// Log request information
+logMessage("Vehicle update request received: " . $_SERVER['REQUEST_METHOD'], 'direct-vehicle-update.log');
 
-// Function to log debug info
-function logDebug($message, $data = null) {
-    global $logDir;
-    $logFile = $logDir . '/direct_vehicle_update_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    
-    $logMessage = "[$timestamp] $message";
-    if ($data !== null) {
-        $logMessage .= ": " . json_encode($data);
-    }
-    
-    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
-}
-
-// Load database utilities
-if (file_exists(__DIR__ . '/../utils/database.php')) {
-    require_once __DIR__ . '/../utils/database.php';
-}
-
-// Handle OPTIONS request
+// Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Get input data from various sources
-$inputData = file_get_contents('php://input');
-$vehicleData = json_decode($inputData, true);
+// Initialize response
+$response = [
+    'status' => 'error',
+    'message' => 'Unknown error',
+    'timestamp' => time()
+];
 
-if (!$vehicleData && !empty($_POST)) {
-    $vehicleData = $_POST;
-}
-
-if (!$vehicleData && !empty($_GET)) {
-    $vehicleData = $_GET;
-}
-
-logDebug("Received update request", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'data' => $vehicleData,
-    'raw' => $inputData
-]);
-
-// Check if we have valid data
-if (empty($vehicleData)) {
-    logDebug("No vehicle data provided");
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'No vehicle data provided'
-    ]);
+// Allow POST/PUT methods
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
+    $response['message'] = 'Only POST or PUT methods are allowed';
+    echo json_encode($response);
     exit;
 }
 
-// Get vehicle ID
-$vehicleId = null;
-if (isset($vehicleData['id'])) {
-    $vehicleId = $vehicleData['id'];
-} elseif (isset($vehicleData['vehicleId'])) {
-    $vehicleId = $vehicleData['vehicleId'];
-} elseif (isset($vehicleData['vehicle_id'])) {
-    $vehicleId = $vehicleData['vehicle_id'];
-} elseif (isset($_GET['id'])) {
-    $vehicleId = $_GET['id'];
-}
+// Log POST data for debugging
+logMessage("POST data: " . json_encode($_POST, JSON_PARTIAL_OUTPUT_ON_ERROR), 'direct-vehicle-update.log');
 
-if (!$vehicleId) {
-    logDebug("Vehicle ID is required");
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID is required'
-    ]);
-    exit;
-}
-
-logDebug("Processing vehicle ID: $vehicleId");
-
-// First, try to update the database if possible (DATABASE FIRST APPROACH)
-$dbUpdated = false;
-$dbVehicle = null;
-
+// Get vehicle data from the request
 try {
-    // Try loading config.php if exists
-    if (file_exists(__DIR__ . '/../../config.php')) {
-        require_once __DIR__ . '/../../config.php';
-    }
+    // Parse input data (support both JSON and form data)
+    $vehicleData = [];
     
-    // Try to connect to database either using getDbConnection from utils or from config
-    $conn = null;
-    if (function_exists('getDbConnection')) {
-        $conn = getDbConnection();
-    } else if (class_exists('mysqli')) {
-        // Fallback database credentials
-        $dbHost = 'localhost';
-        $dbName = 'u64460565_db_be';
-        $dbUser = 'u64460565_usr_be';
-        $dbPass = 'Vizag@1213';
+    // Try using POST data first (most reliable with multipart/form-data)
+    if (!empty($_POST)) {
+        $vehicleData = $_POST;
+        logMessage("Using standard POST data for vehicle update", 'direct-vehicle-update.log');
+    } 
+    // If no POST data, try to parse JSON from request body
+    else {
+        // Read raw input once and store it
+        $rawInput = file_get_contents('php://input');
+        logMessage("Raw input: " . $rawInput, 'direct-vehicle-update.log');
         
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            logDebug("Failed to connect to database: " . $conn->connect_error);
-            $conn = null;
-        } else {
-            $conn->set_charset("utf8mb4");
+        // Try to parse as JSON
+        $jsonData = json_decode($rawInput, true, 512, JSON_THROW_ON_ERROR);
+        if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+            $vehicleData = $jsonData;
+            logMessage("Parsed vehicle data from JSON", 'direct-vehicle-update.log');
+        }
+        // Try to parse as URL-encoded
+        else {
+            parse_str($rawInput, $parsedData);
+            if (!empty($parsedData)) {
+                $vehicleData = $parsedData;
+                logMessage("Parsed vehicle data as URL-encoded", 'direct-vehicle-update.log');
+            }
         }
     }
     
-    if ($conn) {
-        logDebug("Connected to database successfully");
+    // Check if vehicle data is in SERVER for direct inclusion
+    if (empty($vehicleData) && isset($_SERVER['VEHICLE_DATA']) && !empty($_SERVER['VEHICLE_DATA'])) {
+        $vehicleData = $_SERVER['VEHICLE_DATA'];
+        logMessage("Using vehicle data from SERVER variable", 'direct-vehicle-update.log');
+    }
+    
+    if (empty($vehicleData)) {
+        throw new Exception("No vehicle data provided");
+    }
+    
+    logMessage("Vehicle data after parsing: " . json_encode($vehicleData, JSON_PARTIAL_OUTPUT_ON_ERROR), 'direct-vehicle-update.log');
+    
+    // Extract vehicle ID with fallbacks for different naming conventions
+    $vehicleId = null;
+    $possibleVehicleIdFields = ['vehicleId', 'vehicle_id', 'id'];
+    
+    foreach ($possibleVehicleIdFields as $field) {
+        if (isset($vehicleData[$field]) && !empty($vehicleData[$field])) {
+            $vehicleId = $vehicleData[$field];
+            logMessage("Found vehicle ID in field '$field': $vehicleId", 'direct-vehicle-update.log');
+            break;
+        }
+    }
+    
+    // Make sure we have a vehicle ID
+    if (empty($vehicleId)) {
+        throw new Exception("Vehicle ID is required");
+    }
+    
+    // Get database connection with retry
+    $conn = getDbConnectionWithRetry(3);
+    logMessage("Database connection established successfully", 'direct-vehicle-update.log');
+    
+    // Begin transaction
+    $conn->begin_transaction();
+    
+    try {
+        // Check if vehicle exists
+        $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
+        $checkStmt = $conn->prepare($checkQuery);
+        $checkStmt->bind_param('ss', $vehicleId, $vehicleId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
         
-        // Format amenities for database storage
-        $amenitiesValue = '';
+        if ($checkResult->num_rows === 0) {
+            throw new Exception("Vehicle with ID '$vehicleId' not found");
+        }
+        
+        // Get existing vehicle data
+        $existingVehicle = $checkResult->fetch_assoc();
+        logMessage("Existing vehicle data found: " . json_encode($existingVehicle, JSON_PARTIAL_OUTPUT_ON_ERROR), 'direct-vehicle-update.log');
+        
+        // CRITICAL: Handle the isActive flag with proper fallbacks (default to TRUE if not specified)
+        $isActive = 1; // Default value is TRUE/active
+        
+        // Check if isActive is explicitly set in the request (using multiple possible field names)
+        // This allows any variant of the field name to be used
+        if (isset($vehicleData['isActive'])) {
+            $isActive = filter_var($vehicleData['isActive'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+            logMessage("isActive explicitly set to: " . ($isActive ? "true" : "false"), 'direct-vehicle-update.log');
+        } 
+        else if (isset($vehicleData['is_active'])) {
+            $isActive = filter_var($vehicleData['is_active'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+            logMessage("is_active explicitly set to: " . ($isActive ? "true" : "false"), 'direct-vehicle-update.log');
+        }
+        else if (isset($existingVehicle['is_active'])) {
+            $isActive = intval($existingVehicle['is_active']);
+            logMessage("Using existing is_active value: " . $isActive, 'direct-vehicle-update.log');
+        }
+        
+        // CRITICAL: Handle capacity and luggage capacity properly
+        $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : 
+                   (isset($existingVehicle['capacity']) ? intval($existingVehicle['capacity']) : 4);
+                   
+        $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
+                          (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : 
+                          (isset($existingVehicle['luggage_capacity']) ? intval($existingVehicle['luggage_capacity']) : 2));
+
+        // Log capacity values for debugging
+        logMessage("Capacity being set to: " . $capacity, 'direct-vehicle-update.log');
+        logMessage("Luggage capacity being set to: " . $luggageCapacity, 'direct-vehicle-update.log');
+        
+        // Extract updated vehicle properties with fallback to existing values
+        $vehicleName = isset($vehicleData['name']) && !empty($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
+        
+        // CRITICAL: Handle price fields properly
+        $basePrice = isset($vehicleData['basePrice']) && $vehicleData['basePrice'] !== "" ? floatval($vehicleData['basePrice']) : 
+                    (isset($vehicleData['base_price']) && $vehicleData['base_price'] !== "" ? floatval($vehicleData['base_price']) : 
+                    (isset($existingVehicle['base_price']) && $existingVehicle['base_price'] !== null ? floatval($existingVehicle['base_price']) : 0));
+        
+        $pricePerKm = isset($vehicleData['pricePerKm']) && $vehicleData['pricePerKm'] !== "" ? floatval($vehicleData['pricePerKm']) : 
+                     (isset($vehicleData['price_per_km']) && $vehicleData['price_per_km'] !== "" ? floatval($vehicleData['price_per_km']) : 
+                     (isset($existingVehicle['price_per_km']) && $existingVehicle['price_per_km'] !== null ? floatval($existingVehicle['price_per_km']) : 0));
+        
+        // Log price values for debugging
+        logMessage("Base price being set to: " . $basePrice, 'direct-vehicle-update.log');
+        logMessage("Price per km being set to: " . $pricePerKm, 'direct-vehicle-update.log');
+        
+        $ac = isset($vehicleData['ac']) ? (filter_var($vehicleData['ac'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0) : 
+             (isset($existingVehicle['ac']) ? intval($existingVehicle['ac']) : 1);
+        
+        // CRITICAL: Handle night halt charge and driver allowance with default non-null values
+        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) && $vehicleData['nightHaltCharge'] !== "" ? floatval($vehicleData['nightHaltCharge']) : 
+                          (isset($vehicleData['night_halt_charge']) && $vehicleData['night_halt_charge'] !== "" ? floatval($vehicleData['night_halt_charge']) : 
+                          (isset($existingVehicle['night_halt_charge']) && $existingVehicle['night_halt_charge'] !== null ? 
+                           floatval($existingVehicle['night_halt_charge']) : 700));
+        
+        $driverAllowance = isset($vehicleData['driverAllowance']) && $vehicleData['driverAllowance'] !== "" ? floatval($vehicleData['driverAllowance']) : 
+                           (isset($vehicleData['driver_allowance']) && $vehicleData['driver_allowance'] !== "" ? floatval($vehicleData['driver_allowance']) : 
+                           (isset($existingVehicle['driver_allowance']) && $existingVehicle['driver_allowance'] !== null ? 
+                            floatval($existingVehicle['driver_allowance']) : 250));
+        
+        // Ensure night_halt_charge and driver_allowance are never NULL
+        $nightHaltCharge = $nightHaltCharge ?: 700;
+        $driverAllowance = $driverAllowance ?: 250;
+        
+        // Log additional values for debugging
+        logMessage("Night halt charge being set to: " . $nightHaltCharge, 'direct-vehicle-update.log');
+        logMessage("Driver allowance being set to: " . $driverAllowance, 'direct-vehicle-update.log');
+        
+        // Handle description (could be blank)
+        $description = isset($vehicleData['description']) ? $vehicleData['description'] : 
+                      (isset($existingVehicle['description']) ? $existingVehicle['description'] : '');
+        
+        // Handle image path with fallback
+        $image = isset($vehicleData['image']) && !empty($vehicleData['image']) ? $vehicleData['image'] : 
+                (isset($existingVehicle['image']) && !empty($existingVehicle['image']) ? $existingVehicle['image'] : '/cars/sedan.png');
+        
+        // Process amenities
+        $amenities = [];
         if (isset($vehicleData['amenities'])) {
             if (is_array($vehicleData['amenities'])) {
-                $amenitiesValue = json_encode($vehicleData['amenities']);
-            } else if (is_string($vehicleData['amenities'])) {
-                // If it's already a JSON string, keep it as is
-                if (substr($vehicleData['amenities'], 0, 1) === '[') {
-                    $amenitiesValue = $vehicleData['amenities'];
-                } else {
-                    // Convert comma-separated string to JSON array
-                    $amenitiesArray = array_map('trim', explode(',', $vehicleData['amenities']));
-                    $amenitiesValue = json_encode($amenitiesArray);
+                $amenities = $vehicleData['amenities'];
+            } else {
+                // Try to parse as JSON
+                try {
+                    $amenitiesData = json_decode($vehicleData['amenities'], true);
+                    if (is_array($amenitiesData)) {
+                        $amenities = $amenitiesData;
+                    } else {
+                        // Fallback to comma-separated string
+                        $amenities = array_map('trim', explode(',', $vehicleData['amenities']));
+                    }
+                } catch (Exception $e) {
+                    // Fallback to comma-separated string
+                    $amenities = array_map('trim', explode(',', $vehicleData['amenities']));
+                }
+            }
+        } else if (isset($existingVehicle['amenities'])) {
+            if (is_array($existingVehicle['amenities'])) {
+                $amenities = $existingVehicle['amenities'];
+            } else {
+                try {
+                    $amenitiesData = json_decode($existingVehicle['amenities'], true);
+                    if (is_array($amenitiesData)) {
+                        $amenities = $amenitiesData;
+                    } else {
+                        $amenities = array_map('trim', explode(',', $existingVehicle['amenities']));
+                    }
+                } catch (Exception $e) {
+                    $amenities = array_map('trim', explode(',', $existingVehicle['amenities']));
                 }
             }
         }
         
-        // Normalize numeric fields
-        $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : 0;
-        $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 0;
-        $basePrice = isset($vehicleData['basePrice']) ? floatval($vehicleData['basePrice']) : 0;
-        $pricePerKm = isset($vehicleData['pricePerKm']) ? floatval($vehicleData['pricePerKm']) : 0;
-        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) ? floatval($vehicleData['nightHaltCharge']) : 0;
-        $driverAllowance = isset($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 0;
-        $isActive = isset($vehicleData['isActive']) ? ($vehicleData['isActive'] ? 1 : 0) : 1;
-        $ac = isset($vehicleData['ac']) ? ($vehicleData['ac'] ? 1 : 0) : 1;
+        if (empty($amenities)) {
+            $amenities = ['AC']; // Default amenity
+        }
         
-        // Prepare other fields
-        $name = isset($vehicleData['name']) ? $vehicleData['name'] : '';
-        $image = isset($vehicleData['image']) ? $vehicleData['image'] : '';
-        $description = isset($vehicleData['description']) ? $vehicleData['description'] : '';
+        // Serialize amenities for database
+        $amenitiesString = is_array($amenities) ? json_encode($amenities) : $amenities;
         
-        logDebug("Parsed numeric values:", [
-            "capacity: $capacity",
-            "luggageCapacity: $luggageCapacity",
-            "basePrice: $basePrice",
-            "price per km: $pricePerKm",
-            "nightHaltCharge: $nightHaltCharge",
-            "driverAllowance: $driverAllowance"
-        ]);
-        
-        // Check if vehicle exists
-        $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ?";
-        $stmt = $conn->prepare($checkQuery);
-        $stmt->bind_param('s', $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows > 0) {
-            // Get existing database record
-            $dbVehicle = $result->fetch_assoc();
-            logDebug("Found existing vehicle in database", $dbVehicle);
-            
-            // Update existing vehicle
-            $query = "UPDATE vehicles SET 
-                name = ?, 
+        // Update vehicles table
+        $updateVehicleQuery = "
+            UPDATE vehicles SET 
+                name = ?,
                 capacity = ?,
                 luggage_capacity = ?,
-                base_price = ?,
-                price_per_km = ?,
+                ac = ?,
+                is_active = ?,
                 image = ?,
                 amenities = ?,
                 description = ?,
-                ac = ?,
+                base_price = ?,
+                price_per_km = ?,
                 night_halt_charge = ?,
                 driver_allowance = ?,
-                is_active = ?,
                 updated_at = NOW()
-                WHERE vehicle_id = ?";
-            
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param('siiddsssidis', 
-                $name, 
-                $capacity, 
-                $luggageCapacity,
-                $basePrice,
-                $pricePerKm,
-                $image,
-                $amenitiesValue,
-                $description,
-                $ac,
-                $nightHaltCharge,
-                $driverAllowance,
-                $isActive,
-                $vehicleId
-            );
-            
-            $updateResult = $stmt->execute();
-            $affectedRows = $stmt->affected_rows;
-            
-            if ($updateResult) {
-                logDebug("Updated in database: " . $affectedRows . " rows affected");
-                $dbUpdated = true;
-            } else {
-                logDebug("Database update failed: " . $stmt->error);
-            }
+            WHERE id = ? OR vehicle_id = ?
+        ";
+        
+        $updateStmt = $conn->prepare($updateVehicleQuery);
+        
+        if (!$updateStmt) {
+            throw new Exception("Failed to prepare update statement: " . $conn->error);
+        }
+        
+        $updateStmt->bind_param(
+            'siiisssddddss',
+            $vehicleName,
+            $capacity,
+            $luggageCapacity,
+            $ac,
+            $isActive,
+            $image,
+            $amenitiesString,
+            $description,
+            $basePrice, 
+            $pricePerKm,
+            $nightHaltCharge,
+            $driverAllowance,
+            $vehicleId,
+            $vehicleId
+        );
+        
+        if ($updateStmt->execute()) {
+            logMessage("Updated vehicle base information successfully", 'direct-vehicle-update.log');
         } else {
-            // Insert new vehicle
-            logDebug("Vehicle does not exist in database, inserting new record");
-            $query = "INSERT INTO vehicles 
-                (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, 
-                image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+            throw new Exception("Failed to update vehicle: " . $updateStmt->error);
+        }
+        
+        // Update outstation_fares table if exists
+        $outstationQuery = "SELECT COUNT(*) as count FROM information_schema.tables 
+                           WHERE table_schema = DATABASE() AND table_name = 'outstation_fares'";
+        $outstationResult = $conn->query($outstationQuery);
+        $outstationExists = ($outstationResult->fetch_assoc()['count'] > 0);
+        
+        if ($outstationExists) {
+            // Check if vehicle has outstation fares entry
+            $checkFareQuery = "SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?";
+            $checkFareStmt = $conn->prepare($checkFareQuery);
+            $checkFareStmt->bind_param('s', $vehicleId);
+            $checkFareStmt->execute();
+            $fareExists = ($checkFareStmt->get_result()->fetch_assoc()['count'] > 0);
             
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param('ssiiddssidii', 
-                $vehicleId,
-                $name, 
-                $capacity, 
-                $luggageCapacity,
-                $basePrice,
-                $pricePerKm,
-                $image,
-                $amenitiesValue,
-                $description,
-                $ac,
-                $nightHaltCharge,
-                $driverAllowance,
-                $isActive
-            );
-            
-            $insertResult = $stmt->execute();
-            $insertId = $conn->insert_id;
-            
-            if ($insertResult) {
-                logDebug("Inserted in database: ID = " . $insertId);
-                $dbUpdated = true;
+            if ($fareExists) {
+                // Update existing entry
+                $updateFareQuery = "
+                    UPDATE outstation_fares SET 
+                        base_price = ?,
+                        price_per_km = ?,
+                        night_halt_charge = ?,
+                        driver_allowance = ?,
+                        updated_at = NOW()
+                    WHERE vehicle_id = ?
+                ";
                 
-                // Get the newly inserted record
-                $checkQuery = "SELECT * FROM vehicles WHERE id = ?";
-                $stmt = $conn->prepare($checkQuery);
-                $stmt->bind_param('i', $insertId);
-                $stmt->execute();
-                $result = $stmt->get_result();
+                $updateFareStmt = $conn->prepare($updateFareQuery);
+                $updateFareStmt->bind_param('dddds', $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
                 
-                if ($result->num_rows > 0) {
-                    $dbVehicle = $result->fetch_assoc();
+                if ($updateFareStmt->execute()) {
+                    logMessage("Updated outstation_fares successfully", 'direct-vehicle-update.log');
+                } else {
+                    logMessage("Failed to update outstation_fares: " . $updateFareStmt->error, 'direct-vehicle-update.log');
                 }
             } else {
-                logDebug("Database insert failed: " . $stmt->error);
+                // Create new entry
+                $insertFareQuery = "
+                    INSERT INTO outstation_fares (
+                        vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                        roundtrip_base_price, roundtrip_price_per_km, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, NOW(), NOW()
+                    )
+                ";
+                
+                $roundtripBasePrice = $basePrice * 0.95; // 5% discount for round trips
+                $roundtripPricePerKm = $pricePerKm * 0.85; // 15% discount for round trips
+                
+                $insertFareStmt = $conn->prepare($insertFareQuery);
+                $insertFareStmt->bind_param(
+                    'sdddddd',
+                    $vehicleId, 
+                    $basePrice, 
+                    $pricePerKm, 
+                    $nightHaltCharge, 
+                    $driverAllowance, 
+                    $roundtripBasePrice, 
+                    $roundtripPricePerKm
+                );
+                
+                if ($insertFareStmt->execute()) {
+                    logMessage("Created new outstation_fares entry", 'direct-vehicle-update.log');
+                } else {
+                    logMessage("Failed to create outstation_fares entry: " . $insertFareStmt->error, 'direct-vehicle-update.log');
+                }
             }
         }
         
-        $conn->close();
-    } else {
-        logDebug("Could not connect to database, skipping database update");
-    }
-} catch (Exception $e) {
-    logDebug("Database error: " . $e->getMessage());
-}
-
-// Create vehicle object from database or input data
-$vehicle = [];
-
-if ($dbVehicle) {
-    // Use database record as base
-    $vehicle = [
-        'id' => $dbVehicle['vehicle_id'],
-        'vehicleId' => $dbVehicle['vehicle_id'],
-        'name' => $dbVehicle['name'],
-        'capacity' => intval($dbVehicle['capacity']),
-        'luggageCapacity' => intval($dbVehicle['luggage_capacity']),
-        'price' => floatval($dbVehicle['base_price']),
-        'basePrice' => floatval($dbVehicle['base_price']),
-        'pricePerKm' => floatval($dbVehicle['price_per_km']),
-        'image' => $dbVehicle['image'],
-        'description' => $dbVehicle['description'],
-        'ac' => (bool)$dbVehicle['ac'],
-        'nightHaltCharge' => floatval($dbVehicle['night_halt_charge']),
-        'driverAllowance' => floatval($dbVehicle['driver_allowance']),
-        'isActive' => (bool)$dbVehicle['is_active']
-    ];
-    
-    // Parse amenities from database
-    if (!empty($dbVehicle['amenities'])) {
+        // Commit transaction
+        $conn->commit();
+        
+        // Get the updated vehicle data to return
+        $selectQuery = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ?";
+        $selectStmt = $conn->prepare($selectQuery);
+        $selectStmt->bind_param('ss', $vehicleId, $vehicleId);
+        $selectStmt->execute();
+        $updatedVehicle = $selectStmt->get_result()->fetch_assoc();
+        
+        if (!$updatedVehicle) {
+            throw new Exception("Failed to retrieve updated vehicle data");
+        }
+        
+        // Transform the updated vehicle data to match frontend format
+        $formattedVehicle = [
+            'id' => $updatedVehicle['id'] ?? $updatedVehicle['vehicle_id'] ?? '',
+            'vehicleId' => $updatedVehicle['vehicle_id'] ?? $updatedVehicle['id'] ?? '',
+            'name' => $updatedVehicle['name'] ?? '',
+            'capacity' => (int)($updatedVehicle['capacity'] ?? 4),
+            'luggageCapacity' => (int)($updatedVehicle['luggage_capacity'] ?? 2),
+            'price' => (float)($updatedVehicle['base_price'] ?? 0),
+            'basePrice' => (float)($updatedVehicle['base_price'] ?? 0),
+            'pricePerKm' => (float)($updatedVehicle['price_per_km'] ?? 0),
+            'image' => $updatedVehicle['image'] ?? '/cars/sedan.png',
+            'description' => $updatedVehicle['description'] ?? '',
+            'ac' => (bool)$updatedVehicle['ac'],
+            'nightHaltCharge' => (float)($updatedVehicle['night_halt_charge'] ?? 700),
+            'driverAllowance' => (float)($updatedVehicle['driver_allowance'] ?? 250),
+            'isActive' => (bool)$updatedVehicle['is_active']
+        ];
+        
+        // Parse amenities
         try {
-            $amenities = json_decode($dbVehicle['amenities'], true);
-            if (is_array($amenities)) {
-                $vehicle['amenities'] = $amenities;
+            $amenitiesValue = $updatedVehicle['amenities'] ?? '[]';
+            if (is_string($amenitiesValue)) {
+                $parsedAmenities = json_decode($amenitiesValue, true);
+                if (is_array($parsedAmenities)) {
+                    $formattedVehicle['amenities'] = $parsedAmenities;
+                } else {
+                    $formattedVehicle['amenities'] = explode(',', str_replace(['[', ']', '"', "'"], '', $amenitiesValue));
+                }
             } else {
-                $vehicle['amenities'] = array_map('trim', explode(',', $dbVehicle['amenities']));
+                $formattedVehicle['amenities'] = is_array($amenitiesValue) ? $amenitiesValue : ['AC'];
             }
         } catch (Exception $e) {
-            $vehicle['amenities'] = array_map('trim', explode(',', $dbVehicle['amenities']));
+            $formattedVehicle['amenities'] = ['AC'];
         }
-    } else {
-        $vehicle['amenities'] = ['AC'];
-    }
-    
-    logDebug("Using database record as base for vehicle object", $vehicle);
-} else {
-    // Use input data as base
-    $vehicle = [
-        'id' => $vehicleId,
-        'vehicleId' => $vehicleId,
-        'name' => isset($vehicleData['name']) ? $vehicleData['name'] : ucwords(str_replace('_', ' ', $vehicleId)),
-        'capacity' => isset($vehicleData['capacity']) ? (int)$vehicleData['capacity'] : 4,
-        'luggageCapacity' => isset($vehicleData['luggageCapacity']) ? (int)$vehicleData['luggageCapacity'] : 2,
-        'price' => isset($vehicleData['price']) ? (float)$vehicleData['price'] : 0,
-        'basePrice' => isset($vehicleData['basePrice']) ? (float)$vehicleData['basePrice'] : 0,
-        'pricePerKm' => isset($vehicleData['pricePerKm']) ? (float)$vehicleData['pricePerKm'] : 0,
-        'image' => isset($vehicleData['image']) ? $vehicleData['image'] : "/cars/{$vehicleId}.png",
-        'description' => isset($vehicleData['description']) ? $vehicleData['description'] : '',
-        'ac' => isset($vehicleData['ac']) ? (bool)$vehicleData['ac'] : true,
-        'nightHaltCharge' => isset($vehicleData['nightHaltCharge']) ? (float)$vehicleData['nightHaltCharge'] : 700,
-        'driverAllowance' => isset($vehicleData['driverAllowance']) ? (float)$vehicleData['driverAllowance'] : 250,
-        'isActive' => isset($vehicleData['isActive']) ? (bool)$vehicleData['isActive'] : true
-    ];
-    
-    // Handle amenities
-    if (isset($vehicleData['amenities'])) {
-        if (is_string($vehicleData['amenities'])) {
-            try {
-                $amenities = json_decode($vehicleData['amenities'], true);
-                if (is_array($amenities)) {
-                    $vehicle['amenities'] = $amenities;
-                } else {
-                    $vehicle['amenities'] = array_map('trim', explode(',', $vehicleData['amenities']));
-                }
-            } catch (Exception $e) {
-                $vehicle['amenities'] = array_map('trim', explode(',', $vehicleData['amenities']));
+        
+        // Format response with the updated vehicle data
+        $response = [
+            'status' => 'success',
+            'message' => 'Vehicle updated successfully',
+            'id' => $vehicleId,
+            'timestamp' => time(),
+            'vehicle' => $formattedVehicle
+        ];
+        
+        // Clear any vehicle data cache files
+        $cacheDir = dirname(__FILE__) . '/../../cache';
+        if (file_exists($cacheDir)) {
+            $cacheFiles = glob($cacheDir . '/vehicles*.json');
+            foreach ($cacheFiles as $file) {
+                @unlink($file);
             }
-        } else {
-            $vehicle['amenities'] = $vehicleData['amenities'];
         }
-    } else {
-        $vehicle['amenities'] = ['AC'];
-    }
-    
-    logDebug("Using input data as base for vehicle object", $vehicle);
-}
-
-// Now that we have the vehicle data (from DB or input), update the persistent cache
-
-// Load persistent data
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$persistentData = [];
-
-if (file_exists($persistentCacheFile)) {
-    try {
-        $persistentJson = file_get_contents($persistentCacheFile);
-        $persistentData = json_decode($persistentJson, true);
-        if (!is_array($persistentData)) {
-            logDebug("Persistent data is not an array, resetting");
-            $persistentData = [];
-        }
+        
     } catch (Exception $e) {
-        logDebug("Error reading persistent cache: " . $e->getMessage());
-        $persistentData = [];
+        // Rollback transaction on error
+        $conn->rollback();
+        throw $e;
+    } finally {
+        // Close connection
+        $conn->close();
     }
-}
-
-// Find vehicle in persistent data
-$vehicleIndex = -1;
-foreach ($persistentData as $index => $existingVehicle) {
-    $curId = isset($existingVehicle['id']) ? $existingVehicle['id'] : (isset($existingVehicle['vehicleId']) ? $existingVehicle['vehicleId'] : '');
-    if ($curId === $vehicleId) {
-        $vehicleIndex = $index;
-        break;
-    }
-}
-
-if ($vehicleIndex >= 0) {
-    // Update existing vehicle in persistent cache
-    $persistentData[$vehicleIndex] = $vehicle;
-    logDebug("Updated existing vehicle in persistent cache");
-} else {
-    // Add new vehicle to persistent cache
-    $persistentData[] = $vehicle;
-    logDebug("Added new vehicle to persistent cache");
-}
-
-// Save back to persistent cache
-$saveResult = file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));
-if ($saveResult === false) {
-    logDebug("Failed to save to persistent cache");
-} else {
-    logDebug("Saved to persistent cache successfully");
-}
-
-// Clear any temporary cache files
-$cacheFiles = glob($cacheDir . '/vehicles_*.json');
-foreach ($cacheFiles as $file) {
-    if ($file !== $persistentCacheFile && !strpos($file, 'persistent_backup')) {
-        unlink($file);
-        logDebug("Cleared cache file: " . basename($file));
-    }
-}
-
-// Return success response
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Vehicle updated successfully and saved to database',
-    'vehicle' => $vehicle,
-    'dbUpdated' => $dbUpdated,
-    'reload' => true,
-    'reloadUrl' => '/api/admin/reload-vehicles.php?_t=' . time()
-]);
-
-// After successful update, trigger a reload to ensure all systems get updated data
-try {
-    // Prepare and make the reload request
-    $reloadEndpoint = '/api/admin/reload-vehicles.php';
-    $reloadUrl = '';
-    
-    // Get the current script URL
-    if (isset($_SERVER['HTTP_HOST']) && isset($_SERVER['REQUEST_URI'])) {
-        $scriptUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
-        $reloadUrl = str_replace(basename($_SERVER['PHP_SELF']), "", $scriptUrl) . 'reload-vehicles.php';
-    } else if (isset($_SERVER['SCRIPT_URI'])) {
-        $reloadUrl = dirname($_SERVER['SCRIPT_URI']) . "/reload-vehicles.php";
-    } else {
-        // Try to construct a relative path
-        $reloadUrl = dirname($_SERVER['SCRIPT_NAME']) . "/reload-vehicles.php";
-        if (substr($reloadUrl, 0, 1) !== '/') {
-            $reloadUrl = '/' . $reloadUrl;
-        }
-    }
-    
-    logDebug("Calling API: api/admin/reload-vehicles.php");
-    
-    // Add timestamp to prevent caching
-    $reloadUrl .= "?_t=" . time();
-    
-    logDebug("Full URL: " . $reloadUrl);
-    
-    // Make the request
-    if (function_exists('curl_init')) {
-        $ch = curl_init($reloadUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HEADER, 0);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        $reloadResult = curl_exec($ch);
-        curl_close($ch);
-        
-        logDebug("Force refresh response: " . substr($reloadResult, 0, 500));
-    } else {
-        // Fallback to file_get_contents if curl is not available
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 5
-            ]
-        ]);
-        $reloadResult = @file_get_contents($reloadUrl, false, $context);
-        
-        logDebug("Force refresh response (via file_get_contents): " . substr($reloadResult, 0, 500));
-    }
-    
-    logDebug("Vehicle update API response: " . json_encode($vehicle));
 } catch (Exception $e) {
-    logDebug("Failed to trigger reload: " . $e->getMessage());
+    logMessage("Error updating vehicle: " . $e->getMessage(), 'direct-vehicle-update.log');
+    $response = [
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'timestamp' => time()
+    ];
 }
 
-// Clear cache files as final step
-foreach (glob($cacheDir . '/vehicles_*.json') as $cacheFile) {
-    if ($cacheFile !== $persistentCacheFile && strpos($cacheFile, 'persistent_backup') === false) {
-        @unlink($cacheFile);
-        logDebug("Clearing vehicle data cache: " . basename($cacheFile));
-    }
-}
-
-logDebug("Received vehicle-data-cache-cleared event");
+// Send the response
+echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
+exit;

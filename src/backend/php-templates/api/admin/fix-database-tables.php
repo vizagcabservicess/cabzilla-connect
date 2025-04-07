@@ -112,36 +112,6 @@ try {
             $updateResult2 = $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
             
             $response['details']['tables_fixed'][] = 'vehicles table - NULL values fixed in night_halt_charge and driver_allowance';
-        } else {
-            // Create vehicles table if it doesn't exist
-            $createVehiclesTable = "
-                CREATE TABLE IF NOT EXISTS vehicles (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                    name VARCHAR(100) NOT NULL,
-                    capacity INT NOT NULL DEFAULT 4,
-                    luggage_capacity INT NOT NULL DEFAULT 2,
-                    ac BOOLEAN NOT NULL DEFAULT TRUE,
-                    image VARCHAR(255),
-                    amenities TEXT,
-                    description TEXT,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                    driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            ";
-            
-            if ($conn->query($createVehiclesTable)) {
-                $response['details']['tables_fixed'][] = "Created vehicles table";
-                error_log(date('Y-m-d H:i:s') . " - Created vehicles table\n", 3, $logFile);
-            } else {
-                $response['details']['tables_failed'][] = "Failed to create vehicles table: " . $conn->error;
-                error_log(date('Y-m-d H:i:s') . " - Failed to create vehicles table: " . $conn->error . "\n", 3, $logFile);
-            }
         }
         
         // Fix 2: Check if outstation_fares table exists and fix its columns
@@ -162,229 +132,98 @@ try {
             $response['details']['tables_fixed'][] = 'outstation_fares table - NULL values fixed in night_halt_charge and driver_allowance';
         }
         
-        // Fix 3: Create and check airport_transfer_fares table
-        if ($conn->query("SHOW TABLES LIKE 'airport_transfer_fares'")->num_rows > 0) {
-            error_log(date('Y-m-d H:i:s') . " - Airport transfer fares table exists, checking structure\n", 3, $logFile);
-            
-            // Check if all required columns exist
-            $requiredColumns = [
-                'vehicle_id', 'base_price', 'price_per_km', 'pickup_price', 'drop_price',
-                'tier1_price', 'tier2_price', 'tier3_price', 'tier4_price', 'extra_km_charge'
-            ];
-            
-            $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares");
-            $existingColumns = [];
-            while ($columnRow = $columnsResult->fetch_assoc()) {
-                $existingColumns[] = $columnRow['Field'];
+        // Fix 3: Look for other tables with these columns and fix there too
+        $tables = [];
+        $tablesResult = $conn->query("SHOW TABLES");
+        while ($table = $tablesResult->fetch_array(MYSQLI_NUM)) {
+            $tables[] = $table[0];
+        }
+        
+        foreach ($tables as $table) {
+            $columnsResult = $conn->query("SHOW COLUMNS FROM `$table`");
+            $columns = [];
+            while ($column = $columnsResult->fetch_assoc()) {
+                $columns[] = $column['Field'];
             }
             
-            $missingColumns = array_diff($requiredColumns, $existingColumns);
-            
-            if (!empty($missingColumns)) {
-                error_log(date('Y-m-d H:i:s') . " - Missing columns in airport_transfer_fares: " . implode(', ', $missingColumns) . "\n", 3, $logFile);
-                
-                // Add missing columns
-                foreach ($missingColumns as $missingColumn) {
-                    $dataType = "DECIMAL(10,2) NOT NULL DEFAULT 0";
-                    if ($missingColumn === 'vehicle_id') {
-                        $dataType = "VARCHAR(50) NOT NULL";
-                    } else if ($missingColumn === 'price_per_km' || $missingColumn === 'extra_km_charge') {
-                        $dataType = "DECIMAL(5,2) NOT NULL DEFAULT 0";
-                    }
-                    
-                    $alterQuery = "ALTER TABLE airport_transfer_fares ADD COLUMN $missingColumn $dataType";
-                    if ($conn->query($alterQuery)) {
-                        $response['details']['tables_fixed'][] = "Added missing column $missingColumn to airport_transfer_fares";
-                        error_log(date('Y-m-d H:i:s') . " - Added missing column $missingColumn to airport_transfer_fares\n", 3, $logFile);
-                    } else {
-                        $response['details']['tables_failed'][] = "Failed to add column $missingColumn to airport_transfer_fares: " . $conn->error;
-                        error_log(date('Y-m-d H:i:s') . " - Failed to add column $missingColumn: " . $conn->error . "\n", 3, $logFile);
-                    }
-                }
+            if (in_array('night_halt_charge', $columns)) {
+                error_log(date('Y-m-d H:i:s') . " - Found night_halt_charge in $table, fixing\n", 3, $logFile);
+                $conn->query("UPDATE `$table` SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+                $response['details']['tables_fixed'][] = "$table - NULL values fixed in night_halt_charge";
             }
-        } else {
-            // Create airport_transfer_fares table if it doesn't exist
-            $createAirportFaresTable = "
-                CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                    id INT(11) NOT NULL AUTO_INCREMENT,
-                    vehicle_id VARCHAR(50) NOT NULL,
-                    base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                    pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (id),
-                    UNIQUE KEY vehicle_id (vehicle_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            ";
             
-            if ($conn->query($createAirportFaresTable)) {
-                $response['details']['tables_fixed'][] = "Created airport_transfer_fares table";
-                error_log(date('Y-m-d H:i:s') . " - Created airport_transfer_fares table\n", 3, $logFile);
-            } else {
-                $response['details']['tables_failed'][] = "Failed to create airport_transfer_fares table: " . $conn->error;
-                error_log(date('Y-m-d H:i:s') . " - Failed to create airport_transfer_fares table: " . $conn->error . "\n", 3, $logFile);
+            if (in_array('driver_allowance', $columns)) {
+                error_log(date('Y-m-d H:i:s') . " - Found driver_allowance in $table, fixing\n", 3, $logFile);
+                $conn->query("UPDATE `$table` SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+                $response['details']['tables_fixed'][] = "$table - NULL values fixed in driver_allowance";
             }
         }
         
-        // Fix 4: Create and check vehicle_pricing table
-        if ($conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0) {
-            error_log(date('Y-m-d H:i:s') . " - Vehicle pricing table exists, checking airport columns\n", 3, $logFile);
-            
-            // Check if all required airport columns exist
-            $airportColumns = [
-                'airport_base_price', 'airport_price_per_km', 'airport_pickup_price', 'airport_drop_price',
-                'airport_tier1_price', 'airport_tier2_price', 'airport_tier3_price', 'airport_tier4_price', 
-                'airport_extra_km_charge'
-            ];
-            
-            $columnsResult = $conn->query("SHOW COLUMNS FROM vehicle_pricing");
-            $existingColumns = [];
-            while ($columnRow = $columnsResult->fetch_assoc()) {
-                $existingColumns[] = $columnRow['Field'];
-            }
-            
-            $missingColumns = array_diff($airportColumns, $existingColumns);
-            
-            if (!empty($missingColumns)) {
-                error_log(date('Y-m-d H:i:s') . " - Missing columns in vehicle_pricing: " . implode(', ', $missingColumns) . "\n", 3, $logFile);
-                
-                // Add missing columns
-                foreach ($missingColumns as $missingColumn) {
-                    $dataType = "DECIMAL(10,2) NOT NULL DEFAULT 0";
-                    if ($missingColumn === 'airport_price_per_km' || $missingColumn === 'airport_extra_km_charge') {
-                        $dataType = "DECIMAL(5,2) NOT NULL DEFAULT 0";
-                    }
-                    
-                    $alterQuery = "ALTER TABLE vehicle_pricing ADD COLUMN $missingColumn $dataType";
-                    if ($conn->query($alterQuery)) {
-                        $response['details']['tables_fixed'][] = "Added missing column $missingColumn to vehicle_pricing";
-                        error_log(date('Y-m-d H:i:s') . " - Added missing column $missingColumn to vehicle_pricing\n", 3, $logFile);
-                    } else {
-                        $response['details']['tables_failed'][] = "Failed to add column $missingColumn to vehicle_pricing: " . $conn->error;
-                        error_log(date('Y-m-d H:i:s') . " - Failed to add column $missingColumn: " . $conn->error . "\n", 3, $logFile);
-                    }
-                }
-            }
-        } else {
-            // Create vehicle_pricing table if it doesn't exist
-            $createVehiclePricingTable = "
-                CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                    id INT(11) NOT NULL AUTO_INCREMENT,
-                    vehicle_id VARCHAR(50) NOT NULL,
-                    trip_type VARCHAR(20) NOT NULL,
-                    airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                    airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (id),
-                    UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            ";
-            
-            if ($conn->query($createVehiclePricingTable)) {
-                $response['details']['tables_fixed'][] = "Created vehicle_pricing table";
-                error_log(date('Y-m-d H:i:s') . " - Created vehicle_pricing table\n", 3, $logFile);
-            } else {
-                $response['details']['tables_failed'][] = "Failed to create vehicle_pricing table: " . $conn->error;
-                error_log(date('Y-m-d H:i:s') . " - Failed to create vehicle_pricing table: " . $conn->error . "\n", 3, $logFile);
-            }
-        }
-        
-        // Fix 5: Ensure all vehicles have corresponding entries in pricing tables
+        // Fix 4: Ensure all vehicles have corresponding entries in pricing tables
         $vehiclesResult = $conn->query("SELECT id, vehicle_id FROM vehicles");
-        if ($vehiclesResult) {
-            while ($vehicle = $vehiclesResult->fetch_assoc()) {
-                $vehicleId = $vehicle['vehicle_id'] ?? $vehicle['id'];
+        while ($vehicle = $vehiclesResult->fetch_assoc()) {
+            $vehicleId = $vehicle['id'] ?? $vehicle['vehicle_id'];
+            
+            // Check outstation_fares
+            $checkOutstation = $conn->query("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = '$vehicleId'");
+            $outstationCount = $checkOutstation->fetch_assoc()['count'];
+            
+            if ($outstationCount == 0) {
+                // Create entry with default values
+                $insertOutstation = $conn->query("
+                    INSERT INTO outstation_fares (
+                        vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                        roundtrip_base_price, roundtrip_price_per_km, created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 3000, 15, 700, 250, 2850, 12.75, NOW(), NOW()
+                    )
+                ");
                 
-                // Check airport_transfer_fares
-                $checkAirport = $conn->query("SELECT COUNT(*) as count FROM airport_transfer_fares WHERE vehicle_id = '$vehicleId'");
-                if ($checkAirport) {
-                    $airportCount = $checkAirport->fetch_assoc()['count'];
-                    
-                    if ($airportCount == 0) {
-                        // Create entry with default values
-                        $insertAirport = $conn->query("
-                            INSERT INTO airport_transfer_fares (
-                                vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                                tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
-                                created_at, updated_at
-                            ) VALUES (
-                                '$vehicleId', 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW(), NOW()
-                            )
-                        ");
-                        
-                        if ($insertAirport) {
-                            $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
-                            error_log(date('Y-m-d H:i:s') . " - Created airport transfer pricing for $vehicleId\n", 3, $logFile);
-                        }
-                    }
-                }
-                
-                // Check vehicle_pricing for airport entries
-                $checkVPAirport = $conn->query("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = '$vehicleId' AND trip_type = 'airport'");
-                if ($checkVPAirport) {
-                    $vpAirportCount = $checkVPAirport->fetch_assoc()['count'];
-                    
-                    if ($vpAirportCount == 0) {
-                        // Create entry with default values
-                        $insertVPAirport = $conn->query("
-                            INSERT INTO vehicle_pricing (
-                                vehicle_id, trip_type, airport_base_price, airport_price_per_km, airport_pickup_price,
-                                airport_drop_price, airport_tier1_price, airport_tier2_price, airport_tier3_price,
-                                airport_tier4_price, airport_extra_km_charge, created_at, updated_at
-                            ) VALUES (
-                                '$vehicleId', 'airport', 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW(), NOW()
-                            )
-                        ");
-                        
-                        if ($insertVPAirport) {
-                            $response['details']['vehicle_pricing_entries'][] = "Created vehicle_pricing airport entry for $vehicleId";
-                            error_log(date('Y-m-d H:i:s') . " - Created vehicle_pricing airport entry for $vehicleId\n", 3, $logFile);
-                        }
-                    }
+                if ($insertOutstation) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created outstation pricing for $vehicleId";
                 }
             }
-        }
-        
-        // Fix 6: Sync data between airport_transfer_fares and vehicle_pricing tables
-        $syncQuery = "
-            UPDATE vehicle_pricing vp
-            JOIN airport_transfer_fares atf ON vp.vehicle_id = atf.vehicle_id
-            SET 
-                vp.airport_base_price = atf.base_price,
-                vp.airport_price_per_km = atf.price_per_km,
-                vp.airport_pickup_price = atf.pickup_price,
-                vp.airport_drop_price = atf.drop_price,
-                vp.airport_tier1_price = atf.tier1_price,
-                vp.airport_tier2_price = atf.tier2_price,
-                vp.airport_tier3_price = atf.tier3_price,
-                vp.airport_tier4_price = atf.tier4_price,
-                vp.airport_extra_km_charge = atf.extra_km_charge,
-                vp.updated_at = NOW()
-            WHERE 
-                vp.trip_type = 'airport'
-        ";
-        
-        if ($conn->query($syncQuery)) {
-            $response['details']['tables_fixed'][] = "Synced data between airport_transfer_fares and vehicle_pricing tables";
-            error_log(date('Y-m-d H:i:s') . " - Synced data between airport_transfer_fares and vehicle_pricing tables\n", 3, $logFile);
-        } else {
-            $response['details']['tables_failed'][] = "Failed to sync between tables: " . $conn->error;
-            error_log(date('Y-m-d H:i:s') . " - Failed to sync between tables: " . $conn->error . "\n", 3, $logFile);
+            
+            // Check local_package_fares
+            $checkLocal = $conn->query("SELECT COUNT(*) as count FROM local_package_fares WHERE vehicle_id = '$vehicleId'");
+            $localCount = $checkLocal->fetch_assoc()['count'];
+            
+            if ($localCount == 0) {
+                // Create entry with default values
+                $insertLocal = $conn->query("
+                    INSERT INTO local_package_fares (
+                        vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                        price_extra_km, price_extra_hour, created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 1200, 2200, 2500, 14, 250, NOW(), NOW()
+                    )
+                ");
+                
+                if ($insertLocal) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created local package pricing for $vehicleId";
+                }
+            }
+            
+            // Check airport_transfer_fares
+            $checkAirport = $conn->query("SELECT COUNT(*) as count FROM airport_transfer_fares WHERE vehicle_id = '$vehicleId'");
+            $airportCount = $checkAirport->fetch_assoc()['count'];
+            
+            if ($airportCount == 0) {
+                // Create entry with default values
+                $insertAirport = $conn->query("
+                    INSERT INTO airport_transfer_fares (
+                        vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+                        created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, NOW(), NOW()
+                    )
+                ");
+                
+                if ($insertAirport) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
+                }
+            }
         }
         
         // Commit all changes

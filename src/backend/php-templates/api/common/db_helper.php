@@ -1,31 +1,25 @@
 
 <?php
 /**
- * Common database helper functions
- * Production-ready database helpers for vizagup.com
+ * db_helper.php - Common database connection helper
  */
 
 /**
  * Get a database connection with retry mechanism
  * 
  * @param int $maxRetries Maximum number of connection attempts
- * @return mysqli Database connection
- * @throws Exception If all connection attempts fail
+ * @return mysqli|null Database connection object or null if connection fails
+ * @throws Exception If connection fails after max retries
  */
 function getDbConnectionWithRetry($maxRetries = 3) {
-    $retries = 0;
+    $attempts = 0;
     $lastError = null;
     
-    while ($retries < $maxRetries) {
+    while ($attempts < $maxRetries) {
         try {
-            // Try to use config if available
-            if (file_exists(dirname(__FILE__) . '/../../config.php')) {
-                require_once dirname(__FILE__) . '/../../config.php';
-                $conn = getDbConnection();
-                if ($conn) return $conn;
-            }
+            $attempts++;
             
-            // If config not available or connection failed, use hardcoded credentials
+            // Define database connection with correct credentials
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
@@ -34,83 +28,115 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
             
             if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
+                throw new Exception("Connection failed: " . $conn->connect_error);
             }
             
-            // Set proper charset
-            $conn->set_charset("utf8mb4");
+            // Test the connection with a simple query
+            $testResult = $conn->query("SELECT 1");
+            if (!$testResult) {
+                throw new Exception("Test query failed: " . $conn->error);
+            }
             
+            // Set connection timeout and character set
+            $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 30);
+            $conn->set_charset('utf8mb4');
+            $conn->query("SET SESSION wait_timeout=300"); // 5 minutes
+            $conn->query("SET SESSION interactive_timeout=300"); // 5 minutes
+            
+            // Log successful connection
+            logMessage("Database connection established successfully", 'db_connection.log');
+            
+            // Success - return the connection
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
-            $retries++;
+            logMessage("Connection attempt {$attempts} failed: " . $e->getMessage(), 'db_connection.log');
             
-            if ($retries < $maxRetries) {
-                sleep(1); // Delay before retry
+            // Wait before retry with increasing delay
+            if ($attempts < $maxRetries) {
+                usleep(500000 * $attempts); // Increase wait time with each attempt
             }
         }
     }
     
-    // If we've exhausted all retries, throw the last error
-    if ($lastError) {
-        throw $lastError;
-    } else {
-        throw new Exception("Failed to connect to database after {$maxRetries} attempts");
-    }
+    // All attempts failed
+    logMessage("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 'db_connection.log');
+    throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
 }
 
 /**
- * Check database connection and return status
- *
- * @return array Connection status information
- */
-function checkDatabaseConnection() {
-    try {
-        $conn = getDbConnectionWithRetry(2);
-        
-        $isConnected = ($conn instanceof mysqli && !$conn->connect_error);
-        $version = null;
-        
-        if ($isConnected) {
-            // Get database version
-            $versionResult = $conn->query("SELECT VERSION() as version");
-            if ($versionResult && $row = $versionResult->fetch_assoc()) {
-                $version = $row['version'];
-            }
-            
-            $conn->close();
-        }
-        
-        return [
-            'status' => $isConnected ? 'success' : 'error',
-            'connection' => $isConnected,
-            'version' => $version,
-            'timestamp' => time()
-        ];
-    } catch (Exception $e) {
-        error_log("Database connection check failed: " . $e->getMessage());
-        return [
-            'status' => 'error',
-            'connection' => false,
-            'message' => $e->getMessage(),
-            'timestamp' => time()
-        ];
-    }
-}
-
-/**
- * Log message to a file with timestamp
+ * Write to application log
  * 
  * @param string $message Message to log
- * @param string $logFile Log file name
+ * @param string $logFileName Name of log file
  * @return void
  */
-function logMessage($message, $logFile = 'api.log') {
+function logMessage($message, $logFileName = 'application.log') {
     $logDir = dirname(__FILE__) . '/../../logs';
     if (!file_exists($logDir)) {
         mkdir($logDir, 0755, true);
     }
     
     $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/' . $logFile);
+    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/' . $logFileName);
+}
+
+/**
+ * Send API response as JSON
+ * 
+ * @param array $data Response data
+ * @param int $statusCode HTTP status code
+ * @return void
+ */
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    header('Content-Type: application/json');
+    echo json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
+    exit;
+}
+
+/**
+ * Check database connection and return status
+ * 
+ * @return array Connection status information
+ */
+function checkDatabaseConnection() {
+    try {
+        $conn = getDbConnectionWithRetry(2);
+        
+        // Check if vehicles table exists
+        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
+        $vehiclesTableExists = $tableCheckResult->num_rows > 0;
+        
+        // Get row count if table exists
+        $vehicleCount = 0;
+        if ($vehiclesTableExists) {
+            $countResult = $conn->query("SELECT COUNT(*) as count FROM vehicles");
+            if ($countResult) {
+                $vehicleCount = $countResult->fetch_assoc()['count'];
+            }
+        }
+        
+        // Close connection
+        $conn->close();
+        
+        return [
+            'status' => 'success',
+            'connection' => true,
+            'tables' => [
+                'vehicles' => [
+                    'exists' => $vehiclesTableExists,
+                    'count' => $vehicleCount
+                ]
+            ],
+            'timestamp' => time()
+        ];
+    } catch (Exception $e) {
+        return [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'connection' => false,
+            'timestamp' => time()
+        ];
+    }
 }

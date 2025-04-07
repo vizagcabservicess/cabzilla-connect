@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -98,7 +99,7 @@ export default function VehicleManagement() {
       const isConnected = await checkDatabaseConnection();
       
       if (!isConnected) {
-        toast.error("Database connection is unavailable. Attempting to fix...");
+        toast.warning("Database connection is unavailable. Attempting to fix...");
       }
       
       // Use the utility from apiHelper to ensure proper synchronization

@@ -61,11 +61,10 @@ export {
 
 // Export fare update service functions
 export {
+  updateOutstationFares,
   updateLocalFares,
-  updateAirportFares,
-  syncLocalFares,
-  syncAirportFares
-} from '@/services/fareManagementService';
+  updateAirportFares
+} from '@/services/fareUpdateService';
 
 // Export getData function from vehicleDataService
 export { 
