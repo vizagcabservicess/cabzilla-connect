@@ -16,6 +16,7 @@ export interface LocalFareData {
   price10hrs100km?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
+  extraKmCharge?: number; // Alternate field name
   [key: string]: any;
 }
 
@@ -34,6 +35,9 @@ export interface AirportFareData {
   extraKmCharge?: number;
   [key: string]: any;
 }
+
+// Generic fare data type for backwards compatibility
+export type FareData = LocalFareData | AirportFareData;
 
 /**
  * Initialize database tables

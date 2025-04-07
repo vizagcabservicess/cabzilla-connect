@@ -37,7 +37,7 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Set collation explicitly
+    // Set collation explicitly for the entire connection
     $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
     $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
     
@@ -48,8 +48,24 @@ try {
         // Check if table exists
         $result = $conn->query("SHOW TABLES LIKE '$table'");
         if ($result->num_rows > 0) {
-            // Table exists, fix collation
+            // Fix table character set and collation
             $conn->query("ALTER TABLE `$table` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            
+            // Fix collation on all text/string columns
+            $columnsResult = $conn->query("SHOW COLUMNS FROM `$table`");
+            while ($column = $columnsResult->fetch_assoc()) {
+                $columnName = $column['Field'];
+                $dataType = $column['Type'];
+                
+                // Only modify string-type columns
+                if (strpos($dataType, 'varchar') !== false || strpos($dataType, 'text') !== false || 
+                    strpos($dataType, 'char') !== false || strpos($dataType, 'enum') !== false) {
+                    $conn->query("ALTER TABLE `$table` MODIFY COLUMN `$columnName` $dataType CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                }
+            }
+            
+            // Add logging for diagnostics
+            error_log("Fixed collation for table: $table");
         }
     }
     

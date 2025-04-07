@@ -36,6 +36,19 @@ file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_
 
 // Include needed utils
 require_once __DIR__ . '/utils/response.php';
+require_once __DIR__ . '/utils/database.php';
+
+// Try to set collation for any database queries before redirecting
+try {
+    $conn = getDbConnection();
+    if ($conn) {
+        // Set collation explicitly for the entire connection
+        $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+    }
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
+}
 
 // Capture URL parameters
 file_put_contents($logFile, "[$timestamp] URL parameters: " . json_encode($_GET) . "\n", FILE_APPEND);
