@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +13,7 @@ import {
   updateAirportFares,
   syncLocalFares,
   syncAirportFares,
-  LocalFareData,
-  AirportFareData
+  FareData
 } from "@/services/fareManagementService";
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2, AlertTriangle } from "lucide-react";
