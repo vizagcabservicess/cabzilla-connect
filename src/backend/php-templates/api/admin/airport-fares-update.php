@@ -23,6 +23,7 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../utils/response.php';
 
 // Run the DB setup SQL to ensure all tables exist
 include_once __DIR__ . '/db_setup.php';
@@ -306,15 +307,15 @@ try {
         'data' => [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
-            'basePrice' => $basePrice,
-            'pricePerKm' => $pricePerKm,
-            'pickupPrice' => $pickupPrice,
-            'dropPrice' => $dropPrice,
-            'tier1Price' => $tier1Price,
-            'tier2Price' => $tier2Price,
-            'tier3Price' => $tier3Price,
-            'tier4Price' => $tier4Price,
-            'extraKmCharge' => $extraKmCharge
+            'basePrice' => (float)$basePrice,
+            'pricePerKm' => (float)$pricePerKm,
+            'pickupPrice' => (float)$pickupPrice,
+            'dropPrice' => (float)$dropPrice,
+            'tier1Price' => (float)$tier1Price,
+            'tier2Price' => (float)$tier2Price,
+            'tier3Price' => (float)$tier3Price,
+            'tier4Price' => (float)$tier4Price,
+            'extraKmCharge' => (float)$extraKmCharge
         ],
         'timestamp' => time()
     ];

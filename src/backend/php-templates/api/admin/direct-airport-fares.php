@@ -448,8 +448,7 @@ try {
         'debug' => [
             'vehicle_id' => $vehicleId ?? 'Not provided',
             'timestamp' => time(),
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+            'error' => $e->getMessage()
         ]
     ]);
 }

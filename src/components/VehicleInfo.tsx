@@ -23,6 +23,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
         <CardContent>
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No Data Available</AlertTitle>
             <AlertDescription>
               No vehicle data available. Vehicle may not be synced in the database.
             </AlertDescription>

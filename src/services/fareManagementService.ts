@@ -1,6 +1,7 @@
 
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { getApiUrl } from '@/config/api';
+import { toast } from 'sonner';
 
 export interface FareData {
   vehicleId: string;
@@ -115,7 +116,12 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     
     // Clean up vehicle ID and ensure it's properly formatted
     const cleanVehicleId = vehicleId ? encodeURIComponent(vehicleId.trim()) : '';
-    const endpoint = `api/admin/direct-airport-fares.php${cleanVehicleId ? `?vehicle_id=${cleanVehicleId}` : ''}`;
+    let endpoint = `api/admin/direct-airport-fares.php`;
+    
+    if (cleanVehicleId) {
+      endpoint += `?vehicle_id=${cleanVehicleId}`;
+    }
+    
     console.log(`Fetching airport fares from: ${endpoint}`);
     
     const result = await directVehicleOperation(endpoint, 'GET', {
@@ -221,8 +227,12 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
     } catch (syncError) {
       console.warn('Warning: Post-update local fare sync failed:', syncError);
     }
+    
+    // Show success toast
+    toast.success('Local fares updated successfully');
   } catch (error) {
     console.error('Error updating local fares:', error);
+    toast.error(`Failed to update local fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     throw error;
   }
 };
@@ -279,6 +289,9 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
       // Continue anyway, the update was successful
     }
     
+    // Show success toast
+    toast.success('Airport fares updated successfully');
+    
     // Dispatch an event to notify other components that fare data has been updated
     const fareDataUpdatedEvent = new CustomEvent('fare-data-updated', {
       detail: { 
@@ -290,6 +303,7 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
     
   } catch (error) {
     console.error('Error updating airport fares:', error);
+    toast.error(`Failed to update airport fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     throw error;
   }
 };
@@ -309,9 +323,16 @@ export const syncLocalFares = async (): Promise<any> => {
     });
     
     console.log('Local fares sync response:', result);
+    
+    // Show success toast
+    if (result && result.status === 'success') {
+      toast.success('Local fares synchronized successfully');
+    }
+    
     return result;
   } catch (error) {
     console.error('Error syncing local fares:', error);
+    toast.error(`Failed to sync local fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     throw error;
   }
 };
@@ -333,6 +354,11 @@ export const syncAirportFares = async (): Promise<any> => {
     
     console.log('Airport fares sync response:', result);
     
+    // Show success toast if the operation was successful
+    if (result && result.status === 'success') {
+      toast.success(`Airport fares synchronized successfully for ${result.vehicles_synced || 0} vehicles`);
+    }
+    
     // If sync was successful, trigger vehicle resync
     if (result && result.status === 'success') {
       try {
@@ -353,6 +379,7 @@ export const syncAirportFares = async (): Promise<any> => {
     return result;
   } catch (error) {
     console.error('Error syncing airport fares:', error);
+    toast.error(`Failed to sync airport fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     // Return a standardized error response instead of throwing
     return {
       status: 'error',
