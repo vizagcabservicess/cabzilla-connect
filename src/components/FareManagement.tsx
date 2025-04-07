@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -114,9 +114,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>
-          {fareType === 'local' ? 'Local Package Fares' : 'Airport Transfer Fares'}
-        </CardTitle>
+        <div>
+          <CardTitle>
+            {fareType === 'local' ? 'Local Package Fares' : 'Airport Transfer Fares'}
+          </CardTitle>
+          <CardDescription>
+            Manage pricing for {fareType === 'local' ? 'local packages' : 'airport transfers'} for this vehicle
+          </CardDescription>
+        </div>
         <Button 
           variant="outline" 
           size="sm" 

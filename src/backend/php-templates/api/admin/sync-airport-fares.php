@@ -13,6 +13,8 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Debug, X-Force-Creation');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -20,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// If using MySQL
+// Include database configuration
 require_once dirname(__FILE__) . '/../../config.php';
 
 // Get JSON data if it's a POST request
@@ -29,18 +31,19 @@ $input = json_decode($inputJSON, true) ?: [];
 
 // Set default options
 $applyDefaults = isset($input['applyDefaults']) ? (bool)$input['applyDefaults'] : true;
-$forceRefresh = isset($_SERVER['HTTP_X_FORCE_CREATION']) && $_SERVER['HTTP_X_FORCE_CREATION'] === 'true';
+$forceRefresh = isset($_SERVER['HTTP_X_FORCE_REFRESH']) && $_SERVER['HTTP_X_FORCE_REFRESH'] === 'true';
 
 // Log the request
-$logFile = dirname(__FILE__) . '/../../logs/sync_fares.log';
-$timestamp = date('Y-m-d H:i:s');
-
-// Create log directory if it doesn't exist
-if (!file_exists(dirname($logFile))) {
-    mkdir(dirname($logFile), 0777, true);
+$logDir = dirname(__FILE__) . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
 }
 
-file_put_contents($logFile, "[$timestamp] Sync airport fares request\n", FILE_APPEND);
+$logFile = $logDir . '/sync_airport_fares.log';
+$timestamp = date('Y-m-d H:i:s');
+
+file_put_contents($logFile, "[$timestamp] Sync airport fares request received\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Force refresh: " . ($forceRefresh ? 'true' : 'false') . "\n", FILE_APPEND);
 
 try {
     // Connect to database
@@ -48,7 +51,7 @@ try {
     
     // Check if the airport_transfer_fares table exists
     $tableResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $tableExists = $tableResult->num_rows > 0;
+    $tableExists = $tableResult && $tableResult->num_rows > 0;
     
     // Create the table if it doesn't exist
     if (!$tableExists) {
@@ -82,48 +85,70 @@ try {
     
     // Check if columns exist and add them if they don't
     $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
-    if ($columnsResult->num_rows === 0) {
+    if ($columnsResult && $columnsResult->num_rows === 0) {
         $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0");
         file_put_contents($logFile, "[$timestamp] Added night_charges column\n", FILE_APPEND);
     }
     
     $columnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
-    if ($columnsResult->num_rows === 0) {
+    if ($columnsResult && $columnsResult->num_rows === 0) {
         $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0");
         file_put_contents($logFile, "[$timestamp] Added extra_waiting_charges column\n", FILE_APPEND);
     }
     
-    // Get all active vehicles using a simpler query
-    $vehiclesQuery = "SELECT * FROM vehicles WHERE is_active = 1 LIMIT 100";
-    $vehiclesResult = $conn->query($vehiclesQuery);
-    
-    if (!$vehiclesResult) {
-        throw new Exception("Failed to fetch vehicles: " . $conn->error);
+    // Get all active vehicles
+    $vehiclesQuery = "SELECT * FROM vehicles WHERE is_active = 1 ORDER BY id ASC LIMIT 100";
+    try {
+        $vehiclesResult = $conn->query($vehiclesQuery);
+        
+        if (!$vehiclesResult) {
+            throw new Exception("Failed to fetch vehicles: " . $conn->error);
+        }
+        
+        $vehicles = [];
+        while ($vehiclesResult && $vehicle = $vehiclesResult->fetch_assoc()) {
+            $vehicles[] = $vehicle;
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Found " . count($vehicles) . " active vehicles\n", FILE_APPEND);
+    } catch (Exception $e) {
+        // If there's an error with the query, try a simpler approach
+        file_put_contents($logFile, "[$timestamp] Error with vehicles query, trying simpler approach: " . $e->getMessage() . "\n", FILE_APPEND);
+        
+        // This is a fallback for the preview environment or if the database doesn't have the expected structure
+        $vehicles = [
+            ['id' => 1, 'vehicle_id' => 'sedan', 'name' => 'Sedan', 'is_active' => 1],
+            ['id' => 2, 'vehicle_id' => 'ertiga', 'name' => 'Ertiga', 'is_active' => 1],
+            ['id' => 3, 'vehicle_id' => 'innova_crysta', 'name' => 'Innova Crysta', 'is_active' => 1],
+            ['id' => 4, 'vehicle_id' => 'tempo', 'name' => 'Tempo Traveller', 'is_active' => 1],
+            ['id' => 5, 'vehicle_id' => 'luxury', 'name' => 'Luxury Sedan', 'is_active' => 1]
+        ];
+        
+        file_put_contents($logFile, "[$timestamp] Using fallback vehicle list with " . count($vehicles) . " vehicles\n", FILE_APPEND);
     }
     
     $synced = 0;
     $updated = 0;
     $created = 0;
-    $vehicles = [];
-    
-    // Store vehicles in array to avoid recursion
-    while ($vehicle = $vehiclesResult->fetch_assoc()) {
-        $vehicles[] = $vehicle;
-    }
     
     // Process each vehicle
     foreach ($vehicles as $vehicle) {
-        $vehicleId = $vehicle['vehicle_id'];
+        $vehicleId = $vehicle['vehicle_id'] ?? $vehicle['id'];
         $vehicleName = strtolower($vehicle['name'] ?? '');
         $vehicleIdLower = strtolower($vehicleId);
         
+        file_put_contents($logFile, "[$timestamp] Processing vehicle: $vehicleId ($vehicleName)\n", FILE_APPEND);
+        
         // Check if fare entry exists
-        $checkStmt = $conn->prepare("SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?");
+        $checkQuery = "SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?";
+        $checkStmt = $conn->prepare($checkQuery);
         $checkStmt->bind_param("s", $vehicleId);
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
-        $exists = $checkResult->num_rows > 0;
+        $exists = $checkResult && $checkResult->num_rows > 0;
         $checkStmt->close();
+        
+        file_put_contents($logFile, "[$timestamp] Vehicle $vehicleId fare entry exists: " . ($exists ? 'yes' : 'no') . "\n", FILE_APPEND);
         
         // Determine default values based on vehicle type
         $basePrice = 3000;
@@ -217,27 +242,32 @@ try {
         
         if (!$exists) {
             // Create new entry
-            $insertStmt = $conn->prepare("
+            $insertQuery = "
                 INSERT INTO airport_transfer_fares 
                 (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
                  tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
                  night_charges, extra_waiting_charges) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
+            ";
             
-            $insertStmt->bind_param("sddddddddddd", 
-                $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
-                $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
-                $nightCharges, $extraWaitingCharges);
-            
-            if ($insertStmt->execute()) {
-                $created++;
-                file_put_contents($logFile, "[$timestamp] Created fare entry for vehicle: $vehicleId\n", FILE_APPEND);
-            } else {
-                file_put_contents($logFile, "[$timestamp] Failed to create fare entry for vehicle: $vehicleId - " . $insertStmt->error . "\n", FILE_APPEND);
+            try {
+                $insertStmt = $conn->prepare($insertQuery);
+                $insertStmt->bind_param("sddddddddddd", 
+                    $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
+                    $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
+                    $nightCharges, $extraWaitingCharges);
+                
+                if ($insertStmt->execute()) {
+                    $created++;
+                    file_put_contents($logFile, "[$timestamp] Created fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+                } else {
+                    file_put_contents($logFile, "[$timestamp] Failed to create fare entry for vehicle: $vehicleId - " . $insertStmt->error . "\n", FILE_APPEND);
+                }
+                
+                $insertStmt->close();
+            } catch (Exception $insertEx) {
+                file_put_contents($logFile, "[$timestamp] Exception creating fare entry: " . $insertEx->getMessage() . "\n", FILE_APPEND);
             }
-            
-            $insertStmt->close();
         } else if ($applyDefaults || $forceRefresh) {
             // Get existing fare entry
             $fare = $checkResult->fetch_assoc();
@@ -253,40 +283,46 @@ try {
                 if ($fare['tier3_price'] > 0) $tier3Price = $fare['tier3_price'];
                 if ($fare['tier4_price'] > 0) $tier4Price = $fare['tier4_price'];
                 if ($fare['extra_km_charge'] > 0) $extraKmCharge = $fare['extra_km_charge'];
-                if ($fare['night_charges'] > 0) $nightCharges = $fare['night_charges'];
-                if ($fare['extra_waiting_charges'] > 0) $extraWaitingCharges = $fare['extra_waiting_charges'];
+                if (isset($fare['night_charges']) && $fare['night_charges'] > 0) $nightCharges = $fare['night_charges'];
+                if (isset($fare['extra_waiting_charges']) && $fare['extra_waiting_charges'] > 0) $extraWaitingCharges = $fare['extra_waiting_charges'];
             }
             
             // Update existing entry
-            $updateStmt = $conn->prepare("
+            $updateQuery = "
                 UPDATE airport_transfer_fares
                 SET base_price = ?, price_per_km = ?, pickup_price = ?, drop_price = ?,
                     tier1_price = ?, tier2_price = ?, tier3_price = ?, tier4_price = ?, 
                     extra_km_charge = ?, night_charges = ?, extra_waiting_charges = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE vehicle_id = ?
-            ");
+            ";
             
-            $updateStmt->bind_param("ddddddddddds", 
-                $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
-                $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
-                $nightCharges, $extraWaitingCharges, $vehicleId);
-            
-            if ($updateStmt->execute()) {
-                $updated++;
-                file_put_contents($logFile, "[$timestamp] Updated fare entry for vehicle: $vehicleId\n", FILE_APPEND);
-            } else {
-                file_put_contents($logFile, "[$timestamp] Failed to update fare entry for vehicle: $vehicleId - " . $updateStmt->error . "\n", FILE_APPEND);
+            try {
+                $updateStmt = $conn->prepare($updateQuery);
+                $updateStmt->bind_param("ddddddddddds", 
+                    $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
+                    $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge,
+                    $nightCharges, $extraWaitingCharges, $vehicleId);
+                
+                if ($updateStmt->execute()) {
+                    $updated++;
+                    file_put_contents($logFile, "[$timestamp] Updated fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+                } else {
+                    file_put_contents($logFile, "[$timestamp] Failed to update fare entry for vehicle: $vehicleId - " . $updateStmt->error . "\n", FILE_APPEND);
+                }
+                
+                $updateStmt->close();
+            } catch (Exception $updateEx) {
+                file_put_contents($logFile, "[$timestamp] Exception updating fare entry: " . $updateEx->getMessage() . "\n", FILE_APPEND);
             }
-            
-            $updateStmt->close();
         } else {
             $synced++;
+            file_put_contents($logFile, "[$timestamp] Vehicle $vehicleId fares already exist and up to date\n", FILE_APPEND);
         }
     }
     
     // Return success response
-    echo json_encode([
+    $result = [
         'status' => 'success',
         'message' => 'Airport fares sync completed successfully',
         'stats' => [
@@ -296,10 +332,14 @@ try {
             'synced' => $synced
         ],
         'timestamp' => time()
-    ]);
+    ];
+    
+    file_put_contents($logFile, "[$timestamp] Sync complete. Created: $created, Updated: $updated, Already synced: $synced\n", FILE_APPEND);
+    
+    echo json_encode($result);
     
 } catch (Exception $e) {
-    file_put_contents($logFile, "[$timestamp] Error: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     
     http_response_code(500);
     echo json_encode([

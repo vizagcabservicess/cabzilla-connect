@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 
 interface ApiResponse {
@@ -107,7 +108,7 @@ export async function fetchWithTimeout(
 }
 
 /**
- * Make an API call to the backend 
+ * Make an API call to the backend with better error handling
  */
 export async function apiCall(endpoint: string, options: ApiOptions = {}): Promise<ApiResponse> {
   const { 
@@ -141,8 +142,24 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}): Promi
       // First try to get the response as text
       const textResponse = await response.text();
       
+      // Detect HTML responses (which would indicate an error)
+      if (textResponse.trim().startsWith('<!DOCTYPE html>') || 
+          textResponse.trim().startsWith('<html') || 
+          textResponse.trim().startsWith('<?php')) {
+        console.error('Received HTML instead of JSON:', textResponse.substring(0, 500));
+        
+        logOperation(endpoint, method, false, null, `Received HTML instead of JSON: ${textResponse.substring(0, 100)}...`);
+        
+        // Return a structured error response
+        return {
+          status: 'error',
+          message: 'Server returned HTML instead of JSON. This usually indicates a PHP error.',
+          htmlResponse: textResponse.substring(0, 500)
+        };
+      }
+      
       try {
-        // Then try to parse as JSON
+        // Try to parse as JSON
         const jsonResponse = JSON.parse(textResponse);
         
         // Log the successful operation
@@ -181,10 +198,13 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}): Promi
  */
 export async function checkDatabaseConnection(): Promise<DatabaseConnectionResponse> {
   try {
-    const response = await apiCall('api/admin/check-connection.php', {
+    const timestamp = Date.now();
+    const response = await apiCall(`api/admin/check-connection.php?_t=${timestamp}`, {
       method: 'GET',
       headers: {
-        'X-Admin-Mode': 'true'
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       },
       timeout: 10000
     });
@@ -212,17 +232,66 @@ export async function checkDatabaseConnection(): Promise<DatabaseConnectionRespo
 }
 
 /**
- * Fix database tables
+ * Fix database tables with improved error handling
  */
 export async function fixDatabaseTables(): Promise<boolean> {
   try {
-    const response = await apiCall('api/admin/fix-database.php', {
+    const timestamp = Date.now();
+    // Try direct form submission first - more reliable for PHP
+    const formData = new FormData();
+    formData.append('timestamp', timestamp.toString());
+    formData.append('action', 'fix');
+    
+    console.log('Attempting to fix database tables with form data...');
+    
+    // First attempt with FormData
+    try {
+      const formResponse = await fetch('/api/admin/fix-database.php', {
+        method: 'POST',
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: formData
+      });
+      
+      const textResponse = await formResponse.text();
+      
+      // Check if we got HTML instead of JSON
+      if (textResponse.trim().startsWith('<!DOCTYPE html>') || 
+          textResponse.trim().startsWith('<html') || 
+          textResponse.trim().startsWith('<?php')) {
+        console.error('Received HTML response when fixing database:', textResponse.substring(0, 500));
+        // Continue to try JSON approach below
+      } else {
+        try {
+          const jsonResponse = JSON.parse(textResponse);
+          if (jsonResponse.status === 'success') {
+            console.log('Database fixed successfully with form data:', jsonResponse);
+            toast.success('Database tables fixed successfully');
+            return true;
+          }
+        } catch (jsonError) {
+          console.error('Error parsing JSON from form response:', jsonError);
+          // Continue to try JSON approach below
+        }
+      }
+    } catch (formError) {
+      console.error('Form data approach failed:', formError);
+      // Continue to try JSON approach below
+    }
+    
+    // Fall back to standard JSON approach
+    console.log('Falling back to JSON approach...');
+    const response = await apiCall(`api/admin/fix-database.php?_t=${timestamp}`, {
       method: 'GET',
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': Date.now().toString()
+        'X-Force-Refresh': timestamp.toString(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       },
-      timeout: 20000
+      timeout: 30000 // Longer timeout for database operations
     });
     
     console.log('Fix database response:', response);
@@ -233,13 +302,16 @@ export async function fixDatabaseTables(): Promise<boolean> {
         console.log('Fixed tables:', response.fixed);
       }
       
+      toast.success('Database tables fixed successfully');
       return true;
     }
     
     console.error('Failed to fix database tables:', response.message || 'Unknown error');
+    toast.error(response.message || 'Failed to fix database tables');
     return false;
   } catch (error: any) {
     console.error('Error fixing database tables:', error);
+    toast.error('Error fixing database: ' + (error.message || 'Unknown error'));
     return false;
   }
 }
@@ -249,33 +321,53 @@ export async function fixDatabaseTables(): Promise<boolean> {
  */
 export async function forceRefreshVehicles(): Promise<boolean> {
   try {
-    const response = await apiCall('api/admin/reload-vehicles.php', {
+    const timestamp = Date.now();
+    const response = await apiCall(`api/admin/reload-vehicles.php?_t=${timestamp}`, {
       method: 'GET',
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': Date.now().toString()
+        'X-Force-Refresh': timestamp.toString(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
     
-    return response.status === 'success';
-  } catch (error) {
+    if (response.status === 'success') {
+      toast.success('Vehicles data refreshed successfully');
+      return true;
+    }
+    
+    toast.error(response.message || 'Failed to refresh vehicles data');
+    return false;
+  } catch (error: any) {
     console.error('Error refreshing vehicles:', error);
+    toast.error('Error refreshing vehicles: ' + (error.message || 'Unknown error'));
     return false;
   }
 }
 
 /**
- * Direct operation on vehicle data
+ * Direct operation on vehicle data with improved error handling
  */
 export async function directVehicleOperation(endpoint: string, method: string = 'GET', options: ApiOptions = {}): Promise<any> {
   try {
-    const response = await apiCall(endpoint, {
+    const timestamp = Date.now();
+    // Add timestamp to endpoint to prevent caching
+    const endpointWithTimestamp = endpoint.includes('?') 
+      ? `${endpoint}&_t=${timestamp}` 
+      : `${endpoint}?_t=${timestamp}`;
+    
+    const response = await apiCall(endpointWithTimestamp, {
       method: method as 'GET' | 'POST' | 'PUT' | 'DELETE',
+      headers: {
+        ...options.headers,
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
       ...options
     });
     
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error in direct vehicle operation (${endpoint}):`, error);
     throw error;
   }
