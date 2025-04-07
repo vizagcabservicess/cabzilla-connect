@@ -457,7 +457,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
+              <Label htmlFor="tier4Price">Tier 4 Price ({'>'}30km) (₹)</Label>
               <Input
                 id="tier4Price"
                 name="tier4Price"
