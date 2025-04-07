@@ -262,20 +262,27 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         try {
           const vehicleTypes = await getVehicleTypes();
           
-          vehicleTypes.forEach(vType => {
-            if (typeof vType === 'string') {
-              if (!allVehicles.some(v => v.id === vType)) {
-                allVehicles.push({
-                  id: vType,
-                  name: vType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                });
+          if (Array.isArray(vehicleTypes)) {
+            vehicleTypes.forEach((vType: any) => {
+              if (typeof vType === 'string') {
+                if (!allVehicles.some(v => v.id === vType)) {
+                  allVehicles.push({
+                    id: vType,
+                    name: vType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                  });
+                }
+              } else if (vType && typeof vType === 'object' && 'id' in vType) {
+                if (!allVehicles.some(v => v.id === vType.id)) {
+                  allVehicles.push({
+                    id: vType.id,
+                    name: vType.name || vType.id
+                  });
+                }
               }
-            } else if (vType && typeof vType === 'object' && 'id' in vType) {
-              if (!allVehicles.some(v => v.id === vType.id)) {
-                allVehicles.push(vType);
-              }
-            }
-          });
+            });
+          } else {
+            console.warn("getVehicleTypes did not return an array:", vehicleTypes);
+          }
         } catch (error) {
           console.error('Error loading vehicle types:', error);
         }
