@@ -10,8 +10,8 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
 import { FareUpdateError } from './cab-options/FareUpdateError';
-import { directApiPost } from '@/utils/directApiHelper';
 import { fareService } from '@/services/fareService';
+import { updateAirportFares } from '@/services/fareManagementService';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -114,7 +114,7 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: 
         extraWaitingCharges: values.extraWaitingCharges
       };
       
-      const response = await updateAirportFare(fareData);
+      const response = await updateAirportFares(fareData);
       
       toast.success(`Airport fare for ${vehicleId} updated successfully`);
       if (onSuccess) onSuccess();

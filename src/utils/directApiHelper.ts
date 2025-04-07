@@ -2,18 +2,52 @@
 import { apiBaseUrl } from '@/config/api';
 
 /**
+ * Extended RequestInit that includes data property for convenience
+ */
+export interface ExtendedRequestInit extends RequestInit {
+  body?: any;
+}
+
+/**
+ * Process request options and convert data to body if needed
+ * @param options Request options
+ * @returns Processed options
+ */
+function processRequestOptions(options?: RequestInit & { data?: any }): RequestInit {
+  if (!options) return {};
+  
+  const { data, ...restOptions } = options as any;
+  
+  // If data is provided and body is not, convert data to JSON body
+  if (data && !restOptions.body) {
+    return {
+      ...restOptions,
+      body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(restOptions.headers || {})
+      }
+    };
+  }
+  
+  return restOptions;
+}
+
+/**
  * Direct API call helper
  * @param endpoint API endpoint path
  * @param options Optional fetch options
  * @returns Response data
  */
-export async function directApiCall(endpoint: string, options?: RequestInit): Promise<any> {
+export async function directApiCall(endpoint: string, options?: RequestInit & { data?: any }): Promise<any> {
   try {
     const url = endpoint.startsWith('/') 
       ? `${apiBaseUrl}${endpoint}` 
       : `${apiBaseUrl}/${endpoint}`;
     
-    const response = await fetch(url, options);
+    const processedOptions = processRequestOptions(options);
+    
+    const response = await fetch(url, processedOptions);
     
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}`);
@@ -80,7 +114,7 @@ export async function directApiPost(endpoint: string, data: any, options?: Reque
  * @param options Optional fetch options
  * @returns Response data
  */
-export async function directApiCallWithFallback(primaryEndpoint: string, fallbackEndpoint: string, options?: RequestInit): Promise<any> {
+export async function directApiCallWithFallback(primaryEndpoint: string, fallbackEndpoint: string, options?: RequestInit & { data?: any }): Promise<any> {
   try {
     return await directApiCall(primaryEndpoint, options);
   } catch (error) {
@@ -104,4 +138,21 @@ export async function directApiPostWithFallback(primaryEndpoint: string, fallbac
     console.log(`Primary endpoint ${primaryEndpoint} failed, trying fallback ${fallbackEndpoint}`);
     return await directApiPost(fallbackEndpoint, data, options);
   }
+}
+
+// Export formatDataForMultipart from here
+export function formatDataForMultipart(data: Record<string, any>): FormData {
+  const formData = new FormData();
+  
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && value !== null) {
+      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, value);
+      }
+    }
+  }
+  
+  return formData;
 }

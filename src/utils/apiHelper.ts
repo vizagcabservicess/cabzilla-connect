@@ -1,157 +1,123 @@
 
 import { apiBaseUrl } from '@/config/api';
-import { getBypassHeaders } from '@/config/requestConfig';
+
+// Basic request options for API calls
+export interface ApiRequestOptions extends RequestInit {
+  data?: any;
+}
 
 /**
- * Directly perform a vehicle operation via API
+ * Make an API call with the provided options
+ * @param endpoint The API endpoint to call
+ * @param options Request options
+ * @returns JSON response
  */
-export async function directVehicleOperation(endpoint: string, method: string = 'GET', config: RequestInit & { body?: any } = {}): Promise<any> {
+export async function apiCall(endpoint: string, options?: ApiRequestOptions): Promise<any> {
   try {
-    const url = endpoint.startsWith('/') 
-      ? `${apiBaseUrl}${endpoint}` 
-      : `${apiBaseUrl}/${endpoint}`;
+    const url = endpoint.startsWith('http') 
+      ? endpoint 
+      : endpoint.startsWith('/') 
+        ? `${apiBaseUrl}${endpoint}` 
+        : `${apiBaseUrl}/${endpoint}`;
     
-    // Create a copy of the config to avoid modifying the original
-    const fetchOptions: RequestInit = {
-      method,
-      ...config
-    };
+    const processedOptions: RequestInit = { ...options };
     
-    // If body is provided and it's not already a string, stringify it
-    if (config.body && typeof config.body !== 'string' && !(config.body instanceof FormData)) {
-      fetchOptions.body = JSON.stringify(config.body);
+    // If data is provided and body is not, convert data to JSON body
+    if (options?.data && !options.body) {
+      processedOptions.body = JSON.stringify(options.data);
+      processedOptions.headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      };
     }
     
-    const response = await fetch(url, fetchOptions);
+    const response = await fetch(url, processedOptions);
     
     if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
+      throw new Error(`API call failed: ${response.status} ${response.statusText}`);
     }
     
     return await response.json();
   } catch (error) {
-    console.error('Error in vehicle operation:', error);
+    console.error('API call error:', error);
     throw error;
   }
 }
 
 /**
- * API call helper
+ * Perform a direct vehicle operation through the API
  */
-export async function apiCall(endpoint: string, options?: RequestInit): Promise<any> {
-  try {
-    const url = endpoint.startsWith('/') 
-      ? `${apiBaseUrl}${endpoint}` 
-      : `${apiBaseUrl}/${endpoint}`;
-    
-    const response = await fetch(url, options);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
+export function directVehicleOperation(endpoint: string, method: string = 'GET', options: ApiRequestOptions = {}): Promise<any> {
+  const processedOptions: ApiRequestOptions = {
+    method,
+    ...options,
+    headers: {
+      'X-Admin-Mode': 'true',
+      'X-Debug': 'true',
+      ...options.headers
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error in API call:', error);
-    throw error;
-  }
+  };
+  
+  return apiCall(endpoint, processedOptions);
 }
 
-/**
- * Force refresh all vehicles data
- */
+// Utility function to check if we're in preview mode
+export function isPreviewMode(): boolean {
+  return process.env.NODE_ENV === 'development' || 
+         window.location.hostname.includes('localhost') || 
+         window.location.hostname.includes('preview');
+}
+
+// Force refresh of vehicle data
 export async function forceRefreshVehicles(): Promise<boolean> {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/refresh-vehicles.php`, {
-      headers: getBypassHeaders()
+    const response = await apiCall('/api/admin/reload-vehicles.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
     
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data && data.success === true;
+    return response && response.status === 'success';
   } catch (error) {
-    console.error('Failed to refresh vehicles:', error);
+    console.error('Failed to force refresh vehicles:', error);
     return false;
   }
 }
 
-/**
- * Fix database tables (creates them if they don't exist)
- */
+// Fix database tables if needed
 export async function fixDatabaseTables(): Promise<boolean> {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php`, {
-      headers: getBypassHeaders()
+    const response = await apiCall('/api/admin/fix-database.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true'
+      }
     });
     
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data && data.success === true;
+    return response && response.status === 'success';
   } catch (error) {
     console.error('Failed to fix database tables:', error);
     return false;
   }
 }
 
-/**
- * Check if the system is running in preview mode
- */
-export function isPreviewMode(): boolean {
-  // Check for preview mode indicators
-  return (
-    window.location.hostname.includes('preview') ||
-    window.location.hostname.includes('localhost') ||
-    window.location.search.includes('preview=true')
-  );
-}
-
-/**
- * Check database connection
- */
-export async function checkDatabaseConnection(): Promise<boolean> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/check-connection.php`, {
-      headers: getBypassHeaders()
-    });
-    
-    if (!response.ok) {
-      return false;
-    }
-    
-    const data = await response.json();
-    return data && data.connection === true;
-  } catch (error) {
-    console.error('Failed to check database connection:', error);
-    return false;
-  }
-}
-
-/**
- * Format data for multipart form submission
- */
+// Export formatDataForMultipart function
 export function formatDataForMultipart(data: Record<string, any>): FormData {
   const formData = new FormData();
   
-  Object.entries(data).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      if (Array.isArray(value)) {
-        // Handle arrays by stringifying them
-        formData.append(key, JSON.stringify(value));
-      } else if (typeof value === 'object' && !(value instanceof File)) {
-        // Handle objects by stringifying them
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && value !== null) {
+      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
         formData.append(key, JSON.stringify(value));
       } else {
-        // Handle primitives and files directly
         formData.append(key, value);
       }
     }
-  });
+  }
   
   return formData;
 }
