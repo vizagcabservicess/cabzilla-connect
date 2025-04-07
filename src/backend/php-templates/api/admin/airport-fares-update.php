@@ -52,7 +52,7 @@ try {
                     $postData = $parsedData;
                     file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
                 } else {
-                    throw new Exception('Invalid input format: ' . json_last_error_msg());
+                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($json, 0, 100));
                 }
             }
         } else {
@@ -90,6 +90,9 @@ try {
         // Detailed logging of all available keys to debug the issue
         file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
             implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
+            
+        // Try to log the entire request data for debugging
+        file_put_contents($logFile, "[$timestamp] Full request data: " . json_encode($postData) . "\n", FILE_APPEND);
         throw new Exception('Vehicle ID is required');
     }
 
@@ -114,6 +117,39 @@ try {
     }
     
     file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
+    
+    // Check if airport_transfer_fares table exists
+    $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
+    $checkResult = $conn->query($checkTableQuery);
+    
+    if (!$checkResult || $checkResult->num_rows === 0) {
+        // Create the table if it doesn't exist
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+    }
     
     // First ensure the vehicle exists in vehicles table
     $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
@@ -234,6 +270,8 @@ try {
         'message' => 'Airport fare updated successfully',
         'vehicle_id' => $vehicleId,
         'data' => [
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
             'basePrice' => $basePrice,
             'pricePerKm' => $pricePerKm,
             'pickupPrice' => $pickupPrice,

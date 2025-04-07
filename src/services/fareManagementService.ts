@@ -4,6 +4,7 @@ import { getApiUrl } from '@/config/api';
 
 export interface FareData {
   vehicleId: string;
+  vehicle_id?: string;
   basePrice?: number;
   pricePerKm?: number;
   pickupPrice?: number;
@@ -17,11 +18,14 @@ export interface FareData {
   price8hrs80km?: number;
   price10hrs100km?: number;
   priceExtraHour?: number;
+  priceExtraKm?: number;
   // Airport specific fields
   priceOneWay?: number;
   priceRoundTrip?: number;
   nightCharges?: number;
   extraWaitingCharges?: number;
+  // For flexible property access
+  [key: string]: any;
 }
 
 // Function to initialize database tables to ensure they exist
@@ -103,14 +107,6 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     // Make sure database tables are initialized before fetching
     await initializeDatabaseTables();
     
-    // Ensure airport fares are synced
-    try {
-      await syncAirportFares();
-    } catch (syncError) {
-      console.warn('Warning: Pre-fetch airport fare sync failed:', syncError);
-      // Continue with fetch anyway
-    }
-    
     // Clean up vehicle ID and ensure it's properly formatted
     const cleanVehicleId = vehicleId ? encodeURIComponent(vehicleId.trim()) : '';
     const endpoint = `api/admin/direct-airport-fares.php${cleanVehicleId ? `?vehicle_id=${cleanVehicleId}` : ''}`;
@@ -127,25 +123,32 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
 
     console.log('Airport fares raw response:', result);
     
-    // Handle different response formats
-    if (result && result.status === 'success' && Array.isArray(result.fares)) {
-      return result.fares;
-    } else if (result && result.fares && typeof result.fares === 'object') {
-      if (Array.isArray(result.fares)) {
+    // Properly handle different response formats
+    if (result) {
+      if (result.status === 'success' && Array.isArray(result.fares)) {
         return result.fares;
+      } else if (result.fares && typeof result.fares === 'object') {
+        if (Array.isArray(result.fares)) {
+          return result.fares;
+        } else {
+          // Convert object with keys to array
+          return Object.values(result.fares);
+        }
+      } else if (Array.isArray(result)) {
+        return result;
       } else {
-        // Convert object with keys to array
-        return Object.values(result.fares);
+        // If no valid format is found, return an empty array
+        console.warn('No valid fare data in response, returning empty array');
+        return [];
       }
-    } else if (result && Array.isArray(result)) {
-      return result;
     }
     
-    console.warn('No valid fare data in response:', result);
+    // Default empty response
     return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
-    throw error;
+    // Return empty array instead of throwing to avoid breaking the UI
+    return [];
   }
 };
 
@@ -153,6 +156,13 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
   try {
     // Make sure database tables are initialized before updating
     await initializeDatabaseTables();
+    
+    // Ensure fareData has both vehicleId and vehicle_id formats for compatibility
+    if (fareData.vehicleId && !fareData.vehicle_id) {
+      fareData.vehicle_id = fareData.vehicleId;
+    } else if (fareData.vehicle_id && !fareData.vehicleId) {
+      fareData.vehicleId = fareData.vehicle_id;
+    }
     
     console.log('Updating local fares with data:', fareData);
     
@@ -189,7 +199,11 @@ export const updateAirportFares = async (fareData: FareData): Promise<void> => {
     await initializeDatabaseTables();
     
     // Ensure we have both vehicle ID formats for compatibility and clean any whitespace
-    const vehicleId = fareData.vehicleId ? fareData.vehicleId.trim() : '';
+    const vehicleId = fareData.vehicleId ? fareData.vehicleId.trim() : (fareData.vehicle_id ? fareData.vehicle_id.trim() : '');
+    
+    if (!vehicleId) {
+      throw new Error("Vehicle ID is required");
+    }
     
     const dataToSend = {
       ...fareData,
@@ -287,6 +301,11 @@ export const syncAirportFares = async (): Promise<any> => {
     return result;
   } catch (error) {
     console.error('Error syncing airport fares:', error);
-    throw error;
+    // Return a standardized error response instead of throwing
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error during airport fares sync',
+      timestamp: Date.now()
+    };
   }
 };

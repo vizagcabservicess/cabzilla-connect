@@ -11,11 +11,14 @@ interface VehicleInfoProps {
 }
 
 export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData }) => {
+  // Ensure we have a consistent vehicle ID
+  const displayVehicleId = vehicleId || (vehicleData?.vehicle_id || vehicleData?.vehicleId || 'Unknown');
+  
   if (!vehicleData) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle: {vehicleId}</CardTitle>
+          <CardTitle>Vehicle: {displayVehicleId}</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="warning" className="mb-4">
@@ -24,7 +27,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
               No vehicle data available. Vehicle may not be synced in the database.
             </AlertDescription>
           </Alert>
-          <p className="text-muted-foreground">ID: {vehicleId}</p>
+          <p className="text-muted-foreground">ID: {displayVehicleId}</p>
         </CardContent>
       </Card>
     );
@@ -34,7 +37,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
     <Card>
       <CardHeader>
         <CardTitle className="flex justify-between">
-          <span>{vehicleData.name || vehicleId}</span>
+          <span>{vehicleData.name || displayVehicleId}</span>
           <Badge>{vehicleData.active ? 'Active' : 'Inactive'}</Badge>
         </CardTitle>
       </CardHeader>
@@ -42,7 +45,7 @@ export const VehicleInfo: React.FC<VehicleInfoProps> = ({ vehicleId, vehicleData
         <div className="grid grid-cols-2 gap-4">
           <div>
             <h4 className="font-medium text-sm">Vehicle ID</h4>
-            <p>{vehicleId}</p>
+            <p>{displayVehicleId}</p>
           </div>
           <div>
             <h4 className="font-medium text-sm">Category</h4>
