@@ -1,4 +1,3 @@
-
 import { apiBaseUrl } from '@/config/api';
 
 // Basic request options for API calls
@@ -120,4 +119,26 @@ export function formatDataForMultipart(data: Record<string, any>): FormData {
   }
   
   return formData;
+}
+
+/**
+ * Checks the database connection
+ * @returns Promise that resolves to true if connection is successful, false otherwise
+ */
+export async function checkDatabaseConnection(): Promise<boolean> {
+  try {
+    const response = await apiCall('/api/admin/check-connection.php', {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+    
+    return response && response.connection === true;
+  } catch (error) {
+    console.error('Failed to check database connection:', error);
+    return false;
+  }
 }
