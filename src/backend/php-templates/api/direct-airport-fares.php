@@ -33,6 +33,7 @@ $timestamp = date('Y-m-d H:i:s');
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request parameters: " . json_encode($_GET) . "\n", FILE_APPEND);
 
 // Include needed utils
 require_once __DIR__ . '/utils/response.php';
@@ -67,6 +68,35 @@ foreach ($possibleKeys as $key) {
     }
 }
 
+// If no vehicle ID was found but we need one, try other sources
+if (!$vehicleId) {
+    // Check in POST data
+    foreach ($possibleKeys as $key) {
+        if (isset($_POST[$key]) && !empty($_POST[$key])) {
+            $vehicleId = $_POST[$key];
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in POST data $key: $vehicleId\n", FILE_APPEND);
+            break;
+        }
+    }
+    
+    // Check in JSON body if still not found
+    if (!$vehicleId) {
+        $jsonInput = file_get_contents('php://input');
+        if (!empty($jsonInput)) {
+            $jsonData = json_decode($jsonInput, true);
+            if ($jsonData && is_array($jsonData)) {
+                foreach ($possibleKeys as $key) {
+                    if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
+                        $vehicleId = $jsonData[$key];
+                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON input $key: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Clean up vehicle ID if it has a prefix like 'item-'
 if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
@@ -87,5 +117,14 @@ if ($vehicleId) {
     }
 }
 
-// Forward the request to the admin endpoint
-require_once __DIR__ . '/admin/direct-airport-fares.php';
+try {
+    // Forward the request to the admin endpoint
+    file_put_contents($logFile, "[$timestamp] Forwarding to admin/direct-airport-fares.php\n", FILE_APPEND);
+    require_once __DIR__ . '/admin/direct-airport-fares.php';
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Exception during forwarding: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Exception trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
+    
+    // Return a properly formatted error response
+    sendErrorResponse('Error processing request: ' . $e->getMessage());
+}

@@ -85,6 +85,8 @@ if (!$vehicleId && !empty($rawInput)) {
     $jsonError = json_last_error();
     
     if ($jsonError === JSON_ERROR_NONE) {
+        file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
+        
         foreach ($possibleKeys as $key) {
             if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
                 $vehicleId = $jsonData[$key];
@@ -99,6 +101,17 @@ if (!$vehicleId && !empty($rawInput)) {
                 if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
                     $vehicleId = $jsonData['data'][$key];
                     file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
+                    break;
+                }
+            }
+        }
+        
+        // Also check __data field
+        if (!$vehicleId && isset($jsonData['__data']) && is_array($jsonData['__data'])) {
+            foreach ($possibleKeys as $key) {
+                if (isset($jsonData['__data'][$key]) && !empty($jsonData['__data'][$key])) {
+                    $vehicleId = $jsonData['__data'][$key];
+                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in __data[$key]: $vehicleId\n", FILE_APPEND);
                     break;
                 }
             }
@@ -154,12 +167,20 @@ if ($vehicleId) {
             file_put_contents($logFile, "[$timestamp] Updated JSON input with vehicle ID\n", FILE_APPEND);
         }
     }
+    
+    try {
+        // Forward the request to the admin endpoint
+        file_put_contents($logFile, "[$timestamp] Forwarding to admin/airport-fares-update.php with vehicle ID: $vehicleId\n", FILE_APPEND);
+        require_once __DIR__ . '/admin/airport-fares-update.php';
+    } catch (Exception $e) {
+        file_put_contents($logFile, "[$timestamp] Exception during forwarding: " . $e->getMessage() . "\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Exception trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
+        
+        // Return a properly formatted error response
+        sendErrorResponse('Error updating airport fares: ' . $e->getMessage());
+    }
 } else {
     // No valid vehicle ID found, return an error
     file_put_contents($logFile, "[$timestamp] ERROR: No valid vehicle ID found in request\n", FILE_APPEND);
     sendErrorResponse('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.');
-    exit;
 }
-
-// Forward the request to the admin endpoint
-require_once __DIR__ . '/admin/airport-fares-update.php';

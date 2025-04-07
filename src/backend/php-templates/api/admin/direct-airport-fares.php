@@ -40,7 +40,9 @@ $logFile = $logDir . '/airport_fares_api_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Run database setup to ensure tables exist
-ensureDatabaseTables();
+if (function_exists('ensureDatabaseTables')) {
+    ensureDatabaseTables();
+}
 
 try {
     // Get database connection
@@ -61,12 +63,23 @@ try {
     $vehicleId = null;
     
     // Check for vehicle ID in various possible parameters
-    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'cabType'];
+    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'cabType', 'cab_type', 'vehicle_type', 'vehicleType'];
     foreach ($possibleParams as $param) {
         if (isset($_GET[$param]) && !empty($_GET[$param])) {
             $vehicleId = $_GET[$param];
             file_put_contents($logFile, "[$timestamp] Found vehicle ID in parameter '$param': $vehicleId\n", FILE_APPEND);
             break;
+        }
+    }
+    
+    // Check in the REQUEST array as well (might be set by forwarding script)
+    if (!$vehicleId) {
+        foreach ($possibleParams as $param) {
+            if (isset($_REQUEST[$param]) && !empty($_REQUEST[$param])) {
+                $vehicleId = $_REQUEST[$param];
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in REQUEST '$param': $vehicleId\n", FILE_APPEND);
+                break;
+            }
         }
     }
     
@@ -151,25 +164,27 @@ try {
     
     // Fetch results
     $fares = [];
-    while ($row = $result->fetch_assoc()) {
-        // Clean up data - convert numeric values properly
-        $fare = [
-            'id' => $row['id'],
-            'vehicleId' => $row['vehicleId'],
-            'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
-            'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
-            'basePrice' => (float)$row['basePrice'],
-            'pricePerKm' => (float)$row['pricePerKm'],
-            'pickupPrice' => (float)$row['pickupPrice'],
-            'dropPrice' => (float)$row['dropPrice'],
-            'tier1Price' => (float)$row['tier1Price'],
-            'tier2Price' => (float)$row['tier2Price'],
-            'tier3Price' => (float)$row['tier3Price'],
-            'tier4Price' => (float)$row['tier4Price'],
-            'extraKmCharge' => (float)$row['extraKmCharge']
-        ];
-        
-        $fares[] = $fare;
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            // Clean up data - convert numeric values properly
+            $fare = [
+                'id' => $row['id'],
+                'vehicleId' => $row['vehicleId'],
+                'vehicle_id' => $row['vehicleId'], // Include both formats for compatibility
+                'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicleId'])),
+                'basePrice' => (float)$row['basePrice'],
+                'pricePerKm' => (float)$row['pricePerKm'],
+                'pickupPrice' => (float)$row['pickupPrice'],
+                'dropPrice' => (float)$row['dropPrice'],
+                'tier1Price' => (float)$row['tier1Price'],
+                'tier2Price' => (float)$row['tier2Price'],
+                'tier3Price' => (float)$row['tier3Price'],
+                'tier4Price' => (float)$row['tier4Price'],
+                'extraKmCharge' => (float)$row['extraKmCharge']
+            ];
+            
+            $fares[] = $fare;
+        }
     }
     
     file_put_contents($logFile, "[$timestamp] Fetched " . count($fares) . " fare record(s)\n", FILE_APPEND);
@@ -177,6 +192,31 @@ try {
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
         file_put_contents($logFile, "[$timestamp] No fares found for vehicle ID: $vehicleId, creating default entry\n", FILE_APPEND);
+        
+        // First ensure the vehicle exists in vehicles table
+        $checkVehicleQuery = "SELECT vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?";
+        $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
+        
+        if ($checkVehicleStmt) {
+            $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+            $checkVehicleStmt->execute();
+            $checkVehicleResult = $checkVehicleStmt->get_result();
+            
+            // If vehicle doesn't exist, create it
+            if ($checkVehicleResult->num_rows === 0) {
+                $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+                
+                $insertVehicleQuery = "INSERT INTO vehicles (id, vehicle_id, name, is_active) VALUES (?, ?, ?, 1)";
+                $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+                
+                if ($insertVehicleStmt) {
+                    $insertVehicleStmt->bind_param("sss", $vehicleId, $vehicleId, $vehicleName);
+                    $insertVehicleStmt->execute();
+                    
+                    file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
+                }
+            }
+        }
         
         // Insert default entry for this vehicle and then fetch it again
         $insertQuery = "

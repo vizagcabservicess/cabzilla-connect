@@ -39,7 +39,9 @@ require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../../config.php';
 
 // Run the DB setup to ensure all tables exist
-ensureDatabaseTables();
+if (function_exists('ensureDatabaseTables')) {
+    ensureDatabaseTables();
+}
 
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
@@ -48,35 +50,40 @@ file_put_contents($logFile, "[$timestamp] Airport fares update request received\
 $rawInput = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] Raw input: $rawInput\n", FILE_APPEND);
 
+// Check if an updated raw input was provided by the forwarding script
+if (isset($GLOBALS['__UPDATED_RAW_INPUT']) && !empty($GLOBALS['__UPDATED_RAW_INPUT'])) {
+    $rawInput = $GLOBALS['__UPDATED_RAW_INPUT'];
+    file_put_contents($logFile, "[$timestamp] Using updated raw input from forwarding script: $rawInput\n", FILE_APPEND);
+}
+
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Only POST method is allowed');
     }
 
-    // Get request data
+    // Get request data - check various sources
     $postData = $_POST;
+    file_put_contents($logFile, "[$timestamp] POST data: " . print_r($postData, true) . "\n", FILE_APPEND);
     
     // If no POST data, try to get it from the request body
     if (empty($postData)) {
-        $json = file_get_contents('php://input');
-        file_put_contents($logFile, "[$timestamp] Raw JSON input: $json\n", FILE_APPEND);
-        
-        if (!empty($json)) {
-            $postData = json_decode($json, true);
+        if (!empty($rawInput)) {
+            $jsonData = json_decode($rawInput, true);
             $jsonError = json_last_error();
             
             if ($jsonError !== JSON_ERROR_NONE) {
                 file_put_contents($logFile, "[$timestamp] JSON decode error: " . json_last_error_msg() . "\n", FILE_APPEND);
                 
                 // Try to handle non-JSON data (might be URL encoded or form data)
-                parse_str($json, $parsedData);
+                parse_str($rawInput, $parsedData);
                 if (!empty($parsedData)) {
                     $postData = $parsedData;
                     file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
                 } else {
-                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($json, 0, 200));
+                    throw new Exception('Invalid input format: ' . json_last_error_msg() . ' - Input: ' . substr($rawInput, 0, 200));
                 }
             } else {
+                $postData = $jsonData;
                 file_put_contents($logFile, "[$timestamp] Successfully parsed JSON data\n", FILE_APPEND);
             }
         } else {
@@ -110,27 +117,22 @@ try {
         }
     }
 
+    // If still no vehicle ID found, check in request parameters
     if (!$vehicleId) {
-        // Check if there are any other keys that might contain the vehicle ID
-        file_put_contents($logFile, "[$timestamp] WARNING: Vehicle ID not found in standard keys. Available keys: " . 
-            implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
-            
-        // If no vehicle ID found but we have at least some data, try checking URL parameters
         foreach ($possibleKeys as $key) {
-            if (isset($_GET[$key]) && !empty($_GET[$key])) {
-                $vehicleId = trim($_GET[$key]);
-                file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
-                
-                // Also add to post data for consistency
-                $postData['vehicleId'] = $vehicleId;
-                $postData['vehicle_id'] = $vehicleId;
+            if (isset($_REQUEST[$key]) && !empty($_REQUEST[$key])) {
+                $vehicleId = trim($_REQUEST[$key]);
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in REQUEST parameter '$key': $vehicleId\n", FILE_APPEND);
                 break;
             }
         }
-        
-        if (!$vehicleId) {
-            throw new Exception('Vehicle ID is required but not found in request data or URL');
-        }
+    }
+
+    if (!$vehicleId) {
+        // Detailed error message with all available data
+        file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found. POST:" . print_r($_POST, true) . 
+            " GET:" . print_r($_GET, true) . " REQUEST:" . print_r($_REQUEST, true) . "\n", FILE_APPEND);
+        throw new Exception('Vehicle ID is required but not found in request data or URL');
     }
 
     // Normalize vehicle ID
@@ -155,6 +157,20 @@ try {
     $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : 0;
     $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : 0;
     $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 0;
+
+    // Log fare data for debugging
+    file_put_contents($logFile, "[$timestamp] Fare data to save: " . json_encode([
+        'vehicleId' => $vehicleId,
+        'basePrice' => $basePrice,
+        'pricePerKm' => $pricePerKm,
+        'pickupPrice' => $pickupPrice,
+        'dropPrice' => $dropPrice,
+        'tier1Price' => $tier1Price,
+        'tier2Price' => $tier2Price,
+        'tier3Price' => $tier3Price,
+        'tier4Price' => $tier4Price,
+        'extraKmCharge' => $extraKmCharge
+    ]) . "\n", FILE_APPEND);
     
     // Connect to the database
     $conn = getDbConnection();
