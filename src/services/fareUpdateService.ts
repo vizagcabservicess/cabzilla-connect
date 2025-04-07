@@ -94,6 +94,7 @@ export const updateLocalFares = updateLocalFare;
  */
 export async function updateAirportFare(data: AirportFareUpdate) {
   console.log('Updating airport fare:', data);
+  const errors: string[] = [];
   
   try {
     // Validate data
@@ -119,20 +120,43 @@ export async function updateAirportFare(data: AirportFareUpdate) {
     
     console.log('Sending airport fare data to API:', fareData);
     
+    // Try using form data format instead of JSON
+    const formData = new FormData();
+    Object.entries(fareData).forEach(([key, value]) => {
+      formData.append(key, String(value));
+    });
+    
+    // Create an array to hold all errors
+    let directApiError = null;
+    
     try {
       // First try the direct-airport-fares-update endpoint which is more reliable
-      const directResponse = await apiCall('api/admin/direct-airport-fares-update.php', {
-        data: fareData,
+      const directResponse = await fetch('/api/admin/direct-airport-fares-update.php', {
         method: 'POST',
+        body: formData,
         headers: {
           'X-Admin-Mode': 'true',
-          'Content-Type': 'application/json'
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache'
         }
       });
       
-      console.log('Direct endpoint response:', directResponse);
+      // Log raw response for debugging
+      const rawText = await directResponse.text();
+      console.log('Direct endpoint raw response:', rawText);
       
-      if (directResponse && directResponse.status === 'success') {
+      // Try to parse the response as JSON
+      let directJsonResponse;
+      try {
+        directJsonResponse = JSON.parse(rawText);
+        console.log('Direct endpoint parsed response:', directJsonResponse);
+      } catch (jsonError) {
+        console.error('Error parsing direct endpoint response as JSON:', jsonError);
+        errors.push(`Direct API failed: ${jsonError.message}`);
+        directApiError = new Error(`Invalid JSON response: ${rawText.substring(0, 100)}`);
+      }
+      
+      if (directJsonResponse && directJsonResponse.status === 'success') {
         // Clear vehicle cache to ensure updated data is fetched next time
         clearVehicleDataCache();
         
@@ -142,44 +166,139 @@ export async function updateAirportFare(data: AirportFareUpdate) {
         }));
         
         toast.success('Airport fares updated successfully');
-        return directResponse;
+        return directJsonResponse;
+      } else if (directJsonResponse) {
+        // Response has error message
+        errors.push(`Direct API failed: ${directJsonResponse.message || 'Unknown error'}`);
+        directApiError = new Error(directJsonResponse.message || 'Direct API request failed');
+      } else {
+        // Response couldn't be parsed as JSON
+        errors.push('Direct API failed: Invalid response format');
+        directApiError = new Error('Invalid response format from direct API');
       }
-      
-      // If direct endpoint fails, try the original endpoint
-      console.log('Direct endpoint failed or returned error, trying original endpoint...');
     } catch (directError: any) {
       console.error('Error with direct endpoint:', directError);
-      // Continue to try original endpoint
+      errors.push(`Direct API failed: ${directError.message}`);
+      directApiError = directError;
     }
     
-    // Original endpoint as fallback
-    console.log('Trying fallback endpoint...');
-    const response = await apiCall('api/admin/update-airport-fare.php', {
-      data: fareData,
-      method: 'POST',
-      headers: {
-        'X-Admin-Mode': 'true',
-        'Content-Type': 'application/json'
+    // Try fallback method: airport-fares-update.php
+    try {
+      console.log('Trying airport-fares-update.php endpoint...');
+      
+      // Use a URL-encoded format for this endpoint
+      const params = new URLSearchParams();
+      Object.entries(fareData).forEach(([key, value]) => {
+        params.append(key, String(value));
+      });
+      
+      const response = await fetch('/api/admin/airport-fares-update.php', {
+        method: 'POST',
+        body: params.toString(),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      // Log raw response
+      const rawText = await response.text();
+      console.log('Fallback endpoint raw response:', rawText);
+      
+      // Try to parse the response
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(rawText);
+        console.log('Fallback endpoint parsed response:', jsonResponse);
+      } catch (jsonError) {
+        console.error('Error parsing fallback endpoint response as JSON:', jsonError);
+        errors.push(`Fare Update API failed: ${jsonError.message}`);
+        throw new Error(`Invalid JSON response from fallback API: ${rawText.substring(0, 100)}`);
       }
-    });
-    
-    console.log('Fallback endpoint response:', response);
-    
-    if (response && response.status === 'success') {
-      // Clear vehicle cache to ensure updated data is fetched next time
-      clearVehicleDataCache();
       
-      // Dispatch an event to notify components that fares changed
-      window.dispatchEvent(new CustomEvent('airport-fares-updated', {
-        detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
-      }));
+      if (jsonResponse && jsonResponse.status === 'success') {
+        // Clear vehicle cache to ensure updated data is fetched next time
+        clearVehicleDataCache();
+        
+        // Dispatch an event to notify components that fares changed
+        window.dispatchEvent(new CustomEvent('airport-fares-updated', {
+          detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
+        }));
+        
+        toast.success('Airport fares updated successfully via fallback API');
+        return jsonResponse;
+      } else {
+        errors.push(`Fare Update API failed: ${jsonResponse?.message || 'Unknown error'}`);
+        throw new Error(jsonResponse?.message || 'Fallback API request failed');
+      }
+    } catch (fallbackError: any) {
+      console.error('Error with fallback endpoint:', fallbackError);
+      errors.push(`Fare Update API failed: ${fallbackError.message}`);
       
-      toast.success('Airport fares updated successfully');
-      return response;
-    } else {
-      console.error('Error updating airport fare:', response?.message || 'Unknown error');
-      toast.error(response?.message || 'Failed to update airport fare');
-      throw new Error(response?.message || 'Failed to update airport fare');
+      // If we reach here, both attempts failed. Try a third approach using direct-fare-update.php
+      try {
+        console.log('Trying direct-fare-update.php as last resort...');
+        
+        // Prepare data for direct-fare-update.php
+        const directFareData = new FormData();
+        directFareData.append('vehicleId', data.vehicleId);
+        directFareData.append('tripType', 'airport');
+        
+        // Add all fare data
+        Object.entries(fareData).forEach(([key, value]) => {
+          directFareData.append(key, String(value));
+        });
+        
+        const directFareResponse = await fetch('/api/admin/direct-fare-update.php', {
+          method: 'POST',
+          body: directFareData,
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
+          }
+        });
+        
+        // Log raw response
+        const rawDirectFareText = await directFareResponse.text();
+        console.log('Direct fare update endpoint raw response:', rawDirectFareText);
+        
+        // Try to parse response
+        let directFareJson;
+        try {
+          directFareJson = JSON.parse(rawDirectFareText);
+          console.log('Direct fare update endpoint parsed response:', directFareJson);
+        } catch (jsonError) {
+          console.error('Error parsing direct fare update response as JSON:', jsonError);
+          errors.push(`Fare Service failed: ${jsonError.message}`);
+          throw new Error('All update approaches failed');
+        }
+        
+        if (directFareJson && directFareJson.status === 'success') {
+          // Clear vehicle cache to ensure updated data is fetched next time
+          clearVehicleDataCache();
+          
+          // Dispatch an event to notify components that fares changed
+          window.dispatchEvent(new CustomEvent('airport-fares-updated', {
+            detail: { timestamp: Date.now(), vehicleId: data.vehicleId }
+          }));
+          
+          toast.success('Airport fares updated successfully via direct fare update');
+          return directFareJson;
+        } else {
+          errors.push(`Fare Service failed: ${directFareJson?.message || 'Unknown error'}`);
+          throw new Error('All update approaches failed');
+        }
+      } catch (directFareError: any) {
+        console.error('Error with direct fare update endpoint:', directFareError);
+        errors.push(`Fare Service failed: ${directFareError.message}`);
+        
+        // If we get here, all three attempts failed
+        const combinedError = new Error(`Failed to update airport fare: ${errors.join(', ')}`);
+        toast.error(combinedError.message);
+        throw combinedError;
+      }
     }
   } catch (error: any) {
     console.error('Error in updateAirportFare:', error);
@@ -325,37 +444,57 @@ export async function syncAirportFares(forceRefresh: boolean = false): Promise<b
     console.log('Syncing airport fares table');
     toast.info('Syncing airport fares table...');
     
-    const response = await apiCall('api/admin/sync-airport-fares.php', {
+    const formData = new FormData();
+    formData.append('force', forceRefresh ? 'true' : 'false');
+    
+    const response = await fetch('/api/admin/fix-database.php', {
       method: 'POST',
+      body: formData,
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': forceRefresh ? 'true' : 'false',
-        'Content-Type': 'application/json'
+        'X-Force-Creation': 'true',
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache'
       }
     });
     
-    console.log('Sync airport fares response:', response);
+    if (!response.ok) {
+      throw new Error(`Database fix failed with status ${response.status}`);
+    }
     
-    if (response && response.status === 'success') {
+    // Get raw response text for debugging
+    const rawText = await response.text();
+    console.log('Database fix raw response:', rawText);
+    
+    // Try to parse as JSON
+    let jsonResponse;
+    try {
+      jsonResponse = JSON.parse(rawText);
+      console.log('Database fix parsed response:', jsonResponse);
+    } catch (e) {
+      console.error('Error parsing database fix response:', e);
+      throw new Error(`Invalid JSON response: ${rawText.substring(0, 100)}`);
+    }
+    
+    if (jsonResponse.status === 'success') {
       // Clear vehicle cache to ensure updated data is fetched next time
       clearVehicleDataCache();
       
       // Dispatch an event to notify components that fares changed
       window.dispatchEvent(new CustomEvent('airport-fares-updated', {
-        detail: { timestamp: Date.now(), vehicles: response.vehicles || [] }
+        detail: { timestamp: Date.now() }
       }));
       
-      const { created, updated, synced } = response.stats || { created: 0, updated: 0, synced: 0 };
-      toast.success(`Airport fares synced: ${created} created, ${updated} updated, ${synced} verified`);
+      toast.success(`Database fix completed: ${jsonResponse.message || 'Tables verified'}`);
       return true;
     }
     
-    console.error('Failed to sync airport fares:', response?.message || 'Unknown error');
-    toast.error(response?.message || 'Failed to sync airport fares');
+    console.error('Failed to fix airport fares database:', jsonResponse.message);
+    toast.error(jsonResponse.message || 'Failed to fix airport fares database');
     return false;
   } catch (error: any) {
-    console.error('Error syncing airport fares:', error);
-    toast.error(`Error syncing airport fares: ${error.message || 'Unknown error'}`);
+    console.error('Error fixing airport fares database:', error);
+    toast.error(`Error fixing airport fares database: ${error.message}`);
     return false;
   }
 }

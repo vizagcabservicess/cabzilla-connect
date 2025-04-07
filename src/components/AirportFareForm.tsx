@@ -35,9 +35,10 @@ interface AirportFareFormProps {
   vehicleId: string;
   initialData: AirportFare | null;
   onSuccess?: () => void;
+  onError?: (error: Error) => void;
 }
 
-export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFareFormProps) {
+export function AirportFareForm({ vehicleId, initialData, onSuccess, onError }: AirportFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -78,14 +79,60 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
     }
   }, [initialData, form]);
 
+  // Test the API connection directly
+  const testApiConnection = async () => {
+    try {
+      const testResponse = await fetch('/api/admin/direct-api-test.php', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      if (!testResponse.ok) {
+        throw new Error(`API test failed with status: ${testResponse.status}`);
+      }
+      
+      const testData = await testResponse.json();
+      console.log("API test results:", testData);
+      
+      if (testData.database && testData.database.connected) {
+        toast.success("API connection test successful");
+        return true;
+      } else {
+        const errorMsg = testData.database?.error || "Database connection failed";
+        toast.error(`API test failed: ${errorMsg}`);
+        return false;
+      }
+    } catch (err: any) {
+      console.error("API test error:", err);
+      toast.error(`API test error: ${err.message}`);
+      return false;
+    }
+  };
+
   async function onSubmit(values: AirportFareFormValues) {
     if (!vehicleId) {
-      setError(new Error("Vehicle ID is required"));
+      const noVehicleError = new Error("Vehicle ID is required");
+      setError(noVehicleError);
+      if (onError) onError(noVehicleError);
       return;
     }
 
     setIsLoading(true);
     setError(null);
+
+    // First test the API connection
+    const connectionOk = await testApiConnection();
+    if (!connectionOk) {
+      const connectionError = new Error("API connection test failed. Please check your connection before trying again.");
+      setError(connectionError);
+      setIsLoading(false);
+      if (onError) onError(connectionError);
+      return;
+    }
 
     try {
       // Make sure all required fields are included and not undefined
@@ -119,11 +166,13 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
         const errorMessage = response?.message || "Failed to update airport fares";
         const newError = new Error(errorMessage);
         setError(newError);
+        if (onError) onError(newError);
         toast.error(errorMessage);
       }
     } catch (err: any) {
       console.error("Error updating airport fares:", err);
       setError(err);
+      if (onError) onError(err);
       toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);

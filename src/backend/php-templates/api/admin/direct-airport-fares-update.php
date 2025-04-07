@@ -30,20 +30,38 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/airport_fares_update_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
-// Get JSON data
+// Get JSON data from request
 $inputJSON = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] Raw input received: " . $inputJSON . "\n", FILE_APPEND);
 
-$input = json_decode($inputJSON, true);
+// Try to decode JSON data
+$input = null;
+if (!empty($inputJSON)) {
+    $input = json_decode($inputJSON, true);
+    // Check if JSON parsing failed
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        file_put_contents($logFile, "[$timestamp] JSON parsing failed: " . json_last_error_msg() . "\n", FILE_APPEND);
+        
+        // Try to handle it as form data
+        if (!empty($_POST)) {
+            $input = $_POST;
+            file_put_contents($logFile, "[$timestamp] Using POST data\n", FILE_APPEND);
+        } else {
+            // Try to parse raw input as URL-encoded
+            parse_str($inputJSON, $parsedData);
+            if (!empty($parsedData)) {
+                $input = $parsedData;
+                file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
+            }
+        }
+    }
+}
 
-// If JSON parsing fails, try to handle it as form data
-if (json_last_error() !== JSON_ERROR_NONE) {
-    file_put_contents($logFile, "[$timestamp] JSON parsing failed, trying form data\n", FILE_APPEND);
-    $input = $_POST;
-    
-    // If still no data, try to parse raw input as URL-encoded
-    if (empty($input)) {
-        parse_str($inputJSON, $input);
+// If still no data, check query parameters
+if (empty($input)) {
+    if (!empty($_GET)) {
+        $input = $_GET;
+        file_put_contents($logFile, "[$timestamp] Using GET data\n", FILE_APPEND);
     }
 }
 
@@ -81,9 +99,17 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
+    if (!$conn) {
+        throw new Exception("Database connection failed");
+    }
+    
     // Check if the airport_transfer_fares table exists
     $tableResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    $tableExists = $tableResult && $tableResult->num_rows > 0;
+    if (!$tableResult) {
+        throw new Exception("Error checking for airport_transfer_fares table: " . $conn->error);
+    }
+    
+    $tableExists = $tableResult->num_rows > 0;
     
     // Create the table if it doesn't exist
     if (!$tableExists) {

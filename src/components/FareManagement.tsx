@@ -63,10 +63,18 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     loadFares();
   }, [loadFares]);
   
+  const handleFareUpdateErrorCallback = (err: any) => {
+    console.error(`Error in ${fareType} fare update:`, err);
+    setError(`Failed to update ${fareType} fares: ${err.message}`);
+    toast.error(`Error updating ${fareType} fares: ${err.message}`);
+  };
+
   const handleSyncTable = async () => {
     if (isSyncing) return;
     
     setIsSyncing(true);
+    setError(null);
+    
     try {
       toast.info(`Syncing ${fareType} fares table...`);
       
@@ -90,6 +98,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     } catch (err: any) {
       console.error(`Error syncing ${fareType} fares table:`, err);
       toast.error(`Failed to sync ${fareType} fares table: ${err.message}`);
+      setError(`Failed to sync ${fareType} fares table: ${err.message}`);
     } finally {
       setIsSyncing(false);
     }
@@ -100,13 +109,50 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     loadFares();
   };
   
+  const testDatabaseConnection = async () => {
+    try {
+      toast.info("Testing database connection...");
+      const response = await fetch('/api/admin/direct-api-test.php', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API test failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Database connection test results:", data);
+      
+      if (data.database && data.database.connected) {
+        toast.success("Database connection successful!");
+        // Force reload fares after successful connection test
+        loadFares();
+        setDatabaseError(null);
+      } else {
+        const errorMsg = data.database?.error || "Database connection failed";
+        toast.error(`Database connection test failed: ${errorMsg}`);
+      }
+    } catch (err: any) {
+      console.error("Database connection test error:", err);
+      toast.error(`Database connection test error: ${err.message}`);
+    }
+  };
+  
   if (databaseError) {
     return (
       <DatabaseConnectionError 
         error={databaseError}
-        onRetry={loadFares}
+        onRetry={() => {
+          testDatabaseConnection();
+          loadFares();
+        }}
         title={`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares Database Error`}
-        description={`There was an error connecting to the database to load ${fareType} fares.`}
+        description={`There was an error connecting to the database to load ${fareType} fares. Click "Test Connection" to diagnose the issue.`}
       />
     );
   }
@@ -122,16 +168,26 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             Manage pricing for {fareType === 'local' ? 'local packages' : 'airport transfers'} for this vehicle
           </CardDescription>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleSyncTable} 
-          disabled={isSyncing}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Syncing...' : 'Sync Table'}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={testDatabaseConnection}
+            className="flex items-center gap-2"
+          >
+            Test Connection
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSyncTable} 
+            disabled={isSyncing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Table'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {error && (
@@ -149,6 +205,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             vehicleId={vehicleId} 
             initialData={localFare} 
             onSuccess={handleFareUpdateSuccess} 
+            onError={handleFareUpdateErrorCallback}
           />
         )}
         
@@ -157,6 +214,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             vehicleId={vehicleId} 
             initialData={airportFare} 
             onSuccess={handleFareUpdateSuccess} 
+            onError={handleFareUpdateErrorCallback}
           />
         )}
       </CardContent>
