@@ -372,6 +372,9 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
   console.log('Getting all vehicles for admin interface');
   
   try {
+    // Clear any existing cache first to ensure fresh data
+    clearVehicleDataCache();
+    
     // Try direct admin endpoints first
     const adminEndpoints = [
       `api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
@@ -411,6 +414,19 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
         
         if (vehicles.length > 0) {
           console.log(`Found ${vehicles.length} vehicles from admin endpoint`);
+          
+          // Cache these results for quick access
+          try {
+            localStorage.setItem('adminVehicles', JSON.stringify(vehicles));
+          } catch (e) {
+            console.warn('Could not cache admin vehicles:', e);
+          }
+          
+          // Notify components that vehicle data is refreshed
+          window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+            detail: { count: vehicles.length, source: 'admin-api', timestamp: Date.now() }
+          }));
+          
           return vehicles;
         }
       } catch (error) {
@@ -427,7 +443,9 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
     try {
       const cachedAdminVehicles = localStorage.getItem('adminVehicles');
       if (cachedAdminVehicles) {
-        return JSON.parse(cachedAdminVehicles);
+        const vehicles = JSON.parse(cachedAdminVehicles);
+        console.log('Using cached admin vehicles from localStorage:', vehicles.length);
+        return vehicles;
       }
     } catch (e) {
       console.error('Error reading admin vehicles from localStorage:', e);

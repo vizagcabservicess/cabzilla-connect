@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -11,7 +12,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, Database, RefreshCw, Save, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 import { fareService, syncVehicleData } from '@/lib';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
@@ -80,7 +80,7 @@ export function OutstationFareManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Clear cache before loading data
+      // Clear cache before loading data to ensure fresh results
       fareService.clearCache();
       clearVehicleDataCache();
       
@@ -92,7 +92,7 @@ export function OutstationFareManagement() {
         console.warn("Failed to sync vehicle data:", syncErr);
       }
       
-      // Use our enhanced vehicle service to get all vehicles
+      // Use our enhanced vehicle service to get all vehicles, including inactive ones
       const vehicles = await getAllVehiclesForAdmin(true);
       
       if (vehicles && vehicles.length > 0) {
@@ -592,7 +592,7 @@ export function OutstationFareManagement() {
                             {cabTypes.length > 0 ? (
                               cabTypes.map((cab) => (
                                 <SelectItem key={cab.id} value={cab.id}>
-                                  {cab.name}
+                                  {cab.name || cab.id}
                                 </SelectItem>
                               ))
                             ) : (
