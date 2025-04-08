@@ -8,8 +8,8 @@ import {
 } from '@/types/api';
 
 // Update API base URL to ensure it's using the correct path
-// Do not add trailing slash to allow more flexible endpoint construction
-const API_BASE_URL = '/api';
+// Important: don't add trailing slash to allow more flexible endpoint construction
+const API_BASE_URL = '';  // Empty string to use relative paths for maximum flexibility
 
 // Axios instance with base settings
 const api = axios.create({
@@ -92,18 +92,18 @@ export const authAPI = {
       
       // Try multiple endpoint variations until one works
       const endpoints = [
-        // Direct file access
-        '/login.php',
-        // Root-relative paths
+        // Direct file access with absolute paths
         '/api/login.php',
+        '/login.php',
+        // Clean URL patterns
         '/api/login',
-        // Regular paths
+        '/login',
+        // Root level access 
         'login.php',
         'login',
-        // Alternate auth paths
-        '/auth/login.php',
+        // Auth directory alternatives
+        '/api/auth/login',
         '/auth/login',
-        'auth/login.php',
         'auth/login'
       ];
       
@@ -114,7 +114,7 @@ export const authAPI = {
       for (const endpoint of endpoints) {
         try {
           console.log(`Trying login endpoint: ${endpoint}`);
-          response = await api.post(endpoint, credentials, {
+          response = await axios.post(endpoint, credentials, {
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-cache',
@@ -174,23 +174,23 @@ export const authAPI = {
       
       // Try multiple endpoint variations until one works
       const endpoints = [
-        // Direct file access
-        '/signup.php',
-        // Root-relative paths
+        // Direct file access with absolute paths
         '/api/signup.php',
+        '/signup.php',
+        // Clean URL patterns
         '/api/signup',
-        // Regular paths
+        '/signup',
+        // Root level access
         'signup.php',
-        'signup', 
-        // Registration alias paths
-        '/register.php',
+        'signup',
+        // Registration aliases
+        '/api/register',
         '/register',
         'register.php',
         'register',
-        // Alternate auth paths
-        '/auth/signup.php',
+        // Auth directory alternatives
+        '/api/auth/signup',
         '/auth/signup',
-        'auth/signup.php',
         'auth/signup'
       ];
       
@@ -201,7 +201,7 @@ export const authAPI = {
       for (const endpoint of endpoints) {
         try {
           console.log(`Trying signup endpoint: ${endpoint}`);
-          response = await api.post(endpoint, userData, {
+          response = await axios.post(endpoint, userData, {
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-cache',
