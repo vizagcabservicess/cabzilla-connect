@@ -53,11 +53,21 @@ RewriteRule ^api/admin/direct-local-fares\.php$ /api/admin/direct-local-fares.ph
 RewriteRule ^api/admin/direct-outstation-fares\.php$ /api/admin/direct-outstation-fares.php [L]
 RewriteRule ^api/admin/direct-airport-fares\.php$ /api/admin/direct-airport-fares.php [L]
 
-# CRITICAL: Login and signup routes at the root level
-# Direct root URL mapping for auth endpoints
+# CRITICAL: Login and signup routes at the root level with multiple patterns
+# Root level direct mappings (highest priority)
 RewriteRule ^login$ /api/login.php [L,QSA]
 RewriteRule ^signup$ /api/signup.php [L,QSA]
 RewriteRule ^register$ /api/signup.php [L,QSA]
+
+# Handle with and without trailing slash
+RewriteRule ^login/$ /api/login.php [L,QSA]
+RewriteRule ^signup/$ /api/signup.php [L,QSA]
+RewriteRule ^register/$ /api/signup.php [L,QSA]
+
+# Handle with and without .php extension
+RewriteRule ^login\.php$ /api/login.php [L,QSA]
+RewriteRule ^signup\.php$ /api/signup.php [L,QSA]
+RewriteRule ^register\.php$ /api/signup.php [L,QSA]
 
 # Set PHP settings for this directory
 # ... keep existing code (PHP settings for directories)
@@ -69,3 +79,5 @@ RewriteRule ^register$ /api/signup.php [L,QSA]
 ErrorDocument 404 /api/error.php
 ErrorDocument 500 /api/error.php
 
+# Force proper MIME type for PHP files to ensure they're executed correctly
+AddType application/x-httpd-php .php

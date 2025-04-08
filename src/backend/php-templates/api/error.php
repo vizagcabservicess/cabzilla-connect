@@ -46,7 +46,8 @@ $requestInfo = [
     'request_method' => $server['REQUEST_METHOD'] ?? 'unknown',
     'server_software' => $server['SERVER_SOFTWARE'] ?? 'unknown',
     'http_host' => $server['HTTP_HOST'] ?? 'unknown',
-    'http_user_agent' => $server['HTTP_USER_AGENT'] ?? 'unknown'
+    'http_user_agent' => $server['HTTP_USER_AGENT'] ?? 'unknown',
+    'php_version' => PHP_VERSION
 ];
 
 if ($status == 404) {
@@ -56,7 +57,13 @@ if ($status == 404) {
         $details = "The requested API endpoint '{$originalUrl}' could not be found. Please check the URL and try again.";
     }
 } elseif ($status == 500) {
-    $details = "The server encountered an internal error processing your request. This might be due to database connectivity issues or server maintenance.";
+    $details = "The server encountered an internal error processing your request. This might be due to database connectivity issues, PHP errors, or missing functions/files.";
+    
+    // Check if error_get_last() is available
+    $lastError = error_get_last();
+    if ($lastError) {
+        $details .= " Last PHP error: " . $lastError['message'] . " in " . $lastError['file'] . " on line " . $lastError['line'];
+    }
 }
 
 // Enhanced logging with environment info

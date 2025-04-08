@@ -53,3 +53,53 @@ function getDbConnection() {
         return null;
     }
 }
+
+// Essential response functions
+if (!function_exists('sendJsonResponse')) {
+    function sendJsonResponse($data, $statusCode = 200) {
+        header('Content-Type: application/json');
+        http_response_code($statusCode);
+        echo json_encode($data);
+        exit;
+    }
+}
+
+// Define logging function if it doesn't exist
+if (!function_exists('logError')) {
+    function logError($message, $context = []) {
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[$timestamp] $message";
+        
+        if (!empty($context)) {
+            $logEntry .= " - " . json_encode($context);
+        }
+        
+        $logEntry .= "\n";
+        
+        $logFile = LOG_DIR . '/api_error_' . date('Y-m-d') . '.log';
+        file_put_contents($logFile, $logEntry, FILE_APPEND);
+    }
+}
+
+// JWT token generation function
+if (!function_exists('generateJwtToken')) {
+    function generateJwtToken($userId, $email, $role) {
+        $issuedAt = time();
+        $expire = $issuedAt + 30 * 24 * 60 * 60; // 30 days
+        
+        $payload = [
+            'iat' => $issuedAt,
+            'exp' => $expire,
+            'userId' => $userId,
+            'email' => $email,
+            'role' => $role
+        ];
+        
+        // Simple JWT implementation (for production, use a proper JWT library)
+        $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = base64_encode(json_encode($payload));
+        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'your_secret_key', true));
+        
+        return "$header.$payload.$signature";
+    }
+}

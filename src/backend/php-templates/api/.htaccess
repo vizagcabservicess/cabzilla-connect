@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -126,11 +125,13 @@ RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
 <Files "login.php">
     Require all granted
     SetHandler application/x-httpd-php
+    DirectoryIndex login.php
 </Files>
 
 <Files "signup.php">
     Require all granted
     SetHandler application/x-httpd-php
+    DirectoryIndex signup.php
 </Files>
 
 # NEW: Root URL rewrite for login, signup and register
@@ -138,6 +139,11 @@ RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
 RewriteRule ^/login$ /api/login.php [L,QSA]
 RewriteRule ^/signup$ /api/signup.php [L,QSA]
 RewriteRule ^/register$ /api/signup.php [L,QSA]
+
+# Absolute URL rewrite rules for login and signup
+RewriteRule ^/?login$ /api/login.php [L,QSA]
+RewriteRule ^/?signup$ /api/signup.php [L,QSA]
+RewriteRule ^/?register$ /api/signup.php [L,QSA]
 
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
@@ -229,6 +235,11 @@ Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
+# Ensure .php files are recognized as PHP and executed
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+
 # Protect PHP files from direct access
 <Files "*.php">
     # Allow all requests through - critical for CORS
@@ -237,4 +248,3 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
 # Prevent directory listing
 Options -Indexes
-

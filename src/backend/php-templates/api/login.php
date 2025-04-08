@@ -1,6 +1,6 @@
 
 <?php
-// Adjust the path to config.php correctly
+// Ensure correct path to config.php - adjusting relative path
 require_once __DIR__ . '/../config.php';
 
 // For CORS preflight request
