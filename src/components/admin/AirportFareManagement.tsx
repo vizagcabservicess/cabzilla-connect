@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -42,55 +41,51 @@ const AirportFareManagement: React.FC = () => {
         const fareData = fareDatas[0];
         console.log('Retrieved fare data:', fareData);
         
-        // Check if fare data actually contains values or if they're all zeros
-        const hasNonZeroValues = Object.entries(fareData).some(([key, value]) => {
-          // Only check numeric price fields, not IDs or names
-          return key.includes('Price') || key.includes('price') || key.includes('Charge') || key.includes('charge') 
-            ? parseFloat(String(value)) > 0 
-            : false;
+        // Ensure we have numeric values by checking both camelCase and snake_case properties
+        // This is a more comprehensive check to properly detect if we have actual data
+        const hasNonEmptyValues = Object.keys(fareData).some(key => {
+          const value = fareData[key];
+          return value !== null && value !== undefined && value !== '' && value !== 0;
         });
         
-        if (!hasNonZeroValues && (
-            fareData.basePrice === 0 && 
-            fareData.pricePerKm === 0 && 
-            fareData.pickupPrice === 0 && 
-            fareData.dropPrice === 0 && 
-            fareData.tier1Price === 0 && 
-            fareData.tier2Price === 0 && 
-            fareData.tier3Price === 0 && 
-            fareData.tier4Price === 0 && 
-            fareData.extraKmCharge === 0
-        )) {
-          console.log('All fare values are zero, but using the data structure anyway');
+        if (hasNonEmptyValues) {
+          console.log('Valid fare data found');
+          
+          // Create a new object with explicit number conversions to ensure numeric values
+          const cleanedFareData: FareData = {
+            vehicleId: vehicleId,
+            vehicle_id: vehicleId,
+            basePrice: parseNumericValue(fareData.basePrice || fareData.base_price),
+            pricePerKm: parseNumericValue(fareData.pricePerKm || fareData.price_per_km),
+            pickupPrice: parseNumericValue(fareData.pickupPrice || fareData.pickup_price),
+            dropPrice: parseNumericValue(fareData.dropPrice || fareData.drop_price),
+            tier1Price: parseNumericValue(fareData.tier1Price || fareData.tier1_price),
+            tier2Price: parseNumericValue(fareData.tier2Price || fareData.tier2_price),
+            tier3Price: parseNumericValue(fareData.tier3Price || fareData.tier3_price),
+            tier4Price: parseNumericValue(fareData.tier4Price || fareData.tier4_price),
+            extraKmCharge: parseNumericValue(fareData.extraKmCharge || fareData.extra_km_charge)
+          };
+          
+          console.log('Cleaned fare data to display:', cleanedFareData);
+          setFares(cleanedFareData);
+          setInitialized(true);
+        } else {
+          console.log('All fare values are empty or zero, creating default data structure');
+          setFares({
+            vehicleId: vehicleId,
+            vehicle_id: vehicleId,
+            basePrice: 0,
+            pricePerKm: 0,
+            pickupPrice: 0,
+            dropPrice: 0,
+            tier1Price: 0,
+            tier2Price: 0,
+            tier3Price: 0,
+            tier4Price: 0,
+            extraKmCharge: 0
+          });
+          setInitialized(true);
         }
-        
-        // Create a new object with explicit number conversions to ensure numeric values
-        const cleanedFareData: FareData = {
-          vehicleId: vehicleId,
-          vehicle_id: vehicleId,
-          basePrice: fareData.basePrice ? parseFloat(String(fareData.basePrice)) : 
-                     fareData.base_price ? parseFloat(String(fareData.base_price)) : 0,
-          pricePerKm: fareData.pricePerKm ? parseFloat(String(fareData.pricePerKm)) : 
-                      fareData.price_per_km ? parseFloat(String(fareData.price_per_km)) : 0,
-          pickupPrice: fareData.pickupPrice ? parseFloat(String(fareData.pickupPrice)) : 
-                       fareData.pickup_price ? parseFloat(String(fareData.pickup_price)) : 0,
-          dropPrice: fareData.dropPrice ? parseFloat(String(fareData.dropPrice)) : 
-                     fareData.drop_price ? parseFloat(String(fareData.drop_price)) : 0,
-          tier1Price: fareData.tier1Price ? parseFloat(String(fareData.tier1Price)) : 
-                      fareData.tier1_price ? parseFloat(String(fareData.tier1_price)) : 0,
-          tier2Price: fareData.tier2Price ? parseFloat(String(fareData.tier2Price)) : 
-                      fareData.tier2_price ? parseFloat(String(fareData.tier2_price)) : 0,
-          tier3Price: fareData.tier3Price ? parseFloat(String(fareData.tier3Price)) : 
-                      fareData.tier3_price ? parseFloat(String(fareData.tier3_price)) : 0,
-          tier4Price: fareData.tier4Price ? parseFloat(String(fareData.tier4Price)) : 
-                      fareData.tier4_price ? parseFloat(String(fareData.tier4_price)) : 0,
-          extraKmCharge: fareData.extraKmCharge ? parseFloat(String(fareData.extraKmCharge)) : 
-                         fareData.extra_km_charge ? parseFloat(String(fareData.extra_km_charge)) : 0
-        };
-        
-        console.log('Cleaned fare data to display:', cleanedFareData);
-        setFares(cleanedFareData);
-        setInitialized(true);
       } else {
         // If no fare data found, create a default entry
         console.log('No fare data found, creating default');
