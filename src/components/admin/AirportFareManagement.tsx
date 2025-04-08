@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ interface ApiResponse {
     fares?: ApiResponseFare[] | Record<string, ApiResponseFare>
   };
   fares?: ApiResponseFare[] | Record<string, ApiResponseFare>;
+  status?: string;
+  message?: string;
   [key: string]: any;
 }
 
@@ -68,18 +71,19 @@ const AirportFareManagement: React.FC = () => {
     setLoading(true);
     try {
       console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
-      const response = await fetchAirportFares(vehicleId);
+      const response: ApiResponse = await fetchAirportFares(vehicleId);
       console.log('Airport fares response:', response);
       
       let fareData: ApiResponseFare | null = null;
       let foundMatch = false;
       
+      // Check if response is an array
       if (Array.isArray(response)) {
         console.log('Response is an array with length:', response.length);
         if (response.length > 0) {
           const exactMatch = response.find((fare: ApiResponseFare) => 
-            fare.vehicleId?.toLowerCase() === vehicleId.toLowerCase() || 
-            fare.vehicle_id?.toLowerCase() === vehicleId.toLowerCase()
+            (fare.vehicleId?.toLowerCase() === vehicleId.toLowerCase()) || 
+            (fare.vehicle_id?.toLowerCase() === vehicleId.toLowerCase())
           );
           
           if (exactMatch) {
@@ -93,9 +97,11 @@ const AirportFareManagement: React.FC = () => {
           }
         }
       } 
+      // Check if response is an object
       else if (response && typeof response === 'object') {
         console.log('Response is an object, checking for structured data');
         
+        // Check if response has data.fares structure
         if (response.data && response.data.fares) {
           console.log('Found nested data.fares structure:', response.data.fares);
           
@@ -115,7 +121,7 @@ const AirportFareManagement: React.FC = () => {
               foundMatch = true;
             }
           } 
-          else if (typeof response.data.fares === 'object') {
+          else if (typeof response.data.fares === 'object' && response.data.fares !== null) {
             const directFare = response.data.fares[vehicleId];
             if (directFare) {
               console.log('Found direct fare match in data.fares object:', directFare);
@@ -139,6 +145,7 @@ const AirportFareManagement: React.FC = () => {
             }
           }
         } 
+        // Check if response has direct fares property
         else if (response.fares) {
           console.log('Found direct fares property:', response.fares);
           
@@ -158,7 +165,7 @@ const AirportFareManagement: React.FC = () => {
               foundMatch = true;
             }
           } 
-          else if (typeof response.fares === 'object') {
+          else if (typeof response.fares === 'object' && response.fares !== null) {
             const directFare = response.fares[vehicleId];
             if (directFare) {
               console.log('Found direct fare match in fares object:', directFare);
@@ -182,6 +189,7 @@ const AirportFareManagement: React.FC = () => {
             }
           }
         } 
+        // Check if response itself is a fare object
         else if (response.vehicleId || response.vehicle_id || response.basePrice || response.base_price) {
           console.log('Response appears to be a direct fare object:', response);
           fareData = response as ApiResponseFare;
