@@ -19,6 +19,19 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
+# API routes should go to the actual PHP files - IMPORTANT: PLACE THIS BEFORE THE FRONTEND ROUTES
+# Make sure admin API requests are handled correctly
+RewriteRule ^api/admin/booking(.*)$ /api/admin/booking.php [L,QSA]
+RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,QSA]
+RewriteRule ^api/admin/(.*)$ /api/admin/$1 [L,QSA]
+
+# Regular API routes
+RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,QSA]
+RewriteRule ^api/login$ /api/login.php [L,QSA]
+RewriteRule ^api/signup$ /api/signup.php [L,QSA]
+RewriteRule ^api/register$ /api/signup.php [L,QSA]
+RewriteRule ^api/(.*)$ /api/$1 [L,QSA]
+
 # IMPORTANT: Direct frontend routes to React app
 # These routes should serve the frontend app, not the API
 RewriteRule ^login/?$ /index.html [L]
@@ -31,12 +44,6 @@ RewriteRule ^booking/(.*)$ /index.html [L]
 RewriteRule ^receipt/(.*)$ /index.html [L]
 RewriteRule ^cabs/?$ /index.html [L]
 RewriteRule ^tours/?$ /index.html [L]
-
-# API routes should go to the actual PHP files
-# Ensure /api/login goes to the login.php file
-RewriteRule ^api/login$ /api/login.php [L,QSA]
-RewriteRule ^api/signup$ /api/signup.php [L,QSA]
-RewriteRule ^api/register$ /api/signup.php [L,QSA]
 
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f

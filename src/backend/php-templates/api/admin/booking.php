@@ -3,11 +3,14 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers
+// Set standard headers for API response
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
-header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -19,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 logError("Admin booking endpoint request", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'query' => $_SERVER['QUERY_STRING'] ?? '',
-    'headers' => getallheaders()
+    'headers' => getallheaders(),
+    'url' => $_SERVER['REQUEST_URI']
 ]);
 
 // Authenticate as admin
@@ -209,17 +213,25 @@ try {
             // Debug log for troubleshooting
             logError("Fetching all bookings", ["userId" => $userId, "isAdmin" => $isAdmin ? "true" : "false"]);
             
-            // Get status filter if provided
-            $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
-            
-            // First check if bookings table exists
+            // Check if bookings table exists first
             $checkTableStmt = $conn->query("SHOW TABLES LIKE 'bookings'");
+            
+            if ($checkTableStmt === false) {
+                // Query failed
+                logError("Error checking if bookings table exists", ["error" => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
+                exit;
+            }
+            
             if ($checkTableStmt->num_rows === 0) {
                 // Table doesn't exist, create a more informative response
                 logError("Bookings table doesn't exist, returning empty array");
                 sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
                 exit;
             }
+            
+            // Get status filter if provided
+            $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
             // Prepare SQL query with optional status filter
             $sql = "SELECT * FROM bookings";
@@ -232,18 +244,30 @@ try {
             
             $stmt = $conn->prepare($sql);
             
+            if ($stmt === false) {
+                logError("Error preparing statement", ["error" => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
+                exit;
+            }
+            
             // Bind status parameter if filter is applied
             if (!empty($statusFilter)) {
                 $stmt->bind_param("s", $statusFilter);
             }
             
-            $stmt->execute();
+            $success = $stmt->execute();
+            
+            if (!$success) {
+                logError("Error executing query", ["error" => $stmt->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error], 500);
+                exit;
+            }
+            
             $result = $stmt->get_result();
             
-            // Check if there are results
-            if (!$result) {
-                logError("Database query failed", ["error" => $conn->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve bookings: ' . $conn->error], 500);
+            if ($result === false) {
+                logError("Error getting query result", ["error" => $stmt->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Failed to get result: ' . $stmt->error], 500);
                 exit;
             }
             
@@ -285,4 +309,10 @@ try {
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
 
+// Helper function to ensure JSON response
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_PRETTY_PRINT);
+    exit;
+}
 ?>
