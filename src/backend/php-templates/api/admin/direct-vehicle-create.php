@@ -47,7 +47,7 @@ function sendJsonResponse($status, $message, $data = null) {
     }
     
     // Output the JSON response
-    echo json_encode($response);
+    echo json_encode($response, JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -87,42 +87,47 @@ try {
     if (file_exists('../../config.php')) {
         require_once '../../config.php';
     } else {
-        // Fallback database credentials
-        function getDbConnection() {
-            // Database credentials
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';
-            $dbUser = 'u644605165_usr_be';
-            $dbPass = 'Vizag@1213';
-            
-            try {
-                // Create connection
-                $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        // Include database utility functions if available
+        if (file_exists(__DIR__ . '/../utils/database.php')) {
+            require_once __DIR__ . '/../utils/database.php';
+        } else {
+            // Fallback database credentials
+            function getDbConnection() {
+                // Database credentials
+                $dbHost = 'localhost';
+                $dbName = 'u644605165_db_be';
+                $dbUser = 'u644605165_usr_be';
+                $dbPass = 'Vizag@1213';
                 
-                // Check connection
-                if ($conn->connect_error) {
-                    throw new Exception("Connection failed: " . $conn->connect_error);
+                try {
+                    // Create connection
+                    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+                    
+                    // Check connection
+                    if ($conn->connect_error) {
+                        throw new Exception("Connection failed: " . $conn->connect_error);
+                    }
+                    
+                    // Set charset
+                    $conn->set_charset("utf8mb4");
+                    
+                    // Set collation to ensure consistency
+                    $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+                    
+                    return $conn;
+                } catch (Exception $e) {
+                    // Log error
+                    $logDir = __DIR__ . '/../../logs';
+                    if (!file_exists($logDir)) {
+                        mkdir($logDir, 0777, true);
+                    }
+                    
+                    $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
+                    $timestamp = date('Y-m-d H:i:s');
+                    file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
+                    
+                    return null;
                 }
-                
-                // Set charset
-                $conn->set_charset("utf8mb4");
-                
-                // Set collation to ensure consistency
-                $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
-                
-                return $conn;
-            } catch (Exception $e) {
-                // Log error
-                $logDir = __DIR__ . '/../../logs';
-                if (!file_exists($logDir)) {
-                    mkdir($logDir, 0777, true);
-                }
-                
-                $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
-                $timestamp = date('Y-m-d H:i:s');
-                file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
-                
-                return null;
             }
         }
     }
@@ -230,19 +235,24 @@ try {
         logDebug("Failed to connect to database");
         
         // For development/preview environment, proceed with a mock success response
-        logDebug("Development environment detected, returning mock success");
-        sendJsonResponse('success', 'Vehicle created successfully (mock)', $vehicleData);
-        exit;
+        if (strpos($_SERVER['HTTP_HOST'] ?? '', 'lovableproject.com') !== false || 
+            strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false) {
+            logDebug("Development environment detected, returning mock success");
+            sendJsonResponse('success', 'Vehicle created successfully (mock)', $vehicleData);
+            exit;
+        } else {
+            throw new Exception("Database connection failed. Please check credentials.");
+        }
     }
     
     // Check if vehicle already exists
-    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?");
+    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?");
     if (!$checkStmt) {
         logDebug("Prepare statement error: " . $conn->error);
         throw new Exception("Database error: " . $conn->error);
     }
     
-    $checkStmt->bind_param("s", $vehicleId);
+    $checkStmt->bind_param("ss", $vehicleId, $vehicleId);
     $checkStmt->execute();
     $result = $checkStmt->get_result();
     $row = $result->fetch_assoc();
@@ -251,6 +261,7 @@ try {
         // Vehicle exists, return error
         logDebug("Vehicle with ID $vehicleId already exists");
         sendJsonResponse('error', "Vehicle with ID $vehicleId already exists. Use update endpoint instead.");
+        exit;
     }
     
     // Check if vehicles table exists
@@ -260,14 +271,15 @@ try {
         
         // Create vehicles table
         $createTableSql = "CREATE TABLE IF NOT EXISTS vehicles (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            vehicle_id VARCHAR(50) UNIQUE NOT NULL,
+            id VARCHAR(50) NOT NULL,
+            vehicle_id VARCHAR(50) NOT NULL,
             name VARCHAR(100) NOT NULL,
+            category VARCHAR(50) DEFAULT 'Standard',
             capacity INT DEFAULT 4,
             luggage_capacity INT DEFAULT 2,
             ac TINYINT DEFAULT 1,
             image VARCHAR(255) DEFAULT '/cars/sedan.png',
-            amenities JSON DEFAULT NULL,
+            amenities TEXT,
             description TEXT,
             is_active TINYINT DEFAULT 1,
             base_price DECIMAL(10,2) DEFAULT 0,
@@ -275,7 +287,8 @@ try {
             night_halt_charge DECIMAL(10,2) DEFAULT 700,
             driver_allowance DECIMAL(10,2) DEFAULT 250,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
         
         if (!$conn->query($createTableSql)) {
@@ -286,17 +299,6 @@ try {
         logDebug("Vehicles table created successfully");
     }
     
-    // Insert into database
-    $insertStmt = $conn->prepare("INSERT INTO vehicles (
-        vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, 
-        description, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    
-    if (!$insertStmt) {
-        logDebug("Prepare statement error: " . $conn->error);
-        throw new Exception("Database error: " . $conn->error);
-    }
-    
     // Convert amenities to JSON string for database
     $amenitiesJson = json_encode($amenities);
     
@@ -304,12 +306,54 @@ try {
     $acDB = $ac ? 1 : 0;
     $isActiveDB = $isActive ? 1 : 0;
     
-    $insertStmt->bind_param("ssiisssiiddd", 
-        $vehicleId, $name, $capacity, $luggageCapacity, $acDB, $image, $amenitiesJson, 
-        $description, $isActiveDB, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+    // Insert into database - use column names that match the database structure
+    $insertSql = "INSERT INTO vehicles (
+        id, vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, 
+        description, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    $insertStmt = $conn->prepare($insertSql);
+    
+    if (!$insertStmt) {
+        logDebug("Prepare statement error: " . $conn->error);
+        throw new Exception("Database error: " . $conn->error);
+    }
+    
+    $insertStmt->bind_param("sssiiisssidddd", 
+        $vehicleId, 
+        $vehicleId, 
+        $name, 
+        $capacity, 
+        $luggageCapacity, 
+        $acDB, 
+        $image, 
+        $amenitiesJson, 
+        $description, 
+        $isActiveDB, 
+        $basePrice, 
+        $pricePerKm, 
+        $nightHaltCharge, 
+        $driverAllowance
+    );
+    
+    logDebug("Executing SQL with params: " . print_r([
+        'vehicleId' => $vehicleId,
+        'name' => $name,
+        'capacity' => $capacity,
+        'luggageCapacity' => $luggageCapacity,
+        'ac' => $acDB,
+        'image' => $image,
+        'amenities' => $amenitiesJson,
+        'description' => $description,
+        'isActive' => $isActiveDB,
+        'basePrice' => $basePrice,
+        'pricePerKm' => $pricePerKm,
+        'nightHaltCharge' => $nightHaltCharge,
+        'driverAllowance' => $driverAllowance
+    ], true));
     
     if ($insertStmt->execute()) {
-        logDebug("Vehicle inserted into database");
+        logDebug("Vehicle inserted into database successfully");
         
         // Update persistent cache
         $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';

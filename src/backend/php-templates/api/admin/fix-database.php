@@ -23,18 +23,80 @@ while (ob_get_level()) {
     ob_end_clean();
 }
 
-// Load configuration
-require_once dirname(__FILE__) . '/../../config.php';
+// Create logs directory
+$logDir = dirname(__FILE__) . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
 
-// Load utilities
-require_once dirname(__FILE__) . '/../utils/response.php';
-
-// Log the fix attempt
-$logFile = LOG_DIR . '/database_fix_' . date('Y-m-d') . '.log';
+// Set up log file
+$logFile = $logDir . '/database_fix_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 file_put_contents($logFile, "[$timestamp] Fix database attempt started\n", FILE_APPEND);
 
+// Function to send JSON response
+function sendJsonResponse($status, $message, $data = []) {
+    $response = [
+        'status' => $status,
+        'message' => $message,
+        'timestamp' => time()
+    ];
+    
+    if (!empty($data)) {
+        $response = array_merge($response, $data);
+    }
+    
+    echo json_encode($response, JSON_PRETTY_PRINT);
+    exit;
+}
+
+// Function to log messages
+function logMessage($message) {
+    global $logFile, $timestamp;
+    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+}
+
 try {
+    // Try to include the config file, if it exists
+    if (file_exists('../../config.php')) {
+        require_once '../../config.php';
+    } 
+    
+    // Check for utils/database.php
+    if (file_exists('../utils/database.php')) {
+        require_once '../utils/database.php';
+    } else {
+        // Fallback database function
+        function getDbConnection() {
+            // Database credentials
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            try {
+                // Create connection
+                $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+                
+                // Check connection
+                if ($conn->connect_error) {
+                    throw new Exception("Connection failed: " . $conn->connect_error);
+                }
+                
+                // Set charset
+                $conn->set_charset("utf8mb4");
+                
+                // Set collation to ensure consistency
+                $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+                
+                return $conn;
+            } catch (Exception $e) {
+                logMessage("Database connection error: " . $e->getMessage());
+                return null;
+            }
+        }
+    }
+    
     // Connect to database
     $conn = getDbConnection();
     
@@ -42,14 +104,13 @@ try {
         throw new Exception("Failed to connect to database. Check credentials.");
     }
     
-    // Log successful connection
-    file_put_contents($logFile, "[$timestamp] Successfully connected to database\n", FILE_APPEND);
+    logMessage("Successfully connected to database");
     
     // Check if vehicles table exists
     $tablesResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
     $vehiclesTableExists = ($tablesResult && $tablesResult->num_rows > 0);
     
-    file_put_contents($logFile, "[$timestamp] Vehicles table exists: " . ($vehiclesTableExists ? 'Yes' : 'No') . "\n", FILE_APPEND);
+    logMessage("Vehicles table exists: " . ($vehiclesTableExists ? 'Yes' : 'No'));
     
     // Array to track what was fixed
     $fixed = [];
@@ -62,21 +123,20 @@ try {
                 vehicle_id VARCHAR(50) NOT NULL,
                 name VARCHAR(100) NOT NULL,
                 category VARCHAR(50) DEFAULT 'Standard',
-                capacity INT(11) DEFAULT 4,
-                luggage_capacity INT(11) DEFAULT 2,
-                base_price DECIMAL(10,2) DEFAULT 0.00,
-                price_per_km DECIMAL(5,2) DEFAULT 0.00,
-                image VARCHAR(255) DEFAULT '',
-                description TEXT,
+                capacity INT DEFAULT 4,
+                luggage_capacity INT DEFAULT 2,
+                ac TINYINT DEFAULT 1,
+                image VARCHAR(255) DEFAULT '/cars/sedan.png',
                 amenities TEXT,
-                ac TINYINT(1) DEFAULT 1,
-                is_active TINYINT(1) DEFAULT 1,
-                night_halt_charge DECIMAL(10,2) DEFAULT 0.00,
-                driver_allowance DECIMAL(10,2) DEFAULT 0.00,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
+                description TEXT,
+                is_active TINYINT DEFAULT 1,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 700,
+                driver_allowance DECIMAL(10,2) DEFAULT 250,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
@@ -85,7 +145,7 @@ try {
         }
         
         $fixed[] = "Created vehicles table";
-        file_put_contents($logFile, "[$timestamp] Successfully created vehicles table\n", FILE_APPEND);
+        logMessage("Successfully created vehicles table");
     } else {
         // Table exists, check its structure
         $missingColumns = [];
@@ -96,17 +156,17 @@ try {
             'vehicle_id' => 'VARCHAR(50) NOT NULL',
             'name' => 'VARCHAR(100) NOT NULL',
             'category' => "VARCHAR(50) DEFAULT 'Standard'",
-            'capacity' => 'INT(11) DEFAULT 4',
-            'luggage_capacity' => 'INT(11) DEFAULT 2',
-            'base_price' => 'DECIMAL(10,2) DEFAULT 0.00',
-            'price_per_km' => 'DECIMAL(5,2) DEFAULT 0.00',
-            'image' => "VARCHAR(255) DEFAULT ''",
+            'capacity' => 'INT DEFAULT 4',
+            'luggage_capacity' => 'INT DEFAULT 2',
+            'base_price' => 'DECIMAL(10,2) DEFAULT 0',
+            'price_per_km' => 'DECIMAL(10,2) DEFAULT 0',
+            'image' => "VARCHAR(255) DEFAULT '/cars/sedan.png'",
             'description' => 'TEXT',
             'amenities' => 'TEXT',
-            'ac' => 'TINYINT(1) DEFAULT 1',
-            'is_active' => 'TINYINT(1) DEFAULT 1',
-            'night_halt_charge' => 'DECIMAL(10,2) DEFAULT 0.00',
-            'driver_allowance' => 'DECIMAL(10,2) DEFAULT 0.00'
+            'ac' => 'TINYINT DEFAULT 1',
+            'is_active' => 'TINYINT DEFAULT 1',
+            'night_halt_charge' => 'DECIMAL(10,2) DEFAULT 700',
+            'driver_allowance' => 'DECIMAL(10,2) DEFAULT 250'
         ];
         
         // Get existing columns
@@ -126,9 +186,9 @@ try {
                     $query = "ALTER TABLE vehicles ADD COLUMN $column $definition";
                     if ($conn->query($query)) {
                         $fixed[] = "Added column $column to vehicles table";
-                        file_put_contents($logFile, "[$timestamp] Added column $column to vehicles table\n", FILE_APPEND);
+                        logMessage("Added column $column to vehicles table");
                     } else {
-                        file_put_contents($logFile, "[$timestamp] Failed to add column $column: " . $conn->error . "\n", FILE_APPEND);
+                        logMessage("Failed to add column $column: " . $conn->error);
                     }
                 }
             }
@@ -142,7 +202,7 @@ try {
     if (!$airportTableExists) {
         $createAirportTable = "
             CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                id INT(11) NOT NULL AUTO_INCREMENT,
+                id INT NOT NULL AUTO_INCREMENT,
                 vehicle_id VARCHAR(50) NOT NULL,
                 base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
                 price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
@@ -165,7 +225,7 @@ try {
         }
         
         $fixed[] = "Created airport_transfer_fares table";
-        file_put_contents($logFile, "[$timestamp] Successfully created airport_transfer_fares table\n", FILE_APPEND);
+        logMessage("Successfully created airport_transfer_fares table");
     }
     
     // Check if vehicle_pricing table exists
@@ -175,7 +235,7 @@ try {
     if (!$vpTableExists) {
         $createVPTable = "
             CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                id INT(11) NOT NULL AUTO_INCREMENT,
+                id INT NOT NULL AUTO_INCREMENT,
                 vehicle_id VARCHAR(50) NOT NULL,
                 trip_type VARCHAR(20) NOT NULL,
                 airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -199,7 +259,7 @@ try {
         }
         
         $fixed[] = "Created vehicle_pricing table";
-        file_put_contents($logFile, "[$timestamp] Successfully created vehicle_pricing table\n", FILE_APPEND);
+        logMessage("Successfully created vehicle_pricing table");
     }
     
     // Check for vehicles in the database
@@ -209,7 +269,7 @@ try {
         $vehiclesCount = $vehiclesResult['count'];
     }
     
-    file_put_contents($logFile, "[$timestamp] Found $vehiclesCount vehicles in database\n", FILE_APPEND);
+    logMessage("Found $vehiclesCount vehicles in database");
     
     // If no vehicles exist, create default ones
     if ($vehiclesCount == 0) {
@@ -235,7 +295,7 @@ try {
             
             if ($insertCount > 0) {
                 $fixed[] = "Added $insertCount default vehicles";
-                file_put_contents($logFile, "[$timestamp] Added $insertCount default vehicles\n", FILE_APPEND);
+                logMessage("Added $insertCount default vehicles");
             }
         }
     }
@@ -250,7 +310,7 @@ try {
         $affected = $conn->affected_rows;
         if ($affected > 0) {
             $fixed[] = "Synced $affected vehicles with airport_transfer_fares table";
-            file_put_contents($logFile, "[$timestamp] Synced $affected vehicles with airport_transfer_fares table\n", FILE_APPEND);
+            logMessage("Synced $affected vehicles with airport_transfer_fares table");
         }
     }
     
@@ -264,27 +324,73 @@ try {
         $affected = $conn->affected_rows;
         if ($affected > 0) {
             $fixed[] = "Synced $affected vehicles with vehicle_pricing table";
-            file_put_contents($logFile, "[$timestamp] Synced $affected vehicles with vehicle_pricing table\n", FILE_APPEND);
+            logMessage("Synced $affected vehicles with vehicle_pricing table");
         }
     }
     
-    // Also trigger the more detailed sync airport fares script
-    if (file_exists(__DIR__ . '/sync-airport-fares.php')) {
-        file_put_contents($logFile, "[$timestamp] Triggering sync-airport-fares.php script\n", FILE_APPEND);
-        include_once __DIR__ . '/sync-airport-fares.php';
+    // Generate and update the persistent vehicle cache
+    $persistentCacheDir = dirname(__FILE__) . '/../../cache';
+    if (!file_exists($persistentCacheDir)) {
+        mkdir($persistentCacheDir, 0755, true);
+    }
+    
+    $persistentCacheFile = $persistentCacheDir . '/vehicles_persistent.json';
+    
+    // Get all vehicles
+    $vehiclesResult = $conn->query("SELECT * FROM vehicles");
+    if ($vehiclesResult) {
+        $vehicles = [];
+        
+        while ($row = $vehiclesResult->fetch_assoc()) {
+            // Parse amenities field if it exists
+            $amenities = ['AC'];
+            if (!empty($row['amenities'])) {
+                $parsedAmenities = json_decode($row['amenities'], true);
+                if (is_array($parsedAmenities)) {
+                    $amenities = $parsedAmenities;
+                }
+            }
+            
+            // Create a vehicle object in the format expected by frontend
+            $vehicle = [
+                'id' => $row['id'],
+                'vehicleId' => $row['vehicle_id'],
+                'name' => $row['name'],
+                'capacity' => (int)$row['capacity'],
+                'luggageCapacity' => (int)$row['luggage_capacity'],
+                'price' => (float)$row['base_price'],
+                'basePrice' => (float)$row['base_price'],
+                'pricePerKm' => (float)$row['price_per_km'],
+                'image' => $row['image'],
+                'amenities' => $amenities,
+                'description' => $row['description'],
+                'ac' => (bool)(int)$row['ac'],
+                'nightHaltCharge' => (float)$row['night_halt_charge'],
+                'driverAllowance' => (float)$row['driver_allowance'],
+                'isActive' => (bool)(int)$row['is_active']
+            ];
+            
+            $vehicles[] = $vehicle;
+        }
+        
+        // Save to persistent cache
+        if (!empty($vehicles) && file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT))) {
+            $fixed[] = "Updated vehicle persistent cache with " . count($vehicles) . " vehicles";
+            logMessage("Updated vehicle persistent cache with " . count($vehicles) . " vehicles");
+        }
     }
     
     // Close the database connection
     $conn->close();
     
     // Return success response with details of what was fixed
-    sendSuccessResponse([
+    sendJsonResponse('success', 'Database fix completed successfully', [
         'fixes' => $fixed,
         'count' => count($fixed)
-    ], 'Database fix completed successfully');
+    ]);
     
-    file_put_contents($logFile, "[$timestamp] Fix database completed successfully\n", FILE_APPEND);
+    logMessage("Fix database completed successfully");
 } catch (Exception $e) {
-    file_put_contents($logFile, "[$timestamp] Error: " . $e->getMessage() . "\n", FILE_APPEND);
-    sendErrorResponse($e->getMessage());
+    logMessage("Error: " . $e->getMessage());
+    sendJsonResponse('error', $e->getMessage());
 }

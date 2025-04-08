@@ -49,7 +49,7 @@ function sendJsonResponse($status, $message, $data = null) {
         $response['vehicle'] = $data;
     }
     
-    echo json_encode($response);
+    echo json_encode($response, JSON_PRETTY_PRINT);
     exit;
 }
 
