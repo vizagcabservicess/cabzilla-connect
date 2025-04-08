@@ -133,6 +133,12 @@ RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
     SetHandler application/x-httpd-php
 </Files>
 
+# NEW: Root URL rewrite for login, signup and register
+# These rules handle direct root access like /login, /signup without the /api/ prefix
+RewriteRule ^/login$ /api/login.php [L,QSA]
+RewriteRule ^/signup$ /api/signup.php [L,QSA]
+RewriteRule ^/register$ /api/signup.php [L,QSA]
+
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]

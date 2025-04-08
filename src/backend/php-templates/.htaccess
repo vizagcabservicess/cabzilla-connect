@@ -53,6 +53,12 @@ RewriteRule ^api/admin/direct-local-fares\.php$ /api/admin/direct-local-fares.ph
 RewriteRule ^api/admin/direct-outstation-fares\.php$ /api/admin/direct-outstation-fares.php [L]
 RewriteRule ^api/admin/direct-airport-fares\.php$ /api/admin/direct-airport-fares.php [L]
 
+# CRITICAL: Login and signup routes at the root level
+# Direct root URL mapping for auth endpoints
+RewriteRule ^login$ /api/login.php [L,QSA]
+RewriteRule ^signup$ /api/signup.php [L,QSA]
+RewriteRule ^register$ /api/signup.php [L,QSA]
+
 # Set PHP settings for this directory
 # ... keep existing code (PHP settings for directories)
 
@@ -62,3 +68,4 @@ RewriteRule ^api/admin/direct-airport-fares\.php$ /api/admin/direct-airport-fare
 # Handle errors
 ErrorDocument 404 /api/error.php
 ErrorDocument 500 /api/error.php
+
