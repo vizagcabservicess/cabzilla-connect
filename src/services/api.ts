@@ -8,6 +8,7 @@ import {
 } from '@/types/api';
 
 // Update API base URL to ensure it's using the correct path
+// Do not add trailing slash to allow more flexible endpoint construction
 const API_BASE_URL = '/api';
 
 // Axios instance with base settings
@@ -87,9 +88,32 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      // Use direct file name with .php extension and ensure it's at the root /api path
-      const response = await api.post('/login.php', credentials);
+      console.log('Attempting login with direct path:', `${API_BASE_URL}/login.php`);
+      
+      // Use multiple fallback approaches for maximum compatibility
+      let response;
+      
+      try {
+        // First try with direct path that matches .htaccess rules
+        response = await api.post('/login.php', credentials);
+      } catch (firstError) {
+        console.warn('First login attempt failed, trying absolute path:', firstError);
+        
+        // If that fails, try with absolute path
+        response = await axios.post(`${window.location.origin}/api/login.php`, credentials, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+      }
+      
       const data = response.data;
+      console.log('Login response received:', { 
+        status: response.status, 
+        hasToken: !!data.token,
+        dataKeys: Object.keys(data)
+      });
       
       if (data.token) {
         localStorage.setItem('authToken', data.token);
@@ -98,15 +122,39 @@ export const authAPI = {
       
       return data;
     } catch (error) {
+      console.error('Login request failed:', error);
       return handleApiError(error);
     }
   },
   
   signup: async (userData: SignupRequest): Promise<AuthResponse> => {
     try {
-      // Use direct file name with .php extension and ensure it's at the root /api path
-      const response = await api.post('/signup.php', userData);
+      console.log('Attempting signup with direct path:', `${API_BASE_URL}/signup.php`);
+      
+      // Use multiple fallback approaches for maximum compatibility
+      let response;
+      
+      try {
+        // First try with direct path that matches .htaccess rules
+        response = await api.post('/signup.php', userData);
+      } catch (firstError) {
+        console.warn('First signup attempt failed, trying absolute path:', firstError);
+        
+        // If that fails, try with absolute path
+        response = await axios.post(`${window.location.origin}/api/signup.php`, userData, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+      }
+      
       const data = response.data;
+      console.log('Signup response received:', { 
+        status: response.status, 
+        hasToken: !!data.token,
+        dataKeys: Object.keys(data)
+      });
       
       if (data.token) {
         localStorage.setItem('authToken', data.token);
@@ -115,6 +163,7 @@ export const authAPI = {
       
       return data;
     } catch (error) {
+      console.error('Signup request failed:', error);
       return handleApiError(error);
     }
   },
@@ -139,7 +188,6 @@ export const authAPI = {
     return user?.role === 'admin';
   },
   
-  // Get all users (admin only)
   getAllUsers: async (): Promise<User[]> => {
     try {
       const response = await api.get('/admin/users.php');
@@ -161,7 +209,6 @@ export const authAPI = {
     }
   },
   
-  // Update user role (admin only)
   updateUserRole: async (userId: number, role: 'user' | 'admin'): Promise<any> => {
     try {
       const response = await api.post('/admin/users.php', { userId, role });
@@ -282,7 +329,6 @@ export const bookingAPI = {
     }
   },
   
-  // Update booking details
   updateBooking: async (bookingId: number, updateData: BookingUpdateRequest): Promise<Booking> => {
     try {
       const response = await api.post(`/update-booking.php`, { 
@@ -299,7 +345,6 @@ export const bookingAPI = {
     }
   },
   
-  // Cancel booking
   cancelBooking: async (bookingId: number): Promise<any> => {
     try {
       const response = await api.post(`/update-booking.php`, { id: bookingId, status: 'cancelled' });
@@ -309,7 +354,6 @@ export const bookingAPI = {
     }
   },
   
-  // Delete booking (admin only)
   deleteBooking: async (bookingId: number): Promise<any> => {
     try {
       const response = await api.delete(`/admin/booking.php?id=${bookingId}`);
@@ -319,7 +363,6 @@ export const bookingAPI = {
     }
   },
   
-  // Admin functions
   getAllBookings: async (status?: string): Promise<Booking[]> => {
     try {
       const url = status && status !== 'all' 
@@ -436,7 +479,6 @@ export const bookingAPI = {
 
 // Fare API functions
 export const fareAPI = {
-  // Get tour fares
   getTourFares: async (): Promise<TourFare[]> => {
     try {
       console.log("Getting tour fares...");
@@ -477,7 +519,6 @@ export const fareAPI = {
     }
   },
   
-  // Get vehicle pricing
   getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
       const cacheBuster = new Date().getTime();
@@ -518,7 +559,6 @@ export const fareAPI = {
     }
   },
   
-  // Get vehicle data (includes both types and pricing)
   getVehicles: async (): Promise<any[]> => {
     try {
       console.log("Fetching vehicle data with cache busting...");
@@ -594,7 +634,6 @@ export const fareAPI = {
     }
   },
   
-  // Update tour fares (admin only)
   updateTourFares: async (fareData: FareUpdateRequest): Promise<any> => {
     try {
       const response = await api.post('/admin/fares-update.php', fareData);
@@ -611,7 +650,6 @@ export const fareAPI = {
     }
   },
   
-  // Add new tour fare (admin only)
   addTourFare: async (fareData: TourFare): Promise<any> => {
     try {
       const response = await api.put('/admin/fares-update.php', fareData);
@@ -621,7 +659,6 @@ export const fareAPI = {
     }
   },
   
-  // Delete tour fare (admin only)
   deleteTourFare: async (tourId: string): Promise<any> => {
     try {
       const response = await api.delete(`/admin/fares-update.php?tourId=${tourId}`);
@@ -631,7 +668,6 @@ export const fareAPI = {
     }
   },
   
-  // Update vehicle pricing (admin only)
   updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
     try {
       console.log("Vehicle pricing update request:", pricingData);
@@ -671,7 +707,6 @@ export const fareAPI = {
     }
   },
   
-  // Update vehicle (admin only)
   updateVehicle: async (vehicleData: any): Promise<any> => {
     try {
       console.log(`Updating vehicle ${vehicleData.name} (${vehicleData.vehicleId})...`);
@@ -721,7 +756,6 @@ export const fareAPI = {
     }
   },
   
-  // Add new vehicle (admin only)
   addVehicle: async (vehicleData: any): Promise<any> => {
     try {
       const timestamp = Date.now();
@@ -738,7 +772,6 @@ export const fareAPI = {
     }
   },
   
-  // Delete vehicle (admin only)
   deleteVehicle: async (vehicleId: string): Promise<any> => {
     try {
       const timestamp = Date.now();
@@ -755,7 +788,6 @@ export const fareAPI = {
     }
   },
   
-  // Get all vehicle data for booking
   getAllVehicleData: async (): Promise<any[]> => {
     try {
       const cacheBuster = new Date().getTime();
