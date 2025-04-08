@@ -63,7 +63,7 @@ try {
         // Clean up vehicle ID for SQL query
         $vehicleId = $conn->real_escape_string($vehicleId);
         
-        // Query for specific vehicle
+        // Query for specific vehicle - using a LIKE query to handle case sensitivity
         $query = "
             SELECT 
                 atf.id, 
@@ -83,7 +83,7 @@ try {
             LEFT JOIN 
                 vehicles v ON atf.vehicle_id = v.vehicle_id
             WHERE 
-                atf.vehicle_id = '$vehicleId'
+                LOWER(atf.vehicle_id) = LOWER('$vehicleId')
         ";
     } else {
         // Query for all vehicles
@@ -126,14 +126,23 @@ try {
             'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
             'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
             'basePrice' => (float)$row['base_price'],
+            'base_price' => (float)$row['base_price'], // Include both formats for compatibility
             'pricePerKm' => (float)$row['price_per_km'],
+            'price_per_km' => (float)$row['price_per_km'], // Include both formats for compatibility
             'pickupPrice' => (float)$row['pickup_price'],
+            'pickup_price' => (float)$row['pickup_price'], // Include both formats for compatibility
             'dropPrice' => (float)$row['drop_price'],
+            'drop_price' => (float)$row['drop_price'], // Include both formats for compatibility
             'tier1Price' => (float)$row['tier1_price'],
+            'tier1_price' => (float)$row['tier1_price'], // Include both formats for compatibility
             'tier2Price' => (float)$row['tier2_price'],
+            'tier2_price' => (float)$row['tier2_price'], // Include both formats for compatibility
             'tier3Price' => (float)$row['tier3_price'],
+            'tier3_price' => (float)$row['tier3_price'], // Include both formats for compatibility
             'tier4Price' => (float)$row['tier4_price'],
-            'extraKmCharge' => (float)$row['extra_km_charge']
+            'tier4_price' => (float)$row['tier4_price'], // Include both formats for compatibility
+            'extraKmCharge' => (float)$row['extra_km_charge'],
+            'extra_km_charge' => (float)$row['extra_km_charge'] // Include both formats for compatibility
         ];
         
         $fares[] = $fare;
@@ -148,7 +157,7 @@ try {
         error_log("No fares found for vehicleId $vehicleId, inserting default entry");
         
         // Before inserting, check if the vehicle exists in the vehicles table
-        $checkVehicleQuery = "SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?";
+        $checkVehicleQuery = "SELECT vehicle_id FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
         $checkStmt = $conn->prepare($checkVehicleQuery);
         
         if ($checkStmt) {
@@ -204,7 +213,7 @@ try {
                 LEFT JOIN 
                     vehicles v ON atf.vehicle_id = v.vehicle_id
                 WHERE 
-                    atf.vehicle_id = ?
+                    LOWER(atf.vehicle_id) = LOWER(?)
             ";
             
             $refetchStmt = $conn->prepare($refetchQuery);
@@ -220,14 +229,23 @@ try {
                         'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
                         'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
                         'basePrice' => (float)$row['base_price'],
+                        'base_price' => (float)$row['base_price'],
                         'pricePerKm' => (float)$row['price_per_km'],
+                        'price_per_km' => (float)$row['price_per_km'],
                         'pickupPrice' => (float)$row['pickup_price'],
+                        'pickup_price' => (float)$row['pickup_price'],
                         'dropPrice' => (float)$row['drop_price'],
+                        'drop_price' => (float)$row['drop_price'],
                         'tier1Price' => (float)$row['tier1_price'],
+                        'tier1_price' => (float)$row['tier1_price'],
                         'tier2Price' => (float)$row['tier2_price'],
+                        'tier2_price' => (float)$row['tier2_price'],
                         'tier3Price' => (float)$row['tier3_price'],
+                        'tier3_price' => (float)$row['tier3_price'],
                         'tier4Price' => (float)$row['tier4_price'],
-                        'extraKmCharge' => (float)$row['extra_km_charge']
+                        'tier4_price' => (float)$row['tier4_price'],
+                        'extraKmCharge' => (float)$row['extra_km_charge'],
+                        'extra_km_charge' => (float)$row['extra_km_charge']
                     ];
                     
                     $fares[] = $fare;
@@ -245,14 +263,23 @@ try {
             'vehicle_id' => $vehicleId,
             'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
             'basePrice' => 0.00,
+            'base_price' => 0.00,
             'pricePerKm' => 0.00,
+            'price_per_km' => 0.00,
             'pickupPrice' => 0.00,
+            'pickup_price' => 0.00,
             'dropPrice' => 0.00,
+            'drop_price' => 0.00,
             'tier1Price' => 0.00,
+            'tier1_price' => 0.00,
             'tier2Price' => 0.00,
+            'tier2_price' => 0.00,
             'tier3Price' => 0.00,
+            'tier3_price' => 0.00,
             'tier4Price' => 0.00,
-            'extraKmCharge' => 0.00
+            'tier4_price' => 0.00,
+            'extraKmCharge' => 0.00,
+            'extra_km_charge' => 0.00
         ];
         
         $fares[] = $defaultFare;

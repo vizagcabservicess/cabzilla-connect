@@ -172,7 +172,7 @@ export const updateLocalFares = async (fareData: FareData): Promise<any> => {
 };
 
 // Get airport fares for a specific vehicle
-export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> => {
+export const fetchAirportFares = async (vehicleId: string): Promise<any> => {
   try {
     // Append a timestamp to prevent browser caching
     const timestamp = new Date().getTime();
@@ -194,45 +194,12 @@ export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> 
       throw new Error(`Failed to fetch airport fares: ${response.status}`);
     }
     
+    // Return the raw response directly to simplify handling
     const responseData = await response.json();
-    console.log('Airport fares response:', responseData);
+    console.log('Airport fares raw response:', responseData);
     
-    if (responseData && responseData.status === 'success' && responseData.fares) {
-      // Transform the response data to match our FareData interface
-      let fares = Array.isArray(responseData.fares) ? responseData.fares : [responseData.fares];
-      
-      // Ensure all fares have the necessary properties
-      fares = fares.map(fare => ({
-        ...fare,
-        id: fare.id || 0,
-        vehicleId: vehicleId,
-        vehicle_id: vehicleId,
-        // Make sure all required fields have at least a default value
-        basePrice: typeof fare.basePrice === 'number' ? fare.basePrice : 
-                  typeof fare.base_price === 'number' ? fare.base_price : 0,
-        pricePerKm: typeof fare.pricePerKm === 'number' ? fare.pricePerKm : 
-                   typeof fare.price_per_km === 'number' ? fare.price_per_km : 0,
-        pickupPrice: typeof fare.pickupPrice === 'number' ? fare.pickupPrice : 
-                    typeof fare.pickup_price === 'number' ? fare.pickup_price : 0,
-        dropPrice: typeof fare.dropPrice === 'number' ? fare.dropPrice : 
-                  typeof fare.drop_price === 'number' ? fare.drop_price : 0,
-        tier1Price: typeof fare.tier1Price === 'number' ? fare.tier1Price : 
-                   typeof fare.tier1_price === 'number' ? fare.tier1_price : 0,
-        tier2Price: typeof fare.tier2Price === 'number' ? fare.tier2Price : 
-                   typeof fare.tier2_price === 'number' ? fare.tier2_price : 0,
-        tier3Price: typeof fare.tier3Price === 'number' ? fare.tier3Price : 
-                   typeof fare.tier3_price === 'number' ? fare.tier3_price : 0,
-        tier4Price: typeof fare.tier4Price === 'number' ? fare.tier4Price : 
-                   typeof fare.tier4_price === 'number' ? fare.tier4_price : 0,
-        extraKmCharge: typeof fare.extraKmCharge === 'number' ? fare.extraKmCharge : 
-                      typeof fare.extra_km_charge === 'number' ? fare.extra_km_charge : 0
-      }));
-      
-      console.log('Transformed fares data:', fares);
-      return fares;
-    }
-    
-    return [];
+    // Return the entire response object to allow for more flexible processing
+    return responseData;
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     throw error;
