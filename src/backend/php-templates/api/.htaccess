@@ -95,6 +95,16 @@ RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
     Header always set Content-Type "application/json" env=REDIRECT_STATUS=200
 </FilesMatch>
 
+# NEW: Catch-all additional auth endpoint variations - high priority
+RewriteRule ^/api/login$ login.php [L,QSA]
+RewriteRule ^/api/signup$ signup.php [L,QSA]
+RewriteRule ^login/$ login.php [L,QSA]
+RewriteRule ^signup/$ signup.php [L,QSA]
+RewriteRule ^auth/login$ login.php [L,QSA] 
+RewriteRule ^auth/signup$ signup.php [L,QSA]
+RewriteRule ^auth/login/$ login.php [L,QSA]
+RewriteRule ^auth/signup/$ signup.php [L,QSA]
+
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]

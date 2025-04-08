@@ -88,24 +88,65 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      console.log('Attempting login with direct path:', `${API_BASE_URL}/login.php`);
+      console.log('Attempting login with multiple fallback approaches');
       
-      // Use multiple fallback approaches for maximum compatibility
-      let response;
+      // Try multiple endpoint variations until one works
+      const endpoints = [
+        // Direct file access
+        '/login.php',
+        // Root-relative paths
+        '/api/login.php',
+        '/api/login',
+        // Regular paths
+        'login.php',
+        'login',
+        // Alternate auth paths
+        '/auth/login.php',
+        '/auth/login',
+        'auth/login.php',
+        'auth/login'
+      ];
       
-      try {
-        // First try with direct path that matches .htaccess rules
-        response = await api.post('/login.php', credentials);
-      } catch (firstError) {
-        console.warn('First login attempt failed, trying absolute path:', firstError);
-        
-        // If that fails, try with absolute path
+      let response = null;
+      let lastError = null;
+      
+      // Try each endpoint until one works
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying login endpoint: ${endpoint}`);
+          response = await api.post(endpoint, credentials, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          // If we get here, the request succeeded
+          console.log(`Login successful with endpoint: ${endpoint}`);
+          break;
+        } catch (error) {
+          console.warn(`Login attempt failed with endpoint ${endpoint}:`, error);
+          lastError = error;
+          // Continue to the next endpoint
+        }
+      }
+      
+      // If all endpoints failed, try with absolute URL
+      if (!response) {
+        console.log('Trying absolute URL as last resort');
         response = await axios.post(`${window.location.origin}/api/login.php`, credentials, {
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'X-Force-Refresh': 'true'
           }
         });
+      }
+      
+      // If still no response, throw the last error
+      if (!response) {
+        throw lastError || new Error('All login attempts failed');
       }
       
       const data = response.data;
@@ -129,24 +170,70 @@ export const authAPI = {
   
   signup: async (userData: SignupRequest): Promise<AuthResponse> => {
     try {
-      console.log('Attempting signup with direct path:', `${API_BASE_URL}/signup.php`);
+      console.log('Attempting signup with multiple fallback approaches');
       
-      // Use multiple fallback approaches for maximum compatibility
-      let response;
+      // Try multiple endpoint variations until one works
+      const endpoints = [
+        // Direct file access
+        '/signup.php',
+        // Root-relative paths
+        '/api/signup.php',
+        '/api/signup',
+        // Regular paths
+        'signup.php',
+        'signup', 
+        // Registration alias paths
+        '/register.php',
+        '/register',
+        'register.php',
+        'register',
+        // Alternate auth paths
+        '/auth/signup.php',
+        '/auth/signup',
+        'auth/signup.php',
+        'auth/signup'
+      ];
       
-      try {
-        // First try with direct path that matches .htaccess rules
-        response = await api.post('/signup.php', userData);
-      } catch (firstError) {
-        console.warn('First signup attempt failed, trying absolute path:', firstError);
-        
-        // If that fails, try with absolute path
+      let response = null;
+      let lastError = null;
+      
+      // Try each endpoint until one works
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying signup endpoint: ${endpoint}`);
+          response = await api.post(endpoint, userData, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          // If we get here, the request succeeded
+          console.log(`Signup successful with endpoint: ${endpoint}`);
+          break;
+        } catch (error) {
+          console.warn(`Signup attempt failed with endpoint ${endpoint}:`, error);
+          lastError = error;
+          // Continue to the next endpoint
+        }
+      }
+      
+      // If all endpoints failed, try with absolute URL
+      if (!response) {
+        console.log('Trying absolute URL as last resort');
         response = await axios.post(`${window.location.origin}/api/signup.php`, userData, {
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'X-Force-Refresh': 'true'
           }
         });
+      }
+      
+      // If still no response, throw the last error
+      if (!response) {
+        throw lastError || new Error('All signup attempts failed');
       }
       
       const data = response.data;
