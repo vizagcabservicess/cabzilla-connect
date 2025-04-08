@@ -7,6 +7,7 @@ import {
   BookingUpdateRequest
 } from '@/types/api';
 
+// Update API base URL to ensure it's using the correct path
 const API_BASE_URL = '/api';
 
 // Axios instance with base settings
@@ -86,6 +87,7 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
+      // Use direct file name with .php extension and ensure it's at the root /api path
       const response = await api.post('/login.php', credentials);
       const data = response.data;
       
@@ -102,6 +104,7 @@ export const authAPI = {
   
   signup: async (userData: SignupRequest): Promise<AuthResponse> => {
     try {
+      // Use direct file name with .php extension and ensure it's at the root /api path
       const response = await api.post('/signup.php', userData);
       const data = response.data;
       
