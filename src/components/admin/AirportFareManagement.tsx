@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -43,19 +42,18 @@ const AirportFareManagement: React.FC = () => {
         console.log('Retrieved fare data:', fareData);
         
         // Create a new object with explicit number conversions to ensure numeric values
-        // Handle all possible property name formats due to API inconsistency
         const cleanedFareData: FareData = {
           vehicleId: vehicleId,
           vehicle_id: vehicleId,
-          basePrice: parseNumericValue(fareData.basePrice || fareData.base_price, 0),
-          pricePerKm: parseNumericValue(fareData.pricePerKm || fareData.price_per_km, 0),
-          pickupPrice: parseNumericValue(fareData.pickupPrice || fareData.pickup_price, 0),
-          dropPrice: parseNumericValue(fareData.dropPrice || fareData.drop_price, 0),
-          tier1Price: parseNumericValue(fareData.tier1Price || fareData.tier1_price, 0),
-          tier2Price: parseNumericValue(fareData.tier2Price || fareData.tier2_price, 0),
-          tier3Price: parseNumericValue(fareData.tier3Price || fareData.tier3_price, 0),
-          tier4Price: parseNumericValue(fareData.tier4Price || fareData.tier4_price, 0),
-          extraKmCharge: parseNumericValue(fareData.extraKmCharge || fareData.extra_km_charge, 0)
+          basePrice: parseFloat(String(fareData.basePrice ?? fareData.base_price ?? 0)),
+          pricePerKm: parseFloat(String(fareData.pricePerKm ?? fareData.price_per_km ?? 0)),
+          pickupPrice: parseFloat(String(fareData.pickupPrice ?? fareData.pickup_price ?? 0)),
+          dropPrice: parseFloat(String(fareData.dropPrice ?? fareData.drop_price ?? 0)),
+          tier1Price: parseFloat(String(fareData.tier1Price ?? fareData.tier1_price ?? 0)),
+          tier2Price: parseFloat(String(fareData.tier2Price ?? fareData.tier2_price ?? 0)),
+          tier3Price: parseFloat(String(fareData.tier3Price ?? fareData.tier3_price ?? 0)),
+          tier4Price: parseFloat(String(fareData.tier4Price ?? fareData.tier4_price ?? 0)),
+          extraKmCharge: parseFloat(String(fareData.extraKmCharge ?? fareData.extra_km_charge ?? 0))
         };
         
         console.log('Cleaned fare data to display:', cleanedFareData);
@@ -106,15 +104,15 @@ const AirportFareManagement: React.FC = () => {
       ...fareData,
       vehicleId: selectedVehicleId,
       vehicle_id: selectedVehicleId,
-      basePrice: parseNumericValue(fareData.basePrice, 0),
-      pricePerKm: parseNumericValue(fareData.pricePerKm, 0),
-      pickupPrice: parseNumericValue(fareData.pickupPrice, 0),
-      dropPrice: parseNumericValue(fareData.dropPrice, 0),
-      tier1Price: parseNumericValue(fareData.tier1Price, 0),
-      tier2Price: parseNumericValue(fareData.tier2Price, 0),
-      tier3Price: parseNumericValue(fareData.tier3Price, 0),
-      tier4Price: parseNumericValue(fareData.tier4Price, 0),
-      extraKmCharge: parseNumericValue(fareData.extraKmCharge, 0)
+      basePrice: parseFloat(String(fareData.basePrice ?? 0)),
+      pricePerKm: parseFloat(String(fareData.pricePerKm ?? 0)),
+      pickupPrice: parseFloat(String(fareData.pickupPrice ?? 0)),
+      dropPrice: parseFloat(String(fareData.dropPrice ?? 0)),
+      tier1Price: parseFloat(String(fareData.tier1Price ?? 0)),
+      tier2Price: parseFloat(String(fareData.tier2Price ?? 0)),
+      tier3Price: parseFloat(String(fareData.tier3Price ?? 0)),
+      tier4Price: parseFloat(String(fareData.tier4Price ?? 0)),
+      extraKmCharge: parseFloat(String(fareData.extraKmCharge ?? 0))
     };
     setFares(updatedFareData);
   };
@@ -134,15 +132,15 @@ const AirportFareManagement: React.FC = () => {
       ...fares,
       vehicleId: selectedVehicleId,
       vehicle_id: selectedVehicleId,
-      basePrice: parseNumericValue(fares.basePrice, 0),
-      pricePerKm: parseNumericValue(fares.pricePerKm, 0),
-      pickupPrice: parseNumericValue(fares.pickupPrice, 0),
-      dropPrice: parseNumericValue(fares.dropPrice, 0),
-      tier1Price: parseNumericValue(fares.tier1Price, 0),
-      tier2Price: parseNumericValue(fares.tier2Price, 0),
-      tier3Price: parseNumericValue(fares.tier3Price, 0),
-      tier4Price: parseNumericValue(fares.tier4Price, 0),
-      extraKmCharge: parseNumericValue(fares.extraKmCharge, 0)
+      basePrice: parseFloat(String(fares.basePrice ?? 0)),
+      pricePerKm: parseFloat(String(fares.pricePerKm ?? 0)),
+      pickupPrice: parseFloat(String(fares.pickupPrice ?? 0)),
+      dropPrice: parseFloat(String(fares.dropPrice ?? 0)),
+      tier1Price: parseFloat(String(fares.tier1Price ?? 0)),
+      tier2Price: parseFloat(String(fares.tier2Price ?? 0)),
+      tier3Price: parseFloat(String(fares.tier3Price ?? 0)),
+      tier4Price: parseFloat(String(fares.tier4Price ?? 0)),
+      extraKmCharge: parseFloat(String(fares.extraKmCharge ?? 0))
     };
 
     console.log("Saving fare data:", fareToSave);
