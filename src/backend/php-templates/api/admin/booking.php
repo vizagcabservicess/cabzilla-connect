@@ -206,6 +206,9 @@ try {
     } else {
         // This is a request for all bookings (no specific ID)
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // Debug log for troubleshooting
+            logError("Fetching all bookings", ["userId" => $userId, "isAdmin" => $isAdmin ? "true" : "false"]);
+            
             // Get status filter if provided
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
@@ -216,6 +219,8 @@ try {
             }
             $sql .= " ORDER BY created_at DESC";
             
+            logError("SQL query for bookings", ["sql" => $sql, "status_filter" => $statusFilter]);
+            
             $stmt = $conn->prepare($sql);
             
             // Bind status parameter if filter is applied
@@ -225,6 +230,13 @@ try {
             
             $stmt->execute();
             $result = $stmt->get_result();
+            
+            // Check if there are results
+            if (!$result) {
+                logError("Database query failed", ["error" => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve bookings: ' . $conn->error], 500);
+                exit;
+            }
             
             $bookings = [];
             while ($row = $result->fetch_assoc()) {
@@ -252,6 +264,9 @@ try {
             }
             
             logError("Fetched all bookings", ['count' => count($bookings), 'status_filter' => $statusFilter]);
+            
+            // Make sure we're sending a proper JSON response
+            header('Content-Type: application/json');
             sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
         } else {
             sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
