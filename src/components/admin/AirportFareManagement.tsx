@@ -20,7 +20,6 @@ const AirportFareManagement: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const { toast } = useToast();
 
-  // Load fares when vehicle selection changes or refresh key changes
   useEffect(() => {
     if (selectedVehicleId) {
       loadFares(selectedVehicleId);
@@ -35,146 +34,76 @@ const AirportFareManagement: React.FC = () => {
     setLoading(true);
     try {
       console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
-      const fareDatas = await fetchAirportFares(vehicleId);
-      console.log('Airport fares response:', fareDatas);
+      const response = await fetchAirportFares(vehicleId);
+      console.log('Airport fares response:', response);
       
-      if (fareDatas && Array.isArray(fareDatas) && fareDatas.length > 0) {
-        // Take the first item from the array
-        const rawFareData = fareDatas[0];
-        console.log('Retrieved raw fare data:', rawFareData);
-
-        // Check if we have actual fare data by inspecting specific properties
-        // Look for either basePrice or base_price (handle both formats)
-        const hasBasePrice = (
-          rawFareData.basePrice !== undefined || 
-          rawFareData.base_price !== undefined
-        );
+      let fareData: any = null;
+      
+      if (Array.isArray(response)) {
+        console.log('Response is an array with length:', response.length);
+        if (response.length > 0) {
+          fareData = response[0];
+        }
+      } 
+      else if (response && typeof response === 'object') {
+        console.log('Response is an object, checking for nested data');
         
-        // Check for names that might indicate fare data is present
-        const hasTierPrices = (
-          rawFareData.tier1Price !== undefined || 
-          rawFareData.tier1_price !== undefined ||
-          rawFareData.tier2Price !== undefined ||
-          rawFareData.tier2_price !== undefined
-        );
+        if (response.data && response.data.fares) {
+          console.log('Found nested data.fares structure:', response.data.fares);
+          
+          if (Array.isArray(response.data.fares)) {
+            fareData = response.data.fares.find((fare: any) => 
+              fare.vehicleId === vehicleId || fare.vehicle_id === vehicleId
+            );
+            if (!fareData && response.data.fares.length > 0) {
+              fareData = response.data.fares[0];
+            }
+          } else if (typeof response.data.fares === 'object') {
+            fareData = response.data.fares;
+          }
+        } 
+        else if (response.fares) {
+          console.log('Found direct fares property:', response.fares);
+          
+          if (Array.isArray(response.fares)) {
+            fareData = response.fares.find((fare: any) => 
+              fare.vehicleId === vehicleId || fare.vehicle_id === vehicleId
+            );
+            if (!fareData && response.fares.length > 0) {
+              fareData = response.fares[0];
+            }
+          } else if (typeof response.fares === 'object') {
+            if (response.fares[vehicleId]) {
+              fareData = response.fares[vehicleId];
+            } else {
+              const keys = Object.keys(response.fares);
+              if (keys.length > 0) {
+                fareData = response.fares[keys[0]];
+              }
+            }
+          }
+        } 
+        else {
+          fareData = response;
+        }
+      }
+      
+      console.log('Extracted fare data:', fareData);
+      
+      if (fareData) {
+        const hasAnyFareProperty = 
+          fareData.basePrice !== undefined || 
+          fareData.base_price !== undefined ||
+          fareData.pickupPrice !== undefined || 
+          fareData.pickup_price !== undefined ||
+          fareData.dropPrice !== undefined || 
+          fareData.drop_price !== undefined ||
+          fareData.tier1Price !== undefined || 
+          fareData.tier1_price !== undefined;
         
-        if (rawFareData && (hasBasePrice || hasTierPrices)) {
+        if (hasAnyFareProperty) {
           console.log('Valid fare data found');
           
-          // Extract values from either camelCase or snake_case properties
-          // Always convert to number values using parseNumericValue
-          const cleanedFareData: FareData = {
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId,
-            basePrice: parseNumericValue(rawFareData.basePrice ?? rawFareData.base_price),
-            pricePerKm: parseNumericValue(rawFareData.pricePerKm ?? rawFareData.price_per_km),
-            pickupPrice: parseNumericValue(rawFareData.pickupPrice ?? rawFareData.pickup_price),
-            dropPrice: parseNumericValue(rawFareData.dropPrice ?? rawFareData.drop_price),
-            tier1Price: parseNumericValue(rawFareData.tier1Price ?? rawFareData.tier1_price),
-            tier2Price: parseNumericValue(rawFareData.tier2Price ?? rawFareData.tier2_price),
-            tier3Price: parseNumericValue(rawFareData.tier3Price ?? rawFareData.tier3_price),
-            tier4Price: parseNumericValue(rawFareData.tier4Price ?? rawFareData.tier4_price),
-            extraKmCharge: parseNumericValue(rawFareData.extraKmCharge ?? rawFareData.extra_km_charge)
-          };
-          
-          console.log('Cleaned fare data to display:', cleanedFareData);
-          setFares(cleanedFareData);
-          setInitialized(true);
-        } else if (rawFareData && typeof rawFareData === 'object') {
-          // Handle case where data is returned but in a different format
-          // Try to directly extract numeric values from any matching properties
-          console.log('Trying to extract data from alternative format:', rawFareData);
-          
-          const cleanedFareData: FareData = {
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId,
-            basePrice: 0,
-            pricePerKm: 0,
-            pickupPrice: 0,
-            dropPrice: 0,
-            tier1Price: 0,
-            tier2Price: 0,
-            tier3Price: 0,
-            tier4Price: 0,
-            extraKmCharge: 0
-          };
-          
-          // Try to extract values from any property that might contain our data
-          Object.entries(rawFareData).forEach(([key, value]) => {
-            const lowerKey = key.toLowerCase();
-            
-            if (lowerKey.includes('base') && lowerKey.includes('price')) {
-              cleanedFareData.basePrice = parseNumericValue(value);
-            } else if ((lowerKey.includes('perkm') || lowerKey.includes('per_km')) && lowerKey.includes('price')) {
-              cleanedFareData.pricePerKm = parseNumericValue(value);
-            } else if (lowerKey.includes('pickup') && lowerKey.includes('price')) {
-              cleanedFareData.pickupPrice = parseNumericValue(value);
-            } else if (lowerKey.includes('drop') && lowerKey.includes('price')) {
-              cleanedFareData.dropPrice = parseNumericValue(value);
-            } else if (lowerKey.includes('tier1') || lowerKey.includes('tier_1')) {
-              cleanedFareData.tier1Price = parseNumericValue(value);
-            } else if (lowerKey.includes('tier2') || lowerKey.includes('tier_2')) {
-              cleanedFareData.tier2Price = parseNumericValue(value);
-            } else if (lowerKey.includes('tier3') || lowerKey.includes('tier_3')) {
-              cleanedFareData.tier3Price = parseNumericValue(value);
-            } else if (lowerKey.includes('tier4') || lowerKey.includes('tier_4')) {
-              cleanedFareData.tier4Price = parseNumericValue(value);
-            } else if ((lowerKey.includes('extrakm') || lowerKey.includes('extra_km')) && lowerKey.includes('charge')) {
-              cleanedFareData.extraKmCharge = parseNumericValue(value);
-            }
-          });
-          
-          // Check if we found any non-zero values
-          const hasNonZeroValues = Object.values(cleanedFareData).some(val => 
-            typeof val === 'number' && val > 0 && !['vehicleId', 'vehicle_id'].includes(val.toString())
-          );
-          
-          if (hasNonZeroValues) {
-            console.log('Extracted fare data from alternative format:', cleanedFareData);
-            setFares(cleanedFareData);
-            setInitialized(true);
-          } else {
-            console.log('No meaningful fare values found in the response, creating default');
-            setFares({
-              vehicleId: vehicleId,
-              vehicle_id: vehicleId,
-              basePrice: 0,
-              pricePerKm: 0,
-              pickupPrice: 0,
-              dropPrice: 0,
-              tier1Price: 0,
-              tier2Price: 0,
-              tier3Price: 0,
-              tier4Price: 0,
-              extraKmCharge: 0
-            });
-            setInitialized(true);
-          }
-        } else {
-          console.log('No valid fare data found in response, creating default');
-          setFares({
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId,
-            basePrice: 0,
-            pricePerKm: 0,
-            pickupPrice: 0,
-            dropPrice: 0,
-            tier1Price: 0,
-            tier2Price: 0,
-            tier3Price: 0,
-            tier4Price: 0,
-            extraKmCharge: 0
-          });
-          setInitialized(true);
-        }
-      } else if (fareDatas && typeof fareDatas === 'object' && !Array.isArray(fareDatas)) {
-        // Handle case where API returns an object instead of an array
-        console.log('API returned an object instead of an array:', fareDatas);
-        
-        // Check if the response has a data property that contains the fares
-        const fareData = (fareDatas as any).data?.fares?.[0] || fareDatas;
-        
-        if (fareData) {
           const cleanedFareData: FareData = {
             vehicleId: vehicleId,
             vehicle_id: vehicleId,
@@ -189,44 +118,29 @@ const AirportFareManagement: React.FC = () => {
             extraKmCharge: parseNumericValue(fareData.extraKmCharge ?? fareData.extra_km_charge)
           };
           
-          console.log('Cleaned fare data from object:', cleanedFareData);
+          console.log('Cleaned fare data to display:', cleanedFareData);
           setFares(cleanedFareData);
           setInitialized(true);
-        } else {
-          console.log('No fare data found in object response, creating default');
-          setFares({
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId,
-            basePrice: 0,
-            pricePerKm: 0,
-            pickupPrice: 0,
-            dropPrice: 0,
-            tier1Price: 0,
-            tier2Price: 0,
-            tier3Price: 0,
-            tier4Price: 0,
-            extraKmCharge: 0
-          });
-          setInitialized(true);
+          setLoading(false);
+          return;
         }
-      } else {
-        // If no fare data found, create a default entry
-        console.log('No fare data found, creating default');
-        setFares({
-          vehicleId: vehicleId,
-          vehicle_id: vehicleId,
-          basePrice: 0,
-          pricePerKm: 0,
-          pickupPrice: 0,
-          dropPrice: 0,
-          tier1Price: 0,
-          tier2Price: 0,
-          tier3Price: 0,
-          tier4Price: 0,
-          extraKmCharge: 0
-        });
-        setInitialized(true);
       }
+      
+      console.log('No valid fare data found, creating default');
+      setFares({
+        vehicleId: vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      });
+      setInitialized(true);
     } catch (error) {
       console.error('Error loading airport fares:', error);
       toast({
@@ -235,7 +149,6 @@ const AirportFareManagement: React.FC = () => {
         variant: "destructive"
       });
       
-      // Set default values even on error
       setFares({
         vehicleId: vehicleId,
         vehicle_id: vehicleId,
@@ -258,14 +171,12 @@ const AirportFareManagement: React.FC = () => {
   const handleVehicleChange = (vehicleId: string) => {
     console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
-    // Clear current fares to prevent old data showing while loading
     setFares(null);
     setInitialized(false);
   };
 
   const handleFareChange = (fareData: FareData) => {
     console.log("Fare data changed:", fareData);
-    // Ensure we're preserving numeric values
     const updatedFareData: FareData = {
       ...fareData,
       vehicleId: selectedVehicleId,
@@ -293,7 +204,6 @@ const AirportFareManagement: React.FC = () => {
       return;
     }
 
-    // Ensure vehicle ID is set correctly and all values are numbers
     const fareToSave: FareData = {
       ...fares,
       vehicleId: selectedVehicleId,
@@ -319,10 +229,7 @@ const AirportFareManagement: React.FC = () => {
         description: "Airport fares saved successfully.",
       });
       
-      // Force a reload of data to ensure we have the latest values
-      // Add a short delay to allow the backend to process the update
       setTimeout(() => {
-        // Increment refresh key to trigger a reload
         setRefreshKey(prev => prev + 1);
       }, 1000);
     } catch (error) {
@@ -346,9 +253,7 @@ const AirportFareManagement: React.FC = () => {
         description: "Airport fare tables synchronized successfully.",
       });
       
-      // Reload data if we have a selected vehicle
       if (selectedVehicleId) {
-        // Increment refresh key to trigger a reload
         setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
@@ -363,11 +268,9 @@ const AirportFareManagement: React.FC = () => {
     }
   };
 
-  // Fix database collation
   const handleFixDatabase = async () => {
     setSyncing(true);
     try {
-      // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await fetch(`/api/admin/fix-collation.php?_t=${timestamp}`, {
         method: 'GET',
@@ -387,10 +290,8 @@ const AirportFareManagement: React.FC = () => {
           description: `Database collation fixed successfully for ${result.data?.tables_count || 0} tables.`,
         });
         
-        // Sync tables after fixing collation
         await syncAirportFares();
         
-        // Increment refresh key to trigger a reload
         setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(result.message || 'Failed to fix database collation');
