@@ -70,6 +70,79 @@ try {
         logMessage("Created local_package_fares table");
     }
     
+    // Check table columns to ensure correct structure
+    $checkColumnsStmt = $conn->query("SHOW COLUMNS FROM local_package_fares");
+    $existingColumns = [];
+    while ($column = $checkColumnsStmt->fetch_assoc()) {
+        $existingColumns[] = $column['Field'];
+    }
+    
+    // Check if the table has the correct column names
+    $requiredColumns = [
+        'vehicle_id',
+        'price_4hrs_40km',
+        'price_8hrs_80km',
+        'price_10hrs_100km',
+        'price_extra_km',
+        'price_extra_hour'
+    ];
+    
+    $missingColumns = array_diff($requiredColumns, $existingColumns);
+    
+    // If columns are missing, check if we have alternative column names
+    if (!empty($missingColumns)) {
+        logMessage("Missing columns in local_package_fares: " . implode(', ', $missingColumns));
+        
+        // Column name mappings - map expected names to possible alternatives
+        $columnMappings = [
+            'price_4hrs_40km' => ['price_4hr_40km', 'package_4hr', 'local_package_4hr', 'price_4hr'],
+            'price_8hrs_80km' => ['price_8hr_80km', 'package_8hr', 'local_package_8hr', 'price_8hr'],
+            'price_10hrs_100km' => ['price_10hr_100km', 'package_10hr', 'local_package_10hr', 'price_10hr'],
+            'price_extra_km' => ['extra_km_rate', 'extra_km_charge', 'extra_km'],
+            'price_extra_hour' => ['extra_hour_rate', 'extra_hour_charge', 'extra_hour']
+        ];
+        
+        // Check alternative column names
+        $alterTableSql = "";
+        
+        foreach ($missingColumns as $missingColumn) {
+            if (isset($columnMappings[$missingColumn])) {
+                $alternativeFound = false;
+                
+                foreach ($columnMappings[$missingColumn] as $alternative) {
+                    if (in_array($alternative, $existingColumns)) {
+                        // If alternative exists, rename it to the expected name
+                        $alterTableSql .= "ALTER TABLE local_package_fares CHANGE `$alternative` `$missingColumn` DECIMAL(10,2) NOT NULL DEFAULT 0; ";
+                        $alternativeFound = true;
+                        logMessage("Will rename column $alternative to $missingColumn");
+                        break;
+                    }
+                }
+                
+                if (!$alternativeFound) {
+                    // If no alternative exists, add the missing column
+                    $alterTableSql .= "ALTER TABLE local_package_fares ADD COLUMN `$missingColumn` DECIMAL(10,2) NOT NULL DEFAULT 0; ";
+                    logMessage("Will add missing column $missingColumn");
+                }
+            }
+        }
+        
+        // Execute the alter table SQL if needed
+        if (!empty($alterTableSql)) {
+            $alterStatements = explode(';', $alterTableSql);
+            foreach ($alterStatements as $statement) {
+                if (trim($statement) !== '') {
+                    try {
+                        $conn->query($statement);
+                        logMessage("Executed: $statement");
+                    } catch (Exception $e) {
+                        logMessage("Error executing: $statement. Error: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+    }
+    
     // Get vehicles from vehicles table
     $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
     $vehiclesResult = $conn->query($vehiclesQuery);
@@ -98,35 +171,44 @@ try {
             }
             
             // Now sync with vehicle_pricing table (for compatibility)
-            $updateVehiclePricing = $conn->prepare("
-                INSERT INTO vehicle_pricing 
-                (vehicle_id, trip_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, updated_at)
-                SELECT 
-                    lpf.vehicle_id, 
-                    'local-package',
-                    lpf.price_4hrs_40km,
-                    lpf.price_8hrs_80km,
-                    lpf.price_10hrs_100km,
-                    lpf.price_extra_km,
-                    lpf.price_extra_hour,
-                    NOW()
-                FROM 
-                    local_package_fares lpf
-                WHERE 
-                    lpf.vehicle_id = ?
-                ON DUPLICATE KEY UPDATE
-                    price_4hrs_40km = lpf.price_4hrs_40km,
-                    price_8hrs_80km = lpf.price_8hrs_80km,
-                    price_10hrs_100km = lpf.price_10hrs_100km,
-                    price_extra_km = lpf.price_extra_km,
-                    price_extra_hour = lpf.price_extra_hour,
-                    updated_at = NOW()
-            ");
+            // Check if the vehicle_pricing table has the right columns
+            $checkVehiclePricingColumnsStmt = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_%'");
+            $hasLocalPackageColumns = $checkVehiclePricingColumnsStmt->num_rows > 0;
             
-            $updateVehiclePricing->bind_param("s", $vehicleId);
-            $updateVehiclePricing->execute();
-            
-            logMessage("Synced local package fare for vehicle $vehicleId with vehicle_pricing table");
+            if ($hasLocalPackageColumns) {
+                // If column names in vehicle_pricing are different, we need to adjust our query
+                $updateVehiclePricing = $conn->prepare("
+                    INSERT INTO vehicle_pricing 
+                    (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, extra_km_charge, extra_hour_charge, updated_at)
+                    SELECT 
+                        lpf.vehicle_id, 
+                        'local-package',
+                        lpf.price_4hrs_40km,
+                        lpf.price_8hrs_80km,
+                        lpf.price_10hrs_100km,
+                        lpf.price_extra_km,
+                        lpf.price_extra_hour,
+                        NOW()
+                    FROM 
+                        local_package_fares lpf
+                    WHERE 
+                        lpf.vehicle_id = ?
+                    ON DUPLICATE KEY UPDATE
+                        local_package_4hr = lpf.price_4hrs_40km,
+                        local_package_8hr = lpf.price_8hrs_80km,
+                        local_package_10hr = lpf.price_10hrs_100km,
+                        extra_km_charge = lpf.price_extra_km,
+                        extra_hour_charge = lpf.price_extra_hour,
+                        updated_at = NOW()
+                ");
+                
+                $updateVehiclePricing->bind_param("s", $vehicleId);
+                $updateVehiclePricing->execute();
+                
+                logMessage("Synced local package fare for vehicle $vehicleId with vehicle_pricing table");
+            } else {
+                logMessage("vehicle_pricing table missing local_package columns - skipping sync");
+            }
         }
     } else {
         logMessage("No vehicles found in database");
