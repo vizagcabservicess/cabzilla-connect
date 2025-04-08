@@ -1,4 +1,3 @@
-
 # Enable URL rewriting
 RewriteEngine On
 
@@ -69,11 +68,21 @@ RewriteRule ^login\.php$ /api/login.php [L,QSA]
 RewriteRule ^signup\.php$ /api/signup.php [L,QSA]
 RewriteRule ^register\.php$ /api/signup.php [L,QSA]
 
+# CRITICAL: Root level login/signup direct routing (absolute paths)
+RewriteRule ^/login$ /api/login.php [L,QSA]
+RewriteRule ^/signup$ /api/signup.php [L,QSA]
+RewriteRule ^/register$ /api/signup.php [L,QSA]
+
 # Set PHP settings for this directory
-# ... keep existing code (PHP settings for directories)
+<IfModule mod_php7.c>
+    php_flag display_errors Off
+    php_value error_reporting 32767
+</IfModule>
 
 # Prevent direct access to sensitive files
-# ... keep existing code (security settings)
+<FilesMatch "\.(htaccess|htpasswd|ini)$">
+    Require all denied
+</FilesMatch>
 
 # Handle errors
 ErrorDocument 404 /api/error.php
