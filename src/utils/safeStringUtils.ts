@@ -1,39 +1,92 @@
 
 /**
- * Parse a potentially string or null numeric value to a number
+ * Utility functions for safely handling string operations
  */
-export function parseNumericValue(value: string | number | null | undefined, defaultValue: number): number {
-  if (value === undefined || value === null) {
-    return defaultValue;
+
+/**
+ * Safely checks if a string contains a substring
+ * Gracefully handles null, undefined, and non-string values
+ * @param value Any value that might be a string
+ * @param substring The substring to search for
+ * @returns boolean indicating if the substring is found
+ */
+export function safeIncludes(value: any, substring: string): boolean {
+  // Check if value is null, undefined, or not a string
+  if (value === null || value === undefined || typeof value !== 'string') {
+    return false;
   }
   
-  if (typeof value === 'number') {
-    return isNaN(value) ? defaultValue : value;
+  // Ensure substring is a string and not null/undefined
+  if (substring === null || substring === undefined || typeof substring !== 'string') {
+    return false;
   }
   
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? defaultValue : parsed;
-  }
-  
-  return defaultValue;
+  // Now safely perform the includes check
+  return value.toLowerCase().includes(substring.toLowerCase());
 }
 
 /**
- * Parse amenities value which could be string, array or undefined
+ * Safely converts a value to lowercase
+ * @param value Any value that might be a string
+ * @returns Lowercase string or empty string if input is invalid
  */
-export function parseAmenities(amenities: string | string[] | null | undefined): string[] {
-  if (!amenities) {
-    return ['AC'];
+export function safeLowerCase(value: any): string {
+  if (value === null || value === undefined || typeof value !== 'string') {
+    return '';
+  }
+  return value.toLowerCase();
+}
+
+/**
+ * Parse a value to a number, handling various input types
+ * @param value Any value that might be convertible to a number
+ * @returns Numeric value or 0 if parsing fails
+ */
+export function parseNumericValue(value: any): number {
+  // If value is null, undefined, or empty string, return 0
+  if (value === null || value === undefined || value === '') {
+    return 0;
   }
   
-  if (typeof amenities === 'string') {
-    return amenities.split(',').map(item => item.trim()).filter(Boolean);
+  // Handle case where value is already a number
+  if (typeof value === 'number') {
+    return isNaN(value) ? 0 : value;
   }
   
-  if (Array.isArray(amenities)) {
-    return amenities.filter(Boolean);
+  // Handle case where value is a string representing a number
+  if (typeof value === 'string') {
+    const parsedValue = parseFloat(value);
+    return isNaN(parsedValue) ? 0 : parsedValue;
   }
   
-  return ['AC']; 
+  // Try to convert to number as a last resort
+  const attemptNumber = Number(value);
+  return isNaN(attemptNumber) ? 0 : attemptNumber;
+}
+
+/**
+ * Safely gets a property from an object
+ * @param obj The object to get the property from
+ * @param prop The property name
+ * @returns The property value or undefined
+ */
+export function safeGet(obj: any, prop: string): any {
+  if (obj === null || obj === undefined || typeof obj !== 'object') {
+    return undefined;
+  }
+  return obj[prop];
+}
+
+/**
+ * Safely extracts a string property from an object
+ * @param obj The object to get the property from
+ * @param prop The property name
+ * @returns The property value as string or empty string
+ */
+export function safeGetString(obj: any, prop: string): string {
+  const value = safeGet(obj, prop);
+  if (value === null || value === undefined || typeof value !== 'string') {
+    return '';
+  }
+  return value;
 }
