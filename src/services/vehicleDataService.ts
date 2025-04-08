@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { toast } from 'sonner';
@@ -19,6 +18,12 @@ let cachedVehicles: {
 // Keep track of last successful refresh
 let lastSuccessfulRefresh = 0;
 let pendingRefreshPromise: Promise<CabType[]> | null = null;
+
+// Add throttling for cache clearing to prevent cascading refreshes
+let lastCacheClearTime = 0;
+const CACHE_CLEAR_THROTTLE = 3000; // 3 seconds minimum between cache clears
+let clearingInProgress = false;
+let cacheOperationsQueue: Array<() => Promise<void>> = [];
 
 // Default vehicles as last resort fallback (should never be used if database connection works)
 const DEFAULT_VEHICLES: CabType[] = [
@@ -69,38 +74,76 @@ const DEFAULT_VEHICLES: CabType[] = [
   }
 ];
 
+// Process operation queue one at a time
+const processQueue = async () => {
+  if (cacheOperationsQueue.length === 0 || clearingInProgress) {
+    return;
+  }
+
+  clearingInProgress = true;
+  try {
+    const operation = cacheOperationsQueue.shift();
+    if (operation) {
+      await operation();
+    }
+  } catch (error) {
+    console.error('Error processing cache operation:', error);
+  } finally {
+    clearingInProgress = false;
+    if (cacheOperationsQueue.length > 0) {
+      setTimeout(processQueue, 100); // Process next operation after a short delay
+    }
+  }
+};
+
 /**
- * Clear all vehicle data caches
+ * Clear all vehicle data caches with throttling to prevent infinite loops
  */
 export const clearVehicleDataCache = () => {
-  console.log('Clearing vehicle data cache');
-  cachedVehicles = {};
-  lastSuccessfulRefresh = 0;
-  pendingRefreshPromise = null;
+  const now = Date.now();
   
-  try {
-    // Clear all localStorage cache keys related to vehicles
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('cachedVehicles') || key.startsWith('localVehicles') || key.startsWith('cabOptions_'))) {
-        keysToRemove.push(key);
-      }
-    }
-    
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    localStorage.removeItem('cachedVehicles');
-    localStorage.removeItem('cachedVehiclesTimestamp');
-    localStorage.removeItem('localVehicles');
-  } catch (e) {
-    console.error('Error clearing cached vehicles from localStorage:', e);
+  // If we've cleared the cache recently, throttle to prevent cascading refreshes
+  if (now - lastCacheClearTime < CACHE_CLEAR_THROTTLE) {
+    console.log(`Throttling cache clear operation (last clear was ${now - lastCacheClearTime}ms ago)`);
+    return;
   }
   
-  // Dispatch event to notify components about the cache clear
-  window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-    detail: { timestamp: Date.now() }
-  }));
+  lastCacheClearTime = now;
+  
+  // Queue the operation instead of executing immediately
+  cacheOperationsQueue.push(async () => {
+    console.log('Clearing vehicle data cache');
+    cachedVehicles = {};
+    lastSuccessfulRefresh = 0;
+    pendingRefreshPromise = null;
+    
+    try {
+      // Clear all localStorage cache keys related to vehicles
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('cachedVehicles') || key.startsWith('localVehicles') || key.startsWith('cabOptions_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('cachedVehiclesTimestamp');
+      localStorage.removeItem('localVehicles');
+    } catch (e) {
+      console.error('Error clearing cached vehicles from localStorage:', e);
+    }
+    
+    // Dispatch event to notify components about the cache clear
+    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
+  });
+  
+  // Start processing the queue
+  processQueue();
 };
 
 /**
@@ -371,9 +414,30 @@ export const getVehicleTypes = async (): Promise<string[]> => {
 export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabType[]> => {
   console.log('Getting all vehicles for admin interface');
   
+  // Use a throttling mechanism to prevent too frequent refreshes
+  const now = Date.now();
+  const lastAdminRefreshTime = parseInt(localStorage.getItem('lastAdminVehicleRefresh') || '0', 10);
+  const ADMIN_REFRESH_THROTTLE = 2000; // 2 seconds minimum between admin refreshes
+  
+  // Skip forced refresh if we've done one recently
+  if (forceRefresh && now - lastAdminRefreshTime < ADMIN_REFRESH_THROTTLE) {
+    console.log(`Admin refresh throttled (last refresh was ${now - lastAdminRefreshTime}ms ago)`);
+    forceRefresh = false;
+  } else if (forceRefresh) {
+    localStorage.setItem('lastAdminVehicleRefresh', now.toString());
+  }
+  
   try {
-    // Clear any existing cache first to ensure fresh data
-    clearVehicleDataCache();
+    // Only clear cache if not throttled
+    if (forceRefresh) {
+      // Queue the cache clear instead of doing it synchronously
+      cacheOperationsQueue.push(async () => {
+        console.log('Clearing cache for admin vehicles');
+        // Clear specific admin-related cache entries
+        localStorage.removeItem('adminVehicles');
+      });
+      processQueue();
+    }
     
     // Try direct admin endpoints first
     const adminEndpoints = [
@@ -418,14 +482,17 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
           // Cache these results for quick access
           try {
             localStorage.setItem('adminVehicles', JSON.stringify(vehicles));
+            localStorage.setItem('adminVehiclesTimestamp', Date.now().toString());
           } catch (e) {
             console.warn('Could not cache admin vehicles:', e);
           }
           
-          // Notify components that vehicle data is refreshed
-          window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-            detail: { count: vehicles.length, source: 'admin-api', timestamp: Date.now() }
-          }));
+          // Dispatch event only if we actually got new data and it's a forced refresh
+          if (forceRefresh) {
+            window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+              detail: { count: vehicles.length, source: 'admin-api', timestamp: Date.now() }
+            }));
+          }
           
           return vehicles;
         }
