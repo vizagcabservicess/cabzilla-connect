@@ -180,8 +180,8 @@ try {
                 'luggageCapacity' => isset($row['luggage_capacity']) ? intval($row['luggage_capacity']) : 2,
                 'image' => $row['image'] ?? '/cars/sedan.png',
                 'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
-                'basePrice' => isset($row['base_price']) ? floatval($row['base_price']) : 0,
-                'pricePerKm' => isset($row['price_per_km']) ? floatval($row['price_per_km']) : 0,
+                'oneWayBasePrice' => isset($row['base_price']) ? floatval($row['base_price']) : 0,
+                'oneWayPricePerKm' => isset($row['price_per_km']) ? floatval($row['price_per_km']) : 0,
                 'driverAllowance' => isset($row['driver_allowance']) ? floatval($row['driver_allowance']) : 300,
                 'nightHaltCharge' => isset($row['night_halt_charge']) ? floatval($row['night_halt_charge']) : 700,
                 'roundTripBasePrice' => isset($row['roundtrip_base_price']) ? floatval($row['roundtrip_base_price']) : 0,
@@ -266,15 +266,25 @@ try {
         logMessage("Normalized vehicle ID to lowercase: $vehicleId");
         
         // Get outstation fare values with fallbacks
-        $basePrice = isset($_POST['basePrice']) && is_numeric($_POST['basePrice']) ? 
-                   floatval($_POST['basePrice']) : 
-                   (isset($_POST['base_price']) && is_numeric($_POST['base_price']) ? 
-                   floatval($_POST['base_price']) : 0);
-                   
-        $pricePerKm = isset($_POST['pricePerKm']) && is_numeric($_POST['pricePerKm']) ? 
-                     floatval($_POST['pricePerKm']) : 
-                     (isset($_POST['price_per_km']) && is_numeric($_POST['price_per_km']) ? 
-                     floatval($_POST['price_per_km']) : 0);
+        $oneWayBasePrice = isset($_POST['oneWayBasePrice']) && is_numeric($_POST['oneWayBasePrice']) ? 
+                          floatval($_POST['oneWayBasePrice']) : 
+                          (isset($_POST['basePrice']) && is_numeric($_POST['basePrice']) ? 
+                          floatval($_POST['basePrice']) : 0);
+                          
+        $oneWayPricePerKm = isset($_POST['oneWayPricePerKm']) && is_numeric($_POST['oneWayPricePerKm']) ? 
+                           floatval($_POST['oneWayPricePerKm']) : 
+                           (isset($_POST['pricePerKm']) && is_numeric($_POST['pricePerKm']) ? 
+                           floatval($_POST['pricePerKm']) : 0);
+                          
+        $roundTripBasePrice = isset($_POST['roundTripBasePrice']) && is_numeric($_POST['roundTripBasePrice']) ? 
+                             floatval($_POST['roundTripBasePrice']) : 
+                             (isset($_POST['roundtrip_base_price']) && is_numeric($_POST['roundtrip_base_price']) ? 
+                             floatval($_POST['roundtrip_base_price']) : $oneWayBasePrice * 0.9);
+                             
+        $roundTripPricePerKm = isset($_POST['roundTripPricePerKm']) && is_numeric($_POST['roundTripPricePerKm']) ? 
+                              floatval($_POST['roundTripPricePerKm']) : 
+                              (isset($_POST['roundtrip_price_per_km']) && is_numeric($_POST['roundtrip_price_per_km']) ? 
+                              floatval($_POST['roundtrip_price_per_km']) : $oneWayPricePerKm * 0.85);
                      
         $driverAllowance = isset($_POST['driverAllowance']) && is_numeric($_POST['driverAllowance']) ? 
                           floatval($_POST['driverAllowance']) : 
@@ -285,16 +295,6 @@ try {
                           floatval($_POST['nightHaltCharge']) : 
                           (isset($_POST['night_halt_charge']) && is_numeric($_POST['night_halt_charge']) ? 
                           floatval($_POST['night_halt_charge']) : 700);
-                          
-        $roundTripBasePrice = isset($_POST['roundTripBasePrice']) && is_numeric($_POST['roundTripBasePrice']) ? 
-                             floatval($_POST['roundTripBasePrice']) : 
-                             (isset($_POST['roundtrip_base_price']) && is_numeric($_POST['roundtrip_base_price']) ? 
-                             floatval($_POST['roundtrip_base_price']) : $basePrice * 0.9);
-                             
-        $roundTripPricePerKm = isset($_POST['roundTripPricePerKm']) && is_numeric($_POST['roundTripPricePerKm']) ? 
-                              floatval($_POST['roundTripPricePerKm']) : 
-                              (isset($_POST['roundtrip_price_per_km']) && is_numeric($_POST['roundtrip_price_per_km']) ? 
-                              floatval($_POST['roundtrip_price_per_km']) : $pricePerKm * 0.85);
         
         // Begin transaction
         $conn->beginTransaction();
@@ -375,8 +375,8 @@ try {
                 
                 $updateStmt = $conn->prepare($updateQuery);
                 $updateStmt->execute([
-                    $basePrice,
-                    $pricePerKm,
+                    $oneWayBasePrice,
+                    $oneWayPricePerKm,
                     $driverAllowance,
                     $nightHaltCharge,
                     $roundTripBasePrice,
@@ -384,7 +384,7 @@ try {
                     $vehicleId
                 ]);
                 
-                logMessage("Updated outstation fares for vehicle: " . $vehicleId);
+                logMessage("Updated outstation fare for vehicle: " . $vehicleId);
             } else {
                 // Insert new record
                 $insertQuery = "
@@ -404,74 +404,114 @@ try {
                 $insertStmt = $conn->prepare($insertQuery);
                 $insertStmt->execute([
                     $vehicleId,
-                    $basePrice,
-                    $pricePerKm,
+                    $oneWayBasePrice,
+                    $oneWayPricePerKm,
                     $driverAllowance,
                     $nightHaltCharge,
                     $roundTripBasePrice,
                     $roundTripPricePerKm
                 ]);
                 
-                logMessage("Inserted outstation fares for vehicle: " . $vehicleId);
+                logMessage("Inserted new outstation fare for vehicle: " . $vehicleId);
             }
             
-            // Also update base pricing in the vehicles table
-            $updateVehicleQuery = "
-                UPDATE vehicles
-                SET base_price = ?,
-                    price_per_km = ?,
-                    driver_allowance = ?,
-                    night_halt_charge = ?,
-                    updated_at = NOW()
-                WHERE vehicle_id = ?
-            ";
+            // Also update vehicle_pricing table for compatibility
+            $oneWayTripType = 'outstation-one-way';
+            $roundTripTripType = 'outstation-round-trip';
             
-            $updateVehicleStmt = $conn->prepare($updateVehicleQuery);
-            $updateVehicleStmt->execute([
-                $basePrice,
-                $pricePerKm,
-                $driverAllowance,
-                $nightHaltCharge,
-                $vehicleId
-            ]);
+            // Check if the vehicle_pricing table exists
+            $checkPricingTableQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
+            $checkPricingTableStmt = $conn->prepare($checkPricingTableQuery);
+            $checkPricingTableStmt->execute();
+            $pricingTableExists = ($checkPricingTableStmt->rowCount() > 0);
             
-            logMessage("Synced pricing to vehicles table for: " . $vehicleId);
+            if ($pricingTableExists) {
+                // Update one-way pricing
+                $upsertOneWayQuery = "
+                    INSERT INTO vehicle_pricing (
+                        vehicle_id, 
+                        trip_type, 
+                        base_fare, 
+                        price_per_km, 
+                        driver_allowance, 
+                        night_halt_charge, 
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE 
+                        base_fare = VALUES(base_fare),
+                        price_per_km = VALUES(price_per_km),
+                        driver_allowance = VALUES(driver_allowance),
+                        night_halt_charge = VALUES(night_halt_charge),
+                        updated_at = NOW()
+                ";
+                
+                $upsertOneWayStmt = $conn->prepare($upsertOneWayQuery);
+                $upsertOneWayStmt->execute([
+                    $vehicleId,
+                    $oneWayTripType,
+                    $oneWayBasePrice,
+                    $oneWayPricePerKm,
+                    $driverAllowance,
+                    $nightHaltCharge
+                ]);
+                
+                // Update round-trip pricing
+                $upsertRoundTripStmt = $conn->prepare($upsertOneWayQuery);
+                $upsertRoundTripStmt->execute([
+                    $vehicleId,
+                    $roundTripTripType,
+                    $roundTripBasePrice,
+                    $roundTripPricePerKm,
+                    $driverAllowance,
+                    $nightHaltCharge
+                ]);
+                
+                logMessage("Updated vehicle_pricing table for both trip types");
+            }
             
             // Commit the transaction
             $conn->commit();
             
-            // Return success response
+            // Send success response
             echo json_encode([
                 'status' => 'success',
-                'message' => "Outstation fares updated for $vehicleId",
-                'vehicleId' => $vehicleId,
-                'originalId' => $rawVehicleId,
-                'fares' => [
-                    'basePrice' => $basePrice,
-                    'pricePerKm' => $pricePerKm,
-                    'driverAllowance' => $driverAllowance,
-                    'nightHaltCharge' => $nightHaltCharge,
+                'message' => 'Outstation fare updated successfully',
+                'data' => [
+                    'vehicleId' => $vehicleId,
+                    'vehicle_id' => $vehicleId,
+                    'oneWayBasePrice' => $oneWayBasePrice,
+                    'oneWayPricePerKm' => $oneWayPricePerKm,
                     'roundTripBasePrice' => $roundTripBasePrice,
-                    'roundTripPricePerKm' => $roundTripPricePerKm
+                    'roundTripPricePerKm' => $roundTripPricePerKm,
+                    'driverAllowance' => $driverAllowance,
+                    'nightHaltCharge' => $nightHaltCharge
                 ]
             ]);
-            
         } catch (Exception $e) {
-            // Rollback on error
+            // Rollback the transaction on error
             $conn->rollBack();
-            logMessage("Error updating fares: " . $e->getMessage());
-            throw $e;
+            
+            logMessage("Error updating outstation fare: " . $e->getMessage());
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Failed to update outstation fare: ' . $e->getMessage(),
+                'error' => $e->getMessage()
+            ]);
         }
-    } else if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Invalid request method'
-        ]);
+    } else {
+        // Handle unsupported HTTP methods
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'OPTIONS') {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Unsupported HTTP method: ' . $_SERVER['REQUEST_METHOD']
+            ]);
+        }
     }
 } catch (Exception $e) {
-    logMessage("ERROR: " . $e->getMessage());
+    logMessage("Critical error in direct-outstation-fares.php: " . $e->getMessage());
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => 'An error occurred: ' . $e->getMessage(),
+        'error' => $e->getMessage()
     ]);
 }
