@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -192,8 +191,12 @@ const AirportFareManagement: React.FC = () => {
         // Check if response itself is a fare object
         else if (response.vehicleId || response.vehicle_id || response.basePrice || response.base_price) {
           console.log('Response appears to be a direct fare object:', response);
-          fareData = response as ApiResponseFare;
-          foundMatch = true;
+          if ((response.vehicleId && response.vehicleId.toLowerCase() === vehicleId.toLowerCase()) ||
+              (response.vehicle_id && response.vehicle_id.toLowerCase() === vehicleId.toLowerCase()) ||
+              !response.vehicleId && !response.vehicle_id) {
+            fareData = response as ApiResponseFare;
+            foundMatch = true;
+          }
         }
       }
       
