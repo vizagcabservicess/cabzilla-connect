@@ -11,6 +11,40 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
 
+interface ApiResponseFare {
+  id?: number;
+  vehicleId?: string;
+  vehicle_id?: string;
+  name?: string;
+  basePrice?: number | string;
+  base_price?: number | string;
+  pricePerKm?: number | string;
+  price_per_km?: number | string;
+  pickupPrice?: number | string;
+  pickup_price?: number | string;
+  dropPrice?: number | string;
+  drop_price?: number | string;
+  tier1Price?: number | string;
+  tier1_price?: number | string;
+  tier2Price?: number | string;
+  tier2_price?: number | string;
+  tier3Price?: number | string;
+  tier3_price?: number | string;
+  tier4Price?: number | string;
+  tier4_price?: number | string;
+  extraKmCharge?: number | string;
+  extra_km_charge?: number | string;
+  [key: string]: any;
+}
+
+interface ApiResponse {
+  data?: {
+    fares?: ApiResponseFare[] | Record<string, ApiResponseFare>
+  };
+  fares?: ApiResponseFare[] | Record<string, ApiResponseFare>;
+  [key: string]: any;
+}
+
 const AirportFareManagement: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [fares, setFares] = useState<FareData | null>(null);
@@ -37,54 +71,55 @@ const AirportFareManagement: React.FC = () => {
       const response = await fetchAirportFares(vehicleId);
       console.log('Airport fares response:', response);
       
-      let fareData: any = null;
+      let fareData: ApiResponseFare | null = null;
+      const apiResponse = response as ApiResponse;
       
-      if (Array.isArray(response)) {
-        console.log('Response is an array with length:', response.length);
-        if (response.length > 0) {
-          fareData = response[0];
+      if (Array.isArray(apiResponse)) {
+        console.log('Response is an array with length:', apiResponse.length);
+        if (apiResponse.length > 0) {
+          fareData = apiResponse[0];
         }
       } 
-      else if (response && typeof response === 'object') {
+      else if (apiResponse && typeof apiResponse === 'object') {
         console.log('Response is an object, checking for nested data');
         
-        if (response.data && response.data.fares) {
-          console.log('Found nested data.fares structure:', response.data.fares);
+        if (apiResponse.data && apiResponse.data.fares) {
+          console.log('Found nested data.fares structure:', apiResponse.data.fares);
           
-          if (Array.isArray(response.data.fares)) {
-            fareData = response.data.fares.find((fare: any) => 
+          if (Array.isArray(apiResponse.data.fares)) {
+            fareData = apiResponse.data.fares.find((fare: ApiResponseFare) => 
               fare.vehicleId === vehicleId || fare.vehicle_id === vehicleId
             );
-            if (!fareData && response.data.fares.length > 0) {
-              fareData = response.data.fares[0];
+            if (!fareData && apiResponse.data.fares.length > 0) {
+              fareData = apiResponse.data.fares[0];
             }
-          } else if (typeof response.data.fares === 'object') {
-            fareData = response.data.fares;
+          } else if (typeof apiResponse.data.fares === 'object') {
+            fareData = apiResponse.data.fares[vehicleId as keyof typeof apiResponse.data.fares] as ApiResponseFare;
           }
         } 
-        else if (response.fares) {
-          console.log('Found direct fares property:', response.fares);
+        else if (apiResponse.fares) {
+          console.log('Found direct fares property:', apiResponse.fares);
           
-          if (Array.isArray(response.fares)) {
-            fareData = response.fares.find((fare: any) => 
+          if (Array.isArray(apiResponse.fares)) {
+            fareData = apiResponse.fares.find((fare: ApiResponseFare) => 
               fare.vehicleId === vehicleId || fare.vehicle_id === vehicleId
             );
-            if (!fareData && response.fares.length > 0) {
-              fareData = response.fares[0];
+            if (!fareData && apiResponse.fares.length > 0) {
+              fareData = apiResponse.fares[0];
             }
-          } else if (typeof response.fares === 'object') {
-            if (response.fares[vehicleId]) {
-              fareData = response.fares[vehicleId];
+          } else if (typeof apiResponse.fares === 'object') {
+            if (apiResponse.fares[vehicleId]) {
+              fareData = apiResponse.fares[vehicleId] as ApiResponseFare;
             } else {
-              const keys = Object.keys(response.fares);
+              const keys = Object.keys(apiResponse.fares);
               if (keys.length > 0) {
-                fareData = response.fares[keys[0]];
+                fareData = apiResponse.fares[keys[0]] as ApiResponseFare;
               }
             }
           }
         } 
         else {
-          fareData = response;
+          fareData = apiResponse as ApiResponseFare;
         }
       }
       
