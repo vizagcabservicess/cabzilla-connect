@@ -49,13 +49,18 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center space-x-4">
           <a 
-            href="tel:+1800123456" 
+            href="tel:+919966363662" 
             className="flex items-center space-x-2 text-cabBlue-600 hover:text-cabBlue-800 transition-colors"
           >
             <Phone size={18} />
             <span>+91 9966363662</span>
           </a>
-          <Button>Login</Button>
+          <Link to="/login">
+            <Button variant="outline" className="mr-2">Login</Button>
+          </Link>
+          <Link to="/signup">
+            <Button>Sign Up</Button>
+          </Link>
         </div>
 
         <button 
@@ -83,7 +88,12 @@ export function Navbar() {
                 <Phone size={18} />
                 <span>+91 9966363662</span>
               </a>
-              <Button className="w-full mt-4">Login</Button>
+              <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                <Button variant="outline" className="w-full mt-4 mb-2">Login</Button>
+              </Link>
+              <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                <Button className="w-full">Sign Up</Button>
+              </Link>
             </div>
           </div>
         </div>

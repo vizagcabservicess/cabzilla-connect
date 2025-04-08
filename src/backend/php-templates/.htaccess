@@ -1,8 +1,9 @@
+
 # Enable URL rewriting
 RewriteEngine On
 
 # Set the base directory
-RewriteBase /api/
+RewriteBase /
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
 RewriteCond %{REQUEST_METHOD} OPTIONS
@@ -18,60 +19,31 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
+# IMPORTANT: Direct frontend routes to React app
+# These routes should serve the frontend app, not the API
+RewriteRule ^login/?$ /index.html [L]
+RewriteRule ^signup/?$ /index.html [L]
+RewriteRule ^register/?$ /index.html [L]
+RewriteRule ^dashboard/?$ /index.html [L]
+RewriteRule ^admin/?$ /index.html [L]
+RewriteRule ^admin/(.*)$ /index.html [L]
+RewriteRule ^booking/(.*)$ /index.html [L]
+RewriteRule ^receipt/(.*)$ /index.html [L]
+RewriteRule ^cabs/?$ /index.html [L]
+RewriteRule ^tours/?$ /index.html [L]
+
+# API routes should go to the actual PHP files
+# Ensure /api/login goes to the login.php file
+RewriteRule ^api/login$ /api/login.php [L,QSA]
+RewriteRule ^api/signup$ /api/signup.php [L,QSA]
+RewriteRule ^api/register$ /api/signup.php [L,QSA]
+
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
-# IMPORTANT: Redirect all /admin/* requests to the frontend
-# This prevents admin API routes from intercepting frontend routes
-RewriteRule ^admin/?$ /index.html [L]
-RewriteRule ^admin/(.*)$ /index.html [L]
-
-# Handle the root admin path for dashboard access
-RewriteRule ^api/admin$ /api/admin/status.php [L]
-RewriteRule ^api/admin/$ /api/admin/status.php [L]
-
-# HIGHEST PRIORITY: Direct vehicle operations
-# Map vehicle update endpoints to our direct-vehicle-modify.php
-RewriteRule ^api/admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^api/admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^api/admin/vehicles-update\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^api/admin/direct-vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
-
-# Map vehicle create endpoints to our direct-vehicle-create.php
-RewriteRule ^api/admin/vehicle-create\.php$ /api/admin/direct-vehicle-create.php [L]
-RewriteRule ^api/admin/add-vehicle\.php$ /api/admin/direct-vehicle-create.php [L]
-
-# Map vehicle delete endpoints to our direct-vehicle-delete.php
-RewriteRule ^api/admin/delete-vehicle\.php$ /api/admin/direct-vehicle-delete.php [L]
-RewriteRule ^api/admin/vehicle-delete\.php$ /api/admin/direct-vehicle-delete.php [L]
-
-# HIGH PRIORITY: Map fare endpoints to their handlers
-RewriteRule ^api/admin/local-fares-update\.php$ /api/admin/local-fares-update.php [L]
-RewriteRule ^api/admin/direct-local-fares\.php$ /api/admin/direct-local-fares.php [L]
-RewriteRule ^api/admin/direct-outstation-fares\.php$ /api/admin/direct-outstation-fares.php [L]
-RewriteRule ^api/admin/direct-airport-fares\.php$ /api/admin/direct-airport-fares.php [L]
-
-# CRITICAL: Login and signup routes at the root level with multiple patterns
-# Root level direct mappings (highest priority)
-RewriteRule ^login$ /api/login.php [L,QSA]
-RewriteRule ^signup$ /api/signup.php [L,QSA]
-RewriteRule ^register$ /api/signup.php [L,QSA]
-
-# Handle with and without trailing slash
-RewriteRule ^login/$ /api/login.php [L,QSA]
-RewriteRule ^signup/$ /api/signup.php [L,QSA]
-RewriteRule ^register/$ /api/signup.php [L,QSA]
-
-# Handle with and without .php extension
-RewriteRule ^login\.php$ /api/login.php [L,QSA]
-RewriteRule ^signup\.php$ /api/signup.php [L,QSA]
-RewriteRule ^register\.php$ /api/signup.php [L,QSA]
-
-# CRITICAL: Root level login/signup direct routing (absolute paths)
-RewriteRule ^/login$ /api/login.php [L,QSA]
-RewriteRule ^/signup$ /api/signup.php [L,QSA]
-RewriteRule ^/register$ /api/signup.php [L,QSA]
+# Send all other requests to index.html for React to handle
+RewriteRule ^(.*)$ /index.html [L]
 
 # Set PHP settings for this directory
 <IfModule mod_php7.c>
