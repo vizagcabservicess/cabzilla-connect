@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -283,7 +284,7 @@ const AirportFareManagement: React.FC = () => {
   const handleVehicleChange = (vehicleId: string) => {
     console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
-    setFares(null);
+    // Removed setFares(null); to prevent race condition
     setInitialized(false);
   };
 
