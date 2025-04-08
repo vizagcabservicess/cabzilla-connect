@@ -48,12 +48,14 @@ export function AdminBookingsList() {
   const [retryCount, setRetryCount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [apiAttempt, setApiAttempt] = useState(0);
-
+  const [responseDebug, setResponseDebug] = useState<string | null>(null);
+  
   const fetchBookings = async () => {
     try {
       setIsLoading(true);
       setError(null);
       setIsRefreshing(true);
+      setResponseDebug(null);
       console.log('Admin: Fetching all bookings...');
       
       const timestamp = new Date().getTime();
@@ -75,15 +77,17 @@ export function AdminBookingsList() {
           }
         });
         
+        // Check for non-200 responses
         if (!directResponse.ok) {
           throw new Error(`Direct API failed with status: ${directResponse.status}`);
         }
         
+        // Check that we actually got JSON back
         const contentType = directResponse.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
-          console.error('Response is not JSON:', contentType);
           const textResponse = await directResponse.text();
-          console.error('Raw response:', textResponse);
+          console.error('API returned non-JSON response:', textResponse);
+          setResponseDebug(textResponse.substring(0, 500) + (textResponse.length > 500 ? '...' : ''));
           throw new Error('API returned non-JSON response');
         }
         
@@ -97,59 +101,100 @@ export function AdminBookingsList() {
           data = responseData;
           responseSource = 'direct_fetch_array';
         } else {
+          console.error('Invalid data format:', responseData);
           throw new Error('Invalid data format from direct API');
         }
       } catch (directError) {
         console.warn('Direct fetch failed:', directError);
         
+        // Try with a more explicit server path
         try {
           setApiAttempt(2);
-          // Fallback to using the bookingAPI service
-          data = await bookingAPI.getAllBookings();
-          console.log('Admin: Bookings received from admin API:', data);
-          responseSource = 'booking_api';
-        } catch (adminError) {
-          console.warn('getAllBookings admin API failed:', adminError);
+          const token = localStorage.getItem('authToken');
+          const apiBase = window.location.hostname.includes('localhost') ? '' : '/api';
+          const altDirectResponse = await fetch(`${apiBase}/api/admin/booking.php?_t=${timestamp}`, {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          if (!altDirectResponse.ok) {
+            throw new Error(`Alternative direct API failed with status: ${altDirectResponse.status}`);
+          }
+          
+          const contentType = altDirectResponse.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const textResponse = await altDirectResponse.text();
+            console.error('Alternative API returned non-JSON response:', textResponse);
+            throw new Error('Alternative API returned non-JSON response');
+          }
+          
+          const responseData = await altDirectResponse.json();
+          console.log('Alternative direct API response:', responseData);
+          
+          if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
+            data = responseData.bookings;
+            responseSource = 'alt_direct_fetch';
+          } else if (Array.isArray(responseData)) {
+            data = responseData;
+            responseSource = 'alt_direct_fetch_array';
+          } else {
+            throw new Error('Invalid data format from alternative direct API');
+          }
+        } catch (altDirectError) {
+          console.warn('Alternative direct fetch failed:', altDirectError);
           
           try {
             setApiAttempt(3);
-            // Try user bookings as a final fallback
-            data = await bookingAPI.getUserBookings();
-            console.log('Admin: Bookings received from user API:', data);
-            responseSource = 'user_api';
-          } catch (userError) {
-            console.warn('getUserBookings API also failed:', userError);
+            // Fallback to using the bookingAPI service
+            data = await bookingAPI.getAllBookings();
+            console.log('Admin: Bookings received from admin API:', data);
+            responseSource = 'booking_api';
+          } catch (adminError) {
+            console.warn('getAllBookings admin API failed:', adminError);
             
             try {
               setApiAttempt(4);
-              // Last resort try
-              const token = localStorage.getItem('authToken');
-              const response = await fetch('/api/user/direct-booking-data.php', {
-                headers: {
-                  'Authorization': token ? `Bearer ${token}` : '',
-                  'Cache-Control': 'no-cache',
-                  'X-Force-Refresh': 'true'
-                }
-              });
+              // Try user bookings as a final fallback
+              data = await bookingAPI.getUserBookings();
+              console.log('Admin: Bookings received from user API:', data);
+              responseSource = 'user_api';
+            } catch (userError) {
+              console.warn('getUserBookings API also failed:', userError);
               
-              if (response.ok) {
-                const responseData = await response.json();
-                console.log('Final fallback API successful:', responseData);
+              try {
+                setApiAttempt(5);
+                // Last resort try
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('/api/user/bookings.php', {
+                  headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Cache-Control': 'no-cache',
+                    'X-Force-Refresh': 'true'
+                  }
+                });
                 
-                if (responseData.bookings && Array.isArray(responseData.bookings)) {
-                  data = responseData.bookings;
-                } else if (Array.isArray(responseData)) {
-                  data = responseData;
+                if (response.ok) {
+                  const responseData = await response.json();
+                  console.log('Final fallback API successful:', responseData);
+                  
+                  if (responseData.bookings && Array.isArray(responseData.bookings)) {
+                    data = responseData.bookings;
+                  } else if (Array.isArray(responseData)) {
+                    data = responseData;
+                  } else {
+                    throw new Error('Invalid data format from final fallback API');
+                  }
+                  responseSource = 'fallback_api';
                 } else {
-                  throw new Error('Invalid data format from final fallback API');
+                  throw new Error(`Final fallback API failed with status: ${response.status}`);
                 }
-                responseSource = 'fallback_api';
-              } else {
-                throw new Error(`Final fallback API failed with status: ${response.status}`);
+              } catch (directError) {
+                console.error('All API attempts failed:', directError);
+                throw new Error('All booking API attempts failed. Please check your network connection and server status.');
               }
-            } catch (directError) {
-              console.error('All API attempts failed:', directError);
-              throw new Error('All booking API attempts failed. Please check your network connection and server status.');
             }
           }
         }
@@ -347,13 +392,24 @@ export function AdminBookingsList() {
               <li>The API is returning a web page instead of JSON data</li>
             </ul>
             <div className="mt-2">
-              <p className="text-sm text-gray-700 mb-2">API Attempt: {apiAttempt}/4</p>
+              <p className="text-sm text-gray-700 mb-2">API Attempt: {apiAttempt}/5</p>
               <Button variant="outline" size="sm" onClick={handleRetry}>
                 Retry API Call
               </Button>
             </div>
           </AlertDescription>
         </Alert>
+        
+        {responseDebug && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Response Debug</AlertTitle>
+            <AlertDescription>
+              <div className="mt-2 p-2 bg-gray-100 text-xs rounded overflow-auto max-h-40">
+                <pre>{responseDebug}</pre>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
         
         <ApiErrorFallback
           error={error}
@@ -449,7 +505,7 @@ export function AdminBookingsList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{booking.tripType.toUpperCase()} - {booking.tripMode}</div>
+                      <div className="font-medium">{booking.tripType?.toUpperCase() || 'N/A'} - {booking.tripMode || 'N/A'}</div>
                       <div className="flex items-center text-xs text-gray-500">
                         <MapPin className="h-3 w-3 mr-1" /> From: {booking.pickupLocation}
                       </div>
@@ -465,16 +521,16 @@ export function AdminBookingsList() {
                         {new Date(booking.pickupDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </div>
                     </TableCell>
-                    <TableCell>₹{booking.totalAmount.toLocaleString('en-IN')}</TableCell>
+                    <TableCell>₹{booking.totalAmount?.toLocaleString('en-IN') || 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(booking.status)}>
-                        {booking.status}
+                      <Badge className={getStatusColor(booking.status || 'pending')}>
+                        {booking.status || 'pending'}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {booking.driverName ? (
                         <div>
-                          <div className="font-medium">{booking.driverName || 'Unassigned'}</div>
+                          <div className="font-medium">{booking.driverName}</div>
                           {booking.driverPhone && (
                             <div className="text-xs text-gray-500">{booking.driverPhone}</div>
                           )}

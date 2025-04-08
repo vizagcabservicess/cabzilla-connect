@@ -212,6 +212,15 @@ try {
             // Get status filter if provided
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
+            // First check if bookings table exists
+            $checkTableStmt = $conn->query("SHOW TABLES LIKE 'bookings'");
+            if ($checkTableStmt->num_rows === 0) {
+                // Table doesn't exist, create a more informative response
+                logError("Bookings table doesn't exist, returning empty array");
+                sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
+                exit;
+            }
+            
             // Prepare SQL query with optional status filter
             $sql = "SELECT * FROM bookings";
             if (!empty($statusFilter)) {
@@ -266,7 +275,6 @@ try {
             logError("Fetched all bookings", ['count' => count($bookings), 'status_filter' => $statusFilter]);
             
             // Make sure we're sending a proper JSON response
-            header('Content-Type: application/json');
             sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
         } else {
             sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
@@ -276,3 +284,5 @@ try {
     logError("Error in admin booking endpoint", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
+
+?>
