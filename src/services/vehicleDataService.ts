@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { toast } from 'sonner';
@@ -113,7 +114,9 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
       // Prioritize direct database endpoints
       `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
       `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
-      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`
+      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`,
+      // Add admin endpoint specifically for fare management
+      `api/admin/direct-vehicle-pricing.php?action=load_vehicles&_t=${Date.now()}`
     ];
     
     let vehicles: CabType[] | null = null;
@@ -353,10 +356,83 @@ const filterVehicles = (vehicles: CabType[], includeInactive: boolean): CabType[
  */
 export const getVehicleTypes = async (): Promise<string[]> => {
   try {
-    const vehicles = await getVehicleData();
+    const vehicles = await getVehicleData(true, true); // Force refresh and include inactive
     return vehicles.map(v => v.id);
   } catch (error) {
     console.error('Error getting vehicle types:', error);
     return DEFAULT_VEHICLES.map(v => v.id);
+  }
+};
+
+/**
+ * Get all vehicles with full details, including inactive ones
+ * Used for admin management interfaces
+ */
+export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabType[]> => {
+  console.log('Getting all vehicles for admin interface');
+  
+  try {
+    // Try direct admin endpoints first
+    const adminEndpoints = [
+      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
+      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=${forceRefresh}`,
+      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=true`
+    ];
+    
+    for (const endpoint of adminEndpoints) {
+      try {
+        console.log(`Fetching admin vehicles from: ${window.location.origin}/${endpoint}`);
+        const response = await fetch(getApiUrl(endpoint), {
+          method: 'GET',
+          headers: {
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true',
+            'X-Bypass-Cache': 'true',
+            'X-Database-First': 'true'
+          },
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) continue;
+        
+        const text = await response.text();
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) continue;
+        
+        const data = JSON.parse(text);
+        let vehicles: CabType[] = [];
+        
+        if (data.vehicles && Array.isArray(data.vehicles)) {
+          vehicles = data.vehicles;
+        } else if (data.data && Array.isArray(data.data)) {
+          vehicles = data.data;
+        } else if (Array.isArray(data)) {
+          vehicles = data;
+        }
+        
+        if (vehicles.length > 0) {
+          console.log(`Found ${vehicles.length} vehicles from admin endpoint`);
+          return vehicles;
+        }
+      } catch (error) {
+        console.error(`Error with admin endpoint ${endpoint}:`, error);
+      }
+    }
+    
+    // Fall back to regular method with includeInactive
+    return await getVehicleData(forceRefresh, true);
+  } catch (error) {
+    console.error('Error getting all vehicles for admin:', error);
+    
+    // Try localStorage as last resort
+    try {
+      const cachedAdminVehicles = localStorage.getItem('adminVehicles');
+      if (cachedAdminVehicles) {
+        return JSON.parse(cachedAdminVehicles);
+      }
+    } catch (e) {
+      console.error('Error reading admin vehicles from localStorage:', e);
+    }
+    
+    return DEFAULT_VEHICLES;
   }
 };

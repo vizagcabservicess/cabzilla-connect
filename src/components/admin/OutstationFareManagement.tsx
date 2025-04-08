@@ -17,6 +17,7 @@ import { fareService, syncVehicleData } from '@/lib';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
 import axios from 'axios';
 import { directVehicleOperation } from '@/utils/apiHelper';
+import { getAllVehiclesForAdmin, clearVehicleDataCache } from '@/services/vehicleDataService';
 
 const formSchema = z.object({
   cabType: z.string().min(1, { message: "Cab type is required" }),
@@ -62,11 +63,15 @@ export function OutstationFareManagement() {
     window.addEventListener('trip-fares-updated', handleFareUpdate);
     window.addEventListener('fare-cache-cleared', handleFareUpdate);
     window.addEventListener('vehicles-updated', handleFareUpdate);
+    window.addEventListener('vehicle-data-refreshed', handleFareUpdate);
+    window.addEventListener('vehicle-data-cache-cleared', handleFareUpdate);
     
     return () => {
       window.removeEventListener('trip-fares-updated', handleFareUpdate);
       window.removeEventListener('fare-cache-cleared', handleFareUpdate);
       window.removeEventListener('vehicles-updated', handleFareUpdate);
+      window.removeEventListener('vehicle-data-refreshed', handleFareUpdate);
+      window.removeEventListener('vehicle-data-cache-cleared', handleFareUpdate);
     };
   }, []);
   
@@ -77,6 +82,7 @@ export function OutstationFareManagement() {
       
       // Clear cache before loading data
       fareService.clearCache();
+      clearVehicleDataCache();
       
       // First try to forcefully sync between database and JSON
       try {
@@ -86,101 +92,30 @@ export function OutstationFareManagement() {
         console.warn("Failed to sync vehicle data:", syncErr);
       }
       
-      // Try multiple approaches to load vehicle data
-      let vehicles: CabType[] = [];
+      // Use our enhanced vehicle service to get all vehicles
+      const vehicles = await getAllVehiclesForAdmin(true);
       
-      // Approach 1: Try direct vehicle API endpoint
-      try {
-        const directResponse = await directVehicleOperation(
-          '/api/admin/get-vehicles.php?includeInactive=false',
-          'GET',
-          {}  // Add empty object as third argument
-        );
+      if (vehicles && vehicles.length > 0) {
+        console.log('Loaded vehicles for outstation fare management:', vehicles);
+        setCabTypes(vehicles);
         
-        if (directResponse && Array.isArray(directResponse)) {
-          console.log('Loaded vehicles from direct API:', directResponse);
-          vehicles = directResponse;
-          setCabTypes(vehicles);
-          setIsLoading(false);
-          return;
+        // Cache in localStorage for quick recovery
+        try {
+          localStorage.setItem('adminVehicles', JSON.stringify(vehicles));
+        } catch (cacheErr) {
+          console.warn('Could not cache admin vehicles:', cacheErr);
         }
-      } catch (directErr) {
-        console.warn('Could not load from direct API:', directErr);
-      }
-      
-      // Approach 2: Try to load from local JSON
-      try {
-        const response = await axios.get('/data/vehicles.json', {
-          params: { _t: Date.now() }, // Cache busting
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        if (response.data && Array.isArray(response.data)) {
-          console.log('Loaded vehicles from local JSON:', response.data);
-          vehicles = response.data;
-          setCabTypes(vehicles);
-          setIsLoading(false);
-          return;
-        }
-      } catch (jsonErr) {
-        console.warn('Could not load from local JSON:', jsonErr);
-      }
-      
-      // Approach 3: Try loadCabTypes method
-      try {
-        const types = await loadCabTypes(true);
-        console.log('Loaded cab types:', types);
-        if (types && types.length > 0) {
-          vehicles = types;
-          setCabTypes(vehicles);
-          setIsLoading(false);
-          return;
-        }
-      } catch (cabTypesErr) {
-        console.warn('Could not load from loadCabTypes:', cabTypesErr);
-      }
-      
-      // Approach 4: Try vehicles data endpoint (backup)
-      try {
-        const vehiclesDataResponse = await fetch(`${apiBaseUrl}/api/vehicles-data.php?_t=${Date.now()}`, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        });
-        
-        if (vehiclesDataResponse.ok) {
-          const data = await vehiclesDataResponse.json();
-          if (data && Array.isArray(data)) {
-            console.log('Loaded vehicles from vehicles-data.php:', data);
-            vehicles = data;
-            setCabTypes(vehicles);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (backupErr) {
-        console.warn('Could not load from vehicles-data.php:', backupErr);
-      }
-      
-      // If we reached here and still have no vehicles, check if we loaded any vehicles at all
-      if (vehicles.length === 0) {
-        throw new Error('Could not load vehicle data from any source');
+      } else {
+        throw new Error('No vehicles found in database');
       }
     } catch (err) {
       console.error("Error loading cab types:", err);
       setError(err instanceof Error ? err : new Error('Failed to load cab types'));
-      setIsLoading(false);
       
       // Try to load from local storage as fallback
       try {
-        const cachedVehicles = localStorage.getItem('cachedVehicles');
+        const cachedVehicles = localStorage.getItem('adminVehicles') || 
+                              localStorage.getItem('cachedVehicles');
         if (cachedVehicles) {
           const vehicles = JSON.parse(cachedVehicles) as CabType[];
           console.log('Using cached vehicles from localStorage:', vehicles);
@@ -626,129 +561,117 @@ export function OutstationFareManagement() {
           </div>
           
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="cabType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehicle Type</FormLabel>
-                    <Select 
-                      onValueChange={(value) => {
-                        console.log('Selected vehicle ID:', value);
-                        field.onChange(value);
-                        loadFaresForVehicle(value);
-                      }}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a vehicle type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {cabTypes.length === 0 && (
-                          <div className="p-2 text-center text-sm text-muted-foreground">
-                            No vehicles found. Try refreshing.
-                          </div>
-                        )}
-                        {cabTypes.map((cab) => (
-                          <SelectItem 
-                            key={cab.id || cab.vehicleId} 
-                            value={cab.id || cab.vehicleId || ''}
-                          >
-                            {cab.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <Tabs defaultValue="one-way" onValueChange={setActiveTab} value={activeTab}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <Tabs defaultValue="one-way" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="one-way">One Way</TabsTrigger>
                   <TabsTrigger value="round-trip">Round Trip</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="one-way" className="space-y-4">
+                <TabsContent value="one-way" className="space-y-4 pt-4">
                   <FormField
                     control={form.control}
-                    name="oneWayBasePrice"
+                    name="cabType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Base Price (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
+                        <FormLabel>Vehicle Type</FormLabel>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            loadFaresForVehicle(value);
+                          }}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a vehicle type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {cabTypes.length > 0 ? (
+                              cabTypes.map((cab) => (
+                                <SelectItem key={cab.id} value={cab.id}>
+                                  {cab.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="loading" disabled>
+                                {isLoading ? "Loading vehicles..." : "No vehicles found"}
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   
-                  <FormField
-                    control={form.control}
-                    name="oneWayPricePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price per Km (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="oneWayBasePrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Base Price (₹)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="oneWayPricePerKm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price Per KM (₹)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </TabsContent>
                 
-                <TabsContent value="round-trip" className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="roundTripBasePrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Base Price (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="roundTripPricePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price per Km (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <TabsContent value="round-trip" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="roundTripBasePrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Base Price (₹)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="roundTripPricePerKm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price Per KM (₹)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </TabsContent>
               </Tabs>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="nightHalt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Night Halt Charge (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
                 <FormField
                   control={form.control}
                   name="driverAllowance"
@@ -762,17 +685,27 @@ export function OutstationFareManagement() {
                     </FormItem>
                   )}
                 />
+                
+                <FormField
+                  control={form.control}
+                  name="nightHalt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Night Halt Charge (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
               
-              <Button 
-                type="submit" 
-                disabled={isLoading}
-                className="w-full"
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
+                    Saving...
                   </>
                 ) : (
                   <>
