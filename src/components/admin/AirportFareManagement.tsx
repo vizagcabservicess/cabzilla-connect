@@ -172,7 +172,7 @@ const AirportFareManagement: React.FC = () => {
         console.log('API returned an object instead of an array:', fareDatas);
         
         // Check if the response has a data property that contains the fares
-        const fareData = fareDatas.data?.fares?.[0] || fareDatas;
+        const fareData = (fareDatas as any).data?.fares?.[0] || fareDatas;
         
         if (fareData) {
           const cleanedFareData: FareData = {
