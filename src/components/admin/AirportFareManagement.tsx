@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -74,154 +73,122 @@ const AirportFareManagement: React.FC = () => {
       const response: ApiResponse = await fetchAirportFares(vehicleId);
       console.log('Airport fares response:', response);
       
-      let fareData: ApiResponseFare | null = null;
-      let foundMatch = false;
-      
-      // Check if response is an array
-      if (Array.isArray(response)) {
-        console.log('Response is an array with length:', response.length);
-        if (response.length > 0) {
-          // First try to find an exact case-insensitive match by vehicle ID
-          const exactMatch = response.find((fare: ApiResponseFare) => 
-            (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
-            (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
-          );
-          
-          if (exactMatch) {
-            console.log('Found exact match by vehicle ID:', exactMatch);
-            fareData = exactMatch;
-            foundMatch = true;
-          } else if (response[0]) {
-            console.log('No exact match found, using first item:', response[0]);
-            fareData = response[0];
-            foundMatch = true;
-          }
-        }
-      } 
-      // Check if response is an object
-      else if (response && typeof response === 'object') {
-        console.log('Response is an object, checking for structured data');
+      // First check if there's a direct success response with data
+      if (response && response.status === 'success') {
+        let fareData: ApiResponseFare | null = null;
+        let foundMatch = false;
         
-        // Check if response has data.fares structure
+        // Check for data in response.data.fares (nested structure)
         if (response.data && response.data.fares) {
-          console.log('Found nested data.fares structure:', response.data.fares);
+          console.log('Found nested data.fares structure');
           
-          if (Array.isArray(response.data.fares)) {
+          // Handle array of fares
+          if (Array.isArray(response.data.fares) && response.data.fares.length > 0) {
+            console.log('data.fares is an array with length:', response.data.fares.length);
+            
+            // Try to find a match by vehicle ID (case insensitive)
             const matchedFare = response.data.fares.find((fare: ApiResponseFare) => 
               (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
               (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
             );
             
             if (matchedFare) {
-              console.log('Found exact match in data.fares array:', matchedFare);
+              console.log('Found matching fare in data.fares array:', matchedFare);
               fareData = matchedFare;
               foundMatch = true;
-            } else if (response.data.fares.length > 0) {
+            } else {
+              // If no exact match, use the first item
               console.log('No exact match in data.fares array, using first item:', response.data.fares[0]);
               fareData = response.data.fares[0];
               foundMatch = true;
             }
-          } 
+          }
+          // Handle object of fares
           else if (typeof response.data.fares === 'object' && response.data.fares !== null) {
-            // Try to find a direct match by vehicleId
-            const directFare = response.data.fares[vehicleId];
-            if (directFare) {
-              console.log('Found direct fare match in data.fares object:', directFare);
-              fareData = directFare;
+            console.log('data.fares is an object');
+            
+            // Try direct access by vehicle ID
+            if (response.data.fares[vehicleId]) {
+              console.log('Found direct match in data.fares object by key:', response.data.fares[vehicleId]);
+              fareData = response.data.fares[vehicleId];
               foundMatch = true;
             } else {
-              // Try to find a case-insensitive match by looping through keys
+              // Try case-insensitive match on keys
               const vehicleKeys = Object.keys(response.data.fares);
-              const matchingKey = vehicleKeys.find(key => 
-                key.toLowerCase() === vehicleId.toLowerCase()
-              );
+              const matchingKey = vehicleKeys.find(key => key.toLowerCase() === vehicleId.toLowerCase());
               
               if (matchingKey) {
                 console.log('Found case-insensitive match in data.fares object:', response.data.fares[matchingKey]);
                 fareData = response.data.fares[matchingKey];
                 foundMatch = true;
               } else if (vehicleKeys.length > 0) {
-                console.log('No match found in data.fares object, using first item:', response.data.fares[vehicleKeys[0]]);
+                // Use first item if no match
+                console.log('No match in data.fares object, using first item:', response.data.fares[vehicleKeys[0]]);
                 fareData = response.data.fares[vehicleKeys[0]];
                 foundMatch = true;
               }
             }
           }
-        } 
-        // Check if response has direct fares property
-        else if (response.fares) {
-          console.log('Found direct fares property:', response.fares);
+        }
+        
+        // If not found in nested structure, check for direct fares property
+        if (!foundMatch && response.fares) {
+          console.log('Checking direct fares property');
           
-          if (Array.isArray(response.fares)) {
+          // Handle array of fares
+          if (Array.isArray(response.fares) && response.fares.length > 0) {
+            console.log('Direct fares is an array with length:', response.fares.length);
+            
+            // Try to find a match by vehicle ID (case insensitive)
             const matchedFare = response.fares.find((fare: ApiResponseFare) => 
               (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
-              (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
+              (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase()) ||
+              (fare.name && fare.name.toLowerCase().includes(vehicleId.toLowerCase()))
             );
             
             if (matchedFare) {
-              console.log('Found exact match in fares array:', matchedFare);
+              console.log('Found matching fare in direct fares array:', matchedFare);
               fareData = matchedFare;
               foundMatch = true;
-            } else if (response.fares.length > 0) {
-              console.log('No exact match in fares array, using first item:', response.fares[0]);
+            } else {
+              // If no exact match, use the first item
+              console.log('No exact match in direct fares array, using first item:', response.fares[0]);
               fareData = response.fares[0];
               foundMatch = true;
             }
-          } 
+          }
+          // Handle object of fares
           else if (typeof response.fares === 'object' && response.fares !== null) {
-            // Try to find a direct match by vehicleId
-            const directFare = response.fares[vehicleId];
-            if (directFare) {
-              console.log('Found direct fare match in fares object:', directFare);
-              fareData = directFare;
+            console.log('Direct fares is an object');
+            
+            // Try direct access by vehicle ID
+            if (response.fares[vehicleId]) {
+              console.log('Found direct match in fares object by key:', response.fares[vehicleId]);
+              fareData = response.fares[vehicleId];
               foundMatch = true;
             } else {
-              // Try to find a case-insensitive match by looping through keys
+              // Try case-insensitive match on keys
               const vehicleKeys = Object.keys(response.fares);
-              const matchingKey = vehicleKeys.find(key => 
-                key.toLowerCase() === vehicleId.toLowerCase()
-              );
+              const matchingKey = vehicleKeys.find(key => key.toLowerCase() === vehicleId.toLowerCase());
               
               if (matchingKey) {
                 console.log('Found case-insensitive match in fares object:', response.fares[matchingKey]);
                 fareData = response.fares[matchingKey];
                 foundMatch = true;
               } else if (vehicleKeys.length > 0) {
-                console.log('No match found in fares object, using first item:', response.fares[vehicleKeys[0]]);
+                // Use first item if no match
+                console.log('No match in fares object, using first item:', response.fares[vehicleKeys[0]]);
                 fareData = response.fares[vehicleKeys[0]];
                 foundMatch = true;
               }
             }
           }
-        } 
-        // Check if response itself is a fare object
-        else if (response.vehicleId || response.vehicle_id || response.basePrice || response.base_price) {
-          console.log('Response appears to be a direct fare object:', response);
-          if ((response.vehicleId && response.vehicleId.toLowerCase() === vehicleId.toLowerCase()) ||
-              (response.vehicle_id && response.vehicle_id.toLowerCase() === vehicleId.toLowerCase()) ||
-              !response.vehicleId && !response.vehicle_id) {
-            fareData = response as ApiResponseFare;
-            foundMatch = true;
-          }
         }
-      }
-      
-      console.log('Extracted fare data:', fareData, 'Match found:', foundMatch);
-      
-      if (fareData && foundMatch) {
-        const hasAnyFareProperty = 
-          fareData.basePrice !== undefined || 
-          fareData.base_price !== undefined ||
-          fareData.pickupPrice !== undefined || 
-          fareData.pickup_price !== undefined ||
-          fareData.dropPrice !== undefined || 
-          fareData.drop_price !== undefined ||
-          fareData.tier1Price !== undefined || 
-          fareData.tier1_price !== undefined;
         
-        if (hasAnyFareProperty) {
-          console.log('Valid fare data found, preparing to display');
-          
+        // Process the fare data if found
+        console.log('Final extracted fare data:', fareData, 'Match found:', foundMatch);
+        
+        if (fareData && foundMatch) {
           const cleanedFareData: FareData = {
             vehicleId: vehicleId,
             vehicle_id: vehicleId,
@@ -244,6 +211,7 @@ const AirportFareManagement: React.FC = () => {
         }
       }
       
+      // If we get here, no valid fare data was found
       console.log('No valid fare data found, creating default');
       setFares({
         vehicleId: vehicleId,
