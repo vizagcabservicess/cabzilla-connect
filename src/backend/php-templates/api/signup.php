@@ -13,7 +13,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Allow only POST requests
+// Handle GET requests gracefully - redirect to frontend signup page or show user-friendly message
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    // Set CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
+    
+    // Send friendly response for direct browser access
+    echo json_encode([
+        'status' => 'info',
+        'message' => 'This is the signup API endpoint. Please use the frontend application to create an account.',
+        'redirect' => '/'
+    ]);
+    exit;
+}
+
+// Allow only POST requests for actual signup
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');

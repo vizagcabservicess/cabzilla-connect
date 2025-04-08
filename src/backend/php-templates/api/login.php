@@ -14,7 +14,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Allow only POST requests
+// Handle GET requests gracefully - redirect to frontend login page or show user-friendly message
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    // Set CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
+    
+    // Send friendly response for direct browser access
+    echo json_encode([
+        'status' => 'info',
+        'message' => 'This is the login API endpoint. Please use the frontend application to log in.',
+        'redirect' => '/'
+    ]);
+    exit;
+}
+
+// Continue with POST request handling for actual login
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     // Add CORS headers
     header('Access-Control-Allow-Origin: *');
