@@ -81,9 +81,10 @@ const AirportFareManagement: React.FC = () => {
       if (Array.isArray(response)) {
         console.log('Response is an array with length:', response.length);
         if (response.length > 0) {
+          // First try to find an exact case-insensitive match by vehicle ID
           const exactMatch = response.find((fare: ApiResponseFare) => 
-            (fare.vehicleId?.toLowerCase() === vehicleId.toLowerCase()) || 
-            (fare.vehicle_id?.toLowerCase() === vehicleId.toLowerCase())
+            (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
+            (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
           );
           
           if (exactMatch) {
@@ -107,8 +108,8 @@ const AirportFareManagement: React.FC = () => {
           
           if (Array.isArray(response.data.fares)) {
             const matchedFare = response.data.fares.find((fare: ApiResponseFare) => 
-              (fare.vehicleId?.toLowerCase() === vehicleId.toLowerCase()) || 
-              (fare.vehicle_id?.toLowerCase() === vehicleId.toLowerCase())
+              (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
+              (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
             );
             
             if (matchedFare) {
@@ -122,12 +123,14 @@ const AirportFareManagement: React.FC = () => {
             }
           } 
           else if (typeof response.data.fares === 'object' && response.data.fares !== null) {
+            // Try to find a direct match by vehicleId
             const directFare = response.data.fares[vehicleId];
             if (directFare) {
               console.log('Found direct fare match in data.fares object:', directFare);
               fareData = directFare;
               foundMatch = true;
             } else {
+              // Try to find a case-insensitive match by looping through keys
               const vehicleKeys = Object.keys(response.data.fares);
               const matchingKey = vehicleKeys.find(key => 
                 key.toLowerCase() === vehicleId.toLowerCase()
@@ -151,8 +154,8 @@ const AirportFareManagement: React.FC = () => {
           
           if (Array.isArray(response.fares)) {
             const matchedFare = response.fares.find((fare: ApiResponseFare) => 
-              (fare.vehicleId?.toLowerCase() === vehicleId.toLowerCase()) || 
-              (fare.vehicle_id?.toLowerCase() === vehicleId.toLowerCase())
+              (typeof fare.vehicleId === 'string' && fare.vehicleId.toLowerCase() === vehicleId.toLowerCase()) || 
+              (typeof fare.vehicle_id === 'string' && fare.vehicle_id.toLowerCase() === vehicleId.toLowerCase())
             );
             
             if (matchedFare) {
@@ -166,12 +169,14 @@ const AirportFareManagement: React.FC = () => {
             }
           } 
           else if (typeof response.fares === 'object' && response.fares !== null) {
+            // Try to find a direct match by vehicleId
             const directFare = response.fares[vehicleId];
             if (directFare) {
               console.log('Found direct fare match in fares object:', directFare);
               fareData = directFare;
               foundMatch = true;
             } else {
+              // Try to find a case-insensitive match by looping through keys
               const vehicleKeys = Object.keys(response.fares);
               const matchingKey = vehicleKeys.find(key => 
                 key.toLowerCase() === vehicleId.toLowerCase()
