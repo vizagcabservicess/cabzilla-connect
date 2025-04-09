@@ -49,6 +49,19 @@ export function GuestDetailsForm({
     try {
       console.log('Starting booking submission with details:', details);
       
+      // Additional validation
+      if (!details.name || !details.phone || !details.email) {
+        throw new Error("All contact fields are required");
+      }
+      
+      if (details.phone.length < 10) {
+        throw new Error("Please enter a valid phone number");
+      }
+      
+      if (!details.email.includes('@')) {
+        throw new Error("Please enter a valid email address");
+      }
+      
       // Check authentication
       const isAuthenticated = authAPI.isAuthenticated();
       console.log('Authentication check result:', isAuthenticated);

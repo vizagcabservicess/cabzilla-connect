@@ -94,3 +94,47 @@ function verifyDatabaseIntegrity($conn) {
     
     return ['status' => 'success', 'message' => 'Database integrity verified'];
 }
+
+// New function: Enhanced database connection with retry mechanism
+function getDbConnectionWithRetry($maxRetries = 3) {
+    $retries = 0;
+    $lastError = null;
+    
+    while ($retries < $maxRetries) {
+        try {
+            $conn = getDbConnection();
+            
+            if ($conn && !$conn->connect_error) {
+                // Successfully connected
+                return $conn;
+            }
+            
+            // Connection failed, let's retry
+            $retries++;
+            error_log("Database connection attempt $retries failed, retrying...");
+            
+            if ($retries < $maxRetries) {
+                // Wait a bit before retry (exponential backoff)
+                usleep(500000 * $retries); // 500ms, 1s, 1.5s
+            }
+        } catch (Exception $e) {
+            $lastError = $e;
+            $retries++;
+            error_log("Database connection exception on attempt $retries: " . $e->getMessage());
+            
+            if ($retries < $maxRetries) {
+                usleep(500000 * $retries);
+            }
+        }
+    }
+    
+    // If we get here, all retry attempts failed
+    error_log("All database connection attempts failed after $maxRetries retries");
+    
+    // If there was an exception, rethrow it
+    if ($lastError) {
+        throw $lastError;
+    }
+    
+    return null;
+}

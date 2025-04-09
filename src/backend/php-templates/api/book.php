@@ -1,11 +1,10 @@
 
 <?php
-// Adjust the path to config.php correctly
-require_once __DIR__ . '/../config.php';
+// Include required files
+require_once __DIR__ . '/utils/database.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -38,8 +37,21 @@ error_log("Book.php request initiated: " . json_encode([
 ]));
 
 // Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
-error_log("Booking request data: " . json_encode($data));
+$requestBody = file_get_contents('php://input');
+error_log("Booking request raw data: " . $requestBody);
+
+$data = json_decode($requestBody, true);
+if (!$data) {
+    error_log("JSON decode error: " . json_last_error_msg());
+    echo json_encode([
+        'status' => 'error', 
+        'message' => 'Invalid JSON data: ' . json_last_error_msg()
+    ]);
+    http_response_code(400);
+    exit;
+}
+
+error_log("Booking request decoded data: " . json_encode($data));
 
 // Different validation rules based on trip type
 $requiredFields = [
@@ -114,42 +126,13 @@ if (!empty($missingFields)) {
 // Get user ID if authenticated
 $userId = null;
 $headers = getallheaders();
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    // Log token for debugging
-    error_log("Auth token received: " . substr($token, 0, 20) . '...');
-    
-    if (function_exists('verifyJwtToken')) {
-        $payload = verifyJwtToken($token);
-        if ($payload && isset($payload['user_id'])) {
-            $userId = $payload['user_id'];
-            error_log("Authenticated booking for user: " . $userId);
-        }
-    }
-}
 
-// Connect to database using direct connection for reliability
+// Connect to database using improved connection with retry
 try {
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    $conn = getDbConnectionWithRetry(3);
     
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
-    }
-    
-    // Set character set
-    $conn->set_charset("utf8mb4");
-    
-    // Test connection with a simple query
-    $testResult = $conn->query("SELECT 1");
-    if (!$testResult) {
-        throw new Exception("Connection test query failed: " . $conn->error);
+    if (!$conn) {
+        throw new Exception("Database connection failed after multiple attempts");
     }
     
     error_log("Database connection established successfully");
@@ -204,93 +187,56 @@ try {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
-        $conn->query($createTableSql);
-        error_log("Created bookings table");
-    }
-
-    // Check if the SQL needs user_id parameter
-    if ($userId === null) {
-        // SQL for guest booking (NULL user_id)
-        $sql = "INSERT INTO bookings 
-                (booking_number, pickup_location, drop_location, pickup_date, 
-                 return_date, cab_type, distance, trip_type, trip_mode, 
-                 total_amount, passenger_name, passenger_phone, passenger_email, 
-                 hourly_package, tour_id, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            throw new Exception("Prepare statement failed: " . $conn->error);
+        $tableCreationResult = $conn->query($createTableSql);
+        
+        if (!$tableCreationResult) {
+            throw new Exception("Failed to create bookings table: " . $conn->error);
         }
         
-        // Get values
-        $pickupLocation = $data['pickupLocation'];
-        $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
-        $pickupDate = $data['pickupDate'];
-        $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
-        $cabType = $data['cabType'];
-        $distance = $data['distance']; 
-        $tripType = $data['tripType'];
-        $tripMode = $data['tripMode'];
-        $totalAmount = $data['totalAmount'];
-        $passengerName = $data['passengerName'];
-        $passengerPhone = $data['passengerPhone'];
-        $passengerEmail = $data['passengerEmail'];
-        $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
-        $tourId = isset($data['tourId']) ? $data['tourId'] : null;
-        $status = 'pending'; // Default status for new bookings
-        
-        error_log("Guest booking - binding values to SQL statement: " . $bookingNumber);
-        
-        $stmt->bind_param(
-            "ssssssdssdsssss",
-            $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-            $returnDate, $cabType, $distance, $tripType, $tripMode,
-            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-            $hourlyPackage, $tourId, $status
-        );
-    } else {
-        // SQL for authenticated user booking
-        $sql = "INSERT INTO bookings 
-                (user_id, booking_number, pickup_location, drop_location, pickup_date, 
-                 return_date, cab_type, distance, trip_type, trip_mode, 
-                 total_amount, passenger_name, passenger_phone, passenger_email, 
-                 hourly_package, tour_id, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            throw new Exception("Prepare statement failed: " . $conn->error);
-        }
-        
-        // Get values
-        $pickupLocation = $data['pickupLocation'];
-        $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
-        $pickupDate = $data['pickupDate'];
-        $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
-        $cabType = $data['cabType'];
-        $distance = $data['distance']; 
-        $tripType = $data['tripType'];
-        $tripMode = $data['tripMode'];
-        $totalAmount = $data['totalAmount'];
-        $passengerName = $data['passengerName'];
-        $passengerPhone = $data['passengerPhone'];
-        $passengerEmail = $data['passengerEmail'];
-        $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
-        $tourId = isset($data['tourId']) ? $data['tourId'] : null;
-        $status = 'pending'; // Default status for new bookings
-        
-        error_log("Authenticated booking - binding values to SQL statement for user ID: " . $userId);
-        
-        $stmt->bind_param(
-            "issssssdssdsssss",
-            $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-            $returnDate, $cabType, $distance, $tripType, $tripMode,
-            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-            $hourlyPackage, $tourId, $status
-        );
+        error_log("Created bookings table successfully");
     }
 
+    // Prepare the SQL statement for guest booking
+    $sql = "INSERT INTO bookings 
+            (booking_number, pickup_location, drop_location, pickup_date, 
+             return_date, cab_type, distance, trip_type, trip_mode, 
+             total_amount, passenger_name, passenger_phone, passenger_email, 
+             hourly_package, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
+    }
+    
+    // Get values with proper type handling and defaults
+    $pickupLocation = $data['pickupLocation'];
+    $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
+    $pickupDate = $data['pickupDate'];
+    $returnDate = isset($data['returnDate']) && !empty($data['returnDate']) ? $data['returnDate'] : null;
+    $cabType = $data['cabType'];
+    $distance = floatval($data['distance']); 
+    $tripType = $data['tripType'];
+    $tripMode = $data['tripMode'];
+    $totalAmount = floatval($data['totalAmount']);
+    $passengerName = $data['passengerName'];
+    $passengerPhone = $data['passengerPhone'];
+    $passengerEmail = $data['passengerEmail'];
+    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+    $status = 'pending'; // Default status for new bookings
+    
+    error_log("Binding values to SQL statement: " . $bookingNumber);
+    
+    $stmt->bind_param(
+        "ssssssdssdsssss",
+        $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+        $returnDate, $cabType, $distance, $tripType, $tripMode,
+        $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+        $hourlyPackage, $status
+    );
+    
+    error_log("About to execute SQL statement");
+    
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
     }

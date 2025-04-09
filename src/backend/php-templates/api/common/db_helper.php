@@ -18,26 +18,16 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     
     while ($retries < $maxRetries) {
         try {
-            // Try to use config if available
-            if (file_exists(dirname(__FILE__) . '/../../config.php')) {
-                require_once dirname(__FILE__) . '/../../config.php';
-                if (function_exists('getDbConnection')) {
-                    $conn = getDbConnection();
-                    if ($conn && !$conn->connect_error) {
-                        error_log("Database connection successful using getDbConnection()");
-                        return $conn;
-                    }
-                }
-            }
-            
-            // If config not available or connection failed, use hardcoded credentials
+            // Database credentials
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
             $dbPass = 'Vizag@1213';
             
+            // Create connection
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
             
+            // Check connection
             if ($conn->connect_error) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);
             }
@@ -135,82 +125,53 @@ function logMessage($message, $logFile = 'api.log') {
     }
     
     $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/' . $logFile);
+    file_put_contents($logDir . '/' . $logFile, "[$timestamp] " . $message . "\n", FILE_APPEND);
 }
 
 /**
- * Execute query with better error handling
+ * Ensure the bookings table exists
  * 
  * @param mysqli $conn Database connection
- * @param string $sql SQL query
- * @param array $params Optional parameters for prepared statement
- * @return array Query result
- * @throws Exception If query fails
+ * @return bool True if table exists or was created successfully
  */
-function executeQuery($conn, $sql, $params = []) {
-    try {
-        $stmt = $conn->prepare($sql);
+function ensureBookingsTableExists($conn) {
+    // Check if the bookings table exists
+    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
+    if ($tableResult->num_rows === 0) {
+        // Create the bookings table if it doesn't exist
+        $createTableSql = "
+        CREATE TABLE bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            booking_number VARCHAR(50) NOT NULL UNIQUE,
+            pickup_location TEXT NOT NULL,
+            drop_location TEXT,
+            pickup_date DATETIME NOT NULL,
+            return_date DATETIME,
+            cab_type VARCHAR(50) NOT NULL,
+            distance DECIMAL(10,2),
+            trip_type VARCHAR(20) NOT NULL,
+            trip_mode VARCHAR(20) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            passenger_name VARCHAR(100) NOT NULL,
+            passenger_phone VARCHAR(20) NOT NULL,
+            passenger_email VARCHAR(100) NOT NULL,
+            hourly_package VARCHAR(50),
+            tour_id VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        $tableCreationResult = $conn->query($createTableSql);
         
-        if (!$stmt) {
-            throw new Exception("Failed to prepare query: " . $conn->error);
+        if (!$tableCreationResult) {
+            error_log("Failed to create bookings table: " . $conn->error);
+            return false;
         }
         
-        // Bind parameters if any
-        if (!empty($params)) {
-            $types = '';
-            $bindParams = [];
-            
-            foreach ($params as $param) {
-                if (is_int($param)) {
-                    $types .= 'i';
-                } elseif (is_float($param)) {
-                    $types .= 'd';
-                } elseif (is_string($param)) {
-                    $types .= 's';
-                } else {
-                    $types .= 'b';
-                }
-                $bindParams[] = $param;
-            }
-            
-            array_unshift($bindParams, $types);
-            call_user_func_array([$stmt, 'bind_param'], $bindParams);
-        }
-        
-        $success = $stmt->execute();
-        
-        if (!$success) {
-            throw new Exception("Failed to execute query: " . $stmt->error);
-        }
-        
-        $result = $stmt->get_result();
-        
-        if ($result === false && $stmt->errno !== 0) {
-            throw new Exception("Failed to get result: " . $stmt->error);
-        }
-        
-        // For SELECT queries
-        if ($result) {
-            $data = [];
-            while ($row = $result->fetch_assoc()) {
-                $data[] = $row;
-            }
-            return [
-                'success' => true,
-                'data' => $data,
-                'affected_rows' => 0,
-                'insert_id' => 0
-            ];
-        }
-        
-        // For INSERT/UPDATE/DELETE queries
-        return [
-            'success' => true,
-            'data' => [],
-            'affected_rows' => $stmt->affected_rows,
-            'insert_id' => $stmt->insert_id
-        ];
-    } catch (Exception $e) {
-        throw $e;
+        error_log("Created bookings table successfully");
     }
+    
+    return true;
 }
