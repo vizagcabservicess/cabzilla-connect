@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,26 @@ export function UserManagement() {
   const { toast: uiToast } = useToast();
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [dataSource, setDataSource] = useState<'database' | 'sample' | 'cache'>('sample');
+  
+  // Define sampleUsers within the component to fix the reference error
+  const sampleUsers: User[] = [
+    {
+      id: 101,
+      name: 'Admin User',
+      email: 'admin@example.com',
+      phone: '9876543210',
+      role: 'admin',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 102,
+      name: 'Test User',
+      email: 'user@example.com',
+      phone: '8765432109',
+      role: 'user',
+      createdAt: new Date().toISOString()
+    }
+  ];
   
   useEffect(() => {
     // Get current user ID from auth API
