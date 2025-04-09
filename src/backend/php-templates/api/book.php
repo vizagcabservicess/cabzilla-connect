@@ -4,7 +4,7 @@
  * CRITICAL API ENDPOINT: Creates new bookings
  */
 
-// First, set all headers upfront
+// CRITICAL: Set all headers upfront before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -13,13 +13,13 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Disable output buffering - this is critical to prevent HTML contamination
+// Disable output buffering completely - critical to prevent HTML contamination
 ob_end_clean();
 if (ob_get_level()) {
     ob_end_clean();
 }
 
-// Enable error reporting and logging but don't display errors
+// Enable error reporting but don't display errors to client
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -29,7 +29,7 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-// Define booking log function with timestamp
+// Define booking log function
 function logBooking($message, $data = null) {
     global $logDir;
     $logFile = $logDir . '/booking_' . date('Y-m-d') . '.log';
@@ -50,11 +50,14 @@ function logBooking($message, $data = null) {
 
 // Send JSON response function to ensure proper output
 function sendJsonResponse($data, $statusCode = 200) {
-    // Clean any previous output that might contaminate the response
+    // Clean any previous output
     if (ob_get_length()) ob_clean();
     
     // Set status code
     http_response_code($statusCode);
+    
+    // Ensure content type is set
+    header('Content-Type: application/json');
     
     // Output JSON
     echo json_encode($data, JSON_UNESCAPED_UNICODE);

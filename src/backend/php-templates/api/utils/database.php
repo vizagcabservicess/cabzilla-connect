@@ -27,7 +27,7 @@ function logDbConnection($message, $data = []) {
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Disable any output buffering
+    // Disable any output buffering to prevent HTML contamination
     if (ob_get_level()) ob_end_clean();
     
     // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
@@ -70,6 +70,22 @@ function getDbConnection() {
         
         return null;
     }
+}
+
+// Function for sending JSON responses
+function sendDbJsonResponse($data, $statusCode = 200) {
+    // Clear any existing output to prevent contamination
+    if (ob_get_length()) ob_clean();
+    
+    // Set HTTP status code
+    http_response_code($statusCode);
+    
+    // Ensure content type is application/json
+    header('Content-Type: application/json');
+    
+    // Output JSON
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 // Enhanced direct database connection function that NEVER fails silently

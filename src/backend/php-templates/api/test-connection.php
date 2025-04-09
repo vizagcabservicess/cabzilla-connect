@@ -5,7 +5,7 @@
  * Access via /api/test-connection
  */
 
-// Set proper response headers
+// Set proper response headers FIRST, before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -14,7 +14,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Disable any output buffering
+// Disable any output buffering - CRITICAL to prevent HTML contamination
 ob_end_clean();
 if (ob_get_level()) {
     ob_end_clean();
@@ -59,6 +59,22 @@ function logTestConnection($message, $data = []) {
     
     file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
     error_log($logEntry);
+}
+
+// Function to send JSON response
+function sendTestResponse($data, $statusCode = 200) {
+    // Clean any previous output to prevent contamination
+    if (ob_get_level()) ob_clean();
+    
+    // Set status code
+    http_response_code($statusCode);
+    
+    // Ensure content type is JSON
+    header('Content-Type: application/json');
+    
+    // Output JSON
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 // Get debug flag from query string
@@ -210,7 +226,7 @@ try {
         ];
     }
     
-    echo json_encode($responseData);
+    sendTestResponse($responseData);
     logTestConnection("Test completed successfully");
     
     // Close connection
@@ -219,7 +235,7 @@ try {
 } catch (Exception $e) {
     logTestConnection("Test failed", ['error' => $e->getMessage()]);
     
-    echo json_encode([
+    sendTestResponse([
         'status' => 'error',
         'message' => $e->getMessage(),
         'connection' => false,
@@ -228,7 +244,5 @@ try {
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ] : null
-    ]);
-    
-    http_response_code(500);
+    ], 500);
 }
