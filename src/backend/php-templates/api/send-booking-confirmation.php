@@ -42,7 +42,29 @@ function logEmailError($message, $data = []) {
 }
 
 // Get booking data from request body
-$requestData = json_decode(file_get_contents('php://input'), true);
+$requestData = null;
+$requestBody = file_get_contents('php://input');
+
+// Safety check for empty request
+if (empty($requestBody)) {
+    logEmailError("Empty request body received");
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Empty request body']);
+    exit;
+}
+
+// Safely parse JSON with error handling
+try {
+    $requestData = json_decode($requestBody, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new Exception("JSON parse error: " . json_last_error_msg());
+    }
+} catch (Exception $e) {
+    logEmailError("Invalid JSON in request", ['error' => $e->getMessage(), 'body' => $requestBody]);
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid JSON: ' . $e->getMessage()]);
+    exit;
+}
 
 if (!$requestData) {
     http_response_code(400);

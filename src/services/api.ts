@@ -1,6 +1,7 @@
+
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
-import { getApiUrl, defaultHeaders } from '@/config/api';
+import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 
 const API_URL = '/api';
 
@@ -54,9 +55,15 @@ export const bookingAPI = {
     try {
       console.log('Creating booking with data:', bookingData);
       
+      // Validate required data before sending
+      if (!bookingData.pickupLocation || !bookingData.cabType || !bookingData.pickupDate) {
+        throw new Error('Missing required booking information');
+      }
+      
       const requestBody = JSON.stringify(bookingData);
       console.log('Request body after stringifying:', requestBody);
       
+      // Use timeout and more robust fetch configuration
       const response = await fetch(getApiUrl('/api/book.php'), {
         method: 'POST',
         headers: {
@@ -72,14 +79,33 @@ export const bookingAPI = {
         throw new Error(`Failed to create booking: ${response.status} ${response.statusText}`);
       }
       
+      // Safer JSON parsing with error handling
+      let responseText;
       let result;
+      
       try {
-        const responseText = await response.text();
+        responseText = await response.text();
         console.log('Raw response:', responseText);
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        throw new Error('Invalid JSON response from server');
+        
+        // Only attempt parsing if we have actual content
+        if (responseText && responseText.trim()) {
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error('JSON parse error:', parseError, 'Response text was:', responseText);
+            throw new Error('Invalid JSON response from server');
+          }
+        } else {
+          console.error('Empty response received');
+          throw new Error('Empty response received from server');
+        }
+      } catch (textError) {
+        console.error('Error reading response text:', textError);
+        throw new Error('Failed to read server response');
+      }
+      
+      if (!result) {
+        throw new Error('No data returned from server');
       }
       
       console.log('Booking created successfully:', result);
@@ -88,12 +114,16 @@ export const bookingAPI = {
         throw new Error(result.message || 'Failed to create booking');
       }
       
+      // Send email confirmation
       try {
         console.log('Sending email confirmation for booking:', result.data);
         
         const emailResponse = await fetch(getApiUrl('/api/send-booking-confirmation.php'), {
           method: 'POST',
-          headers: defaultHeaders,
+          headers: {
+            ...defaultHeaders,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify(result.data)
         });
         

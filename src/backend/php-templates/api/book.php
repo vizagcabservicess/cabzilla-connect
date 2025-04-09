@@ -57,8 +57,8 @@ function sendJsonResponse($data, $statusCode = 200) {
     // Ensure content type is set
     header('Content-Type: application/json');
     
-    // Output JSON
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    // Output JSON with proper encoding to prevent issues
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     exit;
 }
 
