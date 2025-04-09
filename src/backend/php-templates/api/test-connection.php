@@ -30,18 +30,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Enable error reporting in case of issues
-ini_set('display_errors', 1);
+// Enable error reporting but don't display to end user
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// Define a function to log database testing info
-function logDbTest($message, $data = []) {
-    $logDir = __DIR__ . '/../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    
-    $logFile = $logDir . '/db_test_' . date('Y-m-d') . '.log';
+// Create/access logs directory
+$logDir = __DIR__ . '/../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+
+// Log function for test connection
+function logTestConnection($message, $data = []) {
+    global $logDir;
+    $logFile = $logDir . '/test_connection_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logEntry = "[$timestamp] $message";
     
@@ -56,38 +58,58 @@ function logDbTest($message, $data = []) {
 // Get debug flag from query string
 $debug = isset($_GET['debug']) && $_GET['debug'] === 'true';
 
+logTestConnection("Connection test started", [
+    'remote_addr' => $_SERVER['REMOTE_ADDR'],
+    'debug_mode' => $debug
+]);
+
 try {
-    // Database credentials - USING DIRECT CREDENTIALS FOR RELIABILITY
+    // Use direct database credentials for maximum reliability
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
     $dbPass = 'Vizag@1213';
     
-    logDbTest("Trying database connection", [
+    logTestConnection("Connecting to database", [
         'host' => $dbHost,
-        'dbname' => $dbName,
-        'user' => $dbUser
+        'dbname' => $dbName
     ]);
     
-    // Create connection directly
+    // Create connection directly (no helper functions)
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     
     if ($conn->connect_error) {
-        logDbTest("Connection failed", ['error' => $conn->connect_error]);
+        logTestConnection("Connection failed", ['error' => $conn->connect_error]);
         throw new Exception("Connection failed: " . $conn->connect_error);
     }
     
-    logDbTest("Database connection successful", ['server_info' => $conn->server_info]);
+    $conn->set_charset("utf8mb4");
+    logTestConnection("Connected successfully", ['server_info' => $conn->server_info]);
+    
+    // Test connection with a simple query
+    $testQuery = $conn->query("SELECT 1");
+    if (!$testQuery) {
+        logTestConnection("Test query failed", ['error' => $conn->error]);
+        throw new Exception("Test query failed: " . $conn->error);
+    }
+    logTestConnection("Test query successful");
     
     // Check if bookings table exists
-    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
-    $bookingsTableExists = $tableResult->num_rows > 0;
+    $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+    $bookingsTableExists = $tableCheck->num_rows > 0;
+    logTestConnection("Bookings table check", ['exists' => $bookingsTableExists]);
     
-    logDbTest("Bookings table check", ['exists' => $bookingsTableExists]);
-    
-    if (!$bookingsTableExists) {
-        // Create bookings table if it doesn't exist
-        logDbTest("Creating bookings table", ['attempted' => true]);
+    // Count existing bookings
+    $bookingsCount = 0;
+    if ($bookingsTableExists) {
+        $countResult = $conn->query("SELECT COUNT(*) as count FROM bookings");
+        if ($countResult && $row = $countResult->fetch_assoc()) {
+            $bookingsCount = (int)$row['count'];
+        }
+        logTestConnection("Bookings count", ['count' => $bookingsCount]);
+    } else {
+        // Create bookings table
+        logTestConnection("Creating bookings table");
         
         $createTableSql = "
         CREATE TABLE IF NOT EXISTS bookings (
@@ -116,17 +138,19 @@ try {
         
         $createResult = $conn->query($createTableSql);
         if (!$createResult) {
-            logDbTest("Failed to create bookings table", ['error' => $conn->error]);
+            logTestConnection("Failed to create bookings table", ['error' => $conn->error]);
             throw new Exception("Failed to create bookings table: " . $conn->error);
         }
         
-        logDbTest("Bookings table created successfully");
+        logTestConnection("Bookings table created successfully");
         $bookingsTableExists = true;
     }
     
-    // Try to insert a test booking
+    // Try to insert and delete a test booking
+    $insertTest = false;
     if ($bookingsTableExists) {
         $testBookingNumber = 'TEST_' . time() . '_' . rand(1000, 9999);
+        
         $testInsertSql = "
         INSERT INTO bookings (
             booking_number, pickup_location, drop_location, pickup_date, 
@@ -138,35 +162,24 @@ try {
             'Test User', '1234567890', 'test@example.com'
         )";
         
-        logDbTest("Testing insert capability", ['sql' => $testInsertSql]);
+        logTestConnection("Testing insert capability", ['sql' => $testInsertSql]);
         
         $testInsertResult = $conn->query($testInsertSql);
-        $insertSuccess = $testInsertResult !== false;
-        $insertId = $insertSuccess ? $conn->insert_id : 0;
+        $insertTest = $testInsertResult !== false;
         
-        logDbTest("Insert test result", [
-            'success' => $insertSuccess, 
-            'insert_id' => $insertId,
-            'error' => $insertSuccess ? null : $conn->error
+        logTestConnection("Insert test result", [
+            'success' => $insertTest, 
+            'error' => $insertTest ? null : $conn->error
         ]);
         
-        // Delete the test record
-        if ($insertSuccess) {
+        // Delete test record if insert succeeded
+        if ($insertTest) {
             $conn->query("DELETE FROM bookings WHERE booking_number = '$testBookingNumber'");
-            logDbTest("Deleted test booking record", ['booking_number' => $testBookingNumber]);
+            logTestConnection("Deleted test booking");
         }
     }
     
-    // Count existing bookings
-    $bookingsCount = 0;
-    $countResult = $conn->query("SELECT COUNT(*) as count FROM bookings");
-    if ($countResult && $row = $countResult->fetch_assoc()) {
-        $bookingsCount = (int)$row['count'];
-    }
-    
-    logDbTest("Current bookings count", ['count' => $bookingsCount]);
-    
-    // Prepare response data
+    // Prepare response
     $responseData = [
         'status' => 'success',
         'message' => 'Database connection test successful',
@@ -176,7 +189,7 @@ try {
         'php_version' => phpversion(),
         'bookings_table_exists' => $bookingsTableExists,
         'bookings_count' => $bookingsCount,
-        'insert_test' => $insertSuccess ?? false
+        'insert_test' => $insertTest
     ];
     
     // Add debug info if requested
@@ -186,17 +199,19 @@ try {
             'database' => $dbName,
             'user' => $dbUser,
             'error_reporting' => error_reporting(),
-            'display_errors' => ini_get('display_errors')
+            'display_errors' => ini_get('display_errors'),
+            'request_time' => date('Y-m-d H:i:s')
         ];
     }
     
     echo json_encode($responseData);
-    logDbTest("Test connection response sent", ['status' => 'success']);
+    logTestConnection("Test completed successfully");
     
+    // Close connection
     $conn->close();
     
 } catch (Exception $e) {
-    logDbTest("Test connection failed", ['error' => $e->getMessage()]);
+    logTestConnection("Test failed", ['error' => $e->getMessage()]);
     
     echo json_encode([
         'status' => 'error',
@@ -208,4 +223,6 @@ try {
             'trace' => $e->getTraceAsString()
         ] : null
     ]);
+    
+    http_response_code(500);
 }

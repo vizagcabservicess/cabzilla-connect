@@ -1,16 +1,17 @@
-
 <?php
 /**
  * Database utility functions for establishing connections
  */
 
+// Create logs directory if it doesn't exist
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+
 // Define a function to log database connection info
 function logDbConnection($message, $data = []) {
-    $logDir = __DIR__ . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    
+    global $logDir;
     $logFile = $logDir . '/db_connection_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logEntry = "[$timestamp] $message";
@@ -34,8 +35,7 @@ function getDbConnection() {
     try {
         logDbConnection("Attempting database connection", [
             'host' => $dbHost, 
-            'dbname' => $dbName,
-            'user' => $dbUser
+            'dbname' => $dbName
         ]);
         
         // Create connection with error reporting
@@ -68,6 +68,46 @@ function getDbConnection() {
     }
 }
 
+// Enhanced direct database connection function that NEVER fails silently
+function getDirectDatabaseConnection() {
+    // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    // Log the attempt
+    error_log("Attempting direct database connection to {$dbHost}/{$dbName}");
+    
+    try {
+        // Create connection
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        // Check connection
+        if ($conn->connect_error) {
+            error_log("Direct database connection failed: " . $conn->connect_error);
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set charset
+        $conn->set_charset("utf8mb4");
+        
+        // Test connection with a simple query
+        $testResult = $conn->query("SELECT 1");
+        if (!$testResult) {
+            error_log("Connection test query failed: " . $conn->error);
+            throw new Exception("Connection test query failed: " . $conn->error);
+        }
+        
+        error_log("Direct database connection successful");
+        return $conn;
+    } catch (Exception $e) {
+        // Log the error
+        error_log("Direct database connection error: " . $e->getMessage());
+        return null;
+    }
+}
+
 // Function to safely escape a value for database queries
 function dbEscape($conn, $value) {
     if ($conn) {
@@ -86,32 +126,6 @@ function tableExists($conn, $tableName) {
     
     $result = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($tableName) . "'");
     return $result && $result->num_rows > 0;
-}
-
-// Function to verify database integrity
-function verifyDatabaseIntegrity($conn) {
-    if (!$conn) {
-        return ['status' => 'error', 'message' => 'No database connection'];
-    }
-    
-    $requiredTables = ['bookings'];
-    $missingTables = [];
-    
-    foreach ($requiredTables as $table) {
-        if (!tableExists($conn, $table)) {
-            $missingTables[] = $table;
-        }
-    }
-    
-    if (count($missingTables) > 0) {
-        return [
-            'status' => 'warning', 
-            'message' => 'Missing required tables', 
-            'missing_tables' => $missingTables
-        ];
-    }
-    
-    return ['status' => 'success', 'message' => 'Database integrity verified'];
 }
 
 // Direct database testing function for diagnostics
@@ -216,42 +230,28 @@ function testDirectDatabaseConnection() {
     return $result;
 }
 
-// Enhanced direct database connection function that NEVER fails silently
-function getDirectDatabaseConnection() {
-    // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    // Log the attempt
-    error_log("Attempting direct database connection to {$dbHost}/{$dbName}");
-    
-    try {
-        // Create connection
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            error_log("Direct database connection failed: " . $conn->connect_error);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            error_log("Connection test query failed: " . $conn->error);
-            throw new Exception("Connection test query failed: " . $conn->error);
-        }
-        
-        error_log("Direct database connection successful");
-        return $conn;
-    } catch (Exception $e) {
-        // Log the error
-        error_log("Direct database connection error: " . $e->getMessage());
-        return null;
+// Function to verify database integrity
+function verifyDatabaseIntegrity($conn) {
+    if (!$conn) {
+        return ['status' => 'error', 'message' => 'No database connection'];
     }
+    
+    $requiredTables = ['bookings'];
+    $missingTables = [];
+    
+    foreach ($requiredTables as $table) {
+        if (!tableExists($conn, $table)) {
+            $missingTables[] = $table;
+        }
+    }
+    
+    if (count($missingTables) > 0) {
+        return [
+            'status' => 'warning', 
+            'message' => 'Missing required tables', 
+            'missing_tables' => $missingTables
+        ];
+    }
+    
+    return ['status' => 'success', 'message' => 'Database integrity verified'];
 }
