@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/table";
 import { User } from '@/types/api';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/config/api';
+import axios from 'axios';
 
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
@@ -70,14 +72,33 @@ export function UserManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Call the API to get all users (only admins can see this)
-      const data = await authAPI.getAllUsers();
-      console.log('User data received:', data);
+      // Call the direct user data endpoint instead of users.php
+      const response = await axios.get(getApiUrl('/api/admin/direct-user-data'), {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'X-Force-Refresh': 'true'
+        }
+      });
       
-      if (data) {
-        setUsers(data);
+      console.log('User data response:', response.data);
+      
+      if (response.data && response.data.users) {
+        // Map the response data to match the User type
+        const userData = response.data.users.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone || null,
+          role: user.role,
+          createdAt: user.createdAt
+        }));
+        
+        setUsers(userData);
+      } else if (response.data && response.data.status === 'success' && response.data.data) {
+        // Handle response from users.php if it's available
+        setUsers(response.data.data);
       } else {
-        throw new Error('No user data received');
+        throw new Error('No user data received or invalid format');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -113,14 +134,27 @@ export function UserManagement() {
         return;
       }
       
-      await authAPI.updateUserRole(userId, newRole);
+      // Try to update using direct API request instead of authAPI
+      const response = await axios.put(getApiUrl('/api/admin/users'), {
+        userId: userId,
+        role: newRole
+      }, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      // Update the local state
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, role: newRole } : u
-      ));
-      
-      toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
+      if (response.data && response.data.status === 'success') {
+        // Update the local state
+        setUsers(users.map(u => 
+          u.id === userId ? { ...u, role: newRole } : u
+        ));
+        
+        toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
+      } else {
+        throw new Error(response.data?.message || 'Failed to update user role');
+      }
     } catch (error) {
       console.error('Error updating user role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update user role');
