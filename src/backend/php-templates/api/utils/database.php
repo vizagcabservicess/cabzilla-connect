@@ -25,9 +25,6 @@ function getDbConnection() {
         // Set charset
         $conn->set_charset("utf8mb4");
         
-        // Enable strict mode for better SQL error detection
-        $conn->query("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
-        
         return $conn;
     } catch (Exception $e) {
         // Log error to both custom log and PHP error log

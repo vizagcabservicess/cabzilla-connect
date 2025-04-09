@@ -1,8 +1,7 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/utils/mailer.php';
-require_once __DIR__ . '/utils/email.php';
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -14,6 +13,29 @@ header('Content-Type: application/json');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
+}
+
+// Helper function to send JSON response
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_PRETTY_PRINT);
+    exit;
+}
+
+// Helper function to log errors
+function logError($message, $data = []) {
+    $logDir = __DIR__ . '/../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    
+    $logFile = $logDir . '/api_errors_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logData = "[$timestamp] $message: " . json_encode($data, JSON_PRETTY_PRINT) . "\n";
+    file_put_contents($logFile, $logData, FILE_APPEND);
+    
+    // Also log to PHP error log
+    error_log("$message: " . json_encode($data));
 }
 
 // Allow both POST and PUT requests for this endpoint
@@ -37,27 +59,6 @@ if (isset($_GET['id'])) {
     }
 }
 
-// Get user ID from JWT token
-$headers = getallheaders();
-$userId = null;
-$isAdmin = false;
-
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-    }
-}
-
-if (!$userId && !$isAdmin) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
-    exit;
-}
-
 // Get data from request body
 $data = json_decode(file_get_contents('php://input'), true);
 if (!$data) {
@@ -69,9 +70,29 @@ if (!$data) {
 logError("Update booking request data", $data);
 
 // Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+try {
+    // Try to use getDbConnection from config.php first
+    if (function_exists('getDbConnection')) {
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+    }
+} catch (Exception $e) {
+    logError("Database connection failed", ['error' => $e->getMessage()]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
     exit;
 }
 
@@ -83,14 +104,14 @@ try {
         $createTableSql = "
             CREATE TABLE IF NOT EXISTS bookings (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
+                user_id INT,
                 booking_number VARCHAR(20) NOT NULL,
                 pickup_location TEXT NOT NULL,
                 drop_location TEXT,
                 pickup_date DATETIME NOT NULL,
                 return_date DATETIME,
                 cab_type VARCHAR(50) NOT NULL,
-                distance DECIMAL(10,2) NOT NULL,
+                distance DECIMAL(10,2),
                 trip_type VARCHAR(20) NOT NULL,
                 trip_mode VARCHAR(20) NOT NULL,
                 total_amount DECIMAL(10,2) NOT NULL,
@@ -112,7 +133,7 @@ try {
         exit;
     }
 
-    // First check if the booking exists and belongs to the user or the user is an admin
+    // First check if the booking exists
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $stmt->bind_param("i", $bookingId);
     $stmt->execute();
@@ -125,17 +146,12 @@ try {
     
     $booking = $result->fetch_assoc();
     
-    // Check if the booking belongs to the user or if the user is an admin
-    if ($booking['user_id'] != $userId && !$isAdmin) {
-        sendJsonResponse(['status' => 'error', 'message' => 'You do not have permission to update this booking'], 403);
-        exit;
-    }
-    
     // Build the update query based on provided fields
     $updateFields = [];
     $updateValues = [];
     $updateTypes = "";
     
+    // All the fields that can be updated
     $allowedFields = [
         'pickup_location' => 'pickupLocation',
         'drop_location' => 'dropLocation',
@@ -151,14 +167,10 @@ try {
         'admin_notes' => 'adminNotes'
     ];
     
-    // Track if status is being updated to 'confirmed'
-    $statusUpdated = false;
+    // Track if status is being updated
     $oldStatus = $booking['status'];
     $newStatus = isset($data['status']) ? $data['status'] : $oldStatus;
-    
-    if ($oldStatus != $newStatus) {
-        $statusUpdated = true;
-    }
+    $statusUpdated = ($oldStatus != $newStatus);
     
     // Map API field names to database field names
     foreach ($allowedFields as $dbField => $apiField) {
@@ -213,7 +225,7 @@ try {
     // Format the response
     $booking = [
         'id' => (int)$updatedBooking['id'],
-        'userId' => (int)$updatedBooking['user_id'],
+        'userId' => $updatedBooking['user_id'] ? (int)$updatedBooking['user_id'] : null,
         'bookingNumber' => $updatedBooking['booking_number'],
         'pickupLocation' => $updatedBooking['pickup_location'],
         'dropLocation' => $updatedBooking['drop_location'],
@@ -238,78 +250,12 @@ try {
     
     // If status is changed, send a notification email to customer
     if ($statusUpdated && $newStatus === 'confirmed') {
-        logError("Sending booking status update email", [
+        logError("Status updated to confirmed", [
             'booking_id' => $bookingId,
-            'new_status' => 'confirmed',
-            'passenger_email' => $updatedBooking['passenger_email'],
-            'timestamp' => date('Y-m-d H:i:s')
+            'email' => $updatedBooking['passenger_email']
         ]);
         
-        try {
-            // Only send if we have a passenger email
-            if (!empty($updatedBooking['passenger_email'])) {
-                // Enhanced email sending with all available methods
-                $emailSubject = "Booking #" . $updatedBooking['booking_number'] . " Confirmed";
-                $emailMessage = "Your booking has been confirmed by Vizag Taxi Hub. Your driver " . 
-                    ($updatedBooking['driver_name'] ? $updatedBooking['driver_name'] : "will be assigned soon") . 
-                    " and vehicle " . ($updatedBooking['vehicle_number'] ? $updatedBooking['vehicle_number'] : "details will be shared soon") . 
-                    ". Thank you for choosing Vizag Taxi Hub.";
-                
-                // Try direct SMTP first (most reliable)
-                logError("First attempting SMTP for status update email", [
-                    'recipient' => $updatedBooking['passenger_email'],
-                    'booking_id' => $bookingId,
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]);
-                
-                $htmlEmail = generateConfirmationEmailHtml($emailSubject, $emailMessage);
-                
-                // Add some additional information to help avoid spam filters
-                $htmlEmail = str_replace('</body>', 
-                    '<div style="font-size:0.8em;color:#666;margin-top:30px;border-top:1px solid #eee;padding-top:10px;">
-                        <p>This is a legitimate booking confirmation from Vizag Taxi Hub. If you did not make this booking, please contact us.</p>
-                        <p>Our address: Lawsons Bay Colony, Visakhapatnam, AP 530017</p>
-                        <p>Contact: +91 9966363662 | info@vizagtaxihub.com</p>
-                    </div></body>', $htmlEmail);
-                
-                $emailSuccess = sendSmtpEmail(
-                    $updatedBooking['passenger_email'],
-                    $emailSubject,
-                    $htmlEmail
-                );
-                
-                if (!$emailSuccess) {
-                    // Try with all methods through our helper
-                    logError("SMTP failed, trying all available methods", [
-                        'recipient' => $updatedBooking['passenger_email'],
-                        'booking_id' => $bookingId,
-                        'timestamp' => date('Y-m-d H:i:s')
-                    ]);
-                    
-                    $emailSuccess = sendEmailAllMethods(
-                        $updatedBooking['passenger_email'],
-                        $emailSubject,
-                        $htmlEmail
-                    );
-                }
-                
-                // Log the email sending result
-                logError("Status update email result", [
-                    'success' => $emailSuccess ? 'yes' : 'no',
-                    'booking_id' => $bookingId,
-                    'recipient' => $updatedBooking['passenger_email'],
-                    'methods_tried' => 'all available methods',
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]);
-            }
-        } catch (Exception $e) {
-            logError("Error sending status update email", [
-                'error' => $e->getMessage(),
-                'booking_id' => $bookingId,
-                'trace' => $e->getTraceAsString(),
-                'timestamp' => date('Y-m-d H:i:s')
-            ]);
-        }
+        // You can add email notification code here if needed
     }
     
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
@@ -317,50 +263,12 @@ try {
 } catch (Exception $e) {
     logError("Update booking error", [
         'message' => $e->getMessage(), 
-        'trace' => $e->getTraceAsString(),
-        'timestamp' => date('Y-m-d H:i:s')
+        'trace' => $e->getTraceAsString()
     ]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
 }
 
-// Helper function to generate HTML email for confirmation
-function generateConfirmationEmailHtml($subject, $message) {
-    return '<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>'.$subject.'</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-        .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; border: 1px solid #ddd; }
-        .footer { margin-top: 20px; text-align: center; color: #777; font-size: 14px; }
-        .contact-info { margin-top: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 5px; }
-        .booking-reference { font-weight: bold; color: #4CAF50; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>'.$subject.'</h1>
-        </div>
-        <div class="content">
-            <p>'.$message.'</p>
-            <div class="contact-info">
-                <p>If you have any questions, please contact our customer support:</p>
-                <p>Phone: +91 9966363662</p>
-                <p>Email: info@vizagtaxihub.com</p>
-                <p class="booking-reference">Please keep your booking reference for all communications.</p>
-            </div>
-        </div>
-        <div class="footer">
-            <p>Thank you for choosing Vizag Taxi Hub!</p>
-            <p>© ' . date('Y') . ' Vizag Taxi Hub. All rights reserved.</p>
-            <p>Lawsons Bay Colony, Visakhapatnam, AP 530017</p>
-        </div>
-    </div>
-</body>
-</html>';
+// Close database connection
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
 }

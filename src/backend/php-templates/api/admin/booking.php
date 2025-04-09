@@ -24,7 +24,7 @@ function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     
     // Clear any output buffering to prevent HTML contamination
-    while (ob_get_level()) {
+    if (ob_get_level()) {
         ob_end_clean();
     }
     
@@ -39,53 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Try to include the database helper if available
-$usingDbHelper = false;
-if (file_exists(__DIR__ . '/../common/db_helper.php')) {
-    require_once __DIR__ . '/../common/db_helper.php';
-    $usingDbHelper = true;
-}
-
-// Authenticate as admin - with fallback for development
-$headers = getallheaders();
-$userId = null;
-$isAdmin = false;
-
-// Try to get auth token
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    try {
-        if (function_exists('verifyJwtToken')) {
-            $payload = verifyJwtToken($token);
-            if ($payload) {
-                $userId = $payload['user_id'] ?? null;
-                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-            }
-        }
-    } catch (Exception $e) {
-        error_log("JWT verification failed: " . $e->getMessage());
-        // Continue for dev mode
-    }
-}
-
-// Development/testing mode - allow access even without auth
-$devMode = true; // Set to false in production
-
-if (!$isAdmin && !$devMode) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
-}
-
 // Connect to database with improved error handling
 try {
-    $conn = null;
-    
     // Try multiple ways to get a database connection
-    if ($usingDbHelper && function_exists('getDbConnectionWithRetry')) {
-        error_log("Using getDbConnectionWithRetry from db_helper.php");
-        $conn = getDbConnectionWithRetry(2);
-    } else if (function_exists('getDbConnection')) {
+    if (function_exists('getDbConnection')) {
         error_log("Using getDbConnection from config.php");
         $conn = getDbConnection();
     } else {
@@ -97,10 +54,12 @@ try {
         $dbPass = 'Vizag@1213';
         
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    }
-    
-    if (!$conn || $conn->connect_error) {
-        throw new Exception("Database connection failed: " . ($conn ? $conn->connect_error : "Connection returned null"));
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
     }
     
     // Test the connection
@@ -114,9 +73,7 @@ try {
         'message' => 'Database connection failed: ' . $e->getMessage(),
         'error_details' => $debugMode ? [
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
+            'trace' => $e->getTraceAsString()
         ] : null
     ], 500);
 }
@@ -260,7 +217,7 @@ try {
                 
                 if ($tableCheck->num_rows === 0) {
                     // Table doesn't exist, return empty bookings array
-                    sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
+                    sendJsonResponse(['status' => 'success', 'bookings' => []]);
                 }
             } catch (Exception $e) {
                 error_log("Error checking bookings table: " . $e->getMessage());
@@ -337,8 +294,7 @@ try {
                     'bookings' => [],
                     'debug' => $debugMode ? [
                         'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                        'sql' => $sql
+                        'trace' => $e->getTraceAsString()
                     ] : null
                 ], 500);
             }
@@ -353,13 +309,12 @@ try {
         'message' => 'Failed to process request: ' . $e->getMessage(),
         'debug' => $debugMode ? [
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
+            'trace' => $e->getTraceAsString()
         ] : null
     ], 500);
 }
 
-// Make sure to not output anything after response is sent
-exit;
-?>
+// Close database connection
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+}

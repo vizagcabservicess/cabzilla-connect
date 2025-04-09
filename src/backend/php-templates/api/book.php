@@ -1,8 +1,7 @@
+
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/utils/email.php';
-require_once __DIR__ . '/utils/mailer.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -15,27 +14,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Ensure correct Content-Type
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    // Add CORS headers
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+    http_response_code(405);
+    exit;
 }
 
 // Log request data for debugging
-logError("Book.php request initiated", [
+error_log("Book.php request initiated: " . json_encode([
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders(),
     'request_uri' => $_SERVER['REQUEST_URI'],
     'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
-]);
+]));
 
 // Get the request body
 $data = json_decode(file_get_contents('php://input'), true);
-logError("Booking request data", ['data' => $data]);
+error_log("Booking request data: " . json_encode($data));
 
 // Different validation rules based on trip type
 $requiredFields = [
@@ -77,10 +78,10 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
                 default:
                     $data['distance'] = 80; // Default to 80km if package not recognized
             }
-            logError("Setting default distance for local trip", ['distance' => $data['distance'], 'package' => $data['hourlyPackage']]);
+            error_log("Setting default distance for local trip: " . $data['distance']);
         } else {
             $data['distance'] = 80; // Default fallback
-            logError("No package specified, using default distance", ['distance' => $data['distance']]);
+            error_log("No package specified, using default distance: 80");
         }
     }
 } else {
@@ -92,8 +93,9 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
 // Validate required fields
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
-        logError("Missing required field", ['field' => $field]);
-        sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
+        error_log("Missing required field: " . $field);
+        echo json_encode(['status' => 'error', 'message' => "Field $field is required"]);
+        http_response_code(400);
         exit;
     }
 }
@@ -106,54 +108,90 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $token = str_replace('Bearer ', '', $authHeader);
     
     // Log token for debugging
-    logError("Auth token received", ['token_length' => strlen($token)]);
+    error_log("Auth token received: " . substr($token, 0, 20) . '...');
     
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        
-        // Verify user exists in the database
-        $conn = getDbConnection();
-        $checkUserStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
-        $checkUserStmt->bind_param("i", $userId);
-        $checkUserStmt->execute();
-        $userResult = $checkUserStmt->get_result();
-        
-        if ($userResult->num_rows === 0) {
-            logError("User ID from token not found in database", ['user_id' => $userId]);
-            // Don't set userId if user doesn't exist in db
-            $userId = null;
+    if (function_exists('verifyJwtToken')) {
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $userId = $payload['user_id'];
+            error_log("Authenticated booking for user: " . $userId);
         }
-        
-        logError("Authenticated booking", ['user_id' => $userId, 'verified' => ($userResult->num_rows > 0 ? 'yes' : 'no')]);
-    } else {
-        logError("Invalid token for booking", ['token_prefix' => substr($token, 0, 20) . '...']);
-        // Continue with guest booking (user_id will be NULL)
     }
-} else {
-    // For debugging - log the headers we received
-    logError("No authorization header found", ['headers' => array_keys($headers)]);
-    // Continue with guest booking (user_id will be NULL)
 }
 
 // Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    logError("Database connection failed");
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+try {
+    // Try to use getDbConnection from config.php first
+    if (function_exists('getDbConnection')) {
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+    }
+} catch (Exception $e) {
+    error_log("Database connection failed: " . $e->getMessage());
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()]);
+    http_response_code(500);
     exit;
 }
 
 // Generate a unique booking number
-$bookingNumber = generateBookingNumber();
+$prefix = 'CB';
+$timestamp = time();
+$random = mt_rand(1000, 9999);
+$bookingNumber = $prefix . $timestamp . $random;
 
 // Debug log the user ID
-logError("User ID for booking", ['user_id' => $userId, 'booking_number' => $bookingNumber]);
+error_log("User ID for booking: " . ($userId ?? 'guest') . ", booking number: " . $bookingNumber);
 
 // Begin transaction for data consistency
 $conn->begin_transaction();
 
 try {
+    // Check if the bookings table exists
+    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
+    if ($tableResult->num_rows === 0) {
+        // Create the bookings table if it doesn't exist
+        $createTableSql = "
+        CREATE TABLE bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            booking_number VARCHAR(50) NOT NULL UNIQUE,
+            pickup_location TEXT NOT NULL,
+            drop_location TEXT,
+            pickup_date DATETIME NOT NULL,
+            return_date DATETIME,
+            cab_type VARCHAR(50) NOT NULL,
+            distance DECIMAL(10,2),
+            trip_type VARCHAR(20) NOT NULL,
+            trip_mode VARCHAR(20) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            passenger_name VARCHAR(100) NOT NULL,
+            passenger_phone VARCHAR(20) NOT NULL,
+            passenger_email VARCHAR(100) NOT NULL,
+            hourly_package VARCHAR(50),
+            tour_id VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        $conn->query($createTableSql);
+        error_log("Created bookings table");
+    }
+
     // Check if the SQL needs user_id parameter
     if ($userId === null) {
         // SQL for guest booking (NULL user_id)
@@ -161,8 +199,8 @@ try {
                 (booking_number, pickup_location, drop_location, pickup_date, 
                  return_date, cab_type, distance, trip_type, trip_mode, 
                  total_amount, passenger_name, passenger_phone, passenger_email, 
-                 hourly_package, tour_id, status, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                 hourly_package, tour_id, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -186,14 +224,10 @@ try {
         $tourId = isset($data['tourId']) ? $data['tourId'] : null;
         $status = 'pending'; // Default status for new bookings
         
-        logError("Guest booking - binding values to SQL statement", [
-            'booking_number' => $bookingNumber,
-            'passenger_details' => $passengerName . ' / ' . $passengerPhone,
-            'passenger_email' => $passengerEmail
-        ]);
+        error_log("Guest booking - binding values to SQL statement: " . $bookingNumber);
         
         $stmt->bind_param(
-            "ssssssdssdsssiss",
+            "ssssssdssdsssss",
             $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
             $returnDate, $cabType, $distance, $tripType, $tripMode,
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
@@ -205,8 +239,8 @@ try {
                 (user_id, booking_number, pickup_location, drop_location, pickup_date, 
                  return_date, cab_type, distance, trip_type, trip_mode, 
                  total_amount, passenger_name, passenger_phone, passenger_email, 
-                 hourly_package, tour_id, status, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                 hourly_package, tour_id, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -230,15 +264,10 @@ try {
         $tourId = isset($data['tourId']) ? $data['tourId'] : null;
         $status = 'pending'; // Default status for new bookings
         
-        logError("Authenticated booking - binding values to SQL statement", [
-            'user_id' => $userId,
-            'booking_number' => $bookingNumber,
-            'passenger_details' => $passengerName . ' / ' . $passengerPhone,
-            'passenger_email' => $passengerEmail
-        ]);
+        error_log("Authenticated booking - binding values to SQL statement for user ID: " . $userId);
         
         $stmt->bind_param(
-            "issssssdssdsssiss",
+            "issssssdssdsssss",
             $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
             $returnDate, $cabType, $distance, $tripType, $tripMode,
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
@@ -251,7 +280,7 @@ try {
     }
 
     $bookingId = $conn->insert_id;
-    logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bookingNumber, 'user_id' => $userId]);
+    error_log("Booking created successfully: ID=" . $bookingId . ", Number=" . $bookingNumber);
 
     // Get the created booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -276,8 +305,8 @@ try {
 
     // Format the booking data for response
     $formattedBooking = [
-        'id' => $booking['id'],
-        'userId' => $booking['user_id'],
+        'id' => (int)$booking['id'],
+        'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
         'bookingNumber' => $booking['booking_number'],
         'pickupLocation' => $booking['pickup_location'],
         'dropLocation' => $booking['drop_location'],
@@ -295,158 +324,29 @@ try {
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];
-    
-    // Send confirmation emails with detailed error logging and using Hostinger methods
-    logError("Attempting to send confirmation emails", [
-        'booking_id' => $bookingId,
-        'passenger_email' => $booking['passenger_email'],
-        'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
-        'php_version' => phpversion(),
-        'server_os' => PHP_OS,
-        'sapi' => php_sapi_name(),
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
-        'sendmail_path' => ini_get('sendmail_path')
-    ]);
-    
-    // Initialize email results array
-    $emailSuccess = ['customer' => false, 'admin' => false];
-    
-    // Try with all available methods in order of preference
-    try {
-        // First try our Hostinger-specific method
-        $emailSuccess['customer'] = sendHostingerMail(
-            $booking['passenger_email'],
-            "Booking Confirmation - #" . $booking['booking_number'],
-            generateBookingConfirmationEmail($formattedBooking)
-        );
-        
-        logError("Hostinger-specific customer email sending attempt completed", [
-            'result' => $emailSuccess['customer'] ? 'success' : 'failed',
-            'email' => $booking['passenger_email']
-        ]);
-        
-        // If that fails, try the reliable method
-        if (!$emailSuccess['customer']) {
-            logError("Hostinger-specific method failed for customer, trying reliable method", [
-                'booking_id' => $bookingId,
-                'email' => $booking['passenger_email']
-            ]);
-            
-            $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
-            
-            logError("Reliable method result for customer email", [
-                'result' => $emailSuccess['customer'] ? 'success' : 'failed',
-                'email' => $booking['passenger_email']
-            ]);
-        }
-        
-        // If both failed, try as a last resort the original method
-        if (!$emailSuccess['customer']) {
-            logError("All custom methods failed for customer, trying original method", [
-                'booking_id' => $bookingId,
-                'email' => $booking['passenger_email']
-            ]);
-            
-            // Try with the original sendEmail function directly
-            $emailSuccess['customer'] = sendEmail(
-                $booking['passenger_email'],
-                "Booking Confirmation - #" . $booking['booking_number'],
-                generateBookingConfirmationEmail($formattedBooking)
-            );
-            
-            logError("Original method result for customer email", [
-                'result' => $emailSuccess['customer'] ? 'success' : 'failed',
-                'email' => $booking['passenger_email']
-            ]);
-        }
-    } catch (Exception $e) {
-        logError("Exception while sending customer email", [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        $emailSuccess['customer'] = false;
-    }
-    
-    try {
-        // Same approach for admin email - first try Hostinger-specific
-        $emailSuccess['admin'] = sendHostingerMail(
-            'info@vizagtaxihub.com',
-            "New Booking - #" . $booking['booking_number'],
-            generateAdminNotificationEmail($formattedBooking)
-        );
-        
-        logError("Hostinger-specific admin email sending attempt completed", [
-            'result' => $emailSuccess['admin'] ? 'success' : 'failed'
-        ]);
-        
-        // If that fails, try the reliable method
-        if (!$emailSuccess['admin']) {
-            logError("Hostinger-specific method failed for admin, trying reliable method", [
-                'booking_id' => $bookingId
-            ]);
-            
-            $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
-            
-            logError("Reliable method result for admin email", [
-                'result' => $emailSuccess['admin'] ? 'success' : 'failed'
-            ]);
-        }
-        
-        // If both failed, try as a last resort the original method
-        if (!$emailSuccess['admin']) {
-            logError("All custom methods failed for admin, trying original method", [
-                'booking_id' => $bookingId
-            ]);
-            
-            // Try with the original sendEmail function directly
-            $emailSuccess['admin'] = sendEmail(
-                'info@vizagtaxihub.com',
-                "New Booking - #" . $booking['booking_number'],
-                generateAdminNotificationEmail($formattedBooking)
-            );
-            
-            logError("Original method result for admin email", [
-                'result' => $emailSuccess['admin'] ? 'success' : 'failed'
-            ]);
-        }
-    } catch (Exception $e) {
-        logError("Exception while sending admin email", [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        $emailSuccess['admin'] = false;
-    }
-    
-    logError("Email sending final results", [
-        'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
-        'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
-        'booking_id' => $bookingId,
-        'php_mail_function' => function_exists('mail') ? 'available' : 'unavailable',
-        'php_version' => phpversion(),
-        'sendmail_path' => ini_get('sendmail_path')
-    ]);
 
-    // Send response including email status
-    sendJsonResponse([
+    // Send successful response
+    echo json_encode([
         'status' => 'success',
         'message' => 'Booking created successfully',
-        'data' => $formattedBooking,
-        'emailSent' => $emailSuccess['customer'],
-        'adminEmailSent' => $emailSuccess['admin']
-    ], 201);
+        'data' => $formattedBooking
+    ]);
+    http_response_code(201);
 
 } catch (Exception $e) {
     // Roll back the transaction on error
     $conn->rollback();
     
-    logError("Booking creation failed", [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString(),
-        'data' => $data
-    ]);
+    error_log("Booking creation failed: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     
-    sendJsonResponse([
+    echo json_encode([
         'status' => 'error',
         'message' => 'Failed to create booking: ' . $e->getMessage()
-    ], 500);
+    ]);
+    http_response_code(500);
+}
+
+// Close database connection
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
 }
