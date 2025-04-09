@@ -188,6 +188,33 @@ export const fareAPI = {
     return response.data;
   },
   
+  // Add missing methods for FareManagement.tsx
+  updateTourFares: async (fares: any) => {
+    const response = await apiClient.put(`/admin/tour-fares/${fares.tourId}`, fares);
+    return response.data;
+  },
+  
+  addTourFare: async (fareData: any) => {
+    const response = await apiClient.post('/admin/tour-fares', fareData);
+    return response.data;
+  },
+  
+  deleteTourFare: async (tourId: string) => {
+    const response = await apiClient.delete(`/admin/tour-fares/${tourId}`);
+    return response.data;
+  },
+  
+  // Add missing methods for VehicleFareManagement.tsx
+  getVehiclePricing: async () => {
+    const response = await apiClient.get('/admin/vehicle-pricing');
+    return response.data;
+  },
+  
+  updateVehiclePricing: async (pricingData: any) => {
+    const response = await apiClient.put('/admin/vehicle-pricing', pricingData);
+    return response.data;
+  },
+  
   getVehicleFares: async () => {
     const response = await apiClient.get('/admin/vehicle-fares');
     return response.data;

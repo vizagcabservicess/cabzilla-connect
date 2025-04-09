@@ -39,16 +39,20 @@ export default function DashboardPage() {
       }
 
       try {
-        const userData = authAPI.getCurrentUser();
+        const userData = await authAPI.getCurrentUser();
         if (userData) {
-          setUser(userData);
+          setUser({
+            id: userData.id || 0,
+            name: userData.name || '',
+            email: userData.email || '',
+            role: userData.role || 'user'
+          });
           setIsAdmin(userData.role === 'admin');
         } else {
           throw new Error('User data not found');
         }
       } catch (error) {
         console.error('Error getting user data:', error);
-        // Don't redirect here, just show an error message
         toast.error('Error loading user data. Please try logging in again.');
       }
     };
