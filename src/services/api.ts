@@ -80,6 +80,32 @@ export const bookingAPI = {
   cancelBooking: async (id: string | number) => {
     const response = await apiClient.put(`/update-booking/${id}`, { status: 'cancelled' });
     return response.data;
+  },
+
+  // Add missing methods needed by components
+  getAllBookings: async () => {
+    const response = await apiClient.get('/admin/bookings');
+    return response.data;
+  },
+
+  getUserBookings: async () => {
+    const response = await apiClient.get('/user/bookings');
+    return response.data;
+  },
+
+  updateBookingStatus: async (id: string | number, status: string) => {
+    const response = await apiClient.put(`/update-booking/${id}`, { status });
+    return response.data;
+  },
+
+  deleteBooking: async (id: string | number) => {
+    const response = await apiClient.delete(`/admin/booking/${id}`);
+    return response.data;
+  },
+
+  getAdminDashboardMetrics: async (period: string) => {
+    const response = await apiClient.get(`/admin/dashboard-metrics?period=${period}`);
+    return response.data;
   }
 };
 
@@ -107,6 +133,39 @@ export const authAPI = {
       console.error('Error getting current user:', error);
       return null;
     }
+  },
+
+  // Add missing methods needed by components
+  isAuthenticated: () => {
+    return !!localStorage.getItem('authToken');
+  },
+
+  isAdmin: () => {
+    const userDataStr = localStorage.getItem('userData');
+    if (!userDataStr) return false;
+    
+    try {
+      const userData = JSON.parse(userDataStr);
+      return userData.role === 'admin';
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      return false;
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+  },
+
+  getAllUsers: async () => {
+    const response = await apiClient.get('/admin/users');
+    return response.data;
+  },
+
+  updateUserRole: async (userId: number, role: string) => {
+    const response = await apiClient.put(`/admin/users/${userId}/role`, { role });
+    return response.data;
   }
 };
 
@@ -117,8 +176,62 @@ export const vehicleAPI = {
   }
 };
 
+// Add fareAPI for components that need it
+export const fareAPI = {
+  getTourFares: async () => {
+    const response = await apiClient.get('/admin/tour-fares');
+    return response.data;
+  },
+  
+  updateTourFare: async (tourId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/tour-fares/${tourId}`, fares);
+    return response.data;
+  },
+  
+  getVehicleFares: async () => {
+    const response = await apiClient.get('/admin/vehicle-fares');
+    return response.data;
+  },
+  
+  updateVehicleFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/vehicle-fares/${vehicleId}`, fares);
+    return response.data;
+  },
+  
+  getOutstationFares: async () => {
+    const response = await apiClient.get('/admin/outstation-fares');
+    return response.data;
+  },
+  
+  getLocalFares: async () => {
+    const response = await apiClient.get('/admin/local-fares');
+    return response.data;
+  },
+  
+  getAirportFares: async () => {
+    const response = await apiClient.get('/admin/airport-fares');
+    return response.data;
+  },
+  
+  updateOutstationFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/outstation-fares/${vehicleId}`, fares);
+    return response.data;
+  },
+  
+  updateLocalFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/local-fares/${vehicleId}`, fares);
+    return response.data;
+  },
+  
+  updateAirportFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/airport-fares/${vehicleId}`, fares);
+    return response.data;
+  }
+};
+
 export default {
   booking: bookingAPI,
   auth: authAPI,
-  vehicle: vehicleAPI
+  vehicle: vehicleAPI,
+  fare: fareAPI
 };
