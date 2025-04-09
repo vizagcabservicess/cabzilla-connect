@@ -3,7 +3,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Set standard headers for API response
+// Set standard headers for API response FIRST to prevent any output before headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -11,6 +11,53 @@ header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Critical error handling to prevent HTML output
+function handleFatalErrors() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Fatal PHP error: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line'],
+            'error_details' => $error
+        ]);
+        exit;
+    }
+}
+register_shutdown_function('handleFatalErrors');
+
+// Set error handler to prevent HTML errors
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) {
+        // This error code is not included in error_reporting
+        return false;
+    }
+    
+    logError("PHP Error in booking.php", [
+        'message' => $errstr,
+        'file' => $errfile,
+        'line' => $errline
+    ]);
+    
+    // Don't output HTML for warnings/notices, just log them
+    if ($errno == E_WARNING || $errno == E_NOTICE || $errno == E_DEPRECATED) {
+        return true;
+    }
+    
+    // For serious errors, return JSON error
+    header('Content-Type: application/json');
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'PHP Error: ' . $errstr,
+        'errno' => $errno,
+        'file' => $errfile,
+        'line' => $errline
+    ]);
+    exit;
+}, E_ALL);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -23,7 +70,8 @@ logError("Admin booking endpoint request", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'query' => $_SERVER['QUERY_STRING'] ?? '',
     'headers' => getallheaders(),
-    'url' => $_SERVER['REQUEST_URI']
+    'url' => $_SERVER['REQUEST_URI'],
+    'remote_addr' => $_SERVER['REMOTE_ADDR']
 ]);
 
 // Authenticate as admin
@@ -65,6 +113,16 @@ if (!$conn) {
 }
 
 try {
+    // First check if the bookings table exists
+    $tablesExist = $conn->query("SHOW TABLES LIKE 'bookings'");
+    
+    if (!$tablesExist || $tablesExist->num_rows === 0) {
+        // Bookings table doesn't exist yet
+        logError("Bookings table doesn't exist");
+        sendJsonResponse(['status' => 'warning', 'message' => 'The bookings table does not exist yet', 'bookings' => []]);
+        exit;
+    }
+    
     // Check if this is a request for a specific booking or all bookings
     if (isset($_GET['id'])) {
         // Get booking by ID
@@ -213,23 +271,6 @@ try {
             // Debug log for troubleshooting
             logError("Fetching all bookings", ["userId" => $userId, "isAdmin" => $isAdmin ? "true" : "false"]);
             
-            // Check if bookings table exists first
-            $checkTableStmt = $conn->query("SHOW TABLES LIKE 'bookings'");
-            
-            if ($checkTableStmt === false) {
-                // Query failed
-                logError("Error checking if bookings table exists", ["error" => $conn->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
-                exit;
-            }
-            
-            if ($checkTableStmt->num_rows === 0) {
-                // Table doesn't exist, create a more informative response
-                logError("Bookings table doesn't exist, returning empty array");
-                sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
-                exit;
-            }
-            
             // Get status filter if provided
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
@@ -311,8 +352,17 @@ try {
 
 // Helper function to ensure JSON response
 function sendJsonResponse($data, $statusCode = 200) {
+    // Ensure proper headers are sent
+    header('Content-Type: application/json');
     http_response_code($statusCode);
-    echo json_encode($data, JSON_PRETTY_PRINT);
+    
+    // Prevent any debug output before or after JSON
+    ob_clean();
+    
+    // Encode with proper options to ensure valid JSON and pretty print for debugging
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    
+    // Make sure no further output happens
     exit;
 }
 ?>

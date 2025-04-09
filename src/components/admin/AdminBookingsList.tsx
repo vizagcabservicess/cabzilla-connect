@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { getForcedRequestConfig } from '@/config/requestConfig';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -68,22 +69,30 @@ export function AdminBookingsList() {
         setApiAttempt(1);
         // Try direct fetch first with explicit API url and proper headers
         const token = localStorage.getItem('authToken');
-        const directResponse = await fetch(`/api/admin/booking.php?_t=${timestamp}`, {
+        const requestUrl = `/api/admin/booking.php?_t=${timestamp}`;
+        console.log(`Attempting direct fetch from: ${requestUrl}`);
+        
+        const directResponse = await fetch(requestUrl, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : '',
             'Accept': 'application/json',
             'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
           }
         });
         
         // Check for non-200 responses
         if (!directResponse.ok) {
+          console.error(`Direct API failed with status: ${directResponse.status}`);
           throw new Error(`Direct API failed with status: ${directResponse.status}`);
         }
         
         // Check that we actually got JSON back
         const contentType = directResponse.headers.get('content-type');
+        console.log('Content-Type from response:', contentType);
+        
         if (!contentType || !contentType.includes('application/json')) {
           const textResponse = await directResponse.text();
           console.error('API returned non-JSON response:', textResponse);
@@ -111,23 +120,32 @@ export function AdminBookingsList() {
         try {
           setApiAttempt(2);
           const token = localStorage.getItem('authToken');
-          const apiBase = window.location.hostname.includes('localhost') ? '' : '/api';
-          const altDirectResponse = await fetch(`${apiBase}/api/admin/booking.php?_t=${timestamp}`, {
+          const requestUrl = `/api/admin/bookings?_t=${timestamp}`;
+          console.log(`Attempting alternative fetch from: ${requestUrl}`);
+          
+          const altDirectResponse = await fetch(requestUrl, {
+            ...getForcedRequestConfig(),
             headers: {
+              ...getForcedRequestConfig().headers,
               'Authorization': token ? `Bearer ${token}` : '',
               'Accept': 'application/json',
-              'Cache-Control': 'no-cache'
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true'
             }
           });
           
           if (!altDirectResponse.ok) {
+            console.error(`Alternative direct API failed with status: ${altDirectResponse.status}`);
             throw new Error(`Alternative direct API failed with status: ${altDirectResponse.status}`);
           }
           
           const contentType = altDirectResponse.headers.get('content-type');
+          console.log('Content-Type from alternative response:', contentType);
+          
           if (!contentType || !contentType.includes('application/json')) {
             const textResponse = await altDirectResponse.text();
             console.error('Alternative API returned non-JSON response:', textResponse);
+            setResponseDebug(textResponse.substring(0, 500) + (textResponse.length > 500 ? '...' : ''));
             throw new Error('Alternative API returned non-JSON response');
           }
           
@@ -149,6 +167,7 @@ export function AdminBookingsList() {
           try {
             setApiAttempt(3);
             // Fallback to using the bookingAPI service
+            console.log('Attempting to fetch via bookingAPI.getAllBookings()');
             data = await bookingAPI.getAllBookings();
             console.log('Admin: Bookings received from admin API:', data);
             responseSource = 'booking_api';
@@ -158,6 +177,7 @@ export function AdminBookingsList() {
             try {
               setApiAttempt(4);
               // Try user bookings as a final fallback
+              console.log('Attempting to fetch via bookingAPI.getUserBookings()');
               data = await bookingAPI.getUserBookings();
               console.log('Admin: Bookings received from user API:', data);
               responseSource = 'user_api';
@@ -168,11 +188,13 @@ export function AdminBookingsList() {
                 setApiAttempt(5);
                 // Last resort try
                 const token = localStorage.getItem('authToken');
+                console.log('Attempting final fallback to /api/user/bookings.php');
                 const response = await fetch('/api/user/bookings.php', {
                   headers: {
                     'Authorization': token ? `Bearer ${token}` : '',
                     'Cache-Control': 'no-cache',
-                    'X-Force-Refresh': 'true'
+                    'X-Force-Refresh': 'true',
+                    'X-Admin-Mode': 'true' 
                   }
                 });
                 
@@ -335,6 +357,33 @@ export function AdminBookingsList() {
     fetchBookings();
   };
 
+  const handleVerifyConnectivity = async () => {
+    try {
+      setIsRefreshing(true);
+      console.log('Verifying API connectivity...');
+      
+      const response = await fetch('/api/admin/status.php');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('API status response:', data);
+        toast.success('API is operational', {
+          description: `Server time: ${data.server_time}`
+        });
+      } else {
+        toast.error('API connectivity issue', {
+          description: `Status code: ${response.status}`
+        });
+      }
+    } catch (error) {
+      console.error('API connectivity check failed:', error);
+      toast.error('API connectivity check failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleAssignDriver = (bookingId: number) => {
     uiToast({
       title: "Feature Coming Soon",
@@ -370,15 +419,26 @@ export function AdminBookingsList() {
               disabled
             />
           </div>
-          <Button 
-            variant="default" 
-            onClick={handleRetry} 
-            disabled={isRefreshing}
-            className="md:self-end"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Retrying...' : 'Retry Connection'}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="default" 
+              onClick={handleRetry} 
+              disabled={isRefreshing}
+              className="md:self-end"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Retrying...' : 'Retry Connection'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleVerifyConnectivity}
+              disabled={isRefreshing}
+              className="md:self-end"
+            >
+              <Wifi className="h-4 w-4 mr-2" />
+              Verify API
+            </Button>
+          </div>
         </div>
         
         <Alert variant="destructive" className="mb-4">
@@ -393,9 +453,14 @@ export function AdminBookingsList() {
             </ul>
             <div className="mt-2">
               <p className="text-sm text-gray-700 mb-2">API Attempt: {apiAttempt}/5</p>
-              <Button variant="outline" size="sm" onClick={handleRetry}>
-                Retry API Call
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleRetry}>
+                  Retry API Call
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleVerifyConnectivity}>
+                  Check API Status
+                </Button>
+              </div>
             </div>
           </AlertDescription>
         </Alert>

@@ -21,7 +21,11 @@ RewriteRule .* - [R=200,L]
 
 # API routes should go to the actual PHP files - IMPORTANT: PLACE THIS BEFORE THE FRONTEND ROUTES
 # Make sure admin API requests are handled correctly
-RewriteRule ^api/admin/booking(.*)$ /api/admin/booking.php [L,QSA]
+# Explicit booking endpoint mapping - add both singular and plural versions
+RewriteRule ^api/admin/bookings(.*)$ /api/admin/booking.php$1 [L,QSA]
+RewriteRule ^api/admin/booking(.*)$ /api/admin/booking.php$1 [L,QSA]
+
+# Other admin API endpoints
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,QSA]
 RewriteRule ^api/admin/(.*)$ /api/admin/$1 [L,QSA]
 
@@ -69,3 +73,8 @@ ErrorDocument 500 /api/error.php
 
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php
+
+# Ensure PHP files are recognized and processed correctly
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>

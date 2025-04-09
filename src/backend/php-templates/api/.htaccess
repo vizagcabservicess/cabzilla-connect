@@ -32,6 +32,12 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
+# CRITICAL: Explicitly map admin booking endpoints
+RewriteRule ^admin/bookings$ admin/booking.php [L,QSA]
+RewriteRule ^admin/bookings/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
+RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
+RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
+
 # CRITICAL: First priority - Login/Signup direct access (with and without .php extension)
 # Base endpoint variations (with and without file extension)
 RewriteRule ^login$ login.php [L,QSA]
@@ -149,6 +155,11 @@ RewriteRule ^/?register$ /api/signup.php [L,QSA]
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
+
+# Add direct mapping for booking endpoints
+RewriteRule ^user/bookings$ user/bookings.php [L,QSA] 
+RewriteRule ^bookings$ bookings.php [L,QSA]
+RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
 RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
