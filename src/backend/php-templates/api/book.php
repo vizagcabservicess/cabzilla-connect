@@ -14,10 +14,9 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Disable output buffering completely - critical to prevent HTML contamination
-ob_end_clean();
-if (ob_get_level()) {
-    ob_end_clean();
-}
+if (ob_get_level()) ob_end_clean();
+if (ob_get_length()) ob_clean();
+if (ob_get_level()) ob_end_clean();
 
 // Enable error reporting but don't display errors to client
 ini_set('display_errors', 0);
@@ -82,6 +81,34 @@ logBooking("Booking request started", [
     'uri' => $_SERVER['REQUEST_URI'],
     'remote_addr' => $_SERVER['REMOTE_ADDR']
 ]);
+
+// Extract user ID from JWT token if available
+$userId = null;
+$headers = getallheaders();
+
+logBooking("Request headers", $headers);
+
+// Check for Authorization header
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
+    logBooking("Found auth token", ['token' => substr($token, 0, 10) . '...']);
+    
+    // Basic JWT token parsing (simple implementation)
+    $tokenParts = explode('.', $token);
+    if (count($tokenParts) === 3) {
+        try {
+            $payload = json_decode(base64_decode($tokenParts[1]), true);
+            if (isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+                logBooking("Extracted user_id from token", ['user_id' => $userId]);
+            }
+        } catch (Exception $e) {
+            logBooking("Error decoding token", ['error' => $e->getMessage()]);
+        }
+    }
+}
 
 try {
     // Read and parse the request body
@@ -214,23 +241,27 @@ try {
     $hourlyPackageEscaped = isset($data['hourlyPackage']) ? "'" . $conn->real_escape_string($data['hourlyPackage']) . "'" : "NULL";
     $tourIdEscaped = isset($data['tourId']) ? "'" . $conn->real_escape_string($data['tourId']) . "'" : "NULL";
     
+    // Add user_id to the query if authenticated
+    $userIdValue = $userId ? $userId : "NULL";
+    
     // Log the prepared data
     logBooking("Data prepared for insertion", [
         'booking_number' => $bookingNumberEscaped,
         'pickup_location' => $pickupLocationEscaped,
         'trip_type' => $tripTypeEscaped,
-        'total_amount' => $totalAmountValue
+        'total_amount' => $totalAmountValue,
+        'user_id' => $userIdValue
     ]);
     
     // Use simple insert query to avoid prepared statement issues
     $insertSql = "
     INSERT INTO bookings (
-        booking_number, pickup_location, drop_location, pickup_date, 
+        user_id, booking_number, pickup_location, drop_location, pickup_date, 
         return_date, cab_type, distance, trip_type, trip_mode, 
         total_amount, passenger_name, passenger_phone, passenger_email, 
         hourly_package, tour_id
     ) VALUES (
-        '$bookingNumberEscaped', '$pickupLocationEscaped', '$dropLocationEscaped', '$pickupDateEscaped',
+        $userIdValue, '$bookingNumberEscaped', '$pickupLocationEscaped', '$dropLocationEscaped', '$pickupDateEscaped',
         $returnDateEscaped, '$cabTypeEscaped', $distanceValue, '$tripTypeEscaped', '$tripModeEscaped',
         $totalAmountValue, '$passengerNameEscaped', '$passengerPhoneEscaped', '$passengerEmailEscaped',
         $hourlyPackageEscaped, $tourIdEscaped
@@ -245,7 +276,7 @@ try {
     }
     
     $bookingId = $conn->insert_id;
-    logBooking("Booking inserted successfully", ['id' => $bookingId]);
+    logBooking("Booking inserted successfully", ['id' => $bookingId, 'user_id' => $userIdValue]);
     
     // Verify insertion by selecting the record
     $verifyQuery = "SELECT * FROM bookings WHERE id = $bookingId";
@@ -258,7 +289,8 @@ try {
     $booking = $verifyResult->fetch_assoc();
     logBooking("Booking verification successful", [
         'id' => $booking['id'],
-        'booking_number' => $booking['booking_number']
+        'booking_number' => $booking['booking_number'],
+        'user_id' => $booking['user_id']
     ]);
     
     // Commit the transaction
@@ -268,6 +300,7 @@ try {
     // Format response
     $formattedBooking = [
         'id' => (int)$booking['id'],
+        'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
         'bookingNumber' => $booking['booking_number'],
         'pickupLocation' => $booking['pickup_location'],
         'dropLocation' => $booking['drop_location'],

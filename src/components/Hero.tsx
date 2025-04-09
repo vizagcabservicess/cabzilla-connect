@@ -328,6 +328,9 @@ export function Hero() {
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
+      const authToken = localStorage.getItem('authToken');
+      console.log("Auth token available:", !!authToken);
+      
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
         dropLocation: dropLocation?.address || dropLocation?.name || '',
@@ -360,7 +363,7 @@ export function Hero() {
       };
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
 
-      const response = await bookingAPI.createBooking(bookingData);
+      const response = await bookingAPI.createBooking(bookingData, authToken);
       
       console.log('Booking created:', response);
       

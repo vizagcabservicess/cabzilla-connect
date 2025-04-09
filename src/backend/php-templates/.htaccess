@@ -1,3 +1,4 @@
+
 # Enable URL rewriting
 RewriteEngine On
 
@@ -25,6 +26,11 @@ RewriteRule ^api/admin/booking/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
 RewriteRule ^api/admin/bookings$ /api/admin/booking.php [L,QSA]
 RewriteRule ^api/admin/bookings/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
 RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,QSA]
+
+# Add direct access to the book endpoint - HIGHEST PRIORITY
+RewriteRule ^api/book$ /api/book.php [L,QSA]
+RewriteRule ^create-booking$ /api/book.php [L,QSA]
+RewriteRule ^api/create-booking$ /api/book.php [L,QSA]
 
 # Add direct access to the test endpoint
 RewriteRule ^test-booking-api$ /api/admin/test-booking-api.php [L,QSA]
