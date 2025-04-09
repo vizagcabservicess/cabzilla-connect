@@ -54,10 +54,16 @@ export const bookingAPI = {
     try {
       console.log('Creating booking with data:', bookingData);
       
+      const requestBody = JSON.stringify(bookingData);
+      console.log('Request body after stringifying:', requestBody);
+      
       const response = await fetch(getApiUrl('/api/book.php'), {
         method: 'POST',
-        headers: defaultHeaders,
-        body: JSON.stringify(bookingData)
+        headers: {
+          ...defaultHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: requestBody
       });
       
       if (!response.ok) {
@@ -66,15 +72,25 @@ export const bookingAPI = {
         throw new Error(`Failed to create booking: ${response.status} ${response.statusText}`);
       }
       
-      const result = await response.json();
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('Raw response:', responseText);
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+      
       console.log('Booking created successfully:', result);
       
       if (result.status === 'error') {
         throw new Error(result.message || 'Failed to create booking');
       }
       
-      // After booking is created, send confirmation emails
       try {
+        console.log('Sending email confirmation for booking:', result.data);
+        
         const emailResponse = await fetch(getApiUrl('/api/send-booking-confirmation.php'), {
           method: 'POST',
           headers: defaultHeaders,
@@ -85,7 +101,8 @@ export const bookingAPI = {
           const emailResult = await emailResponse.json();
           console.log('Email confirmation result:', emailResult);
         } else {
-          console.warn('Email confirmation request failed, but booking was created');
+          const emailErrorText = await emailResponse.text();
+          console.warn('Email confirmation request failed, but booking was created:', emailErrorText);
         }
       } catch (emailError) {
         console.warn('Failed to send booking confirmation email, but booking was created:', emailError);
