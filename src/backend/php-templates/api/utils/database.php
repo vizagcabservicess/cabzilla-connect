@@ -6,9 +6,9 @@
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Database credentials
+    // Correct database credentials
     $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
+    $dbName = 'u644605165_db_be';  // Corrected database name
     $dbUser = 'u644605165_usr_be';
     $dbPass = 'Vizag@1213';
     
@@ -24,12 +24,6 @@ function getDbConnection() {
         
         // Set charset to prevent encoding issues
         $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            throw new Exception("Connection test query failed: " . $conn->error);
-        }
         
         return $conn;
     } catch (Exception $e) {
@@ -95,35 +89,46 @@ function verifyDatabaseIntegrity($conn) {
     return ['status' => 'success', 'message' => 'Database integrity verified'];
 }
 
-// New function: Enhanced database connection with retry mechanism
+// Enhanced database connection with retry mechanism
 function getDbConnectionWithRetry($maxRetries = 3) {
     $retries = 0;
     $lastError = null;
     
     while ($retries < $maxRetries) {
         try {
-            $conn = getDbConnection();
+            // Database credentials
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';  // Corrected database name
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
             
-            if ($conn && !$conn->connect_error) {
-                // Successfully connected
-                return $conn;
+            // Create connection
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            // Check connection
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
             }
             
-            // Connection failed, let's retry
+            // Set charset
+            $conn->set_charset("utf8mb4");
+            
+            // Test connection with a simple query
+            $testResult = $conn->query("SELECT 1");
+            if (!$testResult) {
+                throw new Exception("Connection test query failed: " . $conn->error);
+            }
+            
+            error_log("Database connection successful");
+            return $conn;
+        } catch (Exception $e) {
+            $lastError = $e;
             $retries++;
-            error_log("Database connection attempt $retries failed, retrying...");
+            error_log("Database connection attempt $retries failed: " . $e->getMessage());
             
             if ($retries < $maxRetries) {
                 // Wait a bit before retry (exponential backoff)
                 usleep(500000 * $retries); // 500ms, 1s, 1.5s
-            }
-        } catch (Exception $e) {
-            $lastError = $e;
-            $retries++;
-            error_log("Database connection exception on attempt $retries: " . $e->getMessage());
-            
-            if ($retries < $maxRetries) {
-                usleep(500000 * $retries);
             }
         }
     }
@@ -131,9 +136,16 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     // If we get here, all retry attempts failed
     error_log("All database connection attempts failed after $maxRetries retries");
     
-    // If there was an exception, rethrow it
     if ($lastError) {
-        throw $lastError;
+        // Log the last error
+        $logDir = __DIR__ . '/../../logs';
+        if (!file_exists($logDir)) {
+            mkdir($logDir, 0777, true);
+        }
+        
+        $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
+        $timestamp = date('Y-m-d H:i:s');
+        file_put_contents($logFile, "[$timestamp] All connection attempts failed: " . $lastError->getMessage() . "\n", FILE_APPEND);
     }
     
     return null;

@@ -1,207 +1,125 @@
 
 <?php
 /**
- * direct-check-connection.php - Direct database connection check
- * This provides an alternative way to check database connections
+ * direct-check-connection.php - Simple test for database connection
  */
 
-// Set CORS headers
+// Set headers first
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Debug, X-Admin-Mode');
-header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate');
 
-// Enable error reporting for debugging
+// Enable error reporting for diagnosis
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Handle OPTIONS preflight request
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Function to log information
-function logConnectionCheck($message) {
+// Simple log function
+function logMessage($message) {
     $timestamp = date('Y-m-d H:i:s');
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!is_dir($logDir)) {
-        mkdir($logDir, 0755, true);
+    error_log("[$timestamp] $message");
+    
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
     }
-    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/db-connection-check.log');
+    
+    $logFile = $logDir . '/direct_connection_test.log';
+    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
 }
 
 // Initialize response
 $response = [
     'status' => 'error',
     'connection' => false,
-    'message' => 'Unknown error',
+    'message' => 'Connection test not started',
     'timestamp' => time(),
-    'debug_info' => []
+    'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+    'php_version' => PHP_VERSION
 ];
 
-// Get output buffer to capture any PHP errors/warnings
-ob_start();
-
 try {
-    logConnectionCheck("Starting direct database connection check");
+    logMessage("Starting direct connection test");
     
-    // Try with first set of credentials
-    $dbHost1 = 'localhost';
-    $dbName1 = 'u64460565_db_be';
-    $dbUser1 = 'u64460565_usr_be';
-    $dbPass1 = 'Vizag@1213';
+    // Define database credentials directly
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
     
-    $conn1 = null;
-    $connectionSuccess = false;
+    // Attempt mysqli connection
+    logMessage("Attempting mysqli connection");
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     
-    // First try with mysqli
-    try {
-        logConnectionCheck("Trying mysqli connection to $dbHost1/$dbName1 with user $dbUser1");
-        $conn1 = new mysqli($dbHost1, $dbUser1, $dbPass1, $dbName1);
-        
-        if (!$conn1->connect_error) {
-            logConnectionCheck("Successfully connected with mysqli");
-            $response['debug_info'][] = "Successful mysqli connection to $dbHost1/$dbName1";
-            $connectionSuccess = true;
-            
-            // Test a simple query
-            $versionResult = $conn1->query("SELECT VERSION() as version");
-            if ($versionResult && $row = $versionResult->fetch_assoc()) {
-                $version = $row['version'];
-                $response['debug_info'][] = "MySQL version: $version";
-                $response['version'] = $version;
-            }
-            
-            // Check vehicles table
-            $tablesResult = $conn1->query("SHOW TABLES LIKE 'vehicles'");
-            if ($tablesResult && $tablesResult->num_rows > 0) {
-                $response['debug_info'][] = "Vehicles table exists";
-                
-                // Get column info
-                $columnsResult = $conn1->query("DESCRIBE vehicles");
-                if ($columnsResult) {
-                    $columns = [];
-                    while ($column = $columnsResult->fetch_assoc()) {
-                        $columns[] = $column['Field'];
-                    }
-                    $response['debug_info'][] = count($columns) . " columns found in vehicles table";
-                    $response['columns'] = $columns;
-                }
-            } else {
-                $response['debug_info'][] = "Vehicles table does not exist";
-            }
-        } else {
-            logConnectionCheck("Failed to connect with mysqli: " . $conn1->connect_error);
-            $response['debug_info'][] = "Failed mysqli connection: " . $conn1->connect_error;
-        }
-    } catch (Exception $e) {
-        logConnectionCheck("Exception in mysqli connection: " . $e->getMessage());
-        $response['debug_info'][] = "Exception in mysqli connection: " . $e->getMessage();
+    if ($conn->connect_error) {
+        $response['message'] = 'Connection error: ' . $conn->connect_error;
+        $response['error_details'] = $conn->connect_error;
+        logMessage("Connection failed: " . $conn->connect_error);
+        throw new Exception("Connection failed: " . $conn->connect_error);
     }
     
-    // If mysqli failed, try with PDO
-    if (!$connectionSuccess) {
-        try {
-            logConnectionCheck("Trying PDO connection");
-            $dsn = "mysql:host=$dbHost1;dbname=$dbName1;charset=utf8mb4";
-            $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ];
-            
-            $pdoConn = new PDO($dsn, $dbUser1, $dbPass1, $options);
-            
-            logConnectionCheck("Successfully connected with PDO");
-            $response['debug_info'][] = "Successful PDO connection to $dbHost1/$dbName1";
-            $connectionSuccess = true;
-            
-            // Test a simple query
-            $stmt = $pdoConn->query("SELECT VERSION() as version");
-            if ($stmt) {
-                $row = $stmt->fetch();
-                $version = $row['version'];
-                $response['debug_info'][] = "MySQL version (PDO): $version";
-                $response['version'] = $version;
-            }
-            
-            // Close PDO connection
-            $pdoConn = null;
-        } catch (PDOException $e) {
-            logConnectionCheck("PDO exception: " . $e->getMessage());
-            $response['debug_info'][] = "PDO exception: " . $e->getMessage();
-        }
+    // Connection succeeded - now test a simple query
+    logMessage("Connection successful, testing query");
+    $result = $conn->query("SELECT 1 as test");
+    
+    if (!$result) {
+        $response['message'] = 'Query test failed: ' . $conn->error;
+        logMessage("Query test failed: " . $conn->error);
+        throw new Exception("Query test failed: " . $conn->error);
     }
     
-    // If all connection attempts failed, try with corrected database name (u64460565_db_be)
-    if (!$connectionSuccess) {
-        try {
-            $correctedDbName = 'u64460565_db_be';
-            logConnectionCheck("Trying with corrected database name: $correctedDbName");
-            
-            $conn2 = new mysqli($dbHost1, $dbUser1, $dbPass1, $correctedDbName);
-            
-            if (!$conn2->connect_error) {
-                logConnectionCheck("Successfully connected with corrected database name");
-                $response['debug_info'][] = "Successful connection with corrected DB name: $correctedDbName";
-                $connectionSuccess = true;
-                
-                // Save the correct DB name for later reference
-                $response['corrected_db_name'] = $correctedDbName;
-                
-                // Close the connection
-                $conn2->close();
-            } else {
-                logConnectionCheck("Failed with corrected DB name: " . $conn2->connect_error);
-                $response['debug_info'][] = "Failed with corrected DB name: " . $conn2->connect_error;
-            }
-        } catch (Exception $e) {
-            logConnectionCheck("Exception with corrected DB name: " . $e->getMessage());
-            $response['debug_info'][] = "Exception with corrected DB name: " . $e->getMessage();
-        }
-    }
+    $row = $result->fetch_assoc();
     
-    // Set the final response status
-    if ($connectionSuccess) {
+    if ($row['test'] == 1) {
         $response['status'] = 'success';
         $response['connection'] = true;
-        $response['message'] = 'Database connection successful';
+        $response['message'] = 'Database connection and query test successful';
+        logMessage("Query test successful");
         
-        // Close mysqli connection if still open
-        if ($conn1 instanceof mysqli) {
-            $conn1->close();
+        // Check for bookings table
+        $tablesResult = $conn->query("SHOW TABLES LIKE 'bookings'");
+        $response['bookings_table_exists'] = $tablesResult->num_rows > 0;
+        
+        if ($response['bookings_table_exists']) {
+            // Get table structure
+            $structureResult = $conn->query("DESCRIBE bookings");
+            $columns = [];
+            while ($col = $structureResult->fetch_assoc()) {
+                $columns[] = $col['Field'];
+            }
+            $response['bookings_columns'] = $columns;
+            $response['bookings_column_count'] = count($columns);
+            
+            // Get row count
+            $countResult = $conn->query("SELECT COUNT(*) as count FROM bookings");
+            $countRow = $countResult->fetch_assoc();
+            $response['bookings_count'] = (int)$countRow['count'];
+            
+            logMessage("Bookings table exists with {$response['bookings_count']} rows");
+        } else {
+            logMessage("Bookings table does not exist");
         }
     } else {
-        $response['message'] = 'All database connection attempts failed';
-        
-        // Check for common error patterns
-        $errorLog = implode(' ', $response['debug_info']);
-        if (stripos($errorLog, 'Access denied') !== false) {
-            $response['error_type'] = 'credentials';
-            $response['suggestion'] = 'Check database username and password';
-        } elseif (stripos($errorLog, 'unknown database') !== false) {
-            $response['error_type'] = 'database_name';
-            $response['suggestion'] = 'Check database name';
-        } elseif (stripos($errorLog, 'connect') !== false) {
-            $response['error_type'] = 'connection';
-            $response['suggestion'] = 'Check database host and port';
-        }
+        $response['message'] = 'Query returned unexpected result';
+        logMessage("Query returned unexpected result: " . print_r($row, true));
     }
     
+    // Close the connection
+    $conn->close();
+    
 } catch (Exception $e) {
-    logConnectionCheck("Top-level exception: " . $e->getMessage());
-    $response['message'] = 'Exception during connection check: ' . $e->getMessage();
+    $response['message'] = 'Exception: ' . $e->getMessage();
     $response['exception'] = $e->getMessage();
+    $response['trace'] = $e->getTraceAsString();
+    logMessage("Exception: " . $e->getMessage());
 }
 
-// Get any output from the buffer
-$output = ob_get_clean();
-if (!empty($output)) {
-    logConnectionCheck("Output buffer: " . $output);
-    $response['output_buffer'] = $output;
-}
-
-// Send response
+// Return the result as JSON
 echo json_encode($response, JSON_PRETTY_PRINT);

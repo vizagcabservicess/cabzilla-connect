@@ -13,6 +13,10 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -39,6 +43,22 @@ $response = [
     ]
 ];
 
+// Log function for the test
+function logTestMessage($message) {
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    
+    $logFile = $logDir . '/test_booking_api_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+    
+    error_log($message);
+}
+
+logTestMessage("Test booking API was called");
+
 // Test database connection
 $response['database_test'] = [
     'attempted' => true,
@@ -55,12 +75,35 @@ try {
     $configPath = __DIR__ . '/../../config.php';
     $response['database_test']['config_file_exists'] = file_exists($configPath);
     
-    // Attempt connection with retry
-    $conn = getDbConnectionWithRetry(2);
+    logTestMessage("Config file exists: " . ($response['database_test']['config_file_exists'] ? 'Yes' : 'No'));
     
-    if (!$conn) {
-        throw new Exception("Could not establish database connection after retries");
+    // First try direct connection
+    logTestMessage("Attempting direct database connection");
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    if ($conn->connect_error) {
+        throw new Exception("Direct connection failed: " . $conn->connect_error);
     }
+    
+    logTestMessage("Direct database connection succeeded");
+    $response['database_test']['direct_connection'] = true;
+    
+    // Set charset for proper handling of special characters
+    $conn->set_charset("utf8mb4");
+    
+    // Test a simple query to confirm connection is working
+    $testResult = $conn->query("SELECT 1 as test");
+    if (!$testResult) {
+        throw new Exception("Test query failed: " . $conn->error);
+    }
+    
+    $testRow = $testResult->fetch_assoc();
+    logTestMessage("Test query result: " . ($testRow['test'] ?? 'null'));
     
     $response['database_test']['success'] = true;
     $response['database_test']['message'] = "Successfully connected to database";
@@ -69,13 +112,18 @@ try {
     $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
     $response['database_test']['bookings_table_exists'] = $tableCheck->num_rows > 0;
     
+    logTestMessage("Bookings table exists: " . ($response['database_test']['bookings_table_exists'] ? 'Yes' : 'No'));
+    
     if ($response['database_test']['bookings_table_exists']) {
+        // Get booking count
         $countResult = $conn->query("SELECT COUNT(*) as count FROM bookings");
         $countData = $countResult->fetch_assoc();
         $response['database_test']['bookings_count'] = (int)$countData['count'];
         
+        logTestMessage("Bookings count: " . $response['database_test']['bookings_count']);
+        
         // Get a sample booking for verification
-        $sampleResult = $conn->query("SELECT * FROM bookings ORDER BY id ASC LIMIT 1");
+        $sampleResult = $conn->query("SELECT * FROM bookings ORDER BY id DESC LIMIT 1");
         if ($sampleResult && $sampleResult->num_rows > 0) {
             $sample = $sampleResult->fetch_assoc();
             $response['database_test']['sample_booking'] = [
@@ -86,10 +134,14 @@ try {
                 'pickup_location' => $sample['pickup_location'],
                 'created_at' => $sample['created_at']
             ];
+            
+            logTestMessage("Retrieved sample booking: ID=" . $sample['id'] . ", Number=" . $sample['booking_number']);
+        } else {
+            logTestMessage("No sample booking found");
         }
     } else {
-        // Try to create the bookings table
-        $response['database_test']['table_creation_attempted'] = true;
+        // Create the bookings table if it doesn't exist
+        logTestMessage("Attempting to create bookings table");
         
         $createTableSql = "
         CREATE TABLE IF NOT EXISTS bookings (
@@ -116,50 +168,47 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
         
         $tableCreationResult = $conn->query($createTableSql);
+        $response['database_test']['table_creation_attempted'] = true;
         $response['database_test']['table_creation_success'] = !!$tableCreationResult;
         
         if (!$tableCreationResult) {
+            logTestMessage("Failed to create bookings table: " . $conn->error);
             $response['database_test']['table_creation_error'] = $conn->error;
-        }
-    }
-    
-    // Get table structure if exists
-    if ($response['database_test']['bookings_table_exists']) {
-        $structureResult = $conn->query("DESCRIBE bookings");
-        $structure = [];
-        
-        while ($row = $structureResult->fetch_assoc()) {
-            $structure[] = [
-                'field' => $row['Field'],
-                'type' => $row['Type'],
-                'null' => $row['Null'],
-                'key' => $row['Key']
-            ];
+        } else {
+            logTestMessage("Successfully created bookings table");
         }
         
-        $response['database_test']['table_structure'] = $structure;
+        // Check if table was created
+        $recheckTable = $conn->query("SHOW TABLES LIKE 'bookings'");
+        $tableNowExists = $recheckTable->num_rows > 0;
+        $response['database_test']['table_now_exists'] = $tableNowExists;
+        
+        logTestMessage("Table now exists: " . ($tableNowExists ? 'Yes' : 'No'));
     }
     
-    // Try to insert a test booking
-    if ($response['database_test']['bookings_table_exists']) {
+    // Try to insert a test booking (this is crucial to test the full flow)
+    if ($response['database_test']['bookings_table_exists'] || $response['database_test']['table_now_exists']) {
         $response['database_test']['test_insert_attempted'] = true;
         
         // Generate test booking number
         $testBookingNumber = 'TEST' . time() . mt_rand(1000, 9999);
+        logTestMessage("Generated test booking number: " . $testBookingNumber);
         
-        // Start transaction
+        // Start transaction to safely test and roll back
         $conn->begin_transaction();
         
-        // Prepare the insert statement
+        // Prepare the insert statement - use very simple prepared statement to minimize potential issues
         $testSql = "INSERT INTO bookings 
             (booking_number, pickup_location, drop_location, pickup_date, 
              cab_type, distance, trip_type, trip_mode, 
              total_amount, passenger_name, passenger_phone, passenger_email, status) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
+        logTestMessage("Preparing insert statement");
         $testStmt = $conn->prepare($testSql);
         
         if (!$testStmt) {
+            logTestMessage("Failed to prepare statement: " . $conn->error);
             throw new Exception("Prepare statement failed: " . $conn->error);
         }
         
@@ -177,6 +226,7 @@ try {
         $passengerEmail = "test@example.com";
         $status = "test";
         
+        logTestMessage("Binding parameters to insert statement");
         $testStmt->bind_param(
             "ssssdsssdsss",
             $testBookingNumber, $pickupLocation, $dropLocation, $pickupDate,
@@ -184,54 +234,60 @@ try {
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail, $status
         );
         
+        logTestMessage("Executing insert statement");
         $testInsertSuccess = $testStmt->execute();
         $response['database_test']['test_insert_success'] = $testInsertSuccess;
         
         if (!$testInsertSuccess) {
+            logTestMessage("Insert failed: " . $testStmt->error);
             $response['database_test']['test_insert_error'] = $testStmt->error;
         } else {
+            logTestMessage("Insert succeeded, insert_id=" . $conn->insert_id);
             $testBookingId = $conn->insert_id;
             $response['database_test']['test_booking_id'] = $testBookingId;
             
+            // Verify the record exists
+            $verifyStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            $verifyStmt->bind_param("i", $testBookingId);
+            $verifyStmt->execute();
+            $verifyResult = $verifyStmt->get_result();
+            
+            if ($verifyResult && $verifyResult->num_rows > 0) {
+                $verifyRow = $verifyResult->fetch_assoc();
+                logTestMessage("Verified booking exists with number: " . $verifyRow['booking_number']);
+                $response['database_test']['verification_success'] = true;
+            } else {
+                logTestMessage("Failed to verify booking exists");
+                $response['database_test']['verification_success'] = false;
+            }
+            
             // Delete the test booking to clean up
+            logTestMessage("Deleting test booking");
             $deleteSql = "DELETE FROM bookings WHERE id = ?";
             $deleteStmt = $conn->prepare($deleteSql);
             $deleteStmt->bind_param("i", $testBookingId);
             $deleteSuccess = $deleteStmt->execute();
             
             $response['database_test']['test_delete_success'] = $deleteSuccess;
+            
+            if (!$deleteSuccess) {
+                logTestMessage("Delete failed: " . $deleteStmt->error);
+            } else {
+                logTestMessage("Delete succeeded");
+            }
         }
         
-        // Commit or rollback the transaction
-        if ($testInsertSuccess) {
-            $conn->commit();
-        } else {
-            $conn->rollback();
-        }
+        // Rollback the transaction regardless of success to ensure no test data remains
+        logTestMessage("Rolling back transaction");
+        $conn->rollback();
     }
-    
-    // Check server permissions and PHP configurations
-    $response['server_info'] = [
-        'open_basedir' => ini_get('open_basedir'),
-        'disable_functions' => ini_get('disable_functions'),
-        'max_execution_time' => ini_get('max_execution_time'),
-        'memory_limit' => ini_get('memory_limit'),
-        'file_uploads' => ini_get('file_uploads'),
-        'upload_max_filesize' => ini_get('upload_max_filesize'),
-        'post_max_size' => ini_get('post_max_size')
-    ];
-    
-    $testDir = __DIR__ . '/../../logs';
-    $response['permissions'] = [
-        'logs_dir_exists' => file_exists($testDir),
-        'logs_dir_writable' => is_writable($testDir) || (!file_exists($testDir) && is_writable(dirname($testDir))),
-        'api_dir_writable' => is_writable(__DIR__),
-        'tmp_dir_writable' => is_writable(sys_get_temp_dir())
-    ];
     
     // Close database connection
     $conn->close();
+    logTestMessage("Database connection closed");
+    
 } catch (Exception $e) {
+    logTestMessage("Exception: " . $e->getMessage());
     $response['database_test']['success'] = false;
     $response['database_test']['message'] = "Database test failed";
     $response['database_test']['error'] = $e->getMessage();
@@ -239,4 +295,5 @@ try {
 }
 
 // Output the response
+logTestMessage("Sending response: " . json_encode(['status' => $response['status'], 'db_success' => $response['database_test']['success']]));
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

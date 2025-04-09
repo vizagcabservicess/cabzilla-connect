@@ -22,6 +22,29 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Define a function to log booking-related info
+function logBooking($message, $data = []) {
+    $logDir = __DIR__ . '/../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    
+    $logFile = $logDir . '/booking_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] $message";
+    
+    if (!empty($data)) {
+        $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+    
+    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
+    error_log($logEntry);
+}
+
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
@@ -30,19 +53,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Log request data for debugging
-error_log("Book.php request initiated: " . json_encode([
+logBooking("Book.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'request_uri' => $_SERVER['REQUEST_URI'],
     'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
-]));
+]);
 
 // Get the request body
 $requestBody = file_get_contents('php://input');
-error_log("Booking request raw data: " . $requestBody);
+logBooking("Booking request raw data", ['raw' => $requestBody]);
 
 $data = json_decode($requestBody, true);
 if (!$data) {
-    error_log("JSON decode error: " . json_last_error_msg());
+    logBooking("JSON decode error", ['error' => json_last_error_msg()]);
     echo json_encode([
         'status' => 'error', 
         'message' => 'Invalid JSON data: ' . json_last_error_msg()
@@ -51,7 +74,7 @@ if (!$data) {
     exit;
 }
 
-error_log("Booking request decoded data: " . json_encode($data));
+logBooking("Booking request decoded data", $data);
 
 // Different validation rules based on trip type
 $requiredFields = [
@@ -93,10 +116,10 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
                 default:
                     $data['distance'] = 80; // Default to 80km if package not recognized
             }
-            error_log("Setting default distance for local trip: " . $data['distance']);
+            logBooking("Setting default distance for local trip", ['distance' => $data['distance']]);
         } else {
             $data['distance'] = 80; // Default fallback
-            error_log("No package specified, using default distance: 80");
+            logBooking("No package specified, using default distance", ['distance' => 80]);
         }
     }
 } else {
@@ -114,7 +137,7 @@ foreach ($requiredFields as $field) {
 }
 
 if (!empty($missingFields)) {
-    error_log("Missing required fields: " . implode(', ', $missingFields));
+    logBooking("Missing required fields", ['fields' => $missingFields]);
     echo json_encode([
         'status' => 'error', 
         'message' => 'Missing required fields: ' . implode(', ', $missingFields)
@@ -123,21 +146,19 @@ if (!empty($missingFields)) {
     exit;
 }
 
-// Get user ID if authenticated
-$userId = null;
-$headers = getallheaders();
-
 // Connect to database using improved connection with retry
 try {
+    logBooking("Attempting database connection");
     $conn = getDbConnectionWithRetry(3);
     
     if (!$conn) {
+        logBooking("Database connection failed after multiple attempts");
         throw new Exception("Database connection failed after multiple attempts");
     }
     
-    error_log("Database connection established successfully");
+    logBooking("Database connection established successfully");
 } catch (Exception $e) {
-    error_log("Database connection failed: " . $e->getMessage());
+    logBooking("Database connection failed", ['error' => $e->getMessage()]);
     echo json_encode([
         'status' => 'error', 
         'message' => 'Database connection failed: ' . $e->getMessage()
@@ -152,8 +173,12 @@ $timestamp = time();
 $random = mt_rand(1000, 9999);
 $bookingNumber = $prefix . $timestamp . $random;
 
+// Get user ID if authenticated
+$userId = null;
+$headers = getallheaders();
+
 // Debug log the user ID
-error_log("User ID for booking: " . ($userId ?? 'guest') . ", booking number: " . $bookingNumber);
+logBooking("User ID for booking", ['user_id' => ($userId ?? 'guest'), 'booking_number' => $bookingNumber]);
 
 // Begin transaction for data consistency
 $conn->begin_transaction();
@@ -163,6 +188,8 @@ try {
     $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
     if ($tableResult->num_rows === 0) {
         // Create the bookings table if it doesn't exist
+        logBooking("Creating bookings table", ['attempted' => true]);
+        
         $createTableSql = "
         CREATE TABLE bookings (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -190,10 +217,11 @@ try {
         $tableCreationResult = $conn->query($createTableSql);
         
         if (!$tableCreationResult) {
+            logBooking("Failed to create bookings table", ['error' => $conn->error]);
             throw new Exception("Failed to create bookings table: " . $conn->error);
         }
         
-        error_log("Created bookings table successfully");
+        logBooking("Created bookings table successfully");
     }
 
     // Prepare the SQL statement for guest booking
@@ -206,6 +234,7 @@ try {
     
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
+        logBooking("Prepare statement failed", ['error' => $conn->error]);
         throw new Exception("Prepare statement failed: " . $conn->error);
     }
     
@@ -225,7 +254,14 @@ try {
     $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
     $status = 'pending'; // Default status for new bookings
     
-    error_log("Binding values to SQL statement: " . $bookingNumber);
+    logBooking("Binding values to SQL statement", [
+        'booking_number' => $bookingNumber,
+        'pickup_location' => $pickupLocation,
+        'pickup_date' => $pickupDate,
+        'passenger_name' => $passengerName,
+        'trip_type' => $tripType,
+        'amount' => $totalAmount
+    ]);
     
     $stmt->bind_param(
         "ssssssdssdsssss",
@@ -235,23 +271,26 @@ try {
         $hourlyPackage, $status
     );
     
-    error_log("About to execute SQL statement");
+    logBooking("About to execute SQL statement");
     
     if (!$stmt->execute()) {
+        logBooking("Execute statement failed", ['error' => $stmt->error]);
         throw new Exception("Execute statement failed: " . $stmt->error);
     }
 
     $bookingId = $conn->insert_id;
-    error_log("Booking created successfully: ID=" . $bookingId . ", Number=" . $bookingNumber);
+    logBooking("Booking created successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
 
     // Get the created booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     if (!$stmt) {
+        logBooking("Prepare statement failed for select", ['error' => $conn->error]);
         throw new Exception("Prepare statement failed for select: " . $conn->error);
     }
 
     $stmt->bind_param("i", $bookingId);
     if (!$stmt->execute()) {
+        logBooking("Execute statement failed for select", ['error' => $stmt->error]);
         throw new Exception("Execute statement failed for select: " . $stmt->error);
     }
 
@@ -259,11 +298,13 @@ try {
     $booking = $result->fetch_assoc();
 
     if (!$booking) {
+        logBooking("No booking found after insertion");
         throw new Exception("No booking found after insertion");
     }
 
     // Commit the transaction
     $conn->commit();
+    logBooking("Transaction committed successfully");
 
     // Format the booking data for response
     $formattedBooking = [
@@ -288,6 +329,7 @@ try {
     ];
 
     // Send successful response
+    logBooking("Sending success response", ['booking_id' => $booking['id']]);
     echo json_encode([
         'status' => 'success',
         'message' => 'Booking created successfully',
@@ -299,7 +341,10 @@ try {
     // Roll back the transaction on error
     $conn->rollback();
     
-    error_log("Booking creation failed: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    logBooking("Booking creation failed", [
+        'error' => $e->getMessage(), 
+        'trace' => $e->getTraceAsString()
+    ]);
     
     echo json_encode([
         'status' => 'error',
@@ -310,5 +355,6 @@ try {
 
 // Close database connection
 if (isset($conn) && $conn instanceof mysqli) {
+    logBooking("Closing database connection");
     $conn->close();
 }

@@ -29,9 +29,20 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Test endpoint for API connectivity verification
+# Easy access diagnostic endpoints - highest priority
+RewriteRule ^test-connection$ admin/direct-check-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
+RewriteRule ^direct-connection$ admin/direct-check-connection.php [L,QSA]
+RewriteRule ^admin/test-connection$ admin/direct-check-connection.php [L,QSA]
 RewriteRule ^admin/test-booking-api$ admin/test-booking-api.php [L,QSA]
+RewriteRule ^admin/direct-connection$ admin/direct-check-connection.php [L,QSA]
+
+# HIGHEST PRIORITY: Booking endpoints
+RewriteRule ^book$ book.php [L,QSA]
+RewriteRule ^book\.php$ book.php [L,QSA]
+RewriteRule ^book/$ book.php [L,QSA]
+RewriteRule ^create-booking$ book.php [L,QSA]
+RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
 # HIGHEST PRIORITY: Admin booking endpoints
 RewriteRule ^admin/booking$ admin/booking.php [L,QSA]

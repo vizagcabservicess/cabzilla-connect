@@ -18,7 +18,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     
     while ($retries < $maxRetries) {
         try {
-            // Database credentials
+            // Database credentials - ensure these match with database.php
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
@@ -41,7 +41,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
                 throw new Exception("Connection test query failed: " . $conn->error);
             }
             
-            error_log("Database connection successful using direct credentials");
+            error_log("Database connection successful using db_helper");
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
@@ -53,6 +53,16 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             }
         }
     }
+    
+    // Log the error details
+    $logDir = dirname(__FILE__) . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    
+    $logFile = $logDir . '/db_connection_errors.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$timestamp] All connection attempts failed: " . ($lastError ? $lastError->getMessage() : 'Unknown error') . "\n", FILE_APPEND);
     
     // If we've exhausted all retries, throw the last error
     if ($lastError) {
