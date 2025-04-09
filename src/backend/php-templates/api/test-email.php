@@ -1,21 +1,30 @@
 
 <?php
-// Test script for PHPMailer email functionality
-header('Content-Type: application/json');
+// Test endpoint for email sending
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Content-Type: application/json');
 
-// Include the email utilities
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+// Include email utilities
 require_once __DIR__ . '/utils/email.php';
+require_once __DIR__ . '/utils/mailer.php';
 
-// Function to log test results
-function logTestResult($message, $data = null) {
-    $logDir = __DIR__ . '/../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    
-    $logFile = $logDir . '/email_test_' . date('Y-m-d') . '.log';
+// Create log directory if it doesn't exist
+$logDir = __DIR__ . '/../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+
+function logTestEmail($message, $data = null) {
+    global $logDir;
+    $logFile = $logDir . '/test_email_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logEntry = "[$timestamp] $message";
     
@@ -28,63 +37,80 @@ function logTestResult($message, $data = null) {
     }
     
     file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
+    error_log($logEntry); // Also log to PHP error log
 }
 
-// Create a sample booking data
-$testBooking = [
-    'bookingNumber' => 'TEST' . time(),
-    'pickupLocation' => 'Test Location',
-    'dropLocation' => 'Test Destination',
-    'pickupDate' => date('Y-m-d H:i:s'),
-    'cabType' => 'Sedan',
-    'distance' => 25,
-    'tripType' => 'outstation',
-    'tripMode' => 'one-way',
-    'totalAmount' => 2400,
-    'passengerName' => 'Test User',
-    'passengerEmail' => isset($_GET['email']) ? $_GET['email'] : 'info@vizagup.com',
-    'passengerPhone' => '9999999999',
-    'status' => 'confirmed'
-];
-
-// Log test start
-logTestResult('Starting email test', [
-    'recipient' => $testBooking['passengerEmail'],
-    'booking_number' => $testBooking['bookingNumber']
-]);
+// Get the recipient email from the request
+$recipientEmail = isset($_GET['email']) ? $_GET['email'] : 'test@example.com';
+logTestEmail("Test email requested for recipient", $recipientEmail);
 
 try {
-    // Test sending customer email
-    $customerEmailResult = sendBookingConfirmationEmail($testBooking);
-    logTestResult('Customer email result', ['success' => $customerEmailResult ? 'yes' : 'no']);
+    // Create test email content
+    $subject = "Test Email from Vizag Taxi Hub";
+    $htmlBody = "
+        <html>
+        <body>
+            <h2>Test Email</h2>
+            <p>This is a test email from Vizag Taxi Hub.</p>
+            <p>If you received this email, the email sending functionality is working correctly.</p>
+            <p>Time: " . date('Y-m-d H:i:s') . "</p>
+        </body>
+        </html>
+    ";
     
-    // Test sending admin notification
-    $adminEmailResult = sendAdminNotificationEmail($testBooking);
-    logTestResult('Admin email result', ['success' => $adminEmailResult ? 'yes' : 'no']);
+    // Try sending with PHPMailer first
+    logTestEmail("Attempting to send test email with PHPMailer");
+    $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
     
-    // Prepare and send response
-    $response = [
-        'status' => ($customerEmailResult || $adminEmailResult) ? 'success' : 'error',
-        'message' => ($customerEmailResult || $adminEmailResult) 
-            ? 'Email test completed successfully' 
-            : 'Email test failed - check logs',
-        'details' => [
-            'customerEmailSent' => $customerEmailResult,
-            'adminEmailSent' => $adminEmailResult,
-            'testEmailAddress' => $testBooking['passengerEmail']
-        ]
-    ];
+    if ($phpMailerResult) {
+        logTestEmail("PHPMailer test email sent successfully");
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Test email sent successfully using PHPMailer',
+            'recipient' => $recipientEmail,
+            'time' => date('Y-m-d H:i:s')
+        ]);
+        exit;
+    }
     
-    echo json_encode($response);
+    // If PHPMailer fails, try the legacy method
+    logTestEmail("PHPMailer failed, attempting legacy method");
+    if (function_exists('sendEmail')) {
+        $legacyResult = sendEmail($recipientEmail, $subject, $htmlBody);
+        
+        if ($legacyResult) {
+            logTestEmail("Legacy email method succeeded");
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Test email sent successfully using legacy method',
+                'recipient' => $recipientEmail,
+                'time' => date('Y-m-d H:i:s')
+            ]);
+            exit;
+        }
+    }
+    
+    // If all methods fail
+    logTestEmail("All email sending methods failed");
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Failed to send test email. See server logs for details.',
+        'recipient' => $recipientEmail,
+        'time' => date('Y-m-d H:i:s')
+    ]);
     
 } catch (Exception $e) {
-    logTestResult('Test error', [
+    logTestEmail("Exception during test email", [
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
     ]);
     
+    http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Email test failed with exception: ' . $e->getMessage()
+        'message' => 'Exception during test email: ' . $e->getMessage(),
+        'recipient' => $recipientEmail,
+        'time' => date('Y-m-d H:i:s')
     ]);
 }

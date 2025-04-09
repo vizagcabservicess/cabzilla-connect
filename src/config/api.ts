@@ -8,7 +8,9 @@ export const apiBaseUrl = process.env.NODE_ENV === 'production'
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {
-  return `${apiBaseUrl}${path}`;
+  // Ensure path starts with a slash
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${apiBaseUrl}${normalizedPath}`;
 };
 
 // Force refresh headers for API requests to bypass cache
@@ -28,5 +30,6 @@ export const defaultHeaders = {
 // Export configuration options
 export default {
   baseUrl: apiBaseUrl,
-  defaultHeaders
+  defaultHeaders,
+  forceRefreshHeaders
 };

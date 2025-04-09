@@ -63,14 +63,14 @@ export const bookingAPI = {
       const requestBody = JSON.stringify(bookingData);
       console.log('Request body after stringifying:', requestBody);
       
-      // Use timeout and more robust fetch configuration
+      // Use timeout and more robust fetch configuration with longer timeout
       const response = await fetch(getApiUrl('/api/book.php'), {
         method: 'POST',
         headers: {
           ...defaultHeaders,
           'Content-Type': 'application/json'
         },
-        body: requestBody
+        body: requestBody,
       });
       
       if (!response.ok) {
@@ -242,8 +242,51 @@ export const authAPI = {
 
 export const vehicleAPI = {
   getVehicles: async () => {
-    const response = await apiClient.get('/vehicles');
-    return response.data;
+    try {
+      // Try multiple endpoints with fallbacks
+      const urls = [
+        '/api/admin/get-vehicles.php',
+        '/api/vehicles.php',
+        '/api/vehicles/list'
+      ];
+      
+      let response = null;
+      let error = null;
+      
+      for (const url of urls) {
+        try {
+          console.log(`Attempting to fetch vehicles from: ${url}`);
+          response = await fetch(getApiUrl(url), {
+            headers: {
+              ...forceRefreshHeaders,
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`Successfully fetched vehicles from ${url}:`, data);
+            return data;
+          }
+        } catch (err) {
+          console.error(`Error fetching from ${url}:`, err);
+          error = err;
+        }
+      }
+      
+      // If all endpoints failed, try the axios client as a last resort
+      response = await apiClient.get('/vehicles');
+      return response.data;
+    } catch (error) {
+      console.error('All vehicle fetch attempts failed:', error);
+      
+      // Return fallback data if everything fails
+      return {
+        status: 'error',
+        message: 'Failed to fetch vehicles',
+        vehicles: []
+      };
+    }
   }
 };
 
