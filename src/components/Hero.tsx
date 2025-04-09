@@ -363,7 +363,7 @@ export function Hero() {
       };
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
 
-      const response = await bookingAPI.createBooking(bookingData, authToken);
+      const response = await bookingAPI.createBooking(bookingData);
       
       console.log('Booking created:', response);
       

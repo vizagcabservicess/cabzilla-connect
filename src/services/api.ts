@@ -1,5 +1,6 @@
 import axios from 'axios';
-import { BookingRequest } from '@/types/api';
+import { BookingRequest, Booking } from '@/types/api';
+import { getApiUrl, defaultHeaders } from '@/config/api';
 
 const API_URL = '/api';
 
