@@ -19,7 +19,7 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# CRITICAL SECTION: ADMIN BOOKING ENDPOINTS
+# CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
 RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,QSA]
 RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,QSA]
@@ -77,7 +77,7 @@ ErrorDocument 500 /api/error.php
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php
 
-# Ensure PHP files are recognized and processed correctly
+# Ensure PHP files are recognized and processed correctly - CRITICALLY IMPORTANT!
 <FilesMatch "\.php$">
     SetHandler application/x-httpd-php
     # Set JSON content type for API responses

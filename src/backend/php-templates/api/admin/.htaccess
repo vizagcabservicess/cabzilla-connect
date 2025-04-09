@@ -14,9 +14,21 @@ Header always set Access-Control-Max-Age "86400"
 Header always set Access-Control-Expose-Headers "*"
 Header always set X-Content-Type-Options "nosniff"
 
-# Handle OPTIONS preflight requests
+# Handle OPTIONS preflight requests - CRITICAL: Must be VERY first rule
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Critical PHP settings - must be set early
+<FilesMatch "\.php$">
+    # Ensure PHP files are recognized and processed correctly
+    SetHandler application/x-httpd-php
+    # Set JSON content type for API responses
+    Header always set Content-Type "application/json"
+    # No caching for PHP files
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>
 
 # CRITICAL: Explicitly define booking endpoints with highest priority
 RewriteRule ^booking\.php$ booking.php [L,QSA]
@@ -49,18 +61,3 @@ RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
-
-# Force no caching for PHP files
-<FilesMatch "\.php$">
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</FilesMatch>
-
-# CRITICAL: Ensure proper PHP handling for API responses
-# This ensures PHP is processed correctly and returns application/json
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
-    Header always set Content-Type "application/json" env=REDIRECT_STATUS=200
-</FilesMatch>

@@ -2,18 +2,21 @@
 RewriteEngine On
 RewriteBase /api/
 
+# CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
+<FilesMatch "\.php$">
+    # Ensure PHP files are processed correctly
+    SetHandler application/x-httpd-php
+    # Set JSON content type for API responses
+    Header always set Content-Type "application/json"
+    # No caching for PHP files
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>
+
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
-<IfModule mod_headers.c>
-    <If "%{REQUEST_METHOD} == 'OPTIONS'">
-        Header always set Status "200 OK"
-        Header always set Access-Control-Allow-Origin "*" 
-        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, *"
-        Header always set Access-Control-Max-Age "86400"
-        Header always set Content-Type "text/plain"
-        Header always set Content-Length "0"
-    </If>
-</IfModule>
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
@@ -24,13 +27,6 @@ RewriteBase /api/
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
 </IfModule>
-
-# Handle OPTIONS requests - immediately return 200
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
-
-# CRITICAL: Set PHP handler for all PHP files
-AddHandler application/x-httpd-php .php
 
 # CRITICAL: Explicitly map admin booking endpoints - HIGHEST PRIORITY
 RewriteRule ^admin/booking\.php$ admin/booking.php [L,QSA]
@@ -70,19 +66,6 @@ RewriteRule ^login/$ login.php [L,QSA]
 RewriteRule ^signup/$ signup.php [L,QSA]
 RewriteRule ^register/$ signup.php [L,QSA]
 
-# Auth subdirectory variations
-RewriteRule ^auth/login$ login.php [L,QSA]
-RewriteRule ^auth/login\.php$ login.php [L,QSA]
-RewriteRule ^auth/signup$ signup.php [L,QSA]
-RewriteRule ^auth/signup\.php$ signup.php [L,QSA]
-RewriteRule ^auth/register$ signup.php [L,QSA]
-RewriteRule ^auth/register\.php$ signup.php [L,QSA]
-
-# Auth subdirectory with trailing slashes
-RewriteRule ^auth/login/$ login.php [L,QSA]
-RewriteRule ^auth/signup/$ signup.php [L,QSA]
-RewriteRule ^auth/register/$ signup.php [L,QSA]
-
 # CRITICAL VEHICLE ENDPOINTS - HIGHEST PRIORITY
 # Direct mappings for add vehicle endpoint with multiple variants
 RewriteRule ^admin/direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
@@ -90,13 +73,16 @@ RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [
 RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
 
-# Make add-vehicle-simple accessible from multiple paths
+# Add direct mapping for booking endpoints
+RewriteRule ^user/bookings$ user/bookings.php [L,QSA] 
+RewriteRule ^bookings$ bookings.php [L,QSA]
+RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
+
+# Other routes kept the same as before
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^admin/add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
-
-# Legacy aliases for vehicle creation
 RewriteRule ^admin/vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^admin/vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
@@ -105,63 +91,30 @@ RewriteRule ^admin/add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^admin/add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
-
-# Debug endpoint for troubleshooting (explicit mapping)
 RewriteRule ^admin/vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
 RewriteRule ^admin/vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
 RewriteRule ^vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
 RewriteRule ^vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
-
-# Diagnostic endpoint for PHP testing
 RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
-
-# Allow access to all PHP files directly
-<Files "*.php">
-    Require all granted
-</Files>
-
-# Critical: Prevent HTML error responses for PHP files
-<FilesMatch "\.php$">
-    # Force PHP processing even if system wants to serve as plain text
-    SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
-    Header always set Content-Type "application/json" env=REDIRECT_STATUS=200
-</FilesMatch>
-
-# NEW: Direct file path for login and signup
-# Make login.php and signup.php accessible even when called directly without rewrite
 <Files "login.php">
     Require all granted
     SetHandler application/x-httpd-php
     DirectoryIndex login.php
 </Files>
-
 <Files "signup.php">
     Require all granted
     SetHandler application/x-httpd-php
     DirectoryIndex signup.php
 </Files>
-
-# NEW: Root URL rewrite for login, signup and register
-# These rules handle direct root access like /login, /signup without the /api/ prefix
 RewriteRule ^/login$ /api/login.php [L,QSA]
 RewriteRule ^/signup$ /api/signup.php [L,QSA]
 RewriteRule ^/register$ /api/signup.php [L,QSA]
-
-# Absolute URL rewrite rules for login and signup
 RewriteRule ^/?login$ /api/login.php [L,QSA]
 RewriteRule ^/?signup$ /api/signup.php [L,QSA]
 RewriteRule ^/?register$ /api/signup.php [L,QSA]
-
-# Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
-
-# Add direct mapping for booking endpoints
-RewriteRule ^user/bookings$ user/bookings.php [L,QSA] 
-RewriteRule ^bookings$ bookings.php [L,QSA]
-RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
 RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
@@ -238,26 +191,15 @@ RewriteRule ^airport-fares$ fares.php?type=airport [L,QSA]
 RewriteRule ^fares$ fares.php [L,QSA]
 RewriteRule ^tours$ tours.php [L,QSA]
 RewriteRule ^tours/([^/]+)$ tours.php?id=$1 [L,QSA]
-
-# Add absolute fallback patterns for login/signup
 RewriteRule ^/api/login$ login.php [L,QSA]
 RewriteRule ^/api/signup$ signup.php [L,QSA]
-
-# Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
-
-# Ensure .php files are recognized as PHP and executed
 <FilesMatch "\.php$">
     SetHandler application/x-httpd-php
 </FilesMatch>
-
-# Protect PHP files from direct access
 <Files "*.php">
-    # Allow all requests through - critical for CORS
     Require all granted
 </Files>
-
-# Prevent directory listing
 Options -Indexes

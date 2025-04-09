@@ -3,7 +3,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CRITICAL: Set all response headers first
+// CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -72,19 +72,34 @@ logError("Admin booking endpoint request", [
     'remote_addr' => $_SERVER['REMOTE_ADDR']
 ]);
 
-// Always use JSON response helper
+// Always use JSON response helper - MODIFIED to be safer
 function sendJsonResponse($data, $statusCode = 200) {
-    // Ensure proper headers
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
-    
-    // Clear any output buffering to prevent HTML contamination
-    if (ob_get_level()) {
-        ob_clean();
+    // Ensure proper headers - Send again in case they were overwritten
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code($statusCode);
     }
     
-    // Encode with proper options to ensure valid JSON
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Clear any output buffering to prevent HTML contamination
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    // Ensure the data can be properly encoded to avoid JSON errors
+    try {
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new Exception('JSON encoding failed: ' . json_last_error_msg());
+        }
+        echo $json;
+    } catch (Exception $e) {
+        // Fallback if encoding fails
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'JSON encoding error: ' . $e->getMessage(),
+            'original_data_type' => gettype($data)
+        ]);
+    }
     
     // Exit to prevent any further output
     exit;
@@ -116,14 +131,17 @@ $devMode = true; // Set to false in production
 
 if (!$isAdmin && !$devMode) {
     sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
-    exit;
 }
 
-// Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
-    exit;
+// Connect to database - ENHANCED error handling
+try {
+    $conn = getDbConnection();
+    if (!$conn) {
+        throw new Exception("Database connection failed - getDbConnection returned false");
+    }
+} catch (Exception $e) {
+    logError("Database connection failed in booking.php", ['error' => $e->getMessage()]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
 }
 
 try {
@@ -134,7 +152,6 @@ try {
         // Bookings table doesn't exist yet
         logError("Bookings table doesn't exist");
         sendJsonResponse(['status' => 'warning', 'message' => 'The bookings table does not exist yet', 'bookings' => []]);
-        exit;
     }
     
     // Check if this is a request for a specific booking or all bookings
@@ -153,7 +170,6 @@ try {
             if ($result->num_rows === 0) {
                 logError("Booking not found for deletion", ['booking_id' => $bookingId]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-                exit;
             }
             
             // Delete the booking
@@ -184,7 +200,6 @@ try {
                 if ($result->num_rows === 0) {
                     logError("Booking not found for status update", ['booking_id' => $bookingId]);
                     sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-                    exit;
                 }
                 
                 // Update booking status
@@ -248,7 +263,6 @@ try {
             if ($result->num_rows === 0) {
                 logError("Booking not found", ['booking_id' => $bookingId]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-                exit;
             }
             
             $booking = $result->fetch_assoc();
@@ -302,7 +316,6 @@ try {
             if ($stmt === false) {
                 logError("Error preparing statement", ["error" => $conn->error]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
-                exit;
             }
             
             // Bind status parameter if filter is applied
@@ -315,7 +328,6 @@ try {
             if (!$success) {
                 logError("Error executing query", ["error" => $stmt->error]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error], 500);
-                exit;
             }
             
             $result = $stmt->get_result();
@@ -323,7 +335,6 @@ try {
             if ($result === false) {
                 logError("Error getting query result", ["error" => $stmt->error]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Failed to get result: ' . $stmt->error], 500);
-                exit;
             }
             
             $bookings = [];
