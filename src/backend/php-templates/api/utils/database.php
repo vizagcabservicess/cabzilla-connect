@@ -22,8 +22,14 @@ function getDbConnection() {
             throw new Exception("Connection failed: " . $conn->connect_error);
         }
         
-        // Set charset
+        // Set charset to prevent encoding issues
         $conn->set_charset("utf8mb4");
+        
+        // Test connection with a simple query
+        $testResult = $conn->query("SELECT 1");
+        if (!$testResult) {
+            throw new Exception("Connection test query failed: " . $conn->error);
+        }
         
         return $conn;
     } catch (Exception $e) {

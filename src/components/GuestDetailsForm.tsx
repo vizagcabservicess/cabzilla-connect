@@ -3,7 +3,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
-import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Loader2, AlertTriangle } from 'lucide-react';
 import { bookingAPI, authAPI } from '@/services/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -31,6 +31,7 @@ export function GuestDetailsForm({
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
   const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+  const [error, setError] = useState<string | null>(null);
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -43,6 +44,7 @@ export function GuestDetailsForm({
     if (isSubmitting || isSaving) return; // Prevent double submission
     
     setIsSaving(true);
+    setError(null);
     
     try {
       console.log('Starting booking submission with details:', details);
@@ -86,6 +88,7 @@ export function GuestDetailsForm({
       }
     } catch (error) {
       console.error("Error in booking operation:", error);
+      setError(error instanceof Error ? error.message : "Something went wrong during the booking process");
       toast({
         title: "Operation Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
@@ -99,6 +102,15 @@ export function GuestDetailsForm({
 
   return (
     <div ref={formRef} className="transition-all duration-300 rounded-lg">
+      {error && (
+        <Alert className="mb-4 bg-red-50 border-red-200 text-red-800">
+          <AlertTriangle className="h-4 w-4 mr-2" />
+          <AlertDescription>
+            {error}
+          </AlertDescription>
+        </Alert>
+      )}
+    
       {authStatus === 'unauthenticated' && !bookingId && (
         <Alert className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800">
           <AlertDescription>

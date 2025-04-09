@@ -14,11 +14,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Ensure correct Content-Type
+// CRITICAL: Set proper response headers for ALL scenarios
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -91,13 +94,21 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
 }
 
 // Validate required fields
+$missingFields = [];
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
-        error_log("Missing required field: " . $field);
-        echo json_encode(['status' => 'error', 'message' => "Field $field is required"]);
-        http_response_code(400);
-        exit;
+        $missingFields[] = $field;
     }
+}
+
+if (!empty($missingFields)) {
+    error_log("Missing required fields: " . implode(', ', $missingFields));
+    echo json_encode([
+        'status' => 'error', 
+        'message' => 'Missing required fields: ' . implode(', ', $missingFields)
+    ]);
+    http_response_code(400);
+    exit;
 }
 
 // Get user ID if authenticated
@@ -119,30 +130,35 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     }
 }
 
-// Connect to database
+// Connect to database using direct connection for reliability
 try {
-    // Try to use getDbConnection from config.php first
-    if (function_exists('getDbConnection')) {
-        $conn = getDbConnection();
-    } else {
-        // Direct connection as fallback
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
+    
+    // Set character set
+    $conn->set_charset("utf8mb4");
+    
+    // Test connection with a simple query
+    $testResult = $conn->query("SELECT 1");
+    if (!$testResult) {
+        throw new Exception("Connection test query failed: " . $conn->error);
+    }
+    
+    error_log("Database connection established successfully");
 } catch (Exception $e) {
     error_log("Database connection failed: " . $e->getMessage());
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()]);
+    echo json_encode([
+        'status' => 'error', 
+        'message' => 'Database connection failed: ' . $e->getMessage()
+    ]);
     http_response_code(500);
     exit;
 }

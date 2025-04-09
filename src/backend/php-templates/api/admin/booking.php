@@ -41,26 +41,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Connect to database with improved error handling
 try {
-    // Try multiple ways to get a database connection
-    if (function_exists('getDbConnection')) {
-        error_log("Using getDbConnection from config.php");
-        $conn = getDbConnection();
-    } else {
-        // Direct connection as fallback
-        error_log("Using direct database connection as fallback");
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
+    // Direct connection as fallback since we need maximum reliability
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
+    
+    // Set character set
+    $conn->set_charset("utf8mb4");
     
     // Test the connection
     if (!$conn->ping()) {
@@ -208,20 +201,43 @@ try {
     } else {
         // This is a request for all bookings
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            // First check if bookings table exists
-            try {
-                $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
-                if ($tableCheck === false) {
-                    throw new Exception("Error checking tables: " . $conn->error);
+            // Check if bookings table exists and create it if it doesn't
+            $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+            if ($tableCheck->num_rows === 0) {
+                // Create the bookings table if it doesn't exist
+                $createTableSql = "
+                CREATE TABLE bookings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT,
+                    booking_number VARCHAR(50) NOT NULL UNIQUE,
+                    pickup_location TEXT NOT NULL,
+                    drop_location TEXT,
+                    pickup_date DATETIME NOT NULL,
+                    return_date DATETIME,
+                    cab_type VARCHAR(50) NOT NULL,
+                    distance DECIMAL(10,2),
+                    trip_type VARCHAR(20) NOT NULL,
+                    trip_mode VARCHAR(20) NOT NULL,
+                    total_amount DECIMAL(10,2) NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    passenger_name VARCHAR(100) NOT NULL,
+                    passenger_phone VARCHAR(20) NOT NULL,
+                    passenger_email VARCHAR(100) NOT NULL,
+                    hourly_package VARCHAR(50),
+                    tour_id VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ";
+                $createTableResult = $conn->query($createTableSql);
+                if ($createTableResult === false) {
+                    throw new Exception("Failed to create bookings table: " . $conn->error);
                 }
+                error_log("Created bookings table in admin/booking.php");
                 
-                if ($tableCheck->num_rows === 0) {
-                    // Table doesn't exist, return empty bookings array
-                    sendJsonResponse(['status' => 'success', 'bookings' => []]);
-                }
-            } catch (Exception $e) {
-                error_log("Error checking bookings table: " . $e->getMessage());
-                // Continue and try the query anyway
+                // Return empty bookings array since we just created the table
+                sendJsonResponse(['status' => 'success', 'bookings' => []]);
+                exit;
             }
             
             // Get status filter if provided
