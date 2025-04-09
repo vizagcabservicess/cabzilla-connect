@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -255,7 +254,82 @@ try {
             'email' => $updatedBooking['passenger_email']
         ]);
         
-        // You can add email notification code here if needed
+        // Include email utilities if needed
+        if (!function_exists('sendEmailWithPHPMailer')) {
+            require_once __DIR__ . '/utils/email.php';
+        }
+        
+        // Try to send status update notification
+        try {
+            // Create email content for status update
+            $emailSubject = "Booking #{$updatedBooking['booking_number']} Confirmed";
+            $htmlContent = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Confirmed</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; border: 1px solid #ddd; }
+        .details { margin: 20px 0; }
+        .detail-row { display: flex; margin-bottom: 10px; }
+        .detail-label { font-weight: bold; width: 150px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Booking Confirmed!</h1>
+            <p>Your booking #{$updatedBooking['booking_number']} has been confirmed.</p>
+        </div>
+        <div class="content">
+            <p>Dear {$updatedBooking['passenger_name']},</p>
+            <p>We're pleased to inform you that your booking has been confirmed. Your driver details are:</p>
+            
+            <div class="details">
+                <div class="detail-row">
+                    <div class="detail-label">Driver Name:</div>
+                    <div>{$updatedBooking['driver_name'] ?? 'To be assigned'}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Driver Phone:</div>
+                    <div>{$updatedBooking['driver_phone'] ?? 'To be assigned'}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Vehicle Number:</div>
+                    <div>{$updatedBooking['vehicle_number'] ?? 'To be assigned'}</div>
+                </div>
+            </div>
+            
+            <p>For any questions, please contact us at:</p>
+            <p>Phone: +91 9966363662</p>
+            <p>Email: info@vizagtaxihub.com</p>
+            
+            <p>Thank you for choosing Vizag Taxi Hub!</p>
+        </div>
+    </div>
+</body>
+</html>
+HTML;
+            
+            // Send the email
+            $emailSent = sendEmailAllMethods($updatedBooking['passenger_email'], $emailSubject, $htmlContent);
+            logError("Status update email result", ['sent' => $emailSent ? 'yes' : 'no']);
+            
+            // Add email status to response
+            $booking['emailSent'] = $emailSent;
+            
+        } catch (Exception $emailException) {
+            logError("Failed to send status update email", [
+                'error' => $emailException->getMessage(),
+                'trace' => $emailException->getTraceAsString()
+            ]);
+            // Don't fail the update if email fails
+            $booking['emailSent'] = false;
+        }
     }
     
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);

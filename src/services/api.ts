@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { BookingRequest } from '@/types/api';
 
@@ -50,24 +49,50 @@ export const bookingAPI = {
     return response.data;
   },
   
-  createBooking: async (bookingData: BookingRequest, authToken?: string | null) => {
-    // Create headers object with auth token if available
-    const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
-    
-    console.log('Creating booking with auth:', !!authToken);
-    
+  createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
     try {
-      const response = await apiClient.post('/book', bookingData, { headers });
+      console.log('Creating booking with data:', bookingData);
       
-      // Handle if response is HTML instead of JSON (error case)
-      if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-        console.error('Received HTML response instead of JSON:', response.data.substring(0, 100));
-        throw new Error('Invalid response format received from server');
+      const response = await fetch(getApiUrl('/api/book.php'), {
+        method: 'POST',
+        headers: defaultHeaders,
+        body: JSON.stringify(bookingData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error creating booking:', errorText);
+        throw new Error(`Failed to create booking: ${response.status} ${response.statusText}`);
       }
       
-      return response.data;
+      const result = await response.json();
+      console.log('Booking created successfully:', result);
+      
+      if (result.status === 'error') {
+        throw new Error(result.message || 'Failed to create booking');
+      }
+      
+      // After booking is created, send confirmation emails
+      try {
+        const emailResponse = await fetch(getApiUrl('/api/send-booking-confirmation.php'), {
+          method: 'POST',
+          headers: defaultHeaders,
+          body: JSON.stringify(result.data)
+        });
+        
+        if (emailResponse.ok) {
+          const emailResult = await emailResponse.json();
+          console.log('Email confirmation result:', emailResult);
+        } else {
+          console.warn('Email confirmation request failed, but booking was created');
+        }
+      } catch (emailError) {
+        console.warn('Failed to send booking confirmation email, but booking was created:', emailError);
+      }
+      
+      return result.data;
     } catch (error) {
-      console.error('Booking creation error:', error);
+      console.error('Error in createBooking:', error);
       throw error;
     }
   },
@@ -82,7 +107,6 @@ export const bookingAPI = {
     return response.data;
   },
 
-  // Add missing methods needed by components
   getAllBookings: async () => {
     const response = await apiClient.get('/admin/bookings');
     return response.data;
@@ -135,7 +159,6 @@ export const authAPI = {
     }
   },
 
-  // Add missing methods needed by components
   isAuthenticated: () => {
     return !!localStorage.getItem('authToken');
   },
@@ -176,7 +199,6 @@ export const vehicleAPI = {
   }
 };
 
-// Add fareAPI for components that need it
 export const fareAPI = {
   getTourFares: async () => {
     const response = await apiClient.get('/admin/tour-fares');
@@ -188,7 +210,6 @@ export const fareAPI = {
     return response.data;
   },
   
-  // Add missing methods for FareManagement.tsx
   updateTourFares: async (fares: any) => {
     const response = await apiClient.put(`/admin/tour-fares/${fares.tourId}`, fares);
     return response.data;
@@ -204,7 +225,6 @@ export const fareAPI = {
     return response.data;
   },
   
-  // Add missing methods for VehicleFareManagement.tsx
   getVehiclePricing: async () => {
     const response = await apiClient.get('/admin/vehicle-pricing');
     return response.data;

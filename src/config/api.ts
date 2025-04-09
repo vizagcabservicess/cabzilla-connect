@@ -45,6 +45,13 @@ export const getApiUrl = (endpoint: string): string => {
     return `https://vizagup.com/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
   }
   
+  // Email endpoints should always use direct PHP access
+  if (endpoint.includes('/send-booking-confirmation') || 
+      endpoint.includes('/test-email')) {
+    console.log('Redirecting email endpoint to direct PHP access');
+    return getApiUrl(endpoint + '.php');
+  }
+  
   // For admin users endpoint, we want to ensure direct access to the PHP file
   if (endpoint.includes('/admin/users') || endpoint === '/api/admin/users') {
     console.log('Redirecting admin users endpoint to direct PHP access');

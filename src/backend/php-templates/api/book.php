@@ -1,4 +1,3 @@
-
 <?php
 /**
  * CRITICAL API ENDPOINT: Creates new bookings
@@ -316,6 +315,37 @@ try {
         'passengerPhone' => $booking['passenger_phone'],
         'passengerEmail' => $booking['passenger_email']
     ];
+    
+    // Send email confirmation - include email.php if needed
+    if (!function_exists('sendBookingConfirmationEmail')) {
+        require_once __DIR__ . '/utils/email.php';
+    }
+    
+    // Try to send emails but don't break the booking process if it fails
+    try {
+        logBooking("Attempting to send confirmation emails");
+        
+        // Send to customer
+        $customerEmailSent = sendBookingConfirmationEmail($formattedBooking);
+        logBooking("Customer email result", ['sent' => $customerEmailSent ? 'yes' : 'no']);
+        
+        // Send to admin
+        $adminEmailSent = sendAdminNotificationEmail($formattedBooking);
+        logBooking("Admin notification email result", ['sent' => $adminEmailSent ? 'yes' : 'no']);
+        
+        // Include email status in response
+        $formattedBooking['emailSent'] = [
+            'customer' => $customerEmailSent,
+            'admin' => $adminEmailSent
+        ];
+    } catch (Exception $emailException) {
+        logBooking("Email sending exception", [
+            'error' => $emailException->getMessage(),
+            'trace' => $emailException->getTraceAsString()
+        ]);
+        // Don't fail the booking if email fails
+        $formattedBooking['emailSent'] = false;
+    }
     
     // Send success response
     $response = [
