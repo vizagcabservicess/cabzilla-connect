@@ -1,9 +1,8 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Set standard headers for API response FIRST to prevent any output before headers
+// CRITICAL: Set all response headers first
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -11,6 +10,9 @@ header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Debug mode - to diagnose problems
+$debugMode = false;
 
 // Critical error handling to prevent HTML output
 function handleFatalErrors() {
@@ -30,11 +32,7 @@ register_shutdown_function('handleFatalErrors');
 
 // Set error handler to prevent HTML errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    if (!(error_reporting() & $errno)) {
-        // This error code is not included in error_reporting
-        return false;
-    }
-    
+    // Log the error
     logError("PHP Error in booking.php", [
         'message' => $errstr,
         'file' => $errfile,
@@ -65,21 +63,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Log request info for debugging
+// Log request info
 logError("Admin booking endpoint request", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'query' => $_SERVER['QUERY_STRING'] ?? '',
-    'headers' => getallheaders(),
     'url' => $_SERVER['REQUEST_URI'],
     'remote_addr' => $_SERVER['REMOTE_ADDR']
 ]);
 
-// Authenticate as admin
+// Always use JSON response helper
+function sendJsonResponse($data, $statusCode = 200) {
+    // Ensure proper headers
+    header('Content-Type: application/json');
+    http_response_code($statusCode);
+    
+    // Clear any output buffering to prevent HTML contamination
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    // Encode with proper options to ensure valid JSON
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    
+    // Exit to prevent any further output
+    exit;
+}
+
+// Authenticate as admin - with fallback for development
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
-// More permissive authentication for development/testing
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
@@ -92,15 +106,14 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         }
     } catch (Exception $e) {
         logError("JWT verification failed: " . $e->getMessage());
-        // Don't exit - continue for dev/demo mode
+        // Continue for dev mode
     }
 }
 
-// For development/testing - allow access even without auth
+// Development/testing mode - allow access even without auth
 $devMode = true; // Set to false in production
 
 if (!$isAdmin && !$devMode) {
-    logError("Non-admin attempting admin action", ['user_id' => $userId ?? 'none', 'role' => $payload['role'] ?? 'none']);
     sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
     exit;
 }
@@ -266,7 +279,7 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
         }
     } else {
-        // This is a request for all bookings (no specific ID)
+        // This is a request for all bookings
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // Debug log for troubleshooting
             logError("Fetching all bookings", ["userId" => $userId, "isAdmin" => $isAdmin ? "true" : "false"]);
@@ -348,21 +361,5 @@ try {
 } catch (Exception $e) {
     logError("Error in admin booking endpoint", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
-}
-
-// Helper function to ensure JSON response
-function sendJsonResponse($data, $statusCode = 200) {
-    // Ensure proper headers are sent
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
-    
-    // Prevent any debug output before or after JSON
-    ob_clean();
-    
-    // Encode with proper options to ensure valid JSON and pretty print for debugging
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    
-    // Make sure no further output happens
-    exit;
 }
 ?>

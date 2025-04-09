@@ -1,4 +1,3 @@
-
 # Enable URL rewriting
 RewriteEngine On
 
@@ -19,11 +18,14 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# API routes should go to the actual PHP files - IMPORTANT: PLACE THIS BEFORE THE FRONTEND ROUTES
-# Make sure admin API requests are handled correctly
-# Explicit booking endpoint mapping - add both singular and plural versions
-RewriteRule ^api/admin/bookings(.*)$ /api/admin/booking.php$1 [L,QSA]
-RewriteRule ^api/admin/booking(.*)$ /api/admin/booking.php$1 [L,QSA]
+# CRITICAL SECTION: ADMIN BOOKING ENDPOINTS
+# Explicit booking endpoint mappings - these MUST be at the top and have high priority
+RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,QSA]
+RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,QSA]
+RewriteRule ^api/admin/booking/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
+RewriteRule ^api/admin/bookings$ /api/admin/booking.php [L,QSA]
+RewriteRule ^api/admin/bookings/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
+RewriteRule ^api/admin/bookings\.php$ /api/admin/booking.php [L,QSA]
 
 # Other admin API endpoints
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,QSA]

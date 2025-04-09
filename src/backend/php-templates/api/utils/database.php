@@ -4,7 +4,7 @@
  * Database utility functions for establishing connections
  */
 
-// Get database connection
+// Get database connection with improved error handling
 function getDbConnection() {
     // Database credentials
     $dbHost = 'localhost';
