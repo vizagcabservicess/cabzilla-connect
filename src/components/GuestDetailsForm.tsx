@@ -30,6 +30,7 @@ export function GuestDetailsForm({
   const { toast } = useToast();
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
 
   // Check authentication status on component mount
@@ -43,9 +44,26 @@ export function GuestDetailsForm({
     if (isSubmitting || isSaving) return; // Prevent double submission
     
     setIsSaving(true);
+    setError(null);
     
     try {
       console.log('Starting booking submission with details:', details);
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(details.email)) {
+        throw new Error('Please enter a valid email address');
+      }
+      
+      // Validate phone number - assuming a simple validation for demo
+      if (!/^\d{10,15}$/.test(details.phone.replace(/[^0-9]/g, ''))) {
+        throw new Error('Please enter a valid phone number (10-15 digits)');
+      }
+      
+      // Validate name
+      if (!details.name || details.name.trim().length < 3) {
+        throw new Error('Please enter a valid name (at least 3 characters)');
+      }
       
       // Check authentication
       const isAuthenticated = authAPI.isAuthenticated();
@@ -86,6 +104,10 @@ export function GuestDetailsForm({
       }
     } catch (error) {
       console.error("Error in booking operation:", error);
+      
+      // Set the error message
+      setError(error instanceof Error ? error.message : "Something went wrong");
+      
       toast({
         title: "Operation Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
@@ -111,6 +133,12 @@ export function GuestDetailsForm({
               Login for a better experience
             </Button>
           </AlertDescription>
+        </Alert>
+      )}
+
+      {error && (
+        <Alert className="mb-4 bg-red-50 border-red-200 text-red-800">
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 

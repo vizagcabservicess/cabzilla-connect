@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../utils/database.php';
 
 // CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
@@ -41,31 +42,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Connect to database with improved error handling
 try {
-    // Try multiple ways to get a database connection
-    if (function_exists('getDbConnection')) {
-        error_log("Using getDbConnection from config.php");
-        $conn = getDbConnection();
-    } else {
-        // Direct connection as fallback
-        error_log("Using direct database connection as fallback");
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
+    // Get a database connection with retry
+    $conn = getDbConnectionWithRetry(3);
+    
+    if (!$conn) {
+        throw new Exception("Failed to establish database connection after multiple attempts");
     }
     
-    // Test the connection
-    if (!$conn->ping()) {
-        throw new Exception("Database connection is not active");
+    // Ensure bookings table exists
+    if (!ensureBookingsTableExists($conn)) {
+        throw new Exception("Failed to ensure bookings table exists");
     }
+    
 } catch (Exception $e) {
     error_log("Database connection failed in booking.php: " . $e->getMessage());
     sendJsonResponse([
@@ -87,8 +75,15 @@ try {
         // Handle DELETE request for specific booking
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Prepare statement failed: " . $conn->error);
+            }
+            
             $stmt->bind_param("i", $bookingId);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                throw new Exception("Execute statement failed: " . $stmt->error);
+            }
+            
             $result = $stmt->get_result();
             
             if ($result->num_rows === 0) {
@@ -97,13 +92,17 @@ try {
             
             // Delete the booking
             $deleteStmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
+            if (!$deleteStmt) {
+                throw new Exception("Prepare delete statement failed: " . $conn->error);
+            }
+            
             $deleteStmt->bind_param("i", $bookingId);
             $success = $deleteStmt->execute();
             
             if ($success) {
                 sendJsonResponse(['status' => 'success', 'message' => 'Booking deleted successfully']);
             } else {
-                throw new Exception("Failed to delete booking: " . $conn->error);
+                throw new Exception("Failed to delete booking: " . $deleteStmt->error);
             }
         } 
         // Handle POST or PUT request for updating booking status
@@ -111,66 +110,143 @@ try {
             // Get request body
             $requestData = json_decode(file_get_contents('php://input'), true);
             
+            if (!$requestData) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data received'], 400);
+            }
+            
+            // First check if booking exists
+            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Prepare statement failed: " . $conn->error);
+            }
+            
+            $stmt->bind_param("i", $bookingId);
+            if (!$stmt->execute()) {
+                throw new Exception("Execute statement failed: " . $stmt->error);
+            }
+            
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+            }
+            
+            // Update fields based on the request data
+            $updateFields = [];
+            $updateTypes = "";
+            $updateValues = [];
+            
+            // Check which fields to update
             if (isset($requestData['status'])) {
-                // First check if booking exists
+                $updateFields[] = "status = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['status'];
+            }
+            
+            if (isset($requestData['driverName'])) {
+                $updateFields[] = "driver_name = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['driverName'];
+            }
+            
+            if (isset($requestData['driverPhone'])) {
+                $updateFields[] = "driver_phone = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['driverPhone'];
+            }
+            
+            if (isset($requestData['passengerName'])) {
+                $updateFields[] = "passenger_name = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['passengerName'];
+            }
+            
+            if (isset($requestData['passengerPhone'])) {
+                $updateFields[] = "passenger_phone = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['passengerPhone'];
+            }
+            
+            if (isset($requestData['passengerEmail'])) {
+                $updateFields[] = "passenger_email = ?";
+                $updateTypes .= "s";
+                $updateValues[] = $requestData['passengerEmail'];
+            }
+            
+            // If no fields to update, return error
+            if (count($updateFields) === 0) {
+                sendJsonResponse(['status' => 'error', 'message' => 'No fields to update provided'], 400);
+            }
+            
+            // Add updated_at timestamp
+            $updateFields[] = "updated_at = NOW()";
+            
+            // Add booking ID to values
+            $updateTypes .= "i";
+            $updateValues[] = $bookingId;
+            
+            // Build update SQL
+            $updateSql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
+            
+            // Prepare and execute update
+            $updateStmt = $conn->prepare($updateSql);
+            if (!$updateStmt) {
+                throw new Exception("Prepare update statement failed: " . $conn->error);
+            }
+            
+            // Bind parameters dynamically
+            $updateStmt->bind_param($updateTypes, ...$updateValues);
+            $success = $updateStmt->execute();
+            
+            if ($success) {
+                // Get updated booking details
                 $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
                 $stmt->bind_param("i", $bookingId);
                 $stmt->execute();
                 $result = $stmt->get_result();
+                $booking = $result->fetch_assoc();
                 
-                if ($result->num_rows === 0) {
-                    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-                }
+                // Format response data
+                $formattedBooking = [
+                    'id' => (int)$booking['id'],
+                    'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
+                    'bookingNumber' => $booking['booking_number'],
+                    'pickupLocation' => $booking['pickup_location'],
+                    'dropLocation' => $booking['drop_location'],
+                    'pickupDate' => $booking['pickup_date'],
+                    'returnDate' => $booking['return_date'],
+                    'cabType' => $booking['cab_type'],
+                    'distance' => (float)$booking['distance'],
+                    'tripType' => $booking['trip_type'],
+                    'tripMode' => $booking['trip_mode'],
+                    'totalAmount' => (float)$booking['total_amount'],
+                    'status' => $booking['status'],
+                    'passengerName' => $booking['passenger_name'],
+                    'passengerPhone' => $booking['passenger_phone'],
+                    'passengerEmail' => $booking['passenger_email'],
+                    'driverName' => $booking['driver_name'],
+                    'driverPhone' => $booking['driver_phone'],
+                    'createdAt' => $booking['created_at'],
+                    'updatedAt' => $booking['updated_at']
+                ];
                 
-                // Update booking status
-                $newStatus = $requestData['status'];
-                $updateStmt = $conn->prepare("UPDATE bookings SET status = ?, updated_at = NOW() WHERE id = ?");
-                $updateStmt->bind_param("si", $newStatus, $bookingId);
-                $success = $updateStmt->execute();
-                
-                if ($success) {
-                    // Get updated booking details
-                    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-                    $stmt->bind_param("i", $bookingId);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    $booking = $result->fetch_assoc();
-                    
-                    // Format response data
-                    $formattedBooking = [
-                        'id' => (int)$booking['id'],
-                        'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
-                        'bookingNumber' => $booking['booking_number'],
-                        'pickupLocation' => $booking['pickup_location'],
-                        'dropLocation' => $booking['drop_location'],
-                        'pickupDate' => $booking['pickup_date'],
-                        'returnDate' => $booking['return_date'],
-                        'cabType' => $booking['cab_type'],
-                        'distance' => (float)$booking['distance'],
-                        'tripType' => $booking['trip_type'],
-                        'tripMode' => $booking['trip_mode'],
-                        'totalAmount' => (float)$booking['total_amount'],
-                        'status' => $booking['status'],
-                        'passengerName' => $booking['passenger_name'],
-                        'passengerPhone' => $booking['passenger_phone'],
-                        'passengerEmail' => $booking['passenger_email'],
-                        'createdAt' => $booking['created_at'],
-                        'updatedAt' => $booking['updated_at']
-                    ];
-                    
-                    sendJsonResponse(['status' => 'success', 'message' => 'Booking status updated successfully', 'data' => $formattedBooking]);
-                } else {
-                    throw new Exception("Failed to update booking status: " . $conn->error);
-                }
+                sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $formattedBooking]);
             } else {
-                sendJsonResponse(['status' => 'error', 'message' => 'Status is required for booking update'], 400);
+                throw new Exception("Failed to update booking: " . $updateStmt->error);
             }
         }
         // Handle GET request for specific booking
         else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Prepare statement failed: " . $conn->error);
+            }
+            
             $stmt->bind_param("i", $bookingId);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                throw new Exception("Execute statement failed: " . $stmt->error);
+            }
+            
             $result = $stmt->get_result();
             
             if ($result->num_rows === 0) {
@@ -197,6 +273,8 @@ try {
                 'passengerName' => $booking['passenger_name'],
                 'passengerPhone' => $booking['passenger_phone'],
                 'passengerEmail' => $booking['passenger_email'],
+                'driverName' => $booking['driver_name'],
+                'driverPhone' => $booking['driver_phone'],
                 'createdAt' => $booking['created_at'],
                 'updatedAt' => $booking['updated_at']
             ];
@@ -209,19 +287,14 @@ try {
         // This is a request for all bookings
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // First check if bookings table exists
-            try {
-                $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
-                if ($tableCheck === false) {
-                    throw new Exception("Error checking tables: " . $conn->error);
+            if (!tableExists($conn, 'bookings')) {
+                // Table doesn't exist, create it
+                if (!ensureBookingsTableExists($conn)) {
+                    throw new Exception("Failed to create bookings table");
                 }
                 
-                if ($tableCheck->num_rows === 0) {
-                    // Table doesn't exist, return empty bookings array
-                    sendJsonResponse(['status' => 'success', 'bookings' => []]);
-                }
-            } catch (Exception $e) {
-                error_log("Error checking bookings table: " . $e->getMessage());
-                // Continue and try the query anyway
+                // Return empty bookings array since table was just created
+                sendJsonResponse(['status' => 'success', 'bookings' => []]);
             }
             
             // Get status filter if provided
@@ -277,6 +350,8 @@ try {
                         'passengerName' => $row['passenger_name'],
                         'passengerPhone' => $row['passenger_phone'],
                         'passengerEmail' => $row['passenger_email'],
+                        'driverName' => $row['driver_name'],
+                        'driverPhone' => $row['driver_phone'],
                         'createdAt' => $row['created_at'],
                         'updatedAt' => $row['updated_at']
                     ];
