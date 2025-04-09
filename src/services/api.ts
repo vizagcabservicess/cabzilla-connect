@@ -60,28 +60,33 @@ export const bookingAPI = {
         throw new Error('Missing required booking information');
       }
       
+      // Get the absolute URL for book.php
+      const bookingUrl = getApiUrl('/api/book.php');
+      console.log('Booking endpoint URL:', bookingUrl);
+      
+      // Convert bookingData to JSON string
       const requestBody = JSON.stringify(bookingData);
       console.log('Request body after stringifying:', requestBody);
       
-      // Use direct fetch with proper error handling (avoid empty responses)
-      const response = await fetch(getApiUrl('/api/book.php'), {
+      // Use direct fetch with proper error handling and detailed logging
+      const response = await fetch(bookingUrl, {
         method: 'POST',
         headers: {
           ...defaultHeaders,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Requested-With': 'fetch'
         },
         body: requestBody,
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response from server:', errorText);
-        throw new Error(`Server responded with status: ${response.status} ${response.statusText}`);
-      }
+      console.log('Response status:', response.status, response.statusText);
       
       // Get the response text first to debug potential issues
       const responseText = await response.text();
-      console.log('Raw server response:', responseText);
+      console.log('Raw server response text length:', responseText.length);
+      console.log('Raw server response (first 500 chars):', responseText.substring(0, 500));
       
       // Safety check - empty responses
       if (!responseText || responseText.trim() === '') {
@@ -93,9 +98,22 @@ export const bookingAPI = {
       let result;
       try {
         result = JSON.parse(responseText);
+        console.log('Parsed JSON result:', result);
       } catch (parseError) {
         console.error('Failed to parse server response as JSON:', parseError);
-        throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+        // Try to extract JSON if there's any HTML content before/after it
+        const jsonMatch = responseText.match(/\{.*\}/s);
+        if (jsonMatch) {
+          try {
+            result = JSON.parse(jsonMatch[0]);
+            console.log('Extracted JSON from response:', result);
+          } catch (extractError) {
+            console.error('Failed to extract JSON from response:', extractError);
+            throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+          }
+        } else {
+          throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+        }
       }
       
       // Check if the result contains expected data
@@ -105,7 +123,7 @@ export const bookingAPI = {
       
       console.log('Booking created successfully:', result);
       
-      // Send email confirmation
+      // Send email confirmation separately
       try {
         if (result.data && result.data.passengerEmail) {
           console.log('Sending email confirmation for booking:', result.data);
@@ -125,6 +143,24 @@ export const bookingAPI = {
           
           const emailResult = await emailResponse.text();
           console.log('Email test endpoint response:', emailResult);
+          
+          // Also send to the dedicated email confirmation endpoint
+          try {
+            const confirmEmailUrl = getApiUrl('/api/send-booking-confirmation.php');
+            const confirmResponse = await fetch(confirmEmailUrl, {
+              method: 'POST',
+              headers: {
+                ...defaultHeaders,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(result.data)
+            });
+            
+            const confirmResult = await confirmResponse.text();
+            console.log('Confirmation email endpoint response:', confirmResult);
+          } catch (confirmError) {
+            console.warn('Failed to trigger confirmation email via dedicated endpoint:', confirmError);
+          }
         }
       } catch (emailError) {
         // Don't fail booking just because email failed

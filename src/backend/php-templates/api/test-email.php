@@ -5,6 +5,14 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Disable output buffering completely
+if (ob_get_level()) ob_end_clean();
+if (ob_get_length()) ob_clean();
+if (ob_get_level()) ob_end_clean();
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -38,6 +46,13 @@ function logTestEmail($message, $data = null) {
     file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
     error_log($logEntry); // Also log to PHP error log
 }
+
+// Log request details
+logTestEmail("Test email request received", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'query' => $_SERVER['QUERY_STRING'] ?? 'none',
+    'remote_addr' => $_SERVER['REMOTE_ADDR']
+]);
 
 // Get the recipient email from the request
 $recipientEmail = isset($_GET['email']) ? $_GET['email'] : 'test@example.com';

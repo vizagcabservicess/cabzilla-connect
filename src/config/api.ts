@@ -10,8 +10,9 @@ export const apiBaseUrl = process.env.NODE_ENV === 'production'
 export const getApiUrl = (path: string): string => {
   // Ensure path starts with a slash if it doesn't already
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  // Make sure we properly join the URL parts without double slashes
-  return `${apiBaseUrl}${normalizedPath}`;
+  // Remove any duplicate slashes that might occur when joining
+  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
+  return fullUrl;
 };
 
 // Force refresh headers for API requests to bypass cache

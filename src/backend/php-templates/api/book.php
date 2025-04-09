@@ -8,7 +8,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cache-Control');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -50,34 +50,16 @@ function logBooking($message, $data = null) {
 // Send JSON response function to ensure proper output
 function sendJsonResponse($data, $statusCode = 200) {
     // Clean any previous output
-    if (ob_get_level()) ob_clean();
-    if (ob_get_length()) ob_clean();
+    while (ob_get_level()) ob_end_clean();
     
     // Set status code
     http_response_code($statusCode);
     
-    // Ensure content type is set again (in case headers were sent previously)
+    // Ensure content type is set again
     header('Content-Type: application/json');
     
-    // Convert to JSON with error handling
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-    
-    if ($json === false) {
-        $jsonError = json_last_error_msg();
-        logBooking("JSON encoding error", $jsonError);
-        
-        // Create a simpler response if JSON encoding failed
-        $fallbackResponse = json_encode([
-            'status' => 'error',
-            'message' => 'JSON encoding failed: ' . $jsonError
-        ]);
-        
-        echo $fallbackResponse;
-        exit;
-    }
-    
-    // Output the JSON response
-    echo $json;
+    // Convert to JSON and output directly
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -91,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     logBooking("Method not allowed", $_SERVER['REQUEST_METHOD']);
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+    exit;
 }
 
 // Log the start of booking request
@@ -233,7 +216,7 @@ try {
         // Continue with booking process even if email fails
     }
     
-    // Send success response
+    // Send success response - make sure this is the ONLY output from the script
     $response = [
         'status' => 'success',
         'message' => 'Booking created successfully',
@@ -256,6 +239,4 @@ try {
     ];
     
     sendJsonResponse($response, 500);
-} finally {
-    logBooking("Request processing complete");
 }
