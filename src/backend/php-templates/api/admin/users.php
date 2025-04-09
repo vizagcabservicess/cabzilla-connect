@@ -3,11 +3,17 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers
+// CORS Headers - Ensure these are set before any output
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Debug-Attempt, Pragma, Cache-Control, Expires');
+header('Access-Control-Max-Age: 86400'); // 24 hours
 header('Content-Type: application/json');
+
+// Debug headers
+header('X-PHP-Version: ' . phpversion());
+header('X-Request-Method: ' . $_SERVER['REQUEST_METHOD']);
+header('X-Script-Path: ' . __FILE__);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -15,24 +21,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Log the incoming request for debugging
+error_log("Admin users.php endpoint request received: " . $_SERVER['REQUEST_METHOD']);
+error_log("Request headers: " . json_encode(getallheaders()));
+
 // Get user ID from JWT token and check if admin
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+try {
+    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+        $token = str_replace('Bearer ', '', $authHeader);
+        
+        error_log("Token received: " . substr($token, 0, 10) . "...");
+        
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $userId = $payload['user_id'];
+            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            error_log("User authenticated: ID=$userId, isAdmin=$isAdmin");
+        } else {
+            error_log("Invalid token payload");
+        }
+    } else {
+        error_log("No Authorization header found");
     }
+} catch (Exception $e) {
+    error_log("JWT verification error: " . $e->getMessage());
 }
 
 // Check if user is admin
 if (!$isAdmin) {
+    error_log("Admin check failed - user is not an admin or not authenticated");
     sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
     exit;
 }
@@ -40,6 +62,7 @@ if (!$isAdmin) {
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
+    error_log("Database connection failed in users.php");
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
@@ -67,14 +90,19 @@ try {
             ];
         }
         
+        error_log("Successfully fetched " . count($users) . " users from database");
         sendJsonResponse(['status' => 'success', 'data' => $users]);
     }
     // Handle PUT request to update user role
     else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         // Get request body
-        $requestData = json_decode(file_get_contents('php://input'), true);
+        $requestBody = file_get_contents('php://input');
+        error_log("Received PUT request body: " . $requestBody);
+        
+        $requestData = json_decode($requestBody, true);
         
         if (!isset($requestData['userId']) || !isset($requestData['role'])) {
+            error_log("Invalid request data - missing userId or role");
             sendJsonResponse(['status' => 'error', 'message' => 'User ID and role are required'], 400);
             exit;
         }
@@ -84,12 +112,14 @@ try {
         
         // Validate role
         if (!in_array($newRole, ['user', 'admin'])) {
+            error_log("Invalid role: $newRole");
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be either "user" or "admin"'], 400);
             exit;
         }
         
         // Prevent admins from removing their own admin status
         if ($targetUserId == $userId && $newRole !== 'admin') {
+            error_log("Attempt to remove own admin status");
             sendJsonResponse(['status' => 'error', 'message' => 'You cannot remove your own admin status'], 403);
             exit;
         }
@@ -101,6 +131,7 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
+            error_log("User not found: $targetUserId");
             sendJsonResponse(['status' => 'error', 'message' => 'User not found'], 404);
             exit;
         }
@@ -111,6 +142,7 @@ try {
         $success = $stmt->execute();
         
         if (!$success) {
+            error_log("Failed to update user role: " . $conn->error);
             throw new Exception("Failed to update user role: " . $conn->error);
         }
         
@@ -130,11 +162,20 @@ try {
             'createdAt' => $userData['created_at']
         ];
         
+        error_log("Successfully updated user role for user $targetUserId to $newRole");
         sendJsonResponse(['status' => 'success', 'message' => 'User role updated successfully', 'data' => $updatedUser]);
     } else {
+        error_log("Method not allowed: " . $_SERVER['REQUEST_METHOD']);
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
-    logError("Error in admin users endpoint", ['error' => $e->getMessage()]);
+    error_log("Error in admin users endpoint: " . $e->getMessage());
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
+}
+
+// Helper function to send JSON response with appropriate headers
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data);
+    exit;
 }

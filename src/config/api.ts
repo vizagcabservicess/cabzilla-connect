@@ -31,6 +31,25 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
+  // For admin users endpoint, we want to ensure direct access to the PHP file
+  if (endpoint.includes('/admin/users.php') || endpoint === '/api/admin/users.php') {
+    console.log('Using direct admin/users.php endpoint access');
+    
+    // If we're running in a production domain, try to access the API directly
+    if (window.location.hostname.includes('vizagup.com')) {
+      return `${window.location.origin}/api/admin/users.php`;
+    }
+    
+    // Try the domain directly as fallback
+    return "https://vizagup.com/api/admin/users.php";
+  }
+  
+  // For users endpoint via REST
+  if (endpoint.includes('/admin/users') && !endpoint.includes('.php')) {
+    console.log('Using RESTful users endpoint, but redirecting to direct PHP access');
+    return getApiUrl('/api/admin/users.php');
+  }
+  
   // Special priority for direct admin endpoints - try to directly access PHP files
   if (endpoint.includes('direct-user-data.php') || 
       endpoint.includes('users.php')) {
@@ -42,28 +61,10 @@ export const getApiUrl = (endpoint: string): string => {
       return `${window.location.origin}/${cleanEndpoint}`;
     }
     
-    // If we have a defined API URL, use it
-    if (apiBaseUrl) {
-      const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
-      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      return `${cleanBase}${cleanEndpoint}`;
-    }
-    
     // Try the domain directly if no API base URL
     const domain = "https://vizagup.com";
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     return `${domain}${cleanEndpoint}`;
-  }
-  
-  // For admin API endpoints, prefer direct PHP file access
-  if (endpoint.includes('/admin/users') || endpoint.includes('/admin/direct-user-data')) {
-    console.log('Using admin users endpoint with direct PHP access');
-    
-    // Try direct PHP endpoints first
-    if (endpoint.includes('/admin/users')) {
-      // Switch to direct PHP endpoints which are more reliable
-      return getApiUrl('/api/admin/users.php');
-    }
   }
   
   // Check for direct API access via environment variable

@@ -1,10 +1,12 @@
 
 import { authAPI } from './authAPI';
 
-// Export the individual APIs
-export { authAPI };
+// Export all API services
+export {
+  authAPI
+};
 
-// Export a default object with all APIs for easy importing
+// Default export
 export default {
   auth: authAPI
 };

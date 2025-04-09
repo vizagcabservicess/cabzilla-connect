@@ -21,6 +21,20 @@ apiClient.interceptors.request.use(
   error => Promise.reject(error)
 );
 
+// Add response logging for debugging
+apiClient.interceptors.response.use(
+  response => {
+    if (response.config.url?.includes('users.php') || response.config.url?.includes('users')) {
+      console.log(`API Response for ${response.config.url}:`, response.data);
+    }
+    return response;
+  },
+  error => {
+    console.error(`API Error for ${error.config?.url || 'unknown endpoint'}:`, error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
 export const authAPI = {
   login: async (credentials: { email: string; password: string }) => {
     const response = await apiClient.post(getApiUrl('/api/login'), credentials);
@@ -71,14 +85,53 @@ export const authAPI = {
     try {
       console.log('Fetching all users...');
       
-      // Try the direct endpoint first (most reliable)
+      // Try the direct users.php endpoint with explicit URL first (most reliable)
       try {
-        console.log('Trying direct PHP endpoint users.php...');
-        const phpResponse = await axios.get(getApiUrl('/api/admin/users.php'), {
+        console.log('Trying direct users.php with explicit URL...');
+        
+        // First attempt - use the explicit URL directly
+        const directUrl = 'https://vizagup.com/api/admin/users.php';
+        console.log('Attempting fetch from:', directUrl);
+        
+        const phpResponse = await axios.get(directUrl, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            ...forceRefreshHeaders
-          }
+            ...forceRefreshHeaders,
+            'X-Debug-Attempt': 'direct_url_attempt',
+            'Access-Control-Allow-Origin': '*'
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        console.log('Direct URL response:', phpResponse.data);
+        
+        if (phpResponse.data && phpResponse.data.status === 'success' && phpResponse.data.data) {
+          return phpResponse.data.data.map((user: any) => ({
+            id: Number(user.id),
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is typed correctly
+            createdAt: user.createdAt || user.created_at || new Date().toISOString()
+          }));
+        }
+      } catch (directUrlError) {
+        console.error('Direct URL users.php endpoint failed:', directUrlError);
+      }
+      
+      // Try the direct PHP endpoint via getApiUrl helper
+      try {
+        console.log('Trying PHP endpoint users.php via getApiUrl...');
+        const url = getApiUrl('/api/admin/users.php');
+        console.log('Fetching from:', url);
+        
+        const phpResponse = await axios.get(url, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            ...forceRefreshHeaders,
+            'X-Debug-Attempt': 'getApiUrl_attempt'
+          },
+          timeout: 8000 // 8 second timeout
         });
         
         console.log('PHP endpoint response:', phpResponse.data);
@@ -101,7 +154,10 @@ export const authAPI = {
       try {
         console.log('Trying direct-user-data.php endpoint...');
         const response = await apiClient.get(getApiUrl('/api/admin/direct-user-data.php'), {
-          headers: forceRefreshHeaders
+          headers: {
+            ...forceRefreshHeaders,
+            'X-Debug-Attempt': 'direct_user_data_attempt'
+          }
         });
         
         console.log('Direct user data response:', response.data);
@@ -144,7 +200,8 @@ export const authAPI = {
         console.error('RESTful users endpoint failed:', restError);
       }
 
-      console.warn('All user API endpoints failed, returning empty array');
+      // No data returned from any endpoint, create a warning in console
+      console.warn('⚠️ All user API endpoints failed, returning empty array');
       return [];
     } catch (error) {
       console.error('Error fetching all users:', error);
@@ -154,14 +211,19 @@ export const authAPI = {
 
   updateUserRole: async (userId: number, role: 'admin' | 'user') => {
     try {
-      // Try the direct PHP endpoint first
+      // Try the direct PHP endpoint first with fallback
       try {
         console.log('Updating role via direct PHP endpoint');
-        const fallbackResponse = await apiClient.put(getApiUrl('/api/admin/users.php'), {
+        const directUrl = 'https://vizagup.com/api/admin/users.php';
+        
+        const fallbackResponse = await axios.put(directUrl, {
           userId,
           role
         }, {
-          headers: forceRefreshHeaders
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            ...forceRefreshHeaders
+          }
         });
         
         if (fallbackResponse.data && fallbackResponse.data.status === 'success') {
@@ -171,7 +233,26 @@ export const authAPI = {
         console.error('Direct PHP role update failed:', directError);
       }
       
-      // Try the RESTful endpoint if PHP direct method fails
+      // Try the getApiUrl method if direct URL fails
+      try {
+        const url = getApiUrl('/api/admin/users.php');
+        console.log('Trying getApiUrl role update endpoint:', url);
+        
+        const response = await apiClient.put(url, {
+          userId,
+          role
+        }, {
+          headers: forceRefreshHeaders
+        });
+        
+        if (response.data && response.data.status === 'success') {
+          return response.data;
+        }
+      } catch (apiUrlError) {
+        console.error('getApiUrl role update failed:', apiUrlError);
+      }
+      
+      // Try the RESTful endpoint if all else fails
       console.log('Trying RESTful role update endpoint');
       const response = await apiClient.put(getApiUrl(`/api/admin/users/${userId}/role`), { role });
       return response.data;

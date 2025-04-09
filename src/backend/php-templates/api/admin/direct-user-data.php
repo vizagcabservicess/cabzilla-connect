@@ -3,16 +3,18 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers
+// CORS Headers - Set these before any output
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Debug-Attempt, Pragma, Cache-Control, Expires');
+header('Access-Control-Max-Age: 86400'); // 24 hours
 header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-user-data.php');
-header('X-API-Version: 1.0.50');
+header('X-API-Version: 1.0.51');
 header('X-Timestamp: ' . time());
+header('X-PHP-Version: ' . phpversion());
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Log the request
 error_log("Direct user data request received: " . json_encode($_GET));
+error_log("Request headers: " . json_encode(getallheaders()));
 
 // Sample users data for fallback
 $sampleUsers = [
@@ -87,6 +90,8 @@ try {
             $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
             $token = str_replace('Bearer ', '', $authHeader);
             
+            error_log("Token received: " . substr($token, 0, 10) . "...");
+            
             $payload = verifyJwtToken($token);
             
             if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
@@ -98,22 +103,34 @@ try {
         } catch (Exception $e) {
             error_log("JWT validation failed: " . $e->getMessage());
         }
+    } else {
+        error_log("No Authorization header found");
     }
     
     // Initialize users array
     $users = [];
     
-    // Try to connect to database
+    // Try to connect to database - using multi-step error handling for better diagnostics
     $conn = null;
+    $connectionError = null;
+    
     try {
+        error_log("Attempting database connection...");
         $conn = getDbConnection();
+        if (!$conn) {
+            error_log("getDbConnection() returned null");
+            throw new Exception("getDbConnection() returned null");
+        }
+        error_log("Database connection established");
     } catch (Exception $e) {
-        error_log("Database connection failed in direct-user-data.php: " . $e->getMessage());
+        $connectionError = $e->getMessage();
+        error_log("Database connection failed in direct-user-data.php: " . $connectionError);
     }
     
     // If authenticated as admin and we have a database connection, try to get real users
     if ($isAdmin && $conn) {
         try {
+            error_log("Admin is authenticated and database connection is available");
             // Get all users
             $query = "SELECT u.*, COUNT(b.id) as bookings_count 
                       FROM users u 
@@ -121,6 +138,7 @@ try {
                       GROUP BY u.id 
                       ORDER BY u.created_at DESC";
             
+            error_log("Executing query: " . $query);
             $result = $conn->query($query);
             
             if ($result) {
@@ -138,10 +156,20 @@ try {
                     $users[] = $user;
                 }
                 
-                error_log("Found " . count($users) . " real users");
+                error_log("Found " . count($users) . " real users in database");
+            } else {
+                error_log("Query failed: " . $conn->error);
+                throw new Exception("Query failed: " . $conn->error);
             }
         } catch (Exception $e) {
             error_log("Error querying database for users: " . $e->getMessage());
+        }
+    } else {
+        if (!$isAdmin) {
+            error_log("User is not authenticated as admin");
+        }
+        if (!$conn) {
+            error_log("No database connection available");
         }
     }
     
@@ -155,9 +183,13 @@ try {
     echo json_encode([
         'status' => 'success',
         'users' => $users,
-        'source' => empty($users) ? 'sample' : 'database',
+        'source' => empty($users) === $sampleUsers ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.51',
+        'isAdmin' => $isAdmin,
+        'hasDbConnection' => $conn !== null,
+        'connectionError' => $connectionError,
+        'phpVersion' => phpversion()
     ]);
     
 } catch (Exception $e) {
@@ -168,9 +200,11 @@ try {
     echo json_encode([
         'status' => 'error',
         'message' => 'Error processing request, using sample data',
+        'error' => $e->getMessage(),
         'users' => $sampleUsers, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.51',
+        'phpVersion' => phpversion()
     ]);
 }
