@@ -72,33 +72,71 @@ export function UserManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Call the direct user data endpoint instead of users.php
-      const response = await axios.get(getApiUrl('/api/admin/direct-user-data'), {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'X-Force-Refresh': 'true'
+      // First try using users.php endpoint
+      try {
+        const data = await authAPI.getAllUsers();
+        if (data && Array.isArray(data)) {
+          setUsers(data);
+          setIsLoading(false);
+          return;
         }
-      });
+      } catch (firstError) {
+        console.log('Failed to fetch from primary endpoint, trying fallback:', firstError);
+      }
       
-      console.log('User data response:', response.data);
-      
-      if (response.data && response.data.users) {
-        // Map the response data to match the User type
-        const userData = response.data.users.map((user: any) => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone || null,
-          role: user.role,
-          createdAt: user.createdAt
-        }));
+      // If first attempt fails, try the direct-user-data endpoint
+      try {
+        const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            'X-Force-Refresh': 'true'
+          }
+        });
         
-        setUsers(userData);
-      } else if (response.data && response.data.status === 'success' && response.data.data) {
-        // Handle response from users.php if it's available
-        setUsers(response.data.data);
-      } else {
-        throw new Error('No user data received or invalid format');
+        console.log('User data response:', response.data);
+        
+        if (response.data && response.data.users) {
+          // Map the response data to match the User type
+          const userData = response.data.users.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: user.role,
+            createdAt: user.createdAt
+          }));
+          
+          setUsers(userData);
+        } else if (response.data && response.data.status === 'success' && response.data.data) {
+          setUsers(response.data.data);
+        } else {
+          throw new Error('No user data received or invalid format');
+        }
+      } catch (secondError) {
+        console.error('Error with fallback endpoint:', secondError);
+        
+        // If both API calls fail, use sample data as a last resort
+        const sampleUsers = [
+          {
+            id: 101,
+            name: 'Admin User',
+            email: 'admin@example.com',
+            phone: '9876543210',
+            role: 'admin',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 102,
+            name: 'Test User',
+            email: 'user@example.com',
+            phone: '8765432109',
+            role: 'user',
+            createdAt: new Date().toISOString()
+          }
+        ];
+        
+        setUsers(sampleUsers);
+        setError('Could not connect to the server. Showing sample data.');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -134,27 +172,34 @@ export function UserManagement() {
         return;
       }
       
-      // Try to update using direct API request instead of authAPI
-      const response = await axios.put(getApiUrl('/api/admin/users'), {
-        userId: userId,
-        role: newRole
-      }, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.data && response.data.status === 'success') {
-        // Update the local state
-        setUsers(users.map(u => 
-          u.id === userId ? { ...u, role: newRole } : u
-        ));
+      // First try standard API
+      try {
+        await authAPI.updateUserRole(userId, newRole);
+      } catch (firstError) {
+        console.log('Standard API failed, trying direct endpoint:', firstError);
         
-        toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
-      } else {
-        throw new Error(response.data?.message || 'Failed to update user role');
+        // Try direct endpoint if standard API fails
+        const response = await axios.put(getApiUrl('/api/admin/users.php'), {
+          userId: userId,
+          role: newRole
+        }, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.data || response.data.status !== 'success') {
+          throw new Error(response.data?.message || 'Failed to update user role');
+        }
       }
+      
+      // Update the local state
+      setUsers(users.map(u => 
+        u.id === userId ? { ...u, role: newRole } : u
+      ));
+      
+      toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
     } catch (error) {
       console.error('Error updating user role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update user role');
@@ -203,7 +248,7 @@ export function UserManagement() {
     }
   };
   
-  if (error) {
+  if (error && !users.length) {
     return (
       <ApiErrorFallback 
         error={error} 
@@ -233,6 +278,14 @@ export function UserManagement() {
         </div>
       </CardHeader>
       <CardContent>
+        {error && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              {error} - Showing {users.length > 0 ? 'cached or sample' : 'no'} data.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <Tabs defaultValue="list">
           <TabsList className="mb-4">
             <TabsTrigger value="list" className="flex items-center gap-1">
