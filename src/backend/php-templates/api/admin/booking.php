@@ -39,6 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Try to include the database helper if available
+$usingDbHelper = false;
+if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+    require_once __DIR__ . '/../common/db_helper.php';
+    $usingDbHelper = true;
+}
+
 // Authenticate as admin - with fallback for development
 $headers = getallheaders();
 $userId = null;
@@ -50,10 +57,12 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $token = str_replace('Bearer ', '', $authHeader);
     
     try {
-        $payload = verifyJwtToken($token);
-        if ($payload) {
-            $userId = $payload['user_id'] ?? null;
-            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+        if (function_exists('verifyJwtToken')) {
+            $payload = verifyJwtToken($token);
+            if ($payload) {
+                $userId = $payload['user_id'] ?? null;
+                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            }
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
@@ -70,14 +79,28 @@ if (!$isAdmin && !$devMode) {
 
 // Connect to database with improved error handling
 try {
-    // Check if getDbConnection function exists
-    if (!function_exists('getDbConnection')) {
-        throw new Exception("Database connection function not found");
+    $conn = null;
+    
+    // Try multiple ways to get a database connection
+    if ($usingDbHelper && function_exists('getDbConnectionWithRetry')) {
+        error_log("Using getDbConnectionWithRetry from db_helper.php");
+        $conn = getDbConnectionWithRetry(2);
+    } else if (function_exists('getDbConnection')) {
+        error_log("Using getDbConnection from config.php");
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        error_log("Using direct database connection as fallback");
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     }
     
-    $conn = getDbConnection();
-    if (!$conn) {
-        throw new Exception("Database connection failed or returned null");
+    if (!$conn || $conn->connect_error) {
+        throw new Exception("Database connection failed: " . ($conn ? $conn->connect_error : "Connection returned null"));
     }
     
     // Test the connection

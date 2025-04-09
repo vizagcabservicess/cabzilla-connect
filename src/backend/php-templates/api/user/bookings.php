@@ -3,6 +3,11 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
+// Check if db_helper exists and include it
+if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+    require_once __DIR__ . '/../common/db_helper.php';
+}
+
 // Set response headers first
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -36,11 +41,13 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $token = str_replace('Bearer ', '', $authHeader);
     
     try {
-        $payload = verifyJwtToken($token);
-        if ($payload && isset($payload['user_id'])) {
-            $userId = $payload['user_id'];
-            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-            error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+        if (function_exists('verifyJwtToken')) {
+            $payload = verifyJwtToken($token);
+            if ($payload && isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+            }
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
@@ -50,7 +57,25 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
 
 // Connect to database
 try {
-    $conn = getDbConnection();
+    // Try using the helper function first
+    $conn = null;
+    if (function_exists('getDbConnectionWithRetry')) {
+        $conn = getDbConnectionWithRetry(2);
+    } else if (function_exists('getDbConnection')) {
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+    }
+    
     if (!$conn) {
         throw new Exception("Database connection failed");
     }

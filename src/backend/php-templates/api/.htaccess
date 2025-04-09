@@ -29,6 +29,10 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
+# Test endpoint for API connectivity verification
+RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
+RewriteRule ^admin/test-booking-api$ admin/test-booking-api.php [L,QSA]
+
 # HIGHEST PRIORITY: Admin booking endpoints
 RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
 RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
@@ -51,10 +55,7 @@ RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
 
-# Add direct access to the test endpoint
-RewriteRule ^test-booking-api$ /api/admin/test-booking-api.php [L,QSA]
-
-# Other routes kept the same as before
+# Keep existing routes
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^admin/add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
 RewriteRule ^add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
