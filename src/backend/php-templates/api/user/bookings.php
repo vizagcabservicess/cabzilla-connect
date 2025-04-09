@@ -85,11 +85,15 @@ try {
     }
     
     // Query to get bookings - modifications to handle various scenarios
-    if ($userId) {
+    if ($userId && !$isAdmin) {
         // Get user's bookings if authenticated
         $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("i", $userId);
+    } else if ($isAdmin) {
+        // Admins can see all bookings
+        $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
+        $stmt = $conn->prepare($sql);
     } else {
         // For testing/demo purposes, return some bookings even without authentication
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";

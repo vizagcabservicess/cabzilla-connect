@@ -6,11 +6,22 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 
+// Verify PHP version and extensions
+$phpInfo = [
+    'version' => phpversion(),
+    'extensions' => get_loaded_extensions(),
+    'database_extensions' => [
+        'mysqli' => extension_loaded('mysqli'),
+        'pdo_mysql' => extension_loaded('pdo_mysql')
+    ]
+];
+
 // Create a simple response
 $response = [
     'status' => 'success',
     'message' => 'Booking API test endpoint is working',
     'timestamp' => date('Y-m-d H:i:s'),
+    'php_info' => $phpInfo,
     'test_bookings' => [
         [
             'id' => 9001,
@@ -35,4 +46,5 @@ $response = [
 
 // Return JSON response
 echo json_encode($response, JSON_PRETTY_PRINT);
+exit;
 ?>

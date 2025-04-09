@@ -18,19 +18,10 @@ $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 // Log request info
 error_log("Admin booking endpoint request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
 // Always use JSON response helper
 function sendJsonResponse($data, $statusCode = 200) {
-    // Already set the headers at the top, but just to be sure
-    if (!headers_sent()) {
-        header('Content-Type: application/json');
-        http_response_code($statusCode);
-    }
+    // Ensure proper HTTP status code
+    http_response_code($statusCode);
     
     // Clear any output buffering to prevent HTML contamination
     while (ob_get_level()) {
@@ -42,11 +33,18 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 // Authenticate as admin - with fallback for development
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
+// Try to get auth token
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
@@ -72,13 +70,32 @@ if (!$isAdmin && !$devMode) {
 
 // Connect to database with improved error handling
 try {
+    // Check if getDbConnection function exists
+    if (!function_exists('getDbConnection')) {
+        throw new Exception("Database connection function not found");
+    }
+    
     $conn = getDbConnection();
     if (!$conn) {
-        throw new Exception("Database connection failed");
+        throw new Exception("Database connection failed or returned null");
+    }
+    
+    // Test the connection
+    if (!$conn->ping()) {
+        throw new Exception("Database connection is not active");
     }
 } catch (Exception $e) {
     error_log("Database connection failed in booking.php: " . $e->getMessage());
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Database connection failed: ' . $e->getMessage(),
+        'error_details' => $debugMode ? [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ] : null
+    ], 500);
 }
 
 try {
@@ -221,7 +238,6 @@ try {
                 if ($tableCheck->num_rows === 0) {
                     // Table doesn't exist, return empty bookings array
                     sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
-                    exit;
                 }
             } catch (Exception $e) {
                 error_log("Error checking bookings table: " . $e->getMessage());
@@ -295,7 +311,12 @@ try {
                 sendJsonResponse([
                     'status' => 'error', 
                     'message' => 'Database query error: ' . $e->getMessage(),
-                    'bookings' => []
+                    'bookings' => [],
+                    'debug' => $debugMode ? [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                        'sql' => $sql
+                    ] : null
                 ], 500);
             }
         } else {
@@ -304,7 +325,16 @@ try {
     }
 } catch (Exception $e) {
     error_log("Error in admin booking endpoint: " . $e->getMessage());
-    sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Failed to process request: ' . $e->getMessage(),
+        'debug' => $debugMode ? [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ] : null
+    ], 500);
 }
 
 // Make sure to not output anything after response is sent
