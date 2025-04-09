@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 RewriteBase /api/admin/
@@ -34,6 +35,7 @@ RewriteRule ^booking$ booking.php [L,QSA]
 RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,QSA]
 RewriteRule ^bookings$ booking.php [L,QSA]
 RewriteRule ^bookings/([0-9]+)$ booking.php?id=$1 [L,QSA]
+RewriteRule ^test-booking-api$ test-booking-api.php [L,QSA]
 
 # Critical: Don't apply rewriting to actual PHP files
 RewriteCond %{REQUEST_FILENAME} -f

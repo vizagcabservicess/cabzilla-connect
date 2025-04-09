@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -50,6 +51,9 @@ RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
+
+# Add direct access to the test endpoint
+RewriteRule ^test-booking-api$ /api/admin/test-booking-api.php [L,QSA]
 
 # Other routes kept the same as before
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
