@@ -31,12 +31,12 @@ RewriteRule .* - [R=200,L]
 </IfModule>
 
 # Easy access diagnostic endpoints - highest priority
-RewriteRule ^test-connection$ admin/direct-check-connection.php [L,QSA]
+RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^direct-connection$ admin/direct-check-connection.php [L,QSA]
-RewriteRule ^admin/test-connection$ admin/direct-check-connection.php [L,QSA]
+RewriteRule ^direct-connection$ test-connection.php [L,QSA]
+RewriteRule ^admin/test-connection$ test-connection.php [L,QSA]
 RewriteRule ^admin/test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^admin/direct-connection$ admin/direct-check-connection.php [L,QSA]
+RewriteRule ^admin/direct-connection$ test-connection.php [L,QSA]
 
 # HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]

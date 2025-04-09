@@ -224,73 +224,122 @@ try {
         logBooking("Created bookings table successfully");
     }
 
-    // Prepare the SQL statement for booking insertion
-    // FIXED: Corrected the parameter binding with proper type definition string
-    $sql = "INSERT INTO bookings 
-            (booking_number, pickup_location, drop_location, pickup_date, 
-             return_date, cab_type, distance, trip_type, trip_mode, 
-             total_amount, passenger_name, passenger_phone, passenger_email, 
-             hourly_package, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    // FIX: Direct simple SQL query to test if insertion will work at all
+    logBooking("Testing direct SQL query to see if insertion will work");
+    $testSql = "INSERT INTO bookings (booking_number, pickup_location, status) VALUES ('TEST123', 'Test Location', 'test')";
+    $testResult = $conn->query($testSql);
+    if (!$testResult) {
+        logBooking("Direct test insertion failed", ['error' => $conn->error]);
+    } else {
+        logBooking("Direct test insertion succeeded");
+        // Delete the test record to clean up
+        $conn->query("DELETE FROM bookings WHERE booking_number = 'TEST123'");
+    }
+
+    // FIX: Simplify the prepared statement and split into smaller operations to identify issues
+    logBooking("Using simplified prepared statement approach");
     
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        logBooking("Prepare statement failed", ['error' => $conn->error]);
-        throw new Exception("Prepare statement failed: " . $conn->error);
+    // Step 1: Insert basic information first
+    $simpleSql = "INSERT INTO bookings (
+            booking_number, pickup_location, drop_location, pickup_date, 
+            cab_type, trip_type, status, passenger_name, passenger_phone, passenger_email
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)";
+        
+    $simpleStmt = $conn->prepare($simpleSql);
+    if (!$simpleStmt) {
+        logBooking("Simple prepare statement failed", ['error' => $conn->error]);
+        throw new Exception("Simple prepare statement failed: " . $conn->error);
     }
     
-    // Get values with proper type handling and defaults
+    // Get basic values 
     $pickupLocation = $data['pickupLocation'];
     $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
     $pickupDate = $data['pickupDate'];
-    $returnDate = isset($data['returnDate']) && !empty($data['returnDate']) ? $data['returnDate'] : null;
     $cabType = $data['cabType'];
-    $distance = floatval($data['distance']); 
     $tripType = $data['tripType'];
-    $tripMode = $data['tripMode'];
-    $totalAmount = floatval($data['totalAmount']);
     $passengerName = $data['passengerName'];
     $passengerPhone = $data['passengerPhone'];
     $passengerEmail = $data['passengerEmail'];
-    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
-    $status = 'pending'; // Default status for new bookings
     
-    logBooking("Binding values to SQL statement", [
+    logBooking("Binding basic values to first SQL statement", [
         'booking_number' => $bookingNumber,
         'pickup_location' => $pickupLocation,
+        'drop_location' => $dropLocation,
         'pickup_date' => $pickupDate,
-        'passenger_name' => $passengerName,
-        'trip_type' => $tripType,
-        'amount' => $totalAmount
+        'cab_type' => $cabType,
+        'trip_type' => $tripType
     ]);
     
-    // FIXED: Make sure type definition string matches the parameters
-    $stmt->bind_param(
-        "ssssssdssdsssss",
+    // Simple bind with fewer parameters to minimize errors
+    $simpleStmt->bind_param(
+        "sssssssss",
         $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-        $returnDate, $cabType, $distance, $tripType, $tripMode,
-        $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-        $hourlyPackage, $status
+        $cabType, $tripType, $passengerName, $passengerPhone, $passengerEmail
     );
     
-    logBooking("About to execute SQL statement");
+    logBooking("About to execute simple SQL statement");
     
-    if (!$stmt->execute()) {
-        logBooking("Execute statement failed", ['error' => $stmt->error]);
-        throw new Exception("Execute statement failed: " . $stmt->error);
+    if (!$simpleStmt->execute()) {
+        logBooking("Simple execute statement failed", ['error' => $simpleStmt->error]);
+        throw new Exception("Simple execute statement failed: " . $simpleStmt->error);
     }
-
+    
+    logBooking("Basic booking info inserted successfully");
+    
+    // Step 2: Update with additional information
+    $updateSql = "UPDATE bookings SET 
+                    return_date = ?, 
+                    distance = ?, 
+                    trip_mode = ?,
+                    total_amount = ?, 
+                    hourly_package = ?
+                WHERE booking_number = ?";
+                
+    $updateStmt = $conn->prepare($updateSql);
+    if (!$updateStmt) {
+        logBooking("Update prepare statement failed", ['error' => $conn->error]);
+        throw new Exception("Update prepare statement failed: " . $conn->error);
+    }
+    
+    // Get additional values
+    $returnDate = isset($data['returnDate']) && !empty($data['returnDate']) ? $data['returnDate'] : null;
+    $distance = floatval($data['distance']); 
+    $tripMode = $data['tripMode'];
+    $totalAmount = floatval($data['totalAmount']);
+    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+    
+    logBooking("Binding additional values to update SQL statement", [
+        'return_date' => $returnDate,
+        'distance' => $distance,
+        'trip_mode' => $tripMode,
+        'total_amount' => $totalAmount,
+        'hourly_package' => $hourlyPackage,
+        'booking_number' => $bookingNumber
+    ]);
+    
+    $updateStmt->bind_param(
+        "sdsdss",
+        $returnDate, $distance, $tripMode, $totalAmount, $hourlyPackage, $bookingNumber
+    );
+    
+    logBooking("About to execute update SQL statement");
+    
+    if (!$updateStmt->execute()) {
+        logBooking("Update execute statement failed", ['error' => $updateStmt->error]);
+        throw new Exception("Update execute statement failed: " . $updateStmt->error);
+    }
+    
     $bookingId = $conn->insert_id;
-    logBooking("Booking created successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
+    logBooking("Booking created and updated successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
 
     // Get the created booking
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE booking_number = ?");
     if (!$stmt) {
         logBooking("Prepare statement failed for select", ['error' => $conn->error]);
         throw new Exception("Prepare statement failed for select: " . $conn->error);
     }
 
-    $stmt->bind_param("i", $bookingId);
+    $stmt->bind_param("s", $bookingNumber);
     if (!$stmt->execute()) {
         logBooking("Execute statement failed for select", ['error' => $stmt->error]);
         throw new Exception("Execute statement failed for select: " . $stmt->error);
