@@ -25,7 +25,7 @@ function logDbConnection($message, $data = []) {
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Database credentials
+    // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
@@ -124,7 +124,7 @@ function testDirectDatabaseConnection() {
     ];
     
     try {
-        // Database credentials
+        // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
         $dbHost = 'localhost';
         $dbName = 'u644605165_db_be';
         $dbUser = 'u644605165_usr_be';
@@ -164,14 +164,16 @@ function testDirectDatabaseConnection() {
             // Generate test booking number
             $testBookingNumber = 'TEST' . time() . rand(1000, 9999);
             
-            // Try insert
-            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, status) VALUES ('$testBookingNumber', 'Test connection', 'test')";
+            // Try insert with MINIMUM required fields only
+            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, pickup_date, cab_type, trip_type, trip_mode, total_amount, passenger_name, passenger_phone, passenger_email) 
+                             VALUES ('$testBookingNumber', 'Test connection', NOW(), 'Test', 'test', 'test', 100, 'Test User', '1234567890', 'test@example.com')";
             $testInsertResult = $conn->query($testInsertSql);
             
             $testInsertSuccess = $testInsertResult !== false;
             logDbConnection("Test insert result", [
                 'success' => $testInsertSuccess, 
-                'error' => $testInsertSuccess ? null : $conn->error
+                'error' => $testInsertSuccess ? null : $conn->error,
+                'sql' => $testInsertSql
             ]);
             
             // Delete test record
@@ -214,13 +216,16 @@ function testDirectDatabaseConnection() {
     return $result;
 }
 
-// Enhanced direct database connection function
+// Enhanced direct database connection function that NEVER fails silently
 function getDirectDatabaseConnection() {
-    // Database credentials
+    // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
     $dbPass = 'Vizag@1213';
+    
+    // Log the attempt
+    error_log("Attempting direct database connection to {$dbHost}/{$dbName}");
     
     try {
         // Create connection
@@ -228,6 +233,7 @@ function getDirectDatabaseConnection() {
         
         // Check connection
         if ($conn->connect_error) {
+            error_log("Direct database connection failed: " . $conn->connect_error);
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
@@ -237,9 +243,11 @@ function getDirectDatabaseConnection() {
         // Test connection with a simple query
         $testResult = $conn->query("SELECT 1");
         if (!$testResult) {
+            error_log("Connection test query failed: " . $conn->error);
             throw new Exception("Connection test query failed: " . $conn->error);
         }
         
+        error_log("Direct database connection successful");
         return $conn;
     } catch (Exception $e) {
         // Log the error

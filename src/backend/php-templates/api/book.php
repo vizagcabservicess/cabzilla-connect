@@ -1,32 +1,37 @@
 
 <?php
-// Include required files
-require_once __DIR__ . '/utils/database.php';
+/**
+ * CRITICAL API ENDPOINT: Creates new bookings
+ * DO NOT MODIFY WITHOUT TESTING!
+ */
 
-// For CORS preflight request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Content-Type: application/json');
-    http_response_code(200);
-    exit;
-}
-
-// CRITICAL: Set proper response headers for ALL scenarios
+// First, set all headers upfront to avoid any output issues
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting for debugging
+// Enable error logging for this critical file
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Define a function to log booking-related info
+// Handle OPTIONS preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+// Allow only POST requests
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+    http_response_code(405);
+    exit;
+}
+
+// Define booking log function
 function logBooking($message, $data = []) {
     $logDir = __DIR__ . '/../logs';
     if (!file_exists($logDir)) {
@@ -45,46 +50,45 @@ function logBooking($message, $data = []) {
     error_log($logEntry);
 }
 
-// Allow only POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
-    http_response_code(405);
-    exit;
-}
-
-// Log request data for debugging
-logBooking("Book.php request initiated", [
+// Log request start
+logBooking("Booking request started", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'request_uri' => $_SERVER['REQUEST_URI'],
-    'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+    'uri' => $_SERVER['REQUEST_URI']
 ]);
 
-// Get the request body
+// Get request data
 $requestBody = file_get_contents('php://input');
-logBooking("Booking request raw data", ['raw' => $requestBody]);
+logBooking("Received request data", ['raw_length' => strlen($requestBody)]);
 
+// Parse JSON data
 $data = json_decode($requestBody, true);
-if (!$data) {
-    logBooking("JSON decode error", ['error' => json_last_error_msg()]);
-    echo json_encode([
-        'status' => 'error', 
-        'message' => 'Invalid JSON data: ' . json_last_error_msg()
-    ]);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    logBooking("Invalid JSON data", ['error' => json_last_error_msg()]);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid JSON data: ' . json_last_error_msg()]);
     http_response_code(400);
     exit;
 }
 
-logBooking("Booking request decoded data", $data);
+// Log parsed data (without sensitive fields)
+$logData = $data;
+if (isset($logData['passengerPhone'])) $logData['passengerPhone'] = '****' . substr($logData['passengerPhone'], -4);
+if (isset($logData['passengerEmail'])) $logData['passengerEmail'] = '****' . substr($logData['passengerEmail'], -10);
+logBooking("Parsed booking data", $logData);
 
-// Different validation rules based on trip type
+// Check required fields based on trip type
 $requiredFields = [
-    'pickupLocation', 'pickupDate', 'cabType', 'tripType', 'tripMode', 'totalAmount', 
-    'passengerName', 'passengerPhone', 'passengerEmail'
+    'pickupLocation', 'pickupDate', 'cabType', 'tripType', 'tripMode', 
+    'totalAmount', 'passengerName', 'passengerPhone', 'passengerEmail'
 ];
 
-// Handle complex object structures for locations
+// For non-local trips, require drop location and distance
+if (!isset($data['tripType']) || $data['tripType'] !== 'local') {
+    $requiredFields[] = 'dropLocation';
+    $requiredFields[] = 'distance';
+}
+
+// Handle object structures for locations (common in frontend frameworks)
 if (isset($data['pickupLocation']) && is_array($data['pickupLocation'])) {
-    // Extract the address from the location object
     if (isset($data['pickupLocation']['address'])) {
         $data['pickupLocation'] = $data['pickupLocation']['address'];
     } elseif (isset($data['pickupLocation']['name'])) {
@@ -93,7 +97,6 @@ if (isset($data['pickupLocation']) && is_array($data['pickupLocation'])) {
 }
 
 if (isset($data['dropLocation']) && is_array($data['dropLocation'])) {
-    // Extract the address from the location object
     if (isset($data['dropLocation']['address'])) {
         $data['dropLocation'] = $data['dropLocation']['address'];
     } elseif (isset($data['dropLocation']['name'])) {
@@ -101,9 +104,8 @@ if (isset($data['dropLocation']) && is_array($data['dropLocation'])) {
     }
 }
 
-// For local trips, don't require distance or dropLocation but set a default distance based on hourly package
+// For local trips with hourly packages, set default distance
 if (isset($data['tripType']) && $data['tripType'] === 'local') {
-    // Set default distance based on hourly package if missing
     if (!isset($data['distance']) || empty($data['distance']) || $data['distance'] == 0) {
         if (isset($data['hourlyPackage'])) {
             switch ($data['hourlyPackage']) {
@@ -114,18 +116,13 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
                     $data['distance'] = 100;
                     break;
                 default:
-                    $data['distance'] = 80; // Default to 80km if package not recognized
+                    $data['distance'] = 80;
             }
-            logBooking("Setting default distance for local trip", ['distance' => $data['distance']]);
         } else {
             $data['distance'] = 80; // Default fallback
-            logBooking("No package specified, using default distance", ['distance' => 80]);
         }
+        logBooking("Set default distance for local trip", ['distance' => $data['distance']]);
     }
-} else {
-    // For non-local trips, distance is required
-    $requiredFields[] = 'distance';
-    $requiredFields[] = 'dropLocation';
 }
 
 // Validate required fields
@@ -146,53 +143,46 @@ if (!empty($missingFields)) {
     exit;
 }
 
-// Connect to database using direct connection (no retries)
+// DIRECT DATABASE CONNECTION - maximum reliability approach
 try {
-    logBooking("Attempting direct database connection");
-    
-    // Database credentials
+    // Database credentials - directly hardcoded for reliability
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
     $dbPass = 'Vizag@1213';
+    
+    logBooking("Creating database connection", ['host' => $dbHost, 'db' => $dbName]);
     
     // Create connection
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     
     // Check connection
     if ($conn->connect_error) {
+        logBooking("Database connection failed", ['error' => $conn->connect_error]);
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
-    logBooking("Database connection established successfully");
-} catch (Exception $e) {
-    logBooking("Database connection failed", ['error' => $e->getMessage()]);
-    echo json_encode([
-        'status' => 'error', 
-        'message' => 'Database connection failed: ' . $e->getMessage()
-    ]);
-    http_response_code(500);
-    exit;
-}
-
-// Generate a unique booking number
-$prefix = 'CB';
-$timestamp = time();
-$random = mt_rand(1000, 9999);
-$bookingNumber = $prefix . $timestamp . $random;
-
-// Debug log the booking number
-logBooking("Generated booking number", ['booking_number' => $bookingNumber]);
-
-// Begin transaction for data consistency
-$conn->begin_transaction();
-
-try {
-    // Directly check if the bookings table exists
+    // Set charset
+    $conn->set_charset("utf8mb4");
+    
+    logBooking("Database connection established");
+    
+    // Generate unique booking number
+    $prefix = 'CB';
+    $timestamp = time();
+    $random = mt_rand(1000, 9999);
+    $bookingNumber = $prefix . $timestamp . $random;
+    
+    logBooking("Generated booking number", ['number' => $bookingNumber]);
+    
+    // Begin transaction
+    $conn->begin_transaction();
+    logBooking("Transaction started");
+    
+    // Check if bookings table exists, create if not
     $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
     if ($tableResult->num_rows === 0) {
-        // Create the bookings table if it doesn't exist
-        logBooking("Creating bookings table", ['attempted' => true]);
+        logBooking("Bookings table doesn't exist, creating");
         
         $createTableSql = "
         CREATE TABLE bookings (
@@ -218,8 +208,8 @@ try {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
-        $tableCreationResult = $conn->query($createTableSql);
         
+        $tableCreationResult = $conn->query($createTableSql);
         if (!$tableCreationResult) {
             logBooking("Failed to create bookings table", ['error' => $conn->error]);
             throw new Exception("Failed to create bookings table: " . $conn->error);
@@ -227,16 +217,15 @@ try {
         
         logBooking("Created bookings table successfully");
     }
-
-    // USING DIRECT QUERY APPROACH - MORE RELIABLE
-    // Prepare all the data values with proper escaping
+    
+    // Prepare data with proper escaping
     $bookingNumberEscaped = $conn->real_escape_string($bookingNumber);
     $pickupLocationEscaped = $conn->real_escape_string($data['pickupLocation']);
     $dropLocationEscaped = isset($data['dropLocation']) ? $conn->real_escape_string($data['dropLocation']) : '';
     $pickupDateEscaped = $conn->real_escape_string($data['pickupDate']);
     $returnDateEscaped = isset($data['returnDate']) && !empty($data['returnDate']) ? "'" . $conn->real_escape_string($data['returnDate']) . "'" : "NULL";
     $cabTypeEscaped = $conn->real_escape_string($data['cabType']);
-    $distance = floatval($data['distance']);
+    $distance = isset($data['distance']) ? floatval($data['distance']) : 0;
     $tripTypeEscaped = $conn->real_escape_string($data['tripType']);
     $tripModeEscaped = $conn->real_escape_string($data['tripMode']);
     $totalAmount = floatval($data['totalAmount']);
@@ -246,14 +235,13 @@ try {
     $hourlyPackageEscaped = isset($data['hourlyPackage']) ? "'" . $conn->real_escape_string($data['hourlyPackage']) . "'" : "NULL";
     $tourIdEscaped = isset($data['tourId']) ? "'" . $conn->real_escape_string($data['tourId']) . "'" : "NULL";
     
-    logBooking("Prepared data for direct insertion", [
-        'booking_number' => $bookingNumberEscaped,
-        'pickup_location' => $pickupLocationEscaped,
-        'cab_type' => $cabTypeEscaped,
-        'total_amount' => $totalAmount
+    logBooking("Data prepared for insertion", [
+        'number' => $bookingNumberEscaped,
+        'location' => $pickupLocationEscaped,
+        'type' => $tripTypeEscaped
     ]);
-
-    // CRITICAL FIX: Use direct SQL query with properly formatted values
+    
+    // CRITICAL FIX: Use direct SQL for insertion with all required fields
     $insertSql = "
     INSERT INTO bookings (
         booking_number, pickup_location, drop_location, pickup_date, 
@@ -267,36 +255,34 @@ try {
         '$passengerEmailEscaped', $hourlyPackageEscaped, $tourIdEscaped
     )";
     
-    logBooking("Executing direct insertion with SQL", ['sql' => $insertSql]);
+    logBooking("Executing SQL insert", ['sql' => $insertSql]);
     
     $insertResult = $conn->query($insertSql);
     if (!$insertResult) {
-        logBooking("Direct insertion failed", ['error' => $conn->error]);
-        throw new Exception("Direct insertion failed: " . $conn->error);
+        logBooking("Insertion failed", ['error' => $conn->error]);
+        throw new Exception("Insertion failed: " . $conn->error);
     }
     
     $bookingId = $conn->insert_id;
-    logBooking("Booking created successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
-
-    // Get the created booking 
-    $selectSql = "SELECT * FROM bookings WHERE booking_number = '$bookingNumberEscaped'";
-    $selectResult = $conn->query($selectSql);
-    if (!$selectResult) {
-        logBooking("Failed to fetch inserted booking", ['error' => $conn->error]);
-        throw new Exception("Failed to fetch inserted booking: " . $conn->error);
+    logBooking("Booking inserted successfully", ['id' => $bookingId]);
+    
+    // Verify the booking was created by selecting it
+    $verifySql = "SELECT * FROM bookings WHERE id = $bookingId";
+    $verifyResult = $conn->query($verifySql);
+    
+    if (!$verifyResult || $verifyResult->num_rows === 0) {
+        logBooking("Couldn't verify booking", ['error' => $conn->error]);
+        throw new Exception("Failed to verify booking was inserted");
     }
     
-    $booking = $selectResult->fetch_assoc();
-    if (!$booking) {
-        logBooking("No booking found after insertion");
-        throw new Exception("No booking found after insertion");
-    }
-
-    // Commit the transaction
+    $booking = $verifyResult->fetch_assoc();
+    logBooking("Booking verified", ['booking_id' => $booking['id'], 'number' => $booking['booking_number']]);
+    
+    // Commit transaction
     $conn->commit();
     logBooking("Transaction committed successfully");
-
-    // Format the booking data for response
+    
+    // Format response data
     $formattedBooking = [
         'id' => (int)$booking['id'],
         'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
@@ -306,10 +292,10 @@ try {
         'pickupDate' => $booking['pickup_date'],
         'returnDate' => $booking['return_date'],
         'cabType' => $booking['cab_type'],
-        'distance' => floatval($booking['distance']),
+        'distance' => (float)$booking['distance'],
         'tripType' => $booking['trip_type'],
         'tripMode' => $booking['trip_mode'],
-        'totalAmount' => floatval($booking['total_amount']),
+        'totalAmount' => (float)$booking['total_amount'],
         'status' => $booking['status'],
         'passengerName' => $booking['passenger_name'],
         'passengerPhone' => $booking['passenger_phone'],
@@ -317,25 +303,25 @@ try {
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];
-
-    // Send successful response
-    logBooking("Sending success response", ['booking_id' => $booking['id']]);
+    
+    // Send success response
     echo json_encode([
         'status' => 'success',
         'message' => 'Booking created successfully',
         'data' => $formattedBooking
     ]);
-    http_response_code(201);
-
+    logBooking("Success response sent", ['id' => $booking['id']]);
+    
 } catch (Exception $e) {
-    // Roll back the transaction on error
-    $conn->rollback();
+    // Rollback transaction if active
+    if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
+        $conn->rollback();
+        logBooking("Transaction rolled back");
+    }
     
-    logBooking("Booking creation failed", [
-        'error' => $e->getMessage(), 
-        'trace' => $e->getTraceAsString()
-    ]);
+    logBooking("Booking creation failed", ['error' => $e->getMessage()]);
     
+    // Send error response
     echo json_encode([
         'status' => 'error',
         'message' => 'Failed to create booking: ' . $e->getMessage()
@@ -343,8 +329,10 @@ try {
     http_response_code(500);
 }
 
-// Close database connection
+// Close connection if exists
 if (isset($conn) && $conn instanceof mysqli) {
-    logBooking("Closing database connection");
     $conn->close();
+    logBooking("Database connection closed");
 }
+
+logBooking("Request processing complete");
