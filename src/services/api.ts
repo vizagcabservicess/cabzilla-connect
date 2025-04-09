@@ -110,16 +110,16 @@ export const bookingAPI = {
         if (result.data && result.data.passengerEmail) {
           console.log('Sending email confirmation for booking:', result.data);
           
-          const emailResponse = await fetch(getApiUrl('/api/test-email.php'), {
+          // Properly build the URL with query parameters
+          const emailEndpoint = getApiUrl('/api/test-email.php');
+          const emailUrl = new URL(emailEndpoint);
+          emailUrl.searchParams.append('email', result.data.passengerEmail);
+          
+          const emailResponse = await fetch(emailUrl.toString(), {
             method: 'GET',
             headers: {
               ...defaultHeaders,
               'Cache-Control': 'no-cache'
-            },
-            // Add the recipient email as a query parameter
-            // This endpoint is more reliable for testing
-            params: {
-              email: result.data.passengerEmail
             }
           });
           
