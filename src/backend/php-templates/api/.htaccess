@@ -34,19 +34,21 @@ RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
 
-# HIGHEST PRIORITY: Booking endpoints 
+# HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]
 RewriteRule ^book\.php$ book.php [L,QSA]
 RewriteRule ^book/$ book.php [L,QSA]
 RewriteRule ^create-booking$ book.php [L,QSA]
 RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
-# CRITICAL: Force direct PHP for critical files
+# CRITICAL: Force direct PHP for critical files - ensure JSON content type
 <Files "book.php">
     SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
 </Files>
 <Files "test-connection.php">
     SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
 </Files>
 
 # Keep existing routes

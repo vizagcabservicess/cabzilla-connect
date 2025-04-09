@@ -13,9 +13,15 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting and logging
-ini_set('display_errors', 0); // Don't display errors to client
-error_reporting(E_ALL); // But report all errors in logs
+// Disable output buffering - this is critical to prevent HTML contamination
+ob_end_clean();
+if (ob_get_level()) {
+    ob_end_clean();
+}
+
+// Enable error reporting and logging but don't display errors
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
 
 // Create logs directory if it doesn't exist
 $logDir = __DIR__ . '/../logs';
@@ -42,6 +48,19 @@ function logBooking($message, $data = null) {
     error_log($logEntry); // Also log to PHP error log
 }
 
+// Send JSON response function to ensure proper output
+function sendJsonResponse($data, $statusCode = 200) {
+    // Clean any previous output that might contaminate the response
+    if (ob_get_length()) ob_clean();
+    
+    // Set status code
+    http_response_code($statusCode);
+    
+    // Output JSON
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -51,9 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     logBooking("Method not allowed", $_SERVER['REQUEST_METHOD']);
-    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
-    http_response_code(405);
-    exit;
+    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
 
 // Log the start of booking request
@@ -66,7 +83,7 @@ logBooking("Booking request started", [
 try {
     // Read and parse the request body
     $requestBody = file_get_contents('php://input');
-    logBooking("Received request body", ['length' => strlen($requestBody)]);
+    logBooking("Received request body", ['length' => strlen($requestBody), 'content' => $requestBody]);
     
     // Parse JSON data with error handling
     $data = json_decode($requestBody, true);
@@ -272,7 +289,7 @@ try {
     ];
     
     logBooking("Sending success response", ['booking_id' => $booking['id']]);
-    echo json_encode($response);
+    sendJsonResponse($response);
     
 } catch (Exception $e) {
     // Rollback transaction if started
@@ -296,8 +313,7 @@ try {
         'message' => 'Failed to create booking: ' . $e->getMessage()
     ];
     
-    echo json_encode($response);
-    http_response_code(500);
+    sendJsonResponse($response, 500);
 } finally {
     // Close connection if exists
     if (isset($conn) && $conn instanceof mysqli) {

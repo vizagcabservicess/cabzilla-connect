@@ -14,6 +14,12 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Disable any output buffering
+ob_end_clean();
+if (ob_get_level()) {
+    ob_end_clean();
+}
+
 // Handle OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);

@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Database utility functions for establishing connections
@@ -26,6 +27,9 @@ function logDbConnection($message, $data = []) {
 
 // Get database connection with improved error handling
 function getDbConnection() {
+    // Disable any output buffering
+    if (ob_get_level()) ob_end_clean();
+    
     // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
@@ -70,6 +74,9 @@ function getDbConnection() {
 
 // Enhanced direct database connection function that NEVER fails silently
 function getDirectDatabaseConnection() {
+    // Disable any output buffering
+    if (ob_get_level()) ob_end_clean();
+    
     // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
@@ -130,6 +137,9 @@ function tableExists($conn, $tableName) {
 
 // Direct database testing function for diagnostics
 function testDirectDatabaseConnection() {
+    // Disable any output buffering
+    if (ob_get_level()) ob_end_clean();
+    
     $result = [
         'status' => 'error',
         'message' => 'Database connection test failed',
