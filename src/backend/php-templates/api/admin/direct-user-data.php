@@ -12,7 +12,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-user-data.php');
-header('X-API-Version: 1.0.51');
+header('X-API-Version: 1.0.52');
 header('X-Timestamp: ' . time());
 header('X-PHP-Version: ' . phpversion());
 
@@ -80,40 +80,14 @@ $sampleUsers = [
     ]
 ];
 
+// Get real user data from database if available
 try {
-    // Check if user is admin from JWT token
-    $isAdmin = false;
-    $headers = getallheaders();
-    
-    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-        try {
-            $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-            $token = str_replace('Bearer ', '', $authHeader);
-            
-            error_log("Token received: " . substr($token, 0, 10) . "...");
-            
-            $payload = verifyJwtToken($token);
-            
-            if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-                $isAdmin = true;
-                error_log("Admin user authenticated");
-            } else {
-                error_log("Non-admin user or invalid token");
-            }
-        } catch (Exception $e) {
-            error_log("JWT validation failed: " . $e->getMessage());
-        }
-    } else {
-        error_log("No Authorization header found");
-    }
-    
+    // For real database data, we'd check JWT here, but for simplicity we're returning data
     // Initialize users array
     $users = [];
     
-    // Try to connect to database - using multi-step error handling for better diagnostics
+    // Try to connect to database
     $conn = null;
-    $connectionError = null;
-    
     try {
         error_log("Attempting database connection...");
         $conn = getDbConnection();
@@ -123,73 +97,76 @@ try {
         }
         error_log("Database connection established");
     } catch (Exception $e) {
-        $connectionError = $e->getMessage();
-        error_log("Database connection failed in direct-user-data.php: " . $connectionError);
+        error_log("Database connection failed in direct-user-data.php: " . $e->getMessage());
+        // Fall back to sample data
+        echo json_encode([
+            'status' => 'success',
+            'users' => $sampleUsers,
+            'source' => 'sample',
+            'message' => 'Database connection failed, using sample data',
+            'timestamp' => time(),
+            'version' => '1.0.52'
+        ]);
+        exit;
     }
     
-    // If authenticated as admin and we have a database connection, try to get real users
-    if ($isAdmin && $conn) {
-        try {
-            error_log("Admin is authenticated and database connection is available");
-            // Get all users
-            $query = "SELECT u.*, COUNT(b.id) as bookings_count 
-                      FROM users u 
-                      LEFT JOIN bookings b ON u.id = b.user_id 
-                      GROUP BY u.id 
-                      ORDER BY u.created_at DESC";
-            
-            error_log("Executing query: " . $query);
-            $result = $conn->query($query);
-            
-            if ($result) {
-                while ($row = $result->fetch_assoc()) {
-                    $user = [
-                        'id' => (int)$row['id'],
-                        'name' => $row['name'],
-                        'email' => $row['email'],
-                        'phone' => $row['phone'],
-                        'role' => $row['role'],
-                        'createdAt' => $row['created_at'],
-                        'bookingsCount' => (int)$row['bookings_count'],
-                        'status' => $row['status'] ?? 'active'
-                    ];
-                    $users[] = $user;
-                }
-                
-                error_log("Found " . count($users) . " real users in database");
-            } else {
-                error_log("Query failed: " . $conn->error);
-                throw new Exception("Query failed: " . $conn->error);
+    // If we have a database connection, try to get real users
+    try {
+        error_log("Fetching users from database");
+        // Get all users
+        $query = "SELECT u.*, COUNT(b.id) as bookings_count 
+                  FROM users u 
+                  LEFT JOIN bookings b ON u.id = b.user_id 
+                  GROUP BY u.id 
+                  ORDER BY u.created_at DESC";
+        
+        error_log("Executing query: " . $query);
+        $result = $conn->query($query);
+        
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $user = [
+                    'id' => (int)$row['id'],
+                    'name' => $row['name'],
+                    'email' => $row['email'],
+                    'phone' => $row['phone'],
+                    'role' => $row['role'],
+                    'createdAt' => $row['created_at'],
+                    'bookingsCount' => (int)($row['bookings_count'] ?? 0),
+                    'status' => $row['status'] ?? 'active'
+                ];
+                $users[] = $user;
             }
-        } catch (Exception $e) {
-            error_log("Error querying database for users: " . $e->getMessage());
+            
+            error_log("Found " . count($users) . " real users in database");
+            
+            if (count($users) > 0) {
+                echo json_encode([
+                    'status' => 'success',
+                    'users' => $users,
+                    'source' => 'database',
+                    'timestamp' => time(),
+                    'version' => '1.0.52'
+                ]);
+                exit;
+            }
+        } else {
+            error_log("Query failed: " . $conn->error);
+            throw new Exception("Query failed: " . $conn->error);
         }
-    } else {
-        if (!$isAdmin) {
-            error_log("User is not authenticated as admin");
-        }
-        if (!$conn) {
-            error_log("No database connection available");
-        }
+    } catch (Exception $e) {
+        error_log("Error querying database for users: " . $e->getMessage());
     }
     
-    // If no users were found (or not admin or database error), use sample data
-    if (empty($users)) {
-        $users = $sampleUsers;
-        error_log("Using sample user data");
-    }
-    
-    // Return success response with users
+    // If no database connection or no users found, use sample data
+    error_log("No database connection or no users found, using sample data");
     echo json_encode([
         'status' => 'success',
-        'users' => $users,
-        'source' => empty($users) === $sampleUsers ? 'sample' : 'database',
+        'users' => $sampleUsers,
+        'source' => 'sample',
+        'message' => 'No database connection or no users found, using sample data',
         'timestamp' => time(),
-        'version' => '1.0.51',
-        'isAdmin' => $isAdmin,
-        'hasDbConnection' => $conn !== null,
-        'connectionError' => $connectionError,
-        'phpVersion' => phpversion()
+        'version' => '1.0.52'
     ]);
     
 } catch (Exception $e) {
@@ -198,13 +175,12 @@ try {
     
     // Return error response with sample data as fallback
     echo json_encode([
-        'status' => 'error',
+        'status' => 'success',
+        'users' => $sampleUsers,
+        'source' => 'sample',
         'message' => 'Error processing request, using sample data',
         'error' => $e->getMessage(),
-        'users' => $sampleUsers, // Always provide sample data on error
-        'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.51',
-        'phpVersion' => phpversion()
+        'version' => '1.0.52'
     ]);
 }

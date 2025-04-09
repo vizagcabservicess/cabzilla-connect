@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -15,6 +14,23 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
+# Add explicit rule for users.php and direct-user-data.php
+<Files "users.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "direct-user-data.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*" 
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
@@ -29,6 +45,12 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
+
+# Direct access to admin endpoints - highest priority
+RewriteRule ^admin/users$ admin/users.php [L,QSA]
+RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
+RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
+RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
 
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]

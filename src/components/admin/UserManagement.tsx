@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowDownUp, 
-  CheckCircle2, 
+  AlertCircle,
+  Database,
   RefreshCw, 
   Search, 
   Shield, 
@@ -48,6 +49,7 @@ export function UserManagement() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const { toast: uiToast } = useToast();
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [dataSource, setDataSource] = useState<'database' | 'sample' | 'cache'>('sample');
   
   useEffect(() => {
     // Get current user ID from auth API
@@ -66,138 +68,114 @@ export function UserManagement() {
     fetchUsers();
   }, []);
   
-  const fetchUsers = async () => {
+  const fetchUsers = async (forceRefresh = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('Fetching users via authAPI.getAllUsers...');
+      // Try to get cached users first if not forcing refresh
+      if (!forceRefresh) {
+        try {
+          const cachedUsers = localStorage.getItem('cachedUsers');
+          if (cachedUsers) {
+            const parsedUsers = JSON.parse(cachedUsers);
+            console.log('Using cached users from localStorage:', parsedUsers);
+            setUsers(parsedUsers);
+            setDataSource('cache');
+            setIsLoading(false);
+            
+            // Fetch fresh data in the background
+            setTimeout(() => {
+              fetchFreshUsers();
+            }, 500);
+            
+            return;
+          }
+        } catch (cacheError) {
+          console.error('Error using cached users:', cacheError);
+        }
+      }
+      
+      // Fetch fresh users
+      fetchFreshUsers();
+      
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      handleFetchError(error);
+    }
+  };
+  
+  const fetchFreshUsers = async () => {
+    try {
+      console.log('Fetching fresh users via authAPI.getAllUsers...');
       const userData = await authAPI.getAllUsers();
       
       if (userData && userData.length > 0) {
         console.log('Users fetched successfully via authAPI:', userData);
         setUsers(userData);
+        setDataSource(userData === sampleUsers ? 'sample' : 'database');
+        
+        // Cache the users for offline access
+        localStorage.setItem('cachedUsers', JSON.stringify(userData));
+        
         setIsLoading(false);
         return;
       }
-      
-      // If authAPI.getAllUsers() returns empty array, try direct users.php endpoint
-      console.log('No users from getAllUsers, trying direct users.php endpoint...');
-      try {
-        const response = await axios.get(getApiUrl('/api/admin/users.php'), {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            ...forceRefreshHeaders
-          }
-        });
-        
-        console.log('Direct users.php response:', response.data);
-        
-        if (response.data && response.data.status === 'success' && response.data.data) {
-          const userData: User[] = response.data.data.map((user: any) => ({
-            id: parseInt(user.id),
-            name: user.name,
-            email: user.email,
-            phone: user.phone || null,
-            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
-            createdAt: user.createdAt || user.created_at || new Date().toISOString()
-          }));
-          
-          setUsers(userData);
-          setIsLoading(false);
-          return;
-        }
-      } catch (firstError) {
-        console.error('Error with users.php endpoint:', firstError);
-      }
-      
-      // If still no users, try direct-user-data.php
-      console.log('Trying direct-user-data.php endpoint...');
-      try {
-        const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            ...forceRefreshHeaders
-          }
-        });
-        
-        console.log('Direct user data endpoint response:', response.data);
-        
-        if (response.data && response.data.users) {
-          const userData: User[] = response.data.users.map((user: any) => ({
-            id: parseInt(user.id),
-            name: user.name,
-            email: user.email,
-            phone: user.phone || null,
-            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
-            createdAt: user.createdAt || new Date().toISOString()
-          }));
-          
-          setUsers(userData);
-          setIsLoading(false);
-          return;
-        }
-      } catch (secondError) {
-        console.error('Error with direct-user-data endpoint:', secondError);
-      }
-      
-      // If all API calls fail, use sample data as a last resort
-      console.log('All endpoints failed, using sample data');
-      const sampleUsers: User[] = [
-        {
-          id: 101,
-          name: 'Admin User',
-          email: 'admin@example.com',
-          phone: '9876543210',
-          role: 'admin',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 102,
-          name: 'Test User',
-          email: 'user@example.com',
-          phone: '8765432109',
-          role: 'user',
-          createdAt: new Date().toISOString()
-        }
-      ];
-      
-      setUsers(sampleUsers);
-      setError('Could not connect to the server. Showing sample data.');
     } catch (error) {
-      console.error('Error fetching users:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load users');
-      
-      uiToast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to load users',
-        variant: "destructive",
-      });
-      
-      // Use sample data as fallback
-      const sampleUsers: User[] = [
-        {
-          id: 101,
-          name: 'Admin User',
-          email: 'admin@example.com',
-          phone: '9876543210',
-          role: 'admin',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 102,
-          name: 'Test User',
-          email: 'user@example.com',
-          phone: '8765432109',
-          role: 'user',
-          createdAt: new Date().toISOString()
-        }
-      ];
-      
-      setUsers(sampleUsers);
+      console.error('Error fetching fresh users:', error);
+      handleFetchError(error);
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleFetchError = (error: any) => {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to load users';
+    setError(errorMessage);
+    
+    uiToast({
+      title: "Error",
+      description: errorMessage,
+      variant: "destructive",
+    });
+    
+    // Try to get users from cache as fallback
+    try {
+      const cachedUsers = localStorage.getItem('cachedUsers');
+      if (cachedUsers) {
+        const parsedUsers = JSON.parse(cachedUsers);
+        setUsers(parsedUsers);
+        setDataSource('cache');
+        toast.info('Using cached user data due to connection error');
+        return;
+      }
+    } catch (cacheError) {
+      console.error('Error using cached users:', cacheError);
+    }
+    
+    // Use sample data as last resort
+    const sampleUsers: User[] = [
+      {
+        id: 101,
+        name: 'Admin User',
+        email: 'admin@example.com',
+        phone: '9876543210',
+        role: 'admin',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 102,
+        name: 'Test User',
+        email: 'user@example.com',
+        phone: '8765432109',
+        role: 'user',
+        createdAt: new Date().toISOString()
+      }
+    ];
+    
+    setUsers(sampleUsers);
+    setDataSource('sample');
+    toast.warning('Using sample data due to connection error');
   };
   
   const handlePromoteToAdmin = async (userId: number) => {
@@ -220,14 +198,33 @@ export function UserManagement() {
         return;
       }
       
-      await authAPI.updateUserRole(userId, newRole);
-      
       // Update the local state to provide immediate feedback
       setUsers(users.map(u => 
         u.id === userId ? { ...u, role: newRole } : u
       ));
       
-      toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
+      try {
+        // Attempt to update on server
+        await authAPI.updateUserRole(userId, newRole);
+        
+        // Success notification
+        toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
+        
+        // Update the cache
+        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
+          u.id === userId ? { ...u, role: newRole } : u
+        )));
+      } catch (updateError) {
+        console.error('Error updating user role on server:', updateError);
+        
+        // Show warning but keep the UI updated
+        toast.warning(`Role updated in UI only. Server update failed: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
+        
+        // Still update the cache for consistency
+        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
+          u.id === userId ? { ...u, role: newRole } : u
+        )));
+      }
     } catch (error) {
       console.error('Error updating user role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update user role');
@@ -275,12 +272,30 @@ export function UserManagement() {
       setSortDirection('asc');
     }
   };
+
+  // Helper to get data source badge
+  const getDataSourceBadge = () => {
+    switch(dataSource) {
+      case 'database':
+        return <span className="bg-green-100 text-green-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
+          <Database className="h-3 w-3" /> Live Data
+        </span>;
+      case 'cache':
+        return <span className="bg-blue-100 text-blue-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
+          <UserCheck className="h-3 w-3" /> Cached Data
+        </span>;
+      case 'sample':
+        return <span className="bg-amber-100 text-amber-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" /> Sample Data
+        </span>;
+    }
+  };
   
   if (error && !users.length) {
     return (
       <ApiErrorFallback 
         error={error} 
-        onRetry={fetchUsers} 
+        onRetry={() => fetchUsers(true)} 
         title="User Management Error" 
         description="Unable to load user data. This may be due to a network issue or server problem."
       />
@@ -294,22 +309,25 @@ export function UserManagement() {
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" /> User Management
           </CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchUsers} 
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {getDataSourceBadge()}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchUsers(true)} 
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         {error && (
           <Alert className="mb-4">
             <AlertDescription>
-              {error} - Showing {users.length > 0 ? 'cached or sample' : 'no'} data.
+              {error} - Showing {dataSource === 'database' ? 'live' : dataSource === 'cache' ? 'cached' : 'sample'} data.
             </AlertDescription>
           </Alert>
         )}
