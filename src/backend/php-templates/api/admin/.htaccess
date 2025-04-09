@@ -30,9 +30,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# Database diagnostic endpoint
-RewriteRule ^test-database$ test-booking-api.php [L,QSA]
-RewriteRule ^test-booking$ test-booking-api.php [L,QSA]
+# Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api$ test-booking-api.php [L,QSA]
 
 # CRITICAL: Explicitly define booking endpoints with highest priority

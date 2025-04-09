@@ -6,10 +6,6 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 
-// Include configuration and database utilities
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../utils/database.php';
-
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -41,7 +37,7 @@ $requestInfo = [
     'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
 ];
 
-// Test database connection with retry mechanism
+// Test database connection
 $dbConnectionTest = [
     'attempted' => false,
     'success' => false,
@@ -50,98 +46,126 @@ $dbConnectionTest = [
 ];
 
 try {
-    // Get a database connection with retry
-    $conn = getDbConnectionWithRetry(3);
-    $dbConnectionTest['attempted'] = true;
-    
-    if ($conn) {
-        $dbConnectionTest['success'] = true;
-        $dbConnectionTest['message'] = 'Successfully connected to database';
+    if (file_exists(__DIR__ . '/../../config.php')) {
+        require_once __DIR__ . '/../../config.php';
+        $dbConnectionTest['attempted'] = true;
+        $dbConnectionTest['config_file_exists'] = true;
         
-        // Run database diagnostic
-        $diagnostic = runDatabaseDiagnostic($conn);
-        $dbConnectionTest['diagnostic'] = $diagnostic;
-        
-        // Verify database integrity
-        $integrityCheck = verifyDatabaseIntegrity($conn);
-        $dbConnectionTest['integrity'] = $integrityCheck;
-        
-        // Ensure bookings table exists
-        $ensureBookingsTable = ensureBookingsTableExists($conn);
-        $dbConnectionTest['bookings_table_created'] = $ensureBookingsTable;
-        
-        // Check if bookings table exists
-        $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
-        $dbConnectionTest['bookings_table_exists'] = ($tableCheck && $tableCheck->num_rows > 0);
-        
-        // Count bookings if table exists
-        if ($dbConnectionTest['bookings_table_exists']) {
-            $countResult = $conn->query("SELECT COUNT(*) as total FROM bookings");
-            if ($countResult && $row = $countResult->fetch_assoc()) {
-                $dbConnectionTest['bookings_count'] = (int)$row['total'];
-            }
-            
-            // Get sample booking if available
-            if (isset($dbConnectionTest['bookings_count']) && $dbConnectionTest['bookings_count'] > 0) {
-                $sampleResult = $conn->query("SELECT * FROM bookings LIMIT 1");
-                if ($sampleResult && $row = $sampleResult->fetch_assoc()) {
-                    $dbConnectionTest['sample_booking'] = [
-                        'id' => (int)$row['id'],
-                        'booking_number' => $row['booking_number'] ?? 'N/A',
-                        'status' => $row['status'] ?? 'N/A',
-                        'passenger_name' => $row['passenger_name'] ?? 'N/A',
-                        'pickup_location' => substr($row['pickup_location'] ?? 'N/A', 0, 30) . '...',
-                        'created_at' => $row['created_at'] ?? 'N/A'
-                    ];
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn && $conn instanceof mysqli) {
+                $dbConnectionTest['success'] = true;
+                $dbConnectionTest['message'] = 'Successfully connected to database';
+                
+                // Check if bookings table exists
+                $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+                $dbConnectionTest['bookings_table_exists'] = ($tableCheck && $tableCheck->num_rows > 0);
+                
+                // Count bookings if table exists
+                if ($dbConnectionTest['bookings_table_exists']) {
+                    $countResult = $conn->query("SELECT COUNT(*) as total FROM bookings");
+                    if ($countResult && $row = $countResult->fetch_assoc()) {
+                        $dbConnectionTest['bookings_count'] = (int)$row['total'];
+                    }
                 }
+                
+                // Get sample booking if available
+                if ($dbConnectionTest['bookings_table_exists'] && isset($dbConnectionTest['bookings_count']) && $dbConnectionTest['bookings_count'] > 0) {
+                    $sampleResult = $conn->query("SELECT * FROM bookings LIMIT 1");
+                    if ($sampleResult && $row = $sampleResult->fetch_assoc()) {
+                        $dbConnectionTest['sample_booking'] = [
+                            'id' => (int)$row['id'],
+                            'booking_number' => $row['booking_number'] ?? 'N/A',
+                            'status' => $row['status'] ?? 'N/A',
+                            'passenger_name' => $row['passenger_name'] ?? 'N/A',
+                            'pickup_location' => substr($row['pickup_location'] ?? 'N/A', 0, 30) . '...',
+                            'created_at' => $row['created_at'] ?? 'N/A'
+                        ];
+                    }
+                }
+                
+                // Get table structure
+                if ($dbConnectionTest['bookings_table_exists']) {
+                    $structureResult = $conn->query("DESCRIBE bookings");
+                    $tableStructure = [];
+                    while ($structureRow = $structureResult->fetch_assoc()) {
+                        $tableStructure[] = [
+                            'field' => $structureRow['Field'],
+                            'type' => $structureRow['Type'],
+                            'null' => $structureRow['Null'],
+                            'key' => $structureRow['Key']
+                        ];
+                    }
+                    $dbConnectionTest['table_structure'] = $tableStructure;
+                }
+            } else {
+                $dbConnectionTest['error'] = 'Failed to connect to database using getDbConnection()';
             }
+        } else {
+            // Try direct connection
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
             
-            // Get table structure
-            $structureResult = $conn->query("DESCRIBE bookings");
-            $tableStructure = [];
-            while ($structureRow = $structureResult->fetch_assoc()) {
-                $tableStructure[] = [
-                    'field' => $structureRow['Field'],
-                    'type' => $structureRow['Type'],
-                    'null' => $structureRow['Null'],
-                    'key' => $structureRow['Key']
-                ];
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if (!$conn->connect_error) {
+                $dbConnectionTest['success'] = true;
+                $dbConnectionTest['message'] = 'Successfully connected to database using direct connection';
+                $dbConnectionTest['method'] = 'direct';
+                
+                // Get database info
+                $result = $conn->query("SELECT VERSION() as version");
+                if ($result && $row = $result->fetch_assoc()) {
+                    $dbConnectionTest['mysql_version'] = $row['version'];
+                }
+                
+                // Check if bookings table exists
+                $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+                $dbConnectionTest['bookings_table_exists'] = ($tableCheck && $tableCheck->num_rows > 0);
+                
+                // Count bookings if table exists
+                if ($dbConnectionTest['bookings_table_exists']) {
+                    $countResult = $conn->query("SELECT COUNT(*) as total FROM bookings");
+                    if ($countResult && $row = $countResult->fetch_assoc()) {
+                        $dbConnectionTest['bookings_count'] = (int)$row['total'];
+                    }
+                }
+            } else {
+                $dbConnectionTest['error'] = 'Direct connection failed: ' . $conn->connect_error;
             }
-            $dbConnectionTest['table_structure'] = $tableStructure;
         }
     } else {
-        $dbConnectionTest['error'] = 'Failed to connect to database after multiple attempts';
+        $dbConnectionTest['error'] = 'Config file not found';
+        $dbConnectionTest['searched_path'] = __DIR__ . '/../../config.php';
         
-        // Try direct connection as fallback
+        // Try direct connection
         $dbHost = 'localhost';
         $dbName = 'u644605165_db_be';
         $dbUser = 'u644605165_usr_be';
         $dbPass = 'Vizag@1213';
         
-        $directConn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
-        if (!$directConn->connect_error) {
-            $dbConnectionTest['direct_connection'] = [
-                'success' => true,
-                'message' => 'Direct connection successful'
-            ];
+        if (!$conn->connect_error) {
+            $dbConnectionTest['success'] = true;
+            $dbConnectionTest['message'] = 'Successfully connected to database using direct connection';
+            $dbConnectionTest['method'] = 'direct';
             
-            // Check if bookings table exists with direct connection
-            $tableCheck = $directConn->query("SHOW TABLES LIKE 'bookings'");
-            $dbConnectionTest['direct_bookings_table_exists'] = ($tableCheck && $tableCheck->num_rows > 0);
+            // Check if bookings table exists
+            $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+            $dbConnectionTest['bookings_table_exists'] = ($tableCheck && $tableCheck->num_rows > 0);
             
-            // Count bookings with direct connection
-            if ($dbConnectionTest['direct_bookings_table_exists']) {
-                $countResult = $directConn->query("SELECT COUNT(*) as total FROM bookings");
+            // Count bookings if table exists
+            if ($dbConnectionTest['bookings_table_exists']) {
+                $countResult = $conn->query("SELECT COUNT(*) as total FROM bookings");
                 if ($countResult && $row = $countResult->fetch_assoc()) {
-                    $dbConnectionTest['direct_bookings_count'] = (int)$row['total'];
+                    $dbConnectionTest['bookings_count'] = (int)$row['total'];
                 }
             }
         } else {
-            $dbConnectionTest['direct_connection'] = [
-                'success' => false,
-                'error' => $directConn->connect_error
-            ];
+            $dbConnectionTest['direct_connection_error'] = $conn->connect_error;
         }
     }
 } catch (Exception $e) {

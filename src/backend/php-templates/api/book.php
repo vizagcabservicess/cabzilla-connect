@@ -2,7 +2,6 @@
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/utils/database.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -120,17 +119,26 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     }
 }
 
-// Connect to database with retry
+// Connect to database
 try {
-    $conn = getDbConnectionWithRetry(3);
-    
-    if (!$conn) {
-        throw new Exception("Failed to establish database connection after multiple attempts");
-    }
-    
-    // Ensure bookings table exists
-    if (!ensureBookingsTableExists($conn)) {
-        throw new Exception("Failed to ensure bookings table exists");
+    // Try to use getDbConnection from config.php first
+    if (function_exists('getDbConnection')) {
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
     }
 } catch (Exception $e) {
     error_log("Database connection failed: " . $e->getMessage());
@@ -152,6 +160,38 @@ error_log("User ID for booking: " . ($userId ?? 'guest') . ", booking number: " 
 $conn->begin_transaction();
 
 try {
+    // Check if the bookings table exists
+    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
+    if ($tableResult->num_rows === 0) {
+        // Create the bookings table if it doesn't exist
+        $createTableSql = "
+        CREATE TABLE bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            booking_number VARCHAR(50) NOT NULL UNIQUE,
+            pickup_location TEXT NOT NULL,
+            drop_location TEXT,
+            pickup_date DATETIME NOT NULL,
+            return_date DATETIME,
+            cab_type VARCHAR(50) NOT NULL,
+            distance DECIMAL(10,2),
+            trip_type VARCHAR(20) NOT NULL,
+            trip_mode VARCHAR(20) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            passenger_name VARCHAR(100) NOT NULL,
+            passenger_phone VARCHAR(20) NOT NULL,
+            passenger_email VARCHAR(100) NOT NULL,
+            hourly_package VARCHAR(50),
+            tour_id VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        $conn->query($createTableSql);
+        error_log("Created bookings table");
+    }
+
     // Check if the SQL needs user_id parameter
     if ($userId === null) {
         // SQL for guest booking (NULL user_id)
@@ -235,8 +275,6 @@ try {
         );
     }
 
-    error_log("About to execute SQL statement");
-    
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
     }
