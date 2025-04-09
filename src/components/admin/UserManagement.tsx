@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { authAPI } from '@/services/api';
+import { authAPI } from '@/services/api/authAPI';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/table";
 import { User } from '@/types/api';
 import { format } from 'date-fns';
-import { getApiUrl } from '@/config/api';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import axios from 'axios';
 
 export function UserManagement() {
@@ -71,64 +71,27 @@ export function UserManagement() {
       setIsLoading(true);
       setError(null);
       
-      console.log('Fetching users via getAllUsers...');
+      console.log('Fetching users via authAPI.getAllUsers...');
       const userData = await authAPI.getAllUsers();
       
       if (userData && userData.length > 0) {
-        console.log('Users fetched successfully:', userData);
+        console.log('Users fetched successfully via authAPI:', userData);
         setUsers(userData);
         setIsLoading(false);
         return;
       }
       
-      // If authAPI.getAllUsers() returns empty array, try direct endpoint
-      console.log('No users from getAllUsers, trying direct endpoint...');
-      try {
-        const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        console.log('Direct user data response:', response.data);
-        
-        if (response.data && response.data.users) {
-          // Map the response data to match the User type with proper type checks
-          const userData: User[] = response.data.users.map((user: any) => ({
-            id: parseInt(user.id),
-            name: user.name,
-            email: user.email,
-            phone: user.phone || null,
-            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
-            createdAt: user.createdAt
-          }));
-          
-          setUsers(userData);
-          setIsLoading(false);
-          return;
-        } 
-      } catch (firstError) {
-        console.error('Error with direct endpoint:', firstError);
-      }
-      
-      // If still no users, try secondary PHP direct endpoint
-      console.log('Trying direct PHP endpoint...');
+      // If authAPI.getAllUsers() returns empty array, try direct users.php endpoint
+      console.log('No users from getAllUsers, trying direct users.php endpoint...');
       try {
         const response = await axios.get(getApiUrl('/api/admin/users.php'), {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            ...forceRefreshHeaders
           }
         });
         
-        console.log('PHP users endpoint response:', response.data);
+        console.log('Direct users.php response:', response.data);
         
         if (response.data && response.data.status === 'success' && response.data.data) {
           const userData: User[] = response.data.data.map((user: any) => ({
@@ -137,7 +100,37 @@ export function UserManagement() {
             email: user.email,
             phone: user.phone || null,
             role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
-            createdAt: user.createdAt || user.created_at
+            createdAt: user.createdAt || user.created_at || new Date().toISOString()
+          }));
+          
+          setUsers(userData);
+          setIsLoading(false);
+          return;
+        }
+      } catch (firstError) {
+        console.error('Error with users.php endpoint:', firstError);
+      }
+      
+      // If still no users, try direct-user-data.php
+      console.log('Trying direct-user-data.php endpoint...');
+      try {
+        const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            ...forceRefreshHeaders
+          }
+        });
+        
+        console.log('Direct user data endpoint response:', response.data);
+        
+        if (response.data && response.data.users) {
+          const userData: User[] = response.data.users.map((user: any) => ({
+            id: parseInt(user.id),
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
+            createdAt: user.createdAt || new Date().toISOString()
           }));
           
           setUsers(userData);
@@ -145,7 +138,7 @@ export function UserManagement() {
           return;
         }
       } catch (secondError) {
-        console.error('Error with PHP endpoint:', secondError);
+        console.error('Error with direct-user-data endpoint:', secondError);
       }
       
       // If all API calls fail, use sample data as a last resort

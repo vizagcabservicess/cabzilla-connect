@@ -1,11 +1,10 @@
 
-// Import the authAPI that exists
 import { authAPI } from './authAPI';
 
-// Re-export the authAPI
+// Export the individual APIs
 export { authAPI };
 
-// Export a default object with authAPI
+// Export a default object with all APIs for easy importing
 export default {
   auth: authAPI
 };

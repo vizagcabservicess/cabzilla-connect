@@ -31,11 +31,11 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // Special case for trying to access the database directly 
-  // This should be the first priority for robust admin API access
+  // Special priority for direct admin endpoints - try to directly access PHP files
   if (endpoint.includes('direct-user-data.php') || 
-      endpoint.includes('users.php') || 
-      endpoint.includes('direct-vehicle')) {
+      endpoint.includes('users.php')) {
+    console.log('Using direct PHP endpoint:', endpoint);
+    
     // If we're running in a production domain, try to access the API directly
     if (window.location.hostname.includes('vizagup.com')) {
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
@@ -55,6 +55,17 @@ export const getApiUrl = (endpoint: string): string => {
     return `${domain}${cleanEndpoint}`;
   }
   
+  // For admin API endpoints, prefer direct PHP file access
+  if (endpoint.includes('/admin/users') || endpoint.includes('/admin/direct-user-data')) {
+    console.log('Using admin users endpoint with direct PHP access');
+    
+    // Try direct PHP endpoints first
+    if (endpoint.includes('/admin/users')) {
+      // Switch to direct PHP endpoints which are more reliable
+      return getApiUrl('/api/admin/users.php');
+    }
+  }
+  
   // Check for direct API access via environment variable
   if (import.meta.env.VITE_USE_DIRECT_API === 'true') {
     // If running on a production domain, allow direct API calls to the same domain
@@ -63,7 +74,7 @@ export const getApiUrl = (endpoint: string): string => {
       return `${window.location.origin}/${cleanEndpoint}`;
     }
     
-    // If we have a defined API base URL, use it
+    // If we have a defined API URL, use it
     if (apiBaseUrl) {
       const cleanBase = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
