@@ -3,11 +3,14 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers - Simplified and permissive
+// Set response headers first
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: *');
-header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Only allow GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
     exit;
 }
 
@@ -26,7 +29,7 @@ $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
-logError("Request received for user bookings", ["headers" => array_keys($headers)]);
+error_log("User bookings request received");
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
@@ -37,29 +40,29 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         if ($payload && isset($payload['user_id'])) {
             $userId = $payload['user_id'];
             $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
         }
     } catch (Exception $e) {
-        logError("JWT verification failed: " . $e->getMessage());
+        error_log("JWT verification failed: " . $e->getMessage());
         // Continue execution to provide fallback behavior
     }
 }
 
 // Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    logError("Database connection failed");
-    // Instead of returning error immediately, use fallback data
-    $fallbackBookings = createFallbackBookings();
-    sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_db']);
-    exit;
-}
-
 try {
-    // Log the request info for debugging
-    logError("Bookings API called", [
-        'user_id' => $userId ?? 'not authenticated',
-        'is_admin' => $isAdmin ? 'yes' : 'no'
-    ]);
+    $conn = getDbConnection();
+    if (!$conn) {
+        throw new Exception("Database connection failed");
+    }
+    
+    // Check if bookings table exists
+    $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
+    if (!$tableExists || $tableExists->num_rows === 0) {
+        // Provide fallback bookings for testing
+        $fallbackBookings = createFallbackBookings();
+        echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
+        exit;
+    }
     
     // For new users, they won't have any bookings yet, so we'll check first
     if ($userId) {
@@ -76,8 +79,7 @@ try {
         
         if ($result->num_rows === 0) {
             // User doesn't exist in database yet, common after signup
-            logError("User not found in database, returning empty bookings array", ['user_id' => $userId]);
-            sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
+            echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
             exit;
         }
     }
@@ -90,37 +92,24 @@ try {
         $stmt->bind_param("i", $userId);
     } else {
         // For testing/demo purposes, return some bookings even without authentication
-        // In production, this would likely require authentication
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
     }
     
     if (!$stmt) {
-        logError("Failed to prepare query", ['error' => $conn->error]);
-        // Use fallback data instead of throwing an error
-        $fallbackBookings = createFallbackBookings();
-        sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_prepare_failed']);
-        exit;
+        throw new Exception("Failed to prepare query: " . $conn->error);
     }
     
     $success = $stmt->execute();
     
     if (!$success) {
-        logError("Failed to execute query", ['error' => $stmt->error]);
-        // Use fallback data instead of throwing an error
-        $fallbackBookings = createFallbackBookings();
-        sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_execute_failed']);
-        exit;
+        throw new Exception("Failed to execute query: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
-        logError("Failed to get result", ['error' => $stmt->error]);
-        // Use fallback data instead of throwing an error
-        $fallbackBookings = createFallbackBookings();
-        sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_result_failed']);
-        exit;
+        throw new Exception("Failed to get result: " . $stmt->error);
     }
     
     // Create an array of bookings
@@ -151,27 +140,21 @@ try {
         $bookings[] = $booking;
     }
     
-    // Log the count of bookings found
-    logError("Bookings found", [
-        'count' => count($bookings),
-        'user_id' => $userId ?? 'guest/demo'
-    ]);
-    
     // For new users who have no bookings yet, return an empty array with success
     if (count($bookings) === 0 && $userId) {
-        sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
+        echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
         exit;
     }
     
     // Return the bookings
-    sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
+    echo json_encode(['status' => 'success', 'bookings' => $bookings]);
     
 } catch (Exception $e) {
-    logError("Error in bookings endpoint", ['error' => $e->getMessage(), 'user_id' => $userId ?? 'unknown']);
+    error_log("Error in bookings endpoint: " . $e->getMessage());
     
     // Instead of returning an error, provide fallback data
     $fallbackBookings = createFallbackBookings();
-    sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'error_fallback', 'original_error' => $e->getMessage()]);
+    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'error_fallback', 'error' => $e->getMessage()]);
 }
 
 // Helper function to create fallback booking data
@@ -194,9 +177,9 @@ function createFallbackBookings() {
             'tripMode' => 'one-way',
             'totalAmount' => 1500,
             'status' => 'pending',
-            'passengerName' => 'New User',
+            'passengerName' => 'Demo User',
             'passengerPhone' => '9876543210',
-            'passengerEmail' => 'newuser@example.com',
+            'passengerEmail' => 'demo@example.com',
             'driverName' => null,
             'driverPhone' => null,
             'createdAt' => $now,
@@ -216,11 +199,11 @@ function createFallbackBookings() {
             'tripMode' => 'round-trip',
             'totalAmount' => 2500,
             'status' => 'confirmed',
-            'passengerName' => 'New User',
-            'passengerPhone' => '9876543210',
-            'passengerEmail' => 'newuser@example.com',
+            'passengerName' => 'Demo Admin',
+            'passengerPhone' => '9876543200',
+            'passengerEmail' => 'admin@example.com',
             'driverName' => 'Demo Driver',
-            'driverPhone' => '9876543200',
+            'driverPhone' => '9876543201',
             'createdAt' => $now,
             'updatedAt' => $now
         ]

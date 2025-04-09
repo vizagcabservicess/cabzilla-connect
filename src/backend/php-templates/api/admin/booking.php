@@ -15,48 +15,8 @@ header('Expires: 0');
 // Debug mode - to diagnose problems
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
-// Critical error handling to prevent HTML output
-function handleFatalErrors() {
-    $error = error_get_last();
-    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        header('Content-Type: application/json');
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Fatal PHP error: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line'],
-            'error_details' => $error
-        ]);
-        exit;
-    }
-}
-register_shutdown_function('handleFatalErrors');
-
-// Set error handler to prevent HTML errors
-set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    // Log the error
-    logError("PHP Error in booking.php", [
-        'message' => $errstr,
-        'file' => $errfile,
-        'line' => $errline
-    ]);
-    
-    // Don't output HTML for warnings/notices, just log them
-    if ($errno == E_WARNING || $errno == E_NOTICE || $errno == E_DEPRECATED) {
-        return true;
-    }
-    
-    // For serious errors, return JSON error
-    header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'PHP Error: ' . $errstr,
-        'errno' => $errno,
-        'file' => $errfile,
-        'line' => $errline
-    ]);
-    exit;
-}, E_ALL);
+// Log request info
+error_log("Admin booking endpoint request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -64,17 +24,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Log request info
-logError("Admin booking endpoint request", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'query' => $_SERVER['QUERY_STRING'] ?? '',
-    'url' => $_SERVER['REQUEST_URI'],
-    'remote_addr' => $_SERVER['REMOTE_ADDR']
-]);
-
-// Always use JSON response helper - MODIFIED to be safer
+// Always use JSON response helper
 function sendJsonResponse($data, $statusCode = 200) {
-    // Ensure proper headers - Send again in case they were overwritten
+    // Already set the headers at the top, but just to be sure
     if (!headers_sent()) {
         header('Content-Type: application/json');
         http_response_code($statusCode);
@@ -85,23 +37,8 @@ function sendJsonResponse($data, $statusCode = 200) {
         ob_end_clean();
     }
     
-    // Ensure the data can be properly encoded to avoid JSON errors
-    try {
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            throw new Exception('JSON encoding failed: ' . json_last_error_msg());
-        }
-        echo $json;
-    } catch (Exception $e) {
-        // Fallback if encoding fails
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'JSON encoding error: ' . $e->getMessage(),
-            'original_data_type' => gettype($data)
-        ]);
-    }
-    
-    // Exit to prevent any further output
+    // Ensure proper JSON encoding
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -121,7 +58,7 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
             $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
         }
     } catch (Exception $e) {
-        logError("JWT verification failed: " . $e->getMessage());
+        error_log("JWT verification failed: " . $e->getMessage());
         // Continue for dev mode
     }
 }
@@ -133,27 +70,18 @@ if (!$isAdmin && !$devMode) {
     sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
 }
 
-// Connect to database - ENHANCED error handling
+// Connect to database with improved error handling
 try {
     $conn = getDbConnection();
     if (!$conn) {
-        throw new Exception("Database connection failed - getDbConnection returned false");
+        throw new Exception("Database connection failed");
     }
 } catch (Exception $e) {
-    logError("Database connection failed in booking.php", ['error' => $e->getMessage()]);
+    error_log("Database connection failed in booking.php: " . $e->getMessage());
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
 }
 
 try {
-    // First check if the bookings table exists
-    $tablesExist = $conn->query("SHOW TABLES LIKE 'bookings'");
-    
-    if (!$tablesExist || $tablesExist->num_rows === 0) {
-        // Bookings table doesn't exist yet
-        logError("Bookings table doesn't exist");
-        sendJsonResponse(['status' => 'warning', 'message' => 'The bookings table does not exist yet', 'bookings' => []]);
-    }
-    
     // Check if this is a request for a specific booking or all bookings
     if (isset($_GET['id'])) {
         // Get booking by ID
@@ -161,14 +89,12 @@ try {
         
         // Handle DELETE request for specific booking
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-            // First check if booking exists
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
             $stmt->bind_param("i", $bookingId);
             $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result->num_rows === 0) {
-                logError("Booking not found for deletion", ['booking_id' => $bookingId]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
             }
             
@@ -178,7 +104,6 @@ try {
             $success = $deleteStmt->execute();
             
             if ($success) {
-                logError("Booking deleted successfully", ['booking_id' => $bookingId, 'by_user_id' => $userId ?? 'dev_mode']);
                 sendJsonResponse(['status' => 'success', 'message' => 'Booking deleted successfully']);
             } else {
                 throw new Exception("Failed to delete booking: " . $conn->error);
@@ -188,7 +113,6 @@ try {
         else if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'PUT') {
             // Get request body
             $requestData = json_decode(file_get_contents('php://input'), true);
-            logError("Admin booking update request", ['booking_id' => $bookingId, 'data' => $requestData]);
             
             if (isset($requestData['status'])) {
                 // First check if booking exists
@@ -198,7 +122,6 @@ try {
                 $result = $stmt->get_result();
                 
                 if ($result->num_rows === 0) {
-                    logError("Booking not found for status update", ['booking_id' => $bookingId]);
                     sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
                 }
                 
@@ -209,12 +132,6 @@ try {
                 $success = $updateStmt->execute();
                 
                 if ($success) {
-                    logError("Booking status updated successfully", [
-                        'booking_id' => $bookingId, 
-                        'new_status' => $newStatus,
-                        'by_user_id' => $userId ?? 'dev_mode'
-                    ]);
-                    
                     // Get updated booking details
                     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
                     $stmt->bind_param("i", $bookingId);
@@ -249,11 +166,10 @@ try {
                     throw new Exception("Failed to update booking status: " . $conn->error);
                 }
             } else {
-                logError("Missing status in booking update request", ['booking_id' => $bookingId, 'data' => $requestData]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Status is required for booking update'], 400);
             }
         }
-        // Handle GET request for admin to view a specific booking
+        // Handle GET request for specific booking
         else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
             $stmt->bind_param("i", $bookingId);
@@ -261,7 +177,6 @@ try {
             $result = $stmt->get_result();
             
             if ($result->num_rows === 0) {
-                logError("Booking not found", ['booking_id' => $bookingId]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
             }
             
@@ -296,8 +211,22 @@ try {
     } else {
         // This is a request for all bookings
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            // Debug log for troubleshooting
-            logError("Fetching all bookings", ["userId" => $userId, "isAdmin" => $isAdmin ? "true" : "false"]);
+            // First check if bookings table exists
+            try {
+                $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+                if ($tableCheck === false) {
+                    throw new Exception("Error checking tables: " . $conn->error);
+                }
+                
+                if ($tableCheck->num_rows === 0) {
+                    // Table doesn't exist, return empty bookings array
+                    sendJsonResponse(['status' => 'success', 'bookings' => [], 'message' => 'No bookings table exists yet']);
+                    exit;
+                }
+            } catch (Exception $e) {
+                error_log("Error checking bookings table: " . $e->getMessage());
+                // Continue and try the query anyway
+            }
             
             // Get status filter if provided
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
@@ -309,69 +238,72 @@ try {
             }
             $sql .= " ORDER BY created_at DESC";
             
-            logError("SQL query for bookings", ["sql" => $sql, "status_filter" => $statusFilter]);
-            
-            $stmt = $conn->prepare($sql);
-            
-            if ($stmt === false) {
-                logError("Error preparing statement", ["error" => $conn->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
+            try {
+                $stmt = $conn->prepare($sql);
+                
+                if ($stmt === false) {
+                    throw new Exception("Error preparing statement: " . $conn->error);
+                }
+                
+                // Bind status parameter if filter is applied
+                if (!empty($statusFilter)) {
+                    $stmt->bind_param("s", $statusFilter);
+                }
+                
+                $success = $stmt->execute();
+                
+                if (!$success) {
+                    throw new Exception("Error executing query: " . $stmt->error);
+                }
+                
+                $result = $stmt->get_result();
+                
+                if ($result === false) {
+                    throw new Exception("Error getting result: " . $stmt->error);
+                }
+                
+                $bookings = [];
+                while ($row = $result->fetch_assoc()) {
+                    $booking = [
+                        'id' => (int)$row['id'],
+                        'userId' => $row['user_id'] ? (int)$row['user_id'] : null,
+                        'bookingNumber' => $row['booking_number'],
+                        'pickupLocation' => $row['pickup_location'],
+                        'dropLocation' => $row['drop_location'],
+                        'pickupDate' => $row['pickup_date'],
+                        'returnDate' => $row['return_date'],
+                        'cabType' => $row['cab_type'],
+                        'distance' => (float)$row['distance'],
+                        'tripType' => $row['trip_type'],
+                        'tripMode' => $row['trip_mode'],
+                        'totalAmount' => (float)$row['total_amount'],
+                        'status' => $row['status'],
+                        'passengerName' => $row['passenger_name'],
+                        'passengerPhone' => $row['passenger_phone'],
+                        'passengerEmail' => $row['passenger_email'],
+                        'createdAt' => $row['created_at'],
+                        'updatedAt' => $row['updated_at']
+                    ];
+                    $bookings[] = $booking;
+                }
+                
+                // Return bookings array (even if empty)
+                sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
+            } catch (Exception $e) {
+                error_log("Database query error: " . $e->getMessage());
+                // Return empty array with error message
+                sendJsonResponse([
+                    'status' => 'error', 
+                    'message' => 'Database query error: ' . $e->getMessage(),
+                    'bookings' => []
+                ], 500);
             }
-            
-            // Bind status parameter if filter is applied
-            if (!empty($statusFilter)) {
-                $stmt->bind_param("s", $statusFilter);
-            }
-            
-            $success = $stmt->execute();
-            
-            if (!$success) {
-                logError("Error executing query", ["error" => $stmt->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error], 500);
-            }
-            
-            $result = $stmt->get_result();
-            
-            if ($result === false) {
-                logError("Error getting query result", ["error" => $stmt->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Failed to get result: ' . $stmt->error], 500);
-            }
-            
-            $bookings = [];
-            while ($row = $result->fetch_assoc()) {
-                $booking = [
-                    'id' => (int)$row['id'],
-                    'userId' => $row['user_id'] ? (int)$row['user_id'] : null,
-                    'bookingNumber' => $row['booking_number'],
-                    'pickupLocation' => $row['pickup_location'],
-                    'dropLocation' => $row['drop_location'],
-                    'pickupDate' => $row['pickup_date'],
-                    'returnDate' => $row['return_date'],
-                    'cabType' => $row['cab_type'],
-                    'distance' => (float)$row['distance'],
-                    'tripType' => $row['trip_type'],
-                    'tripMode' => $row['trip_mode'],
-                    'totalAmount' => (float)$row['total_amount'],
-                    'status' => $row['status'],
-                    'passengerName' => $row['passenger_name'],
-                    'passengerPhone' => $row['passenger_phone'],
-                    'passengerEmail' => $row['passenger_email'],
-                    'createdAt' => $row['created_at'],
-                    'updatedAt' => $row['updated_at']
-                ];
-                $bookings[] = $booking;
-            }
-            
-            logError("Fetched all bookings", ['count' => count($bookings), 'status_filter' => $statusFilter]);
-            
-            // Make sure we're sending a proper JSON response
-            sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
         } else {
             sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
         }
     }
 } catch (Exception $e) {
-    logError("Error in admin booking endpoint", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    error_log("Error in admin booking endpoint: " . $e->getMessage());
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
 

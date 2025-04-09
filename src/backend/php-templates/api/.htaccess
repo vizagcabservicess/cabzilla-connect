@@ -26,57 +26,30 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Allow-Headers "*"
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
+    Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# CRITICAL: Explicitly map admin booking endpoints - HIGHEST PRIORITY
-RewriteRule ^admin/booking\.php$ admin/booking.php [L,QSA]
+# HIGHEST PRIORITY: Admin booking endpoints
 RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
 RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
 RewriteRule ^admin/bookings$ admin/booking.php [L,QSA]
 RewriteRule ^admin/bookings/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
-RewriteRule ^admin/bookings\.php$ admin/booking.php [L,QSA]
 
-# CRITICAL: First priority - Login/Signup direct access (with and without .php extension)
-# Base endpoint variations (with and without file extension)
-RewriteRule ^login$ login.php [L,QSA]
-RewriteRule ^login\.php$ login.php [L,QSA]
-RewriteRule ^signup$ signup.php [L,QSA]
-RewriteRule ^signup\.php$ signup.php [L,QSA]
-RewriteRule ^register$ signup.php [L,QSA]
-RewriteRule ^register\.php$ signup.php [L,QSA]
-
-# ROOT level auth endpoint variations (ensure these also work)
-RewriteRule ^/login$ login.php [L,QSA]
-RewriteRule ^/login\.php$ login.php [L,QSA]
-RewriteRule ^/signup$ signup.php [L,QSA]
-RewriteRule ^/signup\.php$ signup.php [L,QSA]
-RewriteRule ^/register$ signup.php [L,QSA]
-RewriteRule ^/register\.php$ signup.php [L,QSA]
-
-# API prefixed auth endpoint variations
-RewriteRule ^api/login$ login.php [L,QSA]
-RewriteRule ^api/login\.php$ login.php [L,QSA]
-RewriteRule ^api/signup$ signup.php [L,QSA]
-RewriteRule ^api/signup\.php$ signup.php [L,QSA]
-RewriteRule ^api/register$ signup.php [L,QSA]
-RewriteRule ^api/register\.php$ signup.php [L,QSA]
-
-# With trailing slashes
-RewriteRule ^login/$ login.php [L,QSA]
-RewriteRule ^signup/$ signup.php [L,QSA]
-RewriteRule ^register/$ signup.php [L,QSA]
-
-# CRITICAL VEHICLE ENDPOINTS - HIGHEST PRIORITY
-# Direct mappings for add vehicle endpoint with multiple variants
-RewriteRule ^admin/direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-
-# Add direct mapping for booking endpoints
+# User booking endpoints
 RewriteRule ^user/bookings$ user/bookings.php [L,QSA] 
 RewriteRule ^bookings$ bookings.php [L,QSA]
 RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
+
+# Login/Signup endpoints
+RewriteRule ^login$ login.php [L,QSA]
+RewriteRule ^signup$ signup.php [L,QSA]
+RewriteRule ^register$ signup.php [L,QSA]
+
+# Status and diagnostic endpoints
+RewriteRule ^status$ status.php [L,QSA]
+RewriteRule ^admin/status$ admin/status.php [L,QSA]
+RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
+RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
 
 # Other routes kept the same as before
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
