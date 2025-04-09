@@ -1,16 +1,11 @@
 
-import { bookingAPI } from './bookingAPI';
+// Only import the authAPI that exists
 import { authAPI } from './authAPI';
-import { vehicleAPI } from './vehicleAPI';
-import { fareAPI } from './fareAPI';
 
-// Re-export all APIs
-export { bookingAPI, authAPI, vehicleAPI, fareAPI };
+// Re-export authAPI
+export { authAPI };
 
-// Export a default object with all APIs
+// Export a default object with all available APIs
 export default {
-  booking: bookingAPI,
-  auth: authAPI,
-  vehicle: vehicleAPI,
-  fare: fareAPI
+  auth: authAPI
 };
