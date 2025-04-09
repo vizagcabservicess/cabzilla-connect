@@ -1,3 +1,4 @@
+
 # Enable URL rewriting
 RewriteEngine On
 
@@ -79,4 +80,6 @@ AddType application/x-httpd-php .php
 # Ensure PHP files are recognized and processed correctly
 <FilesMatch "\.php$">
     SetHandler application/x-httpd-php
+    # Set JSON content type for API responses
+    Header always set Content-Type "application/json"
 </FilesMatch>

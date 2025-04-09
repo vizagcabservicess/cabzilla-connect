@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -12,7 +13,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Debug mode - to diagnose problems
-$debugMode = false;
+$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
 // Critical error handling to prevent HTML output
 function handleFatalErrors() {
@@ -362,4 +363,7 @@ try {
     logError("Error in admin booking endpoint", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
+
+// Make sure to not output anything after response is sent
+exit;
 ?>
