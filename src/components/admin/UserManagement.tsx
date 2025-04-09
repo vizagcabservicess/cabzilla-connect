@@ -50,11 +50,18 @@ export function UserManagement() {
   
   useEffect(() => {
     // Get current user ID from auth API
-    const currentUser = authAPI.getCurrentUser();
-    if (currentUser) {
-      setCurrentUserId(currentUser.id);
-    }
+    const getCurrentUser = async () => {
+      try {
+        const userData = await authAPI.getCurrentUser();
+        if (userData) {
+          setCurrentUserId(userData.id);
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
     
+    getCurrentUser();
     fetchUsers();
   }, []);
   
