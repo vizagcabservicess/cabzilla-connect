@@ -1,6 +1,7 @@
 
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
+import { User } from '@/types/api';
 
 const apiClient = axios.create({
   headers: {
@@ -66,34 +67,92 @@ export const authAPI = {
     localStorage.removeItem('userData');
   },
 
-  getAllUsers: async () => {
+  getAllUsers: async (): Promise<User[]> => {
     try {
-      // Try the primary endpoint
-      const response = await apiClient.get(getApiUrl('/api/admin/users'));
-      return response.data;
-    } catch (error) {
-      console.error('Primary users endpoint failed, trying fallback:', error);
+      console.log('Fetching all users...');
       
-      // Try the direct data endpoint
-      const fallbackResponse = await apiClient.get(getApiUrl('/api/admin/direct-user-data.php'), {
-        headers: { 'X-Force-Refresh': 'true' }
-      });
-      
-      if (fallbackResponse.data && fallbackResponse.data.users) {
-        return fallbackResponse.data.users;
+      // Try the primary admin users endpoint first
+      try {
+        console.log('Trying primary admin users endpoint...');
+        const response = await apiClient.get(getApiUrl('/api/admin/users'));
+        
+        if (response.data && Array.isArray(response.data)) {
+          return response.data.map(user => ({
+            ...user,
+            role: user.role === 'admin' ? 'admin' : 'user' // Ensure role is valid
+          }));
+        }
+        
+        if (response.data && response.data.status === 'success' && response.data.data) {
+          return response.data.data.map(user => ({
+            ...user,
+            role: user.role === 'admin' ? 'admin' : 'user' // Ensure role is valid
+          }));
+        }
+      } catch (error) {
+        console.error('Primary users endpoint failed:', error);
       }
       
-      throw error;
+      // Try the direct endpoint as fallback
+      try {
+        console.log('Trying direct admin users endpoint...');
+        const response = await apiClient.get(getApiUrl('/api/admin/direct-user-data.php'), {
+          headers: { 'X-Force-Refresh': 'true' }
+        });
+        
+        if (response.data && response.data.users && Array.isArray(response.data.users)) {
+          return response.data.users.map(user => ({
+            id: Number(user.id),
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is typed correctly
+            createdAt: user.createdAt || new Date().toISOString()
+          }));
+        }
+      } catch (error) {
+        console.error('Direct endpoint failed:', error);
+      }
+      
+      // Last resort - try PHP endpoint directly
+      console.log('Trying PHP endpoint directly...');
+      const phpResponse = await axios.get(getApiUrl('/api/admin/users.php'), {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      
+      if (phpResponse.data && phpResponse.data.status === 'success' && phpResponse.data.data) {
+        return phpResponse.data.data.map(user => ({
+          id: Number(user.id),
+          name: user.name,
+          email: user.email,
+          phone: user.phone || null,
+          role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is typed correctly
+          createdAt: user.createdAt || user.created_at || new Date().toISOString()
+        }));
+      }
+      
+      throw new Error('Failed to fetch users data from all endpoints');
+    } catch (error) {
+      console.error('Error fetching all users:', error);
+      
+      // Return empty array instead of throwing
+      return [];
     }
   },
 
-  updateUserRole: async (userId: number, role: string) => {
+  updateUserRole: async (userId: number, role: 'admin' | 'user') => {
     try {
       // Try the RESTful endpoint first
-      const response = await apiClient.put(getApiUrl(`/api/admin/users/${userId}/role`), { role });
-      return response.data;
-    } catch (error) {
-      console.error('Primary role endpoint failed, trying fallback:', error);
+      try {
+        const response = await apiClient.put(getApiUrl(`/api/admin/users/${userId}/role`), { role });
+        return response.data;
+      } catch (error) {
+        console.error('Primary role endpoint failed, trying fallback:', error);
+      }
       
       // Try the PHP direct endpoint
       const fallbackResponse = await apiClient.put(getApiUrl('/api/admin/users.php'), {
@@ -102,6 +161,9 @@ export const authAPI = {
       });
       
       return fallbackResponse.data;
+    } catch (error) {
+      console.error('All update role endpoints failed:', error);
+      throw error;
     }
   }
 };

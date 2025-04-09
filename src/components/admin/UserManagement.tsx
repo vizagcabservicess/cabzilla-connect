@@ -71,16 +71,30 @@ export function UserManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Try direct endpoint first
+      console.log('Fetching users via getAllUsers...');
+      const userData = await authAPI.getAllUsers();
+      
+      if (userData && userData.length > 0) {
+        console.log('Users fetched successfully:', userData);
+        setUsers(userData);
+        setIsLoading(false);
+        return;
+      }
+      
+      // If authAPI.getAllUsers() returns empty array, try direct endpoint
+      console.log('No users from getAllUsers, trying direct endpoint...');
       try {
         const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           }
         });
         
-        console.log('User data response:', response.data);
+        console.log('Direct user data response:', response.data);
         
         if (response.data && response.data.users) {
           // Map the response data to match the User type with proper type checks
@@ -89,48 +103,40 @@ export function UserManagement() {
             name: user.name,
             email: user.email,
             phone: user.phone || null,
-            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user', // Ensure role is valid
+            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
             createdAt: user.createdAt
           }));
           
           setUsers(userData);
           setIsLoading(false);
           return;
-        } else if (response.data && response.data.status === 'success' && response.data.data) {
-          // Ensure data conforms to User type
+        } 
+      } catch (firstError) {
+        console.error('Error with direct endpoint:', firstError);
+      }
+      
+      // If still no users, try secondary PHP direct endpoint
+      console.log('Trying direct PHP endpoint...');
+      try {
+        const response = await axios.get(getApiUrl('/api/admin/users.php'), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        console.log('PHP users endpoint response:', response.data);
+        
+        if (response.data && response.data.status === 'success' && response.data.data) {
           const userData: User[] = response.data.data.map((user: any) => ({
             id: parseInt(user.id),
             name: user.name,
             email: user.email,
             phone: user.phone || null,
-            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user', // Ensure role is valid
-            createdAt: user.createdAt
-          }));
-          
-          setUsers(userData);
-          setIsLoading(false);
-          return;
-        }
-      } catch (firstError) {
-        console.error('Error with direct endpoint:', firstError);
-      }
-      
-      // If first attempt fails, try fallback endpoint
-      try {
-        const response = await axios.get(getApiUrl('/api/users.php'), {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        if (response.data && Array.isArray(response.data)) {
-          const userData: User[] = response.data.map((user: any) => ({
-            id: parseInt(user.id),
-            name: user.name,
-            email: user.email,
-            phone: user.phone || null,
-            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user',
+            role: user.role === 'admin' ? 'admin' : 'user', // Ensure role is valid
             createdAt: user.createdAt || user.created_at
           }));
           
@@ -139,10 +145,11 @@ export function UserManagement() {
           return;
         }
       } catch (secondError) {
-        console.error('Error with fallback endpoint:', secondError);
+        console.error('Error with PHP endpoint:', secondError);
       }
       
-      // If both API calls fail, use sample data as a last resort
+      // If all API calls fail, use sample data as a last resort
+      console.log('All endpoints failed, using sample data');
       const sampleUsers: User[] = [
         {
           id: 101,
@@ -173,6 +180,28 @@ export function UserManagement() {
         description: error instanceof Error ? error.message : 'Failed to load users',
         variant: "destructive",
       });
+      
+      // Use sample data as fallback
+      const sampleUsers: User[] = [
+        {
+          id: 101,
+          name: 'Admin User',
+          email: 'admin@example.com',
+          phone: '9876543210',
+          role: 'admin',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 102,
+          name: 'Test User',
+          email: 'user@example.com',
+          phone: '8765432109',
+          role: 'user',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      
+      setUsers(sampleUsers);
     } finally {
       setIsLoading(false);
     }
@@ -198,27 +227,9 @@ export function UserManagement() {
         return;
       }
       
-      // First try direct endpoint
-      try {
-        const response = await axios.put(getApiUrl('/api/admin/users.php'), {
-          userId: userId,
-          role: newRole
-        }, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.data || response.data.status !== 'success') {
-          throw new Error(response.data?.message || 'Failed to update user role');
-        }
-      } catch (apiError) {
-        console.error('Direct endpoint failed, falling back to mock update', apiError);
-        // We don't throw here, just continue to update the UI
-      }
+      await authAPI.updateUserRole(userId, newRole);
       
-      // Update the local state regardless of API result to provide immediate feedback
+      // Update the local state to provide immediate feedback
       setUsers(users.map(u => 
         u.id === userId ? { ...u, role: newRole } : u
       ));
