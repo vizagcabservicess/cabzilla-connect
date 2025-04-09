@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -30,42 +29,25 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Easy access diagnostic endpoints - highest priority
+# Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
-RewriteRule ^admin/test-connection$ test-connection.php [L,QSA]
-RewriteRule ^admin/test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^admin/direct-connection$ test-connection.php [L,QSA]
 
-# HIGHEST PRIORITY: Booking endpoints
+# HIGHEST PRIORITY: Booking endpoints 
 RewriteRule ^book$ book.php [L,QSA]
 RewriteRule ^book\.php$ book.php [L,QSA]
 RewriteRule ^book/$ book.php [L,QSA]
 RewriteRule ^create-booking$ book.php [L,QSA]
 RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
-# HIGHEST PRIORITY: Admin booking endpoints
-RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
-RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
-RewriteRule ^admin/bookings$ admin/booking.php [L,QSA]
-RewriteRule ^admin/bookings/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
-
-# User booking endpoints
-RewriteRule ^user/bookings$ user/bookings.php [L,QSA] 
-RewriteRule ^bookings$ bookings.php [L,QSA]
-RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
-
-# Login/Signup endpoints
-RewriteRule ^login$ login.php [L,QSA]
-RewriteRule ^signup$ signup.php [L,QSA]
-RewriteRule ^register$ signup.php [L,QSA]
-
-# Status and diagnostic endpoints
-RewriteRule ^status$ status.php [L,QSA]
-RewriteRule ^admin/status$ admin/status.php [L,QSA]
-RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
-RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
+# CRITICAL: Force direct PHP for critical files
+<Files "book.php">
+    SetHandler application/x-httpd-php
+</Files>
+<Files "test-connection.php">
+    SetHandler application/x-httpd-php
+</Files>
 
 # Keep existing routes
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]

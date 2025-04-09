@@ -4,6 +4,25 @@
  * Database utility functions for establishing connections
  */
 
+// Define a function to log database connection info
+function logDbConnection($message, $data = []) {
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    
+    $logFile = $logDir . '/db_connection_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] $message";
+    
+    if (!empty($data)) {
+        $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+    
+    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
+    error_log($logEntry);
+}
+
 // Get database connection with improved error handling
 function getDbConnection() {
     // Database credentials
@@ -13,12 +32,18 @@ function getDbConnection() {
     $dbPass = 'Vizag@1213';
     
     try {
+        logDbConnection("Attempting database connection", [
+            'host' => $dbHost, 
+            'dbname' => $dbName,
+            'user' => $dbUser
+        ]);
+        
         // Create connection with error reporting
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
         // Check connection
         if ($conn->connect_error) {
-            error_log("Database connection failed: " . $conn->connect_error);
+            logDbConnection("Database connection failed", ['error' => $conn->connect_error]);
             throw new Exception("Connection failed: " . $conn->connect_error);
         }
         
@@ -28,22 +53,16 @@ function getDbConnection() {
         // Test connection with a simple query to ensure it's working
         $testResult = $conn->query("SELECT 1");
         if (!$testResult) {
+            logDbConnection("Database test query failed", ['error' => $conn->error]);
             throw new Exception("Database connection test query failed: " . $conn->error);
         }
         
+        logDbConnection("Database connection successful", ['server_info' => $conn->server_info]);
         return $conn;
     } catch (Exception $e) {
         // Log error to both custom log and PHP error log
+        logDbConnection("Database connection error", ['error' => $e->getMessage()]);
         error_log("Database connection error: " . $e->getMessage());
-        
-        $logDir = __DIR__ . '/../../logs';
-        if (!file_exists($logDir)) {
-            mkdir($logDir, 0777, true);
-        }
-        
-        $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFile, "[$timestamp] Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
         
         return null;
     }
@@ -75,7 +94,7 @@ function verifyDatabaseIntegrity($conn) {
         return ['status' => 'error', 'message' => 'No database connection'];
     }
     
-    $requiredTables = ['users', 'bookings', 'vehicles', 'local_fares', 'outstation_fares', 'airport_fares'];
+    $requiredTables = ['bookings'];
     $missingTables = [];
     
     foreach ($requiredTables as $table) {
@@ -95,73 +114,6 @@ function verifyDatabaseIntegrity($conn) {
     return ['status' => 'success', 'message' => 'Database integrity verified'];
 }
 
-// Enhanced database connection with retry mechanism
-function getDbConnectionWithRetry($maxRetries = 3) {
-    $retries = 0;
-    $lastError = null;
-    
-    while ($retries < $maxRetries) {
-        try {
-            // Database credentials
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';
-            $dbUser = 'u644605165_usr_be';
-            $dbPass = 'Vizag@1213';
-            
-            // Create connection
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            // Check connection
-            if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
-            }
-            
-            // Set charset
-            $conn->set_charset("utf8mb4");
-            
-            // Test connection with a simple query
-            $testResult = $conn->query("SELECT 1");
-            if (!$testResult) {
-                throw new Exception("Connection test query failed: " . $conn->error);
-            }
-            
-            // Ensure the connection is properly established
-            if (!$conn->ping()) {
-                throw new Exception("Connection ping failed: " . $conn->error);
-            }
-            
-            error_log("Database connection successful");
-            return $conn;
-        } catch (Exception $e) {
-            $lastError = $e;
-            $retries++;
-            error_log("Database connection attempt $retries failed: " . $e->getMessage());
-            
-            if ($retries < $maxRetries) {
-                // Wait a bit before retry (exponential backoff)
-                usleep(500000 * $retries); // 500ms, 1s, 1.5s
-            }
-        }
-    }
-    
-    // If we get here, all retry attempts failed
-    error_log("All database connection attempts failed after $maxRetries retries");
-    
-    if ($lastError) {
-        // Log the last error
-        $logDir = __DIR__ . '/../../logs';
-        if (!file_exists($logDir)) {
-            mkdir($logDir, 0777, true);
-        }
-        
-        $logFile = $logDir . '/database_error_' . date('Y-m-d') . '.log';
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($logFile, "[$timestamp] All connection attempts failed: " . $lastError->getMessage() . "\n", FILE_APPEND);
-    }
-    
-    return null;
-}
-
 // Direct database testing function for diagnostics
 function testDirectDatabaseConnection() {
     $result = [
@@ -178,11 +130,17 @@ function testDirectDatabaseConnection() {
         $dbUser = 'u644605165_usr_be';
         $dbPass = 'Vizag@1213';
         
+        logDbConnection("Testing direct database connection", [
+            'host' => $dbHost, 
+            'dbname' => $dbName
+        ]);
+        
         // Create connection
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
         // Check connection
         if ($conn->connect_error) {
+            logDbConnection("Direct connection failed", ['error' => $conn->connect_error]);
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
@@ -192,27 +150,12 @@ function testDirectDatabaseConnection() {
         // Test connection with a simple query
         $testResult = $conn->query("SELECT 1");
         if (!$testResult) {
+            logDbConnection("Test query failed", ['error' => $conn->error]);
             throw new Exception("Test query failed: " . $conn->error);
         }
         
         // Check if bookings table exists
         $bookingsTableExists = tableExists($conn, 'bookings');
-        
-        // Get bookings columns if table exists
-        $bookingsColumns = [];
-        $bookingsCount = 0;
-        
-        if ($bookingsTableExists) {
-            $columnsResult = $conn->query("SHOW COLUMNS FROM bookings");
-            while ($column = $columnsResult->fetch_assoc()) {
-                $bookingsColumns[] = $column['Field'];
-            }
-            
-            // Count bookings
-            $countResult = $conn->query("SELECT COUNT(*) as count FROM bookings");
-            $countRow = $countResult->fetch_assoc();
-            $bookingsCount = $countRow['count'];
-        }
         
         // Try simple insert and delete on bookings table
         $testInsertSuccess = false;
@@ -226,6 +169,10 @@ function testDirectDatabaseConnection() {
             $testInsertResult = $conn->query($testInsertSql);
             
             $testInsertSuccess = $testInsertResult !== false;
+            logDbConnection("Test insert result", [
+                'success' => $testInsertSuccess, 
+                'error' => $testInsertSuccess ? null : $conn->error
+            ]);
             
             // Delete test record
             if ($testInsertSuccess) {
@@ -242,18 +189,17 @@ function testDirectDatabaseConnection() {
             'server' => $conn->server_info ?? 'unknown',
             'php_version' => phpversion(),
             'bookings_table_exists' => $bookingsTableExists,
-            'bookings_columns' => $bookingsColumns,
-            'bookings_column_count' => count($bookingsColumns),
-            'bookings_count' => $bookingsCount,
             'test_insert_success' => $testInsertSuccess
         ];
+        
+        logDbConnection("Direct test successful", ['result' => $result]);
         
         // Close connection
         $conn->close();
         
     } catch (Exception $e) {
         // Log error and build error response
-        error_log("Direct database connection test failed: " . $e->getMessage());
+        logDbConnection("Direct database connection test failed", ['error' => $e->getMessage()]);
         
         $result = [
             'status' => 'error',
@@ -266,4 +212,38 @@ function testDirectDatabaseConnection() {
     }
     
     return $result;
+}
+
+// Enhanced direct database connection function
+function getDirectDatabaseConnection() {
+    // Database credentials
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    try {
+        // Create connection
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        // Check connection
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set charset
+        $conn->set_charset("utf8mb4");
+        
+        // Test connection with a simple query
+        $testResult = $conn->query("SELECT 1");
+        if (!$testResult) {
+            throw new Exception("Connection test query failed: " . $conn->error);
+        }
+        
+        return $conn;
+    } catch (Exception $e) {
+        // Log the error
+        error_log("Direct database connection error: " . $e->getMessage());
+        return null;
+    }
 }

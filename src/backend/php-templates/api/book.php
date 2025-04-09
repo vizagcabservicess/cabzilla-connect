@@ -146,14 +146,22 @@ if (!empty($missingFields)) {
     exit;
 }
 
-// Connect to database using improved connection with retry
+// Connect to database using direct connection (no retries)
 try {
-    logBooking("Attempting database connection");
-    $conn = getDbConnectionWithRetry(3);
+    logBooking("Attempting direct database connection");
     
-    if (!$conn) {
-        logBooking("Database connection failed after multiple attempts");
-        throw new Exception("Database connection failed after multiple attempts");
+    // Database credentials
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    // Create connection
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    // Check connection
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
     logBooking("Database connection established successfully");
@@ -173,18 +181,14 @@ $timestamp = time();
 $random = mt_rand(1000, 9999);
 $bookingNumber = $prefix . $timestamp . $random;
 
-// Get user ID if authenticated
-$userId = null;
-$headers = getallheaders();
-
-// Debug log the user ID
-logBooking("User ID for booking", ['user_id' => ($userId ?? 'guest'), 'booking_number' => $bookingNumber]);
+// Debug log the booking number
+logBooking("Generated booking number", ['booking_number' => $bookingNumber]);
 
 // Begin transaction for data consistency
 $conn->begin_transaction();
 
 try {
-    // Check if the bookings table exists
+    // Directly check if the bookings table exists
     $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
     if ($tableResult->num_rows === 0) {
         // Create the bookings table if it doesn't exist
@@ -224,130 +228,65 @@ try {
         logBooking("Created bookings table successfully");
     }
 
-    // FIX: Direct simple SQL query to test if insertion will work at all
-    logBooking("Testing direct SQL query to see if insertion will work");
-    $testSql = "INSERT INTO bookings (booking_number, pickup_location, status) VALUES ('TEST123', 'Test Location', 'test')";
-    $testResult = $conn->query($testSql);
-    if (!$testResult) {
-        logBooking("Direct test insertion failed", ['error' => $conn->error]);
-    } else {
-        logBooking("Direct test insertion succeeded");
-        // Delete the test record to clean up
-        $conn->query("DELETE FROM bookings WHERE booking_number = 'TEST123'");
-    }
-
-    // FIX: Simplify the prepared statement and split into smaller operations to identify issues
-    logBooking("Using simplified prepared statement approach");
-    
-    // Step 1: Insert basic information first
-    $simpleSql = "INSERT INTO bookings (
-            booking_number, pickup_location, drop_location, pickup_date, 
-            cab_type, trip_type, status, passenger_name, passenger_phone, passenger_email
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)";
-        
-    $simpleStmt = $conn->prepare($simpleSql);
-    if (!$simpleStmt) {
-        logBooking("Simple prepare statement failed", ['error' => $conn->error]);
-        throw new Exception("Simple prepare statement failed: " . $conn->error);
-    }
-    
-    // Get basic values 
-    $pickupLocation = $data['pickupLocation'];
-    $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
-    $pickupDate = $data['pickupDate'];
-    $cabType = $data['cabType'];
-    $tripType = $data['tripType'];
-    $passengerName = $data['passengerName'];
-    $passengerPhone = $data['passengerPhone'];
-    $passengerEmail = $data['passengerEmail'];
-    
-    logBooking("Binding basic values to first SQL statement", [
-        'booking_number' => $bookingNumber,
-        'pickup_location' => $pickupLocation,
-        'drop_location' => $dropLocation,
-        'pickup_date' => $pickupDate,
-        'cab_type' => $cabType,
-        'trip_type' => $tripType
-    ]);
-    
-    // Simple bind with fewer parameters to minimize errors
-    $simpleStmt->bind_param(
-        "sssssssss",
-        $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-        $cabType, $tripType, $passengerName, $passengerPhone, $passengerEmail
-    );
-    
-    logBooking("About to execute simple SQL statement");
-    
-    if (!$simpleStmt->execute()) {
-        logBooking("Simple execute statement failed", ['error' => $simpleStmt->error]);
-        throw new Exception("Simple execute statement failed: " . $simpleStmt->error);
-    }
-    
-    logBooking("Basic booking info inserted successfully");
-    
-    // Step 2: Update with additional information
-    $updateSql = "UPDATE bookings SET 
-                    return_date = ?, 
-                    distance = ?, 
-                    trip_mode = ?,
-                    total_amount = ?, 
-                    hourly_package = ?
-                WHERE booking_number = ?";
-                
-    $updateStmt = $conn->prepare($updateSql);
-    if (!$updateStmt) {
-        logBooking("Update prepare statement failed", ['error' => $conn->error]);
-        throw new Exception("Update prepare statement failed: " . $conn->error);
-    }
-    
-    // Get additional values
-    $returnDate = isset($data['returnDate']) && !empty($data['returnDate']) ? $data['returnDate'] : null;
-    $distance = floatval($data['distance']); 
-    $tripMode = $data['tripMode'];
+    // USING DIRECT QUERY APPROACH - MORE RELIABLE
+    // Prepare all the data values with proper escaping
+    $bookingNumberEscaped = $conn->real_escape_string($bookingNumber);
+    $pickupLocationEscaped = $conn->real_escape_string($data['pickupLocation']);
+    $dropLocationEscaped = isset($data['dropLocation']) ? $conn->real_escape_string($data['dropLocation']) : '';
+    $pickupDateEscaped = $conn->real_escape_string($data['pickupDate']);
+    $returnDateEscaped = isset($data['returnDate']) && !empty($data['returnDate']) ? "'" . $conn->real_escape_string($data['returnDate']) . "'" : "NULL";
+    $cabTypeEscaped = $conn->real_escape_string($data['cabType']);
+    $distance = floatval($data['distance']);
+    $tripTypeEscaped = $conn->real_escape_string($data['tripType']);
+    $tripModeEscaped = $conn->real_escape_string($data['tripMode']);
     $totalAmount = floatval($data['totalAmount']);
-    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+    $passengerNameEscaped = $conn->real_escape_string($data['passengerName']);
+    $passengerPhoneEscaped = $conn->real_escape_string($data['passengerPhone']);
+    $passengerEmailEscaped = $conn->real_escape_string($data['passengerEmail']);
+    $hourlyPackageEscaped = isset($data['hourlyPackage']) ? "'" . $conn->real_escape_string($data['hourlyPackage']) . "'" : "NULL";
+    $tourIdEscaped = isset($data['tourId']) ? "'" . $conn->real_escape_string($data['tourId']) . "'" : "NULL";
     
-    logBooking("Binding additional values to update SQL statement", [
-        'return_date' => $returnDate,
-        'distance' => $distance,
-        'trip_mode' => $tripMode,
-        'total_amount' => $totalAmount,
-        'hourly_package' => $hourlyPackage,
-        'booking_number' => $bookingNumber
+    logBooking("Prepared data for direct insertion", [
+        'booking_number' => $bookingNumberEscaped,
+        'pickup_location' => $pickupLocationEscaped,
+        'cab_type' => $cabTypeEscaped,
+        'total_amount' => $totalAmount
     ]);
+
+    // CRITICAL FIX: Use direct SQL query with properly formatted values
+    $insertSql = "
+    INSERT INTO bookings (
+        booking_number, pickup_location, drop_location, pickup_date, 
+        return_date, cab_type, distance, trip_type, trip_mode, 
+        total_amount, status, passenger_name, passenger_phone, 
+        passenger_email, hourly_package, tour_id
+    ) VALUES (
+        '$bookingNumberEscaped', '$pickupLocationEscaped', '$dropLocationEscaped', '$pickupDateEscaped',
+        $returnDateEscaped, '$cabTypeEscaped', $distance, '$tripTypeEscaped', '$tripModeEscaped',
+        $totalAmount, 'pending', '$passengerNameEscaped', '$passengerPhoneEscaped',
+        '$passengerEmailEscaped', $hourlyPackageEscaped, $tourIdEscaped
+    )";
     
-    $updateStmt->bind_param(
-        "sdsdss",
-        $returnDate, $distance, $tripMode, $totalAmount, $hourlyPackage, $bookingNumber
-    );
+    logBooking("Executing direct insertion with SQL", ['sql' => $insertSql]);
     
-    logBooking("About to execute update SQL statement");
-    
-    if (!$updateStmt->execute()) {
-        logBooking("Update execute statement failed", ['error' => $updateStmt->error]);
-        throw new Exception("Update execute statement failed: " . $updateStmt->error);
+    $insertResult = $conn->query($insertSql);
+    if (!$insertResult) {
+        logBooking("Direct insertion failed", ['error' => $conn->error]);
+        throw new Exception("Direct insertion failed: " . $conn->error);
     }
     
     $bookingId = $conn->insert_id;
-    logBooking("Booking created and updated successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
+    logBooking("Booking created successfully", ['id' => $bookingId, 'booking_number' => $bookingNumber]);
 
-    // Get the created booking
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE booking_number = ?");
-    if (!$stmt) {
-        logBooking("Prepare statement failed for select", ['error' => $conn->error]);
-        throw new Exception("Prepare statement failed for select: " . $conn->error);
+    // Get the created booking 
+    $selectSql = "SELECT * FROM bookings WHERE booking_number = '$bookingNumberEscaped'";
+    $selectResult = $conn->query($selectSql);
+    if (!$selectResult) {
+        logBooking("Failed to fetch inserted booking", ['error' => $conn->error]);
+        throw new Exception("Failed to fetch inserted booking: " . $conn->error);
     }
-
-    $stmt->bind_param("s", $bookingNumber);
-    if (!$stmt->execute()) {
-        logBooking("Execute statement failed for select", ['error' => $stmt->error]);
-        throw new Exception("Execute statement failed for select: " . $stmt->error);
-    }
-
-    $result = $stmt->get_result();
-    $booking = $result->fetch_assoc();
-
+    
+    $booking = $selectResult->fetch_assoc();
     if (!$booking) {
         logBooking("No booking found after insertion");
         throw new Exception("No booking found after insertion");
