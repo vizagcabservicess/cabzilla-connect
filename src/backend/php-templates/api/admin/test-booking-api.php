@@ -198,6 +198,7 @@ try {
         $conn->begin_transaction();
         
         // Prepare the insert statement - use very simple prepared statement to minimize potential issues
+        // FIXED: The problematic statement - corrected parameter binding
         $testSql = "INSERT INTO bookings 
             (booking_number, pickup_location, drop_location, pickup_date, 
              cab_type, distance, trip_type, trip_mode, 
@@ -220,15 +221,17 @@ try {
         $distance = 10.5;
         $tripType = "local";
         $tripMode = "one-way";
-        $totalAmount = 500;
+        $totalAmount = 500.00;
         $passengerName = "Test User";
         $passengerPhone = "1234567890";
         $passengerEmail = "test@example.com";
         $status = "test";
         
         logTestMessage("Binding parameters to insert statement");
+        
+        // FIXED: Make sure the binding string matches the number of parameters
         $testStmt->bind_param(
-            "ssssdsssdsss",
+            "ssssdsssdssss",
             $testBookingNumber, $pickupLocation, $dropLocation, $pickupDate,
             $cabType, $distance, $tripType, $tripMode,
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail, $status

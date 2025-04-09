@@ -6,9 +6,9 @@
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Correct database credentials
+    // Database credentials
     $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';  // Corrected database name
+    $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
     $dbPass = 'Vizag@1213';
     
@@ -98,7 +98,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
         try {
             // Database credentials
             $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';  // Corrected database name
+            $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
             $dbPass = 'Vizag@1213';
             

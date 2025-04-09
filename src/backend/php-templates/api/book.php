@@ -224,7 +224,8 @@ try {
         logBooking("Created bookings table successfully");
     }
 
-    // Prepare the SQL statement for guest booking
+    // Prepare the SQL statement for booking insertion
+    // FIXED: Corrected the parameter binding with proper type definition string
     $sql = "INSERT INTO bookings 
             (booking_number, pickup_location, drop_location, pickup_date, 
              return_date, cab_type, distance, trip_type, trip_mode, 
@@ -263,6 +264,7 @@ try {
         'amount' => $totalAmount
     ]);
     
+    // FIXED: Make sure type definition string matches the parameters
     $stmt->bind_param(
         "ssssssdssdsssss",
         $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
