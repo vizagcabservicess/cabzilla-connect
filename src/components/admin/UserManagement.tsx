@@ -96,19 +96,29 @@ export function UserManagement() {
         console.log('User data response:', response.data);
         
         if (response.data && response.data.users) {
-          // Map the response data to match the User type
-          const userData = response.data.users.map((user: any) => ({
+          // Map the response data to match the User type with proper type checks
+          const userData: User[] = response.data.users.map((user: any) => ({
             id: user.id,
             name: user.name,
             email: user.email,
             phone: user.phone || null,
-            role: user.role,
+            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user', // Ensure role is valid
             createdAt: user.createdAt
           }));
           
           setUsers(userData);
         } else if (response.data && response.data.status === 'success' && response.data.data) {
-          setUsers(response.data.data);
+          // Ensure data conforms to User type
+          const userData: User[] = response.data.data.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user', // Ensure role is valid
+            createdAt: user.createdAt
+          }));
+          
+          setUsers(userData);
         } else {
           throw new Error('No user data received or invalid format');
         }
@@ -116,7 +126,7 @@ export function UserManagement() {
         console.error('Error with fallback endpoint:', secondError);
         
         // If both API calls fail, use sample data as a last resort
-        const sampleUsers = [
+        const sampleUsers: User[] = [
           {
             id: 101,
             name: 'Admin User',
@@ -196,7 +206,7 @@ export function UserManagement() {
       
       // Update the local state
       setUsers(users.map(u => 
-        u.id === userId ? { ...u, role: newRole } : u
+        u.id === userId ? { ...u, role: newRole as 'admin' | 'user' } : u
       ));
       
       toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
