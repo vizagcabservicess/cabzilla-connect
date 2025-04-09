@@ -13,7 +13,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Include email utilities
-require_once __DIR__ . '/utils/email.php';
 require_once __DIR__ . '/utils/mailer.php';
 
 // Create log directory if it doesn't exist
@@ -54,6 +53,7 @@ try {
             <p>This is a test email from Vizag Taxi Hub.</p>
             <p>If you received this email, the email sending functionality is working correctly.</p>
             <p>Time: " . date('Y-m-d H:i:s') . "</p>
+            <p>Server: " . $_SERVER['SERVER_NAME'] . "</p>
         </body>
         </html>
     ";
@@ -75,6 +75,8 @@ try {
     
     // If PHPMailer fails, try the legacy method
     logTestEmail("PHPMailer failed, attempting legacy method");
+    $legacyResult = false;
+    
     if (function_exists('sendEmail')) {
         $legacyResult = sendEmail($recipientEmail, $subject, $htmlBody);
         
@@ -88,6 +90,25 @@ try {
             ]);
             exit;
         }
+    }
+    
+    // If all methods fail, try direct PHP mail() function
+    logTestEmail("Trying direct PHP mail() function");
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
+    
+    $directMailResult = mail($recipientEmail, $subject, $htmlBody, $headers);
+    
+    if ($directMailResult) {
+        logTestEmail("Direct PHP mail() function succeeded");
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Test email sent successfully using PHP mail function',
+            'recipient' => $recipientEmail,
+            'time' => date('Y-m-d H:i:s')
+        ]);
+        exit;
     }
     
     // If all methods fail

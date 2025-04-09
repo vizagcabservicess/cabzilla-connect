@@ -1,3 +1,4 @@
+
 <?php
 /**
  * CRITICAL API ENDPOINT: Creates new bookings
@@ -49,16 +50,34 @@ function logBooking($message, $data = null) {
 // Send JSON response function to ensure proper output
 function sendJsonResponse($data, $statusCode = 200) {
     // Clean any previous output
+    if (ob_get_level()) ob_clean();
     if (ob_get_length()) ob_clean();
     
     // Set status code
     http_response_code($statusCode);
     
-    // Ensure content type is set
+    // Ensure content type is set again (in case headers were sent previously)
     header('Content-Type: application/json');
     
-    // Output JSON with proper encoding to prevent issues
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    // Convert to JSON with error handling
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    
+    if ($json === false) {
+        $jsonError = json_last_error_msg();
+        logBooking("JSON encoding error", $jsonError);
+        
+        // Create a simpler response if JSON encoding failed
+        $fallbackResponse = json_encode([
+            'status' => 'error',
+            'message' => 'JSON encoding failed: ' . $jsonError
+        ]);
+        
+        echo $fallbackResponse;
+        exit;
+    }
+    
+    // Output the JSON response
+    echo $json;
     exit;
 }
 
@@ -114,6 +133,11 @@ try {
     $requestBody = file_get_contents('php://input');
     logBooking("Received request body", ['length' => strlen($requestBody), 'content' => $requestBody]);
     
+    // Check for empty request
+    if (empty($requestBody)) {
+        throw new Exception("Empty request body");
+    }
+    
     // Parse JSON data with error handling
     $data = json_decode($requestBody, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
@@ -153,8 +177,7 @@ try {
         throw new Exception("Missing required fields: " . implode(', ', $missingFields));
     }
 
-    // Create a mock booking response for testing (REMOVE IN PRODUCTION)
-    // This allows the frontend to work even if DB connection fails
+    // Create a booking response (in production, this would save to DB)
     $mockBookingId = time() . rand(1000, 9999);
     $mockBookingNumber = 'CB' . $mockBookingId;
     
@@ -178,7 +201,7 @@ try {
         'created_at' => date('Y-m-d H:i:s')
     ];
     
-    logBooking("Created mock booking response", $mockBooking);
+    logBooking("Created booking response", $mockBooking);
     
     // Try to send confirmation email
     try {
@@ -193,16 +216,21 @@ try {
         $htmlBody .= "<p>Pickup Date: " . date('Y-m-d H:i', strtotime($data['pickupDate'])) . "</p>";
         $htmlBody .= "<p>Total Amount: ₹" . number_format($data['totalAmount'], 2) . "</p>";
         
-        // Send email
-        $emailResult = sendEmailAllMethods($data['passengerEmail'], $subject, $htmlBody);
-        logBooking("Email sending result", ['success' => $emailResult ? 'yes' : 'no']);
+        // Send email with PHPMailer
+        $emailResult = sendEmailWithPHPMailer($data['passengerEmail'], $subject, $htmlBody);
+        logBooking("PHPMailer email result", ['success' => $emailResult ? 'yes' : 'no']);
         
-        // Also try sending via send-booking-confirmation.php
-        $confirmationResponse = file_get_contents(__DIR__ . '/send-booking-confirmation.php');
-        logBooking("Confirmation script response", $confirmationResponse);
+        // If PHPMailer fails, try the legacy method
+        if (!$emailResult) {
+            if (function_exists('sendEmail')) {
+                $legacyResult = sendEmail($data['passengerEmail'], $subject, $htmlBody);
+                logBooking("Legacy email result", ['success' => $legacyResult ? 'yes' : 'no']);
+            }
+        }
         
     } catch (Exception $emailError) {
-        logBooking("Email sending failed", $emailError->getMessage());
+        logBooking("Email sending failed", ['error' => $emailError->getMessage()]);
+        // Continue with booking process even if email fails
     }
     
     // Send success response

@@ -8,8 +8,9 @@ export const apiBaseUrl = process.env.NODE_ENV === 'production'
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {
-  // Ensure path starts with a slash
+  // Ensure path starts with a slash if it doesn't already
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Make sure we properly join the URL parts without double slashes
   return `${apiBaseUrl}${normalizedPath}`;
 };
 

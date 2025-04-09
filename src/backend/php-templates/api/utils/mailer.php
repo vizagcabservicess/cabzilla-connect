@@ -1,7 +1,6 @@
 
 <?php
 // PHPMailer integration for reliable email sending
-// require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Simulate PHPMailer for development environment
 class PHPMailer {
@@ -74,7 +73,7 @@ function logError($message, $data = []) {
 }
 
 /**
- * Send an email using PHPMailer with Hostinger SMTP settings
+ * Send an email using PHPMailer with enhanced error handling
  * 
  * @param string $to Recipient email address
  * @param string $subject Email subject
@@ -125,6 +124,13 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
             }
         }
         
+        // Log attempt before sending
+        logError("Attempting to send email via PHPMailer SMTP", [
+            'to' => $to,
+            'subject' => $subject,
+            'smtp_host' => $mail->Host
+        ]);
+        
         // Send the email
         $success = $mail->send();
         logError("PHPMailer send result", ['success' => $success ? 'true' : 'false']);
@@ -135,7 +141,29 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ]);
-        return false;
+        
+        // Try again with alternative method
+        try {
+            // Disable SMTP for direct sending
+            $mail = new PHPMailer(true);
+            $mail->isSMTP = false;
+            
+            // Set basic information
+            $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->Body = $htmlBody;
+            $mail->isHTML(true);
+            
+            logError("Attempting direct mail send without SMTP", ['to' => $to]);
+            $directResult = $mail->send();
+            logError("Direct send result", ['success' => $directResult ? 'true' : 'false']);
+            
+            return $directResult;
+        } catch (Exception $e2) {
+            logError("Direct mail send also failed", ['error' => $e2->getMessage()]);
+            return false;
+        }
     }
 }
 
@@ -159,20 +187,24 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
         return true;
     }
     
-    // If PHPMailer fails, try legacy method through existing sendEmail function
-    // The sendEmail function is defined in email.php which includes this file
-    if (function_exists('sendEmail')) {
-        $legacyResult = sendEmail($to, $subject, $htmlBody);
-        
-        if ($legacyResult) {
-            logError("Successfully sent email via legacy method", [
-                'to' => $to,
-                'subject' => $subject
-            ]);
-            return true;
-        }
+    // If PHPMailer fails, try PHP's native mail() function
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
+    $headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+    
+    logError("Attempting to send via PHP mail()", ['to' => $to]);
+    $mailResult = mail($to, $subject, $htmlBody, $headers);
+    
+    if ($mailResult) {
+        logError("Successfully sent email via mail()", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        return true;
     }
     
+    // If mail() also fails, log the failure
     logError("All email sending methods failed", [
         'to' => $to,
         'subject' => $subject

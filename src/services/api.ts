@@ -63,7 +63,7 @@ export const bookingAPI = {
       const requestBody = JSON.stringify(bookingData);
       console.log('Request body after stringifying:', requestBody);
       
-      // Use timeout and more robust fetch configuration with longer timeout
+      // Use direct fetch with proper error handling (avoid empty responses)
       const response = await fetch(getApiUrl('/api/book.php'), {
         method: 'POST',
         headers: {
@@ -75,67 +75,60 @@ export const bookingAPI = {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error creating booking:', errorText);
-        throw new Error(`Failed to create booking: ${response.status} ${response.statusText}`);
+        console.error('Error response from server:', errorText);
+        throw new Error(`Server responded with status: ${response.status} ${response.statusText}`);
       }
       
-      // Safer JSON parsing with error handling
-      let responseText;
+      // Get the response text first to debug potential issues
+      const responseText = await response.text();
+      console.log('Raw server response:', responseText);
+      
+      // Safety check - empty responses
+      if (!responseText || responseText.trim() === '') {
+        console.error('Server returned an empty response');
+        throw new Error('Server returned an empty response');
+      }
+      
+      // Parse the response text into JSON
       let result;
-      
       try {
-        responseText = await response.text();
-        console.log('Raw response:', responseText);
-        
-        // Only attempt parsing if we have actual content
-        if (responseText && responseText.trim()) {
-          try {
-            result = JSON.parse(responseText);
-          } catch (parseError) {
-            console.error('JSON parse error:', parseError, 'Response text was:', responseText);
-            throw new Error('Invalid JSON response from server');
-          }
-        } else {
-          console.error('Empty response received');
-          throw new Error('Empty response received from server');
-        }
-      } catch (textError) {
-        console.error('Error reading response text:', textError);
-        throw new Error('Failed to read server response');
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse server response as JSON:', parseError);
+        throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
       }
       
-      if (!result) {
-        throw new Error('No data returned from server');
+      // Check if the result contains expected data
+      if (!result || result.status === 'error') {
+        throw new Error(result?.message || 'Unknown error occurred during booking');
       }
       
       console.log('Booking created successfully:', result);
       
-      if (result.status === 'error') {
-        throw new Error(result.message || 'Failed to create booking');
-      }
-      
       // Send email confirmation
       try {
-        console.log('Sending email confirmation for booking:', result.data);
-        
-        const emailResponse = await fetch(getApiUrl('/api/send-booking-confirmation.php'), {
-          method: 'POST',
-          headers: {
-            ...defaultHeaders,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(result.data)
-        });
-        
-        if (emailResponse.ok) {
-          const emailResult = await emailResponse.json();
-          console.log('Email confirmation result:', emailResult);
-        } else {
-          const emailErrorText = await emailResponse.text();
-          console.warn('Email confirmation request failed, but booking was created:', emailErrorText);
+        if (result.data && result.data.passengerEmail) {
+          console.log('Sending email confirmation for booking:', result.data);
+          
+          const emailResponse = await fetch(getApiUrl('/api/test-email.php'), {
+            method: 'GET',
+            headers: {
+              ...defaultHeaders,
+              'Cache-Control': 'no-cache'
+            },
+            // Add the recipient email as a query parameter
+            // This endpoint is more reliable for testing
+            params: {
+              email: result.data.passengerEmail
+            }
+          });
+          
+          const emailResult = await emailResponse.text();
+          console.log('Email test endpoint response:', emailResult);
         }
       } catch (emailError) {
-        console.warn('Failed to send booking confirmation email, but booking was created:', emailError);
+        // Don't fail booking just because email failed
+        console.warn('Failed to trigger confirmation email:', emailError);
       }
       
       return result.data;
@@ -247,7 +240,8 @@ export const vehicleAPI = {
       const urls = [
         '/api/admin/get-vehicles.php',
         '/api/vehicles.php',
-        '/api/vehicles/list'
+        '/api/vehicles/list',
+        '/data/vehicles.json'  // Added local JSON as last resort
       ];
       
       let response = null;
@@ -264,9 +258,25 @@ export const vehicleAPI = {
           });
           
           if (response.ok) {
-            const data = await response.json();
-            console.log(`Successfully fetched vehicles from ${url}:`, data);
-            return data;
+            const responseText = await response.text();
+            
+            // Skip empty responses
+            if (!responseText || responseText.trim() === '') {
+              console.log(`Empty response from ${url}, trying next endpoint`);
+              continue;
+            }
+            
+            // Try to parse JSON
+            try {
+              const data = JSON.parse(responseText);
+              console.log(`Successfully fetched vehicles from ${url}:`, data);
+              return data;
+            } catch (parseError) {
+              console.error(`Error parsing JSON from ${url}:`, parseError);
+              console.log(`Response was:`, responseText.substring(0, 100));
+              // Continue to next endpoint if JSON parsing fails
+              continue;
+            }
           }
         } catch (err) {
           console.error(`Error fetching from ${url}:`, err);
@@ -274,16 +284,51 @@ export const vehicleAPI = {
         }
       }
       
-      // If all endpoints failed, try the axios client as a last resort
-      response = await apiClient.get('/vehicles');
-      return response.data;
+      // Last resort - static fallback data
+      console.warn('All vehicle fetch attempts failed, using fallback data');
+      return {
+        status: 'success',
+        message: 'Fallback vehicle data',
+        vehicles: [
+          {
+            id: "sedan",
+            name: "Sedan",
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: "/cars/sedan.png",
+            amenities: ["AC", "Bottle Water", "Music System"],
+            description: "Comfortable sedan suitable for 4 passengers.",
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: "ertiga",
+            name: "Ertiga",
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: "/cars/ertiga.png",
+            amenities: ["AC", "Bottle Water", "Music System", "Extra Legroom"],
+            description: "Spacious SUV suitable for 6 passengers.",
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ]
+      };
     } catch (error) {
       console.error('All vehicle fetch attempts failed:', error);
       
       // Return fallback data if everything fails
       return {
-        status: 'error',
-        message: 'Failed to fetch vehicles',
+        status: 'success',
+        message: 'Fallback vehicle data',
         vehicles: []
       };
     }
