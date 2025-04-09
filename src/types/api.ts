@@ -45,10 +45,9 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  phone?: string;
-  role: 'user' | 'admin';
+  phone: string | null;
+  role: 'admin' | 'user';
   createdAt: string;
-  lastLogin?: string;
 }
 
 export interface DashboardData {

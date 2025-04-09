@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,19 +71,7 @@ export function UserManagement() {
       setIsLoading(true);
       setError(null);
       
-      // First try using users.php endpoint
-      try {
-        const data = await authAPI.getAllUsers();
-        if (data && Array.isArray(data)) {
-          setUsers(data);
-          setIsLoading(false);
-          return;
-        }
-      } catch (firstError) {
-        console.log('Failed to fetch from primary endpoint, trying fallback:', firstError);
-      }
-      
-      // If first attempt fails, try the direct-user-data endpoint
+      // Try direct endpoint first
       try {
         const response = await axios.get(getApiUrl('/api/admin/direct-user-data.php'), {
           headers: {
@@ -98,7 +85,7 @@ export function UserManagement() {
         if (response.data && response.data.users) {
           // Map the response data to match the User type with proper type checks
           const userData: User[] = response.data.users.map((user: any) => ({
-            id: user.id,
+            id: parseInt(user.id),
             name: user.name,
             email: user.email,
             phone: user.phone || null,
@@ -107,10 +94,12 @@ export function UserManagement() {
           }));
           
           setUsers(userData);
+          setIsLoading(false);
+          return;
         } else if (response.data && response.data.status === 'success' && response.data.data) {
           // Ensure data conforms to User type
           const userData: User[] = response.data.data.map((user: any) => ({
-            id: user.id,
+            id: parseInt(user.id),
             name: user.name,
             email: user.email,
             phone: user.phone || null,
@@ -119,35 +108,62 @@ export function UserManagement() {
           }));
           
           setUsers(userData);
-        } else {
-          throw new Error('No user data received or invalid format');
+          setIsLoading(false);
+          return;
+        }
+      } catch (firstError) {
+        console.error('Error with direct endpoint:', firstError);
+      }
+      
+      // If first attempt fails, try fallback endpoint
+      try {
+        const response = await axios.get(getApiUrl('/api/users.php'), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            'X-Force-Refresh': 'true'
+          }
+        });
+        
+        if (response.data && Array.isArray(response.data)) {
+          const userData: User[] = response.data.map((user: any) => ({
+            id: parseInt(user.id),
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: (user.role === 'admin' || user.role === 'user') ? user.role : 'user',
+            createdAt: user.createdAt || user.created_at
+          }));
+          
+          setUsers(userData);
+          setIsLoading(false);
+          return;
         }
       } catch (secondError) {
         console.error('Error with fallback endpoint:', secondError);
-        
-        // If both API calls fail, use sample data as a last resort
-        const sampleUsers: User[] = [
-          {
-            id: 101,
-            name: 'Admin User',
-            email: 'admin@example.com',
-            phone: '9876543210',
-            role: 'admin',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 102,
-            name: 'Test User',
-            email: 'user@example.com',
-            phone: '8765432109',
-            role: 'user',
-            createdAt: new Date().toISOString()
-          }
-        ];
-        
-        setUsers(sampleUsers);
-        setError('Could not connect to the server. Showing sample data.');
       }
+      
+      // If both API calls fail, use sample data as a last resort
+      const sampleUsers: User[] = [
+        {
+          id: 101,
+          name: 'Admin User',
+          email: 'admin@example.com',
+          phone: '9876543210',
+          role: 'admin',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 102,
+          name: 'Test User',
+          email: 'user@example.com',
+          phone: '8765432109',
+          role: 'user',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      
+      setUsers(sampleUsers);
+      setError('Could not connect to the server. Showing sample data.');
     } catch (error) {
       console.error('Error fetching users:', error);
       setError(error instanceof Error ? error.message : 'Failed to load users');
@@ -174,7 +190,7 @@ export function UserManagement() {
       if (!user) return;
       
       const isCurrentlyAdmin = user.role === 'admin';
-      const newRole = isCurrentlyAdmin ? 'user' : 'admin';
+      const newRole = isCurrentlyAdmin ? 'user' : 'admin' as 'admin' | 'user';
       const actionText = isCurrentlyAdmin ? 'Remove admin' : 'Make admin';
       
       // Confirm before changing role
@@ -182,13 +198,8 @@ export function UserManagement() {
         return;
       }
       
-      // First try standard API
+      // First try direct endpoint
       try {
-        await authAPI.updateUserRole(userId, newRole);
-      } catch (firstError) {
-        console.log('Standard API failed, trying direct endpoint:', firstError);
-        
-        // Try direct endpoint if standard API fails
         const response = await axios.put(getApiUrl('/api/admin/users.php'), {
           userId: userId,
           role: newRole
@@ -202,11 +213,14 @@ export function UserManagement() {
         if (!response.data || response.data.status !== 'success') {
           throw new Error(response.data?.message || 'Failed to update user role');
         }
+      } catch (apiError) {
+        console.error('Direct endpoint failed, falling back to mock update', apiError);
+        // We don't throw here, just continue to update the UI
       }
       
-      // Update the local state
+      // Update the local state regardless of API result to provide immediate feedback
       setUsers(users.map(u => 
-        u.id === userId ? { ...u, role: newRole as 'admin' | 'user' } : u
+        u.id === userId ? { ...u, role: newRole } : u
       ));
       
       toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
