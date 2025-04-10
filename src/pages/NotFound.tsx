@@ -1,7 +1,6 @@
 
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, ArrowLeft } from "lucide-react";
 
 const NotFound = () => {
@@ -54,7 +53,7 @@ const NotFound = () => {
         <div className="space-y-3">
           <button 
             onClick={goBack}
-            className="flex items-center justify-center gap-2 w-full border border-gray-300 bg-white text-gray-700 py-3 rounded-lg"
+            className="flex items-center justify-center gap-2 w-full border border-gray-300 bg-white text-gray-700 py-3 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={18} />
             <span>Go Back</span>
@@ -62,7 +61,7 @@ const NotFound = () => {
           
           <button 
             onClick={goHome}
-            className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white py-3 rounded-lg"
+            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-3 rounded-lg shadow-md hover:shadow-lg transition-all"
           >
             <Home size={18} />
             <span>Return to Home</span>

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TripType } from "@/lib/tripTypes";
 import { useNavigate } from "react-router-dom";
@@ -18,9 +18,23 @@ export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelecto
     { id: "local" as TripType, label: "Hourly Rentals" },
   ];
   
+  const [activeTab, setActiveTab] = useState<TripType>(selectedTab);
+
+  useEffect(() => {
+    // Update the active tab when selectedTab prop changes
+    setActiveTab(selectedTab);
+  }, [selectedTab]);
+  
   const handleTabChange = (tab: TripType) => {
+    setActiveTab(tab);
     onTabChange(tab);
-    navigate(`/cabs/${tab}`);
+    
+    // Safely save to sessionStorage without changing the URL
+    try {
+      sessionStorage.setItem('tripType', tab);
+    } catch (e) {
+      console.error("Error saving trip type to session storage:", e);
+    }
   };
 
   return (
@@ -31,7 +45,7 @@ export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelecto
             key={tab.id}
             onClick={() => handleTabChange(tab.id)}
             className={`relative z-10 flex-1 py-2 px-3 text-sm text-center rounded-full transition-colors duration-200 ${
-              selectedTab === tab.id 
+              activeTab === tab.id 
                 ? "text-blue-600 font-medium" 
                 : "text-gray-600"
             }`}
@@ -43,7 +57,7 @@ export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelecto
           className="absolute top-1 left-1 bottom-1 rounded-full bg-blue-50 border border-blue-200"
           initial={false}
           animate={{
-            x: tabs.findIndex((tab) => tab.id === selectedTab) * (100 / tabs.length) + "%",
+            x: tabs.findIndex((tab) => tab.id === activeTab) * (100 / tabs.length) + "%",
             width: 100 / tabs.length + "%",
           }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}

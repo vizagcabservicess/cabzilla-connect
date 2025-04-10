@@ -42,6 +42,51 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
 
   useEffect(() => {
+    // Load saved data from sessionStorage with error handling
+    try {
+      const savedTripType = sessionStorage.getItem('tripType');
+      if (savedTripType) {
+        setTripType(savedTripType as TripType);
+      }
+      
+      const savedTripMode = sessionStorage.getItem('tripMode');
+      if (savedTripMode && (savedTripMode === 'one-way' || savedTripMode === 'round-trip')) {
+        setTripMode(savedTripMode as TripMode);
+      }
+      
+      const pickupData = sessionStorage.getItem('pickupLocation');
+      if (pickupData) {
+        try {
+          setPickupLocation(JSON.parse(pickupData));
+        } catch (e) {
+          console.error("Error parsing pickup location:", e);
+        }
+      }
+      
+      const dropData = sessionStorage.getItem('dropLocation');
+      if (dropData) {
+        try {
+          setDropLocation(JSON.parse(dropData));
+        } catch (e) {
+          console.error("Error parsing drop location:", e);
+        }
+      }
+      
+      const pickupDateStr = sessionStorage.getItem('pickupDate');
+      if (pickupDateStr) {
+        try {
+          setPickupDate(new Date(JSON.parse(pickupDateStr)));
+        } catch (e) {
+          console.error("Error parsing pickup date:", e);
+          setPickupDate(new Date());
+        }
+      }
+    } catch (error) {
+      console.error("Error loading data from session storage:", error);
+    }
+  }, []);
+
+  useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
@@ -61,6 +106,25 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
   const handleTabChange = (tab: TripType) => {
     setTripType(tab);
     setTripMode("one-way");
+    
+    // Safely store in sessionStorage
+    try {
+      sessionStorage.setItem('tripType', tab);
+      sessionStorage.setItem('tripMode', 'one-way');
+    } catch (e) {
+      console.error("Error saving to session storage:", e);
+    }
+  };
+
+  const handleTripModeChange = (mode: TripMode) => {
+    setTripMode(mode);
+    
+    // Safely store in sessionStorage
+    try {
+      sessionStorage.setItem('tripMode', mode);
+    } catch (e) {
+      console.error("Error saving trip mode to session storage:", e);
+    }
   };
 
   const handleSearch = () => {
@@ -89,6 +153,23 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
         variant: "destructive",
       });
       return;
+    }
+
+    // Save form data to sessionStorage safely
+    try {
+      if (pickupLocation) {
+        sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
+      }
+      
+      if (dropLocation) {
+        sessionStorage.setItem('dropLocation', JSON.stringify(dropLocation));
+      }
+      
+      if (pickupDate) {
+        sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
+      }
+    } catch (e) {
+      console.error("Error saving to session storage:", e);
     }
 
     onSubmit({
@@ -142,7 +223,7 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
       <div className="mt-4">
         <MobileTripModeToggle 
           tripMode={tripMode} 
-          onTripModeChange={setTripMode} 
+          onTripModeChange={handleTripModeChange} 
           disabled={tripType === "local"}
         />
       </div>

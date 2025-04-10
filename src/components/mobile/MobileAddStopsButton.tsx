@@ -22,14 +22,14 @@ export function MobileAddStopsButton({ onAddStop }: MobileAddStopsButtonProps) {
     <div className="relative">
       <button
         onClick={handleAddStop}
-        className="border border-blue-500 rounded-full text-blue-600 hover:bg-blue-50 flex items-center justify-center py-2 px-4 w-full transition-colors duration-200"
+        className="border border-blue-500 rounded-full text-blue-600 hover:bg-blue-50 flex items-center justify-center py-2 px-4 w-full transition-colors duration-200 active:bg-blue-100"
       >
         <Plus size={18} className="mr-1" />
         <span className="text-sm font-medium">ADD STOPS</span>
       </button>
       
       {showTooltip && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 text-white text-sm p-3 rounded-lg z-50 flex items-start justify-between shadow-lg">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 text-white text-sm p-3 rounded-lg z-50 flex items-start justify-between shadow-lg animate-fade-in">
           <span>You can add one or multiple stops</span>
           <button onClick={() => setShowTooltip(false)} className="ml-2 text-gray-300 hover:text-white">
             <X size={16} />
