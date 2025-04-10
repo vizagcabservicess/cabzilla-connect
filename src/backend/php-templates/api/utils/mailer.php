@@ -1,11 +1,10 @@
-
 <?php
 // Enable debug mode for email functions
 define('EMAIL_DEBUG_MODE', true);
 
 // PHPMailer integration for reliable email sending
 
-// Simulate PHPMailer for development environment - FIXED implementation
+// Simulate PHPMailer for development environment with FIXED implementation
 class PHPMailer {
     public $SMTPDebug = 0;
     public $Host = '';
@@ -17,40 +16,41 @@ class PHPMailer {
     public $Subject = '';
     public $Body = '';
     public $AltBody = '';
+    public $from = ['email' => '', 'name' => ''];
+    public $to = '';
+    public $replyTo = ['email' => '', 'name' => ''];
+    public $isHtml = false;
+    public $attachments = [];
+    public $mailType = '';
     
+    // Fixed implementation of missing methods
     public function setFrom($email, $name) {
-        // Simulation
         $this->from = ['email' => $email, 'name' => $name];
     }
     
     public function addAddress($email) {
-        // Simulation
         $this->to = $email;
     }
     
     public function addReplyTo($email, $name) {
-        // Simulation
         $this->replyTo = ['email' => $email, 'name' => $name];
     }
     
     public function isHTML($isHtml) {
-        // Simulation
         $this->isHtml = $isHtml;
     }
     
     public function addAttachment($path, $name = '') {
-        // Simulation
         $this->attachments[] = ['path' => $path, 'name' => $name];
     }
     
-    // IMPORTANT: Fixing the missing isSMTP() method
+    // CRITICAL: Properly implement isSMTP method which was missing
     public function isSMTP() {
-        // Simulation
         $this->mailType = 'smtp';
     }
     
     public function send() {
-        // In development, always return success
+        // In development, try to use native mail() function
         error_log("SIMULATION: Email would be sent to {$this->to} with subject: {$this->Subject}");
         
         // Log attempt to PHP error log for debugging
@@ -80,7 +80,7 @@ class PHPMailer {
 }
 
 class SMTP {}
-// CRITICAL: Do NOT declare Exception class as it's part of PHP core
+// CRITICAL: Do NOT declare Exception class, it's already part of PHP core
 
 /**
  * Helper function to log errors during email sending

@@ -1,4 +1,3 @@
-
 <?php
 // CORS headers first to ensure proper handling of preflight requests
 header('Access-Control-Allow-Origin: *');
@@ -45,7 +44,7 @@ if (!file_exists($emailPath)) {
     error_log("ERROR: email.php not found at: " . $emailPath);
 }
 
-// Include utilities - don't use require_once to avoid fatal errors if files are missing
+// Include utilities with proper error handling
 if (file_exists($mailerPath)) {
     include_once $mailerPath;
 } else {
@@ -167,7 +166,7 @@ try {
     $adminEmailSent = false;
     $emailAttempts = [];
     
-    // Try all available email sending methods for customer email
+    // Try multiple methods for customer email
     if (function_exists('testDirectMailFunction')) {
         logEmailError("Using testDirectMailFunction for customer email");
         
@@ -194,7 +193,7 @@ try {
         $emailAttempts[] = ['method' => 'testDirectMailFunction', 'success' => $customerEmailSent];
     }
     
-    // Try native PHP mail() function if direct method failed
+    // Try native PHP mail() function as an alternative approach
     if (!$customerEmailSent) {
         // Create email content
         $subject = "Booking Confirmation: " . $requestData['bookingNumber'];
@@ -209,15 +208,32 @@ try {
         $htmlBody .= "<p>Total Amount: ₹" . number_format($requestData['totalAmount'], 2) . "</p>";
         $htmlBody .= "<p>Thank you for choosing our service!</p>";
         
-        // Prepare headers
+        // Prepare headers that work with many mail servers
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
         $headers .= 'From: info@vizagup.com' . "\r\n"; 
-        $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
         
-        // Try to send
-        $customerEmailSent = mail($requestData['passengerEmail'], $subject, $htmlBody, $headers);
-        $emailAttempts[] = ['method' => 'PHP mail()', 'success' => $customerEmailSent];
+        // Try to send - using simple approach to reduce errors
+        logEmailError("Trying simple mail() function for customer email");
+        $customerEmailSent = @mail($requestData['passengerEmail'], $subject, $htmlBody, $headers);
+        $mailError = error_get_last();
+        $emailAttempts[] = [
+            'method' => 'PHP mail()', 
+            'success' => $customerEmailSent,
+            'error' => $mailError ? $mailError['message'] : null
+        ];
+        
+        // Try alternative approach with fifth parameter if first attempt failed
+        if (!$customerEmailSent) {
+            logEmailError("Trying mail() with additional params for customer email");
+            $customerEmailSent = @mail($requestData['passengerEmail'], $subject, $htmlBody, $headers, "-finfo@vizagup.com");
+            $mailError = error_get_last();
+            $emailAttempts[] = [
+                'method' => 'PHP mail() with -f', 
+                'success' => $customerEmailSent,
+                'error' => $mailError ? $mailError['message'] : null
+            ];
+        }
     }
     
     // Now try to send admin notification
@@ -277,8 +293,8 @@ try {
             ],
             'admin_email' => [
                 'success' => $adminEmailSent,
-                'recipient' => $adminEmail,
-                'attempts' => $adminEmailAttempts
+                'recipient' => 'info@vizagup.com',
+                'attempts' => $adminEmailAttempts ?? []
             ]
         ],
         'timestamp' => date('Y-m-d H:i:s')

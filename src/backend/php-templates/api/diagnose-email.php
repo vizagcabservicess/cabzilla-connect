@@ -46,7 +46,7 @@ try {
 echo "PHPMailer class exists: " . (class_exists('PHPMailer') ? 'Yes' : 'No') . "\n";
 echo "PHPMailer has isSMTP method: " . (method_exists('PHPMailer', 'isSMTP') ? 'Yes' : 'No') . "\n\n";
 
-// Check key functions
+// Verify key methods are available
 echo "Key Functions Available:\n";
 echo "sendEmailWithPHPMailer: " . (function_exists('sendEmailWithPHPMailer') ? 'Yes' : 'No') . "\n";
 echo "testDirectMailFunction: " . (function_exists('testDirectMailFunction') ? 'Yes' : 'No') . "\n";
@@ -68,6 +68,7 @@ if (isset($_GET['test']) && !empty($_GET['email'])) {
         echo "testDirectMailFunction not available\n\n";
     }
     
+    // Try basic PHP mail() for comparison
     if (function_exists('mail')) {
         echo "Testing with PHP mail()...\n";
         $headers = "MIME-Version: 1.0" . "\r\n";
@@ -83,10 +84,22 @@ if (isset($_GET['test']) && !empty($_GET['email'])) {
                 echo "Error: " . $error['message'] . "\n\n";
             }
         }
+        
+        // Try with additional parameters
+        echo "Testing with PHP mail() and sendmail parameters...\n";
+        $result = mail($testEmail, "PHP Mail Test with params", "<p>This is a test email sent with PHP's mail() function and additional parameters</p>", $headers, "-finfo@vizagup.com");
+        echo "Result: " . ($result ? "SUCCESS" : "FAILED") . "\n";
+        
+        if (!$result) {
+            $error = error_get_last();
+            if ($error) {
+                echo "Error: " . $error['message'] . "\n\n";
+            }
+        }
     }
 }
 
-echo "NOTE: For a quick email test, use test-email.php?email=your@email.com\n";
+echo "\nNOTE: For a quick email test, use test-email.php?email=your@email.com\n";
 echo "For detailed diagnostics in JSON format, use: diagnose-email.php?format=json\n";
 echo "To test email sending, use: diagnose-email.php?test=1&email=your@email.com\n";
 

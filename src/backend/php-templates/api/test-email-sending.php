@@ -8,6 +8,12 @@ header('Access-Control-Allow-Origin: *');
 // Log the redirect for debugging
 error_log("Redirecting from test-email-sending.php to test-email.php with query: " . $_SERVER['QUERY_STRING']);
 
-// Just run the test-email.php script directly rather than redirecting
+// Create a valid query string to pass along
+$query = '';
+if (!empty($_SERVER['QUERY_STRING'])) {
+    $query = '?' . $_SERVER['QUERY_STRING'];
+}
+
+// Run the test-email.php script directly
 require_once(__DIR__ . '/test-email.php');
-// The script above will handle the response
+// The included script will handle the response

@@ -10,13 +10,11 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Enable error display for diagnostics
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0); // Turn off error display to ensure clean JSON output
+ini_set('log_errors', 1);     // But enable error logging
 error_reporting(E_ALL);
 
-// Disable output buffering completely
-if (ob_get_level()) ob_end_clean();
-if (ob_get_length()) ob_clean();
+// Disable output buffering completely to prevent contamination
 if (ob_get_level()) ob_end_clean();
 
 // Handle preflight OPTIONS request
@@ -30,11 +28,11 @@ $utilsPath = __DIR__ . '/utils/';
 $mailerPath = $utilsPath . 'mailer.php';
 
 // Log diagnostic information
-error_log("Test email endpoint called. Looking for: $mailerPath");
+error_log("Test email endpoint called. Looking for mailer at: $mailerPath");
 
 // First check if utility files exist
 if (!file_exists($mailerPath)) {
-    http_response_code(500);
+    http_response_code(200); // Still return 200 for consistent API behavior
     echo json_encode([
         'status' => 'error',
         'message' => 'Mail utilities not found at: ' . $mailerPath,
@@ -60,7 +58,7 @@ function logTestEmail($message, $data = null) {
     
     if ($data !== null) {
         if (is_array($data) || is_object($data)) {
-            $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE);
         } else {
             $logEntry .= ": " . $data;
         }
@@ -109,7 +107,7 @@ logTestEmail("Test email requested for recipient", $recipientEmail);
 $serverInfo = getMailServerInfo();
 logTestEmail("Server diagnostics", $serverInfo);
 
-// Always set status to 200 for browser visibility
+// Always set status to 200 for consistent API behavior
 http_response_code(200);
 
 try {
@@ -134,36 +132,45 @@ try {
         'failed' => []
     ];
     
-    // Try direct PHP mail function with additional error diagnostics
+    // Try basic PHP mail function first
     logTestEmail("Attempting to send test email with PHP mail()");
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: noreply@vizagup.com' . "\r\n"; // Using a generic from address
-    
-    // Get initial error state
-    $lastError = error_get_last();
+    $headers .= 'From: noreply@vizagup.com' . "\r\n";
     
     $mailResult = @mail($recipientEmail, $subject, $htmlBody, $headers);
     $results['methods_tried'][] = 'PHP mail()';
-    
-    // Check for new errors
-    $newError = error_get_last();
-    $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
     
     if ($mailResult) {
         $results['successful'][] = 'PHP mail()';
         logTestEmail("Direct PHP mail() test email sent successfully");
     } else {
         $results['failed'][] = 'PHP mail()';
-        logTestEmail("Direct PHP mail() test email failed", ['error' => $errorMessage]);
+        $error = error_get_last();
+        logTestEmail("Direct PHP mail() test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
     }
     
-    // Try with sendEmailAllMethods for maximum compatibility
-    logTestEmail("Attempting to send test email with sendEmailAllMethods");
-    $allMethodsResult = false;
+    // Try simple mail with additional parameters
+    logTestEmail("Attempting to send test email with mail() and additional parameters");
+    $mailResult2 = @mail($recipientEmail, $subject, $htmlBody, $headers, "-fnoreply@vizagup.com");
+    $results['methods_tried'][] = 'PHP mail() with parameters';
     
-    // Only use if function exists
+    if ($mailResult2) {
+        $results['successful'][] = 'PHP mail() with parameters';
+        logTestEmail("PHP mail() with additional parameters test email sent successfully");
+    } else {
+        $results['failed'][] = 'PHP mail() with parameters';
+        $error = error_get_last();
+        logTestEmail("PHP mail() with parameters test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
+    }
+    
+    // Try with our utility functions if available
     if (function_exists('sendEmailAllMethods')) {
+        logTestEmail("Attempting to send test email with sendEmailAllMethods");
         $allMethodsResult = sendEmailAllMethods($recipientEmail, $subject, $htmlBody);
         $results['methods_tried'][] = 'sendEmailAllMethods';
         
@@ -176,7 +183,6 @@ try {
         }
     }
     
-    // Try with testDirectMailFunction if available
     if (function_exists('testDirectMailFunction')) {
         logTestEmail("Attempting to send test email with testDirectMailFunction");
         $directResult = testDirectMailFunction($recipientEmail, $subject, $htmlBody);
@@ -194,8 +200,7 @@ try {
     // Determine if any method succeeded
     $anySuccess = !empty($results['successful']);
     
-    // CRITICAL: Always ensure we return a properly formatted JSON response
-    while (ob_get_level()) ob_end_clean(); // Clear any output buffering
+    // Ensure we return a properly formatted JSON response
     header('Content-Type: application/json'); // Re-establish content type
     
     echo json_encode([
@@ -215,8 +220,7 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
     
-    // CRITICAL: Ensure clean JSON response even on exception
-    while (ob_get_level()) ob_end_clean();
+    // Ensure clean JSON response even on exception
     header('Content-Type: application/json');
     
     echo json_encode([
