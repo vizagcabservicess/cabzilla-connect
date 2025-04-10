@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
 import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
@@ -55,9 +54,31 @@ export const bookingAPI = {
     try {
       console.log('Creating booking with data:', bookingData);
       
-      // Validate required data before sending
-      if (!bookingData.pickupLocation || !bookingData.cabType || !bookingData.pickupDate) {
-        throw new Error('Missing required booking information');
+      // Enhanced validation - check all required fields with detailed logging
+      const requiredFields = ['pickupLocation', 'cabType', 'pickupDate', 'tripType', 
+                             'tripMode', 'totalAmount', 'passengerName', 
+                             'passengerPhone', 'passengerEmail'];
+      
+      // For non-local trips, require drop location
+      if (bookingData.tripType !== 'local') {
+        requiredFields.push('dropLocation');
+      }
+      
+      // Validate all fields are present
+      const missingFields = requiredFields.filter(field => 
+        !bookingData[field as keyof BookingRequest] || 
+        (typeof bookingData[field as keyof BookingRequest] === 'string' && 
+         (bookingData[field as keyof BookingRequest] as string).trim() === '')
+      );
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        throw new Error(`Missing required booking information: ${missingFields.join(', ')}`);
+      }
+      
+      // For local trips, ensure dropLocation has at least an empty string
+      if (bookingData.tripType === 'local' && bookingData.dropLocation === undefined) {
+        bookingData.dropLocation = '';
       }
       
       // Get the absolute URL for book.php
@@ -126,41 +147,21 @@ export const bookingAPI = {
       // Send email confirmation separately
       try {
         if (result.data && result.data.passengerEmail) {
-          console.log('Sending email confirmation for booking:', result.data);
+          console.log('Sending email confirmation for booking:', result.data.bookingNumber);
           
-          // Properly build the URL with query parameters
-          const emailEndpoint = getApiUrl('/api/test-email.php');
-          const emailUrl = new URL(emailEndpoint);
-          emailUrl.searchParams.append('email', result.data.passengerEmail);
-          
-          const emailResponse = await fetch(emailUrl.toString(), {
-            method: 'GET',
+          // Send to the dedicated email confirmation endpoint
+          const confirmEmailUrl = getApiUrl('/api/send-booking-confirmation.php');
+          const confirmResponse = await fetch(confirmEmailUrl, {
+            method: 'POST',
             headers: {
               ...defaultHeaders,
-              'Cache-Control': 'no-cache'
-            }
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(result.data)
           });
           
-          const emailResult = await emailResponse.text();
-          console.log('Email test endpoint response:', emailResult);
-          
-          // Also send to the dedicated email confirmation endpoint
-          try {
-            const confirmEmailUrl = getApiUrl('/api/send-booking-confirmation.php');
-            const confirmResponse = await fetch(confirmEmailUrl, {
-              method: 'POST',
-              headers: {
-                ...defaultHeaders,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(result.data)
-            });
-            
-            const confirmResult = await confirmResponse.text();
-            console.log('Confirmation email endpoint response:', confirmResult);
-          } catch (confirmError) {
-            console.warn('Failed to trigger confirmation email via dedicated endpoint:', confirmError);
-          }
+          const confirmResult = await confirmResponse.text();
+          console.log('Confirmation email endpoint response:', confirmResult);
         }
       } catch (emailError) {
         // Don't fail booking just because email failed

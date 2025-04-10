@@ -106,7 +106,7 @@ foreach ($requiredFields as $field) {
 }
 
 if (!empty($missingFields)) {
-    logEmailError("Missing required fields", ['missing' => $missingFields]);
+    logEmailError("Missing required fields", ['missing' => $missingFields, 'data' => $requestData]);
     http_response_code(400);
     echo json_encode([
         'status' => 'error', 
@@ -116,8 +116,10 @@ if (!empty($missingFields)) {
 }
 
 try {
-    // Include the mail functionality directly in case it wasn't included properly
-    require_once __DIR__ . '/utils/mailer.php';
+    // Load mailer class if needed
+    if (!function_exists('sendEmailWithPHPMailer') && file_exists(__DIR__ . '/utils/mailer.php')) {
+        require_once __DIR__ . '/utils/mailer.php';
+    }
     
     // Prepare email content
     $subject = "Booking Confirmation: " . $requestData['bookingNumber'];
@@ -135,20 +137,30 @@ try {
     // Try all available email sending methods
     $customerEmailResult = false;
     
+    // Log all available functions for debugging
+    logEmailError("Available functions", [
+        'sendEmailWithPHPMailer' => function_exists('sendEmailWithPHPMailer') ? 'yes' : 'no',
+        'sendEmail' => function_exists('sendEmail') ? 'yes' : 'no',
+        'mail' => function_exists('mail') ? 'yes' : 'no'
+    ]);
+    
     // 1. Try PHPMailer first
     if (function_exists('sendEmailWithPHPMailer')) {
+        logEmailError("Attempting PHPMailer", ['to' => $requestData['passengerEmail']]);
         $customerEmailResult = sendEmailWithPHPMailer($requestData['passengerEmail'], $subject, $htmlBody);
         logEmailError("PHPMailer attempt result", ['success' => $customerEmailResult ? 'yes' : 'no']);
     }
     
     // 2. If PHPMailer fails, try the legacy method
     if (!$customerEmailResult && function_exists('sendEmail')) {
+        logEmailError("Attempting legacy email method");
         $customerEmailResult = sendEmail($requestData['passengerEmail'], $subject, $htmlBody);
         logEmailError("Legacy email attempt result", ['success' => $customerEmailResult ? 'yes' : 'no']);
     }
     
     // 3. If all methods fail, try direct PHP mail function
     if (!$customerEmailResult) {
+        logEmailError("Attempting direct PHP mail()");
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
         $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
