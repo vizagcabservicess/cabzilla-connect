@@ -1,6 +1,5 @@
-
 <?php
-// Redirect to the updated and fixed test-email.php endpoint 
+// Properly redirect to the updated and fixed test-email.php endpoint 
 // This file is kept for backward compatibility
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -14,6 +13,7 @@ if (!empty($_SERVER['QUERY_STRING'])) {
     $query = '?' . $_SERVER['QUERY_STRING'];
 }
 
-// Run the test-email.php script directly
-require_once(__DIR__ . '/test-email.php');
-// The included script will handle the response
+// Don't use require_once which keeps executing this file
+// Instead redirect the browser to the new endpoint
+header('Location: test-email.php' . $query);
+exit;

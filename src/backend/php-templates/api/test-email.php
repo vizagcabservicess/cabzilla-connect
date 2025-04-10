@@ -1,6 +1,6 @@
 
 <?php
-// Test endpoint for email sending
+// Test endpoint for email sending with enhanced reliability
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -28,7 +28,8 @@ $utilsPath = __DIR__ . '/utils/';
 $mailerPath = $utilsPath . 'mailer.php';
 
 // Log diagnostic information
-error_log("Test email endpoint called. Looking for mailer at: $mailerPath");
+error_log("Test email endpoint called from: " . $_SERVER['REQUEST_URI']);
+error_log("Looking for mailer at: $mailerPath");
 
 // First check if utility files exist
 if (!file_exists($mailerPath)) {
@@ -70,11 +71,14 @@ function logTestEmail($message, $data = null) {
 
 // Get mail server diagnostics
 function getMailServerInfo() {
+    $sendmailPath = ini_get('sendmail_path');
+    error_log("Sendmail path: $sendmailPath");
+    
     return [
         'php_version' => phpversion(),
         'mail_function_exists' => function_exists('mail'),
         'mail_config' => [
-            'sendmail_path' => ini_get('sendmail_path'),
+            'sendmail_path' => $sendmailPath,
             'smtp' => ini_get('SMTP'),
             'smtp_port' => ini_get('smtp_port'),
         ],
@@ -96,7 +100,8 @@ function getMailServerInfo() {
 logTestEmail("Test email request received", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'query' => $_SERVER['QUERY_STRING'] ?? 'none',
-    'remote_addr' => $_SERVER['REMOTE_ADDR']
+    'remote_addr' => $_SERVER['REMOTE_ADDR'],
+    'uri' => $_SERVER['REQUEST_URI']
 ]);
 
 // Get the recipient email from the request
@@ -132,7 +137,69 @@ try {
         'failed' => []
     ];
     
-    // Try basic PHP mail function first
+    // NEW METHOD: Try direct sendmail command first (most reliable on Linux)
+    logTestEmail("Trying direct sendmail command");
+    $sendmailPath = ini_get('sendmail_path');
+    
+    if (!empty($sendmailPath)) {
+        // Create temporary email file
+        $tempDir = sys_get_temp_dir();
+        $tempFile = tempnam($tempDir, 'email_');
+        
+        // Build email content
+        $emailContent = "To: $recipientEmail\n";
+        $emailContent .= "From: info@vizagup.com\n";
+        $emailContent .= "Subject: $subject\n";
+        $emailContent .= "MIME-Version: 1.0\n";
+        $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+        $emailContent .= $htmlBody;
+        
+        file_put_contents($tempFile, $emailContent);
+        
+        // Execute sendmail
+        $command = "$sendmailPath -t < " . escapeshellarg($tempFile);
+        $output = [];
+        $returnVar = 0;
+        exec($command, $output, $returnVar);
+        
+        logTestEmail("Sendmail command result: " . ($returnVar === 0 ? "SUCCESS" : "FAILED"), [
+            'command' => $command,
+            'return_code' => $returnVar,
+            'output' => $output
+        ]);
+        
+        $results['methods_tried'][] = 'Direct sendmail command';
+        if ($returnVar === 0) {
+            $results['successful'][] = 'Direct sendmail command';
+            logTestEmail("Direct sendmail command succeeded");
+        } else {
+            $results['failed'][] = 'Direct sendmail command';
+            logTestEmail("Direct sendmail command failed", ['return_code' => $returnVar]);
+        }
+        
+        // Clean up
+        unlink($tempFile);
+    }
+    
+    // Try basic PHP mail function with minimal headers
+    logTestEmail("Attempting to send test email with minimal PHP mail()");
+    $minimalHeaders = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\n";
+    
+    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $minimalHeaders);
+    $results['methods_tried'][] = 'Minimal PHP mail()';
+    
+    if ($mailResult) {
+        $results['successful'][] = 'Minimal PHP mail()';
+        logTestEmail("Minimal PHP mail() test email sent successfully");
+    } else {
+        $results['failed'][] = 'Minimal PHP mail()';
+        $error = error_get_last();
+        logTestEmail("Minimal PHP mail() test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
+    }
+    
+    // Try standard PHP mail with more headers
     logTestEmail("Attempting to send test email with PHP mail()");
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -212,7 +279,7 @@ try {
         'results' => $results,
         'server_info' => $serverInfo,
         'time' => date('Y-m-d H:i:s')
-    ]);
+    ], JSON_PRETTY_PRINT);
     
 } catch (Exception $e) {
     logTestEmail("Exception during test email", [
@@ -229,5 +296,5 @@ try {
         'recipient' => $recipientEmail,
         'server_info' => $serverInfo,
         'time' => date('Y-m-d H:i:s')
-    ]);
+    ], JSON_PRETTY_PRINT);
 }
