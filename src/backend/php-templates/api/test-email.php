@@ -25,8 +25,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Include email utilities
-require_once __DIR__ . '/utils/mailer.php';
+// Include email utilities - use absolute paths for reliability
+$utilsPath = __DIR__ . '/utils/';
+$mailerPath = $utilsPath . 'mailer.php';
+$responsePath = $utilsPath . 'response.php';
+
+// Log diagnostic information
+error_log("Test email endpoint called. Looking for: $mailerPath");
+
+// First check if utility files exist
+if (!file_exists($mailerPath)) {
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Mail utilities not found at: ' . $mailerPath,
+        'server_path' => __DIR__
+    ]);
+    exit;
+}
+
+// Include required files
+require_once $mailerPath;
 
 // Create log directory if it doesn't exist
 $logDir = __DIR__ . '/../logs';
@@ -91,6 +110,9 @@ logTestEmail("Test email requested for recipient", $recipientEmail);
 $serverInfo = getMailServerInfo();
 logTestEmail("Server diagnostics", $serverInfo);
 
+// Always set status to 200 for browser visibility
+http_response_code(200);
+
 try {
     // Create test email content
     $subject = "Test Email from Vizag Taxi Hub";
@@ -113,41 +135,11 @@ try {
         'failed' => []
     ];
     
-    // Try sending with testDirectMailFunction if available
-    if (function_exists('testDirectMailFunction')) {
-        logTestEmail("Attempting to send test email with testDirectMailFunction");
-        $directResult = testDirectMailFunction($recipientEmail, $subject, $htmlBody);
-        $results['methods_tried'][] = 'testDirectMailFunction';
-        
-        if ($directResult) {
-            $results['successful'][] = 'testDirectMailFunction';
-            logTestEmail("testDirectMailFunction test email sent successfully");
-        } else {
-            $results['failed'][] = 'testDirectMailFunction';
-            logTestEmail("testDirectMailFunction test email failed");
-        }
-    }
-    
-    // Try sending with PHPMailer if available
-    if (function_exists('sendEmailWithPHPMailer')) {
-        logTestEmail("Attempting to send test email with PHPMailer");
-        $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
-        $results['methods_tried'][] = 'PHPMailer';
-        
-        if ($phpMailerResult) {
-            $results['successful'][] = 'PHPMailer';
-            logTestEmail("PHPMailer test email sent successfully");
-        } else {
-            $results['failed'][] = 'PHPMailer';
-            logTestEmail("PHPMailer test email failed");
-        }
-    }
-    
-    // Try direct PHP mail function
+    // Try direct PHP mail function with additional error diagnostics
     logTestEmail("Attempting to send test email with PHP mail()");
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: noreply@vizagup.com' . "\r\n"; // Try generic from address
+    $headers .= 'From: noreply@vizagup.com' . "\r\n"; // Using a generic from address
     
     // Get initial error state
     $lastError = error_get_last();
@@ -167,10 +159,43 @@ try {
         logTestEmail("Direct PHP mail() test email failed", ['error' => $errorMessage]);
     }
     
+    // Try with PHPMailer if available
+    if (function_exists('sendEmailWithPHPMailer')) {
+        logTestEmail("Attempting to send test email with PHPMailer");
+        $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
+        $results['methods_tried'][] = 'PHPMailer';
+        
+        if ($phpMailerResult) {
+            $results['successful'][] = 'PHPMailer';
+            logTestEmail("PHPMailer test email sent successfully");
+        } else {
+            $results['failed'][] = 'PHPMailer';
+            logTestEmail("PHPMailer test email failed");
+        }
+    }
+    
+    // Try other utility methods if available
+    if (function_exists('testDirectMailFunction')) {
+        logTestEmail("Attempting to send test email with testDirectMailFunction");
+        $directResult = testDirectMailFunction($recipientEmail, $subject, $htmlBody);
+        $results['methods_tried'][] = 'testDirectMailFunction';
+        
+        if ($directResult) {
+            $results['successful'][] = 'testDirectMailFunction';
+            logTestEmail("testDirectMailFunction test email sent successfully");
+        } else {
+            $results['failed'][] = 'testDirectMailFunction';
+            logTestEmail("testDirectMailFunction test email failed");
+        }
+    }
+    
     // Determine if any method succeeded
     $anySuccess = !empty($results['successful']);
     
-    // Send a response with diagnostic information
+    // CRITICAL: Always ensure we return a properly formatted JSON response
+    while (ob_get_level()) ob_end_clean(); // Clear any output buffering
+    header('Content-Type: application/json'); // Re-establish content type
+    
     echo json_encode([
         'status' => $anySuccess ? 'success' : 'error',
         'message' => $anySuccess ? 
@@ -188,7 +213,10 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
     
-    http_response_code(500);
+    // CRITICAL: Ensure clean JSON response even on exception
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json');
+    
     echo json_encode([
         'status' => 'error',
         'message' => 'Exception during test email: ' . $e->getMessage(),

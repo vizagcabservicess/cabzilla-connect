@@ -52,7 +52,8 @@ class PHPMailer {
 }
 
 class SMTP {}
-class Exception extends \Exception {}
+// CRITICAL FIX: Remove the Exception class definition since it already exists in PHP core
+// class Exception extends \Exception {} - THIS LINE CAUSED THE FATAL ERROR
 
 /**
  * Helper function to log errors during email sending
