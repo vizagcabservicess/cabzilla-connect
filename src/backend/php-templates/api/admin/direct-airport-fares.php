@@ -32,8 +32,17 @@ require_once __DIR__ . '/../utils/response.php';
 // Run database setup to ensure tables exist
 require_once __DIR__ . '/db_setup.php';
 
+// Create log directory if it doesn't exist
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+
+$logFile = $logDir . '/admin_airport_fares_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+
 // For debugging
-error_log("Direct airport fares API called with: " . json_encode($_GET));
+file_put_contents($logFile, "[$timestamp] Direct airport fares API called with: " . json_encode($_GET) . "\n", FILE_APPEND);
 
 try {
     // Get database connection
@@ -50,20 +59,21 @@ try {
     $possibleParams = ['vehicleId', 'vehicle_id', 'id'];
     foreach ($possibleParams as $param) {
         if (isset($_GET[$param]) && !empty($_GET[$param])) {
-            $vehicleId = $_GET[$param];
+            $vehicleId = trim($_GET[$param]);
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in param $param: $vehicleId\n", FILE_APPEND);
             break;
         }
     }
     
     // Debug: Log the vehicle ID found
-    error_log("Processing airport fares for vehicle ID: $vehicleId");
+    file_put_contents($logFile, "[$timestamp] Processing airport fares for vehicle ID: $vehicleId\n", FILE_APPEND);
     
     // Build query based on whether a specific vehicle ID was provided
     if ($vehicleId) {
         // Clean up vehicle ID for SQL query
         $vehicleId = $conn->real_escape_string($vehicleId);
         
-        // Query for specific vehicle - using a LIKE query to handle case sensitivity
+        // Query for specific vehicle - using a LOWER() function to handle case sensitivity
         $query = "
             SELECT 
                 atf.id, 
@@ -85,6 +95,8 @@ try {
             WHERE 
                 LOWER(atf.vehicle_id) = LOWER('$vehicleId')
         ";
+        
+        file_put_contents($logFile, "[$timestamp] Vehicle-specific query: $query\n", FILE_APPEND);
     } else {
         // Query for all vehicles
         $query = "
@@ -106,13 +118,15 @@ try {
             LEFT JOIN 
                 vehicles v ON atf.vehicle_id = v.vehicle_id
         ";
+        
+        file_put_contents($logFile, "[$timestamp] All vehicles query: $query\n", FILE_APPEND);
     }
     
     // Execute query
     $result = $conn->query($query);
     
     if (!$result) {
-        error_log("Database query failed: " . $conn->error);
+        file_put_contents($logFile, "[$timestamp] Database query failed: " . $conn->error . "\n", FILE_APPEND);
         throw new Exception("Database query failed: " . $conn->error);
     }
     
@@ -149,12 +163,11 @@ try {
     }
     
     // Debug: Log the query results
-    error_log("Airport fares query returned " . count($fares) . " results");
-    error_log("Fares data: " . json_encode($fares));
+    file_put_contents($logFile, "[$timestamp] Airport fares query returned " . count($fares) . " results\n", FILE_APPEND);
     
     // Sync any missing vehicle entries if needed
     if (empty($fares) && $vehicleId) {
-        error_log("No fares found for vehicleId $vehicleId, inserting default entry");
+        file_put_contents($logFile, "[$timestamp] No fares found for vehicleId $vehicleId, inserting default entry\n", FILE_APPEND);
         
         // Before inserting, check if the vehicle exists in the vehicles table
         $checkVehicleQuery = "SELECT vehicle_id FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
@@ -174,7 +187,7 @@ try {
                 if ($insertVehicleStmt) {
                     $insertVehicleStmt->bind_param('ss', $vehicleId, $vehicleName);
                     $insertVehicleStmt->execute();
-                    error_log("Inserted new vehicle: $vehicleId with name $vehicleName");
+                    file_put_contents($logFile, "[$timestamp] Inserted new vehicle: $vehicleId with name $vehicleName\n", FILE_APPEND);
                 }
             }
         }
@@ -191,7 +204,7 @@ try {
         if ($stmt) {
             $stmt->bind_param('s', $vehicleId);
             $result = $stmt->execute();
-            error_log("Result of inserting default fare: " . ($result ? "success" : "failed"));
+            file_put_contents($logFile, "[$timestamp] Result of inserting default fare: " . ($result ? "success" : "failed") . "\n", FILE_APPEND);
             
             // Now try to get the data again
             $refetchQuery = "
@@ -249,7 +262,7 @@ try {
                     ];
                     
                     $fares[] = $fare;
-                    error_log("Successfully fetched newly inserted fare data");
+                    file_put_contents($logFile, "[$timestamp] Successfully fetched newly inserted fare data\n", FILE_APPEND);
                 }
             }
         }
@@ -257,7 +270,7 @@ try {
     
     // If still no fares found for a specific vehicle, create a default response
     if (empty($fares) && $vehicleId) {
-        error_log("No fares found even after attempted insert, using default object");
+        file_put_contents($logFile, "[$timestamp] No fares found even after attempted insert, using default object\n", FILE_APPEND);
         $defaultFare = [
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
@@ -286,7 +299,7 @@ try {
     }
     
     // Debug: Log the fares for troubleshooting
-    error_log("Airport fares response for vehicleId $vehicleId: " . json_encode($fares));
+    file_put_contents($logFile, "[$timestamp] Airport fares response for vehicleId $vehicleId: " . json_encode($fares) . "\n", FILE_APPEND);
     
     // Return success response
     sendSuccessResponse([
@@ -298,7 +311,7 @@ try {
     
 } catch (Exception $e) {
     // Log error for troubleshooting
-    error_log("Error fetching airport fares: " . $e->getMessage());
+    file_put_contents($logFile, "[$timestamp] Error fetching airport fares: " . $e->getMessage() . "\n", FILE_APPEND);
     
     // Return error response
     sendErrorResponse($e->getMessage(), [

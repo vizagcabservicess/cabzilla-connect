@@ -7,6 +7,8 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -60,6 +62,11 @@ if ($vehicleId) {
         file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
     }
 }
+
+// Set the X-Force-Refresh header to ensure we get fresh data
+$_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
+// Set admin mode for direct access to tables
+$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 
 // Forward this request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';

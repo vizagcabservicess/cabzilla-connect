@@ -65,5 +65,10 @@ if ($vehicleId) {
     }
 }
 
+// Set the X-Force-Refresh header to ensure we get fresh data
+$_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
+// Set admin mode for direct access to tables
+$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+
 // Forward the request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';
