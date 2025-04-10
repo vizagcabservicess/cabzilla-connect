@@ -9,10 +9,13 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Critical debugging - log all errors, don't display them
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
 // Disable output buffering completely - critical to prevent HTML contamination
-if (ob_get_level()) ob_end_clean();
-if (ob_get_length()) ob_clean();
-if (ob_get_level()) ob_end_clean();
+while (ob_get_level()) ob_end_clean();
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -55,9 +58,9 @@ function logEmailError($message, $data = []) {
     error_log($logEntry); // Also log to PHP error log
 }
 
-// Function to send JSON response with proper headers
+// Function to send JSON response with proper headers - SIMPLIFIED FOR RELIABILITY
 function sendEmailJsonResponse($data, $statusCode = 200) {
-    // Clean any previous output
+    // Clean any previous output - belt and suspenders approach
     while (ob_get_level()) ob_end_clean();
     
     // Set status code
@@ -66,9 +69,9 @@ function sendEmailJsonResponse($data, $statusCode = 200) {
     // Set content type again to ensure it's not overwritten
     header('Content-Type: application/json');
     
-    // Output JSON response
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    // Output JSON response - direct echo, no fancy stuff
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit; // Exit immediately after sending response
 }
 
 // Log start of process
@@ -85,7 +88,7 @@ $requestBody = file_get_contents('php://input');
 // Safety check for empty request
 if (empty($requestBody)) {
     logEmailError("Empty request body received");
-    sendEmailJsonResponse(['status' => 'error', 'message' => 'Empty request body']);
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Empty request body'], 400);
 }
 
 // Safely parse JSON with error handling
@@ -96,11 +99,11 @@ try {
     }
 } catch (Exception $e) {
     logEmailError("Invalid JSON in request", ['error' => $e->getMessage(), 'body' => substr($requestBody, 0, 500)]);
-    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid JSON: ' . $e->getMessage()]);
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid JSON: ' . $e->getMessage()], 400);
 }
 
 if (!$requestData) {
-    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid request data']);
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
 }
 
 logEmailError("Received booking confirmation request", [
@@ -127,7 +130,7 @@ if (!empty($missingFields)) {
     sendEmailJsonResponse([
         'status' => 'error', 
         'message' => 'Missing required fields: ' . implode(', ', $missingFields)
-    ]);
+    ], 400);
 }
 
 try {
@@ -276,20 +279,16 @@ try {
         'booking_number' => $requestData['bookingNumber']
     ]);
     
-    // Always provide a proper JSON response - This is the critical fix!
-    sendEmailJsonResponse([
+    // CRITICAL FIX - Force a clean response with simplified JSON
+    header('Content-Type: application/json');
+    echo json_encode([
         'status' => ($customerEmailSent || $adminEmailSent) ? 'success' : 'error',
         'message' => ($customerEmailSent || $adminEmailSent) ? 
                     'Email confirmation sent successfully' : 
                     'Failed to send confirmation emails',
-        'details' => [
-            'customer_email_sent' => $customerEmailSent,
-            'admin_email_sent' => $adminEmailSent,
-            'booking_number' => $requestData['bookingNumber'],
-            'customer_attempts' => $emailAttempts,
-            'admin_attempts' => $adminEmailAttempts
-        ]
+        'booking_number' => $requestData['bookingNumber']
     ]);
+    exit;
     
 } catch (Exception $e) {
     logEmailError("Email sending failed with exception", [
@@ -297,9 +296,11 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
     
-    // Ensure we always return a proper JSON response even on exception
-    sendEmailJsonResponse([
+    // CRITICAL FIX - Ensure we always return a clean JSON response
+    header('Content-Type: application/json');
+    echo json_encode([
         'status' => 'error',
         'message' => 'Failed to send confirmation emails: ' . $e->getMessage()
     ]);
+    exit;
 }

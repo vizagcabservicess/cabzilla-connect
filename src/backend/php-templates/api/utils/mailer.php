@@ -1,5 +1,8 @@
 
 <?php
+// Enable debug mode for email functions
+define('EMAIL_DEBUG_MODE', true);
+
 // PHPMailer integration for reliable email sending
 
 // Simulate PHPMailer for development environment
@@ -70,6 +73,11 @@ function logError($message, $data = []) {
     
     file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
     error_log($logEntry); // Also log to PHP error log
+    
+    // If debug mode is enabled, also output to error log
+    if (defined('EMAIL_DEBUG_MODE') && EMAIL_DEBUG_MODE) {
+        error_log("EMAIL DEBUG: " . $logEntry);
+    }
 }
 
 /**
