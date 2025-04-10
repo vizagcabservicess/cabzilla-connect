@@ -13,14 +13,18 @@ export function MobileDateTimePicker({
   onDateChange,
   minDate
 }: MobileDateTimePickerProps) {
-  const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
+  // Safety check: ensure date is a valid Date object
+  const isValidDate = date && !isNaN(date.getTime());
+  
+  // Only format the date if it's valid
+  const formattedDate = isValidDate ? new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   }).format(date) : '';
   
-  const formattedTime = date ? new Intl.DateTimeFormat('en-US', {
+  const formattedTime = isValidDate ? new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: 'numeric',
     hour12: true,
@@ -34,13 +38,13 @@ export function MobileDateTimePicker({
       
       <div className="relative">
         <DateTimePicker
-          date={date}
+          date={isValidDate ? date : undefined}
           onDateChange={onDateChange}
           minDate={minDate}
         >
           <div className="flex items-center">
             <Calendar size={18} className="text-gray-500 mr-3" />
-            {date ? (
+            {isValidDate ? (
               <div>
                 <div className="font-medium">{formattedDate}</div>
                 <div className="text-sm text-gray-600">{formattedTime}</div>

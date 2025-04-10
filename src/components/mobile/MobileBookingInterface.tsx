@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
@@ -58,8 +59,18 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
   );
   
   const [pickupDate, setPickupDate] = useState<Date | undefined>(() => {
-    const savedDate = safeGetFromSession<string | null>('pickupDate', null);
-    return savedDate ? new Date(savedDate) : new Date();
+    try {
+      const savedDate = safeGetFromSession<string | null>('pickupDate', null);
+      if (savedDate) {
+        const date = new Date(savedDate);
+        // Check if date is valid
+        return !isNaN(date.getTime()) ? date : new Date();
+      }
+      return new Date();
+    } catch (e) {
+      console.error("Error parsing date from session:", e);
+      return new Date();
+    }
   });
 
   useEffect(() => {

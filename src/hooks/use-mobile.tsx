@@ -1,3 +1,4 @@
+
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
@@ -35,13 +36,28 @@ export function safeGetFromSession<T>(key: string, defaultValue: T): T {
     const value = sessionStorage.getItem(key);
     if (value === null) return defaultValue;
     
-    // If the value doesn't start with [ or {, it's a simple string
-    // that should not be parsed as JSON
-    if (typeof value === 'string' && !value.startsWith('{') && !value.startsWith('[')) {
+    // If the value is a simple string that doesn't represent JSON
+    // return it directly for string type
+    if (typeof defaultValue === 'string' && 
+        typeof value === 'string' && 
+        !value.startsWith('{') && 
+        !value.startsWith('[')) {
       return value as unknown as T;
     }
     
-    return JSON.parse(value) as T;
+    try {
+      // Try to parse as JSON
+      return JSON.parse(value) as T;
+    } catch (parseError) {
+      // If parsing fails but the default value type matches the stored value type,
+      // return the value directly
+      if (typeof value === typeof defaultValue) {
+        return value as unknown as T;
+      }
+      
+      console.error(`Error parsing ${key} from session storage:`, parseError);
+      return defaultValue;
+    }
   } catch (e) {
     console.error(`Error loading ${key} from session storage:`, e);
     return defaultValue;
@@ -55,11 +71,17 @@ export function safeGetFromSession<T>(key: string, defaultValue: T): T {
  */
 export function safeSetInSession(key: string, value: any): void {
   try {
-    // If the value is a simple string or number, store it directly
+    if (value === undefined || value === null) {
+      // Remove item if value is null or undefined
+      sessionStorage.removeItem(key);
+      return;
+    }
+    
+    // If the value is a simple primitive, store it directly
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       sessionStorage.setItem(key, value.toString());
     } else {
-      // Otherwise, stringify it
+      // For objects and arrays, use JSON.stringify
       sessionStorage.setItem(key, JSON.stringify(value));
     }
   } catch (e) {
