@@ -1,6 +1,6 @@
 
 <?php
-// Enhanced diagnostic endpoint for email troubleshooting
+// Enhanced diagnostic endpoint for email troubleshooting - Hostinger optimized
 header('Content-Type: text/plain');
 echo "Email System Diagnostic Report\n";
 echo "============================\n";
@@ -21,12 +21,20 @@ echo "SMTP Port: " . ini_get('smtp_port') . "\n\n";
 $sendmailPath = ini_get('sendmail_path');
 if (!empty($sendmailPath)) {
     echo "Sendmail path verification:\n";
-    $parts = explode(' ', $sendmailPath);
-    $binary = $parts[0];
-    echo "Sendmail binary: $binary\n";
-    echo "Binary exists: " . (file_exists($binary) ? 'Yes' : 'No') . "\n";
-    echo "Binary is executable: " . (is_executable($binary) ? 'Yes' : 'No') . "\n\n";
+    $sendmailExec = preg_replace('/\s.*$/', '', $sendmailPath); // Extract binary path
+    echo "Sendmail binary: $sendmailExec\n";
+    echo "Binary exists: " . (file_exists($sendmailExec) ? 'Yes' : 'No') . "\n";
+    echo "Binary is executable: " . (is_executable($sendmailExec) ? 'Yes' : 'No') . "\n\n";
 }
+
+// Check for Hostinger's specific sendmail binary
+echo "Hostinger sendmail check:\n";
+$hostingerSendmail = '/usr/sbin/hsendmail';
+echo "Hostinger sendmail exists: " . (file_exists($hostingerSendmail) ? 'Yes' : 'No') . "\n";
+if (file_exists($hostingerSendmail)) {
+    echo "Hostinger sendmail is executable: " . (is_executable($hostingerSendmail) ? 'Yes' : 'No') . "\n";
+}
+echo "\n";
 
 // Check for required files
 $utilsPath = __DIR__ . '/utils/';
@@ -76,18 +84,31 @@ echo "sendEmailAllMethods: " . (function_exists('sendEmailAllMethods') ? 'Yes' :
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'LIN') {
     echo "Direct Sendmail Testing:\n";
     
-    if (!empty($sendmailPath)) {
-        echo "Using sendmail path: $sendmailPath\n";
+    // Check multiple sendmail paths
+    $sendmailBinaries = [
+        '/usr/sbin/hsendmail',    // Hostinger specific
+        '/usr/sbin/sendmail',     // Standard Linux
+        ini_get('sendmail_path')  // PHP config
+    ];
+    
+    foreach ($sendmailBinaries as $sendmailPath) {
+        if (empty($sendmailPath)) continue;
         
-        // Create a test file in a temp directory
-        $tempDir = sys_get_temp_dir();
-        $tempFile = tempnam($tempDir, 'email_test_');
+        $sendmailExec = preg_replace('/\s.*$/', '', $sendmailPath); // Extract binary path
+        if (!file_exists($sendmailExec)) continue;
+        
+        echo "Testing sendmail binary: $sendmailExec\n";
         
         if (isset($_GET['test']) && !empty($_GET['email'])) {
             $testEmail = $_GET['email'];
             
-            $content = "To: $testEmail\n";
+            // Create a test file in a temp directory
+            $tempDir = sys_get_temp_dir();
+            $tempFile = tempnam($tempDir, 'email_test_');
+            
+            $content = "Return-Path: info@vizagup.com\n"; // Important for Hostinger
             $content .= "From: info@vizagup.com\n";
+            $content .= "To: $testEmail\n";
             $content .= "Subject: Sendmail Direct Test\n";
             $content .= "Content-Type: text/plain\n\n";
             $content .= "This is a direct sendmail test at " . date('Y-m-d H:i:s') . "\n";
@@ -95,12 +116,24 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'LIN') {
             file_put_contents($tempFile, $content);
             
             echo "Created test email file: $tempFile\n";
-            echo "Attempting to send directly with: $sendmailPath -t < $tempFile\n";
             
-            $command = "$sendmailPath -t < " . escapeshellarg($tempFile);
+            // Try direct recipient specification (works better on Hostinger)
+            $command = "$sendmailExec $testEmail < " . escapeshellarg($tempFile);
+            echo "Attempting to send directly with: $command\n";
+            
             $output = [];
             $returnVar = 0;
+            exec($command, $output, $returnVar);
             
+            echo "Command result code: $returnVar (0 = success)\n";
+            echo "Command output: " . implode("\n", $output) . "\n\n";
+            
+            // Try alternative approach with -i flag
+            $command = "$sendmailExec -i $testEmail < " . escapeshellarg($tempFile);
+            echo "Attempting with -i flag: $command\n";
+            
+            $output = [];
+            $returnVar = 0;
             exec($command, $output, $returnVar);
             
             echo "Command result code: $returnVar (0 = success)\n";
@@ -108,11 +141,11 @@ if (strtoupper(substr(PHP_OS, 0, 3)) === 'LIN') {
             
             // Clean up the temp file
             unlink($tempFile);
-        } else {
-            echo "No test email provided. Add ?test=1&email=your@email.com to test direct sendmail.\n\n";
         }
-    } else {
-        echo "No sendmail path configured in PHP.\n\n";
+    }
+    
+    if (!isset($_GET['test']) || empty($_GET['email'])) {
+        echo "No test email provided. Add ?test=1&email=your@email.com to test direct sendmail.\n\n";
     }
 }
 
@@ -132,38 +165,21 @@ if (isset($_GET['test']) && !empty($_GET['email'])) {
         echo "testDirectMailFunction not available\n\n";
     }
     
-    // Try basic PHP mail() for comparison
+    // Try basic PHP mail() with optimized settings for comparison
     if (function_exists('mail')) {
-        echo "Testing with PHP mail()...\n";
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: info@vizagup.com' . "\r\n";
+        echo "Testing with PHP mail() and Hostinger-optimized headers...\n";
         
-        $result = mail($testEmail, "PHP Mail Test", "<p>This is a test email sent with PHP's mail() function</p>", $headers);
-        echo "Result: " . ($result ? "SUCCESS" : "FAILED") . "\n";
+        // Set proper envelope sender - critical for Hostinger
+        ini_set('sendmail_from', 'info@vizagup.com');
         
-        if (!$result) {
-            $error = error_get_last();
-            if ($error) {
-                echo "Error: " . $error['message'] . "\n\n";
-            }
-        }
+        $headers = "From: Vizag Taxi Hub <info@vizagup.com>\r\n";
+        $headers .= "Reply-To: info@vizagup.com\r\n";
+        $headers .= "Return-Path: info@vizagup.com\r\n"; // Important for Hostinger
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
         
-        // Try with minimal headers
-        echo "Testing with PHP mail() and minimal headers...\n";
-        $result = mail($testEmail, "PHP Mail Test (Minimal)", "<p>This is a test email sent with minimal headers</p>", "Content-type:text/html;charset=UTF-8\r\n");
-        echo "Result: " . ($result ? "SUCCESS" : "FAILED") . "\n";
-        
-        if (!$result) {
-            $error = error_get_last();
-            if ($error) {
-                echo "Error: " . $error['message'] . "\n\n";
-            }
-        }
-        
-        // Try with additional parameters
-        echo "Testing with PHP mail() and sendmail parameters...\n";
-        $result = mail($testEmail, "PHP Mail Test with params", "<p>This is a test email sent with PHP's mail() function and additional parameters</p>", $headers, "-finfo@vizagup.com");
+        $result = mail($testEmail, "PHP Mail Test with Hostinger headers", "<p>This is a test email sent with Hostinger-optimized headers</p>", $headers);
         echo "Result: " . ($result ? "SUCCESS" : "FAILED") . "\n";
         
         if (!$result) {
@@ -207,15 +223,21 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     // Check sendmail binary
     $sendmailInfo = [];
     if (!empty($mailSettings['sendmail_path'])) {
-        $parts = explode(' ', $mailSettings['sendmail_path']);
-        $binary = $parts[0];
+        $sendmailExec = preg_replace('/\s.*$/', '', $mailSettings['sendmail_path']);
         $sendmailInfo = [
-            'binary' => $binary,
-            'exists' => file_exists($binary),
-            'executable' => is_executable($binary),
+            'binary' => $sendmailExec,
+            'exists' => file_exists($sendmailExec),
+            'executable' => is_executable($sendmailExec),
             'full_command' => $mailSettings['sendmail_path']
         ];
     }
+    
+    // Hostinger specific checks
+    $hostingerInfo = [
+        'hsendmail_exists' => file_exists('/usr/sbin/hsendmail'),
+        'hsendmail_executable' => is_executable('/usr/sbin/hsendmail'),
+        'is_hostinger' => (strpos($_SERVER['SERVER_SOFTWARE'] ?? '', 'LiteSpeed') !== false)
+    ];
     
     // Gather PHPMailer methods if class exists
     $phpMailerMethods = [];
@@ -233,7 +255,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         'mail' => [
             'function_exists' => function_exists('mail'),
             'settings' => $mailSettings,
-            'sendmail' => $sendmailInfo
+            'sendmail' => $sendmailInfo,
+            'hostinger' => $hostingerInfo
         ],
         'files' => [
             'mailer_exists' => file_exists($mailerPath),

@@ -1,6 +1,6 @@
 
 <?php
-// Test endpoint for email sending with enhanced reliability
+// Test endpoint for email sending with enhanced reliability for Hostinger
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -15,7 +15,7 @@ ini_set('log_errors', 1);     // But enable error logging
 error_reporting(E_ALL);
 
 // Disable output buffering completely to prevent contamination
-if (ob_get_level()) ob_end_clean();
+while (ob_get_level()) ob_end_clean();
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -137,102 +137,108 @@ try {
         'failed' => []
     ];
     
-    // NEW METHOD: Try direct sendmail command first (most reliable on Linux)
-    logTestEmail("Trying direct sendmail command");
-    $sendmailPath = ini_get('sendmail_path');
+    // Let's try a new approach optimized for Hostinger
+    logTestEmail("Trying Hostinger optimized approach");
     
-    if (!empty($sendmailPath)) {
-        // Create temporary email file
-        $tempDir = sys_get_temp_dir();
-        $tempFile = tempnam($tempDir, 'email_');
-        
-        // Build email content
-        $emailContent = "To: $recipientEmail\n";
-        $emailContent .= "From: info@vizagup.com\n";
-        $emailContent .= "Subject: $subject\n";
-        $emailContent .= "MIME-Version: 1.0\n";
-        $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
-        $emailContent .= $htmlBody;
-        
-        file_put_contents($tempFile, $emailContent);
-        
-        // Execute sendmail
-        $command = "$sendmailPath -t < " . escapeshellarg($tempFile);
+    // Create temporary email file
+    $tempDir = sys_get_temp_dir();
+    $tempFile = tempnam($tempDir, 'email_');
+    
+    // Build email content with Return-Path which is critical for Hostinger delivery
+    $emailContent = "Return-Path: info@vizagup.com\n";
+    $emailContent .= "From: Vizag Taxi Hub <info@vizagup.com>\n";
+    $emailContent .= "Reply-To: info@vizagup.com\n";
+    $emailContent .= "To: $recipientEmail\n";
+    $emailContent .= "Subject: $subject\n";
+    $emailContent .= "MIME-Version: 1.0\n";
+    $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+    $emailContent .= $htmlBody;
+    
+    file_put_contents($tempFile, $emailContent);
+    
+    // Try with specific recipient format which works better on Hostinger
+    $results['methods_tried'][] = 'Hostinger optimized approach';
+    $sendmailPath = '/usr/sbin/hsendmail'; // Hostinger's preferred path
+    
+    if (file_exists($sendmailPath)) {
+        $command = "$sendmailPath $recipientEmail < " . escapeshellarg($tempFile);
         $output = [];
         $returnVar = 0;
         exec($command, $output, $returnVar);
         
-        logTestEmail("Sendmail command result: " . ($returnVar === 0 ? "SUCCESS" : "FAILED"), [
+        logTestEmail("Hostinger optimized approach result", [
             'command' => $command,
             'return_code' => $returnVar,
             'output' => $output
         ]);
         
-        $results['methods_tried'][] = 'Direct sendmail command';
         if ($returnVar === 0) {
-            $results['successful'][] = 'Direct sendmail command';
-            logTestEmail("Direct sendmail command succeeded");
+            $results['successful'][] = 'Hostinger optimized approach';
         } else {
-            $results['failed'][] = 'Direct sendmail command';
-            logTestEmail("Direct sendmail command failed", ['return_code' => $returnVar]);
+            $results['failed'][] = 'Hostinger optimized approach';
         }
+    }
+    
+    // Clean up
+    unlink($tempFile);
+    
+    // Try direct sendmail command next
+    logTestEmail("Trying direct sendmail command");
+    $sendmailPath = ini_get('sendmail_path');
+    
+    if (!empty($sendmailPath)) {
+        $sendmailExec = preg_replace('/\s.*$/', '', $sendmailPath); // Extract just the binary
         
-        // Clean up
-        unlink($tempFile);
-    }
-    
-    // Try basic PHP mail function with minimal headers
-    logTestEmail("Attempting to send test email with minimal PHP mail()");
-    $minimalHeaders = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\n";
-    
-    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $minimalHeaders);
-    $results['methods_tried'][] = 'Minimal PHP mail()';
-    
-    if ($mailResult) {
-        $results['successful'][] = 'Minimal PHP mail()';
-        logTestEmail("Minimal PHP mail() test email sent successfully");
-    } else {
-        $results['failed'][] = 'Minimal PHP mail()';
-        $error = error_get_last();
-        logTestEmail("Minimal PHP mail() test email failed", [
-            'error' => $error ? $error['message'] : 'Unknown error'
-        ]);
-    }
-    
-    // Try standard PHP mail with more headers
-    logTestEmail("Attempting to send test email with PHP mail()");
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: noreply@vizagup.com' . "\r\n";
-    
-    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $headers);
-    $results['methods_tried'][] = 'PHP mail()';
-    
-    if ($mailResult) {
-        $results['successful'][] = 'PHP mail()';
-        logTestEmail("Direct PHP mail() test email sent successfully");
-    } else {
-        $results['failed'][] = 'PHP mail()';
-        $error = error_get_last();
-        logTestEmail("Direct PHP mail() test email failed", [
-            'error' => $error ? $error['message'] : 'Unknown error'
-        ]);
-    }
-    
-    // Try simple mail with additional parameters
-    logTestEmail("Attempting to send test email with mail() and additional parameters");
-    $mailResult2 = @mail($recipientEmail, $subject, $htmlBody, $headers, "-fnoreply@vizagup.com");
-    $results['methods_tried'][] = 'PHP mail() with parameters';
-    
-    if ($mailResult2) {
-        $results['successful'][] = 'PHP mail() with parameters';
-        logTestEmail("PHP mail() with additional parameters test email sent successfully");
-    } else {
-        $results['failed'][] = 'PHP mail() with parameters';
-        $error = error_get_last();
-        logTestEmail("PHP mail() with parameters test email failed", [
-            'error' => $error ? $error['message'] : 'Unknown error'
-        ]);
+        if (file_exists($sendmailExec)) {
+            // Create temporary email file
+            $tempFile = tempnam($tempDir, 'email_');
+            
+            // Build email content 
+            $emailContent = "Return-Path: info@vizagup.com\n"; // Critical for delivery
+            $emailContent .= "From: Vizag Taxi Hub <info@vizagup.com>\n";
+            $emailContent .= "To: $recipientEmail\n";
+            $emailContent .= "Subject: $subject\n";
+            $emailContent .= "MIME-Version: 1.0\n";
+            $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+            $emailContent .= $htmlBody;
+            
+            file_put_contents($tempFile, $emailContent);
+            
+            // Try with direct recipient specification (works better on some hosts)
+            $command = "$sendmailExec $recipientEmail < " . escapeshellarg($tempFile);
+            $output = [];
+            $returnVar = 0;
+            exec($command, $output, $returnVar);
+            
+            $results['methods_tried'][] = 'Direct sendmail command';
+            
+            logTestEmail("Sendmail command result", [
+                'command' => $command,
+                'return_code' => $returnVar,
+                'output' => $output
+            ]);
+            
+            if ($returnVar === 0) {
+                $results['successful'][] = 'Direct sendmail command';
+            } else {
+                $results['failed'][] = 'Direct sendmail command';
+                
+                // Try alternative flags
+                $command = "$sendmailExec -i $recipientEmail < " . escapeshellarg($tempFile);
+                exec($command, $output, $returnVar);
+                
+                $results['methods_tried'][] = 'Sendmail with -i flag';
+                
+                if ($returnVar === 0) {
+                    $results['successful'][] = 'Sendmail with -i flag';
+                } else {
+                    $results['failed'][] = 'Sendmail with -i flag';
+                }
+            }
+            
+            // Clean up
+            unlink($tempFile);
+        }
     }
     
     // Try with our utility functions if available
@@ -243,10 +249,8 @@ try {
         
         if ($allMethodsResult) {
             $results['successful'][] = 'sendEmailAllMethods';
-            logTestEmail("sendEmailAllMethods test email sent successfully");
         } else {
             $results['failed'][] = 'sendEmailAllMethods';
-            logTestEmail("sendEmailAllMethods test email failed");
         }
     }
     
@@ -257,11 +261,64 @@ try {
         
         if ($directResult) {
             $results['successful'][] = 'testDirectMailFunction';
-            logTestEmail("testDirectMailFunction test email sent successfully");
         } else {
             $results['failed'][] = 'testDirectMailFunction';
-            logTestEmail("testDirectMailFunction test email failed");
         }
+    }
+    
+    // Try basic PHP mail with minimal headers
+    logTestEmail("Attempting to send test email with minimal PHP mail()");
+    $minimalHeaders = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\n";
+    
+    // Set sendmail_from via ini
+    ini_set('sendmail_from', 'info@vizagup.com');
+    
+    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $minimalHeaders);
+    $results['methods_tried'][] = 'Minimal PHP mail()';
+    
+    if ($mailResult) {
+        $results['successful'][] = 'Minimal PHP mail()';
+    } else {
+        $results['failed'][] = 'Minimal PHP mail()';
+        $error = error_get_last();
+        logTestEmail("Minimal PHP mail() test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
+    }
+    
+    // Try standard PHP mail with more headers
+    logTestEmail("Attempting to send test email with PHP mail()");
+    $headers = "From: Vizag Taxi Hub <info@vizagup.com>\r\n";
+    $headers .= "Reply-To: info@vizagup.com\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8\r\n";
+    
+    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $headers);
+    $results['methods_tried'][] = 'PHP mail()';
+    
+    if ($mailResult) {
+        $results['successful'][] = 'PHP mail()';
+    } else {
+        $results['failed'][] = 'PHP mail()';
+        $error = error_get_last();
+        logTestEmail("Direct PHP mail() test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
+    }
+    
+    // Try simple mail with additional parameters
+    logTestEmail("Attempting to send test email with mail() and additional parameters");
+    $mailResult2 = @mail($recipientEmail, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
+    $results['methods_tried'][] = 'PHP mail() with parameters';
+    
+    if ($mailResult2) {
+        $results['successful'][] = 'PHP mail() with parameters';
+    } else {
+        $results['failed'][] = 'PHP mail() with parameters';
+        $error = error_get_last();
+        logTestEmail("PHP mail() with parameters test email failed", [
+            'error' => $error ? $error['message'] : 'Unknown error'
+        ]);
     }
     
     // Determine if any method succeeded

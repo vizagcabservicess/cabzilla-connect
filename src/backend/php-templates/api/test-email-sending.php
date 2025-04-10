@@ -6,9 +6,6 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
 
-// Log the redirect for debugging
-error_log("Redirecting from test-email-sending.php to test-email.php with query: " . $_SERVER['QUERY_STRING']);
-
 // Create the full query string to pass along
 $query = '';
 if (!empty($_SERVER['QUERY_STRING'])) {
