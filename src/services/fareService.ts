@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -705,7 +704,7 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
   }
 }
 
-// Airport Fares - with fallbacks
+// Airport Fares - with proper airport_transfer_fares table integration
 async function getAirportFares(): Promise<Record<string, AirportFare>> {
   try {
     // Always force refresh to get the latest data
@@ -718,7 +717,7 @@ async function getAirportFares(): Promise<Record<string, AirportFare>> {
       params: { 
         _t: timestamp, // Cache busting
         force: 'true',
-        source: 'vehicle_pricing' // Force using vehicle_pricing table
+        source: 'airport_transfer_fares' // Force using airport_transfer_fares table specifically
       },
       headers: getBypassHeaders()
     });
@@ -747,59 +746,137 @@ async function getAirportFares(): Promise<Record<string, AirportFare>> {
   }
 }
 
-// Get airport fares for a specific vehicle with fallbacks
+// Get airport fares for a specific vehicle with improved airport_transfer_fares table support
 async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare> {
   try {
-    // Try to fetch directly for this vehicle
+    // Normalize vehicle ID to match database convention (handle casing and special chars)
+    const normalizedVehicleId = vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
+    
+    console.log(`Fetching airport fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId}) with timestamp:`, Date.now());
+    
+    // Try to fetch directly from the airport_transfer_fares table
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const now = Date.now();
     
-    console.log(`Fetching airport fares for vehicle ${vehicleId} with timestamp:`, now);
-    
-    const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
+    // First try with the original vehicle ID
+    let response = await axios.get(`${baseUrl}/api/direct-airport-fares.php`, {
       params: {
         vehicle_id: vehicleId,
-        _t: now, // Cache busting
+        _t: now,
         force: 'true',
-        source: 'vehicle_pricing' // Force using vehicle_pricing table
+        source: 'airport_transfer_fares' // Explicitly specify the table
       },
       headers: getBypassHeaders()
     });
     
-    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-      console.log(`Airport fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
-      console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
+    // If no results with original ID, try with normalized ID
+    if ((!response.data || !response.data.fares || 
+        (Array.isArray(response.data.fares) && response.data.fares.length === 0) ||
+        (!Array.isArray(response.data.fares) && Object.keys(response.data.fares).length === 0)) && 
+        vehicleId !== normalizedVehicleId) {
+      console.log(`No results with original ID, trying normalized ID: ${normalizedVehicleId}`);
+      response = await axios.get(`${baseUrl}/api/direct-airport-fares.php`, {
+        params: {
+          vehicle_id: normalizedVehicleId,
+          _t: now,
+          force: 'true',
+          source: 'airport_transfer_fares'
+        },
+        headers: getBypassHeaders()
+      });
+    }
+    
+    // Log how the API data looks to help debug
+    console.log(`Airport fares API response:`, response.data);
+    
+    // Process the API response to extract fare data
+    let fare: AirportFare | null = null;
+    
+    if (response.data && response.data.fares) {
+      if (Array.isArray(response.data.fares) && response.data.fares.length > 0) {
+        // Find the matching fare in the array
+        const matchingFare = response.data.fares.find((f: any) => {
+          const faresVehicleId = f.vehicle_id || f.vehicleId || '';
+          return faresVehicleId.toLowerCase() === vehicleId.toLowerCase() || 
+                 faresVehicleId.toLowerCase() === normalizedVehicleId.toLowerCase();
+        });
+        
+        if (matchingFare) {
+          console.log(`Found matching fare in array:`, matchingFare);
+          fare = convertToAirportFare(matchingFare);
+        } else {
+          console.log(`No matching fare found in array, using first:`, response.data.fares[0]);
+          fare = convertToAirportFare(response.data.fares[0]);
+        }
+      } else if (typeof response.data.fares === 'object' && response.data.fares !== null) {
+        // Check if there's a direct match in the object
+        if (response.data.fares[vehicleId]) {
+          console.log(`Found direct match in fares object:`, response.data.fares[vehicleId]);
+          fare = convertToAirportFare(response.data.fares[vehicleId]);
+        } else if (response.data.fares[normalizedVehicleId]) {
+          console.log(`Found normalized match in fares object:`, response.data.fares[normalizedVehicleId]);
+          fare = convertToAirportFare(response.data.fares[normalizedVehicleId]);
+        } else {
+          // Try a case-insensitive match
+          const keys = Object.keys(response.data.fares);
+          const matchingKey = keys.find(key => key.toLowerCase() === vehicleId.toLowerCase() || 
+                                              key.toLowerCase() === normalizedVehicleId.toLowerCase());
+          
+          if (matchingKey) {
+            console.log(`Found case-insensitive match in fares object:`, response.data.fares[matchingKey]);
+            fare = convertToAirportFare(response.data.fares[matchingKey]);
+          }
+        }
+      }
+    }
+    
+    // If we found a fare, cache it and return it
+    if (fare) {
+      console.log(`Processed airport fare for ${vehicleId}:`, fare);
       
       // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('airport_fares');
       const fares = cachedFares ? JSON.parse(cachedFares) : {};
-      fares[vehicleId] = response.data.fares[vehicleId];
+      fares[vehicleId] = fare;
       localStorage.setItem('airport_fares', JSON.stringify(fares));
       localStorage.setItem('airport_fares_timestamp', now.toString());
       
-      return response.data.fares[vehicleId];
+      return fare;
     }
     
     // If direct fetch failed, try to get all fares
     console.warn(`No specific airport fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getAirportFares();
-    if (allFares && allFares[vehicleId]) {
-      return allFares[vehicleId];
+    
+    if (allFares) {
+      // Try exact match first
+      if (allFares[vehicleId]) {
+        console.log(`Found ${vehicleId} in all fares`);
+        return allFares[vehicleId];
+      }
+      
+      // Try normalized ID
+      if (allFares[normalizedVehicleId]) {
+        console.log(`Found ${normalizedVehicleId} in all fares`);
+        return allFares[normalizedVehicleId];
+      }
+      
+      // Try case-insensitive match
+      const keys = Object.keys(allFares);
+      const caseInsensitiveMatch = keys.find(key => 
+        key.toLowerCase() === vehicleId.toLowerCase() || 
+        key.toLowerCase() === normalizedVehicleId.toLowerCase()
+      );
+      
+      if (caseInsensitiveMatch) {
+        console.log(`Found case-insensitive match ${caseInsensitiveMatch} in all fares`);
+        return allFares[caseInsensitiveMatch];
+      }
     }
     
-    console.warn(`No airport fare found for vehicle ${vehicleId}`);
-    // Return default values if no data found
-    return {
-      basePrice: 0,
-      pricePerKm: 0,
-      pickupPrice: 0,
-      dropPrice: 0,
-      tier1Price: 0,
-      tier2Price: 0,
-      tier3Price: 0,
-      tier4Price: 0,
-      extraKmCharge: 0
-    };
+    console.warn(`No airport fare found for vehicle ${vehicleId}, generating default`);
+    // Generate a default fare based on vehicle type
+    return generateDefaultAirportFare(vehicleId);
   } catch (error) {
     console.error(`Error fetching airport fares for vehicle ${vehicleId}:`, error);
     
@@ -807,24 +884,118 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
     const cachedFares = localStorage.getItem('airport_fares');
     if (cachedFares) {
       const fares = JSON.parse(cachedFares);
+      
+      // Try exact match
       if (fares[vehicleId]) {
         return fares[vehicleId];
       }
+      
+      // Try normalized ID
+      const normalizedVehicleId = vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
+      if (fares[normalizedVehicleId]) {
+        return fares[normalizedVehicleId];
+      }
+      
+      // Try case-insensitive match
+      const keys = Object.keys(fares);
+      const caseInsensitiveMatch = keys.find(key => 
+        key.toLowerCase() === vehicleId.toLowerCase() || 
+        key.toLowerCase() === normalizedVehicleId.toLowerCase()
+      );
+      
+      if (caseInsensitiveMatch) {
+        return fares[caseInsensitiveMatch];
+      }
     }
     
-    // Return default values if error
+    // Return default values based on vehicle type
+    return generateDefaultAirportFare(vehicleId);
+  }
+}
+
+// Helper to convert API response to AirportFare type
+function convertToAirportFare(data: any): AirportFare {
+  return {
+    basePrice: parseFloat(data.basePrice || data.base_price || 0),
+    pricePerKm: parseFloat(data.pricePerKm || data.price_per_km || 0),
+    pickupPrice: parseFloat(data.pickupPrice || data.pickup_price || 0),
+    dropPrice: parseFloat(data.dropPrice || data.drop_price || 0),
+    tier1Price: parseFloat(data.tier1Price || data.tier1_price || 0),
+    tier2Price: parseFloat(data.tier2Price || data.tier2_price || 0),
+    tier3Price: parseFloat(data.tier3Price || data.tier3_price || 0),
+    tier4Price: parseFloat(data.tier4Price || data.tier4_price || 0),
+    extraKmCharge: parseFloat(data.extraKmCharge || data.extra_km_charge || 0)
+  };
+}
+
+// Generate default airport fares based on vehicle type
+function generateDefaultAirportFare(vehicleId: string): AirportFare {
+  // Normalize vehicle ID for matching
+  const normalizedId = vehicleId.toLowerCase();
+  
+  // Default values based on vehicle types in the database
+  if (normalizedId.includes('sedan') || normalizedId === 'toyota' || normalizedId === 'dzire cng') {
     return {
-      basePrice: 0,
-      pricePerKm: 0,
-      pickupPrice: 0,
-      dropPrice: 0,
-      tier1Price: 0,
-      tier2Price: 0,
-      tier3Price: 0,
-      tier4Price: 0,
-      extraKmCharge: 0
+      basePrice: 800,
+      pricePerKm: 14,
+      pickupPrice: 800,
+      dropPrice: 800,
+      tier1Price: 800,
+      tier2Price: 1000,
+      tier3Price: 1000,
+      tier4Price: 1200,
+      extraKmCharge: 12
+    };
+  } else if (normalizedId.includes('ertiga')) {
+    return {
+      basePrice: 1000,
+      pricePerKm: 15,
+      pickupPrice: 1000,
+      dropPrice: 1000,
+      tier1Price: 800,
+      tier2Price: 1000,
+      tier3Price: 1200,
+      tier4Price: 1400,
+      extraKmCharge: 15
+    };
+  } else if (normalizedId.includes('innova') || normalizedId === 'mpv') {
+    return {
+      basePrice: 1200,
+      pricePerKm: 17,
+      pickupPrice: 1200,
+      dropPrice: 1200,
+      tier1Price: 1000,
+      tier2Price: 1200,
+      tier3Price: 1400,
+      tier4Price: 1600,
+      extraKmCharge: 17
+    };
+  } else if (normalizedId.includes('tempo')) {
+    return {
+      basePrice: 2000,
+      pricePerKm: 19,
+      pickupPrice: 2000,
+      dropPrice: 2000,
+      tier1Price: 1600,
+      tier2Price: 1800,
+      tier3Price: 2000,
+      tier4Price: 2500,
+      extraKmCharge: 19
     };
   }
+  
+  // Generic default for unknown vehicle types
+  return {
+    basePrice: 1000,
+    pricePerKm: 15,
+    pickupPrice: 1000,
+    dropPrice: 1000,
+    tier1Price: 1000,
+    tier2Price: 1200,
+    tier3Price: 1400,
+    tier4Price: 1600,
+    extraKmCharge: 15
+  };
 }
 
 // Create the fareService object with all methods
@@ -844,7 +1015,10 @@ export const fareService = {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType
+  getFaresByTripType,
+  // Add the new helper functions
+  convertToAirportFare,
+  generateDefaultAirportFare
 };
 
 // Export individual functions for direct imports
