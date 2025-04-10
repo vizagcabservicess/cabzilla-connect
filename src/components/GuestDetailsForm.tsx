@@ -55,16 +55,12 @@ export function GuestDetailsForm({
       }
       
       if (details.phone.length < 10) {
-        throw new Error("Please enter a valid phone number");
+        throw new Error("Please enter a valid phone number (minimum 10 digits)");
       }
       
       if (!details.email.includes('@')) {
         throw new Error("Please enter a valid email address");
       }
-      
-      // Check authentication
-      const isAuthenticated = authAPI.isAuthenticated();
-      console.log('Authentication check result:', isAuthenticated);
       
       if (bookingId && isEditMode) {
         // If editing an existing booking
@@ -84,7 +80,11 @@ export function GuestDetailsForm({
           throw new Error('Invalid booking ID format');
         }
         
-        const response = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
+        const response = await bookingAPI.updateBooking(bookingIdNumber, {
+          passengerName: details.name,
+          passengerPhone: details.phone,
+          passengerEmail: details.email
+        });
         console.log("Update response:", response);
         
         toast({
@@ -95,9 +95,13 @@ export function GuestDetailsForm({
         
         setIsEditMode(false);
       } else {
-        // For new bookings or when parent handles the update
-        console.log('Passing details to parent onSubmit handler');
-        onSubmit(details);
+        // For new bookings, pass details to parent handler
+        console.log('Passing validated details to parent onSubmit handler');
+        onSubmit({
+          name: details.name.trim(),
+          phone: details.phone.trim(),
+          email: details.email.trim()
+        });
       }
     } catch (error) {
       console.error("Error in booking operation:", error);

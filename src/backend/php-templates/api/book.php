@@ -76,40 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Log the start of booking request
+// Log the start of booking request with details
+$remoteAddr = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
+$requestUri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'unknown';
+$method = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'unknown';
+
 logBooking("Booking request started", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'uri' => $_SERVER['REQUEST_URI'],
-    'remote_addr' => $_SERVER['REMOTE_ADDR']
+    'method' => $method,
+    'uri' => $requestUri,
+    'remote_addr' => $remoteAddr
 ]);
-
-// Extract user ID from JWT token if available
-$userId = null;
-$headers = getallheaders();
-
-logBooking("Request headers", $headers);
-
-// Check for Authorization header
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    logBooking("Found auth token", ['token' => substr($token, 0, 10) . '...']);
-    
-    // Basic JWT token parsing (simple implementation)
-    $tokenParts = explode('.', $token);
-    if (count($tokenParts) === 3) {
-        try {
-            $payload = json_decode(base64_decode($tokenParts[1]), true);
-            if (isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
-                logBooking("Extracted user_id from token", ['user_id' => $userId]);
-            }
-        } catch (Exception $e) {
-            logBooking("Error decoding token", ['error' => $e->getMessage()]);
-        }
-    }
-}
 
 try {
     // Read and parse the request body
@@ -166,14 +142,14 @@ try {
     
     $mockBooking = [
         'id' => (int)$mockBookingId,
-        'userId' => $userId ? (int)$userId : null,
+        'userId' => null,
         'bookingNumber' => $mockBookingNumber,
         'pickupLocation' => $data['pickupLocation'],
-        'dropLocation' => $data['dropLocation'] ?? '',
+        'dropLocation' => isset($data['dropLocation']) ? $data['dropLocation'] : '',
         'pickupDate' => $data['pickupDate'],
-        'returnDate' => $data['returnDate'] ?? null,
+        'returnDate' => isset($data['returnDate']) ? $data['returnDate'] : null,
         'cabType' => $data['cabType'],
-        'distance' => (float)($data['distance'] ?? 0),
+        'distance' => isset($data['distance']) ? (float)$data['distance'] : 0,
         'tripType' => $data['tripType'],
         'tripMode' => $data['tripMode'],
         'totalAmount' => (float)$data['totalAmount'],
@@ -181,42 +157,13 @@ try {
         'passengerName' => $data['passengerName'],
         'passengerPhone' => $data['passengerPhone'],
         'passengerEmail' => $data['passengerEmail'],
+        'hourlyPackage' => isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null,
         'created_at' => date('Y-m-d H:i:s')
     ];
     
     logBooking("Created booking response", $mockBooking);
     
-    // Try to send confirmation email
-    try {
-        require_once __DIR__ . '/utils/mailer.php';
-        
-        // Prepare email content
-        $subject = "Booking Confirmation: " . $mockBookingNumber;
-        $htmlBody = "<h2>Your booking is confirmed!</h2>";
-        $htmlBody .= "<p>Booking Number: <strong>" . $mockBookingNumber . "</strong></p>";
-        $htmlBody .= "<p>Pickup Location: " . $data['pickupLocation'] . "</p>";
-        $htmlBody .= "<p>Cab Type: " . $data['cabType'] . "</p>";
-        $htmlBody .= "<p>Pickup Date: " . date('Y-m-d H:i', strtotime($data['pickupDate'])) . "</p>";
-        $htmlBody .= "<p>Total Amount: ₹" . number_format($data['totalAmount'], 2) . "</p>";
-        
-        // Send email with PHPMailer
-        $emailResult = sendEmailWithPHPMailer($data['passengerEmail'], $subject, $htmlBody);
-        logBooking("PHPMailer email result", ['success' => $emailResult ? 'yes' : 'no']);
-        
-        // If PHPMailer fails, try the legacy method
-        if (!$emailResult) {
-            if (function_exists('sendEmail')) {
-                $legacyResult = sendEmail($data['passengerEmail'], $subject, $htmlBody);
-                logBooking("Legacy email result", ['success' => $legacyResult ? 'yes' : 'no']);
-            }
-        }
-        
-    } catch (Exception $emailError) {
-        logBooking("Email sending failed", ['error' => $emailError->getMessage()]);
-        // Continue with booking process even if email fails
-    }
-    
-    // Send success response - make sure this is the ONLY output from the script
+    // Send success response
     $response = [
         'status' => 'success',
         'message' => 'Booking created successfully',

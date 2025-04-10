@@ -28,7 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Include PHPMailer and email utilities
-require_once __DIR__ . '/utils/email.php';
+if (file_exists(__DIR__ . '/utils/mailer.php')) {
+    require_once __DIR__ . '/utils/mailer.php';
+}
 
 // Helper function to log errors
 function logEmailError($message, $data = []) {
@@ -49,6 +51,18 @@ function logEmailError($message, $data = []) {
     error_log($logEntry); // Also log to PHP error log
 }
 
+// Helper function to send email
+function sendEmail($to, $subject, $htmlBody) {
+    // Create basic email headers
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
+    $headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+    
+    // Try to send the email and return the result
+    return mail($to, $subject, $htmlBody, $headers);
+}
+
 // Get booking data from request body
 $requestData = null;
 $requestBody = file_get_contents('php://input');
@@ -57,7 +71,8 @@ $requestBody = file_get_contents('php://input');
 logEmailError("Email confirmation process started", [
     'content_length' => isset($_SERVER['CONTENT_LENGTH']) ? $_SERVER['CONTENT_LENGTH'] : 'unknown',
     'request_method' => $_SERVER['REQUEST_METHOD'],
-    'request_uri' => $_SERVER['REQUEST_URI']
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'raw_body_length' => strlen($requestBody)
 ]);
 
 // Safety check for empty request
@@ -89,7 +104,8 @@ if (!$requestData) {
 
 logEmailError("Received booking confirmation request", [
     'booking_number' => $requestData['bookingNumber'] ?? 'Unknown',
-    'email' => isset($requestData['passengerEmail']) ? substr($requestData['passengerEmail'], 0, 3) . '***' : 'Missing'
+    'email' => isset($requestData['passengerEmail']) ? substr($requestData['passengerEmail'], 0, 3) . '***' : 'Missing',
+    'data_keys' => array_keys($requestData)
 ]);
 
 // Validate required fields
@@ -116,11 +132,6 @@ if (!empty($missingFields)) {
 }
 
 try {
-    // Load mailer class if needed
-    if (!function_exists('sendEmailWithPHPMailer') && file_exists(__DIR__ . '/utils/mailer.php')) {
-        require_once __DIR__ . '/utils/mailer.php';
-    }
-    
     // Prepare email content
     $subject = "Booking Confirmation: " . $requestData['bookingNumber'];
     $htmlBody = "<h2>Your booking is confirmed!</h2>";
@@ -151,16 +162,18 @@ try {
         logEmailError("PHPMailer attempt result", ['success' => $customerEmailResult ? 'yes' : 'no']);
     }
     
-    // 2. If PHPMailer fails, try the legacy method
-    if (!$customerEmailResult && function_exists('sendEmail')) {
-        logEmailError("Attempting legacy email method");
+    // 2. If PHPMailer fails, try the local sendEmail function
+    if (!$customerEmailResult) {
+        logEmailError("PHPMailer failed, attempting direct sendEmail function");
         $customerEmailResult = sendEmail($requestData['passengerEmail'], $subject, $htmlBody);
-        logEmailError("Legacy email attempt result", ['success' => $customerEmailResult ? 'yes' : 'no']);
+        logEmailError("sendEmail function attempt result", ['success' => $customerEmailResult ? 'yes' : 'no']);
     }
     
-    // 3. If all methods fail, try direct PHP mail function
+    // 3. If all methods fail, try direct PHP mail function as final fallback
     if (!$customerEmailResult) {
-        logEmailError("Attempting direct PHP mail()");
+        logEmailError("All email methods failed, attempting direct PHP mail()");
+        
+        // Basic email headers
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
         $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
@@ -187,11 +200,15 @@ try {
             ]
         ]);
     } else {
-        http_response_code(500);
+        // Even though email failed, we don't want to fail the whole booking process
+        // Just log the issue and return a partial success
+        http_response_code(207); // Multi-Status
         echo json_encode([
-            'status' => 'error',
-            'message' => 'Failed to send confirmation email. We will contact you shortly.',
+            'status' => 'partial',
+            'message' => 'Booking created successfully but confirmation email could not be sent',
             'details' => [
+                'booking_created' => true,
+                'email_sent' => false,
                 'booking_number' => $requestData['bookingNumber']
             ]
         ]);

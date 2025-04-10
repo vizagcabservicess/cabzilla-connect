@@ -65,14 +65,16 @@ export const bookingAPI = {
       }
       
       // Validate all fields are present
-      const missingFields = requiredFields.filter(field => 
-        !bookingData[field as keyof BookingRequest] || 
-        (typeof bookingData[field as keyof BookingRequest] === 'string' && 
-         (bookingData[field as keyof BookingRequest] as string).trim() === '')
-      );
+      const missingFields = requiredFields.filter(field => {
+        const value = bookingData[field as keyof BookingRequest];
+        if (value === undefined || value === null) return true;
+        if (typeof value === 'string' && value.trim() === '') return true;
+        return false;
+      });
       
       if (missingFields.length > 0) {
         console.error('Missing required fields:', missingFields);
+        console.error('Booking data:', bookingData);
         throw new Error(`Missing required booking information: ${missingFields.join(', ')}`);
       }
       
@@ -85,11 +87,9 @@ export const bookingAPI = {
       const bookingUrl = getApiUrl('/api/book.php');
       console.log('Booking endpoint URL:', bookingUrl);
       
-      // Convert bookingData to JSON string
-      const requestBody = JSON.stringify(bookingData);
-      console.log('Request body after stringifying:', requestBody);
+      // Use direct fetch with proper error handling and debugging
+      console.log('Sending booking request with data:', JSON.stringify(bookingData));
       
-      // Use direct fetch with proper error handling and detailed logging
       const response = await fetch(bookingUrl, {
         method: 'POST',
         headers: {
@@ -99,7 +99,7 @@ export const bookingAPI = {
           'Pragma': 'no-cache',
           'X-Requested-With': 'fetch'
         },
-        body: requestBody,
+        body: JSON.stringify(bookingData),
       });
       
       console.log('Response status:', response.status, response.statusText);
@@ -107,7 +107,7 @@ export const bookingAPI = {
       // Get the response text first to debug potential issues
       const responseText = await response.text();
       console.log('Raw server response text length:', responseText.length);
-      console.log('Raw server response (first 500 chars):', responseText.substring(0, 500));
+      console.log('Raw server response:', responseText.substring(0, 500));
       
       // Safety check - empty responses
       if (!responseText || responseText.trim() === '') {
@@ -144,24 +144,40 @@ export const bookingAPI = {
       
       console.log('Booking created successfully:', result);
       
-      // Send email confirmation separately
+      // Send email confirmation separately with explicit debugging
       try {
         if (result.data && result.data.passengerEmail) {
           console.log('Sending email confirmation for booking:', result.data.bookingNumber);
           
           // Send to the dedicated email confirmation endpoint
           const confirmEmailUrl = getApiUrl('/api/send-booking-confirmation.php');
+          console.log('Email confirmation URL:', confirmEmailUrl);
+          console.log('Email confirmation data:', JSON.stringify(result.data));
+          
           const confirmResponse = await fetch(confirmEmailUrl, {
             method: 'POST',
             headers: {
               ...defaultHeaders,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
             },
             body: JSON.stringify(result.data)
           });
           
-          const confirmResult = await confirmResponse.text();
-          console.log('Confirmation email endpoint response:', confirmResult);
+          const confirmText = await confirmResponse.text();
+          console.log('Email confirmation response status:', confirmResponse.status);
+          console.log('Email confirmation response:', confirmText.substring(0, 500));
+          
+          let confirmResult;
+          try {
+            confirmResult = JSON.parse(confirmText);
+            console.log('Parsed email confirmation result:', confirmResult);
+          } catch (e) {
+            console.warn('Could not parse email confirmation response as JSON:', confirmText.substring(0, 200));
+          }
+        } else {
+          console.warn('Email confirmation skipped - missing passenger email in booking data');
         }
       } catch (emailError) {
         // Don't fail booking just because email failed
