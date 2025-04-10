@@ -5,10 +5,9 @@ define('EMAIL_DEBUG_MODE', true);
 
 // PHPMailer integration for reliable email sending
 
-// Simulate PHPMailer for development environment
+// Simulate PHPMailer for development environment - FIXED implementation
 class PHPMailer {
     public $SMTPDebug = 0;
-    public $isSMTP = false;
     public $Host = '';
     public $SMTPAuth = false;
     public $Username = '';
@@ -44,16 +43,44 @@ class PHPMailer {
         $this->attachments[] = ['path' => $path, 'name' => $name];
     }
     
+    // IMPORTANT: Fixing the missing isSMTP() method
+    public function isSMTP() {
+        // Simulation
+        $this->mailType = 'smtp';
+    }
+    
     public function send() {
         // In development, always return success
         error_log("SIMULATION: Email would be sent to {$this->to} with subject: {$this->Subject}");
-        return true;
+        
+        // Log attempt to PHP error log for debugging
+        error_log("Attempting to send email via PHPMailer to: {$this->to}");
+        
+        // Try using native mail function as fallback
+        $headers = "From: {$this->from['email']}\r\n";
+        $headers .= "Reply-To: {$this->from['email']}\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        
+        $success = mail($this->to, $this->Subject, $this->Body, $headers);
+        
+        // Log the result
+        if ($success) {
+            error_log("PHPMailer fallback to native mail(): SUCCESS - Sent to {$this->to}");
+        } else {
+            error_log("PHPMailer fallback to native mail(): FAILED - To {$this->to}");
+            $error = error_get_last();
+            if ($error) {
+                error_log("Mail error: " . print_r($error, true));
+            }
+        }
+        
+        return $success;
     }
 }
 
 class SMTP {}
-// CRITICAL FIX: Remove the Exception class definition since it already exists in PHP core
-// class Exception extends \Exception {} - THIS LINE CAUSED THE FATAL ERROR
+// CRITICAL: Do NOT declare Exception class as it's part of PHP core
 
 /**
  * Helper function to log errors during email sending
@@ -97,7 +124,7 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
     ]);
     
     // Create a new PHPMailer instance
-    $mail = new PHPMailer(true);
+    $mail = new PHPMailer();
     
     try {
         // Server settings
@@ -148,25 +175,25 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
     } catch (Exception $e) {
         logError("PHPMailer Exception", [
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+            'trace' => $e->getTraceAsString() 
         ]);
         
         // Try again with alternative method
         try {
-            // Disable SMTP for direct sending
-            $mail = new PHPMailer(true);
-            $mail->isSMTP = false;
+            // Try direct native mail as fallback
+            $headers = "From: info@vizagup.com\r\n";
+            $headers .= "Reply-To: info@vizagup.com\r\n";
+            $headers .= "MIME-Version: 1.0\r\n";
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
             
-            // Set basic information
-            $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
-            $mail->addAddress($to);
-            $mail->Subject = $subject;
-            $mail->Body = $htmlBody;
-            $mail->isHTML(true);
+            logError("Attempting direct mail send as fallback", ['to' => $to]);
+            $directResult = mail($to, $subject, $htmlBody, $headers);
             
-            logError("Attempting direct mail send without SMTP", ['to' => $to]);
-            $directResult = $mail->send();
-            logError("Direct send result", ['success' => $directResult ? 'true' : 'false']);
+            $error = error_get_last();
+            logError("Direct send result", [
+                'success' => $directResult ? 'true' : 'false',
+                'error' => $error ? $error['message'] : 'none'
+            ]);
             
             return $directResult;
         } catch (Exception $e2) {
@@ -185,6 +212,11 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
  * @return bool True if mail function succeeded, false otherwise
  */
 function testDirectMailFunction($to, $subject, $htmlBody) {
+    // Clear any previous PHP errors
+    if (function_exists('error_clear_last')) {
+        error_clear_last();
+    }
+    
     logError("Testing direct PHP mail() function", ['to' => $to, 'subject' => $subject]);
     
     // Prepare headers
@@ -193,21 +225,29 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     $headers .= 'From: info@vizagup.com' . "\r\n";
     $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
     
-    // Get initial error state
-    $lastError = error_get_last();
+    // Attempt to send with extensive error checking
+    error_log("Attempting to send mail to $to with subject: $subject");
     
-    // Attempt to send
-    $mailResult = @mail($to, $subject, $htmlBody, $headers);
+    $mailResult = mail($to, $subject, $htmlBody, $headers);
     
-    // Check for new errors
-    $newError = error_get_last();
-    $errorMessage = ($newError !== $lastError) ? $newError['message'] : 'No specific error';
+    // Get error information if any
+    $phpError = error_get_last();
     
-    logError("Direct mail() function result", [
-        'success' => $mailResult ? 'true' : 'false',
-        'error' => $mailResult ? 'none' : $errorMessage,
-        'error_details' => $mailResult ? 'none' : print_r(error_get_last(), true)
-    ]);
+    if (!$mailResult) {
+        error_log("Mail FAILED to $to - Error: " . ($phpError ? $phpError['message'] : 'Unknown error'));
+        logError("Direct mail() function failed", [
+            'to' => $to,
+            'subject' => $subject,
+            'error' => $phpError ? $phpError['message'] : 'Unknown mail() failure',
+            'headers' => $headers
+        ]);
+    } else {
+        error_log("Mail SENT to $to with subject: $subject");
+        logError("Direct mail() function succeeded", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+    }
     
     return $mailResult;
 }
@@ -221,47 +261,85 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
  * @return bool True if any method succeeded, false if all failed
  */
 function sendEmailAllMethods($to, $subject, $htmlBody) {
-    // First try PHPMailer
-    $phpMailerResult = sendEmailWithPHPMailer($to, $subject, $htmlBody);
-    
-    if ($phpMailerResult) {
-        logError("Successfully sent email via PHPMailer", [
-            'to' => $to,
-            'subject' => $subject
-        ]);
-        return true;
+    // Create log directory if it doesn't exist
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
     }
     
-    // If PHPMailer fails, try PHP's native mail() function
+    $logFile = $logDir . '/email_attempts_' . date('Y-m-d') . '.log';
+    file_put_contents($logFile, "=== NEW EMAIL ATTEMPT ===\n", FILE_APPEND);
+    file_put_contents($logFile, "Date: " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+    file_put_contents($logFile, "To: $to\n", FILE_APPEND);
+    file_put_contents($logFile, "Subject: $subject\n", FILE_APPEND);
+    
+    // First try direct PHP mail() as it's most likely to work on basic hosting
+    file_put_contents($logFile, "Trying method 1: PHP mail()\n", FILE_APPEND);
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
     $headers .= 'From: info@vizagup.com' . "\r\n";
     $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
     
-    logError("Attempting to send via PHP mail()", ['to' => $to]);
-    $mailResult = mail($to, $subject, $htmlBody, $headers);
+    // Try with error suppression to prevent any warnings breaking the page
+    $mailResult = @mail($to, $subject, $htmlBody, $headers);
+    $phpError = error_get_last();
     
     if ($mailResult) {
+        file_put_contents($logFile, "Method 1 SUCCESS\n", FILE_APPEND);
         logError("Successfully sent email via mail()", [
             'to' => $to,
             'subject' => $subject
         ]);
         return true;
+    } else {
+        file_put_contents($logFile, "Method 1 FAILED: " . ($phpError ? $phpError['message'] : 'Unknown error') . "\n", FILE_APPEND);
     }
     
-    // If mail() also fails, try with additional parameters
-    logError("Attempting to send via mail() with additional parameters", ['to' => $to]);
-    $mailResult2 = mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
+    // If simple mail() fails, try with additional parameters
+    file_put_contents($logFile, "Trying method 2: mail() with additional parameters\n", FILE_APPEND);
+    $mailResult2 = @mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
+    $phpError2 = error_get_last();
     
     if ($mailResult2) {
+        file_put_contents($logFile, "Method 2 SUCCESS\n", FILE_APPEND);
         logError("Successfully sent email via mail() with additional parameters", [
             'to' => $to,
             'subject' => $subject
         ]);
         return true;
+    } else {
+        file_put_contents($logFile, "Method 2 FAILED: " . ($phpError2 ? $phpError2['message'] : 'Unknown error') . "\n", FILE_APPEND);
+    }
+    
+    // Try with PHPMailer's simple implementation as a last resort
+    file_put_contents($logFile, "Trying method 3: Simple PHPMailer implementation\n", FILE_APPEND);
+    
+    try {
+        $mail = new PHPMailer();
+        $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
+        $mail->addAddress($to);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->isHTML(true);
+        
+        $success = $mail->send();
+        
+        if ($success) {
+            file_put_contents($logFile, "Method 3 SUCCESS\n", FILE_APPEND);
+            logError("Successfully sent email via simple PHPMailer", [
+                'to' => $to,
+                'subject' => $subject
+            ]);
+            return true;
+        } else {
+            file_put_contents($logFile, "Method 3 FAILED\n", FILE_APPEND);
+        }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "Method 3 EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
     // If all methods fail, log the failure
+    file_put_contents($logFile, "ALL METHODS FAILED\n", FILE_APPEND);
     logError("All email sending methods failed", [
         'to' => $to,
         'subject' => $subject

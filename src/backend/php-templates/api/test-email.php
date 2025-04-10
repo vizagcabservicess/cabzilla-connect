@@ -28,7 +28,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Include email utilities - use absolute paths for reliability
 $utilsPath = __DIR__ . '/utils/';
 $mailerPath = $utilsPath . 'mailer.php';
-$responsePath = $utilsPath . 'response.php';
 
 // Log diagnostic information
 error_log("Test email endpoint called. Looking for: $mailerPath");
@@ -159,22 +158,25 @@ try {
         logTestEmail("Direct PHP mail() test email failed", ['error' => $errorMessage]);
     }
     
-    // Try with PHPMailer if available
-    if (function_exists('sendEmailWithPHPMailer')) {
-        logTestEmail("Attempting to send test email with PHPMailer");
-        $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
-        $results['methods_tried'][] = 'PHPMailer';
+    // Try with sendEmailAllMethods for maximum compatibility
+    logTestEmail("Attempting to send test email with sendEmailAllMethods");
+    $allMethodsResult = false;
+    
+    // Only use if function exists
+    if (function_exists('sendEmailAllMethods')) {
+        $allMethodsResult = sendEmailAllMethods($recipientEmail, $subject, $htmlBody);
+        $results['methods_tried'][] = 'sendEmailAllMethods';
         
-        if ($phpMailerResult) {
-            $results['successful'][] = 'PHPMailer';
-            logTestEmail("PHPMailer test email sent successfully");
+        if ($allMethodsResult) {
+            $results['successful'][] = 'sendEmailAllMethods';
+            logTestEmail("sendEmailAllMethods test email sent successfully");
         } else {
-            $results['failed'][] = 'PHPMailer';
-            logTestEmail("PHPMailer test email failed");
+            $results['failed'][] = 'sendEmailAllMethods';
+            logTestEmail("sendEmailAllMethods test email failed");
         }
     }
     
-    // Try other utility methods if available
+    // Try with testDirectMailFunction if available
     if (function_exists('testDirectMailFunction')) {
         logTestEmail("Attempting to send test email with testDirectMailFunction");
         $directResult = testDirectMailFunction($recipientEmail, $subject, $htmlBody);
