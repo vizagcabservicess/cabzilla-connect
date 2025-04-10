@@ -25,6 +25,8 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileBookingInterface } from './mobile/MobileBookingInterface';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -43,6 +45,7 @@ export function Hero() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   
   const loadFromSessionStorage = () => {
     try {
@@ -411,233 +414,269 @@ export function Hero() {
     setCurrentStep(2);
   };
 
+  const handleMobileFormSubmit = (formData: {
+    tripType: TripType;
+    tripMode: TripMode;
+    pickupLocation: Location | null;
+    dropLocation: Location | null;
+    pickupDate: Date | undefined;
+  }) => {
+    if (formData.tripType) setTripType(formData.tripType);
+    if (formData.tripMode) setTripMode(formData.tripMode);
+    if (formData.pickupLocation) setPickupLocation(formData.pickupLocation);
+    if (formData.dropLocation) setDropLocation(formData.dropLocation);
+    if (formData.pickupDate) setPickupDate(formData.pickupDate);
+    
+    // Save to session storage
+    sessionStorage.setItem('tripType', formData.tripType);
+    sessionStorage.setItem('tripMode', formData.tripMode);
+    if (formData.pickupLocation) {
+      sessionStorage.setItem('pickupLocation', JSON.stringify(formData.pickupLocation));
+    }
+    if (formData.dropLocation) {
+      sessionStorage.setItem('dropLocation', JSON.stringify(formData.dropLocation));
+    }
+    if (formData.pickupDate) {
+      sessionStorage.setItem('pickupDate', JSON.stringify(formData.pickupDate));
+    }
+    
+    // Navigate to the cabs page
+    navigate(`/cabs/${formData.tripType}`);
+  };
+
   return (
-    <section className="min-h-screen bg-gradient-to-b from-cabBlue-50 to-white py-16 overflow-hidden">
+    <section className="min-h-screen bg-gradient-to-b from-cabBlue-50 to-white py-8 md:py-16 overflow-hidden">
       <div className="container mx-auto px-4">
         <div className="text-center mb-8">
           <h5 className="text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3">
             Book a Cab in Minutes
           </h5>
-          <h1 className="text-4xl md:text-5xl font-bold text-cabGray-800 mb-4">
+          <h1 className="text-3xl md:text-5xl font-bold text-cabGray-800 mb-4">
             Your Journey, Our Priority
           </h1>
         </div>
 
-        {!showGuestDetailsForm ? (
+        {isMobile ? (
+          <MobileBookingInterface onSubmit={handleMobileFormSubmit} />
+        ) : (
           <>
-            {currentStep === 1 && (
-              <div className="bg-white rounded-xl shadow-card border p-8">
-                <TabTripSelector
-                  selectedTab={ensureCustomerTripType(tripType)}
-                  tripMode={tripMode}
-                  onTabChange={setTripType}
-                  onTripModeChange={setTripMode}
-                />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <LocationInput
-                    label="PICKUP LOCATION"
-                    placeholder="Enter pickup location"
-                    value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                    onLocationChange={handlePickupLocationChange}
-                    isPickupLocation={true}
-                    isAirportTransfer={tripType === 'airport'}
-                  />
-                  
-                  {(tripType === 'outstation' || tripType === 'airport') && (
-                    <LocationInput
-                      label="DROP LOCATION"
-                      placeholder="Enter drop location"
-                      value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
-                      onLocationChange={handleDropLocationChange}
-                      isPickupLocation={false}
-                      isAirportTransfer={tripType === 'airport'}
+            {!showGuestDetailsForm ? (
+              <>
+                {currentStep === 1 && (
+                  <div className="bg-white rounded-xl shadow-card border p-8">
+                    <TabTripSelector
+                      selectedTab={ensureCustomerTripType(tripType)}
+                      tripMode={tripMode}
+                      onTabChange={setTripType}
+                      onTripModeChange={setTripMode}
                     />
-                  )}
-                  
-                  {tripType === 'local' && (
-                    <div className="space-y-2">
-                      <Label>HOURLY PACKAGE</Label>
-                      <Select
-                        value={hourlyPackage}
-                        onValueChange={setHourlyPackage}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select package" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {hourlyPackageOptions.map((pkg) => (
-                            <SelectItem key={pkg.value} value={pkg.value}>
-                              {pkg.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                      <LocationInput
+                        label="PICKUP LOCATION"
+                        placeholder="Enter pickup location"
+                        value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                        onLocationChange={handlePickupLocationChange}
+                        isPickupLocation={true}
+                        isAirportTransfer={tripType === 'airport'}
+                      />
+                      
+                      {(tripType === 'outstation' || tripType === 'airport') && (
+                        <LocationInput
+                          label="DROP LOCATION"
+                          placeholder="Enter drop location"
+                          value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
+                          onLocationChange={handleDropLocationChange}
+                          isPickupLocation={false}
+                          isAirportTransfer={tripType === 'airport'}
+                        />
+                      )}
+                      
+                      {tripType === 'local' && (
+                        <div className="space-y-2">
+                          <Label>HOURLY PACKAGE</Label>
+                          <Select
+                            value={hourlyPackage}
+                            onValueChange={setHourlyPackage}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select package" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {hourlyPackageOptions.map((pkg) => (
+                                <SelectItem key={pkg.value} value={pkg.value}>
+                                  {pkg.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      
+                      <DateTimePicker
+                        label="PICKUP DATE & TIME"
+                        date={pickupDate}
+                        onDateChange={setPickupDate}
+                        minDate={new Date()}
+                      />
+
+                      {tripType === 'outstation' && tripMode === 'round-trip' && (
+                        <DateTimePicker
+                          label="RETURN DATE & TIME"
+                          date={returnDate}
+                          onDateChange={setReturnDate}
+                          minDate={pickupDate}
+                        />
+                      )}
                     </div>
-                  )}
-                  
-                  <DateTimePicker
-                    label="PICKUP DATE & TIME"
-                    date={pickupDate}
-                    onDateChange={setPickupDate}
-                    minDate={new Date()}
-                  />
 
-                  {tripType === 'outstation' && tripMode === 'round-trip' && (
-                    <DateTimePicker
-                      label="RETURN DATE & TIME"
-                      date={returnDate}
-                      onDateChange={setReturnDate}
-                      minDate={pickupDate}
-                    />
-                  )}
-                </div>
+                    {isCalculatingDistance && (
+                      <div className="mt-6 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+                        <p className="text-gray-600">Calculating route distance...</p>
+                      </div>
+                    )}
 
-                {isCalculatingDistance && (
-                  <div className="mt-6 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                    <p className="text-gray-600">Calculating route distance...</p>
+                    <div className="mt-8 flex justify-end">
+                      <Button
+                        onClick={handleContinue}
+                        disabled={!isFormValid || isCalculatingDistance}
+                        className={`px-10 py-6 rounded-md ${
+                          isFormValid && !isCalculatingDistance
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        }`}
+                      >
+                        SEARCH <ChevronRight className="ml-1" />
+                      </Button>
+                    </div>
                   </div>
                 )}
 
-                <div className="mt-8 flex justify-end">
-                  <Button
-                    onClick={handleContinue}
-                    disabled={!isFormValid || isCalculatingDistance}
-                    className={`px-10 py-6 rounded-md ${
-                      isFormValid && !isCalculatingDistance
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    }`}
-                  >
-                    SEARCH <ChevronRight className="ml-1" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-white rounded-xl shadow-card p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-xl font-semibold">Trip Details</h3>
-                      <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
-                        Edit
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                      <div>
-                        <p className="text-xs">PICKUP LOCATION</p>
-                        <p className="font-medium">{pickupLocation?.name}</p>
-                      </div>
-                      {(tripType === 'outstation' || tripType === 'airport') && (
-                        <div>
-                          <p className="text-xs">DROP LOCATION</p>
-                          <p className="font-medium">{dropLocation?.name}</p>
+                {currentStep === 2 && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+                    <div className="lg:col-span-2 space-y-6">
+                      <div className="bg-white rounded-xl shadow-card p-6">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-semibold">Trip Details</h3>
+                          <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
+                            Edit
+                          </Button>
                         </div>
-                      )}
-                      {tripType === 'local' && (
-                        <div>
-                          <p className="text-xs">PACKAGE</p>
-                          <p className="font-medium">
-                            {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
-                          </p>
-                        </div>
-                      )}
-                      <div className="col-span-2 border-t pt-3 mt-2 flex justify-between">
-                        <div>
-                          <p className="text-xs">PICKUP DATE & TIME</p>
-                          <p className="font-medium">{pickupDate?.toLocaleString()}</p>
-                        </div>
-                        {tripMode === 'round-trip' && returnDate && (
+                        <div className="grid grid-cols-2 gap-y-4 gap-x-6">
                           <div>
-                            <p className="text-xs">RETURN DATE & TIME</p>
-                            <p className="font-medium">{returnDate?.toLocaleString()}</p>
+                            <p className="text-xs">PICKUP LOCATION</p>
+                            <p className="font-medium">{pickupLocation?.name}</p>
+                          </div>
+                          {(tripType === 'outstation' || tripType === 'airport') && (
+                            <div>
+                              <p className="text-xs">DROP LOCATION</p>
+                              <p className="font-medium">{dropLocation?.name}</p>
+                            </div>
+                          )}
+                          {tripType === 'local' && (
+                            <div>
+                              <p className="text-xs">PACKAGE</p>
+                              <p className="font-medium">
+                                {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
+                              </p>
+                            </div>
+                          )}
+                          <div className="col-span-2 border-t pt-3 mt-2 flex justify-between">
+                            <div>
+                              <p className="text-xs">PICKUP DATE & TIME</p>
+                              <p className="font-medium">{pickupDate?.toLocaleString()}</p>
+                            </div>
+                            {tripMode === 'round-trip' && returnDate && (
+                              <div>
+                                <p className="text-xs">RETURN DATE & TIME</p>
+                                <p className="font-medium">{returnDate?.toLocaleString()}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
+                          <div className="mt-6">
+                            <GoogleMapComponent
+                              pickupLocation={pickupLocation}
+                              dropLocation={dropLocation}
+                              onDistanceCalculated={handleDistanceCalculated}
+                            />
                           </div>
                         )}
-                      </div>
-                    </div>
-                    
-                    {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
-                      <div className="mt-6">
-                        <GoogleMapComponent
-                          pickupLocation={pickupLocation}
-                          dropLocation={dropLocation}
-                          onDistanceCalculated={handleDistanceCalculated}
+                        
+                        <CabOptions 
+                          cabTypes={cabTypes} 
+                          selectedCab={selectedCab} 
+                          onSelectCab={setSelectedCab} 
+                          distance={distance} 
+                          tripType={tripType} 
+                          tripMode={tripMode}
+                          hourlyPackage={hourlyPackage}
+                          pickupDate={pickupDate}
+                          returnDate={returnDate}
                         />
                       </div>
-                    )}
+                    </div>
+                    <div className="lg:col-span-1">
+                      <div ref={bookingSummaryRef} id="booking-summary">
+                        <BookingSummary 
+                          pickupLocation={pickupLocation!} 
+                          dropLocation={dropLocation} 
+                          pickupDate={pickupDate} 
+                          returnDate={returnDate} 
+                          selectedCab={selectedCab!} 
+                          distance={distance} 
+                          tripType={tripType} 
+                          tripMode={tripMode} 
+                          totalPrice={totalPrice}
+                        />
+                      </div>
+                      
+                      <Button 
+                        onClick={handleBookNow}
+                        className="w-full mt-4 py-6 text-base"
+                        disabled={!isFormValid || !selectedCab}
+                      >
+                        Book Now
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-semibold">Complete Your Booking</h3>
+                    </div>
                     
-                    <CabOptions 
-                      cabTypes={cabTypes} 
-                      selectedCab={selectedCab} 
-                      onSelectCab={setSelectedCab} 
-                      distance={distance} 
-                      tripType={tripType} 
-                      tripMode={tripMode}
-                      hourlyPackage={hourlyPackage}
-                      pickupDate={pickupDate}
-                      returnDate={returnDate}
+                    <GuestDetailsForm 
+                      onSubmit={handleGuestDetailsSubmit}
+                      totalPrice={totalPrice}
+                      onBack={handleBackToSelection}
                     />
                   </div>
                 </div>
-                <div className="lg:col-span-1">
-                  <div ref={bookingSummaryRef} id="booking-summary">
-                    <BookingSummary 
-                      pickupLocation={pickupLocation!} 
-                      dropLocation={dropLocation} 
-                      pickupDate={pickupDate} 
-                      returnDate={returnDate} 
-                      selectedCab={selectedCab!} 
-                      distance={distance} 
-                      tripType={tripType} 
-                      tripMode={tripMode} 
-                      totalPrice={totalPrice}
-                    />
-                  </div>
-                  
-                  <Button 
-                    onClick={handleBookNow}
-                    className="w-full mt-4 py-6 text-base"
-                    disabled={!isFormValid || !selectedCab}
-                  >
-                    Book Now
-                  </Button>
+                
+                <div>
+                  <BookingSummary
+                    pickupLocation={pickupLocation!}
+                    dropLocation={dropLocation}
+                    pickupDate={pickupDate}
+                    returnDate={returnDate}
+                    selectedCab={selectedCab!}
+                    distance={distance}
+                    totalPrice={totalPrice}
+                    tripType={tripType}
+                    tripMode={tripMode}
+                  />
                 </div>
               </div>
             )}
           </>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-semibold">Complete Your Booking</h3>
-                </div>
-                
-                <GuestDetailsForm 
-                  onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={totalPrice}
-                  onBack={handleBackToSelection}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <BookingSummary
-                pickupLocation={pickupLocation!}
-                dropLocation={dropLocation}
-                pickupDate={pickupDate}
-                returnDate={returnDate}
-                selectedCab={selectedCab!}
-                distance={distance}
-                totalPrice={totalPrice}
-                tripType={tripType}
-                tripMode={tripMode}
-              />
-            </div>
-          </div>
         )}
       </div>
     </section>

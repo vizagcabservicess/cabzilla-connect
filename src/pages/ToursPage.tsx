@@ -1,5 +1,3 @@
-
-// We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -20,10 +18,13 @@ import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileBookingInterface } from "@/components/mobile/MobileBookingInterface";
 
 const ToursPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
@@ -32,13 +33,11 @@ const ToursPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // This function gets the direct tour fare without adding GST
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
     console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
     
-    // Try to get fare from tourFares mapping
     const tourFareMatrix = tourFares[tourId];
     if (tourFareMatrix) {
       const fare = tourFareMatrix[cabId as keyof typeof tourFareMatrix];
@@ -46,12 +45,10 @@ const ToursPage = () => {
       if (fare) return fare as number;
     }
     
-    // Fallback to default pricing if not found in the matrix
     if (cabId === 'sedan') return 3500;
     if (cabId === 'ertiga') return 4500;
     if (cabId === 'innova_crysta') return 5500;
     
-    // Last resort default
     return 4000;
   };
   
@@ -199,124 +196,145 @@ const ToursPage = () => {
     setPickupLocation(location);
   };
   
+  const handleMobileFormSubmit = (formData: any) => {
+    navigate(`/cabs/${formData.tripType || 'outstation'}`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-5xl mx-auto">
-          {!showGuestDetailsForm ? (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">Available Tour Packages</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {availableTours.map((tour) => (
-                  <div 
-                    key={tour.id}
-                    className={cn(
-                      "border rounded-lg overflow-hidden cursor-pointer transition-all",
-                      selectedTour === tour.id 
-                        ? "border-blue-500 shadow-md ring-2 ring-blue-200" 
-                        : "border-gray-200 hover:border-blue-300"
-                    )}
-                    onClick={() => handleTourSelect(tour.id)}
-                  >
-                    <div className="h-40 bg-gray-200 relative">
-                      {tour.image ? (
-                        <img 
-                          src={tour.image} 
-                          alt={tour.name} 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                          <span className="text-gray-400">No image</span>
-                        </div>
-                      )}
-                      {selectedTour === tour.id && (
-                        <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-                          <Check size={16} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-semibold text-lg">{tour.name}</h3>
-                      <div className="flex items-center mt-1 text-sm text-gray-500">
-                        <MapPin size={14} className="mr-1" />
-                        <span>{tour.distance} km journey</span>
-                      </div>
-                      <div className="mt-2 text-sm text-blue-600">
-                        Starts from ₹{getTourFare(tour.id, 'sedan').toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          {isMobile && !showGuestDetailsForm ? (
+            <div className="bg-white rounded-lg shadow-md overflow-hidden p-4 mb-6">
+              <h2 className="text-xl font-semibold text-center mb-4">Tour Packages</h2>
+              <MobileBookingInterface onSubmit={handleMobileFormSubmit} />
+              <div className="mt-4 text-center">
+                <Button 
+                  onClick={() => navigate('/cabs/outstation')}
+                  variant="outline"
+                >
+                  View Available Tours
+                </Button>
               </div>
-              
-              {selectedTour && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                    <LocationInput
-                      label="PICKUP LOCATION"
-                      placeholder="Enter your pickup location"
-                      value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                      onLocationChange={handlePickupLocationChange}
-                      isPickupLocation={true}
-                    />
-                    
-                    <DateTimePicker
-                      label="TOUR DATE & TIME"
-                      date={pickupDate}
-                      onDateChange={setPickupDate}
-                      minDate={new Date()}
-                    />
-                  </div>
-                  
-                  <CabOptions
-                    cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
-                    selectedCab={selectedCab}
-                    onSelectCab={setSelectedCab}
-                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-                    tripType="tour"
-                    tripMode="one-way" // Tours are considered one-way
-                    pickupDate={pickupDate}
-                  />
-                  
-                  <Button
-                    onClick={handleBookNow}
-                    disabled={!selectedTour || !pickupLocation || !pickupDate || !selectedCab}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
-                  >
-                    BOOK NOW
-                  </Button>
-                </>
-              )}
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <GuestDetailsForm
-                  onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? 
-                    getTourFare(selectedTour, selectedCab.id) : 0}
-                  isSubmitting={isSubmitting}
-                />
-              </div>
-              
-              <div>
-                {selectedTour && selectedCab && pickupLocation && pickupDate && (
-                  <BookingSummary
-                    pickupLocation={pickupLocation}
-                    dropLocation={null} // Tours don't have drop locations
-                    pickupDate={pickupDate}
-                    selectedCab={selectedCab}
-                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-                    totalPrice={getTourFare(selectedTour, selectedCab.id)}
-                    tripType="tour"
-                  />
-                )}
-              </div>
-            </div>
+            <>
+              {!showGuestDetailsForm ? (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden p-6">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-6">Available Tour Packages</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    {availableTours.map((tour) => (
+                      <div 
+                        key={tour.id}
+                        className={cn(
+                          "border rounded-lg overflow-hidden cursor-pointer transition-all",
+                          selectedTour === tour.id 
+                            ? "border-blue-500 shadow-md ring-2 ring-blue-200" 
+                            : "border-gray-200 hover:border-blue-300"
+                        )}
+                        onClick={() => handleTourSelect(tour.id)}
+                      >
+                        <div className="h-40 bg-gray-200 relative">
+                          {tour.image ? (
+                            <img 
+                              src={tour.image} 
+                              alt={tour.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                              <span className="text-gray-400">No image</span>
+                            </div>
+                          )}
+                          {selectedTour === tour.id && (
+                            <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+                              <Check size={16} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-semibold text-lg">{tour.name}</h3>
+                          <div className="flex items-center mt-1 text-sm text-gray-500">
+                            <MapPin size={14} className="mr-1" />
+                            <span>{tour.distance} km journey</span>
+                          </div>
+                          <div className="mt-2 text-sm text-blue-600">
+                            Starts from ₹{getTourFare(tour.id, 'sedan').toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {selectedTour && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                        <LocationInput
+                          label="PICKUP LOCATION"
+                          placeholder="Enter your pickup location"
+                          value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                          onLocationChange={handlePickupLocationChange}
+                          isPickupLocation={true}
+                        />
+                        
+                        <DateTimePicker
+                          label="TOUR DATE & TIME"
+                          date={pickupDate}
+                          onDateChange={setPickupDate}
+                          minDate={new Date()}
+                        />
+                      </div>
+                      
+                      <CabOptions
+                        cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
+                        selectedCab={selectedCab}
+                        onSelectCab={setSelectedCab}
+                        distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
+                        tripType="tour"
+                        tripMode="one-way" // Tours are considered one-way
+                        pickupDate={pickupDate}
+                      />
+                      
+                      <Button
+                        onClick={handleBookNow}
+                        disabled={!selectedTour || !pickupLocation || !pickupDate || !selectedCab}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
+                      >
+                        BOOK NOW
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <GuestDetailsForm
+                      onSubmit={handleGuestDetailsSubmit}
+                      totalPrice={selectedTour && selectedCab ? 
+                        getTourFare(selectedTour, selectedCab.id) : 0}
+                      isSubmitting={isSubmitting}
+                    />
+                  </div>
+                  
+                  <div>
+                    {selectedTour && selectedCab && pickupLocation && pickupDate && (
+                      <BookingSummary
+                        pickupLocation={pickupLocation}
+                        dropLocation={null} // Tours don't have drop locations
+                        pickupDate={pickupDate}
+                        selectedCab={selectedCab}
+                        distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
+                        totalPrice={getTourFare(selectedTour, selectedCab.id)}
+                        tripType="tour"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
