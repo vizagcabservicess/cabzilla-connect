@@ -1,19 +1,20 @@
+
 <?php
-// Properly redirect to the updated and fixed test-email.php endpoint 
-// This file is kept for backward compatibility
-header('Content-Type: application/json');
+// This is just a redirect to maintain backward compatibility with existing code
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Content-Type: application/json');
 
 // Log the redirect for debugging
 error_log("Redirecting from test-email-sending.php to test-email.php with query: " . $_SERVER['QUERY_STRING']);
 
-// Create a valid query string to pass along
+// Create the full query string to pass along
 $query = '';
 if (!empty($_SERVER['QUERY_STRING'])) {
     $query = '?' . $_SERVER['QUERY_STRING'];
 }
 
-// Don't use require_once which keeps executing this file
-// Instead redirect the browser to the new endpoint
+// Properly redirect to the test-email.php endpoint
 header('Location: test-email.php' . $query);
 exit;

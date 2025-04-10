@@ -4,81 +4,143 @@
 define('EMAIL_DEBUG_MODE', true);
 
 // PHPMailer integration for reliable email sending
-
-// Implement PHPMailer simulation for development environment
-class PHPMailer {
-    public $SMTPDebug = 0;
-    public $Host = '';
-    public $SMTPAuth = false;
-    public $Username = '';
-    public $Password = '';
-    public $SMTPSecure = '';
-    public $Port = 0;
-    public $Subject = '';
-    public $Body = '';
-    public $AltBody = '';
-    public $from = ['email' => '', 'name' => ''];
-    public $to = '';
-    public $replyTo = ['email' => '', 'name' => ''];
-    public $isHtml = false;
-    public $attachments = [];
-    public $mailType = '';
-    
-    // Fixed implementation of methods
-    public function setFrom($email, $name) {
-        $this->from = ['email' => $email, 'name' => $name];
-    }
-    
-    public function addAddress($email) {
-        $this->to = $email;
-    }
-    
-    public function addReplyTo($email, $name) {
-        $this->replyTo = ['email' => $email, 'name' => $name];
-    }
-    
-    public function isHTML($isHtml) {
-        $this->isHtml = $isHtml;
-    }
-    
-    public function addAttachment($path, $name = '') {
-        $this->attachments[] = ['path' => $path, 'name' => $name];
-    }
-    
-    // Properly implement isSMTP method
-    public function isSMTP() {
-        $this->mailType = 'smtp';
-    }
-    
-    public function send() {
-        // Log attempt to PHP error log for debugging
-        error_log("Attempting to send email via PHPMailer to: {$this->to}");
+// IMPORTANT: Avoid declaring PHPMailer class if it already exists
+if (!class_exists('PHPMailer')) {
+    // Custom PHPMailer implementation optimized for compatibility with PHP 8.x
+    class PHPMailer {
+        public $SMTPDebug = 0;
+        public $Host = '';
+        public $SMTPAuth = false;
+        public $Username = '';
+        public $Password = '';
+        public $SMTPSecure = '';
+        public $Port = 0;
+        public $Subject = '';
+        public $Body = '';
+        public $AltBody = '';
+        public $from = ['email' => '', 'name' => ''];
+        public $to = '';
+        public $replyTo = ['email' => '', 'name' => ''];
+        public $isHtml = false;
+        public $attachments = [];
+        public $mailType = '';
         
-        // Try using native mail function as fallback
-        $headers = "From: {$this->from['email']}\r\n";
-        $headers .= "Reply-To: {$this->from['email']}\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-        
-        $success = @mail($this->to, $this->Subject, $this->Body, $headers);
-        
-        // Log the result
-        if ($success) {
-            error_log("PHPMailer fallback to native mail(): SUCCESS - Sent to {$this->to}");
-        } else {
-            error_log("PHPMailer fallback to native mail(): FAILED - To {$this->to}");
-            $error = error_get_last();
-            if ($error) {
-                error_log("Mail error: " . print_r($error, true));
-            }
+        // Implementation of methods
+        public function setFrom($email, $name = '') {
+            $this->from = ['email' => $email, 'name' => $name];
+            return true;
         }
         
-        return $success;
+        public function addAddress($email, $name = '') {
+            $this->to = $email;
+            return true;
+        }
+        
+        public function addReplyTo($email, $name = '') {
+            $this->replyTo = ['email' => $email, 'name' => $name];
+            return true;
+        }
+        
+        public function isHTML($isHtml) {
+            $this->isHtml = $isHtml;
+            return true;
+        }
+        
+        public function addAttachment($path, $name = '') {
+            $this->attachments[] = ['path' => $path, 'name' => $name];
+            return true;
+        }
+        
+        // Properly implement isSMTP method
+        public function isSMTP() {
+            $this->mailType = 'smtp';
+            return true;
+        }
+        
+        public function send() {
+            // Log attempt to PHP error log for debugging
+            error_log("Attempting to send email via PHPMailer to: {$this->to}");
+            
+            try {
+                // Try using native mail function as fallback
+                $headers = "From: {$this->from['email']}\r\n";
+                $headers .= "Reply-To: {$this->from['email']}\r\n";
+                $headers .= "MIME-Version: 1.0\r\n";
+                $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+                $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+                
+                // TRY MULTIPLE APPROACHES:
+                // 1. First try with native mail()
+                $success = @mail($this->to, $this->Subject, $this->Body, $headers);
+                
+                if (!$success) {
+                    // 2. Try with alternative approach
+                    $success = @mail($this->to, $this->Subject, $this->Body, $headers, "-f{$this->from['email']}");
+                    
+                    if (!$success) {
+                        // 3. Try direct command-line sendmail approach on Linux
+                        if (strtoupper(substr(PHP_OS, 0, 3)) === 'LIN') {
+                            $sendmailPath = ini_get('sendmail_path');
+                            if (!empty($sendmailPath)) {
+                                // Create a temporary email file
+                                $tempEmailFile = tempnam(sys_get_temp_dir(), 'email_');
+                                $emailContent = "To: {$this->to}\n";
+                                $emailContent .= "From: {$this->from['email']}\n";
+                                $emailContent .= "Subject: {$this->Subject}\n";
+                                $emailContent .= "MIME-Version: 1.0\n";
+                                $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+                                $emailContent .= $this->Body;
+                                
+                                file_put_contents($tempEmailFile, $emailContent);
+                                
+                                // Execute sendmail directly
+                                $cmd = "$sendmailPath -t < " . escapeshellarg($tempEmailFile);
+                                $output = [];
+                                $returnVar = 0;
+                                exec($cmd, $output, $returnVar);
+                                
+                                // Clean up
+                                unlink($tempEmailFile);
+                                
+                                $success = ($returnVar === 0);
+                                
+                                if ($success) {
+                                    error_log("PHPMailer fallback to direct sendmail command: SUCCESS - Sent to {$this->to}");
+                                    return true;
+                                }
+                            }
+                        }
+                        
+                        // 4. Last resort: Try a minimal mail() call
+                        $minHeaders = "Content-Type: text/html; charset=UTF-8\r\n";
+                        $success = @mail($this->to, $this->Subject, $this->Body, $minHeaders);
+                    }
+                }
+                
+                // Log the result
+                if ($success) {
+                    error_log("PHPMailer mail delivery: SUCCESS - Sent to {$this->to}");
+                } else {
+                    error_log("PHPMailer mail delivery: FAILED - To {$this->to}");
+                    $error = error_get_last();
+                    if ($error) {
+                        error_log("Mail error: " . print_r($error, true));
+                    }
+                }
+                
+                return $success;
+            } catch (Exception $e) {
+                error_log("PHPMailer exception: " . $e->getMessage());
+                return false;
+            }
+        }
     }
 }
 
-class SMTP {}
-// DO NOT declare Exception class - it's already part of PHP core
+// Define SMTP only if not already defined
+if (!class_exists('SMTP')) {
+    class SMTP {}
+}
 
 /**
  * Helper function to log errors during email sending
@@ -107,7 +169,7 @@ function logError($message, $data = []) {
 }
 
 /**
- * Send an email using PHPMailer with enhanced error handling
+ * Send an email using PHP mailer with enhanced delivery options
  * 
  * @param string $to Recipient email address
  * @param string $subject Email subject
@@ -125,15 +187,11 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
     $mail = new PHPMailer();
     
     try {
-        // Server settings
+        // Server settings - don't use SMTP configuration, use sendmail
         $mail->SMTPDebug = 0;                      // Disable debug output
-        $mail->isSMTP();                           // Send using SMTP
-        $mail->Host       = 'smtp.hostinger.com';  // SMTP server
-        $mail->SMTPAuth   = true;                  // Enable SMTP authentication
-        $mail->Username   = 'info@vizagup.com';    // SMTP username
-        $mail->Password   = 'Joel@5544';           // SMTP password
-        $mail->SMTPSecure = 'tls';                 // Enable TLS encryption
-        $mail->Port       = 587;                   // TCP port to connect to
+        
+        // Try using direct sendmail approach which is more reliable on Hostinger
+        // Do not use SMTP as it might be blocked
         
         // Recipients
         $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
@@ -159,10 +217,9 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
         }
         
         // Log attempt before sending
-        logError("Attempting to send email via PHPMailer SMTP", [
+        logError("Attempting to send email via PHPMailer fallback", [
             'to' => $to,
-            'subject' => $subject,
-            'smtp_host' => $mail->Host
+            'subject' => $subject
         ]);
         
         // Send the email
@@ -172,42 +229,28 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
         
     } catch (Exception $e) {
         logError("PHPMailer Exception", [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString() 
+            'error' => $e->getMessage()
         ]);
         
-        // Try again with alternative method
+        // Try again with alternative method - direct native mail
         try {
-            // Try direct native mail as fallback
-            $headers = "From: info@vizagup.com\r\n";
-            $headers .= "Reply-To: info@vizagup.com\r\n";
-            $headers .= "MIME-Version: 1.0\r\n";
-            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-            
-            logError("Attempting direct mail send as fallback", ['to' => $to]);
-            $directResult = mail($to, $subject, $htmlBody, $headers);
-            
-            $error = error_get_last();
-            logError("Direct send result", [
-                'success' => $directResult ? 'true' : 'false',
-                'error' => $error ? $error['message'] : 'none'
-            ]);
-            
+            $directResult = testDirectMailFunction($to, $subject, $htmlBody);
+            logError("Direct mail fallback result", ['success' => $directResult ? 'true' : 'false']);
             return $directResult;
         } catch (Exception $e2) {
-            logError("Direct mail send also failed", ['error' => $e2->getMessage()]);
+            logError("Direct mail fallback also failed", ['error' => $e2->getMessage()]);
             return false;
         }
     }
 }
 
 /**
- * Test direct PHP mail() function with extensive logging
+ * Test direct PHP mail() function with extensive logging and alternative approaches
  * 
  * @param string $to Recipient email address
  * @param string $subject Email subject
  * @param string $htmlBody HTML content of the email
- * @return bool True if mail function succeeded, false otherwise
+ * @return bool True if any mail method succeeded, false otherwise
  */
 function testDirectMailFunction($to, $subject, $htmlBody) {
     // Clear any previous PHP errors
@@ -217,41 +260,142 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     
     logError("Testing direct PHP mail() function", ['to' => $to, 'subject' => $subject]);
     
-    // Prepare headers
+    // Try multiple approaches to increase chances of success
+    
+    // Approach 1: Use default sendmail
+    $sendmailPath = ini_get('sendmail_path');
+    if (!empty($sendmailPath) && strtoupper(substr(PHP_OS, 0, 3)) === 'LIN') {
+        // Create a temporary email file
+        $tempEmailFile = tempnam(sys_get_temp_dir(), 'email_');
+        $emailContent = "To: $to\n";
+        $emailContent .= "From: info@vizagup.com\n";
+        $emailContent .= "Subject: $subject\n";
+        $emailContent .= "MIME-Version: 1.0\n";
+        $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+        $emailContent .= $htmlBody;
+        
+        file_put_contents($tempEmailFile, $emailContent);
+        
+        // Execute sendmail with -oi parameter to prevent treating dot as end of input
+        $cmd = "$sendmailPath -oi -t < " . escapeshellarg($tempEmailFile);
+        $output = [];
+        $returnVar = 0;
+        exec($cmd, $output, $returnVar);
+        
+        // Clean up
+        unlink($tempEmailFile);
+        
+        if ($returnVar === 0) {
+            logError("Direct sendmail command succeeded", [
+                'to' => $to,
+                'subject' => $subject,
+                'return_code' => $returnVar
+            ]);
+            return true;
+        } else {
+            logError("Direct sendmail command failed", [
+                'return_code' => $returnVar,
+                'output' => $output,
+                'command' => $cmd
+            ]);
+        }
+    }
+    
+    // Approach 2: Try standard mail with basic headers
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
     $headers .= 'From: info@vizagup.com' . "\r\n";
-    $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
     
-    // Attempt to send with extensive error checking
-    error_log("Attempting to send mail to $to with subject: $subject");
-    
-    $mailResult = mail($to, $subject, $htmlBody, $headers);
-    
-    // Get error information if any
+    $mailResult = @mail($to, $subject, $htmlBody, $headers);
     $phpError = error_get_last();
     
-    if (!$mailResult) {
-        error_log("Mail FAILED to $to - Error: " . ($phpError ? $phpError['message'] : 'Unknown error'));
-        logError("Direct mail() function failed", [
-            'to' => $to,
-            'subject' => $subject,
-            'error' => $phpError ? $phpError['message'] : 'Unknown mail() failure',
-            'headers' => $headers
-        ]);
-    } else {
-        error_log("Mail SENT to $to with subject: $subject");
-        logError("Direct mail() function succeeded", [
+    if ($mailResult) {
+        logError("Basic mail() function succeeded", [
             'to' => $to,
             'subject' => $subject
         ]);
+        return true;
+    } else {
+        logError("Basic mail() function failed", [
+            'error' => $phpError ? $phpError['message'] : 'Unknown mail() failure',
+            'to' => $to
+        ]);
     }
     
-    return $mailResult;
+    // Approach 3: Try with additional parameters
+    $mailResult2 = @mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
+    $phpError2 = error_get_last();
+    
+    if ($mailResult2) {
+        logError("mail() with additional parameters succeeded", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        return true;
+    } else {
+        logError("mail() with additional parameters failed", [
+            'error' => $phpError2 ? $phpError2['message'] : 'Unknown mail() failure',
+            'to' => $to
+        ]);
+    }
+    
+    // Approach 4: Try with minimal headers
+    $minimalHeaders = "Content-type:text/html;charset=UTF-8\r\n";
+    $mailResult3 = @mail($to, $subject, $htmlBody, $minimalHeaders);
+    
+    if ($mailResult3) {
+        logError("mail() with minimal headers succeeded", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        return true;
+    }
+    
+    // Approach 5: Try a completely different mailer approach for Hostinger
+    // Some shared hosts have specific requirements for mail sending
+    
+    $boundary = md5(time());
+    
+    $customHeaders = "MIME-Version: 1.0\r\n";
+    $customHeaders .= "Content-Type: multipart/alternative; boundary=\"$boundary\"\r\n";
+    $customHeaders .= "From: Vizag Taxi Hub <info@vizagup.com>\r\n";
+    $customHeaders .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+    
+    $message = "--$boundary\r\n";
+    $message .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $message .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+    $message .= strip_tags($htmlBody) . "\r\n\r\n";
+    
+    $message .= "--$boundary\r\n";
+    $message .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $message .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+    $message .= $htmlBody . "\r\n\r\n";
+    
+    $message .= "--$boundary--";
+    
+    $mailResult4 = @mail($to, $subject, $message, $customHeaders);
+    
+    if ($mailResult4) {
+        logError("Multipart mail approach succeeded", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        return true;
+    }
+    
+    // If all approaches fail, return false
+    logError("All direct mail approaches failed", [
+        'to' => $to,
+        'subject' => $subject,
+        'php_version' => phpversion(),
+        'sendmail_path' => $sendmailPath
+    ]);
+    
+    return false;
 }
 
 /**
- * Send an email using multiple methods, trying each in order until one succeeds
+ * Send an email using all available methods, trying each until one succeeds
  * 
  * @param string $to Recipient email address
  * @param string $subject Email subject
@@ -271,115 +415,97 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     file_put_contents($logFile, "To: $to\n", FILE_APPEND);
     file_put_contents($logFile, "Subject: $subject\n", FILE_APPEND);
     
-    // First try a direct sendmail approach (most reliable on Linux hosting)
-    file_put_contents($logFile, "Trying method 0: Direct sendmail\n", FILE_APPEND);
-    $result = false;
+    // First try the new Hostinger-specific approach
+    file_put_contents($logFile, "Trying method: Hostinger direct /usr/sbin/hsendmail\n", FILE_APPEND);
     
     try {
-        // Build headers
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: info@vizagup.com' . "\r\n";
-        $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
-        $headers .= 'X-Mailer: PHP/' . phpversion() . "\r\n";
+        // Create temporary email file
+        $tempEmailFile = tempnam(sys_get_temp_dir(), 'email_');
+        $emailContent = "To: $to\n";
+        $emailContent .= "From: Vizag Taxi Hub <info@vizagup.com>\n";
+        $emailContent .= "Reply-To: info@vizagup.com\n";
+        $emailContent .= "Subject: $subject\n";
+        $emailContent .= "MIME-Version: 1.0\n";
+        $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+        $emailContent .= $htmlBody;
         
-        // Try direct sendmail path
-        $sendmailPath = ini_get('sendmail_path');
-        if (!empty($sendmailPath)) {
-            file_put_contents($logFile, "Using sendmail path: $sendmailPath\n", FILE_APPEND);
+        file_put_contents($tempEmailFile, $emailContent);
+        
+        // Try multiple sendmail path options
+        $sendmailPaths = [
+            '/usr/sbin/hsendmail -t',          // Hostinger specific
+            '/usr/sbin/sendmail -t',           // Standard Linux
+            '/usr/lib/sendmail -t',            // Alternative location
+            ini_get('sendmail_path')           // PHP configured path
+        ];
+        
+        foreach ($sendmailPaths as $sendmailCmd) {
+            if (empty($sendmailCmd)) continue;
             
-            // Create a descriptive email file
-            $tempEmailFile = tempnam(sys_get_temp_dir(), 'email_');
-            $emailContent = "To: $to\n";
-            $emailContent .= "From: info@vizagup.com\n";
-            $emailContent .= "Subject: $subject\n";
-            $emailContent .= "MIME-Version: 1.0\n";
-            $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
-            $emailContent .= $htmlBody;
-            
-            file_put_contents($tempEmailFile, $emailContent);
-            
-            // Execute sendmail directly
-            $escapedFile = escapeshellarg($tempEmailFile);
-            $command = "$sendmailPath -t < $escapedFile";
+            file_put_contents($logFile, "Trying sendmail path: $sendmailCmd\n", FILE_APPEND);
+            $command = "$sendmailCmd < " . escapeshellarg($tempEmailFile);
             $output = [];
             $returnVar = 0;
             
             exec($command, $output, $returnVar);
-            
-            file_put_contents($logFile, "Sendmail command result: " . ($returnVar === 0 ? "SUCCESS" : "FAILED ($returnVar)") . "\n", FILE_APPEND);
-            file_put_contents($logFile, "Command output: " . implode("\n", $output) . "\n", FILE_APPEND);
-            
-            // Clean up temp file
-            unlink($tempEmailFile);
+            file_put_contents($logFile, "Command result: " . ($returnVar === 0 ? "SUCCESS" : "FAILED ($returnVar)") . "\n", FILE_APPEND);
             
             if ($returnVar === 0) {
-                file_put_contents($logFile, "Method 0 SUCCESS\n", FILE_APPEND);
+                // Clean up temp file
+                unlink($tempEmailFile);
+                file_put_contents($logFile, "SUCCESS: Email sent via direct sendmail\n", FILE_APPEND);
                 logError("Successfully sent email via direct sendmail", [
                     'to' => $to,
-                    'subject' => $subject
+                    'subject' => $subject,
+                    'command' => $sendmailCmd
                 ]);
                 return true;
             }
         }
+        
+        // Clean up temp file
+        unlink($tempEmailFile);
+        
     } catch (Exception $e) {
-        file_put_contents($logFile, "Method 0 EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
+        file_put_contents($logFile, "Error with sendmail approach: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
-    // Now try standard PHP mail approach
-    file_put_contents($logFile, "Trying method 1: PHP mail()\n", FILE_APPEND);
+    // Try standard PHP mail with -f parameter (often works on shared hosting)
+    file_put_contents($logFile, "Trying standard PHP mail with From parameter\n", FILE_APPEND);
+    $headers = "From: info@vizagup.com\r\n";
+    $headers .= "Reply-To: info@vizagup.com\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
     
-    // Try with error suppression to prevent any warnings breaking the page
-    $mailResult = @mail($to, $subject, $htmlBody, $headers);
-    $phpError = error_get_last();
+    // Use -f to set the envelope sender (often helps with delivery)
+    $mailResult = @mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
     
     if ($mailResult) {
-        file_put_contents($logFile, "Method 1 SUCCESS\n", FILE_APPEND);
-        logError("Successfully sent email via mail()", [
+        file_put_contents($logFile, "SUCCESS: Email sent via mail() with -f parameter\n", FILE_APPEND);
+        logError("Successfully sent email via mail() with -f parameter", [
             'to' => $to,
             'subject' => $subject
         ]);
         return true;
-    } else {
-        file_put_contents($logFile, "Method 1 FAILED: " . ($phpError ? $phpError['message'] : 'Unknown error') . "\n", FILE_APPEND);
     }
     
-    // If simple mail() fails, try with additional parameters
-    file_put_contents($logFile, "Trying method 2: mail() with additional parameters\n", FILE_APPEND);
-    $mailResult2 = @mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
-    $phpError2 = error_get_last();
+    // Try with minimal headers to avoid filtering
+    file_put_contents($logFile, "Trying PHP mail() with minimal headers\n", FILE_APPEND);
+    $minimalHeaders = "Content-Type: text/html; charset=UTF-8\r\n";
+    $mailResult2 = @mail($to, $subject, $htmlBody, $minimalHeaders);
     
     if ($mailResult2) {
-        file_put_contents($logFile, "Method 2 SUCCESS\n", FILE_APPEND);
-        logError("Successfully sent email via mail() with additional parameters", [
-            'to' => $to,
-            'subject' => $subject
-        ]);
-        return true;
-    } else {
-        file_put_contents($logFile, "Method 2 FAILED: " . ($phpError2 ? $phpError2['message'] : 'Unknown error') . "\n", FILE_APPEND);
-    }
-    
-    // Try with minimal headers to reduce potential issues
-    file_put_contents($logFile, "Trying method 3: PHP mail() with minimal headers\n", FILE_APPEND);
-    $minimalHeaders = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\n";
-    $mailResult3 = @mail($to, $subject, $htmlBody, $minimalHeaders);
-    $phpError3 = error_get_last();
-    
-    if ($mailResult3) {
-        file_put_contents($logFile, "Method 3 SUCCESS\n", FILE_APPEND);
+        file_put_contents($logFile, "SUCCESS: Email sent via mail() with minimal headers\n", FILE_APPEND);
         logError("Successfully sent email via mail() with minimal headers", [
             'to' => $to,
             'subject' => $subject
         ]);
         return true;
-    } else {
-        file_put_contents($logFile, "Method 3 FAILED: " . ($phpError3 ? $phpError3['message'] : 'Unknown error') . "\n", FILE_APPEND);
     }
     
-    // Try with PHPMailer's simple implementation as a last resort
-    file_put_contents($logFile, "Trying method 4: Simple PHPMailer implementation\n", FILE_APPEND);
-    
+    // Try with the PHPMailer class implementation 
+    file_put_contents($logFile, "Trying PHPMailer implementation\n", FILE_APPEND);
     try {
         $mail = new PHPMailer();
         $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
@@ -391,25 +517,26 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
         $success = $mail->send();
         
         if ($success) {
-            file_put_contents($logFile, "Method 4 SUCCESS\n", FILE_APPEND);
-            logError("Successfully sent email via simple PHPMailer", [
+            file_put_contents($logFile, "SUCCESS: Email sent via PHPMailer implementation\n", FILE_APPEND);
+            logError("Successfully sent email via PHPMailer implementation", [
                 'to' => $to,
                 'subject' => $subject
             ]);
             return true;
-        } else {
-            file_put_contents($logFile, "Method 4 FAILED\n", FILE_APPEND);
         }
     } catch (Exception $e) {
-        file_put_contents($logFile, "Method 4 EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND);
+        file_put_contents($logFile, "PHPMailer error: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
     // If all methods fail, log the failure
-    file_put_contents($logFile, "ALL METHODS FAILED\n", FILE_APPEND);
+    file_put_contents($logFile, "FAILED: All email sending methods failed\n", FILE_APPEND);
     logError("All email sending methods failed", [
         'to' => $to,
-        'subject' => $subject
+        'subject' => $subject,
+        'php_version' => phpversion(),
+        'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
     return false;
 }
+
