@@ -1,4 +1,3 @@
-
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
@@ -23,4 +22,47 @@ export function useIsMobile() {
   }, [])
 
   return isMobile
+}
+
+/**
+ * Safely get and parse a value from session storage
+ * @param key The key to retrieve from session storage
+ * @param defaultValue The default value to return if parsing fails
+ * @returns The parsed value or default value
+ */
+export function safeGetFromSession<T>(key: string, defaultValue: T): T {
+  try {
+    const value = sessionStorage.getItem(key);
+    if (value === null) return defaultValue;
+    
+    // If the value doesn't start with [ or {, it's a simple string
+    // that should not be parsed as JSON
+    if (typeof value === 'string' && !value.startsWith('{') && !value.startsWith('[')) {
+      return value as unknown as T;
+    }
+    
+    return JSON.parse(value) as T;
+  } catch (e) {
+    console.error(`Error loading ${key} from session storage:`, e);
+    return defaultValue;
+  }
+}
+
+/**
+ * Safely store a value in session storage
+ * @param key The key to store in session storage
+ * @param value The value to store
+ */
+export function safeSetInSession(key: string, value: any): void {
+  try {
+    // If the value is a simple string or number, store it directly
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      sessionStorage.setItem(key, value.toString());
+    } else {
+      // Otherwise, stringify it
+      sessionStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch (e) {
+    console.error(`Error saving ${key} to session storage:`, e);
+  }
 }

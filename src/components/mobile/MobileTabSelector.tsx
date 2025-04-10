@@ -28,6 +28,7 @@ export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelecto
   const handleTabChange = (tab: TripType) => {
     setActiveTab(tab);
     onTabChange(tab);
+    navigate(`/cabs/${tab}`);
     
     // Safely save to sessionStorage without changing the URL
     try {

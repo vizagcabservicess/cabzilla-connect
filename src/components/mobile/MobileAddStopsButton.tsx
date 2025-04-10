@@ -9,7 +9,8 @@ interface MobileAddStopsButtonProps {
 export function MobileAddStopsButton({ onAddStop }: MobileAddStopsButtonProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   
-  const handleAddStop = () => {
+  const handleAddStop = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (onAddStop) {
       onAddStop();
     } else {
@@ -22,6 +23,7 @@ export function MobileAddStopsButton({ onAddStop }: MobileAddStopsButtonProps) {
     <div className="relative">
       <button
         onClick={handleAddStop}
+        type="button"
         className="border border-blue-500 rounded-full text-blue-600 hover:bg-blue-50 flex items-center justify-center py-2 px-4 w-full transition-colors duration-200 active:bg-blue-100"
       >
         <Plus size={18} className="mr-1" />
@@ -31,7 +33,11 @@ export function MobileAddStopsButton({ onAddStop }: MobileAddStopsButtonProps) {
       {showTooltip && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 text-white text-sm p-3 rounded-lg z-50 flex items-start justify-between shadow-lg animate-fade-in">
           <span>You can add one or multiple stops</span>
-          <button onClick={() => setShowTooltip(false)} className="ml-2 text-gray-300 hover:text-white">
+          <button 
+            onClick={() => setShowTooltip(false)} 
+            type="button"
+            className="ml-2 text-gray-300 hover:text-white"
+          >
             <X size={16} />
           </button>
         </div>
