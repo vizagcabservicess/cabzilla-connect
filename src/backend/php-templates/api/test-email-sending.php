@@ -12,6 +12,6 @@ if (!empty($_SERVER['QUERY_STRING'])) {
     $query = '?' . $_SERVER['QUERY_STRING'];
 }
 
-// Properly redirect to the test-email.php endpoint
-header('Location: test-email.php' . $query);
+// Redirect to the test-email.php endpoint with proper params
+header('Location: /api/test-email.php' . $query);
 exit;
