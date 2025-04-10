@@ -176,6 +176,42 @@ function sendEmailWithPHPMailer($to, $subject, $htmlBody, $attachments = []) {
 }
 
 /**
+ * Test direct PHP mail() function with extensive logging
+ * 
+ * @param string $to Recipient email address
+ * @param string $subject Email subject
+ * @param string $htmlBody HTML content of the email
+ * @return bool True if mail function succeeded, false otherwise
+ */
+function testDirectMailFunction($to, $subject, $htmlBody) {
+    logError("Testing direct PHP mail() function", ['to' => $to, 'subject' => $subject]);
+    
+    // Prepare headers
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: info@vizagup.com' . "\r\n";
+    $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
+    
+    // Get initial error state
+    $lastError = error_get_last();
+    
+    // Attempt to send
+    $mailResult = @mail($to, $subject, $htmlBody, $headers);
+    
+    // Check for new errors
+    $newError = error_get_last();
+    $errorMessage = ($newError !== $lastError) ? $newError['message'] : 'No specific error';
+    
+    logError("Direct mail() function result", [
+        'success' => $mailResult ? 'true' : 'false',
+        'error' => $mailResult ? 'none' : $errorMessage,
+        'error_details' => $mailResult ? 'none' : print_r(error_get_last(), true)
+    ]);
+    
+    return $mailResult;
+}
+
+/**
  * Send an email using multiple methods, trying each in order until one succeeds
  * 
  * @param string $to Recipient email address
@@ -198,8 +234,8 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     // If PHPMailer fails, try PHP's native mail() function
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
-    $headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+    $headers .= 'From: info@vizagup.com' . "\r\n";
+    $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
     
     logError("Attempting to send via PHP mail()", ['to' => $to]);
     $mailResult = mail($to, $subject, $htmlBody, $headers);
@@ -214,7 +250,7 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     
     // If mail() also fails, try with additional parameters
     logError("Attempting to send via mail() with additional parameters", ['to' => $to]);
-    $mailResult2 = mail($to, $subject, $htmlBody, $headers, "-finfo@vizagtaxihub.com");
+    $mailResult2 = mail($to, $subject, $htmlBody, $headers, "-finfo@vizagup.com");
     
     if ($mailResult2) {
         logError("Successfully sent email via mail() with additional parameters", [
@@ -231,4 +267,25 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     ]);
     
     return false;
+}
+
+/**
+ * Get mail server diagnostics information
+ * 
+ * @return array Array of mail server configuration details
+ */
+function getMailServerDiagnostics() {
+    $diagnostics = [
+        'php_version' => phpversion(),
+        'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
+        'sendmail_path' => ini_get('sendmail_path'),
+        'smtp_settings' => ini_get('SMTP'),
+        'smtp_port' => ini_get('smtp_port'),
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+        'server_name' => $_SERVER['SERVER_NAME'] ?? 'unknown',
+        'server_os' => PHP_OS
+    ];
+    
+    logError("Mail server diagnostics", $diagnostics);
+    return $diagnostics;
 }

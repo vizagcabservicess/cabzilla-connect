@@ -9,6 +9,11 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Enable error display for diagnostics
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Disable output buffering completely
 if (ob_get_level()) ob_end_clean();
 if (ob_get_length()) ob_clean();
@@ -47,6 +52,30 @@ function logTestEmail($message, $data = null) {
     error_log($logEntry); // Also log to PHP error log
 }
 
+// Get mail server diagnostics
+function getMailServerInfo() {
+    return [
+        'php_version' => phpversion(),
+        'mail_function_exists' => function_exists('mail'),
+        'mail_config' => [
+            'sendmail_path' => ini_get('sendmail_path'),
+            'smtp' => ini_get('SMTP'),
+            'smtp_port' => ini_get('smtp_port'),
+        ],
+        'server_info' => [
+            'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+            'hostname' => gethostname() ?: 'unknown',
+            'os' => PHP_OS,
+        ],
+        'phpmailer_exists' => class_exists('PHPMailer'),
+        'email_functions' => [
+            'mail' => function_exists('mail'),
+            'sendEmailWithPHPMailer' => function_exists('sendEmailWithPHPMailer'),
+            'sendEmailAllMethods' => function_exists('sendEmailAllMethods'),
+        ]
+    ];
+}
+
 // Log request details
 logTestEmail("Test email request received", [
     'method' => $_SERVER['REQUEST_METHOD'],
@@ -57,6 +86,10 @@ logTestEmail("Test email request received", [
 // Get the recipient email from the request
 $recipientEmail = isset($_GET['email']) ? $_GET['email'] : 'test@example.com';
 logTestEmail("Test email requested for recipient", $recipientEmail);
+
+// Get server diagnostics
+$serverInfo = getMailServerInfo();
+logTestEmail("Server diagnostics", $serverInfo);
 
 try {
     // Create test email content
@@ -73,66 +106,79 @@ try {
         </html>
     ";
     
-    // Try sending with PHPMailer first
-    logTestEmail("Attempting to send test email with PHPMailer");
-    $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
+    // Results tracking
+    $results = [
+        'methods_tried' => [],
+        'successful' => [],
+        'failed' => []
+    ];
     
-    if ($phpMailerResult) {
-        logTestEmail("PHPMailer test email sent successfully");
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Test email sent successfully using PHPMailer',
-            'recipient' => $recipientEmail,
-            'time' => date('Y-m-d H:i:s')
-        ]);
-        exit;
-    }
-    
-    // If PHPMailer fails, try the legacy method
-    logTestEmail("PHPMailer failed, attempting legacy method");
-    $legacyResult = false;
-    
-    if (function_exists('sendEmail')) {
-        $legacyResult = sendEmail($recipientEmail, $subject, $htmlBody);
+    // Try sending with testDirectMailFunction if available
+    if (function_exists('testDirectMailFunction')) {
+        logTestEmail("Attempting to send test email with testDirectMailFunction");
+        $directResult = testDirectMailFunction($recipientEmail, $subject, $htmlBody);
+        $results['methods_tried'][] = 'testDirectMailFunction';
         
-        if ($legacyResult) {
-            logTestEmail("Legacy email method succeeded");
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Test email sent successfully using legacy method',
-                'recipient' => $recipientEmail,
-                'time' => date('Y-m-d H:i:s')
-            ]);
-            exit;
+        if ($directResult) {
+            $results['successful'][] = 'testDirectMailFunction';
+            logTestEmail("testDirectMailFunction test email sent successfully");
+        } else {
+            $results['failed'][] = 'testDirectMailFunction';
+            logTestEmail("testDirectMailFunction test email failed");
         }
     }
     
-    // If all methods fail, try direct PHP mail() function
-    logTestEmail("Trying direct PHP mail() function");
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
-    
-    $directMailResult = mail($recipientEmail, $subject, $htmlBody, $headers);
-    
-    if ($directMailResult) {
-        logTestEmail("Direct PHP mail() function succeeded");
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Test email sent successfully using PHP mail function',
-            'recipient' => $recipientEmail,
-            'time' => date('Y-m-d H:i:s')
-        ]);
-        exit;
+    // Try sending with PHPMailer if available
+    if (function_exists('sendEmailWithPHPMailer')) {
+        logTestEmail("Attempting to send test email with PHPMailer");
+        $phpMailerResult = sendEmailWithPHPMailer($recipientEmail, $subject, $htmlBody);
+        $results['methods_tried'][] = 'PHPMailer';
+        
+        if ($phpMailerResult) {
+            $results['successful'][] = 'PHPMailer';
+            logTestEmail("PHPMailer test email sent successfully");
+        } else {
+            $results['failed'][] = 'PHPMailer';
+            logTestEmail("PHPMailer test email failed");
+        }
     }
     
-    // If all methods fail
-    logTestEmail("All email sending methods failed");
-    http_response_code(500);
+    // Try direct PHP mail function
+    logTestEmail("Attempting to send test email with PHP mail()");
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: noreply@vizagup.com' . "\r\n"; // Try generic from address
+    
+    // Get initial error state
+    $lastError = error_get_last();
+    
+    $mailResult = @mail($recipientEmail, $subject, $htmlBody, $headers);
+    $results['methods_tried'][] = 'PHP mail()';
+    
+    // Check for new errors
+    $newError = error_get_last();
+    $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
+    
+    if ($mailResult) {
+        $results['successful'][] = 'PHP mail()';
+        logTestEmail("Direct PHP mail() test email sent successfully");
+    } else {
+        $results['failed'][] = 'PHP mail()';
+        logTestEmail("Direct PHP mail() test email failed", ['error' => $errorMessage]);
+    }
+    
+    // Determine if any method succeeded
+    $anySuccess = !empty($results['successful']);
+    
+    // Send a response with diagnostic information
     echo json_encode([
-        'status' => 'error',
-        'message' => 'Failed to send test email. See server logs for details.',
+        'status' => $anySuccess ? 'success' : 'error',
+        'message' => $anySuccess ? 
+            'Test email sent successfully using at least one method' : 
+            'All email sending methods failed',
         'recipient' => $recipientEmail,
+        'results' => $results,
+        'server_info' => $serverInfo,
         'time' => date('Y-m-d H:i:s')
     ]);
     
@@ -147,6 +193,7 @@ try {
         'status' => 'error',
         'message' => 'Exception during test email: ' . $e->getMessage(),
         'recipient' => $recipientEmail,
+        'server_info' => $serverInfo,
         'time' => date('Y-m-d H:i:s')
     ]);
 }

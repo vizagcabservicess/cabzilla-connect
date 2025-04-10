@@ -1,7 +1,7 @@
 
 <?php
 // Critical debugging for test endpoint
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
@@ -128,6 +128,9 @@ $results = [
     'failed_methods' => []
 ];
 
+// Get mail server diagnostics
+$diagnostics = getMailServerDiagnostics();
+
 // 1. Try PHPMailer if available
 if (function_exists('sendEmailWithPHPMailer')) {
     logTestEmail("Trying PHPMailer", ['to' => $testEmail]);
@@ -196,83 +199,132 @@ if (function_exists('sendEmailAllMethods')) {
     }
 }
 
-// 3. Try native PHP mail() function
-logTestEmail("Trying native PHP mail()", ['to' => $testEmail]);
+// 3. Try direct PHP mail() function with detailed error capture
+logTestEmail("Trying direct PHP mail() function with detailed error tracking", ['to' => $testEmail]);
 $start = microtime(true);
 
 // Basic email headers
 $headers = "MIME-Version: 1.0" . "\r\n";
 $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-$headers .= 'From: info@vizagtaxihub.com' . "\r\n";
-$headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+$headers .= 'From: info@vizagup.com' . "\r\n";
+$headers .= 'Reply-To: info@vizagup.com' . "\r\n";
 
 // Get initial error state
 $lastError = error_get_last();
 
-// Try native mail function
-$mailResult = @mail($testEmail, $subject, $htmlBody, $headers);
+// Try native mail function with detailed error tracking
+$mailResult = false;
+
+try {
+    // Temporarily enable display_errors for this operation
+    $originalDisplayErrors = ini_get('display_errors');
+    ini_set('display_errors', 1);
+    
+    $mailResult = mail($testEmail, $subject, $htmlBody, $headers);
+    $duration = round((microtime(true) - $start) * 1000); // in ms
+    
+    // Restore original display_errors setting
+    ini_set('display_errors', $originalDisplayErrors);
+    
+    // Check for new errors
+    $newError = error_get_last();
+    $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
+
+    $results['methods_tried'][] = 'PHP mail()';
+    if ($mailResult) {
+        $results['successful_methods'][] = [
+            'method' => 'PHP mail()',
+            'duration_ms' => $duration
+        ];
+    } else {
+        $results['failed_methods'][] = [
+            'method' => 'PHP mail()',
+            'duration_ms' => $duration,
+            'error' => $errorMessage
+        ];
+    }
+    
+    logTestEmail("PHP mail() result", [
+        'success' => $mailResult ? 'yes' : 'no',
+        'duration_ms' => $duration,
+        'error' => $errorMessage
+    ]);
+} catch (Exception $e) {
+    $results['failed_methods'][] = [
+        'method' => 'PHP mail()',
+        'error' => $e->getMessage()
+    ];
+    logTestEmail("PHP mail() exception", ['error' => $e->getMessage()]);
+}
+
+// 4. Try test direct mail function
+if (function_exists('testDirectMailFunction')) {
+    logTestEmail("Trying testDirectMailFunction", ['to' => $testEmail]);
+    $start = microtime(true);
+    try {
+        $success = testDirectMailFunction($testEmail, $subject . " (Direct Test)", $htmlBody);
+        $duration = round((microtime(true) - $start) * 1000); // in ms
+        
+        $results['methods_tried'][] = 'testDirectMailFunction';
+        if ($success) {
+            $results['successful_methods'][] = [
+                'method' => 'testDirectMailFunction',
+                'duration_ms' => $duration
+            ];
+        } else {
+            $results['failed_methods'][] = [
+                'method' => 'testDirectMailFunction',
+                'duration_ms' => $duration
+            ];
+        }
+        
+        logTestEmail("testDirectMailFunction result", [
+            'success' => $success ? 'yes' : 'no',
+            'duration_ms' => $duration
+        ]);
+    } catch (Exception $e) {
+        $results['failed_methods'][] = [
+            'method' => 'testDirectMailFunction',
+            'error' => $e->getMessage()
+        ];
+        logTestEmail("testDirectMailFunction exception", ['error' => $e->getMessage()]);
+    }
+}
+
+// 5. Try mail() with different options as a last resort
+logTestEmail("Trying mail() with -f parameter", ['to' => $testEmail]);
+$start = microtime(true);
+
+// Get initial error state
+$lastError = error_get_last();
+
+// Try with fifth parameter
+$mailResult2 = @mail($testEmail, $subject . " (Method 2)", $htmlBody, $headers, "-finfo@vizagup.com");
 $duration = round((microtime(true) - $start) * 1000); // in ms
 
 // Check for new errors
 $newError = error_get_last();
 $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
 
-$results['methods_tried'][] = 'PHP mail()';
-if ($mailResult) {
+$results['methods_tried'][] = 'PHP mail() with -f';
+if ($mailResult2) {
     $results['successful_methods'][] = [
-        'method' => 'PHP mail()',
+        'method' => 'PHP mail() with -f',
         'duration_ms' => $duration
     ];
 } else {
     $results['failed_methods'][] = [
-        'method' => 'PHP mail()',
+        'method' => 'PHP mail() with -f',
         'duration_ms' => $duration,
         'error' => $errorMessage
     ];
 }
 
-logTestEmail("PHP mail() result", [
-    'success' => $mailResult ? 'yes' : 'no',
+logTestEmail("PHP mail() with -f result", [
+    'success' => $mailResult2 ? 'yes' : 'no', 
     'duration_ms' => $duration,
     'error' => $errorMessage
 ]);
-
-// 4. Try mail() with different options as a last resort
-if (!$mailResult) {
-    logTestEmail("Trying mail() with -f parameter", ['to' => $testEmail]);
-    $start = microtime(true);
-    
-    // Get initial error state
-    $lastError = error_get_last();
-    
-    // Try with fifth parameter
-    $mailResult2 = @mail($testEmail, $subject . " (Method 2)", $htmlBody, $headers, "-finfo@vizagtaxihub.com");
-    $duration = round((microtime(true) - $start) * 1000); // in ms
-    
-    // Check for new errors
-    $newError = error_get_last();
-    $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
-    
-    $results['methods_tried'][] = 'PHP mail() with -f';
-    if ($mailResult2) {
-        $results['successful_methods'][] = [
-            'method' => 'PHP mail() with -f',
-            'duration_ms' => $duration
-        ];
-    } else {
-        $results['failed_methods'][] = [
-            'method' => 'PHP mail() with -f',
-            'duration_ms' => $duration,
-            'error' => $errorMessage
-        ];
-    }
-    
-    logTestEmail("PHP mail() with -f result", [
-        'success' => $mailResult2 ? 'yes' : 'no', 
-        'duration_ms' => $duration,
-        'error' => $errorMessage
-    ]);
-}
 
 // Gather system information for debugging
 $systemInfo = [
@@ -284,7 +336,8 @@ $systemInfo = [
         'sendmail_path' => ini_get('sendmail_path'),
         'smtp' => ini_get('SMTP'),
         'smtp_port' => ini_get('smtp_port')
-    ]
+    ],
+    'server_diagnostics' => $diagnostics
 ];
 
 // Determine overall success
@@ -298,8 +351,7 @@ logTestEmail("Email test completed", [
 ]);
 
 // CRITICAL FIX - Force simple clean JSON response
-header('Content-Type: application/json');
-echo json_encode([
+sendTestEmailResponse([
     'status' => $anySuccess ? 'success' : 'error',
     'message' => $anySuccess ? 
                 'Email sent successfully using at least one method' : 
@@ -308,4 +360,3 @@ echo json_encode([
     'system_info' => $systemInfo,
     'timestamp' => date('Y-m-d H:i:s')
 ]);
-exit;

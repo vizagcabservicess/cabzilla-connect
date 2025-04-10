@@ -34,9 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Include required utilities
 if (file_exists(__DIR__ . '/utils/mailer.php')) {
     require_once __DIR__ . '/utils/mailer.php';
+} else {
+    error_log("ERROR: mailer.php not found at: " . __DIR__ . '/utils/mailer.php');
 }
+
 if (file_exists(__DIR__ . '/utils/email.php')) {
     require_once __DIR__ . '/utils/email.php';
+} else {
+    error_log("ERROR: email.php not found at: " . __DIR__ . '/utils/email.php');
 }
 
 // Helper function to log errors with enhanced details
@@ -60,7 +65,7 @@ function logEmailError($message, $data = []) {
 
 // Function to send JSON response with proper headers - SIMPLIFIED FOR RELIABILITY
 function sendEmailJsonResponse($data, $statusCode = 200) {
-    // Clean any previous output - belt and suspenders approach
+    // Clean any previous output
     while (ob_get_level()) ob_end_clean();
     
     // Set status code
@@ -69,7 +74,7 @@ function sendEmailJsonResponse($data, $statusCode = 200) {
     // Set content type again to ensure it's not overwritten
     header('Content-Type: application/json');
     
-    // Output JSON response - direct echo, no fancy stuff
+    // Output JSON response - direct echo approach for maximum reliability
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit; // Exit immediately after sending response
 }
@@ -134,6 +139,13 @@ if (!empty($missingFields)) {
 }
 
 try {
+    // Mail diagnostics - get server config before sending
+    $mailDiagnostics = [];
+    if (function_exists('getMailServerDiagnostics')) {
+        $mailDiagnostics = getMailServerDiagnostics();
+        logEmailError("Mail server diagnostics", $mailDiagnostics);
+    }
+    
     // Prepare email content for customer
     $subject = "Booking Confirmation: " . $requestData['bookingNumber'];
     $htmlBody = "<h2>Your booking is confirmed!</h2>";
@@ -164,15 +176,23 @@ try {
         'booking_number' => $requestData['bookingNumber']
     ]);
     
-    // 1. Try enhanced booking email function if available
-    if (function_exists('sendBookingConfirmationEmail')) {
+    // 1. Try test direct mail first - most reliable with detailed logging
+    if (function_exists('testDirectMailFunction')) {
+        logEmailError("Using testDirectMailFunction for customer email");
+        $customerEmailSent = testDirectMailFunction($requestData['passengerEmail'], $subject, $htmlBody);
+        $emailAttempts[] = ['method' => 'testDirectMailFunction', 'success' => $customerEmailSent];
+        logEmailError("testDirectMailFunction result", ['success' => $customerEmailSent ? 'yes' : 'no']);
+    }
+    
+    // 2. Try enhanced booking email function if available and previous attempt failed
+    if (!$customerEmailSent && function_exists('sendBookingConfirmationEmail')) {
         logEmailError("Using enhanced sendBookingConfirmationEmail function");
         $customerEmailSent = sendBookingConfirmationEmail($requestData);
         $emailAttempts[] = ['method' => 'sendBookingConfirmationEmail', 'success' => $customerEmailSent];
         logEmailError("Enhanced email function result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
-    // 2. If enhanced function fails or doesn't exist, try PHPMailer
+    // 3. If previous methods fail, try PHPMailer
     if (!$customerEmailSent && function_exists('sendEmailWithPHPMailer')) {
         logEmailError("Trying PHPMailer");
         $customerEmailSent = sendEmailWithPHPMailer($requestData['passengerEmail'], $subject, $htmlBody);
@@ -180,7 +200,7 @@ try {
         logEmailError("PHPMailer result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
-    // 3. If PHPMailer fails, try the sendEmailAllMethods function
+    // 4. If PHPMailer fails, try the sendEmailAllMethods function
     if (!$customerEmailSent && function_exists('sendEmailAllMethods')) {
         logEmailError("Trying sendEmailAllMethods");
         $customerEmailSent = sendEmailAllMethods($requestData['passengerEmail'], $subject, $htmlBody);
@@ -188,23 +208,39 @@ try {
         logEmailError("sendEmailAllMethods result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
-    // 4. If all above methods fail, try simple mail function as final fallback
+    // 5. If all above methods fail, try simple mail function as final fallback
     if (!$customerEmailSent) {
         logEmailError("Trying direct PHP mail() as last resort");
         
         // Basic email headers
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
-        $headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+        $headers .= 'From: noreply@vizagup.com' . "\r\n"; // Try generic from address
+        $headers .= 'Reply-To: info@vizagup.com' . "\r\n";
         
-        $customerEmailSent = mail($requestData['passengerEmail'], $subject, $htmlBody, $headers);
-        $emailAttempts[] = ['method' => 'PHP mail()', 'success' => $customerEmailSent];
-        logEmailError("Direct PHP mail() result", ['success' => $customerEmailSent ? 'yes' : 'no']);
+        // Get initial error state
+        $lastError = error_get_last();
+        
+        $customerEmailSent = @mail($requestData['passengerEmail'], $subject, $htmlBody, $headers);
+        
+        // Check for new errors
+        $newError = error_get_last();
+        $errorMessage = ($newError !== $lastError) ? $newError['message'] : 'No specific error';
+        
+        $emailAttempts[] = [
+            'method' => 'PHP mail()', 
+            'success' => $customerEmailSent,
+            'error' => $customerEmailSent ? 'none' : $errorMessage
+        ];
+        
+        logEmailError("Direct PHP mail() result", [
+            'success' => $customerEmailSent ? 'yes' : 'no',
+            'error' => $customerEmailSent ? 'none' : $errorMessage
+        ]);
     }
     
     // Now send admin notification email
-    $adminEmail = 'info@vizagtaxihub.com'; // Change this to the actual admin email
+    $adminEmail = 'info@vizagup.com'; // Admin email
     $adminSubject = "New Booking: " . $requestData['bookingNumber'];
     $adminHtmlBody = "<h2>New booking received!</h2>";
     $adminHtmlBody .= "<p>Booking Number: <strong>" . $requestData['bookingNumber'] . "</strong></p>";
@@ -233,15 +269,23 @@ try {
         'booking_number' => $requestData['bookingNumber']
     ]);
     
-    // 1. Try enhanced admin notification function if available
-    if (function_exists('sendAdminNotificationEmail')) {
+    // 1. Try test direct mail first - most reliable with detailed logging
+    if (function_exists('testDirectMailFunction')) {
+        logEmailError("Using testDirectMailFunction for admin email");
+        $adminEmailSent = testDirectMailFunction($adminEmail, $adminSubject, $adminHtmlBody);
+        $adminEmailAttempts[] = ['method' => 'testDirectMailFunction', 'success' => $adminEmailSent];
+        logEmailError("testDirectMailFunction result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
+    }
+    
+    // 2. Try enhanced admin notification function if available
+    if (!$adminEmailSent && function_exists('sendAdminNotificationEmail')) {
         logEmailError("Using enhanced sendAdminNotificationEmail function");
         $adminEmailSent = sendAdminNotificationEmail($requestData);
         $adminEmailAttempts[] = ['method' => 'sendAdminNotificationEmail', 'success' => $adminEmailSent];
         logEmailError("Enhanced admin email function result", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
-    // 2. If enhanced function fails or doesn't exist, try PHPMailer
+    // 3. If enhanced function fails or doesn't exist, try PHPMailer
     if (!$adminEmailSent && function_exists('sendEmailWithPHPMailer')) {
         logEmailError("Trying PHPMailer for admin email");
         $adminEmailSent = sendEmailWithPHPMailer($adminEmail, $adminSubject, $adminHtmlBody);
@@ -249,7 +293,7 @@ try {
         logEmailError("PHPMailer result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
-    // 3. If PHPMailer fails, try the sendEmailAllMethods function
+    // 4. If PHPMailer fails, try the sendEmailAllMethods function
     if (!$adminEmailSent && function_exists('sendEmailAllMethods')) {
         logEmailError("Trying sendEmailAllMethods for admin email");
         $adminEmailSent = sendEmailAllMethods($adminEmail, $adminSubject, $adminHtmlBody);
@@ -257,38 +301,62 @@ try {
         logEmailError("sendEmailAllMethods result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
-    // 4. If all above methods fail, try simple mail function as final fallback
+    // 5. If all above methods fail, try simple mail function as final fallback
     if (!$adminEmailSent) {
         logEmailError("Trying direct PHP mail() for admin email as last resort");
         
         // Basic email headers
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: bookings@vizagtaxihub.com' . "\r\n";
+        $headers .= 'From: bookings@vizagup.com' . "\r\n";
         $headers .= 'Reply-To: ' . $requestData['passengerEmail'] . "\r\n";
         
-        $adminEmailSent = mail($adminEmail, $adminSubject, $adminHtmlBody, $headers);
-        $adminEmailAttempts[] = ['method' => 'PHP mail()', 'success' => $adminEmailSent];
-        logEmailError("Direct PHP mail() result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
+        // Get initial error state
+        $lastError = error_get_last();
+        
+        $adminEmailSent = @mail($adminEmail, $adminSubject, $adminHtmlBody, $headers);
+        
+        // Check for new errors
+        $newError = error_get_last();
+        $errorMessage = ($newError !== $lastError) ? $newError['message'] : 'No specific error';
+        
+        $adminEmailAttempts[] = [
+            'method' => 'PHP mail()', 
+            'success' => $adminEmailSent,
+            'error' => $adminEmailSent ? 'none' : $errorMessage
+        ];
+        
+        logEmailError("Direct PHP mail() result for admin email", [
+            'success' => $adminEmailSent ? 'yes' : 'no',
+            'error' => $adminEmailSent ? 'none' : $errorMessage
+        ]);
     }
     
     // Return appropriate JSON response based on results
     logEmailError("Email sending completed", [
         'customer_email_sent' => $customerEmailSent ? 'yes' : 'no',
         'admin_email_sent' => $adminEmailSent ? 'yes' : 'no',
-        'booking_number' => $requestData['bookingNumber']
+        'booking_number' => $requestData['bookingNumber'],
+        'attempts' => [
+            'customer' => $emailAttempts,
+            'admin' => $adminEmailAttempts
+        ]
     ]);
     
-    // CRITICAL FIX - Force a clean response with simplified JSON
-    header('Content-Type: application/json');
-    echo json_encode([
+    // CRITICAL FIX - Ensure we ALWAYS return a valid JSON response
+    sendEmailJsonResponse([
         'status' => ($customerEmailSent || $adminEmailSent) ? 'success' : 'error',
         'message' => ($customerEmailSent || $adminEmailSent) ? 
                     'Email confirmation sent successfully' : 
                     'Failed to send confirmation emails',
-        'booking_number' => $requestData['bookingNumber']
+        'booking_number' => $requestData['bookingNumber'],
+        'customer_email_sent' => $customerEmailSent,
+        'admin_email_sent' => $adminEmailSent,
+        'server_info' => [
+            'php_version' => phpversion(),
+            'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+        ]
     ]);
-    exit;
     
 } catch (Exception $e) {
     logEmailError("Email sending failed with exception", [
@@ -297,10 +365,9 @@ try {
     ]);
     
     // CRITICAL FIX - Ensure we always return a clean JSON response
-    header('Content-Type: application/json');
-    echo json_encode([
+    sendEmailJsonResponse([
         'status' => 'error',
-        'message' => 'Failed to send confirmation emails: ' . $e->getMessage()
+        'message' => 'Failed to send confirmation emails: ' . $e->getMessage(),
+        'error_details' => $e->getMessage()
     ]);
-    exit;
 }
