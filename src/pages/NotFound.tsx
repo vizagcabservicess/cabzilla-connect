@@ -36,37 +36,37 @@ const NotFound = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center max-w-md px-4">
         <div className="flex justify-center mb-6">
-          <AlertCircle size={60} className="text-red-500" />
+          <div className="rounded-full w-16 h-16 bg-red-100 flex items-center justify-center">
+            <AlertCircle size={32} className="text-red-500" />
+          </div>
         </div>
-        <h1 className="text-4xl font-bold mb-4">404</h1>
+        <h1 className="text-4xl font-bold mb-4 text-gray-900">404</h1>
         <p className="text-xl text-gray-600 mb-4">
-          {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
+          Page Not Found
         </p>
-        <p className="text-gray-500 mb-6">
-          {isApiError 
-            ? "The requested API endpoint could not be found. This might be due to a server configuration issue."
-            : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
+        <p className="text-gray-500 mb-8">
+          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button 
-            variant="outline" 
+        <div className="space-y-3">
+          <button 
             onClick={goBack}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 w-full border border-gray-300 bg-white text-gray-700 py-3 rounded-lg"
           >
-            <ArrowLeft size={16} />
-            Go Back
-          </Button>
-          <Button 
+            <ArrowLeft size={18} />
+            <span>Go Back</span>
+          </button>
+          
+          <button 
             onClick={goHome}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white py-3 rounded-lg"
           >
-            <Home size={16} />
-            Return to Home
-          </Button>
+            <Home size={18} />
+            <span>Return to Home</span>
+          </button>
         </div>
       </div>
     </div>

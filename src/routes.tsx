@@ -60,8 +60,13 @@ export const router = createBrowserRouter([
     path: '/receipt/:bookingId',
     element: <ReceiptPage />,
   },
+  // Improved cab route structure with optional parameter
   {
     path: '/cabs',
+    element: <CabsPage />,
+  },
+  {
+    path: '/cabs/:tripType',
     element: <CabsPage />,
   },
   {

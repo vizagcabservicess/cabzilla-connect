@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { TripType } from "@/lib/tripTypes";
+import { useNavigate } from "react-router-dom";
 
 interface MobileTabSelectorProps {
   selectedTab: TripType;
@@ -9,11 +10,18 @@ interface MobileTabSelectorProps {
 }
 
 export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelectorProps) {
+  const navigate = useNavigate();
+  
   const tabs = [
     { id: "outstation" as TripType, label: "Outstation" },
     { id: "airport" as TripType, label: "Airport" },
     { id: "local" as TripType, label: "Hourly Rentals" },
   ];
+  
+  const handleTabChange = (tab: TripType) => {
+    onTabChange(tab);
+    navigate(`/cabs/${tab}`);
+  };
 
   return (
     <div className="p-1 bg-gray-50 rounded-full w-full">
@@ -21,7 +29,7 @@ export function MobileTabSelector({ selectedTab, onTabChange }: MobileTabSelecto
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className={`relative z-10 flex-1 py-2 px-3 text-sm text-center rounded-full transition-colors duration-200 ${
               selectedTab === tab.id 
                 ? "text-blue-600 font-medium" 

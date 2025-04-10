@@ -61,7 +61,6 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
   const handleTabChange = (tab: TripType) => {
     setTripType(tab);
     setTripMode("one-way");
-    navigate(`/cabs/${tab}`);
   };
 
   const handleSearch = () => {
@@ -125,6 +124,16 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
 
   return (
     <div className="bg-white rounded-xl p-4 shadow-md">
+      <div className="text-center mb-6">
+        <div className="flex items-center justify-center mb-2">
+          <div className="bg-blue-500 text-white w-10 h-10 rounded-md flex items-center justify-center text-xl font-bold">
+            CC
+          </div>
+          <h3 className="text-blue-600 font-medium ml-2 text-lg">BOOK A CAB IN MINUTES</h3>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-800">Your Journey, Our Priority</h1>
+      </div>
+      
       <MobileTabSelector 
         selectedTab={ensureCustomerTripType(tripType)} 
         onTabChange={handleTabChange} 
