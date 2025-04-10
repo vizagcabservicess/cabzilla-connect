@@ -58,7 +58,7 @@ RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
 
-# ADD: Test email endpoints
+# ADD: Test email endpoints - high priority with multiple URLs
 RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
 RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
 RewriteRule ^test-email$ test-email-sending.php [L,QSA]

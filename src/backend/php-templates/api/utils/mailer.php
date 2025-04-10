@@ -204,7 +204,19 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
         return true;
     }
     
-    // If mail() also fails, log the failure
+    // If mail() also fails, try with additional parameters
+    logError("Attempting to send via mail() with additional parameters", ['to' => $to]);
+    $mailResult2 = mail($to, $subject, $htmlBody, $headers, "-finfo@vizagtaxihub.com");
+    
+    if ($mailResult2) {
+        logError("Successfully sent email via mail() with additional parameters", [
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        return true;
+    }
+    
+    // If all methods fail, log the failure
     logError("All email sending methods failed", [
         'to' => $to,
         'subject' => $subject

@@ -206,7 +206,7 @@ try {
     $adminHtmlBody = "<h2>New booking received!</h2>";
     $adminHtmlBody .= "<p>Booking Number: <strong>" . $requestData['bookingNumber'] . "</strong></p>";
     $adminHtmlBody .= "<p>Passenger: " . $requestData['passengerName'] . "</p>";
-    $adminHtmlBody .= "<p>Phone: " . $requestData['passengerPhone'] . "</p>";
+    $adminHtmlBody .= "<p>Phone: " . ($requestData['passengerPhone'] ?? 'N/A') . "</p>";
     $adminHtmlBody .= "<p>Email: " . $requestData['passengerEmail'] . "</p>";
     $adminHtmlBody .= "<p>Pickup Location: " . $requestData['pickupLocation'] . "</p>";
     if (isset($requestData['dropLocation']) && !empty($requestData['dropLocation'])) {
@@ -276,7 +276,7 @@ try {
         'booking_number' => $requestData['bookingNumber']
     ]);
     
-    // Always provide a proper JSON response
+    // Always provide a proper JSON response - This is the critical fix!
     sendEmailJsonResponse([
         'status' => ($customerEmailSent || $adminEmailSent) ? 'success' : 'error',
         'message' => ($customerEmailSent || $adminEmailSent) ? 
@@ -297,6 +297,7 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
     
+    // Ensure we always return a proper JSON response even on exception
     sendEmailJsonResponse([
         'status' => 'error',
         'message' => 'Failed to send confirmation emails: ' . $e->getMessage()
