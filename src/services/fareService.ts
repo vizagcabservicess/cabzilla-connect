@@ -104,7 +104,7 @@ function getForcedRequestConfig() {
 // Initialize database tables - useful for admin operations
 async function initializeDatabase(forceRecreate = false) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const params = new URLSearchParams();
     
     if (forceRecreate) {
@@ -128,7 +128,7 @@ async function initializeDatabase(forceRecreate = false) {
 // Direct method to update fares with sync option
 async function directFareUpdate(tripType: string, vehicleId: string, data: any) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     let endpoint = '';
     
     // Construct the appropriate endpoint based on trip type
@@ -199,7 +199,7 @@ async function directFareUpdate(tripType: string, vehicleId: string, data: any) 
 // Sync outstation fares - safer implementation with fallback to local API
 async function syncOutstationFares(vehicleId?: string) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     console.log('Syncing outstation_fares with vehicle_pricing' + (vehicleId ? ` for vehicle ${vehicleId}` : ''));
     
     // Construct the URL with parameters
@@ -272,7 +272,7 @@ async function syncLocalFareTables(): Promise<boolean> {
   try {
     console.log('Syncing local fare tables...');
     const bypassHeaders = getBypassHeaders();
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     
     // Call the sync-local-fares.php API endpoint
     const response = await fetch(`${baseUrl}/admin/sync-local-fares.php`, {
@@ -324,7 +324,7 @@ function getFaresByTripType(tripType: TripType, vehicleId?: string) {
 
 // Helper function to build a fallback URL when outstation-fares.php is not available
 function getFallbackOutstationUrl() {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
   // Try to use the vehicle_pricing table directly as a fallback
   return `${baseUrl}/api/vehicle-pricing.php?trip_type=outstation`;
 }
@@ -333,7 +333,7 @@ function getFallbackOutstationUrl() {
 async function getOutstationFares(origin?: string, destination?: string): Promise<Record<string, OutstationFare>> {
   try {
     // Always force a refresh of fares by skipping cache
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const timestamp = Date.now();
     
     console.log('Fetching outstation fares with timestamp:', timestamp);
@@ -456,7 +456,7 @@ function generateDefaultOutstationFares(): Record<string, OutstationFare> {
 async function getOutstationFaresForVehicle(vehicleId: string): Promise<OutstationFare> {
   try {
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const now = Date.now();
     
     console.log(`Fetching outstation fares for vehicle ${vehicleId} with timestamp:`, now);
@@ -595,7 +595,7 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
 async function getLocalFares(): Promise<Record<string, LocalFare>> {
   try {
     // Always fetch fares from API
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const timestamp = Date.now();
     
     console.log('Fetching local fares with timestamp:', timestamp);
@@ -638,7 +638,7 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
   try {
     // Always fetch fresh data - skip the cache check
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const now = Date.now();
     
     console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp:`, now);
@@ -709,7 +709,7 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
 async function getAirportFares(): Promise<Record<string, AirportFare>> {
   try {
     // Always force refresh to get the latest data
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const timestamp = Date.now();
     
     console.log('Fetching airport fares with timestamp:', timestamp);
@@ -751,7 +751,7 @@ async function getAirportFares(): Promise<Record<string, AirportFare>> {
 async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare> {
   try {
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const now = Date.now();
     
     console.log(`Fetching airport fares for vehicle ${vehicleId} with timestamp:`, now);
