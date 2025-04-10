@@ -182,7 +182,6 @@ export const bookingAPI = {
                 result.data.emailDetails = confirmResult.details || {};
               } catch (parseError) {
                 console.warn('Could not parse email confirmation response as JSON:', confirmText.substring(0, 200));
-                // Don't fail the booking if email confirmation response is invalid
                 result.data.emailConfirmation = false;
                 result.data.emailError = 'Invalid response from email service';
               }

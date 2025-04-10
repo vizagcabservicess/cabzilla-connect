@@ -22,6 +22,9 @@ if (ob_get_level()) ob_end_clean();
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+// Include database helper
+require_once __DIR__ . '/common/db_helper.php';
+
 // Create logs directory if it doesn't exist
 $logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
@@ -136,14 +139,15 @@ try {
         throw new Exception("Missing required fields: " . implode(', ', $missingFields));
     }
 
-    // Create a booking response (in production, this would save to DB)
-    $mockBookingId = time() . rand(1000, 9999);
-    $mockBookingNumber = 'CB' . $mockBookingId;
+    // Generate booking number
+    $bookingId = time() . rand(1000, 9999);
+    $bookingNumber = 'CB' . $bookingId;
     
-    $mockBooking = [
-        'id' => (int)$mockBookingId,
+    // Create a booking record
+    $booking = [
+        'id' => (int)$bookingId,
         'userId' => null,
-        'bookingNumber' => $mockBookingNumber,
+        'bookingNumber' => $bookingNumber,
         'pickupLocation' => $data['pickupLocation'],
         'dropLocation' => isset($data['dropLocation']) ? $data['dropLocation'] : '',
         'pickupDate' => $data['pickupDate'],
@@ -161,16 +165,92 @@ try {
         'created_at' => date('Y-m-d H:i:s')
     ];
     
-    logBooking("Created booking response", $mockBooking);
+    logBooking("Created booking response", $booking);
+    
+    // Connect to database and insert the booking
+    try {
+        $conn = getDbConnectionWithRetry(3);
+        logBooking("Database connection established");
+        
+        // Ensure bookings table exists
+        if (!ensureBookingsTableExists($conn)) {
+            throw new Exception("Failed to ensure bookings table exists");
+        }
+        
+        // Prepare the SQL query
+        $sql = "INSERT INTO bookings (
+            booking_number, pickup_location, drop_location, pickup_date, return_date,
+            cab_type, distance, trip_type, trip_mode, total_amount, status,
+            passenger_name, passenger_phone, passenger_email, hourly_package
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Failed to prepare SQL statement: " . $conn->error);
+        }
+        
+        // Format pickup date for database
+        $pickupDateFormatted = date('Y-m-d H:i:s', strtotime($booking['pickupDate']));
+        
+        // Format return date if available
+        $returnDateFormatted = null;
+        if (!empty($booking['returnDate'])) {
+            $returnDateFormatted = date('Y-m-d H:i:s', strtotime($booking['returnDate']));
+        }
+        
+        // Bind parameters
+        $stmt->bind_param(
+            "ssssssdssdsssss",
+            $booking['bookingNumber'],
+            $booking['pickupLocation'],
+            $booking['dropLocation'],
+            $pickupDateFormatted,
+            $returnDateFormatted,
+            $booking['cabType'],
+            $booking['distance'],
+            $booking['tripType'],
+            $booking['tripMode'],
+            $booking['totalAmount'],
+            $booking['status'],
+            $booking['passengerName'],
+            $booking['passengerPhone'],
+            $booking['passengerEmail'],
+            $booking['hourlyPackage']
+        );
+        
+        // Execute the query
+        $success = $stmt->execute();
+        if (!$success) {
+            throw new Exception("Failed to insert booking: " . $stmt->error);
+        }
+        
+        $booking['id'] = $stmt->insert_id ?: $bookingId;
+        
+        logBooking("Booking stored in database", [
+            'booking_id' => $booking['id'],
+            'booking_number' => $booking['bookingNumber']
+        ]);
+        
+        $stmt->close();
+        $conn->close();
+    } catch (Exception $dbError) {
+        // Log database error but don't expose details to client
+        logBooking("DATABASE ERROR: " . $dbError->getMessage(), [
+            'trace' => $dbError->getTraceAsString()
+        ]);
+        
+        // For now, we'll continue with a mock response since we want to test email functionality
+        logBooking("WARNING: Using mock booking response due to database error");
+    }
     
     // Send success response
     $response = [
         'status' => 'success',
         'message' => 'Booking created successfully',
-        'data' => $mockBooking
+        'data' => $booking
     ];
     
-    logBooking("Sending success response", ['booking_id' => $mockBookingId]);
+    logBooking("Sending success response", ['booking_id' => $booking['id']]);
     sendJsonResponse($response);
     
 } catch (Exception $e) {

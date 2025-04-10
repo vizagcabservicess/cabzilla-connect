@@ -28,7 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Include required utilities
-require_once __DIR__ . '/utils/mailer.php';
+if (file_exists(__DIR__ . '/utils/mailer.php')) {
+    require_once __DIR__ . '/utils/mailer.php';
+}
 if (file_exists(__DIR__ . '/utils/email.php')) {
     require_once __DIR__ . '/utils/email.php';
 }
@@ -52,29 +54,37 @@ function logEmailError($message, $data = []) {
     error_log($logEntry); // Also log to PHP error log
 }
 
-// Prevent output before sending headers
-ob_start();
-
-// Get booking data from request body
-$requestData = null;
-$requestBody = file_get_contents('php://input');
+// Function to send JSON response with proper headers
+function sendEmailJsonResponse($data, $statusCode = 200) {
+    // Clean any previous output
+    while (ob_get_level()) ob_end_clean();
+    
+    // Set status code
+    http_response_code($statusCode);
+    
+    // Set content type again to ensure it's not overwritten
+    header('Content-Type: application/json');
+    
+    // Output JSON response
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
 // Log start of process
 logEmailError("Email confirmation process started", [
     'content_length' => isset($_SERVER['CONTENT_LENGTH']) ? $_SERVER['CONTENT_LENGTH'] : 'unknown',
     'request_method' => $_SERVER['REQUEST_METHOD'],
-    'request_uri' => $_SERVER['REQUEST_URI'],
-    'raw_body_length' => strlen($requestBody)
+    'request_uri' => $_SERVER['REQUEST_URI']
 ]);
 
-// Clear any unintended output
-ob_end_clean();
+// Get booking data from request body
+$requestData = null;
+$requestBody = file_get_contents('php://input');
 
 // Safety check for empty request
 if (empty($requestBody)) {
     logEmailError("Empty request body received");
-    echo json_encode(['status' => 'error', 'message' => 'Empty request body']);
-    exit;
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Empty request body']);
 }
 
 // Safely parse JSON with error handling
@@ -85,13 +95,11 @@ try {
     }
 } catch (Exception $e) {
     logEmailError("Invalid JSON in request", ['error' => $e->getMessage(), 'body' => substr($requestBody, 0, 500)]);
-    echo json_encode(['status' => 'error', 'message' => 'Invalid JSON: ' . $e->getMessage()]);
-    exit;
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid JSON: ' . $e->getMessage()]);
 }
 
 if (!$requestData) {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid request data']);
-    exit;
+    sendEmailJsonResponse(['status' => 'error', 'message' => 'Invalid request data']);
 }
 
 logEmailError("Received booking confirmation request", [
@@ -115,11 +123,10 @@ foreach ($requiredFields as $field) {
 
 if (!empty($missingFields)) {
     logEmailError("Missing required fields", ['missing' => $missingFields, 'data' => $requestData]);
-    echo json_encode([
+    sendEmailJsonResponse([
         'status' => 'error', 
         'message' => 'Missing required fields: ' . implode(', ', $missingFields)
     ]);
-    exit;
 }
 
 try {
@@ -257,29 +264,18 @@ try {
         'booking_number' => $requestData['bookingNumber']
     ]);
     
-    if ($customerEmailSent || $adminEmailSent) {
-        // At least one email was sent
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Email confirmation sent successfully',
-            'details' => [
-                'customer_email_sent' => $customerEmailSent,
-                'admin_email_sent' => $adminEmailSent,
-                'booking_number' => $requestData['bookingNumber']
-            ]
-        ]);
-    } else {
-        // No emails could be sent
-        echo json_encode([
-            'status' => 'partial',
-            'message' => 'Booking created successfully but emails could not be sent',
-            'details' => [
-                'booking_created' => true,
-                'email_sent' => false,
-                'booking_number' => $requestData['bookingNumber']
-            ]
-        ]);
-    }
+    // Always provide a proper JSON response
+    sendEmailJsonResponse([
+        'status' => ($customerEmailSent || $adminEmailSent) ? 'success' : 'error',
+        'message' => ($customerEmailSent || $adminEmailSent) ? 
+                    'Email confirmation sent successfully' : 
+                    'Failed to send confirmation emails',
+        'details' => [
+            'customer_email_sent' => $customerEmailSent,
+            'admin_email_sent' => $adminEmailSent,
+            'booking_number' => $requestData['bookingNumber']
+        ]
+    ]);
     
 } catch (Exception $e) {
     logEmailError("Email sending failed with exception", [
@@ -287,7 +283,7 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
     
-    echo json_encode([
+    sendEmailJsonResponse([
         'status' => 'error',
         'message' => 'Failed to send confirmation emails: ' . $e->getMessage()
     ]);

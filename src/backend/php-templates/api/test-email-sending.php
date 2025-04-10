@@ -16,6 +16,11 @@ if (file_exists(__DIR__ . '/utils/email.php')) {
     require_once __DIR__ . '/utils/email.php';
 }
 
+// Include common database helper
+if (file_exists(__DIR__ . '/common/db_helper.php')) {
+    require_once __DIR__ . '/common/db_helper.php';
+}
+
 // Helper function to log results
 function logTestResult($message, $data = []) {
     $logDir = __DIR__ . '/../logs';
@@ -51,8 +56,27 @@ $results = [
         'operating_system' => PHP_OS,
         'hostname' => gethostname(),
         'time' => date('Y-m-d H:i:s')
+    ],
+    'database_connection' => [
+        'status' => 'Not tested',
+        'message' => 'Database connection not tested'
     ]
 ];
+
+// Test database connection if helper is available
+if (function_exists('checkDatabaseConnection')) {
+    try {
+        $dbResult = checkDatabaseConnection();
+        $results['database_connection'] = $dbResult;
+        logTestResult("Database connection test", $dbResult);
+    } catch (Exception $e) {
+        $results['database_connection'] = [
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ];
+        logTestResult("Database connection error", ['error' => $e->getMessage()]);
+    }
+}
 
 // Test subject and content
 $testSubject = "Email Testing - " . date('Y-m-d H:i:s');
@@ -72,6 +96,8 @@ $testHtmlBody = "
         <p>If you're seeing this, the email system is working!</p>
         <p>Server: " . (gethostname() ?: 'Unknown') . "</p>
         <p>PHP Version: " . phpversion() . "</p>
+        <p>Test Parameters: Email=" . htmlspecialchars($testEmail) . ", Name=" . htmlspecialchars($testName) . "</p>
+        <p>Server Software: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown') . "</p>
     </div>
 </body>
 </html>
@@ -90,12 +116,17 @@ try {
     $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
     
     $mailResult = mail($testEmail, $testSubject . ' - PHP mail()', $testHtmlBody, $headers);
+    $mailError = error_get_last();
+    
     $results['methods']['php_mail'] = [
         'success' => $mailResult ? true : false,
-        'error' => $mailResult ? null : 'Mail function returned false'
+        'error' => $mailResult ? null : ($mailError ? $mailError['message'] : 'Mail function returned false')
     ];
     
-    logTestResult("PHP mail() test result", ['success' => $mailResult ? 'yes' : 'no']);
+    logTestResult("PHP mail() test result", [
+        'success' => $mailResult ? 'yes' : 'no',
+        'error' => $mailError ? $mailError['message'] : null
+    ]);
 } catch (Exception $e) {
     $results['methods']['php_mail'] = [
         'success' => false,
