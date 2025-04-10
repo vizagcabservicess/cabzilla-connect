@@ -3,6 +3,13 @@
 // Enable debug mode for email functions
 define('EMAIL_DEBUG_MODE', true);
 
+// Define email credentials (use real credentials)
+define('SMTP_USERNAME', 'info@vizagup.com');
+define('SMTP_PASSWORD', 'Joel@5544');
+define('SMTP_HOST', 'smtp.hostinger.com');
+define('SMTP_PORT', 465);
+define('SMTP_SECURE', 'ssl');
+
 // Helper function to log errors during email sending
 function logError($message, $data = []) {
     $logDir = __DIR__ . '/../../logs';
@@ -81,11 +88,11 @@ if (!class_exists('PHPMailer')) {
             ]);
             
             // APPROACH 1: Direct SMTP Connection to Hostinger SMTP
-            if (function_exists('fsockopen')) {
+            if (function_exists('fsockopen') || function_exists('stream_socket_client')) {
                 try {
                     // Connect directly to Hostinger SMTP server (key fix)
-                    $smtpServer = 'smtp.hostinger.com';
-                    $smtpPort = 465; // SSL port
+                    $smtpServer = SMTP_HOST;
+                    $smtpPort = SMTP_PORT;
                     
                     // Try to establish SSL connection
                     $context = stream_context_create([
@@ -95,14 +102,25 @@ if (!class_exists('PHPMailer')) {
                         ]
                     ]);
                     
-                    $socket = @stream_socket_client(
-                        "ssl://$smtpServer:$smtpPort",
-                        $errno,
-                        $errstr,
-                        10,
-                        STREAM_CLIENT_CONNECT,
-                        $context
-                    );
+                    // Use fsockopen if available, otherwise stream_socket_client
+                    if (function_exists('stream_socket_client')) {
+                        $socket = @stream_socket_client(
+                            "ssl://$smtpServer:$smtpPort",
+                            $errno,
+                            $errstr,
+                            30,
+                            STREAM_CLIENT_CONNECT,
+                            $context
+                        );
+                    } else {
+                        $socket = @fsockopen(
+                            "ssl://$smtpServer", 
+                            $smtpPort, 
+                            $errno, 
+                            $errstr, 
+                            30
+                        );
+                    }
                     
                     if ($socket) {
                         logError("Connected to Hostinger SMTP server");
@@ -117,7 +135,7 @@ if (!class_exists('PHPMailer')) {
                         logError("EHLO response: " . trim($response));
                         
                         // Flush additional EHLO responses
-                        while (substr($response, 3, 1) == '-') {
+                        while ($response && substr($response, 3, 1) == '-') {
                             $response = fgets($socket, 515);
                         }
                         
@@ -127,16 +145,14 @@ if (!class_exists('PHPMailer')) {
                         logError("AUTH response: " . trim($response));
                         
                         // Username (Base64 encoded)
-                        fputs($socket, base64_encode('info@vizagup.com') . "\r\n");
+                        fputs($socket, base64_encode(SMTP_USERNAME) . "\r\n");
                         $response = fgets($socket, 515);
                         logError("Username response: " . trim($response));
                         
-                        // Password (you should get this securely, but for this fix we'll hardcode it)
-                        // Replace with actual password for info@vizagup.com
-                        $password = "Your-Hostinger-Email-Password"; // Replace with actual password
-                        fputs($socket, base64_encode($password) . "\r\n");
+                        // Password (using the provided actual password)
+                        fputs($socket, base64_encode(SMTP_PASSWORD) . "\r\n");
                         $response = fgets($socket, 515);
-                        logError("Password response: " . trim($response));
+                        logError("Password response code: " . substr($response, 0, 3));
                         
                         // Check if authentication was successful
                         if (substr($response, 0, 3) != '235') {
@@ -146,7 +162,7 @@ if (!class_exists('PHPMailer')) {
                         }
                         
                         // Set envelope sender (MAIL FROM)
-                        fputs($socket, "MAIL FROM:<info@vizagup.com>\r\n");
+                        fputs($socket, "MAIL FROM:<" . SMTP_USERNAME . ">\r\n");
                         $response = fgets($socket, 515);
                         logError("MAIL FROM response: " . trim($response));
                         
@@ -161,7 +177,7 @@ if (!class_exists('PHPMailer')) {
                         logError("DATA response: " . trim($response));
                         
                         // Send email with proper headers
-                        fputs($socket, "Return-Path: <info@vizagup.com>\r\n");
+                        fputs($socket, "Return-Path: <" . SMTP_USERNAME . ">\r\n");
                         fputs($socket, "From: " . ($this->from['name'] ? $this->from['name'] . " <{$this->from['email']}>" : $this->from['email']) . "\r\n");
                         fputs($socket, "Reply-To: <{$this->from['email']}>\r\n");
                         fputs($socket, "Subject: {$this->Subject}\r\n");
@@ -197,50 +213,7 @@ if (!class_exists('PHPMailer')) {
                 }
             }
             
-            // APPROACH 2: Use CURL to make direct HTTP request to Hostinger's email sending API
-            if (function_exists('curl_init')) {
-                try {
-                    // Replace with actual Hostinger API endpoint if available
-                    $url = 'https://api.hostinger.com/v1/mail/send';
-                    
-                    // Format email data for Hostinger API
-                    $emailData = [
-                        'from' => $this->from['email'],
-                        'from_name' => $this->from['name'],
-                        'to' => $this->to,
-                        'subject' => $this->Subject,
-                        'body' => $this->Body,
-                        'html' => $this->isHtml
-                    ];
-                    
-                    $ch = curl_init($url);
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_POST, true);
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($emailData));
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                        'Content-Type: application/json',
-                        'Authorization: Bearer YOUR_HOSTINGER_API_KEY' // Replace with actual API key if available
-                    ]);
-                    
-                    $response = curl_exec($ch);
-                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                    curl_close($ch);
-                    
-                    if ($httpCode >= 200 && $httpCode < 300) {
-                        logError("Mail sent successfully via Hostinger API", ['to' => $this->to]);
-                        return true;
-                    } else {
-                        logError("Hostinger API error", [
-                            'http_code' => $httpCode,
-                            'response' => $response
-                        ]);
-                    }
-                } catch (Exception $e) {
-                    logError("CURL exception: " . $e->getMessage());
-                }
-            }
-            
-            // APPROACH 3: Using PHP mail() with proper configuration for Hostinger
+            // APPROACH 2: Use PHP mail() with proper configuration for Hostinger
             try {
                 // Clear any previous errors
                 if (function_exists('error_clear_last')) {
@@ -248,19 +221,18 @@ if (!class_exists('PHPMailer')) {
                 }
                 
                 // Set proper envelope sender - critical for Hostinger
-                ini_set('sendmail_from', 'info@vizagup.com');
+                ini_set('sendmail_from', SMTP_USERNAME);
                 
                 // Create headers with proper Hostinger domain
                 $headers = [];
-                $headers[] = "From: Vizag Taxi Hub <info@vizagup.com>";
-                $headers[] = "Return-Path: <info@vizagup.com>";
-                $headers[] = "Reply-To: <info@vizagup.com>";
+                $headers[] = "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">";
+                $headers[] = "Return-Path: <" . SMTP_USERNAME . ">";
+                $headers[] = "Reply-To: <" . SMTP_USERNAME . ">";
                 $headers[] = "MIME-Version: 1.0";
                 $headers[] = $this->isHtml ? "Content-Type: text/html; charset=UTF-8" : "Content-Type: text/plain; charset=UTF-8";
                 $headers[] = "X-Mailer: Vizag Taxi Hub Mailer";
                 
                 // Basic mail() call specifically for Hostinger
-                // On Hostinger, mail() automatically uses the local MTA
                 $success = @mail($this->to, $this->Subject, $this->Body, implode("\r\n", $headers));
                 
                 if ($success) {
@@ -269,7 +241,7 @@ if (!class_exists('PHPMailer')) {
                 }
                 
                 // Try with explicit envelope sender as 5th parameter
-                $success = @mail($this->to, $this->Subject, $this->Body, implode("\r\n", $headers), "-finfo@vizagup.com");
+                $success = @mail($this->to, $this->Subject, $this->Body, implode("\r\n", $headers), "-f" . SMTP_USERNAME);
                 
                 if ($success) {
                     logError("Mail sent successfully via mail() with -f on Hostinger", ['to' => $this->to]);
@@ -287,47 +259,47 @@ if (!class_exists('PHPMailer')) {
                 logError("Exception in mail(): " . $e->getMessage());
             }
             
-            // APPROACH 4: FALLBACK - Use cURL to send via external API (SendGrid, Mailgun, etc.)
-            if (function_exists('curl_init')) {
+            // APPROACH 3: Try Hostinger's hsendmail directly if available
+            if (file_exists('/usr/sbin/hsendmail')) {
                 try {
-                    // Mailgun example (if you have an account)
-                    $url = 'https://api.mailgun.net/v3/vizagup.com/messages';
-                    $apiKey = 'YOUR_MAILGUN_API_KEY'; // Replace with actual key if available
+                    $tempFile = tempnam(sys_get_temp_dir(), 'email_');
                     
-                    $ch = curl_init();
-                    curl_setopt($ch, CURLOPT_URL, $url);
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                    curl_setopt($ch, CURLOPT_POST, 1);
-                    curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $apiKey);
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, [
-                        'from' => 'Vizag Taxi Hub <info@vizagup.com>',
-                        'to' => $this->to,
-                        'subject' => $this->Subject,
-                        'html' => $this->Body
-                    ]);
+                    // Format email content for direct sendmail
+                    $emailContent = "";
+                    $emailContent .= "Return-Path: <" . SMTP_USERNAME . ">\n";
+                    $emailContent .= "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\n";
+                    $emailContent .= "Reply-To: <" . SMTP_USERNAME . ">\n";
+                    $emailContent .= "To: {$this->to}\n";
+                    $emailContent .= "Subject: {$this->Subject}\n";
+                    $emailContent .= "MIME-Version: 1.0\n";
+                    $emailContent .= "Content-type: " . ($this->isHtml ? "text/html" : "text/plain") . "; charset=UTF-8\n\n";
+                    $emailContent .= $this->Body;
                     
-                    $response = curl_exec($ch);
-                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                    curl_close($ch);
+                    file_put_contents($tempFile, $emailContent);
                     
-                    if ($httpCode >= 200 && $httpCode < 300) {
-                        logError("Mail sent successfully via Mailgun", ['to' => $this->to]);
+                    // Try hsendmail directly (Hostinger-specific)
+                    $command = "/usr/sbin/hsendmail -t < " . escapeshellarg($tempFile);
+                    $output = [];
+                    $returnVar = 0;
+                    
+                    exec($command, $output, $returnVar);
+                    
+                    if ($returnVar === 0) {
+                        unlink($tempFile);
+                        logError("HSendmail command succeeded", ['to' => $this->to]);
                         return true;
-                    } else {
-                        logError("Mailgun API error", [
-                            'http_code' => $httpCode,
-                            'response' => $response
-                        ]);
                     }
+                    
+                    unlink($tempFile);
                 } catch (Exception $e) {
-                    logError("Mailgun exception: " . $e->getMessage());
+                    logError("HSendmail exception: " . $e->getMessage());
                 }
             }
             
             logError("All email delivery methods failed", [
                 'to' => $this->to,
                 'subject' => $this->Subject,
-                'methods_tried' => 'Hostinger SMTP, Mail API, PHP mail(), Mailgun'
+                'methods_tried' => 'Hostinger SMTP, PHP mail(), HSendmail'
             ]);
             
             return false;
@@ -352,7 +324,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     logError("Testing direct mail() function on Hostinger", ['to' => $to, 'subject' => $subject]);
     
     // Fix for Hostinger: Pre-set sendmail_from
-    ini_set('sendmail_from', 'info@vizagup.com');
+    ini_set('sendmail_from', SMTP_USERNAME);
     
     // APPROACH 1: Try Hostinger's direct SMTP with authentication
     if (function_exists('stream_socket_client')) {
@@ -365,10 +337,10 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
             ]);
             
             $socket = @stream_socket_client(
-                "ssl://smtp.hostinger.com:465",
+                "ssl://" . SMTP_HOST . ":" . SMTP_PORT,
                 $errno,
                 $errstr,
-                10,
+                30,
                 STREAM_CLIENT_CONNECT,
                 $context
             );
@@ -392,12 +364,11 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
                 $response = fgets($socket, 515);
                 
                 // Username (Base64 encoded)
-                fputs($socket, base64_encode('info@vizagup.com') . "\r\n");
+                fputs($socket, base64_encode(SMTP_USERNAME) . "\r\n");
                 $response = fgets($socket, 515);
                 
-                // Password (replace with actual password)
-                $password = "Your-Hostinger-Email-Password"; // Replace with actual password
-                fputs($socket, base64_encode($password) . "\r\n");
+                // Password (use actual password)
+                fputs($socket, base64_encode(SMTP_PASSWORD) . "\r\n");
                 $response = fgets($socket, 515);
                 
                 // Check if authentication was successful
@@ -406,7 +377,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
                     fclose($socket);
                 } else {
                     // Set envelope sender
-                    fputs($socket, "MAIL FROM:<info@vizagup.com>\r\n");
+                    fputs($socket, "MAIL FROM:<" . SMTP_USERNAME . ">\r\n");
                     $response = fgets($socket, 515);
                     
                     // Set recipient
@@ -418,7 +389,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
                     $response = fgets($socket, 515);
                     
                     // Send email content with proper headers
-                    fputs($socket, "From: Vizag Taxi Hub <info@vizagup.com>\r\n");
+                    fputs($socket, "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\r\n");
                     fputs($socket, "To: $to\r\n");
                     fputs($socket, "Subject: $subject\r\n");
                     fputs($socket, "MIME-Version: 1.0\r\n");
@@ -449,9 +420,9 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
             
             // Use Hostinger-optimized email format
             $emailContent = "";
-            $emailContent .= "Return-Path: <info@vizagup.com>\n";
-            $emailContent .= "From: Vizag Taxi Hub <info@vizagup.com>\n";
-            $emailContent .= "Reply-To: <info@vizagup.com>\n";
+            $emailContent .= "Return-Path: <" . SMTP_USERNAME . ">\n";
+            $emailContent .= "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\n";
+            $emailContent .= "Reply-To: <" . SMTP_USERNAME . ">\n";
             $emailContent .= "To: $to\n";
             $emailContent .= "Subject: $subject\n";
             $emailContent .= "MIME-Version: 1.0\n";
@@ -480,13 +451,50 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
         }
     }
     
-    // APPROACH 3: Try PHP mail() with multiple configurations
+    // APPROACH 3: Try regular sendmail if hsendmail failed
+    if (file_exists('/usr/sbin/sendmail')) {
+        try {
+            $tempFile = tempnam(sys_get_temp_dir(), 'email_');
+            
+            // Use properly formatted email
+            $emailContent = "";
+            $emailContent .= "Return-Path: <" . SMTP_USERNAME . ">\n";
+            $emailContent .= "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\n";
+            $emailContent .= "Reply-To: <" . SMTP_USERNAME . ">\n";
+            $emailContent .= "To: $to\n";
+            $emailContent .= "Subject: $subject\n";
+            $emailContent .= "MIME-Version: 1.0\n";
+            $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+            $emailContent .= $htmlBody;
+            
+            file_put_contents($tempFile, $emailContent);
+            
+            // Try sendmail directly
+            $command = "/usr/sbin/sendmail -t < " . escapeshellarg($tempFile);
+            $output = [];
+            $returnVar = 0;
+            
+            exec($command, $output, $returnVar);
+            
+            if ($returnVar === 0) {
+                unlink($tempFile);
+                logError("Sendmail command succeeded", ['to' => $to]);
+                return true;
+            }
+            
+            unlink($tempFile);
+        } catch (Exception $e) {
+            logError("Sendmail exception: " . $e->getMessage());
+        }
+    }
+    
+    // APPROACH 4: Try PHP mail() with multiple configurations
     
     // Format 1: Hostinger-friendly headers
     $headers = [];
-    $headers[] = "From: Vizag Taxi Hub <info@vizagup.com>";
-    $headers[] = "Reply-To: info@vizagup.com";
-    $headers[] = "Return-Path: <info@vizagup.com>";
+    $headers[] = "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">";
+    $headers[] = "Reply-To: " . SMTP_USERNAME;
+    $headers[] = "Return-Path: <" . SMTP_USERNAME . ">";
     $headers[] = "MIME-Version: 1.0";
     $headers[] = "Content-type: text/html; charset=UTF-8";
     $headers[] = "X-Mailer: PHP/" . phpversion();
@@ -502,7 +510,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     }
     
     // Format 2: With envelope sender parameter
-    $success = @mail($to, $subject, $htmlBody, $headersStr, "-finfo@vizagup.com");
+    $success = @mail($to, $subject, $htmlBody, $headersStr, "-f" . SMTP_USERNAME);
     
     if ($success) {
         logError("Direct mail() with envelope parameter succeeded", ['to' => $to]);
@@ -510,7 +518,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     }
     
     // Format 3: Simplified headers - sometimes less is more
-    $simpleHeaders = "From: Vizag Taxi Hub <info@vizagup.com>\r\n";
+    $simpleHeaders = "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\r\n";
     $simpleHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
     
     $success = @mail($to, $subject, $htmlBody, $simpleHeaders);
@@ -518,38 +526,6 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
     if ($success) {
         logError("Mail with simplified headers succeeded", ['to' => $to]);
         return true;
-    }
-    
-    // APPROACH 4: Use cURL to send via external API (if available)
-    if (function_exists('curl_init')) {
-        try {
-            // Mailgun example (if account available) - replace API key
-            $url = 'https://api.mailgun.net/v3/vizagup.com/messages';
-            $apiKey = 'YOUR_MAILGUN_API_KEY'; // Replace with actual key if available
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $apiKey);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, [
-                'from' => 'Vizag Taxi Hub <info@vizagup.com>',
-                'to' => $to,
-                'subject' => $subject,
-                'html' => $htmlBody
-            ]);
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($httpCode >= 200 && $httpCode < 300) {
-                logError("Mail sent successfully via Mailgun API", ['to' => $to]);
-                return true;
-            }
-        } catch (Exception $e) {
-            logError("Mailgun API exception: " . $e->getMessage());
-        }
     }
     
     // All methods failed, log the error
@@ -585,14 +561,14 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     try {
         $mail = new PHPMailer();
         $mail->isSMTP();
-        $mail->Host = 'smtp.hostinger.com';  // Hostinger SMTP server
+        $mail->Host = SMTP_HOST;
         $mail->SMTPAuth = true;
-        $mail->Username = 'info@vizagup.com'; // Hostinger email
-        $mail->Password = 'Your-Hostinger-Email-Password'; // Replace with actual password
-        $mail->SMTPSecure = 'ssl';
-        $mail->Port = 465;
+        $mail->Username = SMTP_USERNAME;
+        $mail->Password = SMTP_PASSWORD;
+        $mail->SMTPSecure = SMTP_SECURE;
+        $mail->Port = SMTP_PORT;
         
-        $mail->setFrom('info@vizagup.com', 'Vizag Taxi Hub');
+        $mail->setFrom(SMTP_USERNAME, 'Vizag Taxi Hub');
         $mail->addAddress($to);
         $mail->Subject = $subject;
         $mail->Body = $htmlBody;
@@ -619,10 +595,10 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
             ]);
             
             $socket = @stream_socket_client(
-                "ssl://smtp.hostinger.com:465",
+                "ssl://" . SMTP_HOST . ":" . SMTP_PORT,
                 $errno,
                 $errstr,
-                10,
+                30,
                 STREAM_CLIENT_CONNECT,
                 $context
             );
@@ -647,12 +623,11 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
                 $response = fgets($socket, 515);
                 
                 // Username (Base64 encoded)
-                fputs($socket, base64_encode('info@vizagup.com') . "\r\n");
+                fputs($socket, base64_encode(SMTP_USERNAME) . "\r\n");
                 $response = fgets($socket, 515);
                 
-                // Password (replace with actual password)
-                $password = "Your-Hostinger-Email-Password"; // Replace with actual password
-                fputs($socket, base64_encode($password) . "\r\n");
+                // Password (using actual password)
+                fputs($socket, base64_encode(SMTP_PASSWORD) . "\r\n");
                 $response = fgets($socket, 515);
                 
                 // Check if authentication was successful
@@ -661,7 +636,7 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
                     fclose($socket);
                 } else {
                     // Set envelope sender
-                    fputs($socket, "MAIL FROM:<info@vizagup.com>\r\n");
+                    fputs($socket, "MAIL FROM:<" . SMTP_USERNAME . ">\r\n");
                     $response = fgets($socket, 515);
                     
                     // Set recipient
@@ -673,9 +648,9 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
                     $response = fgets($socket, 515);
                     
                     // Send email with proper domain headers
-                    fputs($socket, "Return-Path: <info@vizagup.com>\r\n");
-                    fputs($socket, "From: Vizag Taxi Hub <info@vizagup.com>\r\n");
-                    fputs($socket, "Reply-To: <info@vizagup.com>\r\n");
+                    fputs($socket, "Return-Path: <" . SMTP_USERNAME . ">\r\n");
+                    fputs($socket, "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\r\n");
+                    fputs($socket, "Reply-To: <" . SMTP_USERNAME . ">\r\n");
                     fputs($socket, "Subject: $subject\r\n");
                     fputs($socket, "To: $to\r\n");
                     fputs($socket, "MIME-Version: 1.0\r\n");
@@ -704,54 +679,58 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
         }
     }
     
-    // APPROACH 3: Try Hostinger-specific hsendmail
-    try {
-        if (file_exists('/usr/sbin/hsendmail')) {
-            $tempFile = tempnam(sys_get_temp_dir(), 'email_');
-            
-            // Important: add Return-Path and use domain that matches From
-            $emailContent = "";
-            $emailContent .= "Return-Path: <info@vizagup.com>\n";
-            $emailContent .= "From: Vizag Taxi Hub <info@vizagup.com>\n";
-            $emailContent .= "Reply-To: <info@vizagup.com>\n";
-            $emailContent .= "To: $to\n";
-            $emailContent .= "Subject: $subject\n";
-            $emailContent .= "MIME-Version: 1.0\n";
-            $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagup.com>\n";
-            $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
-            $emailContent .= $htmlBody;
-            
-            file_put_contents($tempFile, $emailContent);
-            
-            // Try hsendmail directly
-            $command = "/usr/sbin/hsendmail -t < " . escapeshellarg($tempFile);
-            $output = [];
-            $returnVar = 0;
-            
-            exec($command, $output, $returnVar);
-            
-            if ($returnVar === 0) {
+    // APPROACH 3: Try hsendmail or regular sendmail as a fallback
+    $sendmailPaths = ['/usr/sbin/hsendmail', '/usr/sbin/sendmail'];
+    
+    foreach ($sendmailPaths as $sendmailPath) {
+        if (file_exists($sendmailPath)) {
+            try {
+                $tempFile = tempnam(sys_get_temp_dir(), 'email_');
+                
+                // Important: add Return-Path and use domain that matches From
+                $emailContent = "";
+                $emailContent .= "Return-Path: <" . SMTP_USERNAME . ">\n";
+                $emailContent .= "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\n";
+                $emailContent .= "Reply-To: <" . SMTP_USERNAME . ">\n";
+                $emailContent .= "To: $to\n";
+                $emailContent .= "Subject: $subject\n";
+                $emailContent .= "MIME-Version: 1.0\n";
+                $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagup.com>\n";
+                $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
+                $emailContent .= $htmlBody;
+                
+                file_put_contents($tempFile, $emailContent);
+                
+                // Try sendmail directly
+                $command = "$sendmailPath -t < " . escapeshellarg($tempFile);
+                $output = [];
+                $returnVar = 0;
+                
+                exec($command, $output, $returnVar);
+                
+                if ($returnVar === 0) {
+                    unlink($tempFile);
+                    file_put_contents($logFile, "SUCCESS: Direct $sendmailPath approach\n", FILE_APPEND);
+                    return true;
+                }
+                
                 unlink($tempFile);
-                file_put_contents($logFile, "SUCCESS: Direct hsendmail approach\n", FILE_APPEND);
-                return true;
+            } catch (Exception $e) {
+                file_put_contents($logFile, "$sendmailPath error: " . $e->getMessage() . "\n", FILE_APPEND);
             }
-            
-            unlink($tempFile);
         }
-    } catch (Exception $e) {
-        file_put_contents($logFile, "Hsendmail error: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
     // APPROACH 4: Use PHP's mail() function with Hostinger optimizations
     
     // Important: set proper envelope sender
-    ini_set('sendmail_from', 'info@vizagup.com');
+    ini_set('sendmail_from', SMTP_USERNAME);
     
     // Hostinger-optimized headers
     $headers = [
-        "From: Vizag Taxi Hub <info@vizagup.com>",
-        "Reply-To: info@vizagup.com",
-        "Return-Path: <info@vizagup.com>",
+        "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">",
+        "Reply-To: " . SMTP_USERNAME,
+        "Return-Path: <" . SMTP_USERNAME . ">",
         "MIME-Version: 1.0",
         "Content-Type: text/html; charset=UTF-8",
         "X-Mailer: PHP/" . phpversion()
@@ -768,43 +747,11 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     }
     
     // Try with envelope sender parameter
-    $success = @mail($to, $subject, $htmlBody, $headersStr, "-finfo@vizagup.com");
+    $success = @mail($to, $subject, $htmlBody, $headersStr, "-f" . SMTP_USERNAME);
     
     if ($success) {
         file_put_contents($logFile, "SUCCESS: Email sent via mail() with envelope\n", FILE_APPEND);
         return true;
-    }
-    
-    // APPROACH 5: Mail API fallback (if credentials available)
-    if (function_exists('curl_init')) {
-        try {
-            // Mailgun example
-            $url = 'https://api.mailgun.net/v3/vizagup.com/messages';
-            $apiKey = 'YOUR_MAILGUN_API_KEY'; // Replace with actual key if available
-            
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $apiKey);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, [
-                'from' => 'Vizag Taxi Hub <info@vizagup.com>',
-                'to' => $to,
-                'subject' => $subject,
-                'html' => $htmlBody
-            ]);
-            
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($httpCode >= 200 && $httpCode < 300) {
-                file_put_contents($logFile, "SUCCESS: Email sent via Mailgun API\n", FILE_APPEND);
-                return true;
-            }
-        } catch (Exception $e) {
-            file_put_contents($logFile, "Mail API error: " . $e->getMessage() . "\n", FILE_APPEND);
-        }
     }
     
     // Log the failure

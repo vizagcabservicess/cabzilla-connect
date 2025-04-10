@@ -146,7 +146,7 @@ function tryMethod($name, $callback, &$methodsTried, &$successful, &$failed) {
     }
 }
 
-// METHOD 1: Try Hostinger optimized approach
+// METHOD 1: Try Hostinger optimized approach with real credentials
 $hostingerMethod = function() use ($recipientEmail, $subject, $htmlBody) {
     // 1. Try direct authenticated SMTP to smtp.hostinger.com:465
     if (function_exists('stream_socket_client')) {
@@ -162,7 +162,7 @@ $hostingerMethod = function() use ($recipientEmail, $subject, $htmlBody) {
                 "ssl://smtp.hostinger.com:465",
                 $errno,
                 $errstr,
-                10,
+                30,
                 STREAM_CLIENT_CONNECT,
                 $context
             );
@@ -192,9 +192,8 @@ $hostingerMethod = function() use ($recipientEmail, $subject, $htmlBody) {
                 fputs($socket, base64_encode('info@vizagup.com') . "\r\n");
                 $response = fgets($socket, 515);
                 
-                // Password (replace with actual password)
-                $password = "Your-Hostinger-Email-Password"; // Replace with actual password
-                fputs($socket, base64_encode($password) . "\r\n");
+                // Password (with actual password)
+                fputs($socket, base64_encode('Joel@5544') . "\r\n");
                 $response = fgets($socket, 515);
                 
                 // Check if authentication was successful
