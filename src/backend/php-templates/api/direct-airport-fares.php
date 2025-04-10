@@ -28,6 +28,7 @@ $timestamp = date('Y-m-d H:i:s');
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
 
 // Capture URL parameters
 file_put_contents($logFile, "[$timestamp] URL parameters: " . json_encode($_GET) . "\n", FILE_APPEND);
@@ -69,6 +70,13 @@ if ($vehicleId) {
 $_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
 // Set admin mode for direct access to tables
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+// Set debug mode for extra output
+$_SERVER['HTTP_X_DEBUG'] = 'true';
+
+// Force cache-busting 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Forward the request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';

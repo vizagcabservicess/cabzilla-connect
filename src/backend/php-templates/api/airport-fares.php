@@ -28,6 +28,7 @@ $timestamp = date('Y-m-d H:i:s');
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares request redirecting to admin endpoint\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 
 // Make sure we have a vehicle ID from any possible source before forwarding
@@ -67,6 +68,13 @@ if ($vehicleId) {
 $_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
 // Set admin mode for direct access to tables
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+// Set debug mode for extra output
+$_SERVER['HTTP_X_DEBUG'] = 'true';
+
+// Force cache-busting 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Forward this request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';
