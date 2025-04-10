@@ -144,7 +144,7 @@ export const bookingAPI = {
       
       console.log('Booking created successfully:', result);
       
-      // Send email confirmation separately with explicit debugging
+      // Send email confirmation separately with improved error handling
       try {
         if (result.data && result.data.passengerEmail) {
           console.log('Sending email confirmation for booking:', result.data.bookingNumber);
@@ -165,23 +165,47 @@ export const bookingAPI = {
             body: JSON.stringify(result.data)
           });
           
-          const confirmText = await confirmResponse.text();
           console.log('Email confirmation response status:', confirmResponse.status);
-          console.log('Email confirmation response:', confirmText.substring(0, 500));
           
-          let confirmResult;
+          // Try to parse the response as JSON with proper error handling
           try {
-            confirmResult = JSON.parse(confirmText);
-            console.log('Parsed email confirmation result:', confirmResult);
-          } catch (e) {
-            console.warn('Could not parse email confirmation response as JSON:', confirmText.substring(0, 200));
+            const confirmText = await confirmResponse.text();
+            console.log('Email confirmation response:', confirmText.substring(0, 500));
+            
+            if (confirmText && confirmText.trim() !== '') {
+              try {
+                const confirmResult = JSON.parse(confirmText);
+                console.log('Parsed email confirmation result:', confirmResult);
+                
+                // Add email confirmation result to the booking response
+                result.data.emailConfirmation = confirmResult.status === 'success';
+                result.data.emailDetails = confirmResult.details || {};
+              } catch (parseError) {
+                console.warn('Could not parse email confirmation response as JSON:', confirmText.substring(0, 200));
+                // Don't fail the booking if email confirmation response is invalid
+                result.data.emailConfirmation = false;
+                result.data.emailError = 'Invalid response from email service';
+              }
+            } else {
+              console.warn('Empty response from email confirmation endpoint');
+              result.data.emailConfirmation = false;
+              result.data.emailError = 'Empty response from email service';
+            }
+          } catch (textError) {
+            console.warn('Error reading email confirmation response:', textError);
+            result.data.emailConfirmation = false;
+            result.data.emailError = 'Could not read email service response';
           }
         } else {
           console.warn('Email confirmation skipped - missing passenger email in booking data');
+          result.data.emailConfirmation = false;
+          result.data.emailError = 'Missing passenger email';
         }
       } catch (emailError) {
         // Don't fail booking just because email failed
         console.warn('Failed to trigger confirmation email:', emailError);
+        result.data.emailConfirmation = false;
+        result.data.emailError = emailError.message || 'Unknown email error';
       }
       
       return result.data;
