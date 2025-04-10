@@ -50,18 +50,19 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
-// If we found a vehicle ID, add it to $_GET for the forwarded request
+// Explicitly set in query string for the admin endpoint
 if ($vehicleId) {
-    $_GET['vehicleId'] = $vehicleId;
+    // Make sure the vehicle_id parameter is set for the forward
     $_GET['vehicle_id'] = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
+    $_GET['vehicleId'] = $vehicleId;
+    $_GET['id'] = $vehicleId;
     
-    // If this is a GET request, append vehicle_id to the query string
-    if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos($_SERVER['REQUEST_URI'], 'vehicle_id=') === false) {
-        $_SERVER['QUERY_STRING'] = ($_SERVER['QUERY_STRING'] ? $_SERVER['QUERY_STRING'] . '&' : '') . 'vehicle_id=' . urlencode($vehicleId);
-        $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
-        file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
-    }
+    // Update the query string and request URI with the vehicle_id parameter
+    $_SERVER['QUERY_STRING'] = 'vehicle_id=' . urlencode($vehicleId);
+    $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
+    
+    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
 }
 
 // Set the X-Force-Refresh header to ensure we get fresh data
