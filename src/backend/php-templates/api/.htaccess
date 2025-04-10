@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -57,6 +58,11 @@ RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
 
+# ADD: Test email endpoints
+RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
+RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
+RewriteRule ^test-email$ test-email-sending.php [L,QSA]
+
 # HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]
 RewriteRule ^book\.php$ book.php [L,QSA]
@@ -64,12 +70,25 @@ RewriteRule ^book/$ book.php [L,QSA]
 RewriteRule ^create-booking$ book.php [L,QSA]
 RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
+# HIGHEST PRIORITY: Email confirmation endpoints
+RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
+RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
+RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
+
 # CRITICAL: Force direct PHP for critical files - ensure JSON content type
 <Files "book.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
 <Files "test-connection.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "send-booking-confirmation.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "test-email-sending.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>

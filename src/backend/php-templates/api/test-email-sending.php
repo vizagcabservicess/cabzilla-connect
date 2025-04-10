@@ -1,14 +1,19 @@
 
 <?php
-// Simple script to test email sending
-
-// CORS headers
+// CORS headers first to ensure proper handling of preflight requests
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-// Include required utilities
+// Disable output buffering completely - critical to prevent HTML contamination
+if (ob_get_level()) ob_end_clean();
+if (ob_get_length()) ob_clean();
+
+// Include utilities - adapt paths as needed for your server
 if (file_exists(__DIR__ . '/utils/mailer.php')) {
     require_once __DIR__ . '/utils/mailer.php';
 }
@@ -16,19 +21,14 @@ if (file_exists(__DIR__ . '/utils/email.php')) {
     require_once __DIR__ . '/utils/email.php';
 }
 
-// Include common database helper
-if (file_exists(__DIR__ . '/common/db_helper.php')) {
-    require_once __DIR__ . '/common/db_helper.php';
-}
-
-// Helper function to log results
-function logTestResult($message, $data = []) {
+// Function to log test email events
+function logTestEmail($message, $data = []) {
     $logDir = __DIR__ . '/../logs';
     if (!file_exists($logDir)) {
         mkdir($logDir, 0777, true);
     }
     
-    $logFile = $logDir . '/email_test_' . date('Y-m-d') . '.log';
+    $logFile = $logDir . '/test_email_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logEntry = "[$timestamp] $message";
     
@@ -40,163 +40,256 @@ function logTestResult($message, $data = []) {
     error_log($logEntry); // Also log to PHP error log
 }
 
-// Get email address from query parameter or use default
-$testEmail = isset($_GET['email']) ? $_GET['email'] : 'test@example.com';
-$testName = isset($_GET['name']) ? $_GET['name'] : 'Test User';
+// Function to send JSON response with proper headers
+function sendTestEmailResponse($data, $statusCode = 200) {
+    // Clean any previous output
+    while (ob_get_level()) ob_end_clean();
+    
+    // Set status code
+    http_response_code($statusCode);
+    
+    // Set content type again to ensure it's not overwritten
+    header('Content-Type: application/json');
+    
+    // Output JSON response
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
-// Results array
+// Log the start of the test
+logTestEmail("Email test started", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'query' => $_SERVER['QUERY_STRING'] ?? '',
+    'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+]);
+
+// Handle OPTIONS preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'Preflight OK']);
+    exit;
+}
+
+// Get the test email address
+$testEmail = $_GET['email'] ?? '';
+if (empty($testEmail)) {
+    logTestEmail("No test email provided");
+    sendTestEmailResponse([
+        'status' => 'error',
+        'message' => 'Missing email parameter. Use ?email=your@email.com'
+    ], 400);
+}
+
+// Log the test parameters
+logTestEmail("Testing email delivery", [
+    'to' => $testEmail,
+    'php_version' => phpversion(),
+    'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+]);
+
+// Prepare test email content
+$subject = "Email Test from Vizag Taxi Hub";
+$htmlBody = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Email Test</title>
+</head>
+<body>
+    <h1>Email Delivery Test</h1>
+    <p>This is a test email to verify that your server can successfully send emails.</p>
+    <p>Timestamp: {$timestamp = date('Y-m-d H:i:s')}</p>
+    <p>Server: {$_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'}</p>
+    <p>PHP Version: {phpversion()}</p>
+    <hr>
+    <p>If you received this email, it means your email configuration is working!</p>
+</body>
+</html>
+HTML;
+
+// Track results for each method
 $results = [
-    'status' => 'success',
-    'message' => 'Test completed, see details below',
-    'methods' => [],
-    'server_info' => [
-        'php_version' => phpversion(),
-        'mail_enabled' => function_exists('mail') ? 'Yes' : 'No',
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-        'operating_system' => PHP_OS,
-        'hostname' => gethostname(),
-        'time' => date('Y-m-d H:i:s')
-    ],
-    'database_connection' => [
-        'status' => 'Not tested',
-        'message' => 'Database connection not tested'
+    'methods_tried' => [],
+    'successful_methods' => [],
+    'failed_methods' => []
+];
+
+// 1. Try PHPMailer if available
+if (function_exists('sendEmailWithPHPMailer')) {
+    logTestEmail("Trying PHPMailer", ['to' => $testEmail]);
+    $start = microtime(true);
+    try {
+        $success = sendEmailWithPHPMailer($testEmail, $subject, $htmlBody);
+        $duration = round((microtime(true) - $start) * 1000); // in ms
+        
+        $results['methods_tried'][] = 'PHPMailer';
+        if ($success) {
+            $results['successful_methods'][] = [
+                'method' => 'PHPMailer',
+                'duration_ms' => $duration
+            ];
+        } else {
+            $results['failed_methods'][] = [
+                'method' => 'PHPMailer',
+                'duration_ms' => $duration
+            ];
+        }
+        
+        logTestEmail("PHPMailer result", [
+            'success' => $success ? 'yes' : 'no',
+            'duration_ms' => $duration
+        ]);
+    } catch (Exception $e) {
+        $results['failed_methods'][] = [
+            'method' => 'PHPMailer',
+            'error' => $e->getMessage()
+        ];
+        logTestEmail("PHPMailer exception", ['error' => $e->getMessage()]);
+    }
+}
+
+// 2. Try sendEmailAllMethods if available
+if (function_exists('sendEmailAllMethods')) {
+    logTestEmail("Trying sendEmailAllMethods", ['to' => $testEmail]);
+    $start = microtime(true);
+    try {
+        $success = sendEmailAllMethods($testEmail, $subject, $htmlBody);
+        $duration = round((microtime(true) - $start) * 1000); // in ms
+        
+        $results['methods_tried'][] = 'sendEmailAllMethods';
+        if ($success) {
+            $results['successful_methods'][] = [
+                'method' => 'sendEmailAllMethods',
+                'duration_ms' => $duration
+            ];
+        } else {
+            $results['failed_methods'][] = [
+                'method' => 'sendEmailAllMethods',
+                'duration_ms' => $duration
+            ];
+        }
+        
+        logTestEmail("sendEmailAllMethods result", [
+            'success' => $success ? 'yes' : 'no',
+            'duration_ms' => $duration
+        ]);
+    } catch (Exception $e) {
+        $results['failed_methods'][] = [
+            'method' => 'sendEmailAllMethods',
+            'error' => $e->getMessage()
+        ];
+        logTestEmail("sendEmailAllMethods exception", ['error' => $e->getMessage()]);
+    }
+}
+
+// 3. Try native PHP mail() function
+logTestEmail("Trying native PHP mail()", ['to' => $testEmail]);
+$start = microtime(true);
+
+// Basic email headers
+$headers = "MIME-Version: 1.0" . "\r\n";
+$headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+$headers .= 'From: info@vizagtaxihub.com' . "\r\n";
+$headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
+
+// Get initial error state
+$lastError = error_get_last();
+
+// Try native mail function
+$mailResult = @mail($testEmail, $subject, $htmlBody, $headers);
+$duration = round((microtime(true) - $start) * 1000); // in ms
+
+// Check for new errors
+$newError = error_get_last();
+$errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
+
+$results['methods_tried'][] = 'PHP mail()';
+if ($mailResult) {
+    $results['successful_methods'][] = [
+        'method' => 'PHP mail()',
+        'duration_ms' => $duration
+    ];
+} else {
+    $results['failed_methods'][] = [
+        'method' => 'PHP mail()',
+        'duration_ms' => $duration,
+        'error' => $errorMessage
+    ];
+}
+
+logTestEmail("PHP mail() result", [
+    'success' => $mailResult ? 'yes' : 'no',
+    'duration_ms' => $duration,
+    'error' => $errorMessage
+]);
+
+// 4. Try mail() with different options as a last resort
+if (!$mailResult) {
+    logTestEmail("Trying mail() with -f parameter", ['to' => $testEmail]);
+    $start = microtime(true);
+    
+    // Get initial error state
+    $lastError = error_get_last();
+    
+    // Try with fifth parameter
+    $mailResult2 = @mail($testEmail, $subject . " (Method 2)", $htmlBody, $headers, "-finfo@vizagtaxihub.com");
+    $duration = round((microtime(true) - $start) * 1000); // in ms
+    
+    // Check for new errors
+    $newError = error_get_last();
+    $errorMessage = ($newError !== $lastError) ? $newError['message'] : null;
+    
+    $results['methods_tried'][] = 'PHP mail() with -f';
+    if ($mailResult2) {
+        $results['successful_methods'][] = [
+            'method' => 'PHP mail() with -f',
+            'duration_ms' => $duration
+        ];
+    } else {
+        $results['failed_methods'][] = [
+            'method' => 'PHP mail() with -f',
+            'duration_ms' => $duration,
+            'error' => $errorMessage
+        ];
+    }
+    
+    logTestEmail("PHP mail() with -f result", [
+        'success' => $mailResult2 ? 'yes' : 'no', 
+        'duration_ms' => $duration,
+        'error' => $errorMessage
+    ]);
+}
+
+// Gather system information for debugging
+$systemInfo = [
+    'php_version' => phpversion(),
+    'mail_function_exists' => function_exists('mail'),
+    'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+    'server_os' => PHP_OS,
+    'mail_configuration' => [
+        'sendmail_path' => ini_get('sendmail_path'),
+        'smtp' => ini_get('SMTP'),
+        'smtp_port' => ini_get('smtp_port')
     ]
 ];
 
-// Test database connection if helper is available
-if (function_exists('checkDatabaseConnection')) {
-    try {
-        $dbResult = checkDatabaseConnection();
-        $results['database_connection'] = $dbResult;
-        logTestResult("Database connection test", $dbResult);
-    } catch (Exception $e) {
-        $results['database_connection'] = [
-            'status' => 'error',
-            'message' => $e->getMessage()
-        ];
-        logTestResult("Database connection error", ['error' => $e->getMessage()]);
-    }
-}
+// Determine overall success
+$anySuccess = !empty($results['successful_methods']);
 
-// Test subject and content
-$testSubject = "Email Testing - " . date('Y-m-d H:i:s');
-$testHtmlBody = "
-<html>
-<head>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        .container { padding: 20px; border: 1px solid #ddd; }
-        h1 { color: #333; }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <h1>Test Email</h1>
-        <p>This is a test email sent at " . date('Y-m-d H:i:s') . "</p>
-        <p>If you're seeing this, the email system is working!</p>
-        <p>Server: " . (gethostname() ?: 'Unknown') . "</p>
-        <p>PHP Version: " . phpversion() . "</p>
-        <p>Test Parameters: Email=" . htmlspecialchars($testEmail) . ", Name=" . htmlspecialchars($testName) . "</p>
-        <p>Server Software: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown') . "</p>
-    </div>
-</body>
-</html>
-";
-
-logTestResult("Starting email test", [
-    'to' => $testEmail,
-    'name' => $testName,
-    'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+// Send the response
+logTestEmail("Email test completed", [
+    'overall_success' => $anySuccess ? 'yes' : 'no',
+    'methods_succeeded' => count($results['successful_methods']),
+    'methods_failed' => count($results['failed_methods'])
 ]);
 
-// Test Method 1: Direct PHP mail()
-try {
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: info@vizagtaxihub.com' . "\r\n";
-    
-    $mailResult = mail($testEmail, $testSubject . ' - PHP mail()', $testHtmlBody, $headers);
-    $mailError = error_get_last();
-    
-    $results['methods']['php_mail'] = [
-        'success' => $mailResult ? true : false,
-        'error' => $mailResult ? null : ($mailError ? $mailError['message'] : 'Mail function returned false')
-    ];
-    
-    logTestResult("PHP mail() test result", [
-        'success' => $mailResult ? 'yes' : 'no',
-        'error' => $mailError ? $mailError['message'] : null
-    ]);
-} catch (Exception $e) {
-    $results['methods']['php_mail'] = [
-        'success' => false,
-        'error' => $e->getMessage()
-    ];
-    logTestResult("PHP mail() test exception", ['error' => $e->getMessage()]);
-}
-
-// Test Method 2: PHPMailer if available
-if (function_exists('sendEmailWithPHPMailer')) {
-    try {
-        $phpMailerResult = sendEmailWithPHPMailer($testEmail, $testSubject . ' - PHPMailer', $testHtmlBody);
-        $results['methods']['phpmailer'] = [
-            'success' => $phpMailerResult ? true : false,
-            'error' => $phpMailerResult ? null : 'PHPMailer function returned false'
-        ];
-        
-        logTestResult("PHPMailer test result", ['success' => $phpMailerResult ? 'yes' : 'no']);
-    } catch (Exception $e) {
-        $results['methods']['phpmailer'] = [
-            'success' => false,
-            'error' => $e->getMessage()
-        ];
-        logTestResult("PHPMailer test exception", ['error' => $e->getMessage()]);
-    }
-} else {
-    $results['methods']['phpmailer'] = [
-        'success' => false,
-        'error' => 'Function sendEmailWithPHPMailer not available'
-    ];
-    logTestResult("PHPMailer not available");
-}
-
-// Test Method 3: Enhanced email function if available
-if (function_exists('sendEmailAllMethods')) {
-    try {
-        $enhancedResult = sendEmailAllMethods($testEmail, $testSubject . ' - Enhanced', $testHtmlBody);
-        $results['methods']['enhanced_email'] = [
-            'success' => $enhancedResult ? true : false,
-            'error' => $enhancedResult ? null : 'Enhanced email function returned false'
-        ];
-        
-        logTestResult("Enhanced email test result", ['success' => $enhancedResult ? 'yes' : 'no']);
-    } catch (Exception $e) {
-        $results['methods']['enhanced_email'] = [
-            'success' => false,
-            'error' => $e->getMessage()
-        ];
-        logTestResult("Enhanced email test exception", ['error' => $e->getMessage()]);
-    }
-} else {
-    $results['methods']['enhanced_email'] = [
-        'success' => false,
-        'error' => 'Function sendEmailAllMethods not available'
-    ];
-    logTestResult("Enhanced email function not available");
-}
-
-// Check log files
-$logDir = __DIR__ . '/../logs';
-$logFiles = [];
-if (is_dir($logDir)) {
-    $files = scandir($logDir);
-    foreach ($files as $file) {
-        if ($file != '.' && $file != '..' && is_file($logDir . '/' . $file)) {
-            $logFiles[] = $file;
-        }
-    }
-}
-$results['log_files'] = $logFiles;
-
-// Return results
-echo json_encode($results, JSON_PRETTY_PRINT);
+sendTestEmailResponse([
+    'status' => $anySuccess ? 'success' : 'error',
+    'message' => $anySuccess ? 
+                'Email sent successfully using at least one method' : 
+                'All email sending methods failed',
+    'results' => $results,
+    'system_info' => $systemInfo,
+    'timestamp' => date('Y-m-d H:i:s')
+]);
