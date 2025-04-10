@@ -17,6 +17,7 @@ if (ob_get_level()) ob_end_clean();
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'Preflight OK']);
     exit;
 }
 
@@ -152,6 +153,7 @@ try {
     // Track email results
     $customerEmailSent = false;
     $adminEmailSent = false;
+    $emailAttempts = [];
     
     // Try all available email sending methods for customer email
     logEmailError("Attempting to send customer confirmation email", [
@@ -163,6 +165,7 @@ try {
     if (function_exists('sendBookingConfirmationEmail')) {
         logEmailError("Using enhanced sendBookingConfirmationEmail function");
         $customerEmailSent = sendBookingConfirmationEmail($requestData);
+        $emailAttempts[] = ['method' => 'sendBookingConfirmationEmail', 'success' => $customerEmailSent];
         logEmailError("Enhanced email function result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
@@ -170,6 +173,7 @@ try {
     if (!$customerEmailSent && function_exists('sendEmailWithPHPMailer')) {
         logEmailError("Trying PHPMailer");
         $customerEmailSent = sendEmailWithPHPMailer($requestData['passengerEmail'], $subject, $htmlBody);
+        $emailAttempts[] = ['method' => 'PHPMailer', 'success' => $customerEmailSent];
         logEmailError("PHPMailer result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
@@ -177,6 +181,7 @@ try {
     if (!$customerEmailSent && function_exists('sendEmailAllMethods')) {
         logEmailError("Trying sendEmailAllMethods");
         $customerEmailSent = sendEmailAllMethods($requestData['passengerEmail'], $subject, $htmlBody);
+        $emailAttempts[] = ['method' => 'sendEmailAllMethods', 'success' => $customerEmailSent];
         logEmailError("sendEmailAllMethods result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
@@ -191,6 +196,7 @@ try {
         $headers .= 'Reply-To: info@vizagtaxihub.com' . "\r\n";
         
         $customerEmailSent = mail($requestData['passengerEmail'], $subject, $htmlBody, $headers);
+        $emailAttempts[] = ['method' => 'PHP mail()', 'success' => $customerEmailSent];
         logEmailError("Direct PHP mail() result", ['success' => $customerEmailSent ? 'yes' : 'no']);
     }
     
@@ -216,6 +222,8 @@ try {
         logEmailError("Using template email for admin notification");
     }
     
+    $adminEmailAttempts = [];
+    
     // Try all available methods for admin email
     logEmailError("Attempting to send admin notification email", [
         'email' => $adminEmail,
@@ -226,6 +234,7 @@ try {
     if (function_exists('sendAdminNotificationEmail')) {
         logEmailError("Using enhanced sendAdminNotificationEmail function");
         $adminEmailSent = sendAdminNotificationEmail($requestData);
+        $adminEmailAttempts[] = ['method' => 'sendAdminNotificationEmail', 'success' => $adminEmailSent];
         logEmailError("Enhanced admin email function result", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
@@ -233,6 +242,7 @@ try {
     if (!$adminEmailSent && function_exists('sendEmailWithPHPMailer')) {
         logEmailError("Trying PHPMailer for admin email");
         $adminEmailSent = sendEmailWithPHPMailer($adminEmail, $adminSubject, $adminHtmlBody);
+        $adminEmailAttempts[] = ['method' => 'PHPMailer', 'success' => $adminEmailSent];
         logEmailError("PHPMailer result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
@@ -240,6 +250,7 @@ try {
     if (!$adminEmailSent && function_exists('sendEmailAllMethods')) {
         logEmailError("Trying sendEmailAllMethods for admin email");
         $adminEmailSent = sendEmailAllMethods($adminEmail, $adminSubject, $adminHtmlBody);
+        $adminEmailAttempts[] = ['method' => 'sendEmailAllMethods', 'success' => $adminEmailSent];
         logEmailError("sendEmailAllMethods result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
@@ -254,6 +265,7 @@ try {
         $headers .= 'Reply-To: ' . $requestData['passengerEmail'] . "\r\n";
         
         $adminEmailSent = mail($adminEmail, $adminSubject, $adminHtmlBody, $headers);
+        $adminEmailAttempts[] = ['method' => 'PHP mail()', 'success' => $adminEmailSent];
         logEmailError("Direct PHP mail() result for admin email", ['success' => $adminEmailSent ? 'yes' : 'no']);
     }
     
@@ -273,7 +285,9 @@ try {
         'details' => [
             'customer_email_sent' => $customerEmailSent,
             'admin_email_sent' => $adminEmailSent,
-            'booking_number' => $requestData['bookingNumber']
+            'booking_number' => $requestData['bookingNumber'],
+            'customer_attempts' => $emailAttempts,
+            'admin_attempts' => $adminEmailAttempts
         ]
     ]);
     
