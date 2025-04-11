@@ -7,6 +7,7 @@ import { TourInfo } from '@/types/cab';
 import { fareAPI } from '@/services/api';
 import { availableTours } from '@/lib/tourData';
 import { MapPin } from 'lucide-react';
+import { getApiUrl } from '@/config/api';
 
 interface TourPackageSelectorProps {
   selectedTour: string | null;
@@ -17,13 +18,22 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
   const { toast } = useToast();
   const [tours, setTours] = useState<TourInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     const fetchTours = async () => {
+      if (isLoading || hasError) return; // Prevent repeated calls if already loading or had an error
+      
       setIsLoading(true);
       try {
-        // Try to fetch tours from API
-        const tourData = await fareAPI.getTourFares();
+        // Use the correct API endpoint that matches the backend structure
+        const response = await fetch(getApiUrl('/api/fares/tours.php'));
+        
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        }
+        
+        const tourData = await response.json();
         
         if (Array.isArray(tourData) && tourData.length > 0) {
           // Map API data to TourInfo format
@@ -35,7 +45,7 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
             image: `/tours/${tour.tourId}.jpg` // Assume images follow this naming convention
           }));
           
-          console.log("Loaded tours from API:", apiTours);
+          console.log("Successfully loaded tours from API:", apiTours);
           setTours(apiTours);
           
           // If no tour is selected, select the first one
@@ -44,7 +54,7 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
           }
         } else {
           // Fall back to local data if API returns empty result
-          console.log("Using local tours data:", availableTours);
+          console.log("API returned no tours, using local data:", availableTours);
           setTours(availableTours);
           
           // If no tour is selected, select the first one
@@ -54,9 +64,12 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
         }
       } catch (error) {
         console.error("Error fetching tours:", error);
+        setHasError(true); // Set error flag to prevent continuous retries
         
         // Fall back to local data
         setTours(availableTours);
+        
+        // Only show the error toast once to avoid notification spam
         toast({
           title: "Could not fetch tours",
           description: "Using default tour packages instead.",
@@ -74,7 +87,7 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
     };
 
     fetchTours();
-  }, [selectedTour, onTourChange, toast]);
+  }, [selectedTour, onTourChange, toast, isLoading, hasError]); // Add isLoading and hasError to dependencies
 
   const handleTourChange = (tourId: string) => {
     onTourChange(tourId);

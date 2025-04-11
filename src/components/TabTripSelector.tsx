@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useCallback, useState, useRef } from "react";
@@ -29,6 +30,7 @@ export function TabTripSelector({
   const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
   const lastClearTimeRef = useRef<number>(0);
   const clearThrottleTime = 2000; // 2 seconds minimum between clears
+  const lastTabChangeRef = useRef<number>(0);
 
   const clearAllFormState = useCallback(() => {
     const now = Date.now();
@@ -38,24 +40,13 @@ export function TabTripSelector({
     }
     
     lastClearTimeRef.current = now;
-    console.log("✨ Aggressively clearing ALL form state and DOM elements");
+    console.log("✨ Clearing form state for tab change");
     
+    // Clear only relevant session storage items to avoid aggressive refreshes
     sessionStorage.removeItem('dropLocation');
     sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('dropCoordinates');
-    sessionStorage.removeItem('pickupCoordinates');
-    sessionStorage.removeItem('dropLocationObj');
-    sessionStorage.removeItem('pickupLocationObj');
     
-    sessionStorage.removeItem('selectedCab');
-    sessionStorage.removeItem('hourlyPackage');
-    sessionStorage.removeItem('tourPackage');
-    sessionStorage.removeItem('bookingDetails');
-    sessionStorage.removeItem('calculatedFares');
-    sessionStorage.removeItem('distance');
-    sessionStorage.removeItem('airportDirection');
-    sessionStorage.removeItem('cabFares');
-    
+    // The code below was causing UI refresh issues, so we'll handle DOM updates more carefully
     const inputFields = document.querySelectorAll('input[type="text"]');
     inputFields.forEach(input => {
       const inputElement = input as HTMLInputElement;
@@ -64,27 +55,23 @@ export function TabTripSelector({
            inputElement.placeholder.toLowerCase().includes('drop') ||
            inputElement.placeholder.toLowerCase().includes('location'))) {
         
-        inputElement.value = '';
-        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
-        
-        try {
-          if ((inputElement as any)._valueTracker) {
-            (inputElement as any)._valueTracker.setValue('');
-          }
-        } catch (e) {
-          console.error("Error clearing React internal state:", e);
+        // Clear without triggering events that could cause UI refreshes
+        if (inputElement.value) {
+          inputElement.value = '';
         }
       }
     });
     
-    const clearEvent = new CustomEvent('locationCleared', { 
-      bubbles: true, 
-      detail: { source: 'TabTripSelector', timestamp: Date.now() } 
-    });
-    document.dispatchEvent(clearEvent);
+    // Only dispatch this event once to prevent cascading updates
+    if (now - parseInt(sessionStorage.getItem('lastLocationClearedEvent') || '0', 10) > clearThrottleTime) {
+      const clearEvent = new CustomEvent('locationCleared', { 
+        bubbles: true, 
+        detail: { source: 'TabTripSelector', timestamp: now } 
+      });
+      document.dispatchEvent(clearEvent);
+      sessionStorage.setItem('lastLocationClearedEvent', now.toString());
+    }
     
-    sessionStorage.setItem('lastFormClear', Date.now().toString());
   }, [clearThrottleTime]);
 
   const clearAllCacheData = useCallback(() => {
@@ -95,81 +82,23 @@ export function TabTripSelector({
     }
     
     lastClearTimeRef.current = now;
-    console.log("Clearing all cached data for trip type change");
+    console.log("Clearing cache data for trip type change");
     
     const oldTripType = sessionStorage.getItem('tripType');
     
-    sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('dropCoordinates');
-    sessionStorage.removeItem('pickupCoordinates');
-    sessionStorage.removeItem('dropLocationObj');
-    sessionStorage.removeItem('pickupLocationObj');
+    // Store the new trip type
+    sessionStorage.setItem('tripType', selectedTab);
+    sessionStorage.setItem('tripMode', tripMode);
     
-    const pickupInput = document.querySelector('input[placeholder*="pickup"], input[placeholder*="Pickup"]') as HTMLInputElement;
-    const dropInput = document.querySelector('input[placeholder*="drop"], input[placeholder*="Drop"]') as HTMLInputElement;
-    
-    if (pickupInput) {
-      pickupInput.value = '';
-      ['input', 'change', 'blur'].forEach(eventType => {
-        const event = new Event(eventType, { bubbles: true });
-        pickupInput.dispatchEvent(event);
-      });
-    }
-    
-    if (dropInput) {
-      dropInput.value = '';
-      ['input', 'change', 'blur'].forEach(eventType => {
-        const event = new Event(eventType, { bubbles: true });
-        dropInput.dispatchEvent(event);
-      });
-    }
-    
-    sessionStorage.removeItem('selectedCab');
-    sessionStorage.removeItem('hourlyPackage');
-    sessionStorage.removeItem('tourPackage');
-    sessionStorage.removeItem('bookingDetails');
-    sessionStorage.removeItem('calculatedFares');
-    sessionStorage.removeItem('distance');
-    sessionStorage.removeItem('airportDirection');
-    
+    // Only clear fare cache when trip type actually changes
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
       
       const lastFareCacheClear = parseInt(sessionStorage.getItem('lastFareCacheClear') || '0', 10);
       if (now - lastFareCacheClear > clearThrottleTime) {
         fareService.clearCache();
-        sessionStorage.removeItem('cabFares');
-        localStorage.removeItem('cabFares');
         sessionStorage.setItem('lastFareCacheClear', now.toString());
       }
-    }
-    
-    localStorage.removeItem('lastTripType');
-    localStorage.removeItem('lastTripMode');
-    
-    const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-', 'price-'];
-    
-    Object.keys(sessionStorage).forEach(key => {
-      for (const prefix of localKeys) {
-        if (key.startsWith(prefix)) {
-          console.log(`Removing cached item: ${key}`);
-          sessionStorage.removeItem(key);
-          break;
-        }
-      }
-    });
-    
-    sessionStorage.setItem('tripType', selectedTab);
-    sessionStorage.setItem('tripMode', tripMode);
-    sessionStorage.setItem('lastCacheClear', Date.now().toString());
-    
-    const hasDispatchedRecently = sessionStorage.getItem('lastCacheClearedEvent');
-    if (!hasDispatchedRecently || (now - parseInt(hasDispatchedRecently, 10)) > clearThrottleTime) {
-      document.dispatchEvent(new CustomEvent('cacheCleared', { 
-        detail: { tripType: selectedTab } 
-      }));
-      sessionStorage.setItem('lastCacheClearedEvent', now.toString());
     }
   }, [selectedTab, tripMode, clearThrottleTime]);
 
@@ -185,6 +114,8 @@ export function TabTripSelector({
       }
       
       sessionStorage.setItem('lastTabChangeTime', now.toString());
+      
+      // Clear data only when tab changes
       clearAllCacheData();
       clearAllFormState();
       setPrevTab(selectedTab);
@@ -207,6 +138,7 @@ export function TabTripSelector({
         setRefreshTimer(null);
       }
       
+      // Limit cab type reloads to prevent API hammering
       const lastCabTypeReload = parseInt(sessionStorage.getItem('lastCabTypeReload') || '0', 10);
       if (now - lastCabTypeReload > 5000) {
         const reloadTimer = setTimeout(() => {
@@ -235,7 +167,13 @@ export function TabTripSelector({
       return;
     }
     
+    if (value === selectedTab) {
+      console.log(`Tab ${value} already selected, ignoring click`);
+      return;
+    }
+    
     sessionStorage.setItem('lastTabClick', now.toString());
+    lastTabChangeRef.current = now;
     
     console.log(`Tab change requested: ${value} (current: ${selectedTab})`);
     
@@ -244,22 +182,11 @@ export function TabTripSelector({
       setRefreshTimer(null);
     }
     
+    // Perform clear operations only once
     clearAllFormState();
     clearAllCacheData();
     
-    const lastLocationClearedEvent = parseInt(sessionStorage.getItem('lastLocationClearedEvent') || '0', 10);
-    if (now - lastLocationClearedEvent > clearThrottleTime) {
-      window.dispatchEvent(new CustomEvent('locationCleared', { detail: { type: 'all' } }));
-      document.dispatchEvent(new CustomEvent('locationCleared', { detail: { type: 'all' } }));
-      sessionStorage.setItem('lastLocationClearedEvent', now.toString());
-    }
-    
-    const lastFareServiceClear = parseInt(sessionStorage.getItem('lastFareServiceClear') || '0', 10);
-    if (now - lastFareServiceClear > clearThrottleTime) {
-      fareService.clearCache();
-      sessionStorage.setItem('lastFareServiceClear', now.toString());
-    }
-    
+    // Set a timeout to ensure the state update happens after current execution
     setTimeout(() => {
       onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
     }, 50);

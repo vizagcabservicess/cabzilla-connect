@@ -413,8 +413,56 @@ export const vehicleAPI = {
 
 export const fareAPI = {
   getTourFares: async () => {
-    const response = await apiClient.get('/admin/tour-fares');
-    return response.data;
+    try {
+      // Try multiple endpoints with fallbacks to find the correct one
+      const urls = [
+        '/api/fares/tours.php',
+        '/api/tours.php',
+        '/api/tour-fares.php',
+        '/api/admin/tour-fares.php'
+      ];
+      
+      let response = null;
+      let data = null;
+      
+      for (const url of urls) {
+        try {
+          console.log(`Attempting to fetch tours from: ${url}`);
+          response = await fetch(getApiUrl(url), {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          if (!response.ok) {
+            console.log(`Endpoint ${url} returned ${response.status}, trying next...`);
+            continue;
+          }
+          
+          const text = await response.text();
+          
+          if (!text || text.trim() === '') {
+            console.log(`Empty response from ${url}, trying next endpoint`);
+            continue;
+          }
+          
+          data = JSON.parse(text);
+          console.log(`Successfully fetched tours from ${url}:`, data);
+          return data;
+        } catch (err) {
+          console.warn(`Error fetching from ${url}:`, err);
+        }
+      }
+      
+      // If all API attempts fail, fall back to local data
+      console.warn('Returning to default tour data as all endpoints failed');
+      return [];
+    } catch (error) {
+      console.error('Error in getTourFares:', error);
+      return [];
+    }
   },
   
   updateTourFare: async (tourId: string, fares: any) => {
