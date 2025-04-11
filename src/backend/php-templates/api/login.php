@@ -128,7 +128,8 @@ try {
                 'email' => $user['email'],
                 'role' => $user['role'],
                 'token' => $token // Also include token in user object for redundancy
-            ]
+            ],
+            'redirect' => $user['role'] === 'admin' ? '/admin/dashboard' : '/dashboard'
         ];
         
         // Log successful login and token for debugging

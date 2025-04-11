@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -58,20 +59,43 @@ if (!$conn) {
 }
 
 try {
+    // First, ensure the tour_fares table has columns for all vehicle types
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
+    $vehiclesResult = $conn->query($vehiclesQuery);
+    
+    // Get existing columns in tour_fares table
+    $columnsQuery = "SHOW COLUMNS FROM tour_fares";
+    $columnsResult = $conn->query($columnsQuery);
+    
+    if ($columnsResult) {
+        $existingColumns = [];
+        while ($column = $columnsResult->fetch_assoc()) {
+            $existingColumns[] = $column['Field'];
+        }
+        error_log("Existing tour_fares columns: " . json_encode($existingColumns));
+    }
+    
+    // Add columns for each vehicle if needed
+    if ($vehiclesResult) {
+        while ($row = $vehiclesResult->fetch_assoc()) {
+            // Normalize the column name
+            $columnName = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $row['vehicle_id']));
+            
+            // If column doesn't exist, add it
+            if (!in_array($columnName, $existingColumns)) {
+                try {
+                    $alterTableSql = "ALTER TABLE tour_fares ADD COLUMN $columnName DECIMAL(10,2) DEFAULT 0.00";
+                    error_log("Adding new column for vehicle {$row['name']}: $alterTableSql");
+                    $conn->query($alterTableSql);
+                } catch (Exception $e) {
+                    error_log("Error adding column $columnName: " . $e->getMessage());
+                }
+            }
+        }
+    }
+    
     // GET request - Return all tour fares
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // First sync tour_fares table with vehicles to ensure all columns exist
-        $columnsQuery = "SHOW COLUMNS FROM tour_fares";
-        $columnsResult = $conn->query($columnsQuery);
-        
-        if ($columnsResult) {
-            $existingColumns = [];
-            while ($column = $columnsResult->fetch_assoc()) {
-                $existingColumns[] = $column['Field'];
-            }
-            error_log("Existing tour_fares columns: " . json_encode($existingColumns));
-        }
-        
         // Query tour fares from the database
         $query = "SELECT * FROM tour_fares";
         
@@ -92,7 +116,7 @@ try {
         while ($row = $result->fetch_assoc()) {
             // Convert database columns to camelCase for frontend
             $tourFare = [
-                'id' => $row['id'],
+                'id' => intval($row['id']),
                 'tourId' => $row['tour_id'],
                 'tourName' => $row['tour_name']
             ];
@@ -113,16 +137,7 @@ try {
     // POST request to update existing tour fare
     else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Logic for updating tour fare
-        // Process similar to fares-update.php but adjusted for tour fares
-        $requestData = json_decode($rawInput, true);
-        
-        if (!isset($requestData['tourId'])) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Tour ID is required'], 400);
-            exit;
-        }
-        
-        // Enhanced logic for updating fares will go here
-        // For now, redirect to the existing endpoint
+        // Redirect to the existing endpoint
         include_once __DIR__ . '/fares-update.php';
         exit;
     }

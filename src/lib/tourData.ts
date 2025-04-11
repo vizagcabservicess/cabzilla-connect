@@ -107,7 +107,19 @@ export const loadTourFares = async (): Promise<TourFares> => {
               typeof value === 'number' &&
               !['id', 'tourId', 'tourName'].includes(key)
             ) {
-              fareEntry[key] = value;
+              // Normalize keys to prevent duplicates
+              let normalizedKey = key;
+              
+              // Map specific keys to standard vehicle types
+              if (key === 'mpv' || key === 'innova_crysta') {
+                normalizedKey = 'innova';
+              } else if (key === 'toyota' || key === 'dzire_cng') {
+                normalizedKey = 'sedan';
+              } else if (key === 'tempo_traveller' || key === 'tempo') {
+                normalizedKey = 'tempo';
+              }
+              
+              fareEntry[normalizedKey] = value;
             }
           });
           

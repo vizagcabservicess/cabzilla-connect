@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -5,7 +6,7 @@ require_once __DIR__ . '/../../config.php';
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
@@ -41,14 +42,6 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         // For development/testing - assume admin for now
         $isAdmin = true;
         error_log("Valid token found: " . substr($token, 0, 15) . "...");
-        
-        // In production would verify token
-        // $payload = verifyJwtToken($token);
-        // error_log("JWT verification result: " . json_encode($payload));
-        // if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-        //     $isAdmin = true;
-        //     error_log("User authenticated as admin");
-        // }
     } else {
         error_log("Invalid token found in Authorization header: " . $token);
     }
@@ -68,42 +61,62 @@ if (!$conn) {
     exit;
 }
 
-// Define vehicle ID mappings - map frontend IDs to database column names
+// Define normalized vehicle ID mappings to prevent duplicates
+// This will map different forms of the same vehicle type to a single database column
 $vehicleIdMap = [
-    // UI ID to database column mapping
-    'MPV' => 'innova',
+    // Standard vehicle types - canonical mapping
+    'sedan' => 'sedan',
+    'ertiga' => 'ertiga',
+    'innova' => 'innova',
+    'tempo' => 'tempo',
+    'luxury' => 'luxury',
+    'mpv' => 'mpv',
+    
+    // Map variant names to standard columns
+    'MPV' => 'mpv',
     'innova_crysta' => 'innova',
     'innova_hycross' => 'innova',
     'etios' => 'sedan',
-    'dzire_cng' => 'sedan',
+    'dzire_cng' => 'dzire_cng',
     'tempo_traveller' => 'tempo',
-    'Toyota' => 'sedan',
-    'Dzire CNG' => 'sedan',
+    'Toyota' => 'toyota',
+    'Dzire CNG' => 'dzire_cng',
     
     // Handle numeric IDs that might come from the vehicles table
     '1' => 'sedan',
     '2' => 'ertiga',
-    '1266' => 'innova',
-    '1299' => 'sedan',
-    '1311' => 'sedan',
+    '1266' => 'mpv',   // Changed from innova to MPV based on your database
+    '1299' => 'toyota',
+    '1311' => 'dzire_cng',
     '1313' => 'innova',
     '1314' => 'tempo'
 ];
 
 // Fetch dynamic vehicle mapping from database
 try {
-    $vehiclesQuery = "SELECT id, vehicle_id FROM vehicles";
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
     if ($vehiclesResult) {
         while ($row = $vehiclesResult->fetch_assoc()) {
-            // Add dynamic mapping based on database
-            // Map numeric IDs to column names
-            $vehicleIdMap[$row['id']] = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $row['vehicle_id']));
+            // Create a normalized column name based on vehicle_id
+            $normalizedId = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $row['vehicle_id']));
+            
+            // Map vehicle ID and name to the normalized column
+            $vehicleIdMap[$row['id']] = $normalizedId;
+            $vehicleIdMap[$row['vehicle_id']] = $normalizedId;
+            $vehicleIdMap[$row['name']] = $normalizedId;
+            
+            // Also map lowercase versions
+            $vehicleIdMap[strtolower($row['vehicle_id'])] = $normalizedId;
+            $vehicleIdMap[strtolower($row['name'])] = $normalizedId;
+            
+            // Log the mapping
+            error_log("Vehicle mapping: ID {$row['id']} ({$row['name']}) -> column {$normalizedId}");
         }
     }
     
-    error_log("Extended vehicle ID mapping: " . json_encode($vehicleIdMap));
+    error_log("Full vehicle ID mapping: " . json_encode($vehicleIdMap));
 } catch (Exception $e) {
     error_log("Error fetching vehicle mappings: " . $e->getMessage());
 }
@@ -164,50 +177,49 @@ try {
         $updateTypes = "";
         $updateValues = [];
         
-        // Get all dynamic columns from tour_fares table
-        $dynamicColumns = [];
-        $columnsQuery = "SHOW COLUMNS FROM tour_fares";
-        $columnsResult = $conn->query($columnsQuery);
+        // Process the request data and map to normalized column names
+        $processedVehicles = [];
         
-        if ($columnsResult) {
-            while ($column = $columnsResult->fetch_assoc()) {
-                // Skip non-fare columns
-                if (!in_array($column['Field'], ['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'])) {
-                    $dynamicColumns[] = $column['Field'];
-                }
+        // Loop through all request data
+        foreach ($requestData as $key => $value) {
+            // Skip non-vehicle fields
+            if (in_array($key, ['tourId', 'tourName', 'id'])) {
+                continue;
             }
-        }
-        
-        error_log("Dynamic columns for update: " . json_encode($dynamicColumns));
-        
-        // Process each column that exists in the database
-        foreach ($dynamicColumns as $column) {
-            $columnUpdated = false;
             
-            // Check if this column exists directly in the request
-            if (isset($requestData[$column])) {
-                $updateColumns[] = "$column = ?";
+            // Try to map the key to a normalized column name
+            $columnName = isset($vehicleIdMap[$key]) ? $vehicleIdMap[$key] : $key;
+            
+            // Skip if this vehicle type has already been processed
+            if (in_array($columnName, $processedVehicles)) {
+                error_log("Skipping duplicate vehicle type: {$key} -> {$columnName}");
+                continue;
+            }
+            
+            // Add to processed vehicles
+            $processedVehicles[] = $columnName;
+            
+            // Check if the column exists in the database
+            if (in_array($columnName, $existingColumns)) {
+                $updateColumns[] = "$columnName = ?";
                 $updateTypes .= "d";
-                $updateValues[] = floatval($requestData[$column]);
-                $columnUpdated = true;
-                error_log("Adding direct column: $column = " . floatval($requestData[$column]));
+                $updateValues[] = floatval($value);
+                error_log("Adding column to update: $columnName = " . floatval($value));
             } else {
-                // Check if there's a mapped ID for this column
-                foreach ($vehicleIdMap as $requestId => $dbColumn) {
-                    if ($dbColumn === $column && isset($requestData[$requestId])) {
-                        $updateColumns[] = "$column = ?";
-                        $updateTypes .= "d";
-                        $updateValues[] = floatval($requestData[$requestId]);
-                        $columnUpdated = true;
-                        error_log("Mapped $requestId to database column $column = " . floatval($requestData[$requestId]));
-                        break;
-                    }
+                // Column doesn't exist, need to add it first
+                try {
+                    $alterTableSql = "ALTER TABLE tour_fares ADD COLUMN $columnName DECIMAL(10,2) DEFAULT 0.00";
+                    error_log("Adding new column: $alterTableSql");
+                    $conn->query($alterTableSql);
+                    
+                    // Now add to update
+                    $updateColumns[] = "$columnName = ?";
+                    $updateTypes .= "d";
+                    $updateValues[] = floatval($value);
+                    error_log("Added new column and value: $columnName = " . floatval($value));
+                } catch (Exception $e) {
+                    error_log("Error adding column $columnName: " . $e->getMessage());
                 }
-            }
-            
-            if (!$columnUpdated) {
-                // Keep existing value by not including it in the update
-                error_log("No value found for column $column, keeping existing value");
             }
         }
         
