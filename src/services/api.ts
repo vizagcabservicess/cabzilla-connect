@@ -1,4 +1,3 @@
-
 // Import necessary types
 import { TourFare } from '@/types/api';
 import axios from 'axios';
@@ -91,6 +90,17 @@ export const bookingAPI = {
       return response.data || [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
+      throw error;
+    }
+  },
+  
+  // Add the missing getAllBookings method
+  getAllBookings: async (): Promise<any[]> => {
+    try {
+      const response = await apiClient.get('/api/admin/booking.php');
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching all bookings:', error);
       throw error;
     }
   },
