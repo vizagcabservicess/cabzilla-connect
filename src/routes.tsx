@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -9,32 +8,12 @@ import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import CabsPage from './pages/CabsPage';
+import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
-// Import the useIsMobile hook
-import { useIsMobile } from './hooks/use-mobile';
-
-// Create a conditional wrapper component for mobile detection
-const MobileAwareRoute = ({ element, mobileHidden = false }) => {
-  const isMobile = useIsMobile();
-  
-  // Force component to re-render and check mobile status
-  React.useEffect(() => {
-    const forceUpdate = () => {
-      console.log('Mobile detection updated:', isMobile);
-    };
-    forceUpdate();
-    window.addEventListener('resize', forceUpdate);
-    return () => window.removeEventListener('resize', forceUpdate);
-  }, [isMobile]);
-  
-  return !isMobile || !mobileHidden ? element : <NotFound />;
-};
-
-// Define the routes
-const getRoutes = () => [
+export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
@@ -86,12 +65,13 @@ const getRoutes = () => [
     element: <CabsPage />,
   },
   {
+    path: '/tours',
+    element: <ToursPage />,
+  },
+  {
     path: '*',
     element: <NotFound />,
   },
-];
-
-// Export the router with the routes
-export const router = createBrowserRouter(getRoutes());
+]);
 
 export default router;

@@ -3,12 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, ArrowLeft } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const NotFound = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const [isApiError, setIsApiError] = useState(false);
   
   useEffect(() => {
@@ -41,10 +39,10 @@ const NotFound = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="text-center max-w-md px-4">
         <div className="flex justify-center mb-6">
-          <AlertCircle size={isMobile ? 50 : 60} className="text-red-500" />
+          <AlertCircle size={60} className="text-red-500" />
         </div>
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">404</h1>
-        <p className="text-lg md:text-xl text-gray-600 mb-4">
+        <h1 className="text-4xl font-bold mb-4">404</h1>
+        <p className="text-xl text-gray-600 mb-4">
           {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
         </p>
         <p className="text-gray-500 mb-6">
@@ -53,7 +51,7 @@ const NotFound = () => {
             : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
         </p>
         
-        <div className={`flex ${isMobile ? 'flex-col' : 'sm:flex-row'} gap-4 justify-center`}>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button 
             variant="outline" 
             onClick={goBack}
