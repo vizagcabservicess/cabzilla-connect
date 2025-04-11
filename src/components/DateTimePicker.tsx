@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface DateTimePickerProps {
   date?: Date;
@@ -29,6 +30,15 @@ export function DateTimePicker({
     date && date instanceof Date ? format(date, "HH:mm") : null
   );
   
+  // For better time selection on mobile
+  const [selectedHour, setSelectedHour] = useState<string>(
+    date && date instanceof Date ? date.getHours().toString().padStart(2, '0') : '12'
+  );
+  const [selectedMinute, setSelectedMinute] = useState<string>(
+    date && date instanceof Date ? date.getMinutes().toString().padStart(2, '0') : '00'
+  );
+  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  
   // Ensure date is a valid Date object
   useEffect(() => {
     if (date && !(date instanceof Date)) {
@@ -37,26 +47,51 @@ export function DateTimePicker({
     }
   }, [date, onDateChange]);
 
+  // Update hour/minute when date changes
+  useEffect(() => {
+    if (date && date instanceof Date) {
+      setSelectedHour(date.getHours().toString().padStart(2, '0'));
+      setSelectedMinute(date.getMinutes().toString().padStart(2, '0'));
+      setSelectedTime(format(date, "HH:mm"));
+    }
+  }, [date]);
+
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
   };
 
   const handleApply = () => {
-    if (!selectedTime) return;
-
-    const [hours, minutes] = selectedTime.split(":").map(Number);
-    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-      alert("Invalid time format. Please use HH:mm (24-hour format).");
-      return;
+    // For direct input time
+    if (selectedTime) {
+      const [hours, minutes] = selectedTime.split(":").map(Number);
+      if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+        if (date && date instanceof Date) {
+          const newDate = new Date(date);
+          newDate.setHours(hours);
+          newDate.setMinutes(minutes);
+          onDateChange(newDate);
+        }
+      }
     }
-
-    if (date && date instanceof Date) {
-      const newDate = new Date(date);
-      newDate.setHours(hours);
-      newDate.setMinutes(minutes);
-      onDateChange(newDate);
+    // For dropdown-based selection
+    else if (selectedHour && selectedMinute) {
+      const hours = parseInt(selectedHour, 10);
+      const minutes = parseInt(selectedMinute, 10);
+      
+      if (date && date instanceof Date) {
+        const newDate = new Date(date);
+        newDate.setHours(hours);
+        newDate.setMinutes(minutes);
+        onDateChange(newDate);
+      }
     }
+    
+    setIsTimePickerOpen(false);
   };
+
+  // Generate hour and minute options
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
   return (
     <div className="space-y-2">
@@ -91,16 +126,76 @@ export function DateTimePicker({
             initialFocus
             className={cn("p-3 pointer-events-auto")}
           />
-          <div className="p-4 flex items-center space-x-2">
-            <Input
-              type="time"
-              value={selectedTime || ""}
-              onChange={handleTimeChange}
-              className="max-w-[80px]"
-            />
-            <Button size="sm" onClick={handleApply}>
-              Apply
-            </Button>
+          
+          {/* Improved time picker UI */}
+          <div className="p-4 border-t border-gray-200">
+            {isMobile ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Select Time</span>
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
+                  >
+                    <Clock size={16} className="mr-1" />
+                    {selectedHour}:{selectedMinute}
+                  </Button>
+                </div>
+                
+                {isTimePickerOpen && (
+                  <div className="mt-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Hour</label>
+                        <Select value={selectedHour} onValueChange={setSelectedHour}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Hour" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px]">
+                            {hourOptions.map((hour) => (
+                              <SelectItem key={hour} value={hour}>
+                                {hour}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Minute</label>
+                        <Select value={selectedMinute} onValueChange={setSelectedMinute}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Minute" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px]">
+                            {minuteOptions.map((minute) => (
+                              <SelectItem key={minute} value={minute}>
+                                {minute}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={handleApply} className="w-full">
+                      Apply Time
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="time"
+                  value={selectedTime || ""}
+                  onChange={handleTimeChange}
+                  className="max-w-[110px]"
+                />
+                <Button size="sm" onClick={handleApply}>
+                  Apply
+                </Button>
+              </div>
+            )}
           </div>
         </PopoverContent>
       </Popover>

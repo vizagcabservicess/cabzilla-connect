@@ -331,7 +331,7 @@ export function LocationInput({
         <Input
           type="text"
           ref={inputRef}
-          placeholder={placeholder}
+          placeholder={isPickupLocation ? "Select a location in Visakhapatnam" : placeholder}
           className={className + (locationError ? " border-red-500" : "")}
           value={address}
           onChange={(e) => {
@@ -368,8 +368,9 @@ export function LocationInput({
       {locationError && (
         <p className="text-xs text-red-500 mt-1">{locationError}</p>
       )}
+      {/* Just show one help text (removing duplicate) */}
       <p className="text-xs text-gray-500">
-        {isPickupLocation ? "Select a location in India" : "Select a destination in India"}
+        {isPickupLocation ? "Select a location in Visakhapatnam" : "Select a destination in India"}
       </p>
     </div>
   );
