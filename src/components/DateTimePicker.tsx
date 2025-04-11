@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface DateTimePickerProps {
   date?: Date;
@@ -23,9 +24,18 @@ export function DateTimePicker({
   className,
   label
 }: DateTimePickerProps) {
+  const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(
-    date ? format(date, "HH:mm") : null
+    date && date instanceof Date ? format(date, "HH:mm") : null
   );
+  
+  // Ensure date is a valid Date object
+  useEffect(() => {
+    if (date && !(date instanceof Date)) {
+      console.error("Invalid date passed to DateTimePicker:", date);
+      onDateChange(undefined);
+    }
+  }, [date, onDateChange]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
@@ -40,7 +50,7 @@ export function DateTimePicker({
       return;
     }
 
-    if (date) {
+    if (date && date instanceof Date) {
       const newDate = new Date(date);
       newDate.setHours(hours);
       newDate.setMinutes(minutes);
@@ -63,18 +73,19 @@ export function DateTimePicker({
           <Button
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              "w-full justify-start text-left font-normal rounded-md",
+              !date && "text-muted-foreground",
+              isMobile && "text-sm py-2.5"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
+            {date && date instanceof Date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="center" side="bottom">
+        <PopoverContent className="w-auto p-0" align="center" side={isMobile ? "bottom" : "bottom"} sideOffset={5}>
           <Calendar
             mode="single"
-            selected={date}
+            selected={date instanceof Date ? date : undefined}
             onSelect={onDateChange}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
