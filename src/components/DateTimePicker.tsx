@@ -105,13 +105,8 @@ export function DateTimePicker({
             <Button 
               size="sm" 
               onClick={handleApply} 
-              className="whitespace-nowrap pointer-events-auto touch-manipulation"
+              className="whitespace-nowrap pointer-events-auto"
               type="button"
-              onTouchStart={(e) => {
-                // Prevent default to avoid any potential issues
-                e.preventDefault();
-                handleApply();
-              }}
             >
               Apply Time
             </Button>
