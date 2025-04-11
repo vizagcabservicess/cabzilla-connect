@@ -9,7 +9,6 @@ import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import CabsPage from './pages/CabsPage';
-import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
@@ -85,10 +84,6 @@ const getRoutes = () => [
   {
     path: '/cabs',
     element: <CabsPage />,
-  },
-  {
-    path: '/tours',
-    element: <MobileAwareRoute element={<ToursPage />} mobileHidden={true} />,
   },
   {
     path: '*',

@@ -1,6 +1,6 @@
 
 import { useEffect } from 'react';
-import { RouterProvider } from 'react-router-dom';
+import { RouterProvider, useNavigate } from 'react-router-dom';
 import { router } from './routes';
 import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
 import { Toaster as ToastUIToaster } from './components/ui/toaster';
@@ -36,8 +36,23 @@ function App() {
       document.body.style.zoom = '100%';
     }, 10);
     
+    // Add event listener for automatic navigation after cab selection
+    const handleCabSelection = (e: CustomEvent) => {
+      if (e.detail?.selectedCab && e.detail?.autoNavigate) {
+        // Get the booking details from the event or sessionStorage
+        const bookingDetails = e.detail.bookingDetails || JSON.parse(sessionStorage.getItem('bookingDetails') || '{}');
+        if (bookingDetails) {
+          // Use window.location to navigate since we're outside of React Router context
+          window.location.href = '/booking-confirmation';
+        }
+      }
+    };
+    
+    window.addEventListener('cabSelected', handleCabSelection as EventListener);
+    
     return () => {
       window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('cabSelected', handleCabSelection as EventListener);
     };
   }, []);
 

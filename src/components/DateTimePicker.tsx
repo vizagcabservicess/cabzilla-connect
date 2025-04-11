@@ -39,6 +39,17 @@ export function DateTimePicker({
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
+    
+    // Automatically apply time changes immediately for better UX
+    if (e.target.value && date) {
+      const [hours, minutes] = e.target.value.split(":").map(Number);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        const newDate = new Date(date);
+        newDate.setHours(hours);
+        newDate.setMinutes(minutes);
+        onDateChange(newDate);
+      }
+    }
   };
 
   const handleApply = () => {
@@ -91,6 +102,7 @@ export function DateTimePicker({
             value={selectedTime || ""}
             onChange={handleTimeChange}
             className="max-w-[120px]"
+            onClick={(e) => e.currentTarget.showPicker()} // Force time picker to show on mobile
           />
         </div>
         <Button size="sm" onClick={handleApply}>
