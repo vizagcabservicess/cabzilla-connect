@@ -15,6 +15,10 @@ apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
     if (token) {
+      // Ensure we always have the Authorization header for all request methods
+      if (!config.headers) {
+        config.headers = {};
+      }
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -54,8 +58,14 @@ export const fareAPI = {
   // Add a new tour fare
   addTourFare: async (fareData: any): Promise<any> => {
     try {
+      // Ensure auth token is included in PUT request headers
+      console.log('Sending new tour fare with auth token:', localStorage.getItem('authToken'));
       // Use the correct endpoint for adding tour fares
-      const response = await apiClient.put('/api/admin/fares-update.php', fareData);
+      const response = await apiClient.put('/api/admin/fares-update.php', fareData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Error adding tour fare:', error);
@@ -67,13 +77,40 @@ export const fareAPI = {
   deleteTourFare: async (tourId: string): Promise<any> => {
     try {
       // Use the correct endpoint with query parameter
-      const response = await apiClient.delete(`/api/admin/fares-update.php?tourId=${tourId}`);
+      // Explicitly include the auth token in the headers
+      const response = await apiClient.delete(`/api/admin/fares-update.php?tourId=${tourId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Error deleting tour fare:', error);
       throw error;
     }
   },
+  
+  // Get vehicle pricing - placeholder implementation for compatibility
+  getVehiclePricing: async (): Promise<any[]> => {
+    try {
+      // This is a redirect to use the tour fares API for now
+      return await fareAPI.getTourFares();
+    } catch (error) {
+      console.error('Error fetching vehicle pricing:', error);
+      throw error;
+    }
+  },
+  
+  // Update vehicle pricing - placeholder implementation for compatibility
+  updateVehiclePricing: async (pricingData: any): Promise<any> => {
+    try {
+      // Redirect to use the tour fares update API
+      return await fareAPI.updateTourFares(pricingData);
+    } catch (error) {
+      console.error('Error updating vehicle pricing:', error);
+      throw error;
+    }
+  }
 };
 
 // Create booking API service - now properly exported

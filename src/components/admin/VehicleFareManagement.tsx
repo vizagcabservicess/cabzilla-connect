@@ -51,7 +51,9 @@ export function VehicleFareManagement() {
     const fetchData = async () => {
       try {
         setError(null);
-        const vehicleData = await getVehicleData(true, true); // Force refresh and include inactive
+        // Make sure to include inactive vehicles too for more comprehensive mapping
+        const vehicleData = await getVehicleData(true, true);
+        console.log("Fetched vehicle data:", vehicleData);
         setVehicles(vehicleData);
         
         // Initialize form default values for each vehicle
@@ -66,9 +68,8 @@ export function VehicleFareManagement() {
         // Update form with new default values
         form.reset(defaultValues);
         
-        // Fetch tour fares
-        const fares = await fareAPI.getTourFares();
-        setTourFares(fares);
+        // Fetch tour fares to populate vehicle pricing
+        await fetchTourFares();
       } catch (error) {
         console.error("Error fetching data:", error);
         setError("Failed to load vehicle and fare data");
@@ -115,18 +116,27 @@ export function VehicleFareManagement() {
       
       console.log("Submitting vehicle fare data:", fareData);
       
-      // Use the general updateTourFares method since we don't have a specific vehicle pricing update method
+      // Use the fareAPI.updateTourFares method for updating vehicle pricing
       const response = await fareAPI.updateTourFares(fareData);
       console.log("Vehicle fare update response:", response);
       
       toast.success("Vehicle pricing updated successfully");
       
       // Refresh the tour fares
-      const updatedFares = await fareAPI.getTourFares();
-      setTourFares(updatedFares);
-    } catch (error) {
+      await fetchTourFares();
+    } catch (error: any) {
       console.error("Error updating vehicle pricing:", error);
-      const errorMessage = error.response?.data?.message || "Failed to update vehicle pricing";
+      // Enhanced error handling to expose more details about the error
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.statusText || 
+                          error.message || 
+                          "Failed to update vehicle pricing";
+      
+      // Log detailed error information for debugging
+      console.error("Status:", error.response?.status);
+      console.error("Data:", error.response?.data);
+      console.error("Headers:", error.response?.headers);
+      
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -134,10 +144,49 @@ export function VehicleFareManagement() {
     }
   };
   
+  const fetchTourFares = async () => {
+    try {
+      setIsRefreshing(true);
+      
+      // Fetch tour fares data using the API
+      const data = await fareAPI.getTourFares();
+      console.log("Fetched tour fares:", data);
+      
+      if (Array.isArray(data) && data.length > 0) {
+        setTourFares(data);
+      } else {
+        console.warn("Empty or invalid tour fares data:", data);
+        setError("No tour fares data available.");
+      }
+      
+      return data;
+    } catch (error) {
+      console.error("Error fetching tour fares:", error);
+      setError("Failed to load tour fares data");
+      toast.error("Failed to load fare data");
+      return [];
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Vehicle Fare Management</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle>Vehicle Fare Management</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={fetchTourFares} 
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {error && (
