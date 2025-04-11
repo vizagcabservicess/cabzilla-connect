@@ -149,10 +149,10 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
-      // Convert form values to the shape expected by the API
+      // Create base request with required fields to satisfy TypeScript
       const fareUpdateRequest: FareUpdateRequest = {
         tourId: values.tourId,
-        sedan: 0, // Default values to satisfy TypeScript
+        sedan: 0,
         ertiga: 0,
         innova: 0,
         tempo: 0,
@@ -165,6 +165,7 @@ export function FareManagement() {
         fareUpdateRequest[vehicle.id] = values[vehicle.id] || 0;
       });
       
+      // FIX: Use the fareAPI.updateTourFares method which handles the correct endpoint
       const data = await fareAPI.updateTourFares(fareUpdateRequest);
       console.log("Fare update response:", data);
       
