@@ -1,6 +1,7 @@
+
 // Import necessary types
 import { TourFare } from '@/types/api';
-import axios, { AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
 
 // Create an axios instance with defaults
 const apiClient = axios.create({
@@ -15,9 +16,11 @@ apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
     if (token) {
-      // Ensure config.headers is properly initialized as AxiosRequestConfig['headers']
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+      // Ensure config.headers is properly initialized as AxiosHeaders
+      if (!config.headers) {
+        config.headers = new AxiosHeaders();
+      }
+      config.headers.set('Authorization', `Bearer ${token}`);
     }
     return config;
   },
