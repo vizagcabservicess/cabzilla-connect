@@ -35,7 +35,13 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      const response = await authAPI.login(data);
+      // Ensure we're passing the correct type for login
+      const credentials = {
+        email: data.email,
+        password: data.password
+      };
+      
+      const response = await authAPI.login(credentials);
       
       console.log('Login response:', response);
       
