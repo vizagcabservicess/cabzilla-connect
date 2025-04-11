@@ -1,14 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Clock } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar as CalendarIcon } from "lucide-react";
 
 export interface DateTimePickerProps {
   date?: Date;
@@ -25,121 +23,29 @@ export function DateTimePicker({
   className,
   label
 }: DateTimePickerProps) {
-  const isMobile = useIsMobile();
-  
-  // For better time selection on mobile
-  const [selectedHour, setSelectedHour] = useState<string>(
-    date && date instanceof Date ? date.getHours().toString().padStart(2, '0') : '12'
+  const [selectedTime, setSelectedTime] = useState<string | null>(
+    date ? format(date, "HH:mm") : null
   );
-  const [selectedMinute, setSelectedMinute] = useState<string>(
-    date && date instanceof Date ? date.getMinutes().toString().padStart(2, '0') : '00'
-  );
-  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<string>(
-    date && date instanceof Date ? format(date, "HH:mm") : "12:00"
-  );
-  
-  // Ensure date is a valid Date object
-  useEffect(() => {
-    if (date && !(date instanceof Date)) {
-      console.error("Invalid date passed to DateTimePicker:", date);
-      onDateChange(undefined);
-    }
-  }, [date, onDateChange]);
-
-  // Update hour/minute when date changes
-  useEffect(() => {
-    if (date && date instanceof Date) {
-      setSelectedHour(date.getHours().toString().padStart(2, '0'));
-      setSelectedMinute(date.getMinutes().toString().padStart(2, '0'));
-      setSelectedTime(format(date, "HH:mm"));
-    }
-  }, [date]);
-
-  // Apply time immediately when date is selected
-  const handleCalendarSelect = (newDate: Date | undefined) => {
-    if (newDate) {
-      const hours = parseInt(selectedHour, 10);
-      const minutes = parseInt(selectedMinute, 10);
-      
-      newDate.setHours(hours);
-      newDate.setMinutes(minutes);
-      onDateChange(newDate);
-    } else {
-      onDateChange(undefined);
-    }
-  };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
-    if (!date || !(date instanceof Date)) return;
-    
-    const timeStr = e.target.value;
-    if (!timeStr) return;
-    
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-      const newDate = new Date(date);
-      newDate.setHours(hours);
-      newDate.setMinutes(minutes);
-      onDateChange(newDate);
-    }
   };
 
   const handleApply = () => {
-    if (!date || !(date instanceof Date)) return;
-    
-    // Apply selected time directly
-    const newDate = new Date(date);
-    
-    const hours = parseInt(selectedHour, 10);
-    const minutes = parseInt(selectedMinute, 10);
-    
-    if (!isNaN(hours) && !isNaN(minutes)) {
+    if (!selectedTime) return;
+
+    const [hours, minutes] = selectedTime.split(":").map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      alert("Invalid time format. Please use HH:mm (24-hour format).");
+      return;
+    }
+
+    if (date) {
+      const newDate = new Date(date);
       newDate.setHours(hours);
       newDate.setMinutes(minutes);
       onDateChange(newDate);
     }
-    
-    setIsTimePickerOpen(false);
-  };
-
-  // Apply time selection changes immediately for mobile dropdown
-  const handleHourChange = (hour: string) => {
-    setSelectedHour(hour);
-    if (date && date instanceof Date) {
-      const newDate = new Date(date);
-      newDate.setHours(parseInt(hour, 10));
-      newDate.setMinutes(parseInt(selectedMinute, 10));
-      onDateChange(newDate);
-    }
-  };
-
-  const handleMinuteChange = (minute: string) => {
-    setSelectedMinute(minute);
-    if (date && date instanceof Date) {
-      const newDate = new Date(date);
-      newDate.setHours(parseInt(selectedHour, 10));
-      newDate.setMinutes(parseInt(minute, 10));
-      onDateChange(newDate);
-    }
-  };
-
-  // Generate hour and minute options
-  const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-  const minuteOptions = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
-
-  // Format AM/PM time for display
-  const formatTimeDisplay = (date: Date) => {
-    if (!date || !(date instanceof Date)) {
-      return '12:00 AM';
-    }
-    
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
   return (
@@ -157,113 +63,33 @@ export function DateTimePicker({
           <Button
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal rounded-md",
-              !date && "text-muted-foreground",
-              isMobile && "text-sm py-2.5"
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date && date instanceof Date ? (
-              <>
-                {format(date, "PP")} {formatTimeDisplay(date)}
-              </>
-            ) : (
-              <span>Pick a date</span>
-            )}
+            {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="center" side={isMobile ? "bottom" : "bottom"} sideOffset={5}>
+        <PopoverContent className="w-auto p-0" align="center" side="bottom">
           <Calendar
             mode="single"
-            selected={date instanceof Date ? date : undefined}
-            onSelect={handleCalendarSelect}
+            selected={date}
+            onSelect={onDateChange}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
             className={cn("p-3 pointer-events-auto")}
           />
-          
-          {/* Improved time picker UI */}
-          <div className="p-4 border-t border-gray-200">
-            {isMobile ? (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Select Time</span>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
-                    className="flex items-center"
-                  >
-                    <Clock size={16} className="mr-1" />
-                    {date && date instanceof Date ? formatTimeDisplay(date) : `${selectedHour}:${selectedMinute}`}
-                  </Button>
-                </div>
-                
-                {isTimePickerOpen && (
-                  <div className="mt-2 space-y-4">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Hour</label>
-                        <Select value={selectedHour} onValueChange={handleHourChange}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Hour" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px] bg-white">
-                            {hourOptions.map((hour) => (
-                              <SelectItem key={hour} value={hour}>
-                                {hour}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Minute</label>
-                        <Select value={selectedMinute} onValueChange={handleMinuteChange}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Minute" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px] bg-white">
-                            {minuteOptions.map((minute) => (
-                              <SelectItem key={minute} value={minute}>
-                                {minute}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <Button onClick={handleApply} size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                      Apply Time
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="time"
-                  value={selectedTime || ""}
-                  onChange={handleTimeChange}
-                  className="max-w-[110px]"
-                />
-                <Button 
-                  size="sm" 
-                  onClick={() => {
-                    if (date && date instanceof Date && selectedTime) {
-                      const [hours, minutes] = selectedTime.split(":").map(Number);
-                      const newDate = new Date(date);
-                      newDate.setHours(hours || 0);
-                      newDate.setMinutes(minutes || 0);
-                      onDateChange(newDate);
-                    }
-                  }} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Apply
-                </Button>
-              </div>
-            )}
+          <div className="p-4 flex items-center space-x-2">
+            <Input
+              type="time"
+              value={selectedTime || ""}
+              onChange={handleTimeChange}
+              className="max-w-[80px]"
+            />
+            <Button size="sm" onClick={handleApply}>
+              Apply
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

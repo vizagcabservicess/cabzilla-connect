@@ -65,10 +65,6 @@ export const router = createBrowserRouter([
     element: <CabsPage />,
   },
   {
-    path: '/cabs/:tripType',
-    element: <CabsPage />,
-  },
-  {
     path: '/tours',
     element: <ToursPage />,
   },

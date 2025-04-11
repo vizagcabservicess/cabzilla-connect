@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -70,18 +69,6 @@ const CabsPage = () => {
   
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
-  
-  // Determine if form is valid for search button
-  const isFormValid = () => {
-    if (tripType === "local") {
-      return !!pickup && !!pickupDate;
-    } else {
-      if (tripMode === "round-trip") {
-        return !!pickup && !!dropoff && !!pickupDate && !!returnDate;
-      }
-      return !!pickup && !!dropoff && !!pickupDate;
-    }
-  };
   
   useEffect(() => {
     if (pickup) sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
@@ -562,12 +549,8 @@ const CabsPage = () => {
 
                 <Button 
                   onClick={handleSearch} 
-                  disabled={!isFormValid() || !selectedCab || isCalculatingDistance || distance <= 0}
-                  className={`px-6 py-3 rounded-md mt-6 w-full md:w-auto ${
-                    isFormValid() && selectedCab && !isCalculatingDistance && distance > 0 
-                      ? "bg-blue-600 hover:bg-blue-700 text-white" 
-                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  }`}
+                  disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
                 >
                   {isCalculatingDistance ? (
                     <div className="flex items-center">
@@ -580,7 +563,7 @@ const CabsPage = () => {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div>
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={totalPrice}
@@ -588,7 +571,7 @@ const CabsPage = () => {
                 />
               </div>
               
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div>
                 <BookingSummary
                   pickupLocation={pickup}
                   dropLocation={dropoff}

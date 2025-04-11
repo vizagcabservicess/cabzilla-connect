@@ -1,3 +1,4 @@
+
 // We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
@@ -19,21 +20,17 @@ import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
-import { useIsMobile, safeGetFromSession, safeSetInSession } from "@/hooks/use-mobile";
-import { MobileBookingInterface } from "@/components/MobileBookingInterface";
 
 const ToursPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
-  const [pickupLocation, setPickupLocation] = useState<Location | null>(safeGetFromSession('pickupLocation', null));
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   
   // This function gets the direct tour fare without adding GST
   const getTourFare = (tourId: string, cabId: string): number => {
@@ -169,7 +166,7 @@ const ToursPage = () => {
         bookingNumber: response.bookingNumber
       };
       
-      safeSetInSession('bookingDetails', bookingDataForStorage);
+      sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
       
       toast({
         title: "Tour Booking Confirmed!",
@@ -200,14 +197,6 @@ const ToursPage = () => {
     
     console.log("Pickup location changed:", location);
     setPickupLocation(location);
-    safeSetInSession('pickupLocation', location);
-  };
-
-  const handleSearch = () => {
-    setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-    }, 1000);
   };
   
   return (
@@ -215,52 +204,8 @@ const ToursPage = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-6">
-        <div className={isMobile ? "mx-auto" : "max-w-5xl mx-auto"}>
-          {isMobile ? (
-            <div className="px-0">
-              <h1 className="text-2xl font-bold mb-4 text-center">Tour Packages</h1>
-              <MobileBookingInterface 
-                onSearch={handleSearch}
-                isSearching={isSearching}
-              />
-              
-              <div className="mt-6">
-                <h2 className="text-lg font-semibold mb-3">Popular Tours</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  {availableTours.slice(0, 3).map((tour) => (
-                    <div 
-                      key={tour.id}
-                      className="border rounded-lg overflow-hidden shadow-sm"
-                    >
-                      <div className="h-36 bg-gray-200 relative">
-                        {tour.image ? (
-                          <img 
-                            src={tour.image} 
-                            alt={tour.name} 
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                            <span className="text-gray-400">No image</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h3 className="font-medium">{tour.name}</h3>
-                        <div className="flex items-center mt-1 text-sm text-gray-500">
-                          <MapPin size={14} className="mr-1" />
-                          <span>{tour.distance} km journey</span>
-                        </div>
-                        <div className="mt-1 text-sm text-blue-600">
-                          From ₹{getTourFare(tour.id, 'sedan').toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
+        <div className="max-w-5xl mx-auto">
+          {!showGuestDetailsForm ? (
             <div className="bg-white rounded-lg shadow-md overflow-hidden p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6">Available Tour Packages</h2>
               
@@ -347,9 +292,7 @@ const ToursPage = () => {
                 </>
               )}
             </div>
-          )}
-
-          {!isMobile && showGuestDetailsForm && (
+          ) : (
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <GuestDetailsForm
