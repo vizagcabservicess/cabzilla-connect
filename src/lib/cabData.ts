@@ -45,3 +45,68 @@ export const cabTypes: CabType[] = [
     pricePerKm: 20
   }
 ];
+
+// Function to load cab types (with optional force refresh parameter)
+export async function loadCabTypes(forceRefresh: boolean = false): Promise<CabType[]> {
+  try {
+    console.log(`Loading cab types (force refresh: ${forceRefresh})`);
+    
+    // In a real app, you would fetch from an API here
+    // For demonstration, we're just returning the local data
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Clear cache if force refresh is requested
+    if (forceRefresh) {
+      console.log('Forcing refresh of cab types data');
+      localStorage.removeItem('cabTypes');
+      sessionStorage.removeItem('cabTypes');
+    }
+    
+    // Return the cab types data
+    return cabTypes;
+  } catch (error) {
+    console.error('Error loading cab types:', error);
+    return cabTypes; // Return default cab types on error
+  }
+}
+
+// Function to reload cab types (force refresh)
+export async function reloadCabTypes(): Promise<CabType[]> {
+  console.log('Reloading cab types...');
+  
+  try {
+    // Clear any cached data
+    localStorage.removeItem('cabTypes');
+    sessionStorage.removeItem('cabTypes');
+    
+    // In a real app, you would make an API request here
+    // For demonstration, we're just returning the local data with a delay
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Event notifications for other components
+    window.dispatchEvent(new CustomEvent('cab-types-reloaded', {
+      detail: {
+        timestamp: Date.now(),
+        count: cabTypes.length
+      }
+    }));
+    
+    return cabTypes;
+  } catch (error) {
+    console.error('Error reloading cab types:', error);
+    
+    // Notify about the error
+    window.dispatchEvent(new CustomEvent('cab-types-reload-failed', {
+      detail: {
+        timestamp: Date.now(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }));
+    
+    return cabTypes; // Return default cab types on error
+  }
+}
