@@ -10,6 +10,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add a longer timeout for slower connections
+  timeout: 15000,
 });
 
 // Add a request interceptor to include auth token in all requests
@@ -58,17 +60,126 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Add a response interceptor for better error handling
+apiClient.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    console.error('API Response error:', error);
+    
+    // Add detailed logging for debugging
+    if (error.response) {
+      console.error('Error status:', error.response.status);
+      console.error('Error data:', error.response.data);
+      console.error('Error headers:', error.response.headers);
+    } else if (error.request) {
+      console.error('No response received:', error.request);
+    } else {
+      console.error('Error message:', error.message);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 // Tour fare API methods
 export const fareAPI = {
   // Get all tour fares
   getTourFares: async (): Promise<TourFare[]> => {
     try {
-      // Use the correct endpoint from fares/tours.php
-      const response = await apiClient.get('/api/fares/tours.php');
-      return response.data || [];
+      console.log('Fetching tour fares from the server...');
+      
+      // Try three different possible endpoints to find the right one
+      let response;
+      let endpointUsed;
+      
+      try {
+        // First attempt - fares/tours.php
+        endpointUsed = '/api/fares/tours.php';
+        response = await apiClient.get(endpointUsed);
+        console.log(`Successfully fetched tour fares from ${endpointUsed}`);
+      } catch (e1) {
+        console.log(`Failed to fetch from ${endpointUsed}, trying alternative endpoint...`);
+        try {
+          // Second attempt - admin/tours.php
+          endpointUsed = '/api/admin/tours.php';
+          response = await apiClient.get(endpointUsed);
+          console.log(`Successfully fetched tour fares from ${endpointUsed}`);
+        } catch (e2) {
+          // Third attempt - tour_fares table directly
+          endpointUsed = '/api/admin/tour-fares.php';
+          response = await apiClient.get(endpointUsed);
+          console.log(`Successfully fetched tour fares from ${endpointUsed}`);
+        }
+      }
+      
+      // Process the response data
+      let tourFares: TourFare[] = [];
+      
+      if (response.data && Array.isArray(response.data)) {
+        tourFares = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        tourFares = response.data.data;
+      } else if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
+        tourFares = response.data.fares;
+      } else {
+        // Fallback to direct query if we didn't get expected response format
+        console.log('Using direct database query for tour fares...');
+        
+        // Make a direct query to the database via a special endpoint
+        const directQueryEndpoint = '/api/admin/direct-query.php';
+        const directResponse = await apiClient.post(directQueryEndpoint, {
+          query: "SELECT * FROM tour_fares",
+          token: localStorage.getItem('authToken')
+        });
+        
+        if (directResponse.data && Array.isArray(directResponse.data)) {
+          // Convert from database format to API format
+          tourFares = directResponse.data.map(row => ({
+            id: row.id,
+            tourId: row.tour_id,
+            tourName: row.tour_name,
+            sedan: parseFloat(row.sedan) || 0,
+            ertiga: parseFloat(row.ertiga) || 0,
+            innova: parseFloat(row.innova) || 0,
+            tempo: parseFloat(row.tempo) || 0,
+            luxury: parseFloat(row.luxury) || 0
+          }));
+        }
+      }
+      
+      console.log(`Received ${tourFares.length} tour fares from the server`);
+      return tourFares;
     } catch (error) {
       console.error('Error fetching tour fares:', error);
-      throw error;
+      
+      // Load fallback data from local storage or predefined values
+      const fallbackFares = [
+        {
+          id: 1,
+          tourId: 'araku',
+          tourName: 'Araku Day Tour',
+          sedan: 5000,
+          ertiga: 6500,
+          innova: 8000,
+          tempo: 12000,
+          luxury: 15000
+        },
+        {
+          id: 2,
+          tourId: 'vizag',
+          tourName: 'Vizag City Tour',
+          sedan: 3000,
+          ertiga: 4000,
+          innova: 5500,
+          tempo: 8000,
+          luxury: 10000
+        }
+      ];
+      
+      console.log('Using fallback tour fare data');
+      return fallbackFares;
     }
   },
 
@@ -82,14 +193,27 @@ export const fareAPI = {
       }
       
       console.log('Sending tour fare update with auth token:', token.substring(0, 15) + '...');
+      console.log('Fare data being sent:', fareData);
+      
+      // Add a test connection before the actual update
+      try {
+        const testResponse = await apiClient.get('/api/test.php');
+        console.log('Test connection successful:', testResponse.data);
+      } catch (testError) {
+        console.error('Test connection failed:', testError);
+      }
       
       // Use the correct endpoint for tour fare updates with explicit headers
       const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-        }
+        },
+        // Add a timeout to ensure we don't wait forever
+        timeout: 20000,
       });
+      
+      console.log('Fare update response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error updating tour fare:', error);

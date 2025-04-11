@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -38,6 +39,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+// Vehicle mapping for database to UI
+const vehicleMapping = {
+  // Database keys to display names
+  'sedan': 'Sedan',
+  'ertiga': 'Ertiga',
+  'innova': 'Innova',
+  'tempo': 'Tempo Traveller', 
+  'luxury': 'Luxury Sedan',
+  
+  // Additional mappings for any other vehicle types
+  'innova_crysta': 'Innova Crysta',
+  'innova_hycross': 'Innova Hycross',
+  'dzire_cng': 'Dzire CNG',
+  'etios': 'Etios',
+  'MPV': 'MPV'
+};
+
 const createDynamicFormSchema = (vehicleIds: string[]) => {
   const baseSchema = {
     tourId: z.string().min(1, { message: "Tour is required" }),
@@ -70,10 +88,14 @@ export function FareManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const { toast: uiToast } = useToast();
   
-  const formSchema = createDynamicFormSchema(vehicles.map(v => v.id));
-  const newTourFormSchema = createDynamicNewTourFormSchema(vehicles.map(v => v.id));
+  // Standard database vehicle column IDs
+  const dbVehicleIds = ['sedan', 'ertiga', 'innova', 'tempo', 'luxury'];
+  
+  const formSchema = createDynamicFormSchema(dbVehicleIds);
+  const newTourFormSchema = createDynamicNewTourFormSchema(dbVehicleIds);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -101,8 +123,9 @@ export function FareManagement() {
           tourId: form.getValues().tourId || "",
         };
         
-        vehicleData.forEach(vehicle => {
-          defaultValues[vehicle.id] = form.getValues()[vehicle.id] || 0;
+        // Map vehicle IDs to database column IDs
+        dbVehicleIds.forEach(dbId => {
+          defaultValues[dbId] = form.getValues()[dbId] || 0;
         });
         
         form.reset(defaultValues);
@@ -112,8 +135,8 @@ export function FareManagement() {
           tourName: newTourForm.getValues().tourName || "",
         };
         
-        vehicleData.forEach(vehicle => {
-          newTourDefaults[vehicle.id] = newTourForm.getValues()[vehicle.id] || 0;
+        dbVehicleIds.forEach(dbId => {
+          newTourDefaults[dbId] = newTourForm.getValues()[dbId] || 0;
         });
         
         newTourForm.reset(newTourDefaults);
@@ -144,8 +167,9 @@ export function FareManagement() {
         tourId: values.tourId,
       };
       
-      vehicles.forEach(vehicle => {
-        fareUpdateRequest[vehicle.id] = values[vehicle.id] || 0;
+      // Map form values to database column names
+      dbVehicleIds.forEach(dbId => {
+        fareUpdateRequest[dbId] = values[dbId] || 0;
       });
       
       const selectedTour = tourFares.find(fare => fare.tourId === values.tourId);
@@ -158,6 +182,19 @@ export function FareManagement() {
       const authToken = localStorage.getItem('authToken');
       if (!authToken) {
         throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      // Make a test call first
+      try {
+        const testResponse = await fetch('/api/test.php');
+        const testData = await testResponse.json();
+        console.log("Test API response:", testData);
+        setDebugInfo({
+          test: testData,
+          time: new Date().toISOString()
+        });
+      } catch (testError) {
+        console.error("Test API call failed:", testError);
       }
       
       const data = await fareAPI.updateTourFares(fareUpdateRequest);
@@ -199,8 +236,9 @@ export function FareManagement() {
         tourName: values.tourName,
       };
       
-      vehicles.forEach(vehicle => {
-        newTourData[vehicle.id] = values[vehicle.id] || 0;
+      // Map form values to database column names
+      dbVehicleIds.forEach(dbId => {
+        newTourData[dbId] = values[dbId] || 0;
       });
       
       localStorage.removeItem('cabFares');
@@ -315,9 +353,10 @@ export function FareManagement() {
         const processedFares = data.map(fare => {
           const processedFare = { ...fare };
           
-          vehicles.forEach(vehicle => {
-            if (typeof processedFare[vehicle.id] === 'undefined') {
-              processedFare[vehicle.id] = 0;
+          // Ensure all needed vehicle columns exist in the data
+          dbVehicleIds.forEach(dbId => {
+            if (typeof processedFare[dbId] === 'undefined') {
+              processedFare[dbId] = 0;
             }
           });
           
@@ -346,12 +385,18 @@ export function FareManagement() {
         tourId: selectedTour.tourId
       };
       
-      vehicles.forEach(vehicle => {
-        formValues[vehicle.id] = selectedTour[vehicle.id] || 0;
+      // Map database values to form fields
+      dbVehicleIds.forEach(dbId => {
+        formValues[dbId] = selectedTour[dbId] || 0;
       });
       
       form.reset(formValues);
     }
+  };
+  
+  // Helper function to get the display name for a vehicle type
+  const getVehicleDisplayName = (vehicleId: string) => {
+    return vehicleMapping[vehicleId] || vehicleId.charAt(0).toUpperCase() + vehicleId.slice(1);
   };
   
   return (
@@ -428,14 +473,14 @@ export function FareManagement() {
                 />
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {vehicles.map(vehicle => (
+                  {dbVehicleIds.map(dbId => (
                     <FormField
-                      key={vehicle.id}
+                      key={dbId}
                       control={form.control}
-                      name={vehicle.id as any} 
+                      name={dbId as any} 
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{vehicle.name} Price</FormLabel>
+                          <FormLabel>{getVehicleDisplayName(dbId)} Price</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -473,6 +518,15 @@ export function FareManagement() {
                 </div>
               </form>
             </Form>
+            
+            {debugInfo && (
+              <div className="mt-4 p-3 text-xs bg-gray-100 rounded overflow-auto max-h-40">
+                <details>
+                  <summary className="font-bold">Debug Info</summary>
+                  <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+                </details>
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
@@ -502,8 +556,8 @@ export function FareManagement() {
                   <thead>
                     <tr className="border-b">
                       <th className="px-4 py-2 text-left">Tour Name</th>
-                      {vehicles.map(vehicle => (
-                        <th key={vehicle.id} className="px-4 py-2 text-left">{vehicle.name}</th>
+                      {dbVehicleIds.map(dbId => (
+                        <th key={dbId} className="px-4 py-2 text-left">{getVehicleDisplayName(dbId)}</th>
                       ))}
                       <th className="px-4 py-2 text-left">Actions</th>
                     </tr>
@@ -512,9 +566,9 @@ export function FareManagement() {
                     {tourFares.map((fare) => (
                       <tr key={fare.tourId} className="border-b hover:bg-muted/50">
                         <td className="px-4 py-2">{fare.tourName}</td>
-                        {vehicles.map(vehicle => (
-                          <td key={`${fare.tourId}-${vehicle.id}`} className="px-4 py-2">
-                            ₹{fare[vehicle.id] || 0}
+                        {dbVehicleIds.map(dbId => (
+                          <td key={`${fare.tourId}-${dbId}`} className="px-4 py-2">
+                            ₹{fare[dbId] || 0}
                           </td>
                         ))}
                         <td className="px-4 py-2">
@@ -584,14 +638,14 @@ export function FareManagement() {
                 </div>
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {vehicles.map(vehicle => (
+                  {dbVehicleIds.map(dbId => (
                     <FormField
-                      key={vehicle.id}
+                      key={dbId}
                       control={newTourForm.control}
-                      name={vehicle.id as any}
+                      name={dbId as any}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{vehicle.name} Price</FormLabel>
+                          <FormLabel>{getVehicleDisplayName(dbId)} Price</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>

@@ -36,9 +36,55 @@ export const defaultHeaders = {
   'X-Requested-With': 'XMLHttpRequest'
 };
 
+// Vehicle ID mapping to help with database/UI consistency
+export const vehicleIdMapping = {
+  // UI id to database column
+  'MPV': 'innova',
+  'innova_crysta': 'innova',
+  'innova_hycross': 'innova',
+  'etios': 'sedan',
+  'dzire_cng': 'sedan',
+  'tempo_traveller': 'tempo',
+  
+  // Database column to UI id (for reverse mapping)
+  'sedan': 'sedan',
+  'ertiga': 'ertiga',
+  'innova': 'innova',
+  'tempo': 'tempo',
+  'luxury': 'luxury'
+};
+
+// Debug utility function - helps track API issues
+export const logApiError = (error: any, context: string) => {
+  console.error(`API Error in ${context}:`, error);
+  
+  if (error.response) {
+    console.error('Status:', error.response.status);
+    console.error('Data:', error.response.data);
+    console.error('Headers:', error.response.headers);
+  } else if (error.request) {
+    console.error('No response received. Request:', error.request);
+  } else {
+    console.error('Error message:', error.message);
+  }
+  
+  console.error('Error config:', error.config);
+  
+  // Return a structured error object that can be used in UI
+  return {
+    message: error.response?.data?.message || error.message || 'Unknown error occurred',
+    status: error.response?.status || 0,
+    isNetworkError: !error.response,
+    isServerError: error.response?.status >= 500,
+    isAuthError: error.response?.status === 401 || error.response?.status === 403
+  };
+};
+
 // Export configuration options
 export default {
   baseUrl: apiBaseUrl,
   defaultHeaders,
-  forceRefreshHeaders
+  forceRefreshHeaders,
+  vehicleIdMapping,
+  logApiError
 };
