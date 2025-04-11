@@ -204,15 +204,20 @@ export interface TourFare {
   innova: number;
   tempo: number;
   luxury: number;
+  // Allow any additional vehicle properties
+  [key: string]: number | string;
 }
 
 export interface FareUpdateRequest {
   tourId: string;
+  tourName?: string;  // Add the optional tourName property
   sedan: number;
   ertiga: number;
   innova: number;
   tempo: number;
   luxury: number;
+  // Allow any additional vehicle properties
+  [key: string]: number | string | undefined;
 }
 
 export type VehiclePricing = VehiclePricingData;
