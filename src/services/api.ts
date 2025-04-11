@@ -1,4 +1,3 @@
-
 // Import necessary types
 import { TourFare } from '@/types/api';
 import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
@@ -17,6 +16,7 @@ const apiClient = axios.create({
 // Add a request interceptor to include auth token in all requests
 apiClient.interceptors.request.use(
   (config) => {
+    // Get fresh token from localStorage to ensure we're using the latest
     const token = localStorage.getItem('authToken');
     
     // Enhanced token verification
@@ -34,7 +34,7 @@ apiClient.interceptors.request.use(
     } else {
       console.warn(`No valid auth token found for request to ${config.url}.`);
       
-      // Try to get a fresh token if available
+      // Try to get a fresh token if available from user object
       const user = localStorage.getItem('user');
       if (user) {
         try {
@@ -188,17 +188,47 @@ export const fareAPI = {
     try {
       // Get token directly from localStorage to ensure it's current
       const token = localStorage.getItem('authToken');
+      
+      // Validate token - this is critical for the update to work
       if (!token || token === 'null' || token === 'undefined') {
-        throw new Error('No valid authentication token found. Please log in again.');
+        // Try one more source - the user object in localStorage
+        const userStr = localStorage.getItem('user');
+        let userToken = null;
+        
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              userToken = userData.token;
+              // Also update the authToken in localStorage for future requests
+              localStorage.setItem('authToken', userToken);
+              console.log('Retrieved and updated token from user object');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+        
+        // If we still don't have a token, throw an error
+        if (!userToken) {
+          throw new Error('No valid authentication token found. Please log in again.');
+        }
       }
       
-      console.log('Sending tour fare update with auth token:', token.substring(0, 15) + '...');
+      // Get the latest token after potential updates
+      const currentToken = localStorage.getItem('authToken');
+      console.log('Sending tour fare update with auth token:', currentToken?.substring(0, 15) + '...');
       console.log('Fare data being sent:', fareData);
       
       // Add a test connection before the actual update
       try {
-        const testResponse = await apiClient.get('/api/test.php');
-        console.log('Test connection successful:', testResponse.data);
+        const testResponse = await fetch('/api/test.php', {
+          headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        console.log('Test connection successful:', await testResponse.json());
       } catch (testError) {
         console.error('Test connection failed:', testError);
       }
@@ -207,7 +237,9 @@ export const fareAPI = {
       const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${currentToken}`,
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
         // Add a timeout to ensure we don't wait forever
         timeout: 20000,
@@ -221,6 +253,27 @@ export const fareAPI = {
       if (error.response) {
         console.error('Error response:', error.response.status, error.response.data);
       }
+      
+      // Help the client understand the auth problem by enhancing the error message
+      if (error.response?.status === 403 || error.message?.includes('authentication token')) {
+        // Attempt to refresh token on auth errors - check session and user objects
+        const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+        const userStr = localStorage.getItem('user');
+        
+        if (isLoggedIn && userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              // Update the token and suggest retry
+              localStorage.setItem('authToken', userData.token);
+              error.message = 'Authentication token refreshed. Please try updating the fare again.';
+            }
+          } catch (e) {
+            console.error('Error refreshing token:', e);
+          }
+        }
+      }
+      
       throw error;
     }
   },
@@ -464,6 +517,7 @@ export const authAPI = {
         // Validate token before saving
         if (typeof response.data.token === 'string' && response.data.token.length > 10) {
           localStorage.setItem('authToken', response.data.token);
+          localStorage.setItem('isLoggedIn', 'true');
           
           // Log token for debugging
           console.log('Login successful, token stored:', response.data.token.substring(0, 15) + '...');
@@ -491,6 +545,7 @@ export const authAPI = {
   
   logout: () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('user');
     sessionStorage.clear();
     console.log('User logged out, auth tokens cleared');
@@ -524,7 +579,8 @@ export const authAPI = {
   
   isAuthenticated: (): boolean => {
     const token = localStorage.getItem('authToken');
-    return !!(token && token !== 'null' && token !== 'undefined');
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    return !!(token && token !== 'null' && token !== 'undefined' && isLoggedIn);
   },
   
   isAdmin: (): boolean => {

@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -32,25 +33,32 @@ error_log("Received headers: " . json_encode($headers));
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     error_log("Found authorization header: " . $authHeader);
+    
+    // Extract token from Bearer format
     $token = str_replace('Bearer ', '', $authHeader);
     
-    // For development/testing - assume admin for now
-    $isAdmin = true;
-    error_log("Admin authentication bypassed for development");
-    
-    // In production would verify token
-    // $payload = verifyJwtToken($token);
-    // error_log("JWT verification result: " . json_encode($payload));
-    // if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-    //     $isAdmin = true;
-    //     error_log("User authenticated as admin");
-    // }
+    // Check if token is valid (not empty or null string)
+    if (!empty($token) && $token !== 'null' && $token !== 'undefined') {
+        // For development/testing - assume admin for now
+        $isAdmin = true;
+        error_log("Valid token found: " . substr($token, 0, 15) . "...");
+        
+        // In production would verify token
+        // $payload = verifyJwtToken($token);
+        // error_log("JWT verification result: " . json_encode($payload));
+        // if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
+        //     $isAdmin = true;
+        //     error_log("User authenticated as admin");
+        // }
+    } else {
+        error_log("Invalid token found in Authorization header: " . $token);
+    }
 } else {
     error_log("No authorization header found in the request");
 }
 
 if (!$isAdmin) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
+    sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required or invalid authentication token.'], 403);
     exit;
 }
 
@@ -61,14 +69,26 @@ if (!$conn) {
     exit;
 }
 
-// Define vehicle ID mappings - map frontend IDs to database IDs
+// Define vehicle ID mappings - map frontend IDs to database column names
 $vehicleIdMap = [
+    // UI ID to database column mapping
     'MPV' => 'innova',
     'innova_crysta' => 'innova',
     'innova_hycross' => 'innova',
     'etios' => 'sedan',
     'dzire_cng' => 'sedan',
-    'tempo_traveller' => 'tempo'
+    'tempo_traveller' => 'tempo',
+    'Toyota' => 'sedan',
+    'Dzire CNG' => 'sedan',
+    
+    // Handle numeric IDs that might come from the vehicles table
+    '1' => 'sedan',
+    '2' => 'ertiga',
+    '1266' => 'innova',
+    '1299' => 'sedan',
+    '1311' => 'sedan',
+    '1313' => 'innova',
+    '1314' => 'tempo'
 ];
 
 try {

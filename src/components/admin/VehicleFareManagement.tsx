@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { getVehicleData } from '@/services/vehicleDataService';
 import { CabType } from '@/types/cab';
+import { vehicleIdMapping } from '@/config/api';
 
 // Create dynamic form schema based on available vehicles
 const createFormSchema = (vehicles: CabType[]) => {
@@ -47,6 +48,31 @@ export function VehicleFareManagement() {
   });
   
   useEffect(() => {
+    // Check for authentication token at component mount
+    const checkAuthToken = () => {
+      const token = localStorage.getItem('authToken');
+      const user = localStorage.getItem('user');
+      
+      if (!token || token === 'null' || token === 'undefined') {
+        console.warn('No auth token found in localStorage');
+        // Try to recover token from user object
+        if (user) {
+          try {
+            const userData = JSON.parse(user);
+            if (userData && userData.token) {
+              console.log('Found token in user object, restoring to localStorage');
+              localStorage.setItem('authToken', userData.token);
+              localStorage.setItem('isLoggedIn', 'true');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+      }
+    };
+    
+    checkAuthToken();
+    
     // Fetch vehicles and tour fares when component mounts
     const fetchData = async () => {
       try {
@@ -104,6 +130,31 @@ export function VehicleFareManagement() {
       setIsLoading(true);
       setError(null);
       
+      // Check for token before submitting
+      const token = localStorage.getItem('authToken');
+      if (!token || token === 'null' || token === 'undefined') {
+        // Try to get token from user object
+        const userStr = localStorage.getItem('user');
+        let foundToken = false;
+        
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              foundToken = true;
+              console.log('Retrieved token from user object for API call');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+        
+        if (!foundToken) {
+          throw new Error('Authentication token is missing. Please log in again.');
+        }
+      }
+      
       // Create request data from form values
       const fareData: Record<string, any> = {
         vehicleId: values.vehicleId,
@@ -112,6 +163,11 @@ export function VehicleFareManagement() {
       // Add vehicle prices
       vehicles.forEach(vehicle => {
         fareData[vehicle.id] = values[vehicle.id] || 0;
+        
+        // Also map to database columns if necessary
+        if (vehicleIdMapping[vehicle.id]) {
+          fareData[vehicleIdMapping[vehicle.id]] = values[vehicle.id] || 0;
+        }
       });
       
       console.log("Submitting vehicle fare data:", fareData);
@@ -139,6 +195,25 @@ export function VehicleFareManagement() {
       
       setError(errorMessage);
       toast.error(errorMessage);
+      
+      // Special handling for auth token issues
+      if (errorMessage.includes('authentication token') || 
+          errorMessage.includes('log in again') ||
+          error.response?.status === 403) {
+        // Try to refresh token from user object
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              toast.info("Authentication token refreshed. Please try again.");
+            }
+          } catch (e) {
+            console.error('Error refreshing token:', e);
+          }
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +222,24 @@ export function VehicleFareManagement() {
   const fetchTourFares = async () => {
     try {
       setIsRefreshing(true);
+      
+      // Check for token before API call
+      const token = localStorage.getItem('authToken');
+      if (!token || token === 'null' || token === 'undefined') {
+        // Try to get token from user object
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              console.log('Retrieved token from user object for API call');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+      }
       
       // Fetch tour fares data using the API
       const data = await fareAPI.getTourFares();

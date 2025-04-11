@@ -45,13 +45,24 @@ export const vehicleIdMapping = {
   'etios': 'sedan',
   'dzire_cng': 'sedan',
   'tempo_traveller': 'tempo',
+  'Toyota': 'sedan',
+  'Dzire CNG': 'sedan',
   
   // Database column to UI id (for reverse mapping)
   'sedan': 'sedan',
   'ertiga': 'ertiga',
   'innova': 'innova',
   'tempo': 'tempo',
-  'luxury': 'luxury'
+  'luxury': 'luxury',
+  
+  // Numeric ID to column mapping
+  '1': 'sedan',
+  '2': 'ertiga',
+  '1266': 'innova',
+  '1299': 'sedan',  // Etios
+  '1311': 'sedan',  // Dzire CNG
+  '1313': 'innova', // Innova Crysta
+  '1314': 'tempo'   // Tempo Traveller
 };
 
 // Debug utility function - helps track API issues
