@@ -173,31 +173,31 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
   if (!isMobile) return null;
 
   return (
-    <div className="bg-white rounded-xl p-4 shadow-md">
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center mb-2">
+    <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="p-5 pb-3">
+        <div className="flex items-center mb-3">
           <div className="bg-blue-500 text-white w-10 h-10 rounded-md flex items-center justify-center text-xl font-bold">
             CC
           </div>
           <h3 className="text-blue-600 font-medium ml-2 text-lg">BOOK A CAB IN MINUTES</h3>
         </div>
-        <h1 className="text-2xl font-bold text-gray-800">Your Journey, Our Priority</h1>
-      </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Your Journey, Our Priority</h1>
       
-      <MobileTabSelector 
-        selectedTab={ensureCustomerTripType(tripType)} 
-        onTabChange={handleTabChange} 
-      />
-      
-      <div className="mt-4">
-        <MobileTripModeToggle 
-          tripMode={tripMode} 
-          onTripModeChange={handleTripModeChange} 
-          disabled={tripType === "local"}
+        <MobileTabSelector 
+          selectedTab={ensureCustomerTripType(tripType)} 
+          onTabChange={handleTabChange} 
         />
+      
+        <div className="mt-4">
+          <MobileTripModeToggle 
+            tripMode={tripMode} 
+            onTripModeChange={handleTripModeChange} 
+            disabled={tripType === "local"}
+          />
+        </div>
       </div>
       
-      <div className="mt-4 space-y-3">
+      <div className="px-5 pb-5 space-y-3">
         <MobileLocationField
           type="pickup"
           location={pickupLocation}
@@ -217,27 +217,27 @@ export function MobileBookingInterface({ onSubmit }: MobileBookingInterfaceProps
             readOnly={tripType === "airport" && dropLocation?.type === "airport"}
           />
         )}
-      </div>
       
-      {tripType !== "local" && (
+        {tripType !== "local" && (
+          <div className="mt-3">
+            <MobileAddStopsButton />
+          </div>
+        )}
+      
         <div className="mt-3">
-          <MobileAddStopsButton />
+          <MobileDateTimePicker
+            date={pickupDate}
+            onDateChange={setPickupDate}
+            minDate={new Date()}
+          />
         </div>
-      )}
       
-      <div className="mt-3">
-        <MobileDateTimePicker
-          date={pickupDate}
-          onDateChange={setPickupDate}
-          minDate={new Date()}
-        />
-      </div>
-      
-      <div className="mt-6">
-        <MobileSearchButton 
-          onClick={handleSearch}
-          disabled={!pickupLocation || (tripType !== "local" && !dropLocation) || !pickupDate}
-        />
+        <div className="mt-5">
+          <MobileSearchButton 
+            onClick={handleSearch}
+            disabled={!pickupLocation || (tripType !== "local" && !dropLocation) || !pickupDate}
+          />
+        </div>
       </div>
     </div>
   );

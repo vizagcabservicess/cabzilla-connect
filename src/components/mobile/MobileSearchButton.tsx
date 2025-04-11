@@ -16,8 +16,8 @@ export function MobileSearchButton({ onClick, disabled = false }: MobileSearchBu
     <button
       onClick={handleClick}
       disabled={disabled}
-      className={`w-full py-4 rounded-lg text-white font-medium text-lg bg-gradient-to-r from-purple-500 to-indigo-600 shadow-md ${
-        disabled ? "opacity-50 cursor-not-allowed" : "hover:shadow-lg active:shadow-sm transform active:scale-[0.99] transition-all duration-150"
+      className={`w-full py-3.5 rounded-lg text-white font-medium text-lg bg-purple-500 ${
+        disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-600 active:bg-purple-700 transition-colors duration-150"
       }`}
       type="button"
     >

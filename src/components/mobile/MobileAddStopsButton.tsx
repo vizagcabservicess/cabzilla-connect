@@ -24,9 +24,9 @@ export function MobileAddStopsButton({ onAddStop }: MobileAddStopsButtonProps) {
       <button
         onClick={handleAddStop}
         type="button"
-        className="border border-blue-500 rounded-full text-blue-600 hover:bg-blue-50 flex items-center justify-center py-2 px-4 w-full transition-colors duration-200 active:bg-blue-100"
+        className="border border-blue-500 text-blue-600 rounded-full hover:bg-blue-50 flex items-center justify-center py-2.5 px-4 w-full transition-colors duration-200"
       >
-        <Plus size={18} className="mr-1" />
+        <Plus size={16} className="mr-1" />
         <span className="text-sm font-medium">ADD STOPS</span>
       </button>
       

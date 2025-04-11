@@ -31,7 +31,7 @@ export function MobileDateTimePicker({
   }).format(date) : '';
 
   return (
-    <div className="bg-gray-50 rounded-lg p-3">
+    <div className="bg-gray-50 rounded-lg p-3.5">
       <div className="flex items-center mb-1">
         <span className="text-xs font-medium text-gray-500">TRIP START</span>
       </div>

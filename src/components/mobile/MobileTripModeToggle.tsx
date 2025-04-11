@@ -1,6 +1,7 @@
 
 import { TripMode } from "@/lib/tripTypes";
 import { motion } from "framer-motion";
+import { Circle } from "lucide-react";
 
 interface MobileTripModeToggleProps {
   tripMode: TripMode;
@@ -33,19 +34,12 @@ export function MobileTripModeToggle({
           }`}
           disabled={disabled}
         >
-          {tripMode === option.id && option.id === "one-way" && (
-            <div className="w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center">
+          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center
+            ${tripMode === option.id ? "border-blue-600" : "border-gray-400"}`}>
+            {tripMode === option.id && (
               <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-            </div>
-          )}
-          {tripMode !== option.id && (
-            <div className="w-4 h-4 rounded-full border-2 border-gray-400"></div>
-          )}
-          {tripMode === option.id && option.id === "round-trip" && (
-            <div className="w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-            </div>
-          )}
+            )}
+          </div>
           <span className="text-sm font-medium">{option.label}</span>
         </button>
       ))}

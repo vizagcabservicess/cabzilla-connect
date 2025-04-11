@@ -25,17 +25,17 @@ export function MobileLocationField({
   const label = isPickup ? "FROM" : "DROP ADDRESS";
   
   return (
-    <div className="bg-gray-50 rounded-lg p-3">
+    <div className="bg-gray-50 rounded-lg p-3.5">
       <div className="flex items-center mb-1">
         <div className="flex items-center">
           {isPickup ? (
             <div className="w-5 h-5 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-              <div className="w-1 h-6 bg-gray-400 ml-2 absolute mt-8"></div>
+              <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+              <div className="w-0.5 h-7 bg-gray-300 absolute mt-9"></div>
             </div>
           ) : (
             <div className="w-5 h-5 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full border-2 border-gray-600"></div>
+              <div className="w-2 h-2 rounded-full border-2 border-gray-400"></div>
             </div>
           )}
           <span className="text-xs font-medium text-gray-500 ml-3">{label}</span>
