@@ -15,6 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Log the test request for debugging
+error_log("API test.php endpoint accessed: " . date('Y-m-d H:i:s'));
+
 // Log all headers for debugging
 $headers = getallheaders();
 $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : (isset($headers['authorization']) ? $headers['authorization'] : '');
@@ -45,6 +48,7 @@ if (!empty($authHeader)) {
             }
         } catch (Exception $e) {
             // Silently fail - not critical
+            error_log("Token decode error: " . $e->getMessage());
         }
     }
 }
@@ -61,6 +65,17 @@ $localStorageCheckScript = "<script>
     });
 </script>";
 
+// Check PHP Configuration
+$phpConfig = [
+    'version' => PHP_VERSION,
+    'display_errors' => ini_get('display_errors'),
+    'error_reporting' => ini_get('error_reporting'),
+    'max_execution_time' => ini_get('max_execution_time'),
+    'memory_limit' => ini_get('memory_limit'),
+    'upload_max_filesize' => ini_get('upload_max_filesize'),
+    'post_max_size' => ini_get('post_max_size')
+];
+
 // Return API connection status with detailed auth info
 echo json_encode([
     'status' => 'success',
@@ -75,7 +90,9 @@ echo json_encode([
     ],
     'debug' => [
         'check_localStorage' => $localStorageCheckScript,
-        'all_headers' => $headers
+        'request_method' => $_SERVER['REQUEST_METHOD'],
+        'request_uri' => $_SERVER['REQUEST_URI'],
+        'php_config' => $phpConfig
     ],
     'server' => [
         'php_version' => PHP_VERSION,

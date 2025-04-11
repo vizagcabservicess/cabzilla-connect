@@ -100,10 +100,19 @@ try {
         // Very simple token - in production use proper JWT
         $token = base64_encode(json_encode($tokenData));
         
-        // Update user's last login
-        $updateStmt = $conn->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
-        $updateStmt->bind_param("i", $user['id']);
-        $updateStmt->execute();
+        // Check if last_login column exists before trying to update it
+        $tableCheckSQL = "SHOW COLUMNS FROM users LIKE 'last_login'";
+        $tableCheckResult = $conn->query($tableCheckSQL);
+        $hasLastLoginColumn = $tableCheckResult->num_rows > 0;
+        
+        if ($hasLastLoginColumn) {
+            // Update user's last login only if the column exists
+            $updateStmt = $conn->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
+            $updateStmt->bind_param("i", $user['id']);
+            $updateStmt->execute();
+        } else {
+            error_log("Notice: 'last_login' column does not exist in the users table. Skipping last login update.");
+        }
         
         // Return user data without password
         unset($user['password']);
