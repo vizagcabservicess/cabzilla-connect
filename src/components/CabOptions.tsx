@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -92,44 +91,60 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           const selectedTour = sessionStorage.getItem('selectedTour') || localStorage.getItem('selectedTour');
           
           if (selectedTour && tourFares[selectedTour]) {
+            console.log(`Loading tour fares for ${selectedTour}:`, tourFares[selectedTour]);
+            
             cabTypes.forEach(cab => {
-              // Try to find the fare for this cab using different variations of the ID
               const cabId = cab.id.toLowerCase();
               const normalizedCabId = cabId.replace(/[^a-z0-9_]/g, '_');
+              let fare = 0;
               
-              // First try exact match
+              // Try to find the fare for this cab using various matching strategies
+              // First try direct match on cab ID
               if (tourFares[selectedTour][cabId]) {
-                currentFares[cab.id] = tourFares[selectedTour][cabId];
+                fare = tourFares[selectedTour][cabId];
+                console.log(`Found exact fare match for ${cabId}: ${fare}`);
               } 
               // Then try normalized version
               else if (tourFares[selectedTour][normalizedCabId]) {
-                currentFares[cab.id] = tourFares[selectedTour][normalizedCabId];
+                fare = tourFares[selectedTour][normalizedCabId];
+                console.log(`Found normalized fare match for ${normalizedCabId}: ${fare}`);
               } 
               // Try vehicle type mappings
               else if (cabId.includes('sedan') && tourFares[selectedTour].sedan) {
-                currentFares[cab.id] = tourFares[selectedTour].sedan;
+                fare = tourFares[selectedTour].sedan;
+                console.log(`Using sedan fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('innova_crysta') && tourFares[selectedTour].innova_crysta) {
-                currentFares[cab.id] = tourFares[selectedTour].innova_crysta;
+                fare = tourFares[selectedTour].innova_crysta;
+                console.log(`Using innova_crysta fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('innova') && tourFares[selectedTour].innova) {
-                currentFares[cab.id] = tourFares[selectedTour].innova;
+                fare = tourFares[selectedTour].innova;
+                console.log(`Using innova fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('ertiga') && tourFares[selectedTour].ertiga) {
-                currentFares[cab.id] = tourFares[selectedTour].ertiga;
+                fare = tourFares[selectedTour].ertiga;
+                console.log(`Using ertiga fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('tempo') && tourFares[selectedTour].tempo) {
-                currentFares[cab.id] = tourFares[selectedTour].tempo;
+                fare = tourFares[selectedTour].tempo;
+                console.log(`Using tempo fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('luxury') && tourFares[selectedTour].luxury) {
-                currentFares[cab.id] = tourFares[selectedTour].luxury;
+                fare = tourFares[selectedTour].luxury;
+                console.log(`Using luxury fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('dzire') && tourFares[selectedTour].dzire_cng) {
-                currentFares[cab.id] = tourFares[selectedTour].dzire_cng;
+                fare = tourFares[selectedTour].dzire_cng;
+                console.log(`Using dzire_cng fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('toyota') && tourFares[selectedTour].toyota) {
-                currentFares[cab.id] = tourFares[selectedTour].toyota;
+                fare = tourFares[selectedTour].toyota;
+                console.log(`Using toyota fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('etios') && tourFares[selectedTour].etios) {
-                currentFares[cab.id] = tourFares[selectedTour].etios;
+                fare = tourFares[selectedTour].etios;
+                console.log(`Using etios fare for ${cabId}: ${fare}`);
               } else if (cabId.includes('mpv') && tourFares[selectedTour].mpv) {
-                currentFares[cab.id] = tourFares[selectedTour].mpv;
+                fare = tourFares[selectedTour].mpv;
+                console.log(`Using mpv fare for ${cabId}: ${fare}`);
               } else {
                 // Fallback to cab's pre-defined price if available
                 if (cab.price && cab.price > 0) {
-                  currentFares[cab.id] = cab.price;
+                  fare = cab.price;
+                  console.log(`Using predefined price for ${cabId}: ${fare}`);
                 } else {
                   // Last resort - calculate a reasonable fare based on type
                   const baseFare = distance * (
@@ -137,8 +152,19 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                     cabId.includes('innova') ? 15 : 
                     cabId.includes('ertiga') ? 12 : 10
                   );
-                  currentFares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
+                  fare = Math.max(baseFare, 800); // Ensure minimum fare
+                  console.log(`Using calculated fare for ${cabId}: ${fare}`);
                 }
+              }
+              
+              // Set the fare in our local state
+              currentFares[cab.id] = fare;
+              
+              // Also store it in localStorage for persistence
+              try {
+                localStorage.setItem(`fare_tour_${cab.id.toLowerCase()}`, fare.toString());
+              } catch (e) {
+                console.warn(`Could not store fare for ${cab.id} in localStorage:`, e);
               }
             });
             
@@ -146,6 +172,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             setCabFares(currentFares);
             setIsCalculatingFares(false);
             return; // Exit early after setting tour fares
+          } else {
+            console.warn(`No fares found for tour ${selectedTour}`);
           }
         }
         

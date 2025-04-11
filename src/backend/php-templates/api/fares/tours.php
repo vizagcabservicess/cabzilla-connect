@@ -16,6 +16,21 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
 
+    // Create a normalized map of vehicle columns
+    $normalizedColumns = [
+        'sedan' => 'sedan',
+        'ertiga' => 'ertiga',
+        'innova' => 'innova',
+        'tempo' => 'tempo',
+        'luxury' => 'luxury',
+        'innova_crysta' => 'innova_crysta',
+        'tempo_traveller' => 'tempo_traveller',
+        'mpv' => 'mpv',
+        'toyota' => 'toyota',
+        'dzire_cng' => 'dzire_cng',
+        'etios' => 'etios'
+    ];
+
     $tourFares = [];
     while ($row = $result->fetch_assoc()) {
         // Convert numeric strings to actual numbers
@@ -23,28 +38,24 @@ try {
             'id' => intval($row['id']),
             'tourId' => $row['tour_id'],
             'tourName' => $row['tour_name'],
-            'sedan' => floatval($row['sedan']),
-            'ertiga' => floatval($row['ertiga']),
-            'innova' => floatval($row['innova']),
-            'tempo' => floatval($row['tempo']),
-            'luxury' => floatval($row['luxury']),
+            'sedan' => isset($row['sedan']) ? floatval($row['sedan']) : 0,
+            'ertiga' => isset($row['ertiga']) ? floatval($row['ertiga']) : 0,
+            'innova' => isset($row['innova']) ? floatval($row['innova']) : 0,
+            'tempo' => isset($row['tempo']) ? floatval($row['tempo']) : 0,
+            'luxury' => isset($row['luxury']) ? floatval($row['luxury']) : 0,
             'distance' => isset($row['distance']) ? floatval($row['distance']) : 0,
             'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
         
-        // Add any additional vehicle types that might be in the database
-        foreach ($row as $key => $value) {
-            if (!in_array($key, ['id', 'tour_id', 'tour_name', 'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 'distance', 'days', 'created_at', 'updated_at'])) {
-                // Add any numeric value that might be a vehicle price
-                if (is_numeric($value)) {
-                    // Convert column names like vehicle_id to vehicle-friendly format
-                    $vehicleKey = str_replace('_', '', $key);
-                    $tourFare[$vehicleKey] = floatval($value);
-                }
-            }
+        // Explicitly map all additional vehicle types from the database
+        if (isset($row['innova_crysta'])) {
+            $tourFare['innova_crysta'] = floatval($row['innova_crysta']);
         }
         
-        // Add specific mappings for special vehicle IDs
+        if (isset($row['tempo_traveller'])) {
+            $tourFare['tempo_traveller'] = floatval($row['tempo_traveller']);
+        }
+        
         if (isset($row['mpv'])) {
             $tourFare['mpv'] = floatval($row['mpv']);
         }
@@ -57,12 +68,20 @@ try {
             $tourFare['dzire_cng'] = floatval($row['dzire_cng']);
         }
         
-        if (isset($row['innova_crysta'])) {
-            $tourFare['innova_crysta'] = floatval($row['innova_crysta']);
+        if (isset($row['etios'])) {
+            $tourFare['etios'] = floatval($row['etios']);
         }
         
-        if (isset($row['tempo_traveller'])) {
-            $tourFare['tempo_traveller'] = floatval($row['tempo_traveller']);
+        // Add any additional vehicle types that might be in the database
+        foreach ($row as $key => $value) {
+            if (!in_array($key, ['id', 'tour_id', 'tour_name', 'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 'distance', 'days', 'created_at', 'updated_at', 'innova_crysta', 'tempo_traveller', 'mpv', 'toyota', 'dzire_cng', 'etios'])) {
+                // Add any numeric value that might be a vehicle price
+                if (is_numeric($value)) {
+                    // Convert column names like vehicle_id to vehicle-friendly format
+                    $vehicleKey = str_replace('_', '', $key);
+                    $tourFare[$vehicleKey] = floatval($value);
+                }
+            }
         }
         
         $tourFares[] = $tourFare;

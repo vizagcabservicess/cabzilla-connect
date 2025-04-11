@@ -102,15 +102,51 @@ try {
     }
     
     $vehicles = [];
+    $normalizedVehicleMap = []; // Use this to track normalized columns to prevent duplicates
+    
     while ($row = $vehiclesResult->fetch_assoc()) {
         $vehicles[] = [
             'id' => $row['id'],
             'vehicle_id' => $row['vehicle_id'],
             'name' => $row['name']
         ];
+        
+        // Create normalized column name for this vehicle
+        $normalizedColumn = preg_replace('/[^a-zA-Z0-9_]/', '_', strtolower($row['vehicle_id']));
+        
+        // Map to standard column names for common vehicle types to prevent duplicates
+        if (strpos($normalizedColumn, 'sedan') !== false) {
+            $normalizedColumn = 'sedan';
+        } else if (strpos($normalizedColumn, 'ertiga') !== false) {
+            $normalizedColumn = 'ertiga';
+        } else if (strpos($normalizedColumn, 'innova_crysta') !== false) {
+            $normalizedColumn = 'innova_crysta';
+        } else if (strpos($normalizedColumn, 'innova_hycross') !== false || strpos($normalizedColumn, 'innova') !== false) {
+            $normalizedColumn = 'innova';
+        } else if (strpos($normalizedColumn, 'tempo_traveller') !== false) {
+            $normalizedColumn = 'tempo_traveller';
+        } else if (strpos($normalizedColumn, 'tempo') !== false) {
+            $normalizedColumn = 'tempo';
+        } else if (strpos($normalizedColumn, 'luxury') !== false) {
+            $normalizedColumn = 'luxury';
+        } else if (strpos($normalizedColumn, 'mpv') !== false) {
+            $normalizedColumn = 'mpv';
+        } else if (strpos($normalizedColumn, 'toyota') !== false) {
+            $normalizedColumn = 'toyota';
+        } else if (strpos($normalizedColumn, 'dzire') !== false || strpos($normalizedColumn, 'cng') !== false) {
+            $normalizedColumn = 'dzire_cng';
+        } else if (strpos($normalizedColumn, 'etios') !== false) {
+            $normalizedColumn = 'etios';
+        }
+        
+        // Store the mapping to track duplicates
+        $normalizedVehicleMap[$row['id']] = $normalizedColumn;
+        $normalizedVehicleMap[$row['vehicle_id']] = $normalizedColumn;
+        $normalizedVehicleMap[strtolower($row['name'])] = $normalizedColumn;
     }
     
     error_log("Found " . count($vehicles) . " vehicles in the database");
+    error_log("Normalized vehicle map: " . json_encode($normalizedVehicleMap));
     
     // Check if tour_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'tour_fares'";
@@ -128,6 +164,8 @@ try {
             innova DECIMAL(10,2) DEFAULT 0,
             tempo DECIMAL(10,2) DEFAULT 0,
             luxury DECIMAL(10,2) DEFAULT 0,
+            distance DECIMAL(10,2) DEFAULT 0,
+            days INT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )";
@@ -156,13 +194,34 @@ try {
     
     error_log("Existing columns in tour_fares: " . implode(", ", $existingColumns));
     
+    // Track unique vehicle columns to add (avoid duplicates)
+    $uniqueVehicleColumns = [];
+    
+    // Find unique normalized column names
+    foreach ($normalizedVehicleMap as $vehicleId => $columnName) {
+        if (!in_array($columnName, $uniqueVehicleColumns) && 
+            !in_array($columnName, ['id', 'tour_id', 'tour_name', 'created_at', 'updated_at', 'distance', 'days'])) {
+            $uniqueVehicleColumns[$columnName] = $columnName;
+        }
+    }
+    
+    error_log("Unique vehicle columns to check: " . implode(", ", $uniqueVehicleColumns));
+    
+    // Add standard columns if they don't exist
+    $standardColumns = [
+        'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 
+        'innova_crysta', 'tempo_traveller', 'mpv', 'toyota', 'dzire_cng', 'etios',
+        'distance', 'days'
+    ];
+    
+    foreach ($standardColumns as $column) {
+        $uniqueVehicleColumns[$column] = $column;
+    }
+    
     // Add missing vehicle columns
     $addedColumns = [];
     
-    foreach ($vehicles as $vehicle) {
-        // Map vehicle IDs to database-safe column names
-        $columnName = preg_replace('/[^a-zA-Z0-9_]/', '_', strtolower($vehicle['vehicle_id']));
-        
+    foreach ($uniqueVehicleColumns as $columnName) {
         // Skip common columns that should already exist
         if (in_array($columnName, ['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'])) {
             continue;
@@ -188,18 +247,12 @@ try {
         'data' => [
             'vehicles' => $vehicles,
             'existingColumns' => $existingColumns,
-            'addedColumns' => $addedColumns
+            'addedColumns' => $addedColumns,
+            'uniqueColumns' => array_values($uniqueVehicleColumns)
         ]
     ]);
     
 } catch (Exception $e) {
     error_log("Error in db_setup_tour_fares endpoint: " . $e->getMessage());
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to sync tour fares table: ' . $e->getMessage()], 500);
-}
-
-// Helper function
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    echo json_encode($data);
-    exit;
 }

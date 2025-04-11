@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { fareAPI } from '@/services/api';
@@ -7,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormItem, FormLabel, FormMessage, FormControl, Form } from "@/components/ui/form";
-import { RefreshCw, Save } from "lucide-react";
+import { RefreshCw, Save, SyncIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,14 +30,37 @@ const createFormSchema = (vehicles: CabType[]) => {
   return z.object(schema);
 };
 
+// Array of standard vehicle types to ensure consistent ordering
+const standardVehicleTypes = [
+  'sedan', 'ertiga', 'innova', 'innova_crysta', 'tempo', 
+  'tempo_traveller', 'luxury', 'mpv', 'toyota', 'dzire_cng', 'etios'
+];
+
+// Map of human-readable labels for vehicle types
+const vehicleLabels: Record<string, string> = {
+  sedan: 'Sedan',
+  ertiga: 'Ertiga',
+  innova: 'Innova',
+  innova_crysta: 'Innova Crysta',
+  tempo: 'Tempo',
+  tempo_traveller: 'Tempo Traveller',
+  luxury: 'Luxury',
+  mpv: 'MPV',
+  toyota: 'Toyota',
+  dzire_cng: 'Dzire CNG',
+  etios: 'Etios'
+};
+
 // Basic structure with proper implementation
 export function VehicleFareManagement() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [tourFares, setTourFares] = useState<any[]>([]);
   const [dynamicVehicleMap, setDynamicVehicleMap] = useState<Record<string, string>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [uniqueVehicleTypes, setUniqueVehicleTypes] = useState<string[]>([]);
   
   // Dynamic form setup
   const formSchema = createFormSchema(vehicles);
@@ -89,25 +111,11 @@ export function VehicleFareManagement() {
       try {
         setError(null);
         
-        // Make sure to include inactive vehicles too for more comprehensive mapping
-        const vehicleData = await getVehicleData(true, true);
-        console.log("Fetched vehicle data:", vehicleData);
-        setVehicles(vehicleData);
-        
-        // Initialize form default values for each vehicle
-        const defaultValues: Record<string, any> = {
-          vehicleId: form.getValues().vehicleId || "",
-        };
-        
-        vehicleData.forEach(vehicle => {
-          defaultValues[vehicle.id] = form.getValues()[vehicle.id] || 0;
-        });
-        
-        // Update form with new default values
-        form.reset(defaultValues);
-        
         // First sync tour_fares with the vehicles table
         await syncVehiclesWithFares();
+        
+        // Then load vehicles
+        await loadVehicles();
         
         // Then fetch tour fares to populate vehicle pricing
         await fetchTourFares();
@@ -121,8 +129,102 @@ export function VehicleFareManagement() {
     fetchData();
   }, []);
   
+  const loadVehicles = async () => {
+    try {
+      // Make sure to include inactive vehicles too for more comprehensive mapping
+      const vehicleData = await getVehicleData(true, true);
+      console.log("Fetched vehicle data:", vehicleData);
+      
+      // Deduplicate vehicles by type to avoid repeated entries
+      const uniqueVehicles: Record<string, CabType> = {};
+      
+      vehicleData.forEach(vehicle => {
+        const vehicleType = getNormalizedVehicleType(vehicle.id);
+        
+        // Only add if this type doesn't exist yet
+        if (!uniqueVehicles[vehicleType]) {
+          uniqueVehicles[vehicleType] = { ...vehicle };
+        }
+      });
+      
+      // Get the deduplicated list of vehicles
+      const deduplicatedVehicles = Object.values(uniqueVehicles);
+      
+      // Sort vehicles to ensure standard ones come first in a consistent order
+      const sortedVehicles = deduplicatedVehicles.sort((a, b) => {
+        const typeA = getNormalizedVehicleType(a.id);
+        const typeB = getNormalizedVehicleType(b.id);
+        
+        // Check if they're standard types
+        const indexA = standardVehicleTypes.indexOf(typeA);
+        const indexB = standardVehicleTypes.indexOf(typeB);
+        
+        // If both are standard types, sort by the predefined order
+        if (indexA >= 0 && indexB >= 0) {
+          return indexA - indexB;
+        }
+        
+        // If only one is a standard type, it should come first
+        if (indexA >= 0) return -1;
+        if (indexB >= 0) return 1;
+        
+        // Otherwise, sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
+      
+      setVehicles(sortedVehicles);
+      console.log("Sorted and deduplicated vehicles:", sortedVehicles);
+      
+      // Extract unique vehicle types for form fields
+      const types = sortedVehicles.map(v => getNormalizedVehicleType(v.id));
+      setUniqueVehicleTypes(types);
+      
+      // Initialize form default values for each vehicle
+      const defaultValues: Record<string, any> = {
+        vehicleId: form.getValues().vehicleId || "",
+      };
+      
+      sortedVehicles.forEach(vehicle => {
+        defaultValues[vehicle.id] = form.getValues()[vehicle.id] || 0;
+      });
+      
+      // Update form with new default values
+      form.reset(defaultValues);
+      
+      return sortedVehicles;
+    } catch (error) {
+      console.error("Error loading vehicles:", error);
+      setError("Failed to load vehicle data");
+      toast.error("Could not load vehicles");
+      return [];
+    }
+  };
+  
+  // Helper function to get normalized vehicle type
+  const getNormalizedVehicleType = (vehicleId: string): string => {
+    const id = vehicleId.toLowerCase();
+    
+    // Standard vehicle type mappings
+    if (id.includes('sedan')) return 'sedan';
+    if (id.includes('ertiga')) return 'ertiga'; 
+    if (id.includes('innova_crysta')) return 'innova_crysta';
+    if (id.includes('innova')) return 'innova';
+    if (id.includes('tempo_traveller')) return 'tempo_traveller';
+    if (id.includes('tempo')) return 'tempo';
+    if (id.includes('luxury')) return 'luxury';
+    if (id.includes('mpv')) return 'mpv';
+    if (id.includes('toyota')) return 'toyota';
+    if (id.includes('dzire_cng') || (id.includes('dzire') && id.includes('cng'))) return 'dzire_cng';
+    if (id.includes('etios')) return 'etios';
+    
+    // Return original ID if no specific type matches
+    return id;
+  };
+  
   const syncVehiclesWithFares = async () => {
     try {
+      setIsSyncing(true);
+      
       // Call the DB setup endpoint to ensure columns exist
       const response = await fetch('/api/admin/db_setup_tour_fares.php', {
         method: 'GET',
@@ -148,6 +250,8 @@ export function VehicleFareManagement() {
     } catch (error) {
       console.error('Error syncing vehicles with fares:', error);
       return false;
+    } finally {
+      setIsSyncing(false);
     }
   };
   
@@ -155,11 +259,12 @@ export function VehicleFareManagement() {
     form.setValue("vehicleId", vehicleId);
     
     // If we have pricing data for this vehicle, populate the form
-    const selectedVehicleFare = tourFares.find(fare => fare.vehicleId === vehicleId);
+    const selectedVehicleFare = tourFares.find(fare => fare.tourId === vehicleId);
     if (selectedVehicleFare) {
       // Populate form with existing fare data
       vehicles.forEach(vehicle => {
-        const fareValue = selectedVehicleFare[vehicle.id] || 0;
+        const vehicleType = getNormalizedVehicleType(vehicle.id);
+        const fareValue = selectedVehicleFare[vehicleType] || 0;
         form.setValue(vehicle.id, fareValue);
       });
     } else {
@@ -184,7 +289,7 @@ export function VehicleFareManagement() {
         
         if (userStr) {
           try {
-            const userData = JSON.parse(userStr);
+            const userData = JSON.parse(user);
             if (userData && userData.token) {
               localStorage.setItem('authToken', userData.token);
               foundToken = true;
@@ -206,27 +311,11 @@ export function VehicleFareManagement() {
         tourName: vehicles.find(v => v.id === values.vehicleId)?.name || values.vehicleId,
       };
       
-      // Add vehicle prices directly
+      // Add vehicle prices using normalized types (to prevent duplicates)
       vehicles.forEach(vehicle => {
-        fareData[vehicle.id] = values[vehicle.id] || 0;
-        
-        // Also map to database columns using the dynamic mapping
-        const dbColumn = dynamicVehicleMap[vehicle.id] || vehicleIdMapping[vehicle.id];
-        if (dbColumn && dbColumn !== vehicle.id) {
-          fareData[dbColumn] = values[vehicle.id] || 0;
-        }
+        const normalizedType = getNormalizedVehicleType(vehicle.id);
+        fareData[normalizedType] = values[vehicle.id] || 0;
       });
-      
-      // Get database column from mapping
-      let dbColumn = dynamicVehicleMap[values.vehicleId] || vehicleIdMapping[values.vehicleId];
-      
-      // If there's no mapping, create a safe column name
-      if (!dbColumn) {
-        dbColumn = values.vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-      }
-      
-      // Ensure the selected vehicle's price is also included with its column name
-      fareData[dbColumn] = values[values.vehicleId] || 0;
       
       console.log("Submitting vehicle fare data:", fareData);
       
@@ -288,7 +377,7 @@ export function VehicleFareManagement() {
         const userStr = localStorage.getItem('user');
         if (userStr) {
           try {
-            const userData = JSON.parse(userStr);
+            const userData = JSON.parse(user);
             if (userData && userData.token) {
               localStorage.setItem('authToken', userData.token);
               console.log('Retrieved token from user object for API call');
@@ -321,20 +410,56 @@ export function VehicleFareManagement() {
     }
   };
   
+  // Function to handle forcing a sync with the vehicles table
+  const handleSyncVehicles = async () => {
+    try {
+      setIsSyncing(true);
+      setError(null);
+      
+      const success = await syncVehiclesWithFares();
+      
+      if (success) {
+        toast.success("Successfully synchronized vehicles with tour fares table");
+        // Reload everything
+        await loadVehicles();
+        await fetchTourFares();
+      } else {
+        toast.error("Failed to synchronize vehicles");
+      }
+    } catch (error) {
+      console.error("Error syncing vehicles:", error);
+      setError("Failed to sync vehicles with tour fares table");
+      toast.error("Sync failed");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  
   return (
     <Card>
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle>Vehicle Fare Management</CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchTourFares} 
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSyncVehicles} 
+              disabled={isSyncing}
+            >
+              <SyncIcon className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              Sync Vehicles
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchTourFares} 
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -352,7 +477,7 @@ export function VehicleFareManagement() {
               name="vehicleId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Select Vehicle</FormLabel>
+                  <FormLabel>Select Tour</FormLabel>
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
@@ -362,13 +487,13 @@ export function VehicleFareManagement() {
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a vehicle" />
+                        <SelectValue placeholder="Select a tour" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {vehicles.map((vehicle) => (
-                        <SelectItem key={vehicle.id} value={vehicle.id}>
-                          {vehicle.name}
+                      {tourFares.map((tour) => (
+                        <SelectItem key={tour.tourId} value={tour.tourId}>
+                          {tour.tourName}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -386,7 +511,9 @@ export function VehicleFareManagement() {
                   name={vehicle.id as any}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{vehicle.name} Price</FormLabel>
+                      <FormLabel>
+                        {vehicleLabels[getNormalizedVehicleType(vehicle.id)] || vehicle.name} Price
+                      </FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
