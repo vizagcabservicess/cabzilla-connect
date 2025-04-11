@@ -27,8 +27,17 @@ try {
             'ertiga' => floatval($row['ertiga']),
             'innova' => floatval($row['innova']),
             'tempo' => floatval($row['tempo']),
-            'luxury' => floatval($row['luxury'])
+            'luxury' => floatval($row['luxury']),
+            'distance' => isset($row['distance']) ? floatval($row['distance']) : 0,
+            'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
+        
+        // Add any additional vehicle types that might be in the database
+        foreach ($row as $key => $value) {
+            if (!in_array($key, ['id', 'tour_id', 'tour_name', 'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 'distance', 'days', 'created_at', 'updated_at']) && is_numeric($value)) {
+                $tourFare[$key] = floatval($value);
+            }
+        }
         
         $tourFares[] = $tourFare;
     }

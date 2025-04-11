@@ -4,6 +4,7 @@ import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { loadTourFares } from '@/lib/tourData';
 
 export interface CabListProps {
   cabTypes: CabType[];
@@ -76,82 +77,133 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
   
-  // Load actual fares from localStorage
+  // Load actual fares from localStorage or API
   useEffect(() => {
     setIsCalculatingFares(true);
     
-    try {
-      // Try to find actual fares from localStorage first
-      const loadActualFares = () => {
-        const fares: Record<string, number> = {};
-        
-        // For each cab type, attempt to get the fare from localStorage
-        cabTypes.forEach(cab => {
-          try {
-            // For local packages, check for the specific package fare
-            if (tripType === 'local' && hourlyPackage) {
-              // Try to load from price matrix in localStorage
-              const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
-              if (priceMatrixStr) {
-                const priceMatrix = JSON.parse(priceMatrixStr);
-                
-                // Check if we have pricing for this specific package and cab
-                if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
-                  fares[cab.id] = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
-                  console.log(`Found fare for ${cab.id} in price matrix: ${fares[cab.id]}`);
-                  return;
+    const fetchFares = async () => {
+      try {
+        // For tour trip type, load the tour fares
+        if (tripType === 'tour') {
+          const tourFares = await loadTourFares();
+          const currentFares: Record<string, number> = {};
+          
+          // Get the selected tour ID from sessionStorage or localStorage
+          const selectedTour = sessionStorage.getItem('selectedTour') || localStorage.getItem('selectedTour');
+          
+          if (selectedTour && tourFares[selectedTour]) {
+            cabTypes.forEach(cab => {
+              // Normalize cab ID to match what's in the database
+              const normalizedCabId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+              
+              // Try various ways to find the fare
+              if (tourFares[selectedTour][cab.id]) {
+                currentFares[cab.id] = tourFares[selectedTour][cab.id];
+              } else if (tourFares[selectedTour][normalizedCabId]) {
+                currentFares[cab.id] = tourFares[selectedTour][normalizedCabId];
+              } else if (cab.id.includes('sedan') && tourFares[selectedTour].sedan) {
+                currentFares[cab.id] = tourFares[selectedTour].sedan;
+              } else if ((cab.id.includes('innova') || cab.id.includes('crysta')) && tourFares[selectedTour].innova) {
+                currentFares[cab.id] = tourFares[selectedTour].innova;
+              } else if (cab.id.includes('ertiga') && tourFares[selectedTour].ertiga) {
+                currentFares[cab.id] = tourFares[selectedTour].ertiga;
+              } else {
+                // Fallback to cab's pre-defined price if available
+                if (cab.price && cab.price > 0) {
+                  currentFares[cab.id] = cab.price;
+                } else {
+                  // Last resort - calculate a reasonable fare based on type
+                  const baseFare = distance * (
+                    cab.id.includes('luxury') ? 20 : 
+                    cab.id.includes('innova') ? 15 : 
+                    cab.id.includes('ertiga') ? 12 : 10
+                  );
+                  currentFares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
                 }
               }
-            }
+            });
             
-            // If not found in price matrix or not a local package, check vehicle-specific localStorage
-            const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-            const storedFare = localStorage.getItem(localStorageKey);
-            if (storedFare) {
-              fares[cab.id] = parseInt(storedFare, 10);
-              console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
-              return;
-            }
-            
-            // If still not found, use a reasonable default fare
-            if (!fares[cab.id]) {
-              // Fallback to cab's pre-defined price if available
-              if (cab.price && cab.price > 0) {
-                fares[cab.id] = cab.price;
-              } else {
-                // Last resort - calculate a reasonable fare based on type
-                const baseFare = distance * (
-                  cab.id.includes('luxury') ? 20 : 
-                  cab.id.includes('innova') ? 15 : 
-                  cab.id.includes('ertiga') ? 12 : 10
-                );
-                fares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
-              }
-            }
-          } catch (error) {
-            console.error(`Error getting fare for ${cab.id}:`, error);
-            // Fallback calculation
-            fares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+            console.log("Tour fares loaded successfully:", currentFares);
+            setCabFares(currentFares);
+            setIsCalculatingFares(false);
+            return; // Exit early after setting tour fares
           }
-        });
+        }
         
-        return fares;
-      };
-      
-      // Set the calculated fares
-      const actualFares = loadActualFares();
-      setCabFares(actualFares);
-    } catch (error) {
-      console.error('Error loading actual fares:', error);
-      // Fallback to simple calculation
-      const fallbackFares: Record<string, number> = {};
-      cabTypes.forEach(cab => {
-        fallbackFares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
-      });
-      setCabFares(fallbackFares);
-    } finally {
-      setIsCalculatingFares(false);
-    }
+        // If not a tour or no selected tour, try to find actual fares from localStorage
+        const loadActualFares = () => {
+          const fares: Record<string, number> = {};
+          
+          // For each cab type, attempt to get the fare from localStorage
+          cabTypes.forEach(cab => {
+            try {
+              // For local packages, check for the specific package fare
+              if (tripType === 'local' && hourlyPackage) {
+                // Try to load from price matrix in localStorage
+                const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
+                if (priceMatrixStr) {
+                  const priceMatrix = JSON.parse(priceMatrixStr);
+                  
+                  // Check if we have pricing for this specific package and cab
+                  if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
+                    fares[cab.id] = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
+                    console.log(`Found fare for ${cab.id} in price matrix: ${fares[cab.id]}`);
+                    return;
+                  }
+                }
+              }
+              
+              // If not found in price matrix or not a local package, check vehicle-specific localStorage
+              const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
+              const storedFare = localStorage.getItem(localStorageKey);
+              if (storedFare) {
+                fares[cab.id] = parseInt(storedFare, 10);
+                console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
+                return;
+              }
+              
+              // If still not found, use a reasonable default fare
+              if (!fares[cab.id]) {
+                // Fallback to cab's pre-defined price if available
+                if (cab.price && cab.price > 0) {
+                  fares[cab.id] = cab.price;
+                } else {
+                  // Last resort - calculate a reasonable fare based on type
+                  const baseFare = distance * (
+                    cab.id.includes('luxury') ? 20 : 
+                    cab.id.includes('innova') ? 15 : 
+                    cab.id.includes('ertiga') ? 12 : 10
+                  );
+                  fares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
+                }
+              }
+            } catch (error) {
+              console.error(`Error getting fare for ${cab.id}:`, error);
+              // Fallback calculation
+              fares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+            }
+          });
+          
+          return fares;
+        };
+        
+        // Set the calculated fares
+        const actualFares = loadActualFares();
+        setCabFares(actualFares);
+      } catch (error) {
+        console.error('Error loading actual fares:', error);
+        // Fallback to simple calculation
+        const fallbackFares: Record<string, number> = {};
+        cabTypes.forEach(cab => {
+          fallbackFares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+        });
+        setCabFares(fallbackFares);
+      } finally {
+        setIsCalculatingFares(false);
+      }
+    };
+    
+    fetchFares();
   }, [cabTypes, distance, tripType, hourlyPackage]);
 
   // Generate fare details string
@@ -160,6 +212,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       return 'Local package';
     } else if (tripType === 'airport') {
       return 'Airport transfer';
+    } else if (tripType === 'tour') {
+      return 'Tour package';
     } else {
       return tripMode === 'round-trip' ? 'Round trip' : 'One way';
     }

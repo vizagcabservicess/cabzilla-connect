@@ -23,9 +23,53 @@ export const availableTours: TourInfo[] = [
     distance: 25,
     days: 1,
     image: '/tours/rushikonda.jpg'
+  },
+  // Add the tours shown in your console log
+  {
+    id: 'annavaram',
+    name: 'Annavaram Temple Tour',
+    distance: 90,
+    days: 1,
+    image: '/tours/annavaram.jpg'
+  },
+  {
+    id: 'araku',
+    name: 'Araku Scenic Tour',
+    distance: 115,
+    days: 1,
+    image: '/tours/araku.jpg'
+  },
+  {
+    id: 'lambasingi',
+    name: 'Lambasingi Hill Tour',
+    distance: 100,
+    days: 1,
+    image: '/tours/lambasingi.jpg'
+  },
+  {
+    id: 'srikakulam',
+    name: 'Srikakulam Tour',
+    distance: 110,
+    days: 1,
+    image: '/tours/srikakulam.jpg'
+  },
+  {
+    id: 'vanajangi',
+    name: 'Vanajangi Scenic Tour',
+    distance: 95,
+    days: 1,
+    image: '/tours/vanajangi.jpg'
+  },
+  {
+    id: 'vizag',
+    name: 'Vizag City Tour',
+    distance: 30,
+    days: 1,
+    image: '/tours/vizag.jpg'
   }
 ];
 
+// Default fallback fares
 export const tourFares: TourFares = {
   araku_valley: {
     sedan: 6000,
@@ -41,6 +85,48 @@ export const tourFares: TourFares = {
     sedan: 2000,
     ertiga: 3000,
     innova: 4000
+  },
+  annavaram: {
+    sedan: 6000,
+    ertiga: 7500, 
+    innova: 9000,
+    tempo: 13500,
+    luxury: 17000
+  },
+  araku: {
+    sedan: 5000,
+    ertiga: 6500,
+    innova: 8000,
+    tempo: 12000,
+    luxury: 15000
+  },
+  lambasingi: {
+    sedan: 5500,
+    ertiga: 7000,
+    innova: 8500,
+    tempo: 12500,
+    luxury: 16000
+  },
+  srikakulam: {
+    sedan: 6500,
+    ertiga: 8000,
+    innova: 9500,
+    tempo: 14000,
+    luxury: 18000
+  },
+  vanajangi: {
+    sedan: 5500,
+    ertiga: 7000,
+    innova: 8500,
+    tempo: 12500,
+    luxury: 16000
+  },
+  vizag: {
+    sedan: 3000,
+    ertiga: 4000,
+    innova: 5500,
+    tempo: 7500,
+    luxury: 9000
   }
 };
 

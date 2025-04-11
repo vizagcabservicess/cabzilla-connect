@@ -46,6 +46,7 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
         }
         
         const tourData = await response.json();
+        console.log("Tour data received from API:", tourData);
         
         if (Array.isArray(tourData) && tourData.length > 0) {
           // Map API data to TourInfo format

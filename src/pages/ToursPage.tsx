@@ -14,11 +14,12 @@ import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, s
 import { cabTypes, formatPrice } from "@/lib/cabData";
 import { availableTours, tourFares, loadTourFares } from '@/lib/tourData';
 import { TripType } from "@/lib/tripTypes";
-import { CabType } from "@/types/cab";
+import { CabType, TourFares } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
+import { TourPackageSelector } from "@/components/TourPackageSelector";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dynamicTourFares, setDynamicTourFares] = useState(tourFares);
+  const [dynamicTourFares, setDynamicTourFares] = useState<TourFares>(tourFares);
   const [isLoadingFares, setIsLoadingFares] = useState(false);
   
   // Load dynamic tour fares from the API
@@ -108,6 +109,7 @@ const ToursPage = () => {
   };
   
   const handleTourSelect = (tourId: string) => {
+    console.log(`Tour selected: ${tourId}`);
     setSelectedTour(tourId);
     setSelectedCab(null);
   };
