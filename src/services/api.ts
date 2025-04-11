@@ -10,6 +10,20 @@ const apiClient = axios.create({
   },
 });
 
+// Add a request interceptor to include auth token in all requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Tour fare API methods
 export const fareAPI = {
   // Get all tour fares
@@ -27,6 +41,7 @@ export const fareAPI = {
   // Update a tour fare
   updateTourFares: async (fareData: any): Promise<any> => {
     try {
+      console.log('Sending tour fare update with auth token:', localStorage.getItem('authToken'));
       // Use the correct endpoint for tour fare updates
       const response = await apiClient.post('/api/admin/fares-update.php', fareData);
       return response.data;
