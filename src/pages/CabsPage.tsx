@@ -31,15 +31,12 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { Check, MapPin } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
-import { useIsMobile } from "@/hooks/useIsMobile";
-import { cn } from "@/lib/utils";
 
 const CabsPage = () => {
   const navigate = useNavigate();
   const { tripType: urlTripType } = useParams<{ tripType?: string }>();
   const { toast } = useToast();
   const { isLoaded } = useGoogleMaps();
-  const isMobile = useIsMobile();
   
   const getInitialFromSession = (key: string, defaultValue: any) => {
     try {
@@ -151,12 +148,7 @@ const CabsPage = () => {
     setTotalPrice(0);
     
     setTripType(type);
-    
-    if (window.location.pathname.includes('/cabs')) {
-      window.history.replaceState({}, '', `/cabs/${type}`);
-    } else {
-      navigate(`/cabs/${type}`);
-    }
+    navigate(`/cabs/${type}`);
 
     if (type === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -459,7 +451,7 @@ const CabsPage = () => {
                 />
               </div>
 
-              <div className={cn("p-6", isMobile && "px-3")}>
+              <div className="p-6">
                 <LocationInput 
                   label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
                   placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
@@ -547,26 +539,18 @@ const CabsPage = () => {
                 {showMap && pickup && dropoff && (
                   <div className="mt-6 w-full overflow-hidden rounded-lg shadow-md">
                     <h3 className="text-lg font-semibold mb-2">Route Map</h3>
-                    <div className={isMobile ? "h-[300px]" : "h-[400px]"}>
-                      <GoogleMapComponent 
-                        pickupLocation={pickup} 
-                        dropLocation={dropoff} 
-                        onDistanceCalculated={handleMapDistanceCalculated}
-                      />
-                    </div>
+                    <GoogleMapComponent 
+                      pickupLocation={pickup} 
+                      dropLocation={dropoff} 
+                      onDistanceCalculated={handleMapDistanceCalculated}
+                    />
                   </div>
                 )}
 
                 <Button 
                   onClick={handleSearch} 
                   disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
-                  className={cn(
-                    "bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md mt-6",
-                    isMobile ? "w-full" : "w-full md:w-auto",
-                    "transition-all duration-150 ease-in-out",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                    "flex items-center justify-center"
-                  )}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
                 >
                   {isCalculatingDistance ? (
                     <div className="flex items-center">
@@ -578,7 +562,7 @@ const CabsPage = () => {
               </div>
             </div>
           ) : (
-            <div className={cn("grid gap-6", isMobile ? "grid-cols-1" : "md:grid-cols-2")}>
+            <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}

@@ -12,15 +12,6 @@ function App() {
     // Set page title
     document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
     
-    // Set meta viewport for better mobile experience
-    const metaViewport = document.querySelector('meta[name="viewport"]');
-    if (metaViewport) {
-      metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-    }
-    
-    // Apply mobile-friendly styles
-    document.documentElement.classList.add('antialiased');
-    
     // Log navigation for debugging routes
     const handleRouteChange = () => {
       console.log('Route changed to:', window.location.pathname);
@@ -38,12 +29,7 @@ function App() {
       <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <RouterProvider router={router} />
         <ToastUIToaster />
-        <SonnerToaster 
-          position="top-center" 
-          closeButton 
-          richColors 
-          className="mobile-toaster"
-        />
+        <SonnerToaster position="top-right" closeButton richColors />
       </GoogleMapsProvider>
     </ThemeProvider>
   );
