@@ -1,4 +1,3 @@
-
 import axios, { AxiosRequestConfig } from 'axios';
 import { TourFares } from '@/types/cab';
 import { getAuthorizationHeader } from '@/config/api';
@@ -7,7 +6,7 @@ import { toast } from 'sonner';
 import { authAPI } from '@/services/api/authAPI';
 export { authAPI };
 
-// Import and export bookingAPI if it exists, or create a stub if needed
+// Import and export bookingAPI
 import { bookingAPI } from '@/services/api/bookingAPI';
 export { bookingAPI };
 
@@ -70,9 +69,11 @@ baseApi.interceptors.response.use(
     } else if (error.request) {
       // Request was made but no response received (network error)
       console.error('No response received:', error.request);
+      toast.error('Network error. Please check your connection and try again.');
     } else {
       // Error in setting up the request
       console.error('Request setup error:', error.message);
+      toast.error('Error setting up request: ' + error.message);
     }
     
     return Promise.reject(error);
@@ -121,6 +122,7 @@ export const syncTourFaresTable = async (): Promise<boolean> => {
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Authorization': `Bearer ${token}`, // Explicitly add token
         ...getAuthorizationHeader()
       }
     });
@@ -158,7 +160,12 @@ export const fareAPI = {
   getTourFares: async () => {
     try {
       // Ensure authentication token is set
-      ensureAuthToken();
+      const token = ensureAuthToken();
+      if (!token) {
+        console.warn('No auth token available for getTourFares');
+        toast.error('Authentication required to get tour fares');
+        return [];
+      }
       
       // First sync tables to ensure all vehicles are represented
       try {
@@ -167,23 +174,34 @@ export const fareAPI = {
         console.warn('Table sync failed before getTourFares:', syncError);
       }
       
-      const config: AxiosRequestConfig = {
+      console.log('Fetching tour fares from API...');
+      const response = await fetch('/api/admin/tour-fares.php', {
         method: 'GET',
-        url: '/api/admin/tour-fares.php',
         headers: {
-          ...getAuthorizationHeader(),
+          'Content-Type': 'application/json',
+          'X-Admin-Mode': 'true',
           'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Authorization': `Bearer ${token}`, // Explicitly add token
+          ...getAuthorizationHeader()
         }
-      };
+      });
       
-      const response = await baseApi(config);
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error getting tour fares:', errorText);
+        throw new Error(`Failed to get tour fares: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Fetched tour fares:', data);
+      
+      if (Array.isArray(data)) {
+        return data;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        return data.data;
       } else {
-        console.warn('Unexpected format from getTourFares API:', response.data);
+        console.warn('Unexpected format from getTourFares API:', data);
         return [];
       }
     } catch (error) {
@@ -215,6 +233,7 @@ export const fareAPI = {
         url: '/api/admin/fares-update.php',
         headers: {
           ...getAuthorizationHeader(),
+          'Authorization': `Bearer ${token}`, // Explicitly add token
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
@@ -245,6 +264,7 @@ export const fareAPI = {
         url: '/api/admin/fares-update.php',
         headers: {
           ...getAuthorizationHeader(),
+          'Authorization': `Bearer ${token}`, // Explicitly add token
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
@@ -275,6 +295,7 @@ export const fareAPI = {
         url: '/api/admin/fares-update.php',
         headers: {
           ...getAuthorizationHeader(),
+          'Authorization': `Bearer ${token}`, // Explicitly add token
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
@@ -287,5 +308,24 @@ export const fareAPI = {
       console.error('Error deleting tour fare:', error);
       throw error;
     }
+  }
+};
+
+// Enhanced version of BookingAPI to include methods mentioned in errors
+bookingAPI.getBookingById = bookingAPI.getBooking;
+bookingAPI.updateBookingStatus = bookingAPI.updateBooking;
+bookingAPI.getUserBookings = bookingAPI.getBookings;
+bookingAPI.getAllBookings = bookingAPI.getBookings;
+bookingAPI.getAdminDashboardMetrics = async () => {
+  try {
+    const response = await axios.get('/api/admin/dashboard-metrics.php', {
+      headers: {
+        ...getAuthorizationHeader()
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error getting admin dashboard metrics:', error);
+    throw error;
   }
 };

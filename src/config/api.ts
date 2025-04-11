@@ -105,6 +105,24 @@ export async function getDynamicVehicleMapping(): Promise<Record<string, string>
   try {
     console.log('Fetching dynamic vehicle mapping from backend...');
     
+    // Ensure auth token is available for this request
+    let token = localStorage.getItem('authToken');
+    if (!token || token === 'null' || token === 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          if (userData && userData.token) {
+            localStorage.setItem('authToken', userData.token);
+            token = userData.token;
+            console.log('Retrieved token from user object for vehicle mapping');
+          }
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+    }
+    
     // Start with the static mapping
     const mapping = { ...vehicleIdMapping };
     
@@ -115,6 +133,7 @@ export async function getDynamicVehicleMapping(): Promise<Record<string, string>
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Authorization': token ? `Bearer ${token}` : '',
         ...getAuthorizationHeader()
       }
     });
@@ -132,9 +151,16 @@ export async function getDynamicVehicleMapping(): Promise<Record<string, string>
             
             // Also map the vehicle_id itself
             mapping[vehicle.vehicle_id] = safeColumnName;
+            
+            // Map vehicle name too if available
+            if (vehicle.name) {
+              mapping[vehicle.name] = safeColumnName;
+            }
           }
         });
       }
+    } else {
+      console.warn('Failed to fetch vehicle data for mapping:', response.status, response.statusText);
     }
     
     console.log('Dynamic vehicle mapping:', mapping);

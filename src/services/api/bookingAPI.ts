@@ -78,6 +78,37 @@ export const bookingAPI = {
       console.error('Error getting bookings:', error);
       throw error;
     }
+  },
+
+  // Additional methods needed by other components
+  getBookingById: async (bookingId: number) => {
+    return bookingAPI.getBooking(bookingId);
+  },
+
+  updateBookingStatus: async (bookingId: number, status: string) => {
+    return bookingAPI.updateBooking(bookingId, { status });
+  },
+
+  getUserBookings: async (userId: number) => {
+    return bookingAPI.getBookings({ userId });
+  },
+
+  getAllBookings: async () => {
+    return bookingAPI.getBookings();
+  },
+
+  getAdminDashboardMetrics: async () => {
+    try {
+      const response = await axios.get(getApiUrl('/api/admin/dashboard-metrics.php'), {
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting admin dashboard metrics:', error);
+      throw error;
+    }
   }
 };
 

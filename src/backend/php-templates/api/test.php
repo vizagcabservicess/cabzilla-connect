@@ -28,7 +28,7 @@ if (!empty($authHeader)) {
     $token = str_replace('Bearer ', '', $authHeader);
     if (!empty($token) && $token !== 'null' && $token !== 'undefined') {
         $hasAuthToken = true;
-        $tokenValue = $token; // Keep full token for better debugging
+        $tokenValue = substr($token, 0, 15) . '...'; // Truncate token for security in logs
         
         // Try to decode token (if it's a base64 encoded JSON)
         try {
@@ -49,6 +49,18 @@ if (!empty($authHeader)) {
     }
 }
 
+// Get token from localStorage (for debugging purposes)
+$localStorageCheckScript = "<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var token = localStorage.getItem('authToken');
+        var user = localStorage.getItem('user');
+        var div = document.createElement('div');
+        div.innerHTML = 'localStorage authToken: ' + (token ? 'present' : 'missing') + '<br>';
+        div.innerHTML += 'localStorage user: ' + (user ? 'present' : 'missing');
+        document.body.appendChild(div);
+    });
+</script>";
+
 // Return API connection status with detailed auth info
 echo json_encode([
     'status' => 'success',
@@ -56,10 +68,14 @@ echo json_encode([
     'timestamp' => date('Y-m-d H:i:s'),
     'auth' => [
         'hasToken' => $hasAuthToken,
-        'token' => $tokenValue ? "Valid (length: " . strlen($tokenValue) . ")" : "Missing",
+        'token' => $tokenValue ? "Valid (length: " . strlen($token) . ")" : "Missing",
         'headers' => array_keys($headers),
         'authHeader' => $authHeader ? 'present' : 'missing',
         'tokenData' => $tokenData
+    ],
+    'debug' => [
+        'check_localStorage' => $localStorageCheckScript,
+        'all_headers' => $headers
     ],
     'server' => [
         'php_version' => PHP_VERSION,

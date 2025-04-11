@@ -60,6 +60,23 @@ export const loadTourFares = async (): Promise<TourFares> => {
     
     // First, make sure the tour_fares table is synced with vehicles
     try {
+      // Ensure the auth token is set before syncing
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData?.token) {
+              localStorage.setItem('authToken', userData.token);
+              console.log('Retrieved token from user object for tour fares sync');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+      }
+      
       const syncSuccess = await syncTourFaresTable();
       console.log("Tour fares table sync result:", syncSuccess ? "success" : "failed");
     } catch (syncError) {
