@@ -76,5 +76,11 @@ const injectCabSelectionScript = () => {
 // Inject the script immediately on module import
 injectCabSelectionScript();
 
-// Make sure the original CabOptions component's export is maintained
-export { default } from './cab-options/CabList';
+// Import the CabList component
+import { CabList } from './cab-options/CabList';
+
+// Export the CabList as a named export for consistency
+export { CabList as CabOptions };
+
+// Also export as default for backward compatibility
+export default CabList;
