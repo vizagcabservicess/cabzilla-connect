@@ -1,6 +1,38 @@
 
 // API configuration and helpers
 
+// Base API URL - can be overridden by environment variable
+export const apiBaseUrl = '/'; // Default to relative path for API requests
+
+// Default headers to use with API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache'
+};
+
+// Force refresh headers for bypassing cache
+export const forceRefreshHeaders = {
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
+// Helper function to construct an API URL
+export function getApiUrl(path: string): string {
+  // If the path is already a full URL, return it
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  
+  // Ensure the path starts with a slash if necessary
+  const formattedPath = path.startsWith('/') ? path : `/${path}`;
+  
+  // Combine with API base URL, ensuring no double slashes
+  return `${apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl}${formattedPath}`;
+}
+
 // Function to get the authorization header with the token
 export function getAuthorizationHeader(): { Authorization?: string } {
   // Try to get token from localStorage

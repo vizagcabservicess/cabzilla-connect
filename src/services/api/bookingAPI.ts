@@ -1,0 +1,84 @@
+
+import axios from 'axios';
+import { getApiUrl, getAuthorizationHeader } from '@/config/api';
+
+// BookingAPI interface
+export const bookingAPI = {
+  // Get a booking by ID
+  getBooking: async (bookingId: number) => {
+    try {
+      const response = await axios.get(getApiUrl(`/api/bookings/${bookingId}`), {
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting booking:', error);
+      throw error;
+    }
+  },
+
+  // Create a new booking
+  createBooking: async (bookingData: any) => {
+    try {
+      const response = await axios.post(getApiUrl('/api/bookings'), bookingData, {
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      throw error;
+    }
+  },
+
+  // Update an existing booking
+  updateBooking: async (bookingId: number, updateData: any) => {
+    try {
+      const response = await axios.put(getApiUrl(`/api/bookings/${bookingId}`), updateData, {
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      throw error;
+    }
+  },
+
+  // Delete a booking
+  deleteBooking: async (bookingId: number) => {
+    try {
+      const response = await axios.delete(getApiUrl(`/api/bookings/${bookingId}`), {
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      throw error;
+    }
+  },
+
+  // Get all bookings (with optional filters)
+  getBookings: async (filters?: any) => {
+    try {
+      const response = await axios.get(getApiUrl('/api/bookings'), {
+        params: filters,
+        headers: {
+          ...getAuthorizationHeader()
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting bookings:', error);
+      throw error;
+    }
+  }
+};
+
+export default bookingAPI;

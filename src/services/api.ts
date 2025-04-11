@@ -3,6 +3,13 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { TourFares } from '@/types/cab';
 import { getAuthorizationHeader } from '@/config/api';
 import { toast } from 'sonner';
+// Import and re-export authAPI 
+import { authAPI } from '@/services/api/authAPI';
+export { authAPI };
+
+// Import and export bookingAPI if it exists, or create a stub if needed
+import { bookingAPI } from '@/services/api/bookingAPI';
+export { bookingAPI };
 
 // Create a base API instance with default configuration
 const baseApi = axios.create({
