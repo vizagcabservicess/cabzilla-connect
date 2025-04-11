@@ -60,10 +60,12 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
   }, [tripType, tripMode, pickupLocation, dropLocation, pickupDate]);
 
   const handlePickupLocationChange = (location: Location) => {
+    if (!location) return;
     setPickupLocation(location);
   };
   
   const handleDropLocationChange = (location: Location) => {
+    if (!location) return;
     setDropLocation(location);
   };
 

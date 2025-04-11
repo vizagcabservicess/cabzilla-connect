@@ -135,7 +135,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   return vizagNames.some(vizagName => 
     safeIncludes(location.address, vizagName) ||
     safeIncludes(location.name, vizagName) ||
-    safeIncludes((location as AppLocation).city, vizagName)
+    safeIncludes((location as AppLocation)?.city, vizagName)
   );
 };
 

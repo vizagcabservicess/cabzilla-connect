@@ -26,9 +26,6 @@ export function DateTimePicker({
   label
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
-  const [selectedTime, setSelectedTime] = useState<string | null>(
-    date && date instanceof Date ? format(date, "HH:mm") : "12:00"
-  );
   
   // For better time selection on mobile
   const [selectedHour, setSelectedHour] = useState<string>(
@@ -38,6 +35,9 @@ export function DateTimePicker({
     date && date instanceof Date ? date.getMinutes().toString().padStart(2, '0') : '00'
   );
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<string>(
+    date && date instanceof Date ? format(date, "HH:mm") : "12:00"
+  );
   
   // Ensure date is a valid Date object
   useEffect(() => {
@@ -59,24 +59,23 @@ export function DateTimePicker({
   // Apply time immediately when date is selected
   const handleCalendarSelect = (newDate: Date | undefined) => {
     if (newDate) {
-      const hours = selectedTime ? parseInt(selectedTime.split(':')[0], 10) : 
-                   parseInt(selectedHour, 10);
-      const minutes = selectedTime ? parseInt(selectedTime.split(':')[1], 10) : 
-                     parseInt(selectedMinute, 10);
+      const hours = parseInt(selectedHour, 10);
+      const minutes = parseInt(selectedMinute, 10);
       
       newDate.setHours(hours);
       newDate.setMinutes(minutes);
+      onDateChange(newDate);
+    } else {
+      onDateChange(undefined);
     }
-    onDateChange(newDate);
   };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
-    applySelectedTime(e.target.value);
-  };
-
-  const applySelectedTime = (timeStr: string | null) => {
-    if (!date || !timeStr) return;
+    if (!date || !(date instanceof Date)) return;
+    
+    const timeStr = e.target.value;
+    if (!timeStr) return;
     
     const [hours, minutes] = timeStr.split(":").map(Number);
     if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
@@ -88,18 +87,18 @@ export function DateTimePicker({
   };
 
   const handleApply = () => {
-    // For direct input time
-    if (selectedTime) {
-      applySelectedTime(selectedTime);
-    }
-    // For dropdown-based selection
-    else if (selectedHour && selectedMinute) {
-      if (date && date instanceof Date) {
-        const newDate = new Date(date);
-        newDate.setHours(parseInt(selectedHour, 10));
-        newDate.setMinutes(parseInt(selectedMinute, 10));
-        onDateChange(newDate);
-      }
+    if (!date || !(date instanceof Date)) return;
+    
+    // Apply selected time directly
+    const newDate = new Date(date);
+    
+    const hours = parseInt(selectedHour, 10);
+    const minutes = parseInt(selectedMinute, 10);
+    
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      newDate.setHours(hours);
+      newDate.setMinutes(minutes);
+      onDateChange(newDate);
     }
     
     setIsTimePickerOpen(false);
@@ -132,6 +131,10 @@ export function DateTimePicker({
 
   // Format AM/PM time for display
   const formatTimeDisplay = (date: Date) => {
+    if (!date || !(date instanceof Date)) {
+      return '12:00 AM';
+    }
+    
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -230,7 +233,7 @@ export function DateTimePicker({
                         </Select>
                       </div>
                     </div>
-                    <Button size="sm" onClick={handleApply} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button onClick={handleApply} size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                       Apply Time
                     </Button>
                   </div>
@@ -244,7 +247,19 @@ export function DateTimePicker({
                   onChange={handleTimeChange}
                   className="max-w-[110px]"
                 />
-                <Button size="sm" onClick={handleApply} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button 
+                  size="sm" 
+                  onClick={() => {
+                    if (date && date instanceof Date && selectedTime) {
+                      const [hours, minutes] = selectedTime.split(":").map(Number);
+                      const newDate = new Date(date);
+                      newDate.setHours(hours || 0);
+                      newDate.setMinutes(minutes || 0);
+                      onDateChange(newDate);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
                   Apply
                 </Button>
               </div>

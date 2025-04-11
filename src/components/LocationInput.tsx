@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
@@ -37,8 +38,7 @@ export function LocationInput({
   const locationData = location || value || { address: '', id: '', name: '' };
   const handleLocationChange = onLocationChange || onChange;
   
-  const initialAddress = typeof locationData.address === 'string' ? locationData.address : 
-                         typeof locationData.name === 'string' ? locationData.name : '';
+  const initialAddress = locationData?.address || locationData?.name || '';
   const [address, setAddress] = useState<string>(initialAddress);
   const [locationError, setLocationError] = useState<string | null>(null);
   const { google, isLoaded } = useGoogleMaps();
@@ -62,11 +62,7 @@ export function LocationInput({
     prevLocationRef.current = locationData;
     
     if (!locationChangedRef.current) {
-      const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
-        ? locationData.address 
-        : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
-          ? locationData.name 
-          : '';
+      const newAddress = locationData?.address || locationData?.name || '';
           
       if (newAddress && newAddress !== address) {
         console.log('Updating address from props:', newAddress);
@@ -126,12 +122,12 @@ export function LocationInput({
       console.log("Manual address entry - not selected from dropdown:", address);
       
       const updatedLocation: Location = {
-        id: locationData.id || `loc_${Date.now()}`,
+        id: locationData?.id || `loc_${Date.now()}`,
         name: address,
         address: address,
-        ...(typeof locationData.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
-        ...(typeof locationData.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
-        isInVizag: locationData.isInVizag === true
+        ...(typeof locationData?.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
+        ...(typeof locationData?.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
+        isInVizag: locationData?.isInVizag === true
       };
       
       updateParentLocation(updatedLocation);
@@ -233,7 +229,7 @@ export function LocationInput({
         }
         
         const newLocation: Location = {
-          id: locationData.id || `loc_${Date.now()}`,
+          id: locationData?.id || `loc_${Date.now()}`,
           name: place.name || formattedAddress.split(',')[0] || '',
           address: formattedAddress,
           lat: lat,
@@ -251,7 +247,7 @@ export function LocationInput({
     return () => {
       cleanupAutocomplete();
     };
-  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id]);
+  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData]);
 
   function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
     const isInVizagBounds = 
@@ -322,9 +318,6 @@ export function LocationInput({
       {locationError && (
         <p className="text-xs text-red-500 mt-1">{locationError}</p>
       )}
-      <p className="text-xs text-gray-500">
-        {isPickupLocation ? "Select a location in Visakhapatnam" : "Select a destination in India"}
-      </p>
     </div>
   );
 }
