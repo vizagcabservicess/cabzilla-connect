@@ -67,11 +67,26 @@ export const loadTourFares = async (): Promise<TourFares> => {
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
-          dynamicTourFares[tour.tourId] = {
-            sedan: tour.sedan || 0,
-            ertiga: tour.ertiga || 0,
-            innova: tour.innova || 0
-          };
+          // Create an entry for each tour with all vehicle types
+          const fareEntry: Record<string, number> = {};
+          
+          // Extract all vehicle prices from the tour fare object
+          Object.entries(tour).forEach(([key, value]) => {
+            // Only add keys that have numeric values and aren't id, tourId, or tourName
+            if (
+              typeof value === 'number' &&
+              !['id', 'tourId', 'tourName'].includes(key)
+            ) {
+              fareEntry[key] = value;
+            }
+          });
+          
+          // Make sure required vehicle types are always present
+          fareEntry.sedan = tour.sedan || 0;
+          fareEntry.ertiga = tour.ertiga || 0;
+          fareEntry.innova = tour.innova || 0;
+          
+          dynamicTourFares[tour.tourId] = fareEntry;
         }
       });
     }

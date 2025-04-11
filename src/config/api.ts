@@ -65,6 +65,72 @@ export const vehicleIdMapping = {
   '1314': 'tempo'   // Tempo Traveller
 };
 
+// Get dynamic vehicle mapping from database
+export const getDynamicVehicleMapping = async (): Promise<Record<string, string>> => {
+  try {
+    // Sync tour_fares table with vehicles first
+    const syncResponse = await fetch(getApiUrl('/api/admin/db_setup_tour_fares.php'), {
+      method: 'GET',
+      headers: {
+        ...defaultHeaders,
+        ...getAuthorizationHeader()
+      }
+    });
+    
+    if (!syncResponse.ok) {
+      console.error('Failed to sync tour_fares table:', syncResponse.statusText);
+      return vehicleIdMapping;
+    }
+    
+    const syncData = await syncResponse.json();
+    console.log('Tour fares table synced with vehicles:', syncData);
+    
+    // Create dynamic mapping from response
+    const dynamicMapping = { ...vehicleIdMapping };
+    
+    if (syncData.data && syncData.data.vehicles) {
+      syncData.data.vehicles.forEach((vehicle: any) => {
+        // Add mapping based on database ID to column name
+        const columnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        dynamicMapping[vehicle.id] = columnName;
+        
+        // Also add name-based mapping for UI display
+        dynamicMapping[vehicle.name] = columnName;
+      });
+    }
+    
+    console.log('Extended vehicle mapping:', dynamicMapping);
+    return dynamicMapping;
+  } catch (error) {
+    console.error('Error getting dynamic vehicle mapping:', error);
+    return vehicleIdMapping;
+  }
+};
+
+// Helper to get authorization header with token
+export const getAuthorizationHeader = (): Record<string, string> => {
+  let token = localStorage.getItem('authToken');
+  
+  // If token not found, try to retrieve from user object
+  if (!token || token === 'null' || token === 'undefined') {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        if (userData?.token) {
+          token = userData.token;
+          // Store it back in localStorage for future use
+          localStorage.setItem('authToken', token);
+        }
+      }
+    } catch (e) {
+      console.error('Error retrieving token from user object:', e);
+    }
+  }
+  
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // Debug utility function - helps track API issues
 export const logApiError = (error: any, context: string) => {
   console.error(`API Error in ${context}:`, error);
@@ -97,5 +163,7 @@ export default {
   defaultHeaders,
   forceRefreshHeaders,
   vehicleIdMapping,
+  getDynamicVehicleMapping,
+  getAuthorizationHeader,
   logApiError
 };

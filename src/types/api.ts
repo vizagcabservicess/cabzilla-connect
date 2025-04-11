@@ -1,14 +1,22 @@
+// API response types for the application
 
-// src/types/api.ts
-export type BookingStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'assigned'
-  | 'payment_received'
-  | 'payment_pending'
-  | 'completed'
-  | 'continued'
-  | 'cancelled';
+export interface TourFare {
+  id: number;
+  tourId: string;
+  tourName: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
+  [key: string]: number | string; // Allow dynamic vehicle columns
+}
+
+export interface FareUpdateRequest {
+  tourId: string;
+  tourName?: string;
+  [key: string]: any; // Allow dynamic vehicle fields
+}
 
 export interface Booking {
   id: number;
@@ -49,43 +57,6 @@ export interface User {
   phone: string | null;
   role: 'admin' | 'user';
   createdAt?: string; // Adding createdAt property that was missing
-}
-
-export interface TourFare {
-  id: number;
-  tourId: string;
-  tourName: string;
-  
-  // Standard vehicle columns in database
-  sedan: number;
-  ertiga: number;
-  innova: number;
-  tempo: number;
-  luxury: number;
-  
-  // Additional optional columns that may be present
-  [key: string]: any;
-}
-
-export interface FareUpdateRequest {
-  tourId: string;
-  tourName?: string;
-  [key: string]: any;
-}
-
-// Adding missing interfaces that were causing TypeScript errors
-
-export interface Location {
-  id: string;
-  name: string;
-  address: string;
-  lat?: number;
-  lng?: number;
-  isInVizag?: boolean;
-  city?: string;
-  state?: string;
-  type?: string;
-  popularityScore?: number;
 }
 
 export interface BookingRequest {
@@ -142,4 +113,17 @@ export interface DashboardMetrics {
     location: string;
     count: number;
   }[];
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  lat?: number;
+  lng?: number;
+  isInVizag?: boolean;
+  city?: string;
+  state?: string;
+  type?: string;
+  popularityScore?: number;
 }

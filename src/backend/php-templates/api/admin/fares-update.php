@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -91,7 +90,38 @@ $vehicleIdMap = [
     '1314' => 'tempo'
 ];
 
+// Fetch dynamic vehicle mapping from database
 try {
+    $vehiclesQuery = "SELECT id, vehicle_id FROM vehicles";
+    $vehiclesResult = $conn->query($vehiclesQuery);
+    
+    if ($vehiclesResult) {
+        while ($row = $vehiclesResult->fetch_assoc()) {
+            // Add dynamic mapping based on database
+            // Map numeric IDs to column names
+            $vehicleIdMap[$row['id']] = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $row['vehicle_id']));
+        }
+    }
+    
+    error_log("Extended vehicle ID mapping: " . json_encode($vehicleIdMap));
+} catch (Exception $e) {
+    error_log("Error fetching vehicle mappings: " . $e->getMessage());
+}
+
+try {
+    // Sync tour_fares table with vehicles table to ensure all columns exist
+    $columnsQuery = "SHOW COLUMNS FROM tour_fares";
+    $columnsResult = $conn->query($columnsQuery);
+    
+    if ($columnsResult) {
+        $existingColumns = [];
+        while ($column = $columnsResult->fetch_assoc()) {
+            $existingColumns[] = $column['Field'];
+        }
+        
+        error_log("Existing tour_fares columns: " . json_encode($existingColumns));
+    }
+    
     // Handle POST request to update tour fares
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Get request body
@@ -134,39 +164,50 @@ try {
         $updateTypes = "";
         $updateValues = [];
         
-        // Standard vehicle columns that exist in the tour_fares table
-        $standardColumns = ["sedan", "ertiga", "innova", "tempo", "luxury"];
+        // Get all dynamic columns from tour_fares table
+        $dynamicColumns = [];
+        $columnsQuery = "SHOW COLUMNS FROM tour_fares";
+        $columnsResult = $conn->query($columnsQuery);
         
-        // Log which columns we're updating
-        error_log("Updating these columns: " . json_encode($standardColumns));
-        error_log("Received these keys: " . json_encode(array_keys($requestData)));
+        if ($columnsResult) {
+            while ($column = $columnsResult->fetch_assoc()) {
+                // Skip non-fare columns
+                if (!in_array($column['Field'], ['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'])) {
+                    $dynamicColumns[] = $column['Field'];
+                }
+            }
+        }
         
-        // Add all standard columns
-        foreach ($standardColumns as $column) {
-            // Check if this column exists in the request
+        error_log("Dynamic columns for update: " . json_encode($dynamicColumns));
+        
+        // Process each column that exists in the database
+        foreach ($dynamicColumns as $column) {
+            $columnUpdated = false;
+            
+            // Check if this column exists directly in the request
             if (isset($requestData[$column])) {
                 $updateColumns[] = "$column = ?";
                 $updateTypes .= "d";
                 $updateValues[] = floatval($requestData[$column]);
-                error_log("Adding standard column: $column = " . floatval($requestData[$column]));
+                $columnUpdated = true;
+                error_log("Adding direct column: $column = " . floatval($requestData[$column]));
             } else {
                 // Check if there's a mapped ID for this column
-                $found = false;
                 foreach ($vehicleIdMap as $requestId => $dbColumn) {
                     if ($dbColumn === $column && isset($requestData[$requestId])) {
                         $updateColumns[] = "$column = ?";
                         $updateTypes .= "d";
                         $updateValues[] = floatval($requestData[$requestId]);
-                        $found = true;
+                        $columnUpdated = true;
                         error_log("Mapped $requestId to database column $column = " . floatval($requestData[$requestId]));
                         break;
                     }
                 }
-                
-                if (!$found) {
-                    // Keep existing value by not including it in the update
-                    error_log("No value found for column $column, keeping existing value");
-                }
+            }
+            
+            if (!$columnUpdated) {
+                // Keep existing value by not including it in the update
+                error_log("No value found for column $column, keeping existing value");
             }
         }
         

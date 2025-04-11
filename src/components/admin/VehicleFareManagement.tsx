@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { getVehicleData } from '@/services/vehicleDataService';
 import { CabType } from '@/types/cab';
-import { vehicleIdMapping } from '@/config/api';
+import { vehicleIdMapping, getDynamicVehicleMapping, getAuthorizationHeader } from '@/config/api';
 
 // Create dynamic form schema based on available vehicles
 const createFormSchema = (vehicles: CabType[]) => {
@@ -37,6 +37,8 @@ export function VehicleFareManagement() {
   const [error, setError] = useState<string | null>(null);
   const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [tourFares, setTourFares] = useState<any[]>([]);
+  const [dynamicVehicleMap, setDynamicVehicleMap] = useState<Record<string, string>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Dynamic form setup
   const formSchema = createFormSchema(vehicles);
@@ -49,7 +51,7 @@ export function VehicleFareManagement() {
   
   useEffect(() => {
     // Check for authentication token at component mount
-    const checkAuthToken = () => {
+    const checkAuthToken = async () => {
       const token = localStorage.getItem('authToken');
       const user = localStorage.getItem('user');
       
@@ -69,6 +71,15 @@ export function VehicleFareManagement() {
           }
         }
       }
+      
+      // Get dynamic vehicle mapping
+      try {
+        const mapping = await getDynamicVehicleMapping();
+        setDynamicVehicleMap(mapping);
+        console.log('Vehicle ID mapping updated:', mapping);
+      } catch (e) {
+        console.error('Error getting dynamic vehicle mapping:', e);
+      }
     };
     
     checkAuthToken();
@@ -77,6 +88,7 @@ export function VehicleFareManagement() {
     const fetchData = async () => {
       try {
         setError(null);
+        
         // Make sure to include inactive vehicles too for more comprehensive mapping
         const vehicleData = await getVehicleData(true, true);
         console.log("Fetched vehicle data:", vehicleData);
@@ -94,7 +106,10 @@ export function VehicleFareManagement() {
         // Update form with new default values
         form.reset(defaultValues);
         
-        // Fetch tour fares to populate vehicle pricing
+        // First sync tour_fares with the vehicles table
+        await syncVehiclesWithFares();
+        
+        // Then fetch tour fares to populate vehicle pricing
         await fetchTourFares();
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -105,6 +120,36 @@ export function VehicleFareManagement() {
     
     fetchData();
   }, []);
+  
+  const syncVehiclesWithFares = async () => {
+    try {
+      // Call the DB setup endpoint to ensure columns exist
+      const response = await fetch('/api/admin/db_setup_tour_fares.php', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthorizationHeader()
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Tour fares table synchronized with vehicles:', data);
+        
+        if (data.data?.addedColumns?.length > 0) {
+          toast.success(`Added ${data.data.addedColumns.length} new vehicle columns to fare table`);
+        }
+        
+        return true;
+      } else {
+        console.error('Failed to sync vehicles with fares table:', await response.text());
+        return false;
+      }
+    } catch (error) {
+      console.error('Error syncing vehicles with fares:', error);
+      return false;
+    }
+  };
   
   const handleVehicleSelect = (vehicleId: string) => {
     form.setValue("vehicleId", vehicleId);
@@ -157,18 +202,31 @@ export function VehicleFareManagement() {
       
       // Create request data from form values
       const fareData: Record<string, any> = {
-        vehicleId: values.vehicleId,
+        tourId: values.vehicleId, // Use vehicleId as the tour identifier
+        tourName: vehicles.find(v => v.id === values.vehicleId)?.name || values.vehicleId,
       };
       
-      // Add vehicle prices
+      // Add vehicle prices directly
       vehicles.forEach(vehicle => {
         fareData[vehicle.id] = values[vehicle.id] || 0;
         
-        // Also map to database columns if necessary
-        if (vehicleIdMapping[vehicle.id]) {
-          fareData[vehicleIdMapping[vehicle.id]] = values[vehicle.id] || 0;
+        // Also map to database columns using the dynamic mapping
+        const dbColumn = dynamicVehicleMap[vehicle.id] || vehicleIdMapping[vehicle.id];
+        if (dbColumn && dbColumn !== vehicle.id) {
+          fareData[dbColumn] = values[vehicle.id] || 0;
         }
       });
+      
+      // Get database column from mapping
+      let dbColumn = dynamicVehicleMap[values.vehicleId] || vehicleIdMapping[values.vehicleId];
+      
+      // If there's no mapping, create a safe column name
+      if (!dbColumn) {
+        dbColumn = values.vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      }
+      
+      // Ensure the selected vehicle's price is also included with its column name
+      fareData[dbColumn] = values[values.vehicleId] || 0;
       
       console.log("Submitting vehicle fare data:", fareData);
       
@@ -262,8 +320,6 @@ export function VehicleFareManagement() {
       setIsRefreshing(false);
     }
   };
-  
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
   return (
     <Card>

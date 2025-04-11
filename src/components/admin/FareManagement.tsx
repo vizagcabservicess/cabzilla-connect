@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -38,17 +37,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { vehicleIdMapping, getDynamicVehicleMapping, getAuthorizationHeader } from '@/config/api';
 
-// Vehicle mapping for database to UI
-const vehicleMapping = {
-  // Database keys to display names
+const initialVehicleMapping = {
   'sedan': 'Sedan',
   'ertiga': 'Ertiga',
   'innova': 'Innova',
   'tempo': 'Tempo Traveller', 
   'luxury': 'Luxury Sedan',
   
-  // Additional mappings for any other vehicle types
   'innova_crysta': 'Innova Crysta',
   'innova_hycross': 'Innova Hycross',
   'dzire_cng': 'Dzire CNG',
@@ -56,26 +53,28 @@ const vehicleMapping = {
   'MPV': 'MPV'
 };
 
-const createDynamicFormSchema = (vehicleIds: string[]) => {
+let vehicleMapping = { ...initialVehicleMapping };
+
+const createDynamicFormSchema = (vehicleColumns: string[]) => {
   const baseSchema = {
     tourId: z.string().min(1, { message: "Tour is required" }),
   };
   
-  vehicleIds.forEach(id => {
-    baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
+  vehicleColumns.forEach(column => {
+    baseSchema[column] = z.coerce.number().min(0, { message: "Price cannot be negative" });
   });
   
   return z.object(baseSchema);
 };
 
-const createDynamicNewTourFormSchema = (vehicleIds: string[]) => {
+const createDynamicNewTourFormSchema = (vehicleColumns: string[]) => {
   const baseSchema = {
     tourId: z.string().min(1, { message: "Tour ID is required" }),
     tourName: z.string().min(1, { message: "Tour name is required" }),
   };
   
-  vehicleIds.forEach(id => {
-    baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
+  vehicleColumns.forEach(column => {
+    baseSchema[column] = z.coerce.number().min(0, { message: "Price cannot be negative" });
   });
   
   return z.object(baseSchema);
@@ -91,11 +90,13 @@ export function FareManagement() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const { toast: uiToast } = useToast();
   
-  // Standard database vehicle column IDs
-  const dbVehicleIds = ['sedan', 'ertiga', 'innova', 'tempo', 'luxury'];
+  const [vehicleColumns, setVehicleColumns] = useState<string[]>([]);
+  const [dynamicVehicleMap, setDynamicVehicleMap] = useState<Record<string, string>>({});
   
-  const formSchema = createDynamicFormSchema(dbVehicleIds);
-  const newTourFormSchema = createDynamicNewTourFormSchema(dbVehicleIds);
+  const [dbVehicleIds, setDbVehicleIds] = useState(['sedan', 'ertiga', 'innova', 'tempo', 'luxury']);
+  
+  const formSchema = createDynamicFormSchema(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds);
+  const newTourFormSchema = createDynamicNewTourFormSchema(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -112,20 +113,72 @@ export function FareManagement() {
     },
   });
   
+  const initializeDynamicVehicleMapping = async () => {
+    try {
+      const mapping = await getDynamicVehicleMapping();
+      setDynamicVehicleMap(mapping);
+      
+      const displayMapping = { ...initialVehicleMapping };
+      
+      Object.entries(mapping).forEach(([key, value]) => {
+        if (!key.includes('_') && isNaN(Number(key))) {
+          const displayName = key.charAt(0).toUpperCase() + key.slice(1);
+          displayMapping[value] = displayName;
+        }
+      });
+      
+      vehicleMapping = displayMapping;
+      console.log('Updated vehicle display mapping:', vehicleMapping);
+    } catch (error) {
+      console.error('Error initializing dynamic vehicle mapping:', error);
+    }
+  };
+  
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
+        await initializeDynamicVehicleMapping();
+        
         const vehicleData = await getVehicleData(true, true);
         console.log("Available vehicles for fare management:", vehicleData);
         setVehicles(vehicleData);
+        
+        const syncResponse = await fetch('/api/admin/db_setup_tour_fares.php', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthorizationHeader()
+          }
+        });
+        
+        if (syncResponse.ok) {
+          const syncData = await syncResponse.json();
+          console.log("Tour fares table sync result:", syncData);
+          
+          if (syncData.data && syncData.data.existingColumns) {
+            const fareColumns = syncData.data.existingColumns.filter(
+              (col: string) => !['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'].includes(col)
+            );
+            
+            console.log("Available vehicle columns:", fareColumns);
+            setVehicleColumns(fareColumns);
+            setDbVehicleIds(fareColumns);
+          }
+          
+          if (syncData.data && syncData.data.addedColumns && syncData.data.addedColumns.length > 0) {
+            toast.success(`Added ${syncData.data.addedColumns.length} new vehicle columns to fare table`);
+          }
+        } else {
+          console.error("Failed to sync tour_fares table:", await syncResponse.text());
+        }
         
         const defaultValues: Record<string, any> = {
           tourId: form.getValues().tourId || "",
         };
         
-        // Map vehicle IDs to database column IDs
-        dbVehicleIds.forEach(dbId => {
-          defaultValues[dbId] = form.getValues()[dbId] || 0;
+        const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
+        columnsToUse.forEach(column => {
+          defaultValues[column] = form.getValues()[column] || 0;
         });
         
         form.reset(defaultValues);
@@ -135,11 +188,13 @@ export function FareManagement() {
           tourName: newTourForm.getValues().tourName || "",
         };
         
-        dbVehicleIds.forEach(dbId => {
-          newTourDefaults[dbId] = newTourForm.getValues()[dbId] || 0;
+        columnsToUse.forEach(column => {
+          newTourDefaults[column] = newTourForm.getValues()[column] || 0;
         });
         
         newTourForm.reset(newTourDefaults);
+        
+        await fetchTourFares();
       } catch (error) {
         console.error("Error fetching vehicles:", error);
         setError("Failed to load vehicle types");
@@ -147,7 +202,6 @@ export function FareManagement() {
     };
     
     fetchVehicles();
-    fetchTourFares();
   }, []);
   
   const onSubmit = async (values: any) => {
@@ -167,9 +221,10 @@ export function FareManagement() {
         tourId: values.tourId,
       };
       
-      // Map form values to database column names
-      dbVehicleIds.forEach(dbId => {
-        fareUpdateRequest[dbId] = values[dbId] || 0;
+      const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
+      
+      columnsToUse.forEach(column => {
+        fareUpdateRequest[column] = values[column] || 0;
       });
       
       const selectedTour = tourFares.find(fare => fare.tourId === values.tourId);
@@ -184,7 +239,6 @@ export function FareManagement() {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      // Make a test call first
       try {
         const testResponse = await fetch('/api/test.php');
         const testData = await testResponse.json();
@@ -236,9 +290,10 @@ export function FareManagement() {
         tourName: values.tourName,
       };
       
-      // Map form values to database column names
-      dbVehicleIds.forEach(dbId => {
-        newTourData[dbId] = values[dbId] || 0;
+      const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
+      
+      columnsToUse.forEach(column => {
+        newTourData[column] = values[column] || 0;
       });
       
       localStorage.removeItem('cabFares');
@@ -350,13 +405,33 @@ export function FareManagement() {
       if (Array.isArray(data) && data.length > 0) {
         console.log("Fetched tour fares:", data);
         
+        const allColumns = new Set<string>();
+        
+        data.forEach(fare => {
+          Object.keys(fare).forEach(key => {
+            if (!['id', 'tourId', 'tourName'].includes(key) && typeof fare[key] === 'number') {
+              allColumns.add(key);
+            }
+          });
+        });
+        
+        if (allColumns.size > 0) {
+          const columnsArray = Array.from(allColumns);
+          console.log("Found vehicle columns in fare data:", columnsArray);
+          
+          if (columnsArray.length > vehicleColumns.length) {
+            setVehicleColumns(columnsArray);
+            setDbVehicleIds(columnsArray);
+          }
+        }
+        
         const processedFares = data.map(fare => {
           const processedFare = { ...fare };
           
-          // Ensure all needed vehicle columns exist in the data
-          dbVehicleIds.forEach(dbId => {
-            if (typeof processedFare[dbId] === 'undefined') {
-              processedFare[dbId] = 0;
+          const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
+          columnsToUse.forEach(column => {
+            if (typeof processedFare[column] === 'undefined') {
+              processedFare[column] = 0;
             }
           });
           
@@ -385,18 +460,18 @@ export function FareManagement() {
         tourId: selectedTour.tourId
       };
       
-      // Map database values to form fields
-      dbVehicleIds.forEach(dbId => {
-        formValues[dbId] = selectedTour[dbId] || 0;
+      const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
+      
+      columnsToUse.forEach(column => {
+        formValues[column] = typeof selectedTour[column] !== 'undefined' ? selectedTour[column] : 0;
       });
       
       form.reset(formValues);
     }
   };
   
-  // Helper function to get the display name for a vehicle type
   const getVehicleDisplayName = (vehicleId: string) => {
-    return vehicleMapping[vehicleId] || vehicleId.charAt(0).toUpperCase() + vehicleId.slice(1);
+    return vehicleMapping[vehicleId] || vehicleId.charAt(0).toUpperCase() + vehicleId.slice(1).replace(/_/g, ' ');
   };
   
   return (
@@ -473,14 +548,14 @@ export function FareManagement() {
                 />
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {dbVehicleIds.map(dbId => (
+                  {(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds).map(column => (
                     <FormField
-                      key={dbId}
+                      key={column}
                       control={form.control}
-                      name={dbId as any} 
+                      name={column as any} 
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{getVehicleDisplayName(dbId)} Price</FormLabel>
+                          <FormLabel>{getVehicleDisplayName(column)} Price</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -556,8 +631,8 @@ export function FareManagement() {
                   <thead>
                     <tr className="border-b">
                       <th className="px-4 py-2 text-left">Tour Name</th>
-                      {dbVehicleIds.map(dbId => (
-                        <th key={dbId} className="px-4 py-2 text-left">{getVehicleDisplayName(dbId)}</th>
+                      {(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds).map(column => (
+                        <th key={column} className="px-4 py-2 text-left">{getVehicleDisplayName(column)}</th>
                       ))}
                       <th className="px-4 py-2 text-left">Actions</th>
                     </tr>
@@ -566,9 +641,9 @@ export function FareManagement() {
                     {tourFares.map((fare) => (
                       <tr key={fare.tourId} className="border-b hover:bg-muted/50">
                         <td className="px-4 py-2">{fare.tourName}</td>
-                        {dbVehicleIds.map(dbId => (
-                          <td key={`${fare.tourId}-${dbId}`} className="px-4 py-2">
-                            ₹{fare[dbId] || 0}
+                        {(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds).map(column => (
+                          <td key={`${fare.tourId}-${column}`} className="px-4 py-2">
+                            ₹{fare[column] || 0}
                           </td>
                         ))}
                         <td className="px-4 py-2">
@@ -638,14 +713,14 @@ export function FareManagement() {
                 </div>
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {dbVehicleIds.map(dbId => (
+                  {(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds).map(column => (
                     <FormField
-                      key={dbId}
+                      key={column}
                       control={newTourForm.control}
-                      name={dbId as any}
+                      name={column as any}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{getVehicleDisplayName(dbId)} Price</FormLabel>
+                          <FormLabel>{getVehicleDisplayName(column)} Price</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
