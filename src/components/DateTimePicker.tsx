@@ -38,6 +38,12 @@ export function DateTimePicker({
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
+    
+    // On mobile, don't auto-apply as it can cause issues with time input field
+    if (isMobile && e.target.value && e.target.value.includes(":")) {
+      // Delay slightly to ensure the input value is registered
+      setTimeout(() => handleApply(), 300);
+    }
   };
 
   const handleApply = () => {
@@ -56,13 +62,6 @@ export function DateTimePicker({
       onDateChange(newDate);
     }
   };
-
-  // Auto-apply time when changed on mobile
-  useEffect(() => {
-    if (isMobile && selectedTime && date) {
-      handleApply();
-    }
-  }, [selectedTime, isMobile]);
 
   return (
     <div className="space-y-2">
@@ -103,7 +102,12 @@ export function DateTimePicker({
               onChange={handleTimeChange}
               className="max-w-[80px]"
             />
-            <Button size="sm" onClick={handleApply} className="whitespace-nowrap">
+            {/* Add pointer-events-auto to ensure the button is clickable on mobile */}
+            <Button 
+              size="sm" 
+              onClick={handleApply} 
+              className="whitespace-nowrap pointer-events-auto touch-manipulation"
+            >
               Apply Time
             </Button>
           </div>
