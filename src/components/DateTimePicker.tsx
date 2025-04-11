@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface DateTimePickerProps {
   date?: Date;
   onDateChange: (date: Date | undefined) => void;
   minDate?: Date;
   className?: string;
-  label?: string; // Make label optional
+  label?: string;
 }
 
 export function DateTimePicker({ 
@@ -23,9 +24,17 @@ export function DateTimePicker({
   className,
   label
 }: DateTimePickerProps) {
+  const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(
     date ? format(date, "HH:mm") : null
   );
+
+  // Update selectedTime when date prop changes
+  useEffect(() => {
+    if (date) {
+      setSelectedTime(format(date, "HH:mm"));
+    }
+  }, [date]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
@@ -47,6 +56,13 @@ export function DateTimePicker({
       onDateChange(newDate);
     }
   };
+
+  // Auto-apply time when changed on mobile
+  useEffect(() => {
+    if (isMobile && selectedTime && date) {
+      handleApply();
+    }
+  }, [selectedTime, isMobile]);
 
   return (
     <div className="space-y-2">
@@ -87,8 +103,8 @@ export function DateTimePicker({
               onChange={handleTimeChange}
               className="max-w-[80px]"
             />
-            <Button size="sm" onClick={handleApply}>
-              Apply
+            <Button size="sm" onClick={handleApply} className="whitespace-nowrap">
+              Apply Time
             </Button>
           </div>
         </PopoverContent>

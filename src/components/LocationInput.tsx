@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
@@ -369,7 +368,7 @@ export function LocationInput({
         <p className="text-xs text-red-500 mt-1">{locationError}</p>
       )}
       <p className="text-xs text-gray-500">
-        {isPickupLocation ? "Select a location in India" : "Select a destination in India"}
+        {isPickupLocation ? "Select a location in Visakhapatnam" : "Select a location in India"}
       </p>
     </div>
   );
