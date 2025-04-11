@@ -13,7 +13,17 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
-export const router = createBrowserRouter([
+// Import the useIsMobile hook
+import { useIsMobile } from './hooks/use-mobile';
+
+// Create a conditional wrapper component for mobile detection
+const MobileAwareRoute = ({ element, mobileHidden = false }) => {
+  const isMobile = useIsMobile();
+  return !isMobile || !mobileHidden ? element : <NotFound />;
+};
+
+// Define the routes
+const getRoutes = () => [
   {
     path: '/',
     element: <Index />,
@@ -66,12 +76,15 @@ export const router = createBrowserRouter([
   },
   {
     path: '/tours',
-    element: <ToursPage />,
+    element: <MobileAwareRoute element={<ToursPage />} mobileHidden={true} />,
   },
   {
     path: '*',
     element: <NotFound />,
   },
-]);
+];
+
+// Export the router with the routes
+export const router = createBrowserRouter(getRoutes());
 
 export default router;

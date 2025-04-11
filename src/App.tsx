@@ -19,6 +19,17 @@ function App() {
     
     window.addEventListener('popstate', handleRouteChange);
     
+    // Set viewport for mobile devices
+    const metaViewport = document.querySelector('meta[name=viewport]');
+    if (!metaViewport) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+    } else {
+      metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+    
     return () => {
       window.removeEventListener('popstate', handleRouteChange);
     };
