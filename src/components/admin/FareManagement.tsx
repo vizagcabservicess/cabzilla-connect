@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -26,6 +27,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
+import { getVehicleData } from '@/services/vehicleDataService';
+import { CabType } from '@/types/cab';
 import { 
   Dialog,
   DialogContent,
@@ -36,42 +39,52 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const formSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
+// We'll create a dynamic form schema based on available vehicles
+const createDynamicFormSchema = (vehicleIds: string[]) => {
+  const baseSchema = {
+    tourId: z.string().min(1, { message: "Tour is required" }),
+  };
+  
+  // Add vehicle price fields dynamically
+  vehicleIds.forEach(id => {
+    baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
+  });
+  
+  return z.object(baseSchema);
+};
 
-const newTourFormSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour ID is required" }),
-  tourName: z.string().min(1, { message: "Tour name is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
+// Dynamic form schema for new tour creation
+const createDynamicNewTourFormSchema = (vehicleIds: string[]) => {
+  const baseSchema = {
+    tourId: z.string().min(1, { message: "Tour ID is required" }),
+    tourName: z.string().min(1, { message: "Tour name is required" }),
+  };
+  
+  // Add vehicle price fields dynamically
+  vehicleIds.forEach(id => {
+    baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
+  });
+  
+  return z.object(baseSchema);
+};
 
 export function FareManagement() {
   const [tourFares, setTourFares] = useState<TourFare[]>([]);
+  const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const { toast: uiToast } = useToast();
   
+  // Dynamic form setup based on available vehicles
+  const formSchema = createDynamicFormSchema(vehicles.map(v => v.id));
+  const newTourFormSchema = createDynamicNewTourFormSchema(vehicles.map(v => v.id));
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       tourId: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
     },
   });
   
@@ -80,15 +93,50 @@ export function FareManagement() {
     defaultValues: {
       tourId: "",
       tourName: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
     },
   });
   
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  useEffect(() => {
+    // Fetch all available vehicles
+    const fetchVehicles = async () => {
+      try {
+        const vehicleData = await getVehicleData(true, true); // Force refresh and include inactive
+        setVehicles(vehicleData);
+        
+        // Initialize form default values for each vehicle
+        const defaultValues: Record<string, any> = {
+          tourId: form.getValues().tourId || "",
+        };
+        
+        vehicleData.forEach(vehicle => {
+          defaultValues[vehicle.id] = form.getValues()[vehicle.id] || 0;
+        });
+        
+        // Update the form with new default values that include all vehicles
+        form.reset(defaultValues);
+        
+        // Similarly update new tour form
+        const newTourDefaults: Record<string, any> = {
+          tourId: newTourForm.getValues().tourId || "",
+          tourName: newTourForm.getValues().tourName || "",
+        };
+        
+        vehicleData.forEach(vehicle => {
+          newTourDefaults[vehicle.id] = newTourForm.getValues()[vehicle.id] || 0;
+        });
+        
+        newTourForm.reset(newTourDefaults);
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+        setError("Failed to load vehicle types");
+      }
+    };
+    
+    fetchVehicles();
+    fetchTourFares();
+  }, []);
+  
+  const onSubmit = async (values: any) => {
     try {
       setIsLoading(true);
       console.log("Submitting fare update:", values);
@@ -101,7 +149,17 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
-      const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
+      // Convert form values to the shape expected by the API
+      const fareUpdateRequest: FareUpdateRequest = {
+        tourId: values.tourId,
+      };
+      
+      // Dynamically add vehicle prices based on available vehicles
+      vehicles.forEach(vehicle => {
+        fareUpdateRequest[vehicle.id] = values[vehicle.id] || 0;
+      });
+      
+      const data = await fareAPI.updateTourFares(fareUpdateRequest);
       console.log("Fare update response:", data);
       
       toast.success("Tour fare updated successfully");
@@ -114,21 +172,22 @@ export function FareManagement() {
     }
   };
   
-  const onAddTourSubmit = async (values: z.infer<typeof newTourFormSchema>) => {
+  const onAddTourSubmit = async (values: any) => {
     try {
       setIsLoading(true);
       console.log("Adding new tour:", values);
       
-      const newTourData: TourFare = {
+      // Create base tour data
+      const newTourData: any = {
         id: 0,
         tourId: values.tourId,
         tourName: values.tourName,
-        sedan: values.sedan,
-        ertiga: values.ertiga,
-        innova: values.innova,
-        tempo: values.tempo,
-        luxury: values.luxury
       };
+      
+      // Dynamically add vehicle prices based on available vehicles
+      vehicles.forEach(vehicle => {
+        newTourData[vehicle.id] = values[vehicle.id] || 0;
+      });
       
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
@@ -182,10 +241,6 @@ export function FareManagement() {
     }
   };
   
-  useEffect(() => {
-    fetchTourFares();
-  }, []);
-  
   const fetchTourFares = async () => {
     try {
       setIsRefreshing(true);
@@ -222,12 +277,19 @@ export function FareManagement() {
   const handleTourSelect = (tourId: string) => {
     const selectedTour = tourFares.find(fare => fare.tourId === tourId);
     if (selectedTour) {
-      form.setValue("tourId", selectedTour.tourId);
-      form.setValue("sedan", selectedTour.sedan);
-      form.setValue("ertiga", selectedTour.ertiga);
-      form.setValue("innova", selectedTour.innova);
-      form.setValue("tempo", selectedTour.tempo || 0);
-      form.setValue("luxury", selectedTour.luxury || 0);
+      // Start with base values
+      const formValues: Record<string, any> = {
+        tourId: selectedTour.tourId
+      };
+      
+      // Dynamically set values for each vehicle
+      vehicles.forEach(vehicle => {
+        // Use the vehicle ID to get its price (if available)
+        formValues[vehicle.id] = selectedTour[vehicle.id] || 0;
+      });
+      
+      // Reset form with all values
+      form.reset(formValues);
     }
   };
 
@@ -305,75 +367,23 @@ export function FareManagement() {
                 />
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="sedan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sedan Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="ertiga"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ertiga Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Dynamically generate form fields for each vehicle */}
+                  {vehicles.map(vehicle => (
+                    <FormField
+                      key={vehicle.id}
+                      control={form.control}
+                      name={vehicle.id}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{vehicle.name} Price</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
                 </div>
                 
                 <div className="flex gap-4">
@@ -407,6 +417,71 @@ export function FareManagement() {
         </Card>
       </TabsContent>
       
+      <TabsContent value="all">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" /> All Tour Fares
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {tourFares.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No tour fares available.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="px-4 py-2 text-left">Tour Name</th>
+                      {/* Dynamically generate table headers for vehicle types */}
+                      {vehicles.map(vehicle => (
+                        <th key={vehicle.id} className="px-4 py-2 text-left">{vehicle.name}</th>
+                      ))}
+                      <th className="px-4 py-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tourFares.map((fare) => (
+                      <tr key={fare.tourId} className="border-b hover:bg-muted/50">
+                        <td className="px-4 py-2">{fare.tourName}</td>
+                        {/* Dynamically generate table cells for vehicle prices */}
+                        {vehicles.map(vehicle => (
+                          <td key={`${fare.tourId}-${vehicle.id}`} className="px-4 py-2">
+                            ₹{fare[vehicle.id] || 0}
+                          </td>
+                        ))}
+                        <td className="px-4 py-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              form.setValue("tourId", fare.tourId);
+                              handleTourSelect(fare.tourId);
+                              document.querySelector('[data-value="update"]')?.click();
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+      
       <TabsContent value="add">
         <Card>
           <CardHeader>
@@ -423,9 +498,9 @@ export function FareManagement() {
                     name="tourId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tour ID (unique identifier)</FormLabel>
+                        <FormLabel>Tour ID</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., araku-valley" {...field} />
+                          <Input {...field} placeholder="e.g., araku_valley" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -437,9 +512,9 @@ export function FareManagement() {
                     name="tourName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tour Name (display name)</FormLabel>
+                        <FormLabel>Tour Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., Araku Valley Tour" {...field} />
+                          <Input {...field} placeholder="e.g., Araku Valley Tour" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -448,82 +523,30 @@ export function FareManagement() {
                 </div>
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  <FormField
-                    control={newTourForm.control}
-                    name="sedan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sedan Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="ertiga"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ertiga Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Dynamically generate form fields for each vehicle */}
+                  {vehicles.map(vehicle => (
+                    <FormField
+                      key={vehicle.id}
+                      control={newTourForm.control}
+                      name={vehicle.id}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{vehicle.name} Price</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
                 </div>
                 
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Adding Tour...
+                      Adding...
                     </>
                   ) : (
                     <>
@@ -534,91 +557,6 @@ export function FareManagement() {
                 </Button>
               </form>
             </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="all">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" /> All Tour Fares
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchTourFares} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            {isRefreshing ? (
-              <div className="flex justify-center p-10">
-                <RefreshCw className="h-10 w-10 animate-spin text-gray-400" />
-              </div>
-            ) : tourFares.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-2">Tour</th>
-                      <th className="text-right py-2 px-2">Sedan</th>
-                      <th className="text-right py-2 px-2">Ertiga</th>
-                      <th className="text-right py-2 px-2">Innova</th>
-                      <th className="text-right py-2 px-2">Tempo</th>
-                      <th className="text-right py-2 px-2">Luxury</th>
-                      <th className="text-right py-2 px-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tourFares.map((fare) => (
-                      <tr key={fare.tourId} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2">{fare.tourName}</td>
-                        <td className="text-right py-2 px-2">₹{fare.sedan.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.ertiga.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.tempo.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.luxury.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleTourSelect(fare.tourId)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleDeleteTour(fare.tourId)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-10 text-gray-500">
-                No tour fares found.
-              </div>
-            )}
           </CardContent>
         </Card>
       </TabsContent>

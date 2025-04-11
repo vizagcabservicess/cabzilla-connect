@@ -23,9 +23,9 @@ const PopoverContent = React.forwardRef<
       )}
       onPointerDownOutside={(e) => {
         // Better handling for touch events on mobile
-        // Using type assertion to get around the type error
-        const event = e as unknown as { pointerType?: string };
-        if (event.pointerType === 'touch') {
+        // Using type casting to solve TypeScript error
+        const event = e as unknown as { target: any };
+        if (event.target?.tagName === 'TOUCH') {
           e.preventDefault();
         }
       }}
