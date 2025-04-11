@@ -1,7 +1,9 @@
+
 // Import necessary types
 import { TourFare } from '@/types/api';
 import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
-import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders, getAuthorizationHeader } from '@/config/api';
+import { safeFetch } from '@/config/requestConfig';
 
 // Create an axios instance with defaults
 const apiClient = axios.create({
@@ -45,6 +47,11 @@ apiClient.interceptors.request.use(
               config.headers = new AxiosHeaders();
             }
             config.headers.set('Authorization', `Bearer ${userData.token}`);
+            
+            // Save token back to localStorage for future requests
+            localStorage.setItem('authToken', userData.token);
+            localStorage.setItem('isLoggedIn', 'true');
+            console.log('Restored auth token from user object');
           }
         } catch (e) {
           console.error('Error parsing user data from localStorage', e);
@@ -73,6 +80,26 @@ apiClient.interceptors.response.use(
       console.error('Error status:', error.response.status);
       console.error('Error data:', error.response.data);
       console.error('Error headers:', error.response.headers);
+      
+      // Handle 401/403 errors automatically by trying to refresh token
+      if (error.response.status === 401 || error.response.status === 403) {
+        console.log('Auth error detected, attempting to refresh token');
+        
+        // Try to get token from user object
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              localStorage.setItem('isLoggedIn', 'true');
+              console.log('Restored token from user object after auth error');
+            }
+          } catch (e) {
+            console.error('Error recovering token from user object:', e);
+          }
+        }
+      }
     } else if (error.request) {
       console.error('No response received:', error.request);
     } else {
@@ -94,22 +121,51 @@ export const fareAPI = {
       let response;
       let endpointUsed;
       
+      // First make sure token is available
+      const token = localStorage.getItem('authToken');
+      const userStr = localStorage.getItem('user');
+      
+      // Try to recover token from user object if missing in localStorage
+      if (!token || token === 'null' || token === 'undefined') {
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              localStorage.setItem('isLoggedIn', 'true');
+              console.log('Restored token from user object before getTourFares');
+            }
+          } catch (e) {
+            console.error('Error recovering token:', e);
+          }
+        }
+      }
+      
+      // Add timestamp to prevent caching
+      const timestamp = Date.now();
+      const headers = {
+        ...getAuthorizationHeader(),
+        ...forceRefreshHeaders,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      };
+      
       try {
         // First attempt - fares/tours.php
-        endpointUsed = '/api/fares/tours.php';
-        response = await apiClient.get(endpointUsed);
+        endpointUsed = `/api/fares/tours.php?_t=${timestamp}`;
+        response = await apiClient.get(endpointUsed, { headers });
         console.log(`Successfully fetched tour fares from ${endpointUsed}`);
       } catch (e1) {
         console.log(`Failed to fetch from ${endpointUsed}, trying alternative endpoint...`);
         try {
           // Second attempt - admin/tours.php
-          endpointUsed = '/api/admin/tours.php';
-          response = await apiClient.get(endpointUsed);
+          endpointUsed = `/api/admin/tours.php?_t=${timestamp}`;
+          response = await apiClient.get(endpointUsed, { headers });
           console.log(`Successfully fetched tour fares from ${endpointUsed}`);
         } catch (e2) {
           // Third attempt - tour_fares table directly
-          endpointUsed = '/api/admin/tour-fares.php';
-          response = await apiClient.get(endpointUsed);
+          endpointUsed = `/api/admin/tour-fares.php?_t=${timestamp}`;
+          response = await apiClient.get(endpointUsed, { headers });
           console.log(`Successfully fetched tour fares from ${endpointUsed}`);
         }
       }
@@ -132,7 +188,7 @@ export const fareAPI = {
         const directResponse = await apiClient.post(directQueryEndpoint, {
           query: "SELECT * FROM tour_fares",
           token: localStorage.getItem('authToken')
-        });
+        }, { headers });
         
         if (directResponse.data && Array.isArray(directResponse.data)) {
           // Convert from database format to API format
@@ -186,6 +242,13 @@ export const fareAPI = {
   // Update a tour fare
   updateTourFares: async (fareData: any): Promise<any> => {
     try {
+      // Force a sync of tour_fares table before updating
+      try {
+        await syncTourFaresTable();
+      } catch (syncError) {
+        console.warn('Tour fares table sync failed before update:', syncError);
+      }
+      
       // Get token directly from localStorage to ensure it's current
       const token = localStorage.getItem('authToken');
       
@@ -202,6 +265,7 @@ export const fareAPI = {
               userToken = userData.token;
               // Also update the authToken in localStorage for future requests
               localStorage.setItem('authToken', userToken);
+              localStorage.setItem('isLoggedIn', 'true');
               console.log('Retrieved and updated token from user object');
             }
           } catch (e) {
@@ -228,7 +292,12 @@ export const fareAPI = {
             'Content-Type': 'application/json'
           }
         });
-        console.log('Test connection successful:', await testResponse.json());
+        const testData = await testResponse.json();
+        console.log('Test connection successful:', testData);
+        
+        if (!testData.auth?.hasToken) {
+          console.warn('Test connection shows no valid token!');
+        }
       } catch (testError) {
         console.error('Test connection failed:', testError);
       }
@@ -281,19 +350,47 @@ export const fareAPI = {
   // Add a new tour fare
   addTourFare: async (fareData: any): Promise<any> => {
     try {
-      // Get token directly from localStorage to ensure it's current
-      const token = localStorage.getItem('authToken');
-      if (!token || token === 'null' || token === 'undefined') {
-        throw new Error('No valid authentication token found. Please log in again.');
+      // Force a sync of tour_fares table before adding
+      try {
+        await syncTourFaresTable();
+      } catch (syncError) {
+        console.warn('Tour fares table sync failed before adding new tour:', syncError);
       }
       
-      console.log('Sending new tour fare with auth token:', token.substring(0, 15) + '...');
+      // Get token directly from localStorage to ensure it's current
+      const token = localStorage.getItem('authToken');
+      
+      // Validate token and try to recover if missing
+      if (!token || token === 'null' || token === 'undefined') {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              localStorage.setItem('isLoggedIn', 'true');
+              console.log('Retrieved token from user object for addTourFare');
+            } else {
+              throw new Error('No valid authentication token found in user data. Please log in again.');
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+            throw new Error('No valid authentication token found. Please log in again.');
+          }
+        } else {
+          throw new Error('No valid authentication token found. Please log in again.');
+        }
+      }
+      
+      // Get the latest token after potential updates
+      const currentToken = localStorage.getItem('authToken');
+      console.log('Sending new tour fare with auth token:', currentToken?.substring(0, 15) + '...');
       
       // Use the correct endpoint for adding tour fares with explicit headers
       const response = await apiClient.put('/api/admin/fares-update.php', fareData, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${currentToken}`,
         }
       });
       return response.data;
@@ -354,6 +451,68 @@ export const fareAPI = {
       console.error('Error updating vehicle pricing:', error);
       throw error;
     }
+  }
+};
+
+// Function to sync tour_fares table with vehicles
+export const syncTourFaresTable = async (): Promise<boolean> => {
+  try {
+    console.log('Syncing tour_fares table with vehicles...');
+    
+    // Get token directly from localStorage to ensure it's current
+    const token = localStorage.getItem('authToken');
+    
+    // Try to recover token if missing
+    if (!token || token === 'null' || token === 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          if (userData && userData.token) {
+            localStorage.setItem('authToken', userData.token);
+            localStorage.setItem('isLoggedIn', 'true');
+            console.log('Retrieved token from user object for syncTourFaresTable');
+          }
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+    }
+    
+    // Get current token after potential update
+    const currentToken = localStorage.getItem('authToken');
+    
+    // Use safeFetch for better reliability
+    const response = await safeFetch('/api/admin/db_setup_tour_fares.php', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`,
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Tour fares table sync response:', data);
+      return data.status === 'success';
+    } else {
+      // Try to extract error message from response
+      let errorText = '';
+      try {
+        const errorData = await response.json();
+        errorText = errorData.message || response.statusText;
+      } catch (e) {
+        errorText = response.statusText;
+      }
+      console.error(`Failed to sync tour_fares table: ${errorText}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error syncing tour_fares table:', error);
+    return false;
   }
 };
 
@@ -511,6 +670,10 @@ export const bookingAPI = {
 export const authAPI = {
   login: async (credentials: any): Promise<any> => {
     try {
+      // Clear any previous auth tokens to avoid conflicts
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('isLoggedIn');
+      
       const response = await apiClient.post('/api/login.php', credentials);
       
       if (response.data && response.data.token) {
@@ -526,6 +689,20 @@ export const authAPI = {
             // Make sure we also store the token in the user object
             const userData = { ...response.data.user, token: response.data.token };
             localStorage.setItem('user', JSON.stringify(userData));
+          }
+          
+          // Test if token is working immediately after login
+          try {
+            const testResponse = await fetch('/api/test.php', {
+              headers: {
+                'Authorization': `Bearer ${response.data.token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            const testData = await testResponse.json();
+            console.log('Token test after login:', testData);
+          } catch (testError) {
+            console.warn('Token test after login failed:', testError);
           }
         } else {
           console.error('Invalid token received:', response.data.token);
@@ -559,6 +736,7 @@ export const authAPI = {
         // Validate token before saving
         if (typeof response.data.token === 'string' && response.data.token.length > 10) {
           localStorage.setItem('authToken', response.data.token);
+          localStorage.setItem('isLoggedIn', 'true');
           
           if (response.data.user) {
             // Make sure we also store the token in the user object
@@ -580,6 +758,24 @@ export const authAPI = {
   isAuthenticated: (): boolean => {
     const token = localStorage.getItem('authToken');
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    
+    // If no token but user object has one, restore it
+    if ((!token || token === 'null' || token === 'undefined') && !isLoggedIn) {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          if (user.token) {
+            localStorage.setItem('authToken', user.token);
+            localStorage.setItem('isLoggedIn', 'true');
+            return true;
+          }
+        } catch (e) {
+          return false;
+        }
+      }
+    }
+    
     return !!(token && token !== 'null' && token !== 'undefined' && isLoggedIn);
   },
   
@@ -614,6 +810,59 @@ export const authAPI = {
     } catch (error) {
       console.error('Error parsing user data:', error);
       return null;
+    }
+  },
+  
+  // New method to verify and refresh token
+  verifyAndRefreshToken: async (): Promise<boolean> => {
+    try {
+      // Check if we have a token
+      let token = localStorage.getItem('authToken');
+      
+      // Try to recover token from user object if not in localStorage
+      if (!token || token === 'null' || token === 'undefined') {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              token = userData.token;
+              localStorage.setItem('authToken', token);
+              localStorage.setItem('isLoggedIn', 'true');
+              console.log('Restored token from user object during verification');
+            } else {
+              return false;
+            }
+          } catch (e) {
+            console.error('Error parsing user data during token verification:', e);
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+      
+      // Test the token with a lightweight endpoint
+      const response = await fetch('/api/test.php', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.warn('Token verification failed');
+        return false;
+      }
+      
+      const data = await response.json();
+      console.log('Token verification result:', data);
+      
+      // If verification succeeded, we're good
+      return true;
+    } catch (error) {
+      console.error('Error verifying token:', error);
+      return false;
     }
   }
 };

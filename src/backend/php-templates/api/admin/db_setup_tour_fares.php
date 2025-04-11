@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../config.php';
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma, Expires');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Enhanced debugging
 error_log("db_setup_tour_fares.php called with method: " . $_SERVER['REQUEST_METHOD']);
+error_log("Headers received: " . json_encode(getallheaders()));
 
 // Check authentication and admin role
 $headers = getallheaders();
@@ -30,10 +31,15 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         // For development/testing - assume admin for now
         $isAdmin = true;
         error_log("Valid token found in db_setup_tour_fares: " . substr($token, 0, 15) . "...");
+    } else {
+        error_log("Empty or invalid token found in db_setup_tour_fares: " . $token);
     }
+} else {
+    error_log("No Authorization header found in db_setup_tour_fares");
 }
 
 if (!$isAdmin) {
+    error_log("Unauthorized attempt to access db_setup_tour_fares.php - missing or invalid token");
     sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
     exit;
 }
@@ -41,6 +47,7 @@ if (!$isAdmin) {
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
+    error_log("Database connection failed in db_setup_tour_fares.php");
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
@@ -62,6 +69,8 @@ try {
             'name' => $row['name']
         ];
     }
+    
+    error_log("Found " . count($vehicles) . " vehicles in the database");
     
     // Check if tour_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'tour_fares'";
@@ -88,6 +97,8 @@ try {
         }
         
         error_log("Created tour_fares table");
+    } else {
+        error_log("tour_fares table already exists");
     }
     
     // Get existing columns from tour_fares table
@@ -102,6 +113,8 @@ try {
     while ($column = $columnsResult->fetch_assoc()) {
         $existingColumns[] = $column['Field'];
     }
+    
+    error_log("Existing columns in tour_fares: " . implode(", ", $existingColumns));
     
     // Add missing vehicle columns
     $addedColumns = [];

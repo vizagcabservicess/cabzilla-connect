@@ -7,7 +7,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma');
 
 // Handle preflight OPTIONS requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,26 +22,49 @@ $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : (is
 // Check for token in Authorization header
 $hasAuthToken = false;
 $tokenValue = '';
+$tokenData = null;
 
 if (!empty($authHeader)) {
     $token = str_replace('Bearer ', '', $authHeader);
     if (!empty($token) && $token !== 'null' && $token !== 'undefined') {
         $hasAuthToken = true;
         $tokenValue = substr($token, 0, 10) . '...';
+        
+        // Try to decode token (if it's a base64 encoded JSON)
+        try {
+            $decodedToken = base64_decode($token);
+            if ($decodedToken) {
+                $tokenObject = json_decode($decodedToken, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $tokenData = [
+                        'sub' => $tokenObject['sub'] ?? 'unknown',
+                        'role' => $tokenObject['role'] ?? 'unknown',
+                        'exp' => $tokenObject['exp'] ?? 0
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            // Silently fail - not critical
+        }
     }
 }
 
-// Return API connection status
+// Return API connection status with detailed auth info
 echo json_encode([
     'status' => 'success',
     'message' => 'API connection successful',
     'timestamp' => date('Y-m-d H:i:s'),
     'auth' => [
         'hasToken' => $hasAuthToken,
-        'token' => $tokenValue
+        'token' => $tokenValue,
+        'headers' => array_keys($headers),
+        'authHeader' => $authHeader ? 'present' : 'missing',
+        'tokenData' => $tokenData
     ],
     'server' => [
         'php_version' => PHP_VERSION,
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+        'request_method' => $_SERVER['REQUEST_METHOD'],
+        'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
     ]
 ]);

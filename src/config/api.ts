@@ -68,17 +68,88 @@ export const vehicleIdMapping = {
 // Get dynamic vehicle mapping from database
 export const getDynamicVehicleMapping = async (): Promise<Record<string, string>> => {
   try {
+    // Get token to include in request
+    const token = localStorage.getItem('authToken');
+    let requestHeaders = { ...defaultHeaders };
+    
+    // If no token in localStorage, try to get from user object
+    if (!token || token === 'null' || token === 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          if (userData?.token) {
+            requestHeaders['Authorization'] = `Bearer ${userData.token}`;
+            // Store it back in localStorage for future use
+            localStorage.setItem('authToken', userData.token);
+            localStorage.setItem('isLoggedIn', 'true');
+            console.log('Recovered auth token from user object for vehicle mapping');
+          }
+        } catch (e) {
+          console.error('Error retrieving token from user object:', e);
+        }
+      }
+    } else {
+      requestHeaders['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
     // Sync tour_fares table with vehicles first
-    const syncResponse = await fetch(getApiUrl('/api/admin/db_setup_tour_fares.php'), {
+    const syncResponse = await fetch(getApiUrl(`/api/admin/db_setup_tour_fares.php?_t=${timestamp}`), {
       method: 'GET',
       headers: {
-        ...defaultHeaders,
-        ...getAuthorizationHeader()
+        ...requestHeaders,
+        ...forceRefreshHeaders
       }
     });
     
     if (!syncResponse.ok) {
       console.error('Failed to sync tour_fares table:', syncResponse.statusText);
+      
+      // Try again with token recovery
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          if (userData?.token) {
+            const retryResponse = await fetch(getApiUrl(`/api/admin/db_setup_tour_fares.php?_t=${timestamp+1}`), {
+              method: 'GET',
+              headers: {
+                ...defaultHeaders,
+                'Authorization': `Bearer ${userData.token}`,
+                ...forceRefreshHeaders
+              }
+            });
+            
+            if (retryResponse.ok) {
+              const syncData = await retryResponse.json();
+              console.log('Tour fares table synced with vehicles on second attempt:', syncData);
+              
+              // Create dynamic mapping from response
+              const dynamicMapping = { ...vehicleIdMapping };
+              
+              if (syncData.data && syncData.data.vehicles) {
+                syncData.data.vehicles.forEach((vehicle: any) => {
+                  // Add mapping based on database ID to column name
+                  const columnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                  dynamicMapping[vehicle.id] = columnName;
+                  
+                  // Also add name-based mapping for UI display
+                  dynamicMapping[vehicle.name] = columnName;
+                });
+              }
+              
+              console.log('Extended vehicle mapping:', dynamicMapping);
+              return dynamicMapping;
+            }
+          }
+        } catch (e) {
+          console.error('Error in retry attempt for vehicle mapping:', e);
+        }
+      }
+      
       return vehicleIdMapping;
     }
     
@@ -121,6 +192,8 @@ export const getAuthorizationHeader = (): Record<string, string> => {
           token = userData.token;
           // Store it back in localStorage for future use
           localStorage.setItem('authToken', token);
+          localStorage.setItem('isLoggedIn', 'true');
+          console.log('Retrieved and stored token from user object');
         }
       }
     } catch (e) {

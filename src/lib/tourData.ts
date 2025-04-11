@@ -1,6 +1,6 @@
 
 import { TourInfo, TourFares } from '@/types/cab';
-import { fareAPI } from '@/services/api';
+import { fareAPI, syncTourFaresTable } from '@/services/api';
 
 export const availableTours: TourInfo[] = [
   {
@@ -57,7 +57,16 @@ export const loadTourFares = async (): Promise<TourFares> => {
   try {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
-    // Remove the timestamp parameter as it's not accepted by the API
+    
+    // First, make sure the tour_fares table is synced with vehicles
+    try {
+      const syncSuccess = await syncTourFaresTable();
+      console.log("Tour fares table sync result:", syncSuccess ? "success" : "failed");
+    } catch (syncError) {
+      console.error("Error syncing tour fares table:", syncError);
+    }
+    
+    // Fetch the tour fare data
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
@@ -67,7 +76,7 @@ export const loadTourFares = async (): Promise<TourFares> => {
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
-          // Create an entry for each tour with all vehicle types
+          // Create an entry for each tour with required vehicle types
           const fareEntry: Record<string, number> = {
             // Ensure required properties are initialized with default values
             sedan: tour.sedan || 0,
