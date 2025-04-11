@@ -95,7 +95,7 @@ export function DateTimePicker({
             initialFocus
             className={cn("p-3 pointer-events-auto")}
           />
-          <div className="p-4 flex items-center space-x-2">
+          <div className="p-4 flex items-center space-x-2 touch-action-manipulation">
             <Input
               type="time"
               value={selectedTime || ""}
@@ -103,10 +103,10 @@ export function DateTimePicker({
               className="max-w-[80px]"
             />
             <Button 
-              size="sm" 
-              onClick={handleApply} 
-              className="whitespace-nowrap pointer-events-auto"
+              size="sm"
               type="button"
+              className="whitespace-nowrap touch-action-manipulation"
+              onClick={handleApply}
             >
               Apply Time
             </Button>
