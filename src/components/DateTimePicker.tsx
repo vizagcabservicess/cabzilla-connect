@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -38,11 +37,12 @@ export function DateTimePicker({
   }, [date]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedTime(e.target.value);
+    const newTimeValue = e.target.value;
+    setSelectedTime(newTimeValue);
     
-    // Automatically apply time changes immediately for better UX
-    if (e.target.value && date) {
-      const [hours, minutes] = e.target.value.split(":").map(Number);
+    // Always apply time changes immediately for better UX
+    if (newTimeValue && date) {
+      const [hours, minutes] = newTimeValue.split(":").map(Number);
       if (!isNaN(hours) && !isNaN(minutes)) {
         const newDate = new Date(date);
         newDate.setHours(hours);
@@ -52,6 +52,7 @@ export function DateTimePicker({
     }
   };
 
+  // We still keep the apply button for users who prefer clicking buttons
   const handleApply = () => {
     if (!selectedTime) return;
 
