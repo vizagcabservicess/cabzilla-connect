@@ -46,12 +46,13 @@ export const tourFares: TourFares = {
 
 // Track ongoing tour fare fetch operations
 let isFetchingTourFares = false;
+let lastFetchedTourFares: TourFares | null = null;
 
 // Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<TourFares> => {
   if (isFetchingTourFares) {
     console.log('Tour fare fetch already in progress, returning cached data');
-    return tourFares;
+    return lastFetchedTourFares || tourFares;
   }
   
   try {
@@ -85,73 +86,69 @@ export const loadTourFares = async (): Promise<TourFares> => {
     
     // Fetch the tour fare data
     const tourFareData = await fareAPI.getTourFares();
-    console.log("Tour fare data:", tourFareData);
+    console.log("Tour fare data received:", tourFareData);
     
     // Create a properly typed object that will hold our dynamic tour fares
     const dynamicTourFares: TourFares = {};
     
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
+      // Map API response to our TourFares structure
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
-          // Initialize the base fare entry with required properties
-          const fareEntry: Record<string, number> = {
+          // Create a new tour entry
+          const tourId = tour.tourId;
+          dynamicTourFares[tourId] = {
             sedan: 0,
             ertiga: 0,
             innova: 0
           };
           
-          // Extract all vehicle prices from the tour fare object
+          // Set the sedan value
+          if (typeof tour.sedan === 'number') {
+            dynamicTourFares[tourId].sedan = tour.sedan;
+          }
+          
+          // Set the ertiga value
+          if (typeof tour.ertiga === 'number') {
+            dynamicTourFares[tourId].ertiga = tour.ertiga;
+          }
+          
+          // Set the innova value (prioritize innova column, fallback to innova_crysta)
+          if (typeof tour.innova === 'number') {
+            dynamicTourFares[tourId].innova = tour.innova;
+          } else if (typeof tour.innova_crysta === 'number') {
+            dynamicTourFares[tourId].innova = tour.innova_crysta;
+          }
+          
+          // Add other vehicle types as needed
           Object.entries(tour).forEach(([key, value]) => {
-            // Only add keys that have numeric values and aren't id, tourId, or tourName
             if (
-              typeof value === 'number' &&
-              !['id', 'tourId', 'tourName'].includes(key)
+              typeof value === 'number' && 
+              !['id', 'tourId', 'tourName', 'updated_at', 'created_at'].includes(key) &&
+              !['sedan', 'ertiga', 'innova'].includes(key)
             ) {
-              // Normalize keys to prevent duplicates
-              let normalizedKey = key;
-              
-              // Map specific keys to standard vehicle types
-              if (key === 'mpv' || key === 'innova_crysta') {
-                normalizedKey = 'innova';
-              } else if (key === 'toyota' || key === 'dzire_cng') {
-                normalizedKey = 'sedan';
-              } else if (key === 'tempo_traveller' || key === 'tempo') {
-                normalizedKey = 'tempo';
-              }
-              
-              fareEntry[normalizedKey] = value;
+              // Add other vehicle types to the tour fare object
+              (dynamicTourFares[tourId] as any)[key] = value;
             }
           });
-          
-          // Ensure all required properties are initialized
-          if (typeof fareEntry.sedan !== 'number') fareEntry.sedan = 0;
-          if (typeof fareEntry.ertiga !== 'number') fareEntry.ertiga = 0;
-          if (typeof fareEntry.innova !== 'number') fareEntry.innova = 0;
-          
-          // Type assertion to ensure TypeScript understands this object has the required properties
-          dynamicTourFares[tour.tourId] = fareEntry as {
-            sedan: number;
-            ertiga: number;
-            innova: number;
-            tempo?: number;
-            luxury?: number;
-            [key: string]: number | undefined;
-          };
         }
       });
+      
+      // Save the fetched fares for future use
+      lastFetchedTourFares = dynamicTourFares;
+      
+      console.log("Processed dynamic tour fares:", dynamicTourFares);
+      isFetchingTourFares = false;
+      
+      // Return the dynamic fares if we have any
+      if (Object.keys(dynamicTourFares).length > 0) {
+        return dynamicTourFares;
+      }
     }
     
+    // If we didn't get valid data, return the default fares
     isFetchingTourFares = false;
-    
-    // Check if we have any dynamic fares, otherwise return the default ones
-    // Also ensure TypeScript that the returned object conforms to TourFares
-    if (Object.keys(dynamicTourFares).length > 0) {
-      console.log("Returning dynamic tour fares", dynamicTourFares);
-      return dynamicTourFares;
-    } else {
-      console.log("No dynamic fares found, returning default fares");
-      return tourFares;
-    }
+    return tourFares;
   } catch (error) {
     console.error('Error loading tour fares:', error);
     isFetchingTourFares = false;

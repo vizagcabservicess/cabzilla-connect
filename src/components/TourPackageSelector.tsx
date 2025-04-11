@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { TourInfo } from '@/types/cab';
 import { fareAPI } from '@/services/api';
-import { availableTours } from '@/lib/tourData';
+import { availableTours, loadTourFares } from '@/lib/tourData';
 import { MapPin } from 'lucide-react';
 import { getApiUrl } from '@/config/api';
 
@@ -52,13 +52,16 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
           const apiTours: TourInfo[] = tourData.map(tour => ({
             id: tour.tourId,
             name: tour.tourName,
-            distance: 0, // Default distance
-            days: 1,     // Default days
+            distance: tour.distance || 0, // Use distance if provided, otherwise default to 0
+            days: tour.days || 1,         // Use days if provided, otherwise default to 1
             image: `/tours/${tour.tourId}.jpg` // Assume images follow this naming convention
           }));
           
           console.log("Successfully loaded tours from API:", apiTours);
           setTours(apiTours);
+          
+          // Also load the tour fares to make sure they're cached
+          await loadTourFares();
           
           // If no tour is selected, select the first one
           if (!selectedTour && apiTours.length > 0) {
@@ -99,7 +102,7 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
     };
 
     fetchTours();
-  }, [selectedTour, onTourChange, toast, isLoading, hasError]); // Add isLoading and hasError to dependencies
+  }, [selectedTour, onTourChange, toast, isLoading, hasError]); 
 
   // If tours are loaded from API/local but there's no selection, set a default
   useEffect(() => {
