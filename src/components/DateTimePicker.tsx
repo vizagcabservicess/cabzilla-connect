@@ -29,9 +29,10 @@ export function DateTimePicker({
 
   // Initialize with current date and time if no date is provided
   useEffect(() => {
+    const now = new Date();
+    const currentTime = format(now, "HH:mm");
+    
     if (!date) {
-      const now = new Date();
-      const currentTime = format(now, "HH:mm");
       setSelectedTime(currentTime);
       onDateChange(now);
     } else {
@@ -97,7 +98,7 @@ export function DateTimePicker({
             initialFocus
             className={cn("p-3 pointer-events-auto")}
           />
-          <div className="p-4 flex items-center space-x-2 touch-action-manipulation">
+          <div className="p-4 flex items-center space-x-2">
             <Input
               type="time"
               value={selectedTime || ""}
@@ -105,10 +106,9 @@ export function DateTimePicker({
               className="max-w-[80px]"
             />
             <Button 
-              type="button"
               onClick={handleApply}
-              className="whitespace-nowrap touch-none" 
-              style={{ touchAction: "auto" }}
+              className="whitespace-nowrap"
+              style={{touchAction: "manipulation"}}
             >
               Apply Time
             </Button>
