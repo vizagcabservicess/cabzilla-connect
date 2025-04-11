@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormItem, FormLabel, FormMessage, FormControl, Form } from "@/components/ui/form";
-import { RefreshCw, Save, SyncIcon } from "lucide-react";
+import { RefreshCw, Save, Sync } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -289,7 +289,7 @@ export function VehicleFareManagement() {
         
         if (userStr) {
           try {
-            const userData = JSON.parse(user);
+            const userData = JSON.parse(userStr);
             if (userData && userData.token) {
               localStorage.setItem('authToken', userData.token);
               foundToken = true;
@@ -377,7 +377,7 @@ export function VehicleFareManagement() {
         const userStr = localStorage.getItem('user');
         if (userStr) {
           try {
-            const userData = JSON.parse(user);
+            const userData = JSON.parse(userStr);
             if (userData && userData.token) {
               localStorage.setItem('authToken', userData.token);
               console.log('Retrieved token from user object for API call');
@@ -447,7 +447,7 @@ export function VehicleFareManagement() {
               onClick={handleSyncVehicles} 
               disabled={isSyncing}
             >
-              <SyncIcon className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <Sync className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
               Sync Vehicles
             </Button>
             <Button 
