@@ -23,7 +23,10 @@ const PopoverContent = React.forwardRef<
       )}
       onPointerDownOutside={(e) => {
         // Better handling for touch events on mobile
-        if (e.pointerType === 'touch') {
+        // Using any to get around the type error since the Radix UI types
+        // don't include pointerType but the underlying DOM event does
+        const event = e as any;
+        if (event.pointerType === 'touch') {
           e.preventDefault();
         }
       }}

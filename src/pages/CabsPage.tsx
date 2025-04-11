@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -22,6 +23,7 @@ import {
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
+import { availableTours } from "@/lib/tourData"; // Add this import
 import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";
