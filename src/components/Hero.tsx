@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -7,6 +8,8 @@ import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TabTripSelector } from './TabTripSelector';
 import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
@@ -16,6 +19,13 @@ import { BookingRequest } from '@/types/api';
 import { MobileBookingInterface } from './MobileBookingInterface';
 import { MobileAppBar } from './MobileAppBar';
 import { useIsMobile, safeGetFromSession, safeSetInSession } from '@/hooks/use-mobile';
+import { addDays, differenceInCalendarDays } from 'date-fns';
+import { Location, vizagLocations, areBothLocationsInVizag, isVizagLocation as isLocationInVizag } from '@/lib/locationData';
+import { convertToApiLocation } from '@/lib/locationUtils';
+import { cabTypes } from '@/lib/cabData';
+import { hourlyPackageOptions, getLocalPackagePrice } from '@/lib/packageData';
+import GoogleMapComponent from '@/components/GoogleMapComponent';
+import { calculateAirportFare } from '@/lib/locationData';
 
 export function Hero() {
   const { toast } = useToast();
@@ -129,7 +139,13 @@ export function Hero() {
     sessionStorage.setItem('tripType', tripType);
     sessionStorage.setItem('tripMode', tripMode);
     
-    if (tripType === 'airport' && airportLocation) {
+    if (tripType === 'airport') {
+      // Fix: We don't need to reference airportLocation here
+      // Instead, we can find an airport in the vizagLocations array if needed
+      const airport = vizagLocations.find(loc => loc.type === 'airport');
+      if (airport && !pickupLocation) {
+        setPickupLocation(airport);
+      }
     }
     
     if (tripType === 'local') {
@@ -143,7 +159,7 @@ export function Hero() {
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
     }
-  }, [tripType, tripMode]);
+  }, [tripType, tripMode, pickupLocation]);
 
   useEffect(() => {
     if (pickupLocation) {
@@ -216,7 +232,7 @@ export function Hero() {
     if (tripType !== 'local') {
       setDistance(calculatedDistance);
       setDuration(calculatedDuration);
-      setIsCalculatingDistance(false);
+      // Fixed: No setIsCalculatingDistance function needed here
       console.log(`Distance calculated for ${tripType}: ${calculatedDistance}km, ${calculatedDuration} minutes`);
     }
   };
@@ -234,7 +250,7 @@ export function Hero() {
       
       if (distance > packageKm && tripType === 'local') {
         const extraKm = distance - packageKm;
-        const extraKmRate = selectedCab.pricePerKm;
+        const extraKmRate = selectedCab.pricePerKm || 0;
         totalPrice += extraKm * extraKmRate;
         console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
       }
@@ -258,8 +274,8 @@ export function Hero() {
           nightHaltCharge = 1000;
           break;
         default:
-          basePrice = selectedCab.price;
-          perKmRate = selectedCab.pricePerKm;
+          basePrice = selectedCab.price || 0;
+          perKmRate = selectedCab.pricePerKm || 0;
           nightHaltCharge = 700;
       }
       
@@ -376,6 +392,10 @@ export function Hero() {
     setShowGuestDetailsForm(false);
     setCurrentStep(2);
   };
+
+  function handleMobileSearch() {
+    navigate('/cabs');
+  }
 
   return (
     <section className={`${isMobile ? 'min-h-screen' : 'min-h-screen bg-gradient-to-b from-cabBlue-50 to-white'} py-0 md:py-16 overflow-hidden`}>
