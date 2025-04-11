@@ -1,3 +1,4 @@
+
 import { TourInfo, TourFares } from '@/types/cab';
 import { fareAPI } from '@/services/api';
 
@@ -60,7 +61,7 @@ export const loadTourFares = async (): Promise<TourFares> => {
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
-    // Convert the API data to match the existing structure
+    // Create a properly typed object that will hold our dynamic tour fares
     const dynamicTourFares: TourFares = {};
     
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
@@ -87,12 +88,23 @@ export const loadTourFares = async (): Promise<TourFares> => {
             }
           });
           
-          dynamicTourFares[tour.tourId] = fareEntry;
+          // Type assertion to ensure TypeScript understands this object has the required properties
+          dynamicTourFares[tour.tourId] = fareEntry as {
+            sedan: number;
+            ertiga: number;
+            innova: number;
+            tempo?: number;
+            luxury?: number;
+            [key: string]: number | undefined;
+          };
         }
       });
     }
     
     isFetchingTourFares = false;
+    
+    // Check if we have any dynamic fares, otherwise return the default ones
+    // Also ensure TypeScript that the returned object conforms to TourFares
     return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
   } catch (error) {
     console.error('Error loading tour fares:', error);
