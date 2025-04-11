@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -316,7 +317,7 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Location</p>
                 <LocationInput
-                  location={pickupLocation}
+                  value={pickupLocation}
                   onLocationChange={(location: Location) => {
                     setPickupLocation(location);
                   }}
@@ -330,7 +331,7 @@ export default function BookingEditPage() {
                   <div>
                     <p className="text-sm font-medium mb-1">Drop Location</p>
                     <LocationInput
-                      location={dropLocation}
+                      value={dropLocation}
                       onLocationChange={(location: Location) => {
                         setDropLocation(location);
                       }}

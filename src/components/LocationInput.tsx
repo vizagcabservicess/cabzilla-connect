@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   Popover,
@@ -114,7 +115,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7264,
       lng: 83.3072,
-      type: "railway_station",
+      type: "train_station", // Changed from railway_station to train_station
       popularityScore: 85,
       isInVizag: true
     },
@@ -126,7 +127,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7204,
       lng: 83.3094,
-      type: "neighborhood",
+      type: "landmark", // Changed from neighborhood to landmark
       popularityScore: 75,
       isInVizag: true
     },
@@ -138,7 +139,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7104,
       lng: 83.3247,
-      type: "beach",
+      type: "landmark", // Changed from beach to landmark
       popularityScore: 80,
       isInVizag: true
     },
@@ -150,7 +151,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7011,
       lng: 83.3044,
-      type: "shopping_center",
+      type: "landmark", // Changed from shopping_center to landmark
       popularityScore: 70,
       isInVizag: true
     },
@@ -162,7 +163,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7411,
       lng: 83.3344,
-      type: "shopping_area",
+      type: "landmark", // Changed from shopping_area to landmark
       popularityScore: 65,
       isInVizag: true
     },
@@ -174,7 +175,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7611,
       lng: 83.3544,
-      type: "residential",
+      type: "landmark", // Changed from residential to landmark
       popularityScore: 60,
       isInVizag: true
     },
@@ -186,7 +187,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7811,
       lng: 83.3744,
-      type: "tourist_attraction",
+      type: "landmark", // Changed from tourist_attraction to landmark
       popularityScore: 70,
       isInVizag: true
     },
@@ -198,7 +199,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7911,
       lng: 83.3944,
-      type: "tourist_attraction",
+      type: "landmark", // Changed from tourist_attraction to landmark
       popularityScore: 75,
       isInVizag: true
     },
@@ -210,7 +211,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.8011,
       lng: 83.4144,
-      type: "beach",
+      type: "landmark", // Changed from beach to landmark
       popularityScore: 80,
       isInVizag: true
     },
@@ -222,7 +223,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.8900,
       lng: 83.4400,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 55,
       isInVizag: true
     },
@@ -234,7 +235,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.9300,
       lng: 83.4000,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 50,
       isInVizag: true
     },
@@ -246,7 +247,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.7800,
       lng: 83.2000,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 45,
       isInVizag: true
     },
@@ -258,7 +259,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.6800,
       lng: 83.2000,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 50,
       isInVizag: true
     },
@@ -270,7 +271,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.6500,
       lng: 83.1800,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 40,
       isInVizag: true
     },
@@ -282,7 +283,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.6300,
       lng: 83.0800,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 35,
       isInVizag: true
     },
@@ -294,7 +295,7 @@ export function LocationInput({
       state: "Andhra Pradesh",
       lat: 17.6800,
       lng: 82.9800,
-      type: "town",
+      type: "landmark", // Changed from town to landmark
       popularityScore: 30,
       isInVizag: false
     }
