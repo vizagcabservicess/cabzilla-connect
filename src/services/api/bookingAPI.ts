@@ -89,17 +89,21 @@ export const bookingAPI = {
     return bookingAPI.updateBooking(bookingId, { status });
   },
 
-  getUserBookings: async (userId: number) => {
-    return bookingAPI.getBookings({ userId });
+  getUserBookings: async () => {
+    return bookingAPI.getBookings({ userId: 'current' });
   },
 
   getAllBookings: async () => {
     return bookingAPI.getBookings();
   },
 
-  getAdminDashboardMetrics: async () => {
+  getAdminDashboardMetrics: async (period?: string) => {
     try {
-      const response = await axios.get(getApiUrl('/api/admin/dashboard-metrics.php'), {
+      const url = period 
+        ? getApiUrl(`/api/admin/dashboard-metrics.php?period=${period}`)
+        : getApiUrl('/api/admin/dashboard-metrics.php');
+        
+      const response = await axios.get(url, {
         headers: {
           ...getAuthorizationHeader()
         }
