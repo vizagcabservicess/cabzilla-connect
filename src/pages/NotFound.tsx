@@ -3,10 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, ArrowLeft } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 const NotFound = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [isApiError, setIsApiError] = useState(false);
   
   useEffect(() => {
@@ -39,7 +42,7 @@ const NotFound = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="text-center max-w-md px-4">
         <div className="flex justify-center mb-6">
-          <AlertCircle size={60} className="text-red-500" />
+          <AlertCircle size={isMobile ? 48 : 60} className="text-red-500" />
         </div>
         <h1 className="text-4xl font-bold mb-4">404</h1>
         <p className="text-xl text-gray-600 mb-4">
@@ -51,7 +54,10 @@ const NotFound = () => {
             : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className={cn(
+          "flex gap-4 justify-center",
+          isMobile ? "flex-col" : "sm:flex-row"
+        )}>
           <Button 
             variant="outline" 
             onClick={goBack}
