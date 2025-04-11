@@ -389,8 +389,8 @@ export function Hero() {
     setCurrentStep(2);
   };
 
-  function handleMobileSearch() {
-    navigate(`/cabs/${tripType}`);
+  function handleMobileSearch(selectedTripType: TripType) {
+    navigate(`/cabs/${selectedTripType}`);
   }
 
   return (

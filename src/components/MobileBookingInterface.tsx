@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { LocationInput } from "@/components/LocationInput";
@@ -10,7 +11,7 @@ import { safeGetFromSession, safeSetInSession } from '@/hooks/use-mobile';
 import { addDays } from 'date-fns';
 
 interface MobileBookingInterfaceProps {
-  onSearch: () => void;
+  onSearch: (tripType: TripType) => void;
   isSearching?: boolean;
 }
 
@@ -73,6 +74,11 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
     if (type === 'local') {
       setDropLocation(null);
     }
+  };
+
+  const handleSearchClick = () => {
+    // Pass the current tripType to ensure correct routing
+    onSearch(tripType);
   };
 
   return (
@@ -143,7 +149,7 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
           Pickup Location
         </div>
         <LocationInput
-          placeholder="Enter pickup location"
+          placeholder="Select a location in Visakhapatnam"
           value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
           onLocationChange={handlePickupLocationChange}
           isPickupLocation={true}
@@ -181,7 +187,7 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
 
       {/* Search Button - Updated styling to ensure it's visibly active when valid */}
       <Button 
-        onClick={onSearch} 
+        onClick={handleSearchClick} 
         disabled={!isFormValid || isSearching}
         className={`w-full py-5 text-md mt-2 ${
           isFormValid && !isSearching 

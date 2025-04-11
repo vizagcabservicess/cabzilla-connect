@@ -27,7 +27,7 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(
-    date && date instanceof Date ? format(date, "HH:mm") : null
+    date && date instanceof Date ? format(date, "HH:mm") : "12:00"
   );
   
   // For better time selection on mobile
@@ -56,37 +56,74 @@ export function DateTimePicker({
     }
   }, [date]);
 
+  // Apply time immediately when date is selected
+  const handleCalendarSelect = (newDate: Date | undefined) => {
+    if (newDate) {
+      const hours = selectedTime ? parseInt(selectedTime.split(':')[0], 10) : 
+                   parseInt(selectedHour, 10);
+      const minutes = selectedTime ? parseInt(selectedTime.split(':')[1], 10) : 
+                     parseInt(selectedMinute, 10);
+      
+      newDate.setHours(hours);
+      newDate.setMinutes(minutes);
+    }
+    onDateChange(newDate);
+  };
+
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
+    applySelectedTime(e.target.value);
+  };
+
+  const applySelectedTime = (timeStr: string | null) => {
+    if (!date || !timeStr) return;
+    
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      const newDate = new Date(date);
+      newDate.setHours(hours);
+      newDate.setMinutes(minutes);
+      onDateChange(newDate);
+    }
   };
 
   const handleApply = () => {
     // For direct input time
     if (selectedTime) {
-      const [hours, minutes] = selectedTime.split(":").map(Number);
-      if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-        if (date && date instanceof Date) {
-          const newDate = new Date(date);
-          newDate.setHours(hours);
-          newDate.setMinutes(minutes);
-          onDateChange(newDate);
-        }
-      }
+      applySelectedTime(selectedTime);
     }
     // For dropdown-based selection
     else if (selectedHour && selectedMinute) {
-      const hours = parseInt(selectedHour, 10);
-      const minutes = parseInt(selectedMinute, 10);
-      
       if (date && date instanceof Date) {
         const newDate = new Date(date);
-        newDate.setHours(hours);
-        newDate.setMinutes(minutes);
+        newDate.setHours(parseInt(selectedHour, 10));
+        newDate.setMinutes(parseInt(selectedMinute, 10));
         onDateChange(newDate);
       }
     }
     
     setIsTimePickerOpen(false);
+  };
+
+  // Apply time selection changes immediately for mobile dropdown
+  const handleHourChange = (hour: string) => {
+    setSelectedHour(hour);
+    if (date && date instanceof Date) {
+      const newDate = new Date(date);
+      newDate.setHours(parseInt(hour, 10));
+      newDate.setMinutes(parseInt(selectedMinute, 10));
+      onDateChange(newDate);
+    }
+  };
+
+  const handleMinuteChange = (minute: string) => {
+    setSelectedMinute(minute);
+    if (date && date instanceof Date) {
+      const newDate = new Date(date);
+      newDate.setHours(parseInt(selectedHour, 10));
+      newDate.setMinutes(parseInt(minute, 10));
+      onDateChange(newDate);
+    }
   };
 
   // Generate hour and minute options
@@ -136,7 +173,7 @@ export function DateTimePicker({
           <Calendar
             mode="single"
             selected={date instanceof Date ? date : undefined}
-            onSelect={onDateChange}
+            onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
             className={cn("p-3 pointer-events-auto")}
@@ -164,7 +201,7 @@ export function DateTimePicker({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs text-gray-500 mb-1 block">Hour</label>
-                        <Select value={selectedHour} onValueChange={setSelectedHour}>
+                        <Select value={selectedHour} onValueChange={handleHourChange}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Hour" />
                           </SelectTrigger>
@@ -179,7 +216,7 @@ export function DateTimePicker({
                       </div>
                       <div>
                         <label className="text-xs text-gray-500 mb-1 block">Minute</label>
-                        <Select value={selectedMinute} onValueChange={setSelectedMinute}>
+                        <Select value={selectedMinute} onValueChange={handleMinuteChange}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Minute" />
                           </SelectTrigger>
