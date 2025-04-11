@@ -1,5 +1,5 @@
 
-import React, { useState, ReactNode } from 'react';
+import React, { useState } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,7 @@ export interface DateTimePickerProps {
   onDateChange: (date: Date | undefined) => void;
   minDate?: Date;
   className?: string;
-  label?: string;
-  children?: ReactNode;
+  label?: string; // Make label optional
 }
 
 export function DateTimePicker({ 
@@ -22,8 +21,7 @@ export function DateTimePicker({
   onDateChange, 
   minDate, 
   className,
-  label,
-  children
+  label
 }: DateTimePickerProps) {
   const [selectedTime, setSelectedTime] = useState<string | null>(
     date ? format(date, "HH:mm") : null
@@ -51,7 +49,7 @@ export function DateTimePicker({
   };
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className="space-y-2">
       {label && (
         <label
           htmlFor="date"
@@ -62,28 +60,16 @@ export function DateTimePicker({
       )}
       <Popover>
         <PopoverTrigger asChild>
-          {children ? (
-            <Button
-              variant={"outline"}
-              className={cn(
-                "w-full justify-start text-left font-normal p-0",
-                !date && "text-muted-foreground"
-              )}
-            >
-              {children}
-            </Button>
-          ) : (
-            <Button
-              variant={"outline"}
-              className={cn(
-                "w-full justify-start text-left font-normal",
-                !date && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
-            </Button>
-          )}
+          <Button
+            variant={"outline"}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
+          </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="center" side="bottom">
           <Calendar

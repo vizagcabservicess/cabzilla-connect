@@ -1,14 +1,13 @@
 
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, ArrowLeft } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const NotFound = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isApiError, setIsApiError] = useState(false);
-  const isMobile = useIsMobile();
   
   useEffect(() => {
     // Check if this is an API error or a regular 404 page
@@ -37,37 +36,37 @@ const NotFound = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className={`text-center ${isMobile ? 'px-6 py-8 max-w-sm' : 'max-w-md px-4'}`}>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="text-center max-w-md px-4">
         <div className="flex justify-center mb-6">
-          <div className="rounded-full w-16 h-16 bg-red-100 flex items-center justify-center">
-            <AlertCircle size={32} className="text-red-500" />
-          </div>
+          <AlertCircle size={60} className="text-red-500" />
         </div>
-        <h1 className={`${isMobile ? 'text-3xl' : 'text-4xl'} font-bold mb-4 text-gray-900`}>404</h1>
-        <p className={`${isMobile ? 'text-lg' : 'text-xl'} text-gray-600 mb-4`}>
-          Page Not Found
+        <h1 className="text-4xl font-bold mb-4">404</h1>
+        <p className="text-xl text-gray-600 mb-4">
+          {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
         </p>
-        <p className={`text-gray-500 mb-8 ${isMobile ? 'text-sm' : ''}`}>
-          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
+        <p className="text-gray-500 mb-6">
+          {isApiError 
+            ? "The requested API endpoint could not be found. This might be due to a server configuration issue."
+            : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
         </p>
         
-        <div className="space-y-3">
-          <button 
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button 
+            variant="outline" 
             onClick={goBack}
-            className="flex items-center justify-center gap-2 w-full border border-gray-300 bg-white text-gray-700 py-3 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2"
           >
-            <ArrowLeft size={18} />
-            <span>Go Back</span>
-          </button>
-          
-          <button 
+            <ArrowLeft size={16} />
+            Go Back
+          </Button>
+          <Button 
             onClick={goHome}
-            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-3 rounded-lg shadow-md hover:shadow-lg transition-all"
+            className="flex items-center gap-2"
           >
-            <Home size={18} />
-            <span>Return to Home</span>
-          </button>
+            <Home size={16} />
+            Return to Home
+          </Button>
         </div>
       </div>
     </div>
