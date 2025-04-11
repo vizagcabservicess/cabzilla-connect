@@ -91,7 +91,16 @@ export function DateTimePicker({
 
   // Generate hour and minute options
   const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-  const minuteOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+
+  // Format AM/PM time for display
+  const formatTimeDisplay = (date: Date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+  };
 
   return (
     <div className="space-y-2">
@@ -114,7 +123,13 @@ export function DateTimePicker({
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date && date instanceof Date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
+            {date && date instanceof Date ? (
+              <>
+                {format(date, "PP")} {formatTimeDisplay(date)}
+              </>
+            ) : (
+              <span>Pick a date</span>
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="center" side={isMobile ? "bottom" : "bottom"} sideOffset={5}>
@@ -137,9 +152,10 @@ export function DateTimePicker({
                     size="sm" 
                     variant="ghost"
                     onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
+                    className="flex items-center"
                   >
                     <Clock size={16} className="mr-1" />
-                    {selectedHour}:{selectedMinute}
+                    {date && date instanceof Date ? formatTimeDisplay(date) : `${selectedHour}:${selectedMinute}`}
                   </Button>
                 </div>
                 
@@ -152,7 +168,7 @@ export function DateTimePicker({
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Hour" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
+                          <SelectContent className="max-h-[200px] bg-white">
                             {hourOptions.map((hour) => (
                               <SelectItem key={hour} value={hour}>
                                 {hour}
@@ -167,7 +183,7 @@ export function DateTimePicker({
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Minute" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
+                          <SelectContent className="max-h-[200px] bg-white">
                             {minuteOptions.map((minute) => (
                               <SelectItem key={minute} value={minute}>
                                 {minute}
@@ -177,7 +193,7 @@ export function DateTimePicker({
                         </Select>
                       </div>
                     </div>
-                    <Button size="sm" onClick={handleApply} className="w-full">
+                    <Button size="sm" onClick={handleApply} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                       Apply Time
                     </Button>
                   </div>
@@ -191,7 +207,7 @@ export function DateTimePicker({
                   onChange={handleTimeChange}
                   className="max-w-[110px]"
                 />
-                <Button size="sm" onClick={handleApply}>
+                <Button size="sm" onClick={handleApply} className="bg-blue-600 hover:bg-blue-700 text-white">
                   Apply
                 </Button>
               </div>

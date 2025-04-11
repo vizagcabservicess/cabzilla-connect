@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -140,8 +139,6 @@ export function Hero() {
     sessionStorage.setItem('tripMode', tripMode);
     
     if (tripType === 'airport') {
-      // Fix: We don't need to reference airportLocation here
-      // Instead, we can find an airport in the vizagLocations array if needed
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport && !pickupLocation) {
         setPickupLocation(airport);
@@ -232,7 +229,6 @@ export function Hero() {
     if (tripType !== 'local') {
       setDistance(calculatedDistance);
       setDuration(calculatedDuration);
-      // Fixed: No setIsCalculatingDistance function needed here
       console.log(`Distance calculated for ${tripType}: ${calculatedDistance}km, ${calculatedDuration} minutes`);
     }
   };
@@ -394,7 +390,7 @@ export function Hero() {
   };
 
   function handleMobileSearch() {
-    navigate('/cabs');
+    navigate(`/cabs/${tripType}`);
   }
 
   return (
@@ -509,10 +505,10 @@ export function Hero() {
                   <div className="mt-8 flex justify-end">
                     <Button
                       onClick={handleContinue}
-                      disabled={!isFormValid || isCalculatingDistance}
+                      disabled={!isFormValid}
                       className={`px-10 py-6 rounded-md ${
-                        isFormValid && !isCalculatingDistance
-                          ? "bg-blue-500 text-white"
+                        isFormValid
+                          ? "bg-blue-600 hover:bg-blue-700 text-white"
                           : "bg-gray-300 text-gray-500 cursor-not-allowed"
                       }`}
                     >

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { LocationInput } from "@/components/LocationInput";
@@ -150,9 +149,6 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
           isPickupLocation={true}
           className="border rounded-md py-2.5 text-sm"
         />
-        <div className="text-xs text-gray-500 mt-1">
-          Select a location in India
-        </div>
       </div>
 
       {/* Drop Location (not shown for Local trips) */}
@@ -168,9 +164,6 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
             isPickupLocation={false}
             className="border rounded-md py-2.5 text-sm"
           />
-          <div className="text-xs text-gray-500 mt-1">
-            Select a destination in India
-          </div>
         </div>
       )}
 
@@ -186,12 +179,16 @@ export function MobileBookingInterface({ onSearch, isSearching }: MobileBookingI
         />
       </div>
 
-      {/* Search Button */}
+      {/* Search Button - Updated styling to ensure it's visibly active when valid */}
       <Button 
         onClick={onSearch} 
         disabled={!isFormValid || isSearching}
-        className="w-full py-5 text-md mt-2 bg-gray-100 hover:bg-gray-200 text-gray-800 flex items-center justify-center"
-        variant="secondary"
+        className={`w-full py-5 text-md mt-2 ${
+          isFormValid && !isSearching 
+            ? "bg-blue-600 hover:bg-blue-700 text-white" 
+            : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+        } flex items-center justify-center`}
+        variant={isFormValid && !isSearching ? "default" : "secondary"}
       >
         {isSearching ? (
           <div className="flex items-center">
