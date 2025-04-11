@@ -31,11 +31,23 @@ export function TabTripSelector({
   const lastClearTimeRef = useRef<number>(0);
   const clearThrottleTime = 2000; // 2 seconds minimum between clears
   const lastTabChangeRef = useRef<number>(0);
+  const isTabChangingRef = useRef<boolean>(false);
+  const isFirstRender = useRef<boolean>(true);
 
   const clearAllFormState = useCallback(() => {
+    // Skip state clearing on first render to prevent unnecessary DOM manipulation
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    // Only clear if we're not currently in a tab change operation
+    if (isTabChangingRef.current) {
+      return;
+    }
+
     const now = Date.now();
     if (now - lastClearTimeRef.current < clearThrottleTime) {
-      console.log(`Throttling form state clear (last clear was ${now - lastClearTimeRef.current}ms ago)`);
       return;
     }
     
@@ -46,24 +58,10 @@ export function TabTripSelector({
     sessionStorage.removeItem('dropLocation');
     sessionStorage.removeItem('pickupLocation');
     
-    // The code below was causing UI refresh issues, so we'll handle DOM updates more carefully
-    const inputFields = document.querySelectorAll('input[type="text"]');
-    inputFields.forEach(input => {
-      const inputElement = input as HTMLInputElement;
-      if (inputElement.placeholder && 
-          (inputElement.placeholder.toLowerCase().includes('pickup') || 
-           inputElement.placeholder.toLowerCase().includes('drop') ||
-           inputElement.placeholder.toLowerCase().includes('location'))) {
-        
-        // Clear without triggering events that could cause UI refreshes
-        if (inputElement.value) {
-          inputElement.value = '';
-        }
-      }
-    });
-    
-    // Only dispatch this event once to prevent cascading updates
-    if (now - parseInt(sessionStorage.getItem('lastLocationClearedEvent') || '0', 10) > clearThrottleTime) {
+    // Avoid DOM manipulation that triggers UI refreshes
+    // Only dispatch location cleared event if necessary and not too frequent
+    const lastLocationCleared = parseInt(sessionStorage.getItem('lastLocationClearedEvent') || '0', 10);
+    if (now - lastLocationCleared > clearThrottleTime) {
       const clearEvent = new CustomEvent('locationCleared', { 
         bubbles: true, 
         detail: { source: 'TabTripSelector', timestamp: now } 
@@ -71,18 +69,25 @@ export function TabTripSelector({
       document.dispatchEvent(clearEvent);
       sessionStorage.setItem('lastLocationClearedEvent', now.toString());
     }
-    
   }, [clearThrottleTime]);
 
   const clearAllCacheData = useCallback(() => {
+    // Skip cache clearing on first render
+    if (isFirstRender.current) {
+      return;
+    }
+    
+    // Only clear if we're not currently in a tab change operation
+    if (isTabChangingRef.current) {
+      return;
+    }
+
     const now = Date.now();
     if (now - lastClearTimeRef.current < clearThrottleTime) {
-      console.log(`Throttling cache clear (last clear was ${now - lastClearTimeRef.current}ms ago)`);
       return;
     }
     
     lastClearTimeRef.current = now;
-    console.log("Clearing cache data for trip type change");
     
     const oldTripType = sessionStorage.getItem('tripType');
     
@@ -103,17 +108,23 @@ export function TabTripSelector({
   }, [selectedTab, tripMode, clearThrottleTime]);
 
   useEffect(() => {
+    // Skip this effect on the first render to prevent unnecessary operations
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
     if (prevTab !== selectedTab) {
       const debounceTime = 300;
       const now = Date.now();
       const lastTabChangeTime = parseInt(sessionStorage.getItem('lastTabChangeTime') || '0', 10);
       
       if (now - lastTabChangeTime < debounceTime) {
-        console.log('Debouncing tab change operations');
         return;
       }
       
       sessionStorage.setItem('lastTabChangeTime', now.toString());
+      isTabChangingRef.current = true;
       
       // Clear data only when tab changes
       clearAllCacheData();
@@ -151,6 +162,11 @@ export function TabTripSelector({
         setRefreshTimer(reloadTimer);
       }
       
+      // Reset the tab changing flag after a delay
+      setTimeout(() => {
+        isTabChangingRef.current = false;
+      }, 500);
+      
       return () => {
         if (refreshTimer) clearTimeout(refreshTimer);
       };
@@ -158,6 +174,12 @@ export function TabTripSelector({
   }, [selectedTab, toast, clearAllCacheData, prevTab, refreshTimer, clearAllFormState]);
 
   const handleTabChange = (value: string) => {
+    // Skip if we're already on this tab or a change is in progress
+    if (value === selectedTab || isTabChangingRef.current) {
+      console.log(`Tab ${value} already selected or change in progress, ignoring click`);
+      return;
+    }
+    
     const now = Date.now();
     const lastTabClick = parseInt(sessionStorage.getItem('lastTabClick') || '0', 10);
     const debounceTime = 1000;
@@ -167,13 +189,9 @@ export function TabTripSelector({
       return;
     }
     
-    if (value === selectedTab) {
-      console.log(`Tab ${value} already selected, ignoring click`);
-      return;
-    }
-    
     sessionStorage.setItem('lastTabClick', now.toString());
     lastTabChangeRef.current = now;
+    isTabChangingRef.current = true;
     
     console.log(`Tab change requested: ${value} (current: ${selectedTab})`);
     
@@ -182,13 +200,14 @@ export function TabTripSelector({
       setRefreshTimer(null);
     }
     
-    // Perform clear operations only once
-    clearAllFormState();
-    clearAllCacheData();
-    
     // Set a timeout to ensure the state update happens after current execution
     setTimeout(() => {
       onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+      
+      // Reset the tab changing flag after a delay
+      setTimeout(() => {
+        isTabChangingRef.current = false;
+      }, 500);
     }, 50);
   };
 

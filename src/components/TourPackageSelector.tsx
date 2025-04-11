@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
@@ -19,11 +19,23 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
   const [tours, setTours] = useState<TourInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const isInitialMount = useRef(true);
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
+    // Skip the initial fetch if we already have a selected tour
+    // This prevents unnecessary API calls and state updates
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (selectedTour) {
+        return;
+      }
+    }
+
     const fetchTours = async () => {
-      if (isLoading || hasError) return; // Prevent repeated calls if already loading or had an error
+      if (isLoading || hasError || hasFetchedRef.current) return;
       
+      hasFetchedRef.current = true;
       setIsLoading(true);
       try {
         // Use the correct API endpoint that matches the backend structure
@@ -89,7 +101,16 @@ export function TourPackageSelector({ selectedTour, onTourChange }: TourPackageS
     fetchTours();
   }, [selectedTour, onTourChange, toast, isLoading, hasError]); // Add isLoading and hasError to dependencies
 
+  // If tours are loaded from API/local but there's no selection, set a default
+  useEffect(() => {
+    if (!selectedTour && tours.length > 0 && !isLoading) {
+      // This useEffect handles default selection cleanly without causing loops
+      onTourChange(tours[0].id);
+    }
+  }, [tours, selectedTour, onTourChange, isLoading]);
+
   const handleTourChange = (tourId: string) => {
+    console.log(`Tour selection changed to: ${tourId}`);
     onTourChange(tourId);
   };
 
