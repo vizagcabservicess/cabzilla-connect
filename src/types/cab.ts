@@ -113,6 +113,12 @@ export interface TourFares {
     innova: number;
     tempo?: number;
     luxury?: number;
+    innova_crysta?: number;
+    tempo_traveller?: number;
+    mpv?: number;
+    toyota?: number;
+    dzire_cng?: number;
+    etios?: number;
   };
 }
 
