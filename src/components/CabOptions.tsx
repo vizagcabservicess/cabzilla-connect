@@ -72,17 +72,39 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   }, [selectedCab, hasSelectedCab]);
 
+  // Set up mock data for the CabList component
+  const [cabFares, setCabFares] = useState<Record<string, number>>({});
+  
+  // In a real implementation, you would calculate actual fares here
+  useEffect(() => {
+    const fares: Record<string, number> = {};
+    cabTypes.forEach(cab => {
+      // Simple mock calculation based on distance and cab type
+      const baseFare = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+      fares[cab.id] = baseFare;
+    });
+    setCabFares(fares);
+  }, [cabTypes, distance]);
+
+  // Generate fare details string
+  const getFareDetails = (cab: CabType): string => {
+    if (tripType === 'local') {
+      return 'Local package';
+    } else if (tripType === 'airport') {
+      return 'Airport transfer';
+    } else {
+      return tripMode === 'round-trip' ? 'Round trip' : 'One way';
+    }
+  };
+
   return (
     <CabList
       cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id}
-      onSelectCab={handleCabSelect}
-      distance={distance}
-      tripType={tripType}
-      tripMode={tripMode}
-      hourlyPackage={hourlyPackage}
-      pickupDate={pickupDate}
-      returnDate={returnDate}
+      selectedCabId={selectedCab?.id || null}
+      cabFares={cabFares}
+      isCalculatingFares={false}
+      handleSelectCab={handleCabSelect}
+      getFareDetails={getFareDetails}
     />
   );
 };
