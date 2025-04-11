@@ -25,9 +25,19 @@ export function DateTimePicker({
   label
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
-  const [selectedTime, setSelectedTime] = useState<string | null>(
-    date ? format(date, "HH:mm") : null
-  );
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  // Initialize with current date and time if no date is provided
+  useEffect(() => {
+    if (!date) {
+      const now = new Date();
+      const currentTime = format(now, "HH:mm");
+      setSelectedTime(currentTime);
+      onDateChange(now);
+    } else {
+      setSelectedTime(format(date, "HH:mm"));
+    }
+  }, []);
 
   // Update selectedTime when date prop changes
   useEffect(() => {
@@ -38,12 +48,6 @@ export function DateTimePicker({
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
-    
-    // On mobile, don't auto-apply as it can cause issues with time input field
-    if (isMobile && e.target.value && e.target.value.includes(":")) {
-      // Delay slightly to ensure the input value is registered
-      setTimeout(() => handleApply(), 300);
-    }
   };
 
   const handleApply = () => {
@@ -55,12 +59,10 @@ export function DateTimePicker({
       return;
     }
 
-    if (date) {
-      const newDate = new Date(date);
-      newDate.setHours(hours);
-      newDate.setMinutes(minutes);
-      onDateChange(newDate);
-    }
+    const newDate = date ? new Date(date) : new Date();
+    newDate.setHours(hours);
+    newDate.setMinutes(minutes);
+    onDateChange(newDate);
   };
 
   return (
@@ -103,10 +105,10 @@ export function DateTimePicker({
               className="max-w-[80px]"
             />
             <Button 
-              size="sm"
               type="button"
-              className="whitespace-nowrap touch-action-manipulation"
               onClick={handleApply}
+              className="whitespace-nowrap touch-none" 
+              style={{ touchAction: "auto" }}
             >
               Apply Time
             </Button>
