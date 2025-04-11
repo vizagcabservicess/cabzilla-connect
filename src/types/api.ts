@@ -102,6 +102,7 @@ export interface BookingRequest {
   passengerPhone?: string;
   passengerEmail?: string;
   hourlyPackage?: string | null;
+  tourId?: string; // Adding tourId for tour bookings
 }
 
 export interface SignupRequest {
@@ -124,7 +125,19 @@ export interface DashboardMetrics {
   recentBookings: Booking[];
   monthlyRevenue: number;
   totalRevenue: number;
+  
+  // Adding missing properties that were causing TypeScript errors
   activeDrivers?: number;
+  activeRides?: number; // For active/ongoing rides
+  availableDrivers?: number;
+  busyDrivers?: number;
+  upcomingRides?: number;
+  avgRating?: number;
+  
+  // For status filtering
+  availableStatuses?: Array<BookingStatus | 'all'>;
+  currentFilter?: BookingStatus | 'all';
+  
   topLocations?: {
     location: string;
     count: number;

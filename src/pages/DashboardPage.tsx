@@ -232,8 +232,13 @@ export default function DashboardPage() {
   const getFallbackMetrics = (): DashboardMetricsType => {
     return {
       totalBookings: 24,
-      activeRides: 3,
+      pendingBookings: 5,
+      completedBookings: 12,
+      todayBookings: 3,
+      recentBookings: [],
+      monthlyRevenue: 28000,
       totalRevenue: 35600,
+      activeRides: 3,
       availableDrivers: 8,
       busyDrivers: 6,
       avgRating: 4.7,
