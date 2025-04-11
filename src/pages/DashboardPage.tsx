@@ -187,7 +187,7 @@ export default function DashboardPage() {
     return [
       {
         id: 1001,
-        userId: user?.id || 1,
+        user_id: user?.id || 1,
         bookingNumber: 'BK12345',
         pickupLocation: 'Airport Terminal 1',
         dropLocation: 'Taj Hotel, City Center',
@@ -209,7 +209,7 @@ export default function DashboardPage() {
       },
       {
         id: 1002,
-        userId: user?.id || 1,
+        user_id: user?.id || 1,
         bookingNumber: 'BK12346',
         pickupLocation: 'Home Address',
         dropLocation: 'Office Complex',
