@@ -14,13 +14,25 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
+    
+    // Log token for debugging purposes
+    console.log('Auth token for request:', token);
+    
     if (token) {
       // Ensure config.headers is properly initialized as AxiosHeaders
       if (!config.headers) {
         config.headers = new AxiosHeaders();
       }
+      
+      // Set the Authorization header
       config.headers.set('Authorization', `Bearer ${token}`);
+      
+      // Log the headers for debugging
+      console.log('Request headers:', JSON.stringify(config.headers));
+    } else {
+      console.warn('No auth token found in localStorage');
     }
+    
     return config;
   },
   (error) => {
@@ -45,16 +57,24 @@ export const fareAPI = {
   // Update a tour fare
   updateTourFares: async (fareData: any): Promise<any> => {
     try {
-      console.log('Sending tour fare update with auth token:', localStorage.getItem('authToken'));
-      // Use the correct endpoint for tour fare updates
+      // Get token directly from localStorage to ensure it's current
+      const token = localStorage.getItem('authToken');
+      console.log('Sending tour fare update with auth token:', token);
+      
+      // Use the correct endpoint for tour fare updates with explicit headers
       const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`,
         }
       });
       return response.data;
     } catch (error) {
       console.error('Error updating tour fare:', error);
+      // Improve error logging
+      if (error.response) {
+        console.error('Error response:', error.response.status, error.response.data);
+      }
       throw error;
     }
   },
@@ -62,17 +82,24 @@ export const fareAPI = {
   // Add a new tour fare
   addTourFare: async (fareData: any): Promise<any> => {
     try {
-      // Ensure auth token is included in PUT request headers
-      console.log('Sending new tour fare with auth token:', localStorage.getItem('authToken'));
-      // Use the correct endpoint for adding tour fares
+      // Get token directly from localStorage to ensure it's current
+      const token = localStorage.getItem('authToken');
+      console.log('Sending new tour fare with auth token:', token);
+      
+      // Use the correct endpoint for adding tour fares with explicit headers
       const response = await apiClient.put('/api/admin/fares-update.php', fareData, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`,
         }
       });
       return response.data;
     } catch (error) {
       console.error('Error adding tour fare:', error);
+      // Improve error logging
+      if (error.response) {
+        console.error('Error response:', error.response.status, error.response.data);
+      }
       throw error;
     }
   },
@@ -80,16 +107,23 @@ export const fareAPI = {
   // Delete a tour fare
   deleteTourFare: async (tourId: string): Promise<any> => {
     try {
-      // Use the correct endpoint with query parameter
-      // Explicitly include the auth token in the headers
+      // Get token directly from localStorage to ensure it's current
+      const token = localStorage.getItem('authToken');
+      
+      // Use the correct endpoint with query parameter and explicit headers
       const response = await apiClient.delete(`/api/admin/fares-update.php?tourId=${tourId}`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`,
         }
       });
       return response.data;
     } catch (error) {
       console.error('Error deleting tour fare:', error);
+      // Improve error logging
+      if (error.response) {
+        console.error('Error response:', error.response.status, error.response.data);
+      }
       throw error;
     }
   },

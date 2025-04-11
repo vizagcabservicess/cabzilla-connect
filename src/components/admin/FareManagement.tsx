@@ -140,13 +140,8 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
-      const fareUpdateRequest: FareUpdateRequest = {
+      const fareUpdateRequest: Record<string, any> = {
         tourId: values.tourId,
-        sedan: 0,
-        ertiga: 0,
-        innova: 0,
-        tempo: 0,
-        luxury: 0
       };
       
       vehicles.forEach(vehicle => {
@@ -160,6 +155,11 @@ export function FareManagement() {
       
       console.log("Prepared fare update request:", fareUpdateRequest);
       
+      const authToken = localStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
       const data = await fareAPI.updateTourFares(fareUpdateRequest);
       console.log("Fare update response:", data);
       
@@ -169,12 +169,17 @@ export function FareManagement() {
       console.error("Error updating fare:", error);
       
       let errorMessage = "Failed to update fare";
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error;
-        if (axiosError.response?.data?.message) {
-          errorMessage = axiosError.response.data.message;
-        } else if (axiosError.response?.status === 403) {
-          errorMessage = "Authorization failed. Please log out and log back in to refresh your session.";
+      if (error && typeof error === 'object') {
+        if ('response' in error && error.response) {
+          if (error.response.data?.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.status === 403) {
+            errorMessage = "Authorization failed. Please log out and log back in to refresh your session.";
+          } else if (error.response.status === 500) {
+            errorMessage = "Server error. Please check if all vehicle types exist in the database.";
+          }
+        } else if ('message' in error) {
+          errorMessage = error.message;
         }
       }
       
@@ -189,8 +194,7 @@ export function FareManagement() {
       setIsLoading(true);
       console.log("Adding new tour:", values);
       
-      const newTourData: any = {
-        id: 0,
+      const newTourData: Record<string, any> = {
         tourId: values.tourId,
         tourName: values.tourName,
       };
@@ -207,6 +211,11 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
+      const authToken = localStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
       const data = await fareAPI.addTourFare(newTourData);
       console.log("New tour added:", data);
       
@@ -216,7 +225,23 @@ export function FareManagement() {
       newTourForm.reset();
     } catch (error) {
       console.error("Error adding tour:", error);
-      toast.error("Failed to add new tour");
+      
+      let errorMessage = "Failed to add new tour";
+      if (error && typeof error === 'object') {
+        if ('response' in error && error.response) {
+          if (error.response.data?.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.status === 403) {
+            errorMessage = "Authorization failed. Please log out and log back in to refresh your session.";
+          } else if (error.response.status === 500) {
+            errorMessage = "Server error. Please check if all vehicle types exist in the database.";
+          }
+        } else if ('message' in error) {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +263,11 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
+      const authToken = localStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
       const data = await fareAPI.deleteTourFare(tourId);
       console.log("Tour deleted:", data);
       
@@ -245,7 +275,19 @@ export function FareManagement() {
       await fetchTourFares();
     } catch (error) {
       console.error("Error deleting tour:", error);
-      toast.error("Failed to delete tour");
+      
+      let errorMessage = "Failed to delete tour";
+      if (error && typeof error === 'object') {
+        if ('response' in error && error.response) {
+          if (error.response.data?.message) {
+            errorMessage = error.response.data.message;
+          }
+        } else if ('message' in error) {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsRefreshing(false);
     }
