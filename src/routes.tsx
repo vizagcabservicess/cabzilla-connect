@@ -19,6 +19,17 @@ import { useIsMobile } from './hooks/use-mobile';
 // Create a conditional wrapper component for mobile detection
 const MobileAwareRoute = ({ element, mobileHidden = false }) => {
   const isMobile = useIsMobile();
+  
+  // Force component to re-render and check mobile status
+  React.useEffect(() => {
+    const forceUpdate = () => {
+      console.log('Mobile detection updated:', isMobile);
+    };
+    forceUpdate();
+    window.addEventListener('resize', forceUpdate);
+    return () => window.removeEventListener('resize', forceUpdate);
+  }, [isMobile]);
+  
   return !isMobile || !mobileHidden ? element : <NotFound />;
 };
 

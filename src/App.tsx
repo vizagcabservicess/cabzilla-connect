@@ -19,7 +19,7 @@ function App() {
     
     window.addEventListener('popstate', handleRouteChange);
     
-    // Set viewport for mobile devices
+    // Set viewport for mobile devices - ensure this runs on each mount
     const metaViewport = document.querySelector('meta[name=viewport]');
     if (!metaViewport) {
       const meta = document.createElement('meta');
@@ -29,6 +29,12 @@ function App() {
     } else {
       metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
     }
+
+    // Force a layout calculation to ensure responsive styles apply
+    document.body.style.zoom = '99.99%';
+    setTimeout(() => {
+      document.body.style.zoom = '100%';
+    }, 10);
     
     return () => {
       window.removeEventListener('popstate', handleRouteChange);
