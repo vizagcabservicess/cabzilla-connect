@@ -25,7 +25,7 @@ const PopoverContent = React.forwardRef<
         // Better handling for touch events on mobile
         // Using type casting to solve TypeScript error
         const event = e as unknown as { target: any };
-        if (event.target?.tagName === 'TOUCH') {
+        if (event?.target?.tagName === 'TOUCH') {
           e.preventDefault();
         }
       }}

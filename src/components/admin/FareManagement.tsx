@@ -152,10 +152,16 @@ export function FareManagement() {
       // Convert form values to the shape expected by the API
       const fareUpdateRequest: FareUpdateRequest = {
         tourId: values.tourId,
+        sedan: 0, // Default values to satisfy TypeScript
+        ertiga: 0,
+        innova: 0,
+        tempo: 0,
+        luxury: 0
       };
       
       // Dynamically add vehicle prices based on available vehicles
       vehicles.forEach(vehicle => {
+        // This ensures all required properties exist while also adding dynamic ones
         fareUpdateRequest[vehicle.id] = values[vehicle.id] || 0;
       });
       
@@ -372,7 +378,7 @@ export function FareManagement() {
                     <FormField
                       key={vehicle.id}
                       control={form.control}
-                      name={vehicle.id}
+                      name={vehicle.id as any} 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{vehicle.name} Price</FormLabel>
@@ -466,7 +472,11 @@ export function FareManagement() {
                             onClick={() => {
                               form.setValue("tourId", fare.tourId);
                               handleTourSelect(fare.tourId);
-                              document.querySelector('[data-value="update"]')?.click();
+                              // Fix: properly find and click the element
+                              const tabElement = document.querySelector('[data-value="update"]');
+                              if (tabElement && tabElement instanceof HTMLElement) {
+                                tabElement.click();
+                              }
                             }}
                           >
                             <Edit className="h-4 w-4" />
@@ -495,7 +505,7 @@ export function FareManagement() {
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                   <FormField
                     control={newTourForm.control}
-                    name="tourId"
+                    name={"tourId" as const}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Tour ID</FormLabel>
@@ -509,7 +519,7 @@ export function FareManagement() {
                   
                   <FormField
                     control={newTourForm.control}
-                    name="tourName"
+                    name={"tourName" as const}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Tour Name</FormLabel>
@@ -528,7 +538,7 @@ export function FareManagement() {
                     <FormField
                       key={vehicle.id}
                       control={newTourForm.control}
-                      name={vehicle.id}
+                      name={vehicle.id as any}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{vehicle.name} Price</FormLabel>
