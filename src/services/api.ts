@@ -15,10 +15,8 @@ apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
     
-    // Log token for debugging purposes
-    console.log('Auth token for request:', token);
-    
-    if (token) {
+    // Enhanced token verification
+    if (token && token !== 'null' && token !== 'undefined') {
       // Ensure config.headers is properly initialized as AxiosHeaders
       if (!config.headers) {
         config.headers = new AxiosHeaders();
@@ -28,14 +26,29 @@ apiClient.interceptors.request.use(
       config.headers.set('Authorization', `Bearer ${token}`);
       
       // Log the headers for debugging
-      console.log('Request headers:', JSON.stringify(config.headers));
+      console.log(`Request to ${config.url} with token: ${token.substring(0, 15)}...`);
     } else {
-      console.warn('No auth token found in localStorage');
+      console.warn(`No valid auth token found for request to ${config.url}. Using token: ${token}`);
+      
+      // Try to get a fresh token if available
+      const user = localStorage.getItem('user');
+      if (user) {
+        try {
+          const userData = JSON.parse(user);
+          if (userData && userData.token) {
+            console.log('Using token from user object instead');
+            config.headers.set('Authorization', `Bearer ${userData.token}`);
+          }
+        } catch (e) {
+          console.error('Error parsing user data from localStorage', e);
+        }
+      }
     }
     
     return config;
   },
   (error) => {
+    console.error('Interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -59,13 +72,17 @@ export const fareAPI = {
     try {
       // Get token directly from localStorage to ensure it's current
       const token = localStorage.getItem('authToken');
-      console.log('Sending tour fare update with auth token:', token);
+      if (!token || token === 'null' || token === 'undefined') {
+        throw new Error('No valid authentication token found. Please log in again.');
+      }
+      
+      console.log('Sending tour fare update with auth token:', token.substring(0, 15) + '...');
       
       // Use the correct endpoint for tour fare updates with explicit headers
       const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`,
+          'Authorization': `Bearer ${token}`,
         }
       });
       return response.data;
@@ -84,13 +101,17 @@ export const fareAPI = {
     try {
       // Get token directly from localStorage to ensure it's current
       const token = localStorage.getItem('authToken');
-      console.log('Sending new tour fare with auth token:', token);
+      if (!token || token === 'null' || token === 'undefined') {
+        throw new Error('No valid authentication token found. Please log in again.');
+      }
+      
+      console.log('Sending new tour fare with auth token:', token.substring(0, 15) + '...');
       
       // Use the correct endpoint for adding tour fares with explicit headers
       const response = await apiClient.put('/api/admin/fares-update.php', fareData, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`,
+          'Authorization': `Bearer ${token}`,
         }
       });
       return response.data;
@@ -109,12 +130,15 @@ export const fareAPI = {
     try {
       // Get token directly from localStorage to ensure it's current
       const token = localStorage.getItem('authToken');
+      if (!token || token === 'null' || token === 'undefined') {
+        throw new Error('No valid authentication token found. Please log in again.');
+      }
       
       // Use the correct endpoint with query parameter and explicit headers
       const response = await apiClient.delete(`/api/admin/fares-update.php?tourId=${tourId}`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`,
+          'Authorization': `Bearer ${token}`,
         }
       });
       return response.data;
@@ -151,9 +175,9 @@ export const fareAPI = {
   }
 };
 
-// Create booking API service - now properly exported
+// Fix the bookingAPI paths to match the actual backend endpoints
 export const bookingAPI = {
-  // Placeholder methods for booking API
+  // Create booking API service
   createBooking: async (bookingData: any): Promise<any> => {
     try {
       const response = await apiClient.post('/api/bookings/create.php', bookingData);
@@ -174,24 +198,48 @@ export const bookingAPI = {
     }
   },
   
+  // Fixed endpoint for user bookings
   getUserBookings: async (): Promise<any[]> => {
     try {
-      const response = await apiClient.get('/api/bookings/user.php');
+      // Check if token exists
+      const token = localStorage.getItem('authToken');
+      if (!token || token === 'null' || token === 'undefined') {
+        console.warn('No valid token for getUserBookings');
+        return [];
+      }
+      
+      // Use the correct user bookings endpoint
+      const response = await apiClient.get('/api/user/bookings.php', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Handle both response formats
+      if (response.data && response.data.bookings) {
+        return response.data.bookings || [];
+      }
       return response.data || [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
-      throw error;
+      // Return empty array instead of throwing to prevent UI error loops
+      return [];
     }
   },
   
-  // Add the missing getAllBookings method
   getAllBookings: async (): Promise<any[]> => {
     try {
+      // Use consistent admin endpoint
       const response = await apiClient.get('/api/admin/booking.php');
+      
+      // Handle both response formats
+      if (response.data && response.data.bookings) {
+        return response.data.bookings || [];
+      }
       return response.data || [];
     } catch (error) {
       console.error('Error fetching all bookings:', error);
-      throw error;
+      return [];
     }
   },
   
@@ -227,7 +275,23 @@ export const bookingAPI = {
   
   getAdminDashboardMetrics: async (period: string): Promise<any> => {
     try {
-      const response = await apiClient.get(`/api/admin/metrics.php?period=${period}`);
+      // Get token directly for this admin endpoint
+      const token = localStorage.getItem('authToken');
+      if (!token || token === 'null' || token === 'undefined') {
+        throw new Error('No valid authentication token found. Please log in again.');
+      }
+      
+      // Use user/dashboard.php with admin=true parameter for metrics
+      const response = await apiClient.get(`/api/user/dashboard.php?admin=true&period=${period}&_t=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Handle different response formats
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
     } catch (error) {
       console.error('Error fetching admin dashboard metrics:', error);
@@ -236,18 +300,34 @@ export const bookingAPI = {
   }
 };
 
-// Create auth API service - now properly exported
+// Improved auth API methods with better token handling
 export const authAPI = {
-  // Placeholder methods for auth API
   login: async (credentials: any): Promise<any> => {
     try {
       const response = await apiClient.post('/api/login.php', credentials);
+      
       if (response.data && response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        if (response.data.user) {
-          localStorage.setItem('user', JSON.stringify(response.data.user));
+        // Validate token before saving
+        if (typeof response.data.token === 'string' && response.data.token.length > 10) {
+          localStorage.setItem('authToken', response.data.token);
+          
+          // Log token for debugging
+          console.log('Login successful, token stored:', response.data.token.substring(0, 15) + '...');
+          
+          if (response.data.user) {
+            // Make sure we also store the token in the user object
+            const userData = { ...response.data.user, token: response.data.token };
+            localStorage.setItem('user', JSON.stringify(userData));
+          }
+        } else {
+          console.error('Invalid token received:', response.data.token);
+          throw new Error('Invalid authentication token received from server');
         }
+      } else {
+        console.error('No token in login response:', response.data);
+        throw new Error('No authentication token received from server');
       }
+      
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
@@ -259,17 +339,28 @@ export const authAPI = {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     sessionStorage.clear();
+    console.log('User logged out, auth tokens cleared');
   },
   
   signup: async (userData: any): Promise<any> => {
     try {
       const response = await apiClient.post('/api/signup.php', userData);
+      
       if (response.data && response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        if (response.data.user) {
-          localStorage.setItem('user', JSON.stringify(response.data.user));
+        // Validate token before saving
+        if (typeof response.data.token === 'string' && response.data.token.length > 10) {
+          localStorage.setItem('authToken', response.data.token);
+          
+          if (response.data.user) {
+            // Make sure we also store the token in the user object
+            const userData = { ...response.data.user, token: response.data.token };
+            localStorage.setItem('user', JSON.stringify(userData));
+          }
+        } else {
+          console.error('Invalid token received from signup:', response.data.token);
         }
       }
+      
       return response.data;
     } catch (error) {
       console.error('Signup error:', error);
@@ -278,7 +369,8 @@ export const authAPI = {
   },
   
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken');
+    return !!(token && token !== 'null' && token !== 'undefined');
   },
   
   isAdmin: (): boolean => {
@@ -296,8 +388,21 @@ export const authAPI = {
     const userStr = localStorage.getItem('user');
     if (!userStr) return null;
     try {
-      return JSON.parse(userStr);
-    } catch {
+      const user = JSON.parse(userStr);
+      
+      // Ensure token is also carried in the user object
+      if (!user.token) {
+        const token = localStorage.getItem('authToken');
+        if (token && token !== 'null' && token !== 'undefined') {
+          user.token = token;
+          // Update the stored user object
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+      }
+      
+      return user;
+    } catch (error) {
+      console.error('Error parsing user data:', error);
       return null;
     }
   }
