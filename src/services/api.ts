@@ -1,4 +1,3 @@
-
 // Import necessary types
 import { TourFare } from '@/types/api';
 import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
@@ -48,7 +47,11 @@ export const fareAPI = {
     try {
       console.log('Sending tour fare update with auth token:', localStorage.getItem('authToken'));
       // Use the correct endpoint for tour fare updates
-      const response = await apiClient.post('/api/admin/fares-update.php', fareData);
+      const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Error updating tour fare:', error);

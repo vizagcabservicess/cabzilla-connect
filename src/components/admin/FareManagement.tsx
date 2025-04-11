@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -39,13 +38,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-// We'll create a dynamic form schema based on available vehicles
 const createDynamicFormSchema = (vehicleIds: string[]) => {
   const baseSchema = {
     tourId: z.string().min(1, { message: "Tour is required" }),
   };
   
-  // Add vehicle price fields dynamically
   vehicleIds.forEach(id => {
     baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
   });
@@ -53,14 +50,12 @@ const createDynamicFormSchema = (vehicleIds: string[]) => {
   return z.object(baseSchema);
 };
 
-// Dynamic form schema for new tour creation
 const createDynamicNewTourFormSchema = (vehicleIds: string[]) => {
   const baseSchema = {
     tourId: z.string().min(1, { message: "Tour ID is required" }),
     tourName: z.string().min(1, { message: "Tour name is required" }),
   };
   
-  // Add vehicle price fields dynamically
   vehicleIds.forEach(id => {
     baseSchema[id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
   });
@@ -77,7 +72,6 @@ export function FareManagement() {
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const { toast: uiToast } = useToast();
   
-  // Dynamic form setup based on available vehicles
   const formSchema = createDynamicFormSchema(vehicles.map(v => v.id));
   const newTourFormSchema = createDynamicNewTourFormSchema(vehicles.map(v => v.id));
   
@@ -97,13 +91,12 @@ export function FareManagement() {
   });
   
   useEffect(() => {
-    // Fetch all available vehicles
     const fetchVehicles = async () => {
       try {
-        const vehicleData = await getVehicleData(true, true); // Force refresh and include inactive
+        const vehicleData = await getVehicleData(true, true);
+        console.log("Available vehicles for fare management:", vehicleData);
         setVehicles(vehicleData);
         
-        // Initialize form default values for each vehicle
         const defaultValues: Record<string, any> = {
           tourId: form.getValues().tourId || "",
         };
@@ -112,10 +105,8 @@ export function FareManagement() {
           defaultValues[vehicle.id] = form.getValues()[vehicle.id] || 0;
         });
         
-        // Update the form with new default values that include all vehicles
         form.reset(defaultValues);
         
-        // Similarly update new tour form
         const newTourDefaults: Record<string, any> = {
           tourId: newTourForm.getValues().tourId || "",
           tourName: newTourForm.getValues().tourName || "",
@@ -149,7 +140,6 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
-      // Create base request with required fields to satisfy TypeScript
       const fareUpdateRequest: FareUpdateRequest = {
         tourId: values.tourId,
         sedan: 0,
@@ -159,13 +149,17 @@ export function FareManagement() {
         luxury: 0
       };
       
-      // Dynamically add vehicle prices based on available vehicles
       vehicles.forEach(vehicle => {
-        // This ensures all required properties exist while also adding dynamic ones
         fareUpdateRequest[vehicle.id] = values[vehicle.id] || 0;
       });
       
-      // FIX: Use the fareAPI.updateTourFares method which handles the correct endpoint
+      const selectedTour = tourFares.find(fare => fare.tourId === values.tourId);
+      if (selectedTour) {
+        fareUpdateRequest.tourName = selectedTour.tourName;
+      }
+      
+      console.log("Prepared fare update request:", fareUpdateRequest);
+      
       const data = await fareAPI.updateTourFares(fareUpdateRequest);
       console.log("Fare update response:", data);
       
@@ -173,7 +167,18 @@ export function FareManagement() {
       await fetchTourFares();
     } catch (error) {
       console.error("Error updating fare:", error);
-      toast.error("Failed to update fare");
+      
+      let errorMessage = "Failed to update fare";
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error;
+        if (axiosError.response?.data?.message) {
+          errorMessage = axiosError.response.data.message;
+        } else if (axiosError.response?.status === 403) {
+          errorMessage = "Authorization failed. Please log out and log back in to refresh your session.";
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -184,14 +189,12 @@ export function FareManagement() {
       setIsLoading(true);
       console.log("Adding new tour:", values);
       
-      // Create base tour data
       const newTourData: any = {
         id: 0,
         tourId: values.tourId,
         tourName: values.tourName,
       };
       
-      // Dynamically add vehicle prices based on available vehicles
       vehicles.forEach(vehicle => {
         newTourData[vehicle.id] = values[vehicle.id] || 0;
       });
@@ -266,7 +269,20 @@ export function FareManagement() {
       
       if (Array.isArray(data) && data.length > 0) {
         console.log("Fetched tour fares:", data);
-        setTourFares(data);
+        
+        const processedFares = data.map(fare => {
+          const processedFare = { ...fare };
+          
+          vehicles.forEach(vehicle => {
+            if (typeof processedFare[vehicle.id] === 'undefined') {
+              processedFare[vehicle.id] = 0;
+            }
+          });
+          
+          return processedFare;
+        });
+        
+        setTourFares(processedFares);
         toast.success("Tour fares refreshed");
       } else {
         console.warn("Empty or invalid tour fares data:", data);
@@ -284,22 +300,18 @@ export function FareManagement() {
   const handleTourSelect = (tourId: string) => {
     const selectedTour = tourFares.find(fare => fare.tourId === tourId);
     if (selectedTour) {
-      // Start with base values
       const formValues: Record<string, any> = {
         tourId: selectedTour.tourId
       };
       
-      // Dynamically set values for each vehicle
       vehicles.forEach(vehicle => {
-        // Use the vehicle ID to get its price (if available)
         formValues[vehicle.id] = selectedTour[vehicle.id] || 0;
       });
       
-      // Reset form with all values
       form.reset(formValues);
     }
   };
-
+  
   return (
     <Tabs defaultValue="update">
       <TabsList>
@@ -374,7 +386,6 @@ export function FareManagement() {
                 />
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {/* Dynamically generate form fields for each vehicle */}
                   {vehicles.map(vehicle => (
                     <FormField
                       key={vehicle.id}
@@ -449,7 +460,6 @@ export function FareManagement() {
                   <thead>
                     <tr className="border-b">
                       <th className="px-4 py-2 text-left">Tour Name</th>
-                      {/* Dynamically generate table headers for vehicle types */}
                       {vehicles.map(vehicle => (
                         <th key={vehicle.id} className="px-4 py-2 text-left">{vehicle.name}</th>
                       ))}
@@ -460,7 +470,6 @@ export function FareManagement() {
                     {tourFares.map((fare) => (
                       <tr key={fare.tourId} className="border-b hover:bg-muted/50">
                         <td className="px-4 py-2">{fare.tourName}</td>
-                        {/* Dynamically generate table cells for vehicle prices */}
                         {vehicles.map(vehicle => (
                           <td key={`${fare.tourId}-${vehicle.id}`} className="px-4 py-2">
                             ₹{fare[vehicle.id] || 0}
@@ -473,7 +482,6 @@ export function FareManagement() {
                             onClick={() => {
                               form.setValue("tourId", fare.tourId);
                               handleTourSelect(fare.tourId);
-                              // Fix: properly find and click the element
                               const tabElement = document.querySelector('[data-value="update"]');
                               if (tabElement && tabElement instanceof HTMLElement) {
                                 tabElement.click();
@@ -534,7 +542,6 @@ export function FareManagement() {
                 </div>
                 
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  {/* Dynamically generate form fields for each vehicle */}
                   {vehicles.map(vehicle => (
                     <FormField
                       key={vehicle.id}
