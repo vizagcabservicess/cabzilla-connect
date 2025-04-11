@@ -1,10 +1,12 @@
+
 // Import necessary types
 import { TourFare } from '@/types/api';
 import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
+import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 
 // Create an axios instance with defaults
 const apiClient = axios.create({
-  baseURL: '/',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -28,7 +30,7 @@ apiClient.interceptors.request.use(
       // Log the headers for debugging
       console.log(`Request to ${config.url} with token: ${token.substring(0, 15)}...`);
     } else {
-      console.warn(`No valid auth token found for request to ${config.url}. Using token: ${token}`);
+      console.warn(`No valid auth token found for request to ${config.url}.`);
       
       // Try to get a fresh token if available
       const user = localStorage.getItem('user');
@@ -37,6 +39,9 @@ apiClient.interceptors.request.use(
           const userData = JSON.parse(user);
           if (userData && userData.token) {
             console.log('Using token from user object instead');
+            if (!config.headers) {
+              config.headers = new AxiosHeaders();
+            }
             config.headers.set('Authorization', `Bearer ${userData.token}`);
           }
         } catch (e) {
@@ -198,7 +203,7 @@ export const bookingAPI = {
     }
   },
   
-  // Fixed endpoint for user bookings
+  // Updated path for user bookings - using the correct endpoint
   getUserBookings: async (): Promise<any[]> => {
     try {
       // Check if token exists
@@ -208,17 +213,27 @@ export const bookingAPI = {
         return [];
       }
       
-      // Use the correct user bookings endpoint
-      const response = await apiClient.get('/api/user/bookings.php', {
+      // Use the correct user bookings endpoint with correct timestamp to prevent caching
+      const timestamp = Date.now();
+      const response = await apiClient.get(`/api/user/bookings.php?_t=${timestamp}`, {
         headers: {
+          ...forceRefreshHeaders,
           'Authorization': `Bearer ${token}`
         }
       });
       
       // Handle both response formats
       if (response.data && response.data.bookings) {
+        console.log('Received bookings data:', response.data.bookings);
         return response.data.bookings || [];
       }
+      
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Received bookings array data:', response.data);
+        return response.data;
+      }
+      
+      console.log('Received other bookings format:', response.data);
       return response.data || [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
@@ -229,13 +244,21 @@ export const bookingAPI = {
   
   getAllBookings: async (): Promise<any[]> => {
     try {
-      // Use consistent admin endpoint
-      const response = await apiClient.get('/api/admin/booking.php');
+      // Use correct admin endpoint with timestamp
+      const timestamp = Date.now();
+      const response = await apiClient.get(`/api/admin/booking.php?_t=${timestamp}`, {
+        headers: forceRefreshHeaders
+      });
       
       // Handle both response formats
       if (response.data && response.data.bookings) {
         return response.data.bookings || [];
       }
+      
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      }
+      
       return response.data || [];
     } catch (error) {
       console.error('Error fetching all bookings:', error);
@@ -281,9 +304,11 @@ export const bookingAPI = {
         throw new Error('No valid authentication token found. Please log in again.');
       }
       
-      // Use user/dashboard.php with admin=true parameter for metrics
-      const response = await apiClient.get(`/api/user/dashboard.php?admin=true&period=${period}&_t=${Date.now()}`, {
+      // Use the correct admin metrics endpoint with timestamp to prevent caching
+      const timestamp = Date.now();
+      const response = await apiClient.get(`/api/admin/metrics.php?period=${period}&_t=${timestamp}`, {
         headers: {
+          ...forceRefreshHeaders,
           'Authorization': `Bearer ${token}`
         }
       });
@@ -292,6 +317,11 @@ export const bookingAPI = {
       if (response.data && response.data.data) {
         return response.data.data;
       }
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data;
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Error fetching admin dashboard metrics:', error);

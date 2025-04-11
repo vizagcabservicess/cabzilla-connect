@@ -14,7 +14,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 1;
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -94,20 +94,17 @@ export default function DashboardPage() {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      if (retryCount === 0) {
+      if (retryCount < MAX_RETRIES) {
         toast.error('Error loading bookings. Retrying...');
-      }
-      
-      setRetryCount(prev => prev + 1);
-      
-      if (retryCount >= MAX_RETRIES) {
-        console.log('Using fallback booking data after max retries');
-        setShowFallbackBookings(true);
-        setBookings(getFallbackBookings());
-      } else {
+        setRetryCount(prev => prev + 1);
+        
         setTimeout(() => {
           fetchBookings();
         }, 3000);
+      } else {
+        console.log('Using fallback booking data after max retries');
+        setShowFallbackBookings(true);
+        setBookings(getFallbackBookings());
       }
     } finally {
       setIsLoading(false);

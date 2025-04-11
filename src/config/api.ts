@@ -4,11 +4,18 @@
 // Base API URL - auto-detect between development and production
 export const apiBaseUrl = process.env.NODE_ENV === 'production' 
   ? 'https://vizagup.com' 
-  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
+  : '';
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {
-  // Ensure path starts with a slash if it doesn't already
+  // For relative URLs in development (working with Vite's proxy)
+  if (process.env.NODE_ENV !== 'production') {
+    // Ensure path starts with a slash if it doesn't already
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return normalizedPath;
+  }
+  
+  // For production, use the full URL
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   // Remove any duplicate slashes that might occur when joining
   const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
