@@ -54,6 +54,7 @@ export function Hero() {
       const tripModeData = sessionStorage.getItem('tripMode');
       const hourlyPkgData = sessionStorage.getItem('hourlyPackage');
       const cabData = sessionStorage.getItem('selectedCab');
+      const selectedTourData = sessionStorage.getItem('selectedTour');
       
       return {
         pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
@@ -63,7 +64,8 @@ export function Hero() {
         tripType: tripTypeData as TripType || 'outstation',
         tripMode: tripModeData as TripMode || 'one-way',
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
-        selectedCab: cabData ? JSON.parse(cabData) as CabType : null
+        selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
+        selectedTour: selectedTourData || null
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
@@ -75,7 +77,8 @@ export function Hero() {
         tripType: 'outstation' as TripType,
         tripMode: 'one-way' as TripMode,
         hourlyPackage: hourlyPackageOptions[0].value,
-        selectedCab: null
+        selectedCab: null,
+        selectedTour: null
       };
     }
   };
@@ -96,6 +99,7 @@ export function Hero() {
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
+  const [selectedTour, setSelectedTour] = useState<string | null>(savedData.selectedTour);
 
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
@@ -169,27 +173,20 @@ export function Hero() {
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
     }
+    
+    if (tripType === 'tour') {
+      // For tour trips, we need a pickup location but not a drop location
+      if (!pickupLocation) {
+        const defaultLocation = vizagLocations.find(loc => loc.id.includes('vizag'));
+        if (defaultLocation) {
+          setPickupLocation(defaultLocation);
+          sessionStorage.setItem('pickupLocation', JSON.stringify(defaultLocation));
+        }
+      }
+      setDropLocation(null);
+      sessionStorage.removeItem('dropLocation');
+    }
   }, [tripType, tripMode]);
-
-  useEffect(() => {
-    if (pickupLocation) {
-      sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
-    }
-    if (dropLocation) {
-      sessionStorage.setItem('dropLocation', JSON.stringify(dropLocation));
-    }
-  }, [pickupLocation, dropLocation]);
-
-  useEffect(() => {
-    if (pickupDate) {
-      sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
-    }
-    if (returnDate) {
-      sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
-    } else {
-      sessionStorage.removeItem('returnDate');
-    }
-  }, [pickupDate, returnDate]);
 
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
@@ -206,10 +203,12 @@ export function Hero() {
       }
     } else if (tripType === 'airport' && pickupLocation && dropLocation && pickupDate) {
       setIsFormValid(true);
+    } else if (tripType === 'tour' && pickupLocation && pickupDate && selectedTour) {
+      setIsFormValid(true);
     } else {
       setIsFormValid(false);
     }
-  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
+  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType, selectedTour]);
 
   useEffect(() => {
     if (tripType === 'local') {
@@ -411,6 +410,11 @@ export function Hero() {
     setCurrentStep(2);
   };
 
+  const handleTourChange = (tourId: string) => {
+    setSelectedTour(tourId);
+    console.log("Selected tour changed to:", tourId);
+  };
+
   return (
     <section className="min-h-screen bg-gradient-to-b from-cabBlue-50 to-white py-16 overflow-hidden">
       <div className="container mx-auto px-4">
@@ -432,6 +436,8 @@ export function Hero() {
                   tripMode={tripMode}
                   onTabChange={setTripType}
                   onTripModeChange={setTripMode}
+                  selectedTour={selectedTour}
+                  onTourChange={handleTourChange}
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
