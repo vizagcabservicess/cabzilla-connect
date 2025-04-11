@@ -76,14 +76,11 @@ export const loadTourFares = async (): Promise<TourFares> => {
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
-          // Create an entry for each tour with required vehicle types
+          // Initialize the base fare entry with required properties
           const fareEntry: Record<string, number> = {
-            // Ensure required properties are initialized with default values
-            sedan: tour.sedan || 0,
-            ertiga: tour.ertiga || 0,
-            innova: tour.innova || 0,
-            tempo: tour.tempo || 0,
-            luxury: tour.luxury || 0
+            sedan: 0,
+            ertiga: 0,
+            innova: 0
           };
           
           // Extract all vehicle prices from the tour fare object
@@ -96,6 +93,11 @@ export const loadTourFares = async (): Promise<TourFares> => {
               fareEntry[key] = value;
             }
           });
+          
+          // Ensure all required properties are initialized
+          if (typeof fareEntry.sedan !== 'number') fareEntry.sedan = 0;
+          if (typeof fareEntry.ertiga !== 'number') fareEntry.ertiga = 0;
+          if (typeof fareEntry.innova !== 'number') fareEntry.innova = 0;
           
           // Type assertion to ensure TypeScript understands this object has the required properties
           dynamicTourFares[tour.tourId] = fareEntry as {
@@ -114,7 +116,13 @@ export const loadTourFares = async (): Promise<TourFares> => {
     
     // Check if we have any dynamic fares, otherwise return the default ones
     // Also ensure TypeScript that the returned object conforms to TourFares
-    return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
+    if (Object.keys(dynamicTourFares).length > 0) {
+      console.log("Returning dynamic tour fares", dynamicTourFares);
+      return dynamicTourFares;
+    } else {
+      console.log("No dynamic fares found, returning default fares");
+      return tourFares;
+    }
   } catch (error) {
     console.error('Error loading tour fares:', error);
     isFetchingTourFares = false;

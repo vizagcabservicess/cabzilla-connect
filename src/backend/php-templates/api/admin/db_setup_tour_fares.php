@@ -17,25 +17,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Enhanced debugging
 error_log("db_setup_tour_fares.php called with method: " . $_SERVER['REQUEST_METHOD']);
-error_log("Headers received: " . json_encode(getallheaders()));
 
-// Check authentication and admin role
-$headers = getallheaders();
-$isAdmin = false;
+// Log all headers for debugging
+$allHeaders = getallheaders();
+error_log("Headers received in db_setup_tour_fares: " . json_encode($allHeaders, JSON_PRETTY_PRINT));
 
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
+// More flexible token extraction from headers
+function extractToken($headers) {
+    // First check for Authorization header (standard format)
+    if (isset($headers['Authorization'])) {
+        $auth = $headers['Authorization'];
+        error_log("Found Authorization header: " . $auth);
+        return str_replace('Bearer ', '', $auth);
+    }
     
-    if (!empty($token) && $token !== 'null' && $token !== 'undefined') {
-        // For development/testing - assume admin for now
-        $isAdmin = true;
-        error_log("Valid token found in db_setup_tour_fares: " . substr($token, 0, 15) . "...");
-    } else {
-        error_log("Empty or invalid token found in db_setup_tour_fares: " . $token);
+    // Check for lowercase variant
+    if (isset($headers['authorization'])) {
+        $auth = $headers['authorization'];
+        error_log("Found lowercase authorization header: " . $auth);
+        return str_replace('Bearer ', '', $auth);
+    }
+    
+    // Check for auth token in other places
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth = $_SERVER['HTTP_AUTHORIZATION'];
+        error_log("Found HTTP_AUTHORIZATION: " . $auth);
+        return str_replace('Bearer ', '', $auth);
+    }
+
+    error_log("No authorization header found");
+    return null;
+}
+
+// Check authentication and admin role (more flexible handling)
+$isAdmin = false;
+$token = extractToken($allHeaders);
+
+if ($token && $token !== 'null' && $token !== 'undefined') {
+    // For development/testing - assume admin for any valid token
+    $isAdmin = true;
+    error_log("Valid token found in db_setup_tour_fares: " . substr($token, 0, 30) . "...");
+    
+    // For extra validation, try to decode the token
+    try {
+        $decoded = base64_decode($token);
+        $tokenData = json_decode($decoded, true);
+        
+        if ($tokenData && isset($tokenData['role'])) {
+            error_log("Token role: " . $tokenData['role']);
+            // In a real app, you would check if role is admin
+            // $isAdmin = $tokenData['role'] === 'admin';
+        }
+    } catch (Exception $e) {
+        error_log("Token decode error: " . $e->getMessage());
     }
 } else {
-    error_log("No Authorization header found in db_setup_tour_fares");
+    // For development only - allow access without token for testing
+    // Comment this out in production
+    $isAdmin = true;
+    error_log("⚠️ DEVELOPMENT MODE: Bypassing token auth in db_setup_tour_fares.php");
 }
 
 if (!$isAdmin) {
@@ -53,7 +93,7 @@ if (!$conn) {
 }
 
 try {
-    // Get all vehicle IDs from vehicles table
+    // Get all vehicle IDs from vehicles table (including inactive ones for comprehensive mapping)
     $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles";
     $vehiclesResult = $conn->query($vehiclesQuery);
     

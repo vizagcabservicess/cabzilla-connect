@@ -122,9 +122,9 @@ try {
             ]
         ];
         
-        // Log successful login
+        // Log successful login and token for debugging
         error_log("User {$user['email']} logged in successfully with role {$user['role']}");
-        error_log("Generated token: " . substr($token, 0, 15) . "...");
+        error_log("Generated token: " . $token); // Log the full token for debugging
         
         sendJsonResponse($response);
     } else {

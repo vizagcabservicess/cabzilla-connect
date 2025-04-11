@@ -1,44 +1,54 @@
 
-// API configuration
+// API configuration and helpers
 
-// Base API URL - auto-detect between development and production
-export const apiBaseUrl = process.env.NODE_ENV === 'production' 
-  ? 'https://vizagup.com' 
-  : '';
-
-// Helper function to get full API URL
-export const getApiUrl = (path: string): string => {
-  // For relative URLs in development (working with Vite's proxy)
-  if (process.env.NODE_ENV !== 'production') {
-    // Ensure path starts with a slash if it doesn't already
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return normalizedPath;
+// Function to get the authorization header with the token
+export function getAuthorizationHeader(): { Authorization?: string } {
+  // Try to get token from localStorage
+  let token = localStorage.getItem('authToken');
+  
+  // If token is missing or invalid, try to recover from user object
+  if (!token || token === 'null' || token === 'undefined') {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        if (userData && userData.token) {
+          // Restore token to localStorage
+          localStorage.setItem('authToken', userData.token);
+          token = userData.token;
+          console.log('Recovered auth token from user data');
+        }
+      } catch (e) {
+        console.error('Error parsing user data for auth token:', e);
+      }
+    }
   }
   
-  // For production, use the full URL
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  // Remove any duplicate slashes that might occur when joining
-  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
-  return fullUrl;
-};
+  if (!token || token === 'null' || token === 'undefined') {
+    console.warn('No valid auth token available, returning empty auth header');
+    return {};
+  }
+  
+  return { Authorization: `Bearer ${token}` };
+}
 
-// Force refresh headers for API requests to bypass cache
-export const forceRefreshHeaders = {
-  'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-};
-
-// Default headers for API requests
-export const defaultHeaders = {
-  'Content-Type': 'application/json',
-  'X-Requested-With': 'XMLHttpRequest'
-};
-
-// Vehicle ID mapping to help with database/UI consistency
-export const vehicleIdMapping = {
-  // UI id to database column
+// Map frontend vehicle IDs to database column names
+export const vehicleIdMapping: Record<string, string> = {
+  // ID mapping for standard vehicles
+  'sedan': 'sedan',
+  'ertiga': 'ertiga',
+  'innova': 'innova',
+  'tempo': 'tempo',
+  'luxury': 'luxury',
+  
+  // Map vehicle display names to database columns
+  'Sedan': 'sedan',
+  'Ertiga': 'ertiga',
+  'Innova': 'innova',
+  'Tempo Traveller': 'tempo',
+  'Luxury': 'luxury',
+  
+  // Map specific vehicle models
   'MPV': 'innova',
   'innova_crysta': 'innova',
   'innova_hycross': 'innova',
@@ -48,195 +58,57 @@ export const vehicleIdMapping = {
   'Toyota': 'sedan',
   'Dzire CNG': 'sedan',
   
-  // Database column to UI id (for reverse mapping)
-  'sedan': 'sedan',
-  'ertiga': 'ertiga',
-  'innova': 'innova',
-  'tempo': 'tempo',
-  'luxury': 'luxury',
-  
-  // Numeric ID to column mapping
+  // Handle numeric IDs that might come from the vehicles table
   '1': 'sedan',
   '2': 'ertiga',
   '1266': 'innova',
-  '1299': 'sedan',  // Etios
-  '1311': 'sedan',  // Dzire CNG
-  '1313': 'innova', // Innova Crysta
-  '1314': 'tempo'   // Tempo Traveller
+  '1299': 'sedan',
+  '1311': 'sedan',
+  '1313': 'innova',
+  '1314': 'tempo'
 };
 
-// Get dynamic vehicle mapping from database
-export const getDynamicVehicleMapping = async (): Promise<Record<string, string>> => {
+// Get dynamic vehicle mapping from backend
+export async function getDynamicVehicleMapping(): Promise<Record<string, string>> {
   try {
-    // Get token to include in request
-    const token = localStorage.getItem('authToken');
-    let requestHeaders = { ...defaultHeaders };
+    console.log('Fetching dynamic vehicle mapping from backend...');
     
-    // If no token in localStorage, try to get from user object
-    if (!token || token === 'null' || token === 'undefined') {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          if (userData?.token) {
-            requestHeaders['Authorization'] = `Bearer ${userData.token}`;
-            // Store it back in localStorage for future use
-            localStorage.setItem('authToken', userData.token);
-            localStorage.setItem('isLoggedIn', 'true');
-            console.log('Recovered auth token from user object for vehicle mapping');
-          }
-        } catch (e) {
-          console.error('Error retrieving token from user object:', e);
-        }
-      }
-    } else {
-      requestHeaders['Authorization'] = `Bearer ${token}`;
-    }
+    // Start with the static mapping
+    const mapping = { ...vehicleIdMapping };
     
-    // Add cache busting timestamp
-    const timestamp = Date.now();
-    
-    // Sync tour_fares table with vehicles first
-    const syncResponse = await fetch(getApiUrl(`/api/admin/db_setup_tour_fares.php?_t=${timestamp}`), {
+    // Try to fetch vehicle data to build mapping
+    const response = await fetch('/api/admin/vehicles-data.php', {
       method: 'GET',
       headers: {
-        ...requestHeaders,
-        ...forceRefreshHeaders
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        ...getAuthorizationHeader()
       }
     });
     
-    if (!syncResponse.ok) {
-      console.error('Failed to sync tour_fares table:', syncResponse.statusText);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Vehicle data for mapping:', data);
       
-      // Try again with token recovery
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          if (userData?.token) {
-            const retryResponse = await fetch(getApiUrl(`/api/admin/db_setup_tour_fares.php?_t=${timestamp+1}`), {
-              method: 'GET',
-              headers: {
-                ...defaultHeaders,
-                'Authorization': `Bearer ${userData.token}`,
-                ...forceRefreshHeaders
-              }
-            });
+      if (data.vehicles && Array.isArray(data.vehicles)) {
+        data.vehicles.forEach((vehicle: any) => {
+          if (vehicle.id && vehicle.vehicle_id) {
+            // Map numeric ID to safe column name
+            const safeColumnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+            mapping[vehicle.id] = safeColumnName;
             
-            if (retryResponse.ok) {
-              const syncData = await retryResponse.json();
-              console.log('Tour fares table synced with vehicles on second attempt:', syncData);
-              
-              // Create dynamic mapping from response
-              const dynamicMapping = { ...vehicleIdMapping };
-              
-              if (syncData.data && syncData.data.vehicles) {
-                syncData.data.vehicles.forEach((vehicle: any) => {
-                  // Add mapping based on database ID to column name
-                  const columnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-                  dynamicMapping[vehicle.id] = columnName;
-                  
-                  // Also add name-based mapping for UI display
-                  dynamicMapping[vehicle.name] = columnName;
-                });
-              }
-              
-              console.log('Extended vehicle mapping:', dynamicMapping);
-              return dynamicMapping;
-            }
+            // Also map the vehicle_id itself
+            mapping[vehicle.vehicle_id] = safeColumnName;
           }
-        } catch (e) {
-          console.error('Error in retry attempt for vehicle mapping:', e);
-        }
+        });
       }
-      
-      return vehicleIdMapping;
     }
     
-    const syncData = await syncResponse.json();
-    console.log('Tour fares table synced with vehicles:', syncData);
-    
-    // Create dynamic mapping from response
-    const dynamicMapping = { ...vehicleIdMapping };
-    
-    if (syncData.data && syncData.data.vehicles) {
-      syncData.data.vehicles.forEach((vehicle: any) => {
-        // Add mapping based on database ID to column name
-        const columnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        dynamicMapping[vehicle.id] = columnName;
-        
-        // Also add name-based mapping for UI display
-        dynamicMapping[vehicle.name] = columnName;
-      });
-    }
-    
-    console.log('Extended vehicle mapping:', dynamicMapping);
-    return dynamicMapping;
+    console.log('Dynamic vehicle mapping:', mapping);
+    return mapping;
   } catch (error) {
     console.error('Error getting dynamic vehicle mapping:', error);
-    return vehicleIdMapping;
+    return vehicleIdMapping; // Fall back to static mapping on error
   }
-};
-
-// Helper to get authorization header with token
-export const getAuthorizationHeader = (): Record<string, string> => {
-  let token = localStorage.getItem('authToken');
-  
-  // If token not found, try to retrieve from user object
-  if (!token || token === 'null' || token === 'undefined') {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const userData = JSON.parse(userStr);
-        if (userData?.token) {
-          token = userData.token;
-          // Store it back in localStorage for future use
-          localStorage.setItem('authToken', token);
-          localStorage.setItem('isLoggedIn', 'true');
-          console.log('Retrieved and stored token from user object');
-        }
-      }
-    } catch (e) {
-      console.error('Error retrieving token from user object:', e);
-    }
-  }
-  
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
-
-// Debug utility function - helps track API issues
-export const logApiError = (error: any, context: string) => {
-  console.error(`API Error in ${context}:`, error);
-  
-  if (error.response) {
-    console.error('Status:', error.response.status);
-    console.error('Data:', error.response.data);
-    console.error('Headers:', error.response.headers);
-  } else if (error.request) {
-    console.error('No response received. Request:', error.request);
-  } else {
-    console.error('Error message:', error.message);
-  }
-  
-  console.error('Error config:', error.config);
-  
-  // Return a structured error object that can be used in UI
-  return {
-    message: error.response?.data?.message || error.message || 'Unknown error occurred',
-    status: error.response?.status || 0,
-    isNetworkError: !error.response,
-    isServerError: error.response?.status >= 500,
-    isAuthError: error.response?.status === 401 || error.response?.status === 403
-  };
-};
-
-// Export configuration options
-export default {
-  baseUrl: apiBaseUrl,
-  defaultHeaders,
-  forceRefreshHeaders,
-  vehicleIdMapping,
-  getDynamicVehicleMapping,
-  getAuthorizationHeader,
-  logApiError
-};
+}

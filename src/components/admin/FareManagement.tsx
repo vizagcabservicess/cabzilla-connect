@@ -20,11 +20,12 @@ import {
   Globe,
   Map,
   Car,
-  Bookmark
+  Bookmark,
+  Info
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
-import { fareAPI } from '@/services/api';
+import { fareAPI, syncTourFaresTable } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { CabType } from '@/types/cab';
@@ -86,6 +87,7 @@ export function FareManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const { toast: uiToast } = useToast();
@@ -94,6 +96,10 @@ export function FareManagement() {
   const [dynamicVehicleMap, setDynamicVehicleMap] = useState<Record<string, string>>({});
   
   const [dbVehicleIds, setDbVehicleIds] = useState(['sedan', 'ertiga', 'innova', 'tempo', 'luxury']);
+  const [authStatus, setAuthStatus] = useState<{isValid: boolean; message: string}>({
+    isValid: false,
+    message: 'Checking authentication...'
+  });
   
   const formSchema = createDynamicFormSchema(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds);
   const newTourFormSchema = createDynamicNewTourFormSchema(vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds);
@@ -112,6 +118,149 @@ export function FareManagement() {
       tourName: "",
     },
   });
+  
+  const checkAndRestoreAuth = () => {
+    const token = localStorage.getItem('authToken');
+    const user = localStorage.getItem('user');
+    
+    if (!token || token === 'null' || token === 'undefined') {
+      console.log('No auth token found in localStorage, checking user object');
+      if (user) {
+        try {
+          const userData = JSON.parse(user);
+          if (userData && userData.token) {
+            console.log('Found token in user object, restoring to localStorage');
+            localStorage.setItem('authToken', userData.token);
+            localStorage.setItem('isLoggedIn', 'true');
+            setAuthStatus({
+              isValid: true,
+              message: 'Authentication restored from user data'
+            });
+            return userData.token;
+          }
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      setAuthStatus({
+        isValid: false,
+        message: 'No valid authentication token found'
+      });
+      return null;
+    }
+    
+    setAuthStatus({
+      isValid: true,
+      message: 'Authentication valid'
+    });
+    return token;
+  };
+  
+  const syncVehiclesTourFares = async () => {
+    try {
+      setIsSyncing(true);
+      
+      const token = checkAndRestoreAuth();
+      if (!token) {
+        toast.error("Authentication required. Please log in again.");
+        return false;
+      }
+      
+      try {
+        const testResponse = await fetch('/api/test.php', {
+          headers: getAuthorizationHeader()
+        });
+        const testData = await testResponse.json();
+        console.log("Auth test response:", testData);
+        
+        if (!testData.auth?.hasToken) {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            try {
+              const userData = JSON.parse(userStr);
+              if (userData && userData.token) {
+                localStorage.setItem('authToken', userData.token);
+                toast.info("Authentication token refreshed. Retrying sync...");
+              }
+            } catch (e) {
+              console.error('Error refreshing token:', e);
+            }
+          }
+        }
+      } catch (testError) {
+        console.error("Test API call failed:", testError);
+      }
+      
+      toast.info("Syncing tour fares with vehicles...");
+      
+      const syncResult = await syncTourFaresTable();
+      
+      if (syncResult) {
+        toast.success("Tour fares synchronized with vehicles successfully");
+        
+        const response = await fetch('/api/admin/db_setup_tour_fares.php', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            ...getAuthorizationHeader()
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Tour fares table structure:", data);
+          
+          if (data.data && data.data.existingColumns) {
+            const fareColumns = data.data.existingColumns.filter(
+              (col: string) => !['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'].includes(col)
+            );
+            
+            console.log("Available vehicle columns:", fareColumns);
+            setVehicleColumns(fareColumns);
+            setDbVehicleIds(fareColumns);
+            
+            const updatedDefaults: Record<string, any> = {
+              tourId: form.getValues().tourId || "",
+            };
+            
+            fareColumns.forEach(column => {
+              updatedDefaults[column] = form.getValues()[column] || 0;
+            });
+            
+            form.reset(updatedDefaults);
+            
+            const newTourDefaults: Record<string, any> = {
+              tourId: newTourForm.getValues().tourId || "",
+              tourName: newTourForm.getValues().tourName || "",
+            };
+            
+            fareColumns.forEach(column => {
+              newTourDefaults[column] = newTourForm.getValues()[column] || 0;
+            });
+            
+            newTourForm.reset(newTourDefaults);
+          }
+          
+          if (data.data?.addedColumns?.length > 0) {
+            toast.success(`Added ${data.data.addedColumns.length} new vehicle columns to fare table: ${data.data.addedColumns.join(', ')}`);
+          }
+        }
+        
+        await fetchTourFares();
+        return true;
+      } else {
+        toast.error("Failed to sync tour fares with vehicles");
+        return false;
+      }
+    } catch (error) {
+      console.error("Error syncing vehicles with tour fares:", error);
+      toast.error("Error syncing vehicles with tour fares");
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   
   const initializeDynamicVehicleMapping = async () => {
     try {
@@ -143,56 +292,7 @@ export function FareManagement() {
         console.log("Available vehicles for fare management:", vehicleData);
         setVehicles(vehicleData);
         
-        const syncResponse = await fetch('/api/admin/db_setup_tour_fares.php', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthorizationHeader()
-          }
-        });
-        
-        if (syncResponse.ok) {
-          const syncData = await syncResponse.json();
-          console.log("Tour fares table sync result:", syncData);
-          
-          if (syncData.data && syncData.data.existingColumns) {
-            const fareColumns = syncData.data.existingColumns.filter(
-              (col: string) => !['id', 'tour_id', 'tour_name', 'created_at', 'updated_at'].includes(col)
-            );
-            
-            console.log("Available vehicle columns:", fareColumns);
-            setVehicleColumns(fareColumns);
-            setDbVehicleIds(fareColumns);
-          }
-          
-          if (syncData.data && syncData.data.addedColumns && syncData.data.addedColumns.length > 0) {
-            toast.success(`Added ${syncData.data.addedColumns.length} new vehicle columns to fare table`);
-          }
-        } else {
-          console.error("Failed to sync tour_fares table:", await syncResponse.text());
-        }
-        
-        const defaultValues: Record<string, any> = {
-          tourId: form.getValues().tourId || "",
-        };
-        
-        const columnsToUse = vehicleColumns.length > 0 ? vehicleColumns : dbVehicleIds;
-        columnsToUse.forEach(column => {
-          defaultValues[column] = form.getValues()[column] || 0;
-        });
-        
-        form.reset(defaultValues);
-        
-        const newTourDefaults: Record<string, any> = {
-          tourId: newTourForm.getValues().tourId || "",
-          tourName: newTourForm.getValues().tourName || "",
-        };
-        
-        columnsToUse.forEach(column => {
-          newTourDefaults[column] = newTourForm.getValues()[column] || 0;
-        });
-        
-        newTourForm.reset(newTourDefaults);
+        await syncVehiclesTourFares();
         
         await fetchTourFares();
       } catch (error) {
@@ -217,6 +317,11 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
+      const token = checkAndRestoreAuth();
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
       const fareUpdateRequest: Record<string, any> = {
         tourId: values.tourId,
       };
@@ -234,19 +339,31 @@ export function FareManagement() {
       
       console.log("Prepared fare update request:", fareUpdateRequest);
       
-      const authToken = localStorage.getItem('authToken');
-      if (!authToken) {
-        throw new Error("Authentication token is missing. Please log in again.");
-      }
-      
       try {
-        const testResponse = await fetch('/api/test.php');
+        const testResponse = await fetch('/api/test.php', {
+          headers: getAuthorizationHeader()
+        });
         const testData = await testResponse.json();
         console.log("Test API response:", testData);
         setDebugInfo({
           test: testData,
           time: new Date().toISOString()
         });
+        
+        if (!testData.auth?.hasToken) {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            try {
+              const userData = JSON.parse(userStr);
+              if (userData && userData.token) {
+                localStorage.setItem('authToken', userData.token);
+                toast.info("Authentication token refreshed from user data");
+              }
+            } catch (e) {
+              console.error('Error refreshing token:', e);
+            }
+          }
+        }
       } catch (testError) {
         console.error("Test API call failed:", testError);
       }
@@ -275,6 +392,21 @@ export function FareManagement() {
       }
       
       toast.error(errorMessage);
+      
+      if (errorMessage.includes('Authentication') || errorMessage.includes('Authorization')) {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            if (userData && userData.token) {
+              localStorage.setItem('authToken', userData.token);
+              toast.info("Authentication token refreshed. Please try again.");
+            }
+          } catch (e) {
+            console.error('Error refreshing token:', e);
+          }
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -400,6 +532,11 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
+      const token = checkAndRestoreAuth();
+      if (!token) {
+        console.warn("No auth token found, fare operations may fail");
+      }
+      
       const data = await fareAPI.getTourFares();
       
       if (Array.isArray(data) && data.length > 0) {
@@ -495,16 +632,43 @@ export function FareManagement() {
               <CardTitle className="flex items-center gap-2">
                 <Map className="h-5 w-5" /> Update Tour Fares
               </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchTourFares} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={syncVehiclesTourFares} 
+                  disabled={isSyncing}
+                >
+                  <Car className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  Sync Vehicles
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchTourFares} 
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
             </div>
+            {!authStatus.isValid && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center">
+                  <span className="flex-1">{authStatus.message}</span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={checkAndRestoreAuth}
+                    className="ml-2"
+                  >
+                    Retry Auth
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
           </CardHeader>
           <CardContent>
             {error && (

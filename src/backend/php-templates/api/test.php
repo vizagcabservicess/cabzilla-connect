@@ -28,7 +28,7 @@ if (!empty($authHeader)) {
     $token = str_replace('Bearer ', '', $authHeader);
     if (!empty($token) && $token !== 'null' && $token !== 'undefined') {
         $hasAuthToken = true;
-        $tokenValue = substr($token, 0, 10) . '...';
+        $tokenValue = $token; // Keep full token for better debugging
         
         // Try to decode token (if it's a base64 encoded JSON)
         try {
@@ -56,7 +56,7 @@ echo json_encode([
     'timestamp' => date('Y-m-d H:i:s'),
     'auth' => [
         'hasToken' => $hasAuthToken,
-        'token' => $tokenValue,
+        'token' => $tokenValue ? "Valid (length: " . strlen($tokenValue) . ")" : "Missing",
         'headers' => array_keys($headers),
         'authHeader' => $authHeader ? 'present' : 'missing',
         'tokenData' => $tokenData

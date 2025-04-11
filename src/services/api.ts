@@ -1,871 +1,284 @@
 
-// Import necessary types
-import { TourFare } from '@/types/api';
-import axios, { AxiosRequestConfig, AxiosHeaders } from 'axios';
-import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders, getAuthorizationHeader } from '@/config/api';
-import { safeFetch } from '@/config/requestConfig';
+import axios, { AxiosRequestConfig } from 'axios';
+import { TourFares } from '@/types/cab';
+import { getAuthorizationHeader } from '@/config/api';
+import { toast } from 'sonner';
 
-// Create an axios instance with defaults
-const apiClient = axios.create({
-  baseURL: apiBaseUrl,
+// Create a base API instance with default configuration
+const baseApi = axios.create({
+  baseURL: '/',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
-  },
-  // Add a longer timeout for slower connections
-  timeout: 15000,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
+  }
 });
 
-// Add a request interceptor to include auth token in all requests
-apiClient.interceptors.request.use(
-  (config) => {
-    // Get fresh token from localStorage to ensure we're using the latest
-    const token = localStorage.getItem('authToken');
-    
-    // Enhanced token verification
-    if (token && token !== 'null' && token !== 'undefined') {
-      // Ensure config.headers is properly initialized as AxiosHeaders
-      if (!config.headers) {
-        config.headers = new AxiosHeaders();
-      }
-      
-      // Set the Authorization header
-      config.headers.set('Authorization', `Bearer ${token}`);
-      
-      // Log the headers for debugging
-      console.log(`Request to ${config.url} with token: ${token.substring(0, 15)}...`);
-    } else {
-      console.warn(`No valid auth token found for request to ${config.url}.`);
-      
-      // Try to get a fresh token if available from user object
-      const user = localStorage.getItem('user');
-      if (user) {
-        try {
-          const userData = JSON.parse(user);
-          if (userData && userData.token) {
-            console.log('Using token from user object instead');
-            if (!config.headers) {
-              config.headers = new AxiosHeaders();
-            }
-            config.headers.set('Authorization', `Bearer ${userData.token}`);
-            
-            // Save token back to localStorage for future requests
-            localStorage.setItem('authToken', userData.token);
-            localStorage.setItem('isLoggedIn', 'true');
-            console.log('Restored auth token from user object');
-          }
-        } catch (e) {
-          console.error('Error parsing user data from localStorage', e);
-        }
-      }
+// Add request interceptor to add authorization token to all requests
+baseApi.interceptors.request.use(
+  config => {
+    // Add auth headers to every request
+    const authHeaders = getAuthorizationHeader();
+    if (authHeaders.Authorization) {
+      config.headers.Authorization = authHeaders.Authorization;
     }
-    
     return config;
   },
-  (error) => {
-    console.error('Interceptor error:', error);
-    return Promise.reject(error);
-  }
+  error => Promise.reject(error)
 );
 
-// Add a response interceptor for better error handling
-apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    console.error('API Response error:', error);
+// Add response interceptor to handle error message display
+baseApi.interceptors.response.use(
+  response => response,
+  error => {
+    // Log detailed error information
+    console.error('API request failed:', error.config?.url, error);
     
-    // Add detailed logging for debugging
+    // Display appropriate message to user based on error type
     if (error.response) {
-      console.error('Error status:', error.response.status);
-      console.error('Error data:', error.response.data);
-      console.error('Error headers:', error.response.headers);
+      // Server returned an error response (4xx, 5xx)
+      console.error('Response error data:', error.response.data);
+      console.error('Response error status:', error.response.status);
       
-      // Handle 401/403 errors automatically by trying to refresh token
+      // Handle authentication errors
       if (error.response.status === 401 || error.response.status === 403) {
-        console.log('Auth error detected, attempting to refresh token');
+        const message = error.response.data?.message || 'Authentication failed. Please log in again.';
+        toast.error(message);
         
-        // Try to get token from user object
+        // Try to refresh token from user object
         const userStr = localStorage.getItem('user');
         if (userStr) {
           try {
             const userData = JSON.parse(userStr);
             if (userData && userData.token) {
               localStorage.setItem('authToken', userData.token);
-              localStorage.setItem('isLoggedIn', 'true');
-              console.log('Restored token from user object after auth error');
+              console.log('Retrieved token from user object after auth error');
             }
           } catch (e) {
-            console.error('Error recovering token from user object:', e);
+            console.error('Error parsing user data:', e);
           }
         }
       }
     } else if (error.request) {
+      // Request was made but no response received (network error)
       console.error('No response received:', error.request);
     } else {
-      console.error('Error message:', error.message);
+      // Error in setting up the request
+      console.error('Request setup error:', error.message);
     }
     
     return Promise.reject(error);
   }
 );
 
-// Tour fare API methods
-export const fareAPI = {
-  // Get all tour fares
-  getTourFares: async (): Promise<TourFare[]> => {
-    try {
-      console.log('Fetching tour fares from the server...');
-      
-      // Try three different possible endpoints to find the right one
-      let response;
-      let endpointUsed;
-      
-      // First make sure token is available
-      const token = localStorage.getItem('authToken');
-      const userStr = localStorage.getItem('user');
-      
-      // Try to recover token from user object if missing in localStorage
-      if (!token || token === 'null' || token === 'undefined') {
-        if (userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData && userData.token) {
-              localStorage.setItem('authToken', userData.token);
-              localStorage.setItem('isLoggedIn', 'true');
-              console.log('Restored token from user object before getTourFares');
-            }
-          } catch (e) {
-            console.error('Error recovering token:', e);
-          }
-        }
-      }
-      
-      // Add timestamp to prevent caching
-      const timestamp = Date.now();
-      const headers = {
-        ...getAuthorizationHeader(),
-        ...forceRefreshHeaders,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      };
-      
+// Function to check and restore auth token if needed
+const ensureAuthToken = () => {
+  const token = localStorage.getItem('authToken');
+  if (!token || token === 'null' || token === 'undefined') {
+    console.log('No auth token in localStorage, checking user object');
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
       try {
-        // First attempt - fares/tours.php
-        endpointUsed = `/api/fares/tours.php?_t=${timestamp}`;
-        response = await apiClient.get(endpointUsed, { headers });
-        console.log(`Successfully fetched tour fares from ${endpointUsed}`);
-      } catch (e1) {
-        console.log(`Failed to fetch from ${endpointUsed}, trying alternative endpoint...`);
-        try {
-          // Second attempt - admin/tours.php
-          endpointUsed = `/api/admin/tours.php?_t=${timestamp}`;
-          response = await apiClient.get(endpointUsed, { headers });
-          console.log(`Successfully fetched tour fares from ${endpointUsed}`);
-        } catch (e2) {
-          // Third attempt - tour_fares table directly
-          endpointUsed = `/api/admin/tour-fares.php?_t=${timestamp}`;
-          response = await apiClient.get(endpointUsed, { headers });
-          console.log(`Successfully fetched tour fares from ${endpointUsed}`);
+        const userData = JSON.parse(userStr);
+        if (userData && userData.token) {
+          localStorage.setItem('authToken', userData.token);
+          console.log('Retrieved token from user object for API call');
+          return userData.token;
         }
+      } catch (e) {
+        console.error('Error parsing user data:', e);
       }
-      
-      // Process the response data
-      let tourFares: TourFare[] = [];
-      
-      if (response.data && Array.isArray(response.data)) {
-        tourFares = response.data;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        tourFares = response.data.data;
-      } else if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
-        tourFares = response.data.fares;
-      } else {
-        // Fallback to direct query if we didn't get expected response format
-        console.log('Using direct database query for tour fares...');
-        
-        // Make a direct query to the database via a special endpoint
-        const directQueryEndpoint = '/api/admin/direct-query.php';
-        const directResponse = await apiClient.post(directQueryEndpoint, {
-          query: "SELECT * FROM tour_fares",
-          token: localStorage.getItem('authToken')
-        }, { headers });
-        
-        if (directResponse.data && Array.isArray(directResponse.data)) {
-          // Convert from database format to API format
-          tourFares = directResponse.data.map(row => ({
-            id: row.id,
-            tourId: row.tour_id,
-            tourName: row.tour_name,
-            sedan: parseFloat(row.sedan) || 0,
-            ertiga: parseFloat(row.ertiga) || 0,
-            innova: parseFloat(row.innova) || 0,
-            tempo: parseFloat(row.tempo) || 0,
-            luxury: parseFloat(row.luxury) || 0
-          }));
-        }
-      }
-      
-      console.log(`Received ${tourFares.length} tour fares from the server`);
-      return tourFares;
-    } catch (error) {
-      console.error('Error fetching tour fares:', error);
-      
-      // Load fallback data from local storage or predefined values
-      const fallbackFares = [
-        {
-          id: 1,
-          tourId: 'araku',
-          tourName: 'Araku Day Tour',
-          sedan: 5000,
-          ertiga: 6500,
-          innova: 8000,
-          tempo: 12000,
-          luxury: 15000
-        },
-        {
-          id: 2,
-          tourId: 'vizag',
-          tourName: 'Vizag City Tour',
-          sedan: 3000,
-          ertiga: 4000,
-          innova: 5500,
-          tempo: 8000,
-          luxury: 10000
-        }
-      ];
-      
-      console.log('Using fallback tour fare data');
-      return fallbackFares;
     }
-  },
-
-  // Update a tour fare
-  updateTourFares: async (fareData: any): Promise<any> => {
-    try {
-      // Force a sync of tour_fares table before updating
-      try {
-        await syncTourFaresTable();
-      } catch (syncError) {
-        console.warn('Tour fares table sync failed before update:', syncError);
-      }
-      
-      // Get token directly from localStorage to ensure it's current
-      const token = localStorage.getItem('authToken');
-      
-      // Validate token - this is critical for the update to work
-      if (!token || token === 'null' || token === 'undefined') {
-        // Try one more source - the user object in localStorage
-        const userStr = localStorage.getItem('user');
-        let userToken = null;
-        
-        if (userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData && userData.token) {
-              userToken = userData.token;
-              // Also update the authToken in localStorage for future requests
-              localStorage.setItem('authToken', userToken);
-              localStorage.setItem('isLoggedIn', 'true');
-              console.log('Retrieved and updated token from user object');
-            }
-          } catch (e) {
-            console.error('Error parsing user data:', e);
-          }
-        }
-        
-        // If we still don't have a token, throw an error
-        if (!userToken) {
-          throw new Error('No valid authentication token found. Please log in again.');
-        }
-      }
-      
-      // Get the latest token after potential updates
-      const currentToken = localStorage.getItem('authToken');
-      console.log('Sending tour fare update with auth token:', currentToken?.substring(0, 15) + '...');
-      console.log('Fare data being sent:', fareData);
-      
-      // Add a test connection before the actual update
-      try {
-        const testResponse = await fetch('/api/test.php', {
-          headers: {
-            'Authorization': `Bearer ${currentToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const testData = await testResponse.json();
-        console.log('Test connection successful:', testData);
-        
-        if (!testData.auth?.hasToken) {
-          console.warn('Test connection shows no valid token!');
-        }
-      } catch (testError) {
-        console.error('Test connection failed:', testError);
-      }
-      
-      // Use the correct endpoint for tour fare updates with explicit headers
-      const response = await apiClient.post('/api/admin/fares-update.php', fareData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
-        // Add a timeout to ensure we don't wait forever
-        timeout: 20000,
-      });
-      
-      console.log('Fare update response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating tour fare:', error);
-      // Improve error logging
-      if (error.response) {
-        console.error('Error response:', error.response.status, error.response.data);
-      }
-      
-      // Help the client understand the auth problem by enhancing the error message
-      if (error.response?.status === 403 || error.message?.includes('authentication token')) {
-        // Attempt to refresh token on auth errors - check session and user objects
-        const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-        const userStr = localStorage.getItem('user');
-        
-        if (isLoggedIn && userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData && userData.token) {
-              // Update the token and suggest retry
-              localStorage.setItem('authToken', userData.token);
-              error.message = 'Authentication token refreshed. Please try updating the fare again.';
-            }
-          } catch (e) {
-            console.error('Error refreshing token:', e);
-          }
-        }
-      }
-      
-      throw error;
-    }
-  },
-
-  // Add a new tour fare
-  addTourFare: async (fareData: any): Promise<any> => {
-    try {
-      // Force a sync of tour_fares table before adding
-      try {
-        await syncTourFaresTable();
-      } catch (syncError) {
-        console.warn('Tour fares table sync failed before adding new tour:', syncError);
-      }
-      
-      // Get token directly from localStorage to ensure it's current
-      const token = localStorage.getItem('authToken');
-      
-      // Validate token and try to recover if missing
-      if (!token || token === 'null' || token === 'undefined') {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData && userData.token) {
-              localStorage.setItem('authToken', userData.token);
-              localStorage.setItem('isLoggedIn', 'true');
-              console.log('Retrieved token from user object for addTourFare');
-            } else {
-              throw new Error('No valid authentication token found in user data. Please log in again.');
-            }
-          } catch (e) {
-            console.error('Error parsing user data:', e);
-            throw new Error('No valid authentication token found. Please log in again.');
-          }
-        } else {
-          throw new Error('No valid authentication token found. Please log in again.');
-        }
-      }
-      
-      // Get the latest token after potential updates
-      const currentToken = localStorage.getItem('authToken');
-      console.log('Sending new tour fare with auth token:', currentToken?.substring(0, 15) + '...');
-      
-      // Use the correct endpoint for adding tour fares with explicit headers
-      const response = await apiClient.put('/api/admin/fares-update.php', fareData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error adding tour fare:', error);
-      // Improve error logging
-      if (error.response) {
-        console.error('Error response:', error.response.status, error.response.data);
-      }
-      throw error;
-    }
-  },
-
-  // Delete a tour fare
-  deleteTourFare: async (tourId: string): Promise<any> => {
-    try {
-      // Get token directly from localStorage to ensure it's current
-      const token = localStorage.getItem('authToken');
-      if (!token || token === 'null' || token === 'undefined') {
-        throw new Error('No valid authentication token found. Please log in again.');
-      }
-      
-      // Use the correct endpoint with query parameter and explicit headers
-      const response = await apiClient.delete(`/api/admin/fares-update.php?tourId=${tourId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting tour fare:', error);
-      // Improve error logging
-      if (error.response) {
-        console.error('Error response:', error.response.status, error.response.data);
-      }
-      throw error;
-    }
-  },
-  
-  // Get vehicle pricing - placeholder implementation for compatibility
-  getVehiclePricing: async (): Promise<any[]> => {
-    try {
-      // This is a redirect to use the tour fares API for now
-      return await fareAPI.getTourFares();
-    } catch (error) {
-      console.error('Error fetching vehicle pricing:', error);
-      throw error;
-    }
-  },
-  
-  // Update vehicle pricing - placeholder implementation for compatibility
-  updateVehiclePricing: async (pricingData: any): Promise<any> => {
-    try {
-      // Redirect to use the tour fares update API
-      return await fareAPI.updateTourFares(pricingData);
-    } catch (error) {
-      console.error('Error updating vehicle pricing:', error);
-      throw error;
-    }
+    return null;
   }
+  return token;
 };
 
-// Function to sync tour_fares table with vehicles
+// Sync the tour_fares table with vehicles
 export const syncTourFaresTable = async (): Promise<boolean> => {
   try {
-    console.log('Syncing tour_fares table with vehicles...');
-    
-    // Get token directly from localStorage to ensure it's current
-    const token = localStorage.getItem('authToken');
-    
-    // Try to recover token if missing
-    if (!token || token === 'null' || token === 'undefined') {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          if (userData && userData.token) {
-            localStorage.setItem('authToken', userData.token);
-            localStorage.setItem('isLoggedIn', 'true');
-            console.log('Retrieved token from user object for syncTourFaresTable');
-          }
-        } catch (e) {
-          console.error('Error parsing user data:', e);
-        }
-      }
+    // Ensure auth token is available
+    const token = ensureAuthToken();
+    if (!token) {
+      console.warn('No auth token available for syncTourFaresTable');
+      toast.error('Authentication required to sync tour fares');
+      return false;
     }
     
-    // Get current token after potential update
-    const currentToken = localStorage.getItem('authToken');
-    
-    // Use safeFetch for better reliability
-    const response = await safeFetch('/api/admin/db_setup_tour_fares.php', {
+    console.log('Syncing tour fares table with vehicles...');
+    const response = await fetch('/api/admin/db_setup_tour_fares.php', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentToken}`,
+        'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+        ...getAuthorizationHeader()
       }
     });
     
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Tour fares table sync response:', data);
-      return data.status === 'success';
-    } else {
-      // Try to extract error message from response
-      let errorText = '';
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error syncing tour fares table:', errorText);
+      
+      // Try to parse error response
       try {
-        const errorData = await response.json();
-        errorText = errorData.message || response.statusText;
+        const errorData = JSON.parse(errorText);
+        if (errorData.message) {
+          throw new Error(errorData.message);
+        }
       } catch (e) {
-        errorText = response.statusText;
+        // If parsing fails, use the raw text
       }
-      console.error(`Failed to sync tour_fares table: ${errorText}`);
-      return false;
+      
+      throw new Error(`Failed to sync tour fares table: ${response.status} ${response.statusText}`);
     }
+    
+    const data = await response.json();
+    console.log('Tour fares table sync result:', data);
+    
+    return data.status === 'success';
   } catch (error) {
-    console.error('Error syncing tour_fares table:', error);
-    return false;
+    console.error('Error syncing tour fares table:', error);
+    throw error;
   }
 };
 
-// Fix the bookingAPI paths to match the actual backend endpoints
-export const bookingAPI = {
-  // Create booking API service
-  createBooking: async (bookingData: any): Promise<any> => {
+// API methods for handling tour fare operations
+export const fareAPI = {
+  // Get all tour fares
+  getTourFares: async () => {
     try {
-      const response = await apiClient.post('/api/bookings/create.php', bookingData);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      throw error;
-    }
-  },
-  
-  getBookingById: async (bookingId: number): Promise<any> => {
-    try {
-      const response = await apiClient.get(`/api/bookings/${bookingId}.php`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching booking with ID ${bookingId}:`, error);
-      throw error;
-    }
-  },
-  
-  // Updated path for user bookings - using the correct endpoint
-  getUserBookings: async (): Promise<any[]> => {
-    try {
-      // Check if token exists
-      const token = localStorage.getItem('authToken');
-      if (!token || token === 'null' || token === 'undefined') {
-        console.warn('No valid token for getUserBookings');
+      // Ensure authentication token is set
+      ensureAuthToken();
+      
+      // First sync tables to ensure all vehicles are represented
+      try {
+        await syncTourFaresTable();
+      } catch (syncError) {
+        console.warn('Table sync failed before getTourFares:', syncError);
+      }
+      
+      const config: AxiosRequestConfig = {
+        method: 'GET',
+        url: '/api/admin/tour-fares.php',
+        headers: {
+          ...getAuthorizationHeader(),
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      };
+      
+      const response = await baseApi(config);
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else {
+        console.warn('Unexpected format from getTourFares API:', response.data);
         return [];
       }
+    } catch (error) {
+      console.error('Error getting tour fares:', error);
+      throw error;
+    }
+  },
+  
+  // Update tour fare
+  updateTourFares: async (fareData: any) => {
+    try {
+      // Ensure authentication token is set
+      const token = ensureAuthToken();
+      if (!token) {
+        throw new Error('Authentication token is missing. Please log in again.');
+      }
       
-      // Use the correct user bookings endpoint with correct timestamp to prevent caching
-      const timestamp = Date.now();
-      const response = await apiClient.get(`/api/user/bookings.php?_t=${timestamp}`, {
+      console.log('Updating tour fare with data:', fareData);
+      
+      // Make sure tour_fares table is in sync
+      try {
+        await syncTourFaresTable();
+      } catch (syncError) {
+        console.warn('Table sync failed before updateTourFares:', syncError);
+      }
+      
+      const config: AxiosRequestConfig = {
+        method: 'POST',
+        url: '/api/admin/fares-update.php',
         headers: {
-          ...forceRefreshHeaders,
-          'Authorization': `Bearer ${token}`
-        }
-      });
+          ...getAuthorizationHeader(),
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: fareData
+      };
       
-      // Handle both response formats
-      if (response.data && response.data.bookings) {
-        console.log('Received bookings data:', response.data.bookings);
-        return response.data.bookings || [];
-      }
-      
-      if (response.data && Array.isArray(response.data)) {
-        console.log('Received bookings array data:', response.data);
-        return response.data;
-      }
-      
-      console.log('Received other bookings format:', response.data);
-      return response.data || [];
-    } catch (error) {
-      console.error('Error fetching user bookings:', error);
-      // Return empty array instead of throwing to prevent UI error loops
-      return [];
-    }
-  },
-  
-  getAllBookings: async (): Promise<any[]> => {
-    try {
-      // Use correct admin endpoint with timestamp
-      const timestamp = Date.now();
-      const response = await apiClient.get(`/api/admin/booking.php?_t=${timestamp}`, {
-        headers: forceRefreshHeaders
-      });
-      
-      // Handle both response formats
-      if (response.data && response.data.bookings) {
-        return response.data.bookings || [];
-      }
-      
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      }
-      
-      return response.data || [];
-    } catch (error) {
-      console.error('Error fetching all bookings:', error);
-      return [];
-    }
-  },
-  
-  updateBooking: async (bookingId: number, bookingData: any): Promise<any> => {
-    try {
-      const response = await apiClient.post(`/api/bookings/${bookingId}/update.php`, bookingData);
+      const response = await baseApi(config);
       return response.data;
     } catch (error) {
-      console.error(`Error updating booking with ID ${bookingId}:`, error);
+      console.error('Error updating tour fare:', error);
       throw error;
     }
   },
   
-  updateBookingStatus: async (bookingId: number, status: string): Promise<any> => {
+  // Add new tour fare
+  addTourFare: async (fareData: any) => {
     try {
-      const response = await apiClient.post(`/api/bookings/${bookingId}/status.php`, { status });
-      return response.data;
-    } catch (error) {
-      console.error(`Error updating status for booking ${bookingId}:`, error);
-      throw error;
-    }
-  },
-  
-  deleteBooking: async (bookingId: number): Promise<any> => {
-    try {
-      const response = await apiClient.delete(`/api/bookings/${bookingId}/delete.php`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error deleting booking with ID ${bookingId}:`, error);
-      throw error;
-    }
-  },
-  
-  getAdminDashboardMetrics: async (period: string): Promise<any> => {
-    try {
-      // Get token directly for this admin endpoint
-      const token = localStorage.getItem('authToken');
-      if (!token || token === 'null' || token === 'undefined') {
-        throw new Error('No valid authentication token found. Please log in again.');
+      // Ensure authentication token is set
+      const token = ensureAuthToken();
+      if (!token) {
+        throw new Error('Authentication token is missing. Please log in again.');
       }
       
-      // Use the correct admin metrics endpoint with timestamp to prevent caching
-      const timestamp = Date.now();
-      const response = await apiClient.get(`/api/admin/metrics.php?period=${period}&_t=${timestamp}`, {
+      console.log('Adding new tour fare with data:', fareData);
+      
+      const config: AxiosRequestConfig = {
+        method: 'PUT',
+        url: '/api/admin/fares-update.php',
         headers: {
-          ...forceRefreshHeaders,
-          'Authorization': `Bearer ${token}`
-        }
-      });
+          ...getAuthorizationHeader(),
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: fareData
+      };
       
-      // Handle different response formats
-      if (response.data && response.data.data) {
-        return response.data.data;
-      }
-      
-      if (response.data && response.data.status === 'success') {
-        return response.data;
-      }
-      
+      const response = await baseApi(config);
       return response.data;
     } catch (error) {
-      console.error('Error fetching admin dashboard metrics:', error);
+      console.error('Error adding tour fare:', error);
+      throw error;
+    }
+  },
+  
+  // Delete tour fare
+  deleteTourFare: async (tourId: string) => {
+    try {
+      // Ensure authentication token is set
+      const token = ensureAuthToken();
+      if (!token) {
+        throw new Error('Authentication token is missing. Please log in again.');
+      }
+      
+      console.log('Deleting tour fare with ID:', tourId);
+      
+      const config: AxiosRequestConfig = {
+        method: 'DELETE',
+        url: '/api/admin/fares-update.php',
+        headers: {
+          ...getAuthorizationHeader(),
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: { tourId }
+      };
+      
+      const response = await baseApi(config);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting tour fare:', error);
       throw error;
     }
   }
 };
-
-// Improved auth API methods with better token handling
-export const authAPI = {
-  login: async (credentials: any): Promise<any> => {
-    try {
-      // Clear any previous auth tokens to avoid conflicts
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('isLoggedIn');
-      
-      const response = await apiClient.post('/api/login.php', credentials);
-      
-      if (response.data && response.data.token) {
-        // Validate token before saving
-        if (typeof response.data.token === 'string' && response.data.token.length > 10) {
-          localStorage.setItem('authToken', response.data.token);
-          localStorage.setItem('isLoggedIn', 'true');
-          
-          // Log token for debugging
-          console.log('Login successful, token stored:', response.data.token.substring(0, 15) + '...');
-          
-          if (response.data.user) {
-            // Make sure we also store the token in the user object
-            const userData = { ...response.data.user, token: response.data.token };
-            localStorage.setItem('user', JSON.stringify(userData));
-          }
-          
-          // Test if token is working immediately after login
-          try {
-            const testResponse = await fetch('/api/test.php', {
-              headers: {
-                'Authorization': `Bearer ${response.data.token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            const testData = await testResponse.json();
-            console.log('Token test after login:', testData);
-          } catch (testError) {
-            console.warn('Token test after login failed:', testError);
-          }
-        } else {
-          console.error('Invalid token received:', response.data.token);
-          throw new Error('Invalid authentication token received from server');
-        }
-      } else {
-        console.error('No token in login response:', response.data);
-        throw new Error('No authentication token received from server');
-      }
-      
-      return response.data;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  },
-  
-  logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('user');
-    sessionStorage.clear();
-    console.log('User logged out, auth tokens cleared');
-  },
-  
-  signup: async (userData: any): Promise<any> => {
-    try {
-      const response = await apiClient.post('/api/signup.php', userData);
-      
-      if (response.data && response.data.token) {
-        // Validate token before saving
-        if (typeof response.data.token === 'string' && response.data.token.length > 10) {
-          localStorage.setItem('authToken', response.data.token);
-          localStorage.setItem('isLoggedIn', 'true');
-          
-          if (response.data.user) {
-            // Make sure we also store the token in the user object
-            const userData = { ...response.data.user, token: response.data.token };
-            localStorage.setItem('user', JSON.stringify(userData));
-          }
-        } else {
-          console.error('Invalid token received from signup:', response.data.token);
-        }
-      }
-      
-      return response.data;
-    } catch (error) {
-      console.error('Signup error:', error);
-      throw error;
-    }
-  },
-  
-  isAuthenticated: (): boolean => {
-    const token = localStorage.getItem('authToken');
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    
-    // If no token but user object has one, restore it
-    if ((!token || token === 'null' || token === 'undefined') && !isLoggedIn) {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          if (user.token) {
-            localStorage.setItem('authToken', user.token);
-            localStorage.setItem('isLoggedIn', 'true');
-            return true;
-          }
-        } catch (e) {
-          return false;
-        }
-      }
-    }
-    
-    return !!(token && token !== 'null' && token !== 'undefined' && isLoggedIn);
-  },
-  
-  isAdmin: (): boolean => {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return false;
-    try {
-      const user = JSON.parse(userStr);
-      return user.role === 'admin';
-    } catch {
-      return false;
-    }
-  },
-  
-  getCurrentUser: async (): Promise<any> => {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
-    try {
-      const user = JSON.parse(userStr);
-      
-      // Ensure token is also carried in the user object
-      if (!user.token) {
-        const token = localStorage.getItem('authToken');
-        if (token && token !== 'null' && token !== 'undefined') {
-          user.token = token;
-          // Update the stored user object
-          localStorage.setItem('user', JSON.stringify(user));
-        }
-      }
-      
-      return user;
-    } catch (error) {
-      console.error('Error parsing user data:', error);
-      return null;
-    }
-  },
-  
-  // New method to verify and refresh token
-  verifyAndRefreshToken: async (): Promise<boolean> => {
-    try {
-      // Check if we have a token
-      let token = localStorage.getItem('authToken');
-      
-      // Try to recover token from user object if not in localStorage
-      if (!token || token === 'null' || token === 'undefined') {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData && userData.token) {
-              token = userData.token;
-              localStorage.setItem('authToken', token);
-              localStorage.setItem('isLoggedIn', 'true');
-              console.log('Restored token from user object during verification');
-            } else {
-              return false;
-            }
-          } catch (e) {
-            console.error('Error parsing user data during token verification:', e);
-            return false;
-          }
-        } else {
-          return false;
-        }
-      }
-      
-      // Test the token with a lightweight endpoint
-      const response = await fetch('/api/test.php', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        console.warn('Token verification failed');
-        return false;
-      }
-      
-      const data = await response.json();
-      console.log('Token verification result:', data);
-      
-      // If verification succeeded, we're good
-      return true;
-    } catch (error) {
-      console.error('Error verifying token:', error);
-      return false;
-    }
-  }
-};
-
-// Export the API client for direct use
-export default apiClient;
