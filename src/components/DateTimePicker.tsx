@@ -26,8 +26,9 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
-  // Initialize with current date and time if no date is provided
+  // Initialize with current date and time immediately
   useEffect(() => {
     const now = new Date();
     const currentTime = format(now, "HH:mm");
@@ -54,6 +55,7 @@ export function DateTimePicker({
   const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
     // Prevent default to avoid any browser default behavior
     e.preventDefault();
+    e.stopPropagation();
     
     if (!selectedTime) return;
 
@@ -67,6 +69,23 @@ export function DateTimePicker({
     newDate.setHours(hours);
     newDate.setMinutes(minutes);
     onDateChange(newDate);
+    
+    // Close the popover after applying the time
+    setOpen(false);
+  };
+
+  const handleCalendarSelect = (selectedDate: Date | undefined) => {
+    if (selectedDate) {
+      // Preserve the previously selected time if any
+      if (date && selectedTime) {
+        const [hours, minutes] = selectedTime.split(":").map(Number);
+        selectedDate.setHours(hours);
+        selectedDate.setMinutes(minutes);
+      }
+      onDateChange(selectedDate);
+    } else {
+      onDateChange(undefined);
+    }
   };
 
   return (
@@ -79,7 +98,7 @@ export function DateTimePicker({
           {label}
         </label>
       )}
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant={"outline"}
@@ -96,7 +115,7 @@ export function DateTimePicker({
           <Calendar
             mode="single"
             selected={date}
-            onSelect={onDateChange}
+            onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
             className={cn("p-3 pointer-events-auto")}
@@ -110,9 +129,10 @@ export function DateTimePicker({
             />
             <button 
               onClick={handleApply}
-              className="h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/100"
               type="button"
               data-testid="apply-time-button"
+              style={{touchAction: "manipulation"}}
             >
               Apply Time
             </button>
