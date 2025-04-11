@@ -102,11 +102,16 @@ export function DateTimePicker({
               onChange={handleTimeChange}
               className="max-w-[80px]"
             />
-            {/* Add pointer-events-auto to ensure the button is clickable on mobile */}
             <Button 
               size="sm" 
               onClick={handleApply} 
               className="whitespace-nowrap pointer-events-auto touch-manipulation"
+              type="button"
+              onTouchStart={(e) => {
+                // Prevent default to avoid any potential issues
+                e.preventDefault();
+                handleApply();
+              }}
             >
               Apply Time
             </Button>
