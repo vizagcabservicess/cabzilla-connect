@@ -93,20 +93,39 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           
           if (selectedTour && tourFares[selectedTour]) {
             cabTypes.forEach(cab => {
-              // Normalize cab ID to match what's in the database
-              const normalizedCabId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+              // Try to find the fare for this cab using different variations of the ID
+              const cabId = cab.id.toLowerCase();
+              const normalizedCabId = cabId.replace(/[^a-z0-9_]/g, '_');
               
-              // Try various ways to find the fare
-              if (tourFares[selectedTour][cab.id]) {
-                currentFares[cab.id] = tourFares[selectedTour][cab.id];
-              } else if (tourFares[selectedTour][normalizedCabId]) {
+              // First try exact match
+              if (tourFares[selectedTour][cabId]) {
+                currentFares[cab.id] = tourFares[selectedTour][cabId];
+              } 
+              // Then try normalized version
+              else if (tourFares[selectedTour][normalizedCabId]) {
                 currentFares[cab.id] = tourFares[selectedTour][normalizedCabId];
-              } else if (cab.id.includes('sedan') && tourFares[selectedTour].sedan) {
+              } 
+              // Try vehicle type mappings
+              else if (cabId.includes('sedan') && tourFares[selectedTour].sedan) {
                 currentFares[cab.id] = tourFares[selectedTour].sedan;
-              } else if ((cab.id.includes('innova') || cab.id.includes('crysta')) && tourFares[selectedTour].innova) {
+              } else if (cabId.includes('innova_crysta') && tourFares[selectedTour].innova_crysta) {
+                currentFares[cab.id] = tourFares[selectedTour].innova_crysta;
+              } else if (cabId.includes('innova') && tourFares[selectedTour].innova) {
                 currentFares[cab.id] = tourFares[selectedTour].innova;
-              } else if (cab.id.includes('ertiga') && tourFares[selectedTour].ertiga) {
+              } else if (cabId.includes('ertiga') && tourFares[selectedTour].ertiga) {
                 currentFares[cab.id] = tourFares[selectedTour].ertiga;
+              } else if (cabId.includes('tempo') && tourFares[selectedTour].tempo) {
+                currentFares[cab.id] = tourFares[selectedTour].tempo;
+              } else if (cabId.includes('luxury') && tourFares[selectedTour].luxury) {
+                currentFares[cab.id] = tourFares[selectedTour].luxury;
+              } else if (cabId.includes('dzire') && tourFares[selectedTour].dzire_cng) {
+                currentFares[cab.id] = tourFares[selectedTour].dzire_cng;
+              } else if (cabId.includes('toyota') && tourFares[selectedTour].toyota) {
+                currentFares[cab.id] = tourFares[selectedTour].toyota;
+              } else if (cabId.includes('etios') && tourFares[selectedTour].etios) {
+                currentFares[cab.id] = tourFares[selectedTour].etios;
+              } else if (cabId.includes('mpv') && tourFares[selectedTour].mpv) {
+                currentFares[cab.id] = tourFares[selectedTour].mpv;
               } else {
                 // Fallback to cab's pre-defined price if available
                 if (cab.price && cab.price > 0) {
@@ -114,9 +133,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 } else {
                   // Last resort - calculate a reasonable fare based on type
                   const baseFare = distance * (
-                    cab.id.includes('luxury') ? 20 : 
-                    cab.id.includes('innova') ? 15 : 
-                    cab.id.includes('ertiga') ? 12 : 10
+                    cabId.includes('luxury') ? 20 : 
+                    cabId.includes('innova') ? 15 : 
+                    cabId.includes('ertiga') ? 12 : 10
                   );
                   currentFares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
                 }

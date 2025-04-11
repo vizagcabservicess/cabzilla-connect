@@ -130,6 +130,32 @@ export const tourFares: TourFares = {
   }
 };
 
+// Map of vehicle ID variants to normalized IDs
+export const vehicleIdMapping: Record<string, string> = {
+  'sedan': 'sedan',
+  'Sedan': 'sedan',
+  'ertiga': 'ertiga',
+  'Ertiga': 'ertiga',
+  'innova': 'innova',
+  'Innova': 'innova',
+  'innova_crysta': 'innova_crysta',
+  'Innova Crysta': 'innova_crysta',
+  'tempo': 'tempo',
+  'Tempo': 'tempo',
+  'tempo_traveller': 'tempo_traveller',
+  'Tempo Traveller': 'tempo_traveller',
+  'luxury': 'luxury',
+  'Luxury': 'luxury',
+  'mpv': 'mpv',
+  'MPV': 'mpv',
+  'toyota': 'toyota',
+  'Toyota': 'toyota',
+  'dzire_cng': 'dzire_cng',
+  'Dzire CNG': 'dzire_cng',
+  'etios': 'etios',
+  'Etios': 'etios'
+};
+
 // Track ongoing tour fare fetch operations
 let isFetchingTourFares = false;
 let lastFetchedTourFares: TourFares | null = null;
@@ -189,34 +215,48 @@ export const loadTourFares = async (): Promise<TourFares> => {
             innova: 0
           };
           
-          // Set the sedan value
-          if (typeof tour.sedan === 'number') {
-            dynamicTourFares[tourId].sedan = tour.sedan;
-          }
-          
-          // Set the ertiga value
-          if (typeof tour.ertiga === 'number') {
-            dynamicTourFares[tourId].ertiga = tour.ertiga;
-          }
-          
-          // Set the innova value (prioritize innova column, fallback to innova_crysta)
-          if (typeof tour.innova === 'number') {
-            dynamicTourFares[tourId].innova = tour.innova;
-          } else if (typeof tour.innova_crysta === 'number') {
-            dynamicTourFares[tourId].innova = tour.innova_crysta;
-          }
-          
-          // Add other vehicle types as needed
+          // Process all properties from the API response
           Object.entries(tour).forEach(([key, value]) => {
-            if (
-              typeof value === 'number' && 
-              !['id', 'tourId', 'tourName', 'updated_at', 'created_at'].includes(key) &&
-              !['sedan', 'ertiga', 'innova'].includes(key)
-            ) {
-              // Add other vehicle types to the tour fare object
-              (dynamicTourFares[tourId] as any)[key] = value;
+            // Skip non-fare fields
+            if (['id', 'tourId', 'tourName', 'updated_at', 'created_at', 'distance', 'days'].includes(key)) {
+              return;
+            }
+            
+            if (typeof value === 'number') {
+              // Handle specific known vehicle columns
+              if (key === 'sedan') {
+                dynamicTourFares[tourId].sedan = value;
+              } else if (key === 'ertiga') {
+                dynamicTourFares[tourId].ertiga = value;
+              } else if (key === 'innova') {
+                dynamicTourFares[tourId].innova = value;
+              } else if (key === 'innova_crysta') {
+                dynamicTourFares[tourId].innova_crysta = value;
+              } else if (key === 'tempo' || key === 'tempo_traveller') {
+                dynamicTourFares[tourId].tempo = value;
+                // Also store as tempo_traveller for backward compatibility
+                dynamicTourFares[tourId].tempo_traveller = value;
+              } else if (key === 'luxury') {
+                dynamicTourFares[tourId].luxury = value;
+              } else if (key === 'mpv') {
+                dynamicTourFares[tourId].mpv = value;
+              } else if (key === 'toyota') {
+                dynamicTourFares[tourId].toyota = value;
+              } else if (key === 'dzire_cng') {
+                dynamicTourFares[tourId].dzire_cng = value;
+              } else if (key === 'etios') {
+                dynamicTourFares[tourId].etios = value;
+              } else {
+                // For any other vehicle type, just add it to the fare object
+                (dynamicTourFares[tourId] as any)[key] = value;
+              }
             }
           });
+          
+          // Special handling for innova - try to set from innova_crysta if innova is not set
+          if (!dynamicTourFares[tourId].innova && dynamicTourFares[tourId].innova_crysta) {
+            dynamicTourFares[tourId].innova = dynamicTourFares[tourId].innova_crysta;
+          }
         }
       });
       
