@@ -76,11 +76,84 @@ const injectCabSelectionScript = () => {
 // Inject the script immediately on module import
 injectCabSelectionScript();
 
+// Import React and necessary types
+import React from 'react';
+import { CabType } from '@/types/cab';
+import { TripType, TripMode } from '@/lib/tripTypes';
+
+// Create an adapter component to convert between the prop interfaces
+interface CabOptionsProps {
+  cabTypes: CabType[];
+  selectedCab: CabType | null;
+  onSelectCab: (cab: CabType) => void;
+  distance: number;
+  tripType: TripType | string;
+  tripMode: TripMode | string;
+  pickupDate?: Date;
+  returnDate?: Date | null;
+  hourlyPackage?: string;
+}
+
 // Import the CabList component
 import { CabList } from './cab-options/CabList';
 
-// Export the CabList as a named export for consistency
-export { CabList as CabOptions };
+// Create an adapter component that converts props
+export const CabOptions: React.FC<CabOptionsProps> = ({
+  cabTypes,
+  selectedCab,
+  onSelectCab,
+  distance,
+  tripType,
+  tripMode,
+  pickupDate,
+  returnDate,
+  hourlyPackage
+}) => {
+  // Convert the props to match what CabList expects
+  const selectedCabId = selectedCab ? selectedCab.id : null;
+  const [cabFares, setCabFares] = React.useState<Record<string, number>>({});
+  const [isCalculatingFares, setIsCalculatingFares] = React.useState(false);
+
+  // Simple mock function for now - in real implementation, you'd calculate actual fares
+  const getFareDetails = (cab: CabType): string => {
+    return `Base fare + ${distance} km`;
+  };
+
+  // Update fares whenever relevant props change
+  React.useEffect(() => {
+    if (distance > 0 && cabTypes.length > 0) {
+      setIsCalculatingFares(true);
+      
+      // Simple mock calculation - you'd replace this with actual fare calculation
+      const newFares: Record<string, number> = {};
+      cabTypes.forEach(cab => {
+        newFares[cab.id] = cab.price || distance * (cab.pricePerKm || 15);
+      });
+      
+      // Simulate a slight delay as if calculating
+      setTimeout(() => {
+        setCabFares(newFares);
+        setIsCalculatingFares(false);
+      }, 500);
+    }
+  }, [distance, tripType, tripMode, cabTypes, pickupDate, returnDate, hourlyPackage]);
+
+  // Handler for cab selection that converts the cab object to what parent components expect
+  const handleSelectCab = (cab: CabType) => {
+    onSelectCab(cab);
+  };
+
+  return (
+    <CabList
+      cabTypes={cabTypes}
+      selectedCabId={selectedCabId}
+      cabFares={cabFares}
+      isCalculatingFares={isCalculatingFares}
+      handleSelectCab={handleSelectCab}
+      getFareDetails={getFareDetails}
+    />
+  );
+};
 
 // Also export as default for backward compatibility
-export default CabList;
+export default CabOptions;
