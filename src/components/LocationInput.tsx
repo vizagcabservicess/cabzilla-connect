@@ -29,6 +29,214 @@ interface LocationInputProps {
   className?: string;
 }
 
+// Define vizagLocations before it's used in the component
+const vizagLocations: Location[] = [
+  {
+    id: "vizag-airport",
+    name: "Visakhapatnam Airport",
+    address: "Visakhapatnam Airport, NH16, Visakhapatnam, Andhra Pradesh 530009, India",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7167,
+    lng: 83.2167,
+    type: "airport",
+    popularityScore: 90,
+    isInVizag: true
+  },
+  {
+    id: "railway-station",
+    name: "Visakhapatnam Railway Station",
+    address: "Railway Station Rd, Dondaparthy, Visakhapatnam, Andhra Pradesh 530004",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7264,
+    lng: 83.3072,
+    type: "train_station",
+    popularityScore: 85,
+    isInVizag: true
+  },
+  {
+    id: "dwaraka-nagar",
+    name: "Dwaraka Nagar",
+    address: "Dwaraka Nagar, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7204,
+    lng: 83.3094,
+    type: "landmark",
+    popularityScore: 75,
+    isInVizag: true
+  },
+  {
+    id: "rk-beach",
+    name: "RK Beach",
+    address: "RK Beach Rd, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7104,
+    lng: 83.3247,
+    type: "landmark",
+    popularityScore: 80,
+    isInVizag: true
+  },
+  {
+    id: "jagadamba-center",
+    name: "Jagadamba Center",
+    address: "Jagadamba Junction, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7011,
+    lng: 83.3044,
+    type: "landmark",
+    popularityScore: 70,
+    isInVizag: true
+  },
+  {
+    id: "mvp-double-road",
+    name: "MVP Double Road",
+    address: "MVP Double Road, Sector 8, MVP Colony, Visakhapatnam",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7411,
+    lng: 83.3344,
+    type: "landmark",
+    popularityScore: 65,
+    isInVizag: true
+  },
+  {
+    id: "arilova",
+    name: "Arilova",
+    address: "Arilova, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7611,
+    lng: 83.3544,
+    type: "landmark",
+    popularityScore: 60,
+    isInVizag: true
+  },
+  {
+    id: "simhachalam-temple",
+    name: "Simhachalam Temple",
+    address: "Simhachalam Rd, Simhachalam, Visakhapatnam, Andhra Pradesh 530028",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7811,
+    lng: 83.3744,
+    type: "landmark",
+    popularityScore: 70,
+    isInVizag: true
+  },
+  {
+    id: "kailasagiri",
+    name: "Kailasagiri",
+    address: "Kailasagiri, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7911,
+    lng: 83.3944,
+    type: "landmark",
+    popularityScore: 75,
+    isInVizag: true
+  },
+  {
+    id: "rushikonda-beach",
+    name: "Rushikonda Beach",
+    address: "Rushikonda Beach, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.8011,
+    lng: 83.4144,
+    type: "landmark",
+    popularityScore: 80,
+    isInVizag: true
+  },
+  {
+    id: "bheemili",
+    name: "Bheemili",
+    address: "Bheemunipatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.8900,
+    lng: 83.4400,
+    type: "landmark",
+    popularityScore: 55,
+    isInVizag: true
+  },
+  {
+    id: "tagarapuvalasa",
+    name: "Tagarapuvalasa",
+    address: "Tagarapuvalasa, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.9300,
+    lng: 83.4000,
+    type: "landmark",
+    popularityScore: 50,
+    isInVizag: true
+  },
+  {
+    id: "pendurthi",
+    name: "Pendurthi",
+    address: "Pendurthi, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.7800,
+    lng: 83.2000,
+    type: "landmark",
+    popularityScore: 45,
+    isInVizag: true
+  },
+  {
+    id: "gajuwaka",
+    name: "Gajuwaka",
+    address: "Gajuwaka, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.6800,
+    lng: 83.2000,
+    type: "landmark",
+    popularityScore: 50,
+    isInVizag: true
+  },
+  {
+    id: "kurmannapalem",
+    name: "Kurmannapalem",
+    address: "Kurmannapalem, Visakhapatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.6500,
+    lng: 83.1800,
+    type: "landmark",
+    popularityScore: 40,
+    isInVizag: true
+  },
+  {
+    id: "parawada",
+    name: "Parawada",
+    address: "Parawada, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.6300,
+    lng: 83.0800,
+    type: "landmark",
+    popularityScore: 35,
+    isInVizag: true
+  },
+  {
+    id: "narsipatnam",
+    name: "Narsipatnam",
+    address: "Narsipatnam, Andhra Pradesh",
+    city: "Visakhapatnam",
+    state: "Andhra Pradesh",
+    lat: 17.6800,
+    lng: 82.9800,
+    type: "landmark",
+    popularityScore: 30,
+    isInVizag: false
+  }
+];
+
 export function LocationInput({
   label,
   placeholder,
@@ -93,213 +301,6 @@ export function LocationInput({
       return nameMatch || addressMatch;
     });
   }, [searchQuery]);
-  
-  const vizagLocations: Location[] = [
-    {
-      id: "vizag-airport",
-      name: "Visakhapatnam Airport",
-      address: "Visakhapatnam Airport, NH16, Visakhapatnam, Andhra Pradesh 530009, India",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7167,
-      lng: 83.2167,
-      type: "airport",
-      popularityScore: 90,
-      isInVizag: true
-    },
-    {
-      id: "railway-station",
-      name: "Visakhapatnam Railway Station",
-      address: "Railway Station Rd, Dondaparthy, Visakhapatnam, Andhra Pradesh 530004",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7264,
-      lng: 83.3072,
-      type: "train_station", // Changed from railway_station to train_station
-      popularityScore: 85,
-      isInVizag: true
-    },
-    {
-      id: "dwaraka-nagar",
-      name: "Dwaraka Nagar",
-      address: "Dwaraka Nagar, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7204,
-      lng: 83.3094,
-      type: "landmark", // Changed from neighborhood to landmark
-      popularityScore: 75,
-      isInVizag: true
-    },
-    {
-      id: "rk-beach",
-      name: "RK Beach",
-      address: "RK Beach Rd, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7104,
-      lng: 83.3247,
-      type: "landmark", // Changed from beach to landmark
-      popularityScore: 80,
-      isInVizag: true
-    },
-    {
-      id: "jagadamba-center",
-      name: "Jagadamba Center",
-      address: "Jagadamba Junction, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7011,
-      lng: 83.3044,
-      type: "landmark", // Changed from shopping_center to landmark
-      popularityScore: 70,
-      isInVizag: true
-    },
-    {
-      id: "mvp-double-road",
-      name: "MVP Double Road",
-      address: "MVP Double Road, Sector 8, MVP Colony, Visakhapatnam",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7411,
-      lng: 83.3344,
-      type: "landmark", // Changed from shopping_area to landmark
-      popularityScore: 65,
-      isInVizag: true
-    },
-    {
-      id: "arilova",
-      name: "Arilova",
-      address: "Arilova, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7611,
-      lng: 83.3544,
-      type: "landmark", // Changed from residential to landmark
-      popularityScore: 60,
-      isInVizag: true
-    },
-    {
-      id: "simhachalam-temple",
-      name: "Simhachalam Temple",
-      address: "Simhachalam Rd, Simhachalam, Visakhapatnam, Andhra Pradesh 530028",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7811,
-      lng: 83.3744,
-      type: "landmark", // Changed from tourist_attraction to landmark
-      popularityScore: 70,
-      isInVizag: true
-    },
-    {
-      id: "kailasagiri",
-      name: "Kailasagiri",
-      address: "Kailasagiri, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7911,
-      lng: 83.3944,
-      type: "landmark", // Changed from tourist_attraction to landmark
-      popularityScore: 75,
-      isInVizag: true
-    },
-    {
-      id: "rushikonda-beach",
-      name: "Rushikonda Beach",
-      address: "Rushikonda Beach, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.8011,
-      lng: 83.4144,
-      type: "landmark", // Changed from beach to landmark
-      popularityScore: 80,
-      isInVizag: true
-    },
-    {
-      id: "bheemili",
-      name: "Bheemili",
-      address: "Bheemunipatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.8900,
-      lng: 83.4400,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 55,
-      isInVizag: true
-    },
-    {
-      id: "tagarapuvalasa",
-      name: "Tagarapuvalasa",
-      address: "Tagarapuvalasa, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.9300,
-      lng: 83.4000,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 50,
-      isInVizag: true
-    },
-    {
-      id: "pendurthi",
-      name: "Pendurthi",
-      address: "Pendurthi, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.7800,
-      lng: 83.2000,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 45,
-      isInVizag: true
-    },
-    {
-      id: "gajuwaka",
-      name: "Gajuwaka",
-      address: "Gajuwaka, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.6800,
-      lng: 83.2000,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 50,
-      isInVizag: true
-    },
-    {
-      id: "kurmannapalem",
-      name: "Kurmannapalem",
-      address: "Kurmannapalem, Visakhapatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.6500,
-      lng: 83.1800,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 40,
-      isInVizag: true
-    },
-    {
-      id: "parawada",
-      name: "Parawada",
-      address: "Parawada, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.6300,
-      lng: 83.0800,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 35,
-      isInVizag: true
-    },
-    {
-      id: "narsipatnam",
-      name: "Narsipatnam",
-      address: "Narsipatnam, Andhra Pradesh",
-      city: "Visakhapatnam",
-      state: "Andhra Pradesh",
-      lat: 17.6800,
-      lng: 82.9800,
-      type: "landmark", // Changed from town to landmark
-      popularityScore: 30,
-      isInVizag: false
-    }
-  ];
   
   return (
     <div className={cn("w-full mb-4", className)}>
