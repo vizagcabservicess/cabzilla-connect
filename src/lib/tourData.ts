@@ -1,4 +1,3 @@
-
 import { TourInfo, TourFares } from '@/types/cab';
 import { fareAPI } from '@/services/api';
 
@@ -68,7 +67,14 @@ export const loadTourFares = async (): Promise<TourFares> => {
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
           // Create an entry for each tour with all vehicle types
-          const fareEntry: Record<string, number> = {};
+          const fareEntry: Record<string, number> = {
+            // Ensure required properties are initialized with default values
+            sedan: tour.sedan || 0,
+            ertiga: tour.ertiga || 0,
+            innova: tour.innova || 0,
+            tempo: tour.tempo || 0,
+            luxury: tour.luxury || 0
+          };
           
           // Extract all vehicle prices from the tour fare object
           Object.entries(tour).forEach(([key, value]) => {
@@ -80,11 +86,6 @@ export const loadTourFares = async (): Promise<TourFares> => {
               fareEntry[key] = value;
             }
           });
-          
-          // Make sure required vehicle types are always present
-          fareEntry.sedan = tour.sedan || 0;
-          fareEntry.ertiga = tour.ertiga || 0;
-          fareEntry.innova = tour.innova || 0;
           
           dynamicTourFares[tour.tourId] = fareEntry;
         }

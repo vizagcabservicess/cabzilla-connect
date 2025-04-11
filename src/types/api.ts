@@ -1,4 +1,16 @@
+
 // API response types for the application
+
+// Define BookingStatus as a string union type
+export type BookingStatus = 
+  | 'pending'
+  | 'confirmed' 
+  | 'assigned'
+  | 'payment_received'
+  | 'payment_pending'
+  | 'completed'
+  | 'continued'
+  | 'cancelled';
 
 export interface TourFare {
   id: number;
