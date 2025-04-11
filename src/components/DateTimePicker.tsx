@@ -51,7 +51,10 @@ export function DateTimePicker({
     setSelectedTime(e.target.value);
   };
 
-  const handleApply = () => {
+  const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Prevent default to avoid any browser default behavior
+    e.preventDefault();
+    
     if (!selectedTime) return;
 
     const [hours, minutes] = selectedTime.split(":").map(Number);
@@ -105,13 +108,14 @@ export function DateTimePicker({
               onChange={handleTimeChange}
               className="max-w-[80px]"
             />
-            <Button 
+            <button 
               onClick={handleApply}
-              className="whitespace-nowrap"
-              style={{touchAction: "manipulation"}}
+              className="h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+              type="button"
+              data-testid="apply-time-button"
             >
               Apply Time
-            </Button>
+            </button>
           </div>
         </PopoverContent>
       </Popover>
