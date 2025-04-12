@@ -114,11 +114,18 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     console.log(`No specific airport fare found for vehicle ${cabType.id}, fetching all fares`);
     const airportFaresResponse = await fareService.getAirportFares();
     
-    // Check if response contains fares array
-    if (airportFaresResponse && airportFaresResponse.fares && 
-        Array.isArray(airportFaresResponse.fares) && airportFaresResponse.fares.length > 0) {
+    // Check if response contains fares array and has status success
+    if (airportFaresResponse && 
+        airportFaresResponse.status === "success" && 
+        airportFaresResponse.data && 
+        airportFaresResponse.data.fares && 
+        Array.isArray(airportFaresResponse.data.fares) && 
+        airportFaresResponse.data.fares.length > 0) {
+      
+      console.log("Successfully received airport fares data:", airportFaresResponse.data);
+      
       // Try to find an exact match first
-      const matchingFare = airportFaresResponse.fares.find((fare: any) => 
+      const matchingFare = airportFaresResponse.data.fares.find((fare: any) => 
         fare.vehicle_id === cabType.id || 
         fare.vehicleId === cabType.id ||
         fare.vehicle_id === normalizedVehicleId || 
@@ -135,6 +142,22 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fareCache.fares[possibleCacheKeys[0]] = matchingFare.basePrice;
         return matchingFare.basePrice;
       }
+      
+      // If no exact vehicle match but we have fares, use the first one as fallback
+      if (airportFaresResponse.data.fares.length > 0 && 
+          airportFaresResponse.data.fares[0].basePrice) {
+        const firstFare = airportFaresResponse.data.fares[0].basePrice;
+        console.log(`No exact match found, using first available fare: ${firstFare}`);
+        
+        // Save to localStorage for future use
+        localStorage.setItem(possibleLocalStorageKeys[0], firstFare.toString());
+        
+        // Cache and return the first fare
+        fareCache.fares[possibleCacheKeys[0]] = firstFare;
+        return firstFare;
+      }
+    } else if (airportFaresResponse && airportFaresResponse.status === "success") {
+      console.log("API returned success but no valid fare data structure:", airportFaresResponse);
     }
     
     // Fallback calculation if API doesn't return a valid fare

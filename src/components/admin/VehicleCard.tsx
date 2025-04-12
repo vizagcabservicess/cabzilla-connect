@@ -129,19 +129,25 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   }
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4">
+    <Card className="overflow-hidden hover:shadow-md transition-all">
+      <CardContent className="p-5">
         <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-semibold text-lg">{name}</h3>
-            <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
-              <span>{capacity} Seats</span>
-              <span className="mx-1">•</span>
-              <span>{vehicle.luggageCapacity} Luggage</span>
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
+              {image ? (
+                <img src={image} alt={name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-gray-400 text-xs">{name.charAt(0)}</span>
+              )}
             </div>
-            <p className="text-sm mt-2 text-gray-600 line-clamp-2">
-              {formatAmenities(vehicle.amenities || [])}
-            </p>
+            <div>
+              <h3 className="font-semibold text-lg">{name}</h3>
+              <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+                <span>{capacity} Seats</span>
+                <span className="mx-1">•</span>
+                <span>{vehicle.luggageCapacity} Luggage</span>
+              </div>
+            </div>
           </div>
           
           <div className="flex gap-2 items-start">
@@ -182,7 +188,15 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
           </div>
         </div>
         
-        <div className="mt-4 flex justify-between items-center">
+        {vehicle.amenities && vehicle.amenities.length > 0 && (
+          <div className="mt-3 pt-2">
+            <p className="text-sm text-gray-600 line-clamp-2">
+              {formatAmenities(vehicle.amenities)}
+            </p>
+          </div>
+        )}
+        
+        <div className="mt-4 pt-3 border-t flex justify-between items-center">
           <div>
             <span className="text-lg font-bold">₹{vehicle.basePrice || vehicle.price || 0}</span>
             <span className="text-sm text-gray-500 ml-1">base price</span>
