@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { User } from '@/types/api';
@@ -44,8 +43,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   error => {
+    // Log error details for debugging
     console.error(`API Error for ${error.config?.url || 'unknown endpoint'}:`, 
       error.response?.data || error.message);
+    
+    // Handle common errors
+    if (axios.isAxiosError(error) && !error.response) {
+      // Network error - convert to a more user-friendly message
+      console.log('Network error detected, converting to user-friendly message');
+      return Promise.reject(new Error('Network connection error. Please check your internet connection and try again.'));
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -130,11 +138,34 @@ export const authAPI = {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(USER_DATA_KEY);
       
-      const response = await apiClient.post(getApiUrl('/api/login'), credentials, {
-        headers: {
-          ...forceRefreshHeaders
+      // Try multiple API endpoints for better reliability
+      let response;
+      let error;
+      
+      try {
+        // First try the main login endpoint
+        response = await apiClient.post(getApiUrl('/api/login'), credentials, {
+          headers: {
+            ...forceRefreshHeaders
+          }
+        });
+      } catch (err) {
+        error = err;
+        console.warn('First login attempt failed:', err);
+        
+        try {
+          // Try a different path just in case
+          response = await apiClient.post(getApiUrl('/api/auth/login'), credentials, {
+            headers: {
+              ...forceRefreshHeaders
+            }
+          });
+        } catch (err2) {
+          console.warn('Second login attempt failed:', err2);
+          // If both failed, throw the original error
+          throw error;
         }
-      });
+      }
       
       console.log('Login response status:', response.status);
       
@@ -148,18 +179,22 @@ export const authAPI = {
         }
         
         console.log('Login successful, token and user data stored');
+        return response.data;
       } else {
         console.error('Login response missing token:', response.data);
         throw new Error('Authentication failed: Invalid server response');
       }
-      
-      return response.data;
     } catch (error) {
       console.error('Login error:', error);
       
       // Special case for network errors - provide helpful message
       if (axios.isAxiosError(error) && !error.response) {
         throw new Error('Network error: Could not connect to server. Check your internet connection.');
+      }
+      
+      // If server returns 401, provide more specific error
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        throw new Error('Invalid email or password. Please try again.');
       }
       
       throw error;
@@ -232,15 +267,35 @@ export const authAPI = {
           // Try different API endpoints to get user data
           let response;
           
-          try {
-            response = await apiClient.get(getApiUrl('/api/user'), {
-              headers: forceRefreshHeaders
-            });
-          } catch (err) {
-            console.warn('Failed to get user from /api/user, trying /api/user/profile');
-            response = await apiClient.get(getApiUrl('/api/user/profile'), {
-              headers: forceRefreshHeaders
-            });
+          // Try multiple endpoints to be more resilient
+          const endpoints = [
+            '/api/user',
+            '/api/user/profile',
+            '/api/me',
+            '/api/auth/me'
+          ];
+          
+          console.log('Trying multiple user endpoints for reliability');
+          
+          for (const endpoint of endpoints) {
+            try {
+              console.log(`Trying endpoint: ${endpoint}`);
+              response = await apiClient.get(getApiUrl(endpoint), {
+                headers: forceRefreshHeaders
+              });
+              
+              if (response.data) {
+                console.log(`Successfully got user data from ${endpoint}`);
+                break; // Exit the loop if any endpoint succeeds
+              }
+            } catch (endpointError) {
+              console.warn(`Endpoint ${endpoint} failed:`, endpointError.message);
+              // Continue to next endpoint
+            }
+          }
+          
+          if (!response) {
+            throw new Error('All user data endpoints failed');
           }
           
           if (response.data && response.data.user) {
@@ -259,6 +314,7 @@ export const authAPI = {
         } catch (err) {
           error = err;
           retries++;
+          console.log(`Retry ${retries}/${maxRetries} for user data`);
           await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
         }
       }
@@ -341,7 +397,6 @@ export const authAPI = {
     localStorage.removeItem('user');
   },
 
-  // Only include critical methods to reduce file size
   getAllUsers: async (): Promise<User[]> => {
     try {
       console.log('Fetching all users...');

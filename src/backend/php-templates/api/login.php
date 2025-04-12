@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
     header('Content-Type: application/json');
     http_response_code(200);
     exit;
@@ -19,8 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Set CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
     header('Content-Type: application/json');
+    
+    // Check if this is a test request
+    $headers = getallheaders();
+    if (isset($headers['X-Test']) && $headers['X-Test'] === 'true') {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'API endpoint accessible',
+            'test' => true,
+            'timestamp' => time()
+        ]);
+        exit;
+    }
     
     // Send friendly response for direct browser access
     echo json_encode([
@@ -36,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     // Add CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
     
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
