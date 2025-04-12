@@ -1,4 +1,3 @@
-
 // API configuration for all endpoints
 
 // Import from config
@@ -6,7 +5,7 @@ import { apiBaseUrl, getApiUrl } from '@/config/api';
 import { safeFetch, safeJsonParse, getAuthHeaders } from '@/config/requestConfig';
 
 // Import types
-import { Booking, DashboardMetrics, BookingStatus } from '@/types/api';
+import { Booking, DashboardMetrics, BookingStatus, User } from '@/types/api';
 
 // Base API service
 class ApiService {
@@ -201,9 +200,9 @@ export const authAPI = {
     return !!localStorage.getItem('token');
   },
   
-  getCurrentUser: async () => {
+  getCurrentUser: async (): Promise<User | null> => {
     try {
-      return await api.get('/api/user');
+      return await api.get<User>('/api/user');
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;
@@ -211,7 +210,7 @@ export const authAPI = {
   },
   
   login: async (credentials: { email: string; password: string }) => {
-    const response = await api.post('/api/login', credentials);
+    const response = await api.post<{token: string; user: User}>('/api/login', credentials);
     if (response && response.token) {
       localStorage.setItem('token', response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
@@ -226,6 +225,20 @@ export const authAPI = {
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+  },
+  
+  isAdmin: (): boolean => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user.role === 'admin';
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
   }
 };
 
@@ -276,11 +289,24 @@ export const bookingAPI = {
     return await api.put(`/api/admin/booking/${id}`, { status });
   },
   
+  updateBooking: async (id: number | string, bookingData: any): Promise<Booking> => {
+    return await api.put(`/api/booking/${id}`, bookingData);
+  },
+  
   cancelBooking: async (id: number | string): Promise<any> => {
     return await api.put(`/api/booking/${id}/cancel`, {});
   },
   
   getAdminBookings: async (status?: BookingStatus): Promise<Booking[]> => {
+    const endpoint = status && status !== 'all' 
+      ? `/api/admin/booking?status=${status}` 
+      : '/api/admin/booking';
+      
+    const response = await api.get<{bookings: Booking[], status: string}>(endpoint);
+    return response && response.bookings ? response.bookings : [];
+  },
+  
+  getAllBookings: async (status?: BookingStatus | 'all'): Promise<Booking[]> => {
     const endpoint = status && status !== 'all' 
       ? `/api/admin/booking?status=${status}` 
       : '/api/admin/booking';
@@ -295,6 +321,49 @@ export const bookingAPI = {
   
   deleteBooking: async (id: number | string): Promise<any> => {
     return await api.delete(`/api/admin/booking/${id}`);
+  }
+};
+
+// Fare API for managing vehicle fares and pricing
+export const fareAPI = {
+  getLocalFares: async () => {
+    return await api.get('/api/fares/local');
+  },
+  
+  getAirportFares: async () => {
+    return await api.get('/api/fares/airport');
+  },
+  
+  getOutstationFares: async () => {
+    return await api.get('/api/fares/outstation');
+  },
+  
+  getTourFares: async () => {
+    return await api.get('/api/fares/tours');
+  },
+  
+  getVehiclePricing: async (vehicleId: number | string) => {
+    return await api.get(`/api/admin/vehicle-pricing/${vehicleId}`);
+  },
+  
+  updateVehiclePricing: async (vehicleId: number | string, pricingData: any) => {
+    return await api.put(`/api/admin/vehicle-pricing/${vehicleId}`, pricingData);
+  },
+  
+  updateLocalFares: async (fareData: any) => {
+    return await api.put('/api/admin/fare-update/local', fareData);
+  },
+  
+  updateAirportFares: async (fareData: any) => {
+    return await api.put('/api/admin/fare-update/airport', fareData);
+  },
+  
+  updateOutstationFares: async (fareData: any) => {
+    return await api.put('/api/admin/fare-update/outstation', fareData);
+  },
+  
+  updateTourFares: async (fareData: any) => {
+    return await api.put('/api/admin/fare-update/tours', fareData);
   }
 };
 

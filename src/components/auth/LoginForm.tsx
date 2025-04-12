@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
-import { LoginRequest } from '@/types/api';
+import { LoginRequest, LoginResponse } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -212,7 +212,7 @@ export function LoginForm() {
       }
       
       // Attempt login
-      const response = await authAPI.login(values);
+      const response = await authAPI.login(values) as LoginResponse;
       
       if (response && response.token) {
         // Login succeeded, update toast
