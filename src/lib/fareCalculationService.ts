@@ -116,9 +116,12 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     
     // Check if response contains fares array and has status success
     if (airportFaresResponse && 
+        typeof airportFaresResponse === 'object' &&
+        'status' in airportFaresResponse &&
         airportFaresResponse.status === "success" && 
+        'data' in airportFaresResponse &&
         airportFaresResponse.data && 
-        airportFaresResponse.data.fares && 
+        'fares' in airportFaresResponse.data &&
         Array.isArray(airportFaresResponse.data.fares) && 
         airportFaresResponse.data.fares.length > 0) {
       
@@ -156,7 +159,10 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fareCache.fares[possibleCacheKeys[0]] = firstFare;
         return firstFare;
       }
-    } else if (airportFaresResponse && airportFaresResponse.status === "success") {
+    } else if (airportFaresResponse && 
+              typeof airportFaresResponse === 'object' &&
+              'status' in airportFaresResponse &&
+              airportFaresResponse.status === "success") {
       console.log("API returned success but no valid fare data structure:", airportFaresResponse);
     }
     
