@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -11,7 +12,7 @@ if (file_exists(__DIR__ . '/../common/db_helper.php')) {
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-User-ID, X-Force-User-Match');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -32,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Get user ID from JWT token
+// Get user ID from multiple sources in priority order
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
@@ -54,7 +55,7 @@ foreach ($headers as $key => $value) {
         $explicitUserId = intval($value);
         if ($explicitUserId > 0) {
             error_log("Using explicit user ID from header: $explicitUserId");
-            // Don't set $userId yet - we'll validate it against the token first
+            $userId = $explicitUserId; // Set initially, will validate against token below
         }
     }
 }
@@ -63,7 +64,9 @@ foreach ($headers as $key => $value) {
 if (isset($_GET['user_id']) && !empty($_GET['user_id'])) {
     $queryUserId = intval($_GET['user_id']);
     error_log("user_id in query string: $queryUserId");
-    // Don't set $userId yet - we'll validate it below
+    if (!$userId || $queryUserId > 0) {
+        $userId = $queryUserId; // Use query parameter if no header value or if it's a valid ID
+    }
 }
 
 // Extract authorization header manually - handle both camel case and lowercase
@@ -75,6 +78,8 @@ foreach($headers as $key => $value) {
     }
 }
 
+$tokenUserId = null;
+
 if ($authHeader) {
     $token = str_replace('Bearer ', '', $authHeader);
     
@@ -84,9 +89,9 @@ if ($authHeader) {
         if (function_exists('verifyJwtToken')) {
             $payload = verifyJwtToken($token);
             if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
+                $tokenUserId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                error_log("User authenticated from token: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+                error_log("User authenticated from token: $tokenUserId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             } else {
                 error_log("Token payload missing user_id: " . json_encode($payload));
             }
@@ -97,9 +102,9 @@ if ($authHeader) {
             if (count($tokenParts) >= 2) {
                 $payload = json_decode(base64_decode($tokenParts[1]), true);
                 if ($payload && isset($payload['user_id'])) {
-                    $userId = $payload['user_id'];
+                    $tokenUserId = $payload['user_id'];
                     $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                    error_log("Manually extracted user from token: $userId");
+                    error_log("Manually extracted user from token: $tokenUserId");
                 }
             }
         }
@@ -108,22 +113,22 @@ if ($authHeader) {
     }
 }
 
-// Now validate and override userId if necessary
-if (isset($queryUserId) && $queryUserId > 0) {
-    if ($isAdmin || $queryUserId == $userId) {
-        error_log("Using user ID from query string: $queryUserId (original token ID: $userId)");
-        $userId = $queryUserId;
-    } else {
-        error_log("Query user ID ($queryUserId) doesn't match token user ID ($userId) and user is not admin");
-    }
+// Now decide which user ID to use, with explicit parameters taking precedence
+// 1. If no userId from query/header, use token
+if (!$userId && $tokenUserId) {
+    $userId = $tokenUserId;
+    error_log("Using user ID from token: $userId");
 }
-
-if (isset($explicitUserId) && $explicitUserId > 0) {
-    if ($isAdmin || $explicitUserId == $userId) {
-        error_log("Using user ID from header: $explicitUserId (original token ID: $userId)");
-        $userId = $explicitUserId;
+// 2. If userId from query/header doesn't match token and not admin, verify rights
+else if ($userId && $tokenUserId && $userId != $tokenUserId && !$isAdmin) {
+    if ($forceUserMatch) {
+        error_log("Force user match is true, using token's user ID: $tokenUserId instead of: $userId");
+        $userId = $tokenUserId;
     } else {
-        error_log("Header user ID ($explicitUserId) doesn't match token user ID ($userId) and user is not admin");
+        error_log("Query/header user ID ($userId) doesn't match token user ID ($tokenUserId) and user is not admin");
+        // Admin users can view other users' bookings, but normal users should only see their own
+        // If a normal user tries to view someone else's bookings, use their own ID instead
+        $userId = $tokenUserId;
     }
 }
 
@@ -188,20 +193,35 @@ try {
             
             // Prepare the SQL query based on user role
             if ($isAdmin) {
-                // Admins can see all bookings
-                $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
-                $stmt = $conn->prepare($sql);
-            } else {
-                // Regular users see only their bookings, or return all if no userId
+                // Admins can see all bookings or filter by user_id if provided
                 if ($userId) {
                     $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
                     $stmt = $conn->prepare($sql);
                     $stmt->bind_param("i", $userId);
+                    error_log("Admin user querying for specific user ID: $userId");
                 } else {
-                    // Debug mode - return sample data if no user ID found
-                    error_log("No user ID available, returning first 5 bookings for debug");
-                    $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 5";
+                    $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
                     $stmt = $conn->prepare($sql);
+                    error_log("Admin user querying for all bookings");
+                }
+            } else {
+                // Regular users see only their bookings
+                if ($userId) {
+                    $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("i", $userId);
+                    error_log("Regular user querying own bookings with ID: $userId");
+                } else {
+                    // No user ID available - shouldn't happen, but handle it gracefully
+                    error_log("No user ID available for filtering bookings, returning empty array");
+                    echo json_encode([
+                        'status' => 'error', 
+                        'message' => 'No user ID available to fetch bookings',
+                        'bookings' => [],
+                        'userId' => null,
+                        'isAdmin' => false
+                    ]);
+                    exit;
                 }
             }
             
@@ -245,7 +265,7 @@ try {
             }
             
             $dataSource = 'database';
-            error_log("Successfully retrieved " . count($bookings) . " bookings from database");
+            error_log("Successfully retrieved " . count($bookings) . " bookings from database for user ID: $userId");
             
         } catch (Exception $e) {
             error_log("Error fetching bookings from database: " . $e->getMessage());

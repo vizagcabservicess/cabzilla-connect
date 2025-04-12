@@ -49,6 +49,7 @@ export function LoginForm() {
     sessionStorage.removeItem('auth_token');
     localStorage.removeItem('userData');
     localStorage.removeItem('user');
+    localStorage.removeItem('userId'); // Also clear userId to prevent using wrong ID
     
     // Only test connection on component mount if we have an API URL
     if (url) {
@@ -196,12 +197,13 @@ export function LoginForm() {
       // Display a toast to show login is in progress
       toast.loading('Logging in...', { id: 'login-toast' });
       
-      // Clear any existing tokens first
+      // Clear any existing tokens and user data first
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
       localStorage.removeItem('userData');
       localStorage.removeItem('user');
+      localStorage.removeItem('userId'); // Clear userId explicitly
       
       // Log form values for debugging (only email for privacy)
       console.log("Login attempt with email:", values.email);
@@ -232,6 +234,9 @@ export function LoginForm() {
         // Store user data for easier access
         if (response.user) {
           localStorage.setItem('userData', JSON.stringify(response.user));
+          // Store user ID separately for explicit access
+          localStorage.setItem('userId', response.user.id.toString());
+          console.log(`Stored user ID ${response.user.id} in localStorage`);
         }
         
         // Add a slight delay before redirecting to ensure token is saved

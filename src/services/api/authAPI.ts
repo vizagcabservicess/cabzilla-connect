@@ -22,6 +22,26 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // Add user ID from userData if available
+    const userDataStr = localStorage.getItem(USER_DATA_KEY);
+    if (userDataStr) {
+      try {
+        const userData = JSON.parse(userDataStr);
+        if (userData && userData.id) {
+          // Add user ID to all requests
+          config.params = {
+            ...config.params,
+            user_id: userData.id
+          };
+          
+          // Add as header for systems that might need it
+          config.headers['X-User-ID'] = userData.id;
+        }
+      } catch (e) {
+        console.warn('Failed to parse user data for request headers', e);
+      }
+    }
+    
     // Add cache busting to GET requests
     if (config.method === 'get') {
       config.params = {
@@ -182,6 +202,9 @@ export const authAPI = {
         // Store user data separately
         if (response.data.user) {
           localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+          
+          // Log the stored user ID for debugging
+          console.log(`Login successful, stored user ID: ${response.data.user.id}`);
         }
         
         console.log('Login successful, token and user data stored');

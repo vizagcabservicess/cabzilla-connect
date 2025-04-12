@@ -53,10 +53,15 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
-          // Store userId in localStorage for API requests
+          // Store userId in localStorage for API requests - but don't overwrite if exists
           if (userData.id) {
-            localStorage.setItem('userId', userData.id.toString());
-            console.log(`Stored user ID ${userData.id} in localStorage`);
+            const currentStoredId = localStorage.getItem('userId');
+            if (!currentStoredId || currentStoredId !== userData.id.toString()) {
+              localStorage.setItem('userId', userData.id.toString());
+              console.log(`Stored user ID ${userData.id} in localStorage`);
+            } else {
+              console.log(`User ID ${userData.id} already stored in localStorage`);
+            }
           }
           
           setUser({
@@ -93,118 +98,72 @@ export default function DashboardPage() {
       setIsRefreshing(true);
       setError(null);
       
-      console.log('Fetching bookings for user ID:', localStorage.getItem('userId'));
-      const data = await bookingAPI.getUserBookings();
+      // Get the user ID from localStorage or user state
+      const userId = user?.id || localStorage.getItem('userId');
+      console.log('Fetching bookings for user ID:', userId);
+      
+      const data = await bookingAPI.getUserBookings(userId ? Number(userId) : undefined);
       
       console.log('Bookings data received:', data);
       setBookings(Array.isArray(data) ? data : []);
       setRetryCount(0);
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
+      setError(error as Error);
       
-      if (retryCount === 0) {
-        toast.error('Error loading bookings. Retrying...');
-      }
-      
-      setRetryCount(prev => prev + 1);
-      
+      // Retry logic
       if (retryCount < MAX_RETRIES) {
+        setRetryCount(prevCount => prevCount + 1);
         setTimeout(() => {
+          console.log(`Retrying booking fetch (${retryCount + 1}/${MAX_RETRIES})...`);
           fetchBookings();
-        }, 3000);
+        }, 2000 * Math.pow(2, retryCount));
       }
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
+      setIsLoading(false);
     }
-  }, [navigate, retryCount]);
+  }, [navigate, retryCount, user]);
 
-  const fetchAdminMetrics = useCallback(async () => {
-    if (!isAdmin) return;
+  useEffect(() => {
+    if (user?.id) {
+      fetchBookings();
+    }
+  }, [fetchBookings, user]);
+
+  const fetchAdminMetrics = useCallback(async (period: string = 'week', status: string = 'all') => {
+    if (!isAdmin || !user) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
       
-      console.log('Fetching admin dashboard metrics with user ID:', localStorage.getItem('userId'));
+      // Get the user ID from localStorage or user state
+      const userId = user?.id || localStorage.getItem('userId');
+      console.log(`Fetching admin metrics with user ID: ${userId}, period: ${period}, status: ${status}`);
       
-      const data = await bookingAPI.getAdminDashboardMetrics('week');
+      const metrics = await bookingAPI.getAdminDashboardMetrics(period, status, userId ? Number(userId) : undefined);
       
-      if (!data) {
-        console.error('No data returned from getAdminDashboardMetrics');
-        throw new Error('No dashboard metrics data received');
-      }
-      
-      console.log('Admin metrics received:', data);
-      
-      // Create safe metrics object with defaults for missing fields
-      const safeMetrics: DashboardMetricsType = {
-        ...DEFAULT_METRICS,
-        ...data
-      };
-      
-      // Handle different types of availableStatuses
-      if (!safeMetrics.availableStatuses) {
-        console.log('Adding missing availableStatuses array');
-        safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-      } else if (!Array.isArray(safeMetrics.availableStatuses)) {
-        console.log('Converting non-array availableStatuses to array:', safeMetrics.availableStatuses);
-        
-        if (typeof safeMetrics.availableStatuses === 'string') {
-          // Convert comma-separated string to array
-          safeMetrics.availableStatuses = (safeMetrics.availableStatuses as string)
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s !== '') as BookingStatus[];
-        } else if (typeof safeMetrics.availableStatuses === 'object' && safeMetrics.availableStatuses !== null) {
-          // Convert object to array of values
-          safeMetrics.availableStatuses = Object.values(safeMetrics.availableStatuses) as BookingStatus[];
-        } else {
-          // Fallback to default array
-          safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-        }
-      }
-      
-      // Final safety check to ensure it's a valid array
-      if (!Array.isArray(safeMetrics.availableStatuses) || safeMetrics.availableStatuses.length === 0) {
-        safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-      }
-      
-      // Ensure all numeric values are numbers
-      safeMetrics.totalBookings = Number(safeMetrics.totalBookings) || 0;
-      safeMetrics.activeRides = Number(safeMetrics.activeRides) || 0;
-      safeMetrics.totalRevenue = Number(safeMetrics.totalRevenue) || 0;
-      safeMetrics.availableDrivers = Number(safeMetrics.availableDrivers) || 0;
-      safeMetrics.busyDrivers = Number(safeMetrics.busyDrivers) || 0;
-      safeMetrics.avgRating = Number(safeMetrics.avgRating) || 0;
-      safeMetrics.upcomingRides = Number(safeMetrics.upcomingRides) || 0;
-      
-      console.log('Processed safe metrics:', safeMetrics);
-      setAdminMetrics(safeMetrics);
+      console.log('Admin metrics loaded:', metrics);
+      setAdminMetrics(metrics || DEFAULT_METRICS);
     } catch (error) {
-      console.error('Error fetching admin metrics:', error);
+      console.error('Error loading admin metrics:', error);
+      setAdminMetricsError(error as Error);
+      setAdminMetrics(DEFAULT_METRICS);
       
-      const fallbackMetrics: DashboardMetricsType = {
-        ...DEFAULT_METRICS
-      };
-      
-      setAdminMetrics(fallbackMetrics);
-      setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
+      toast.error('Error loading metrics', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
-
-  useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && user?.id) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics]);
+  }, [fetchAdminMetrics, isAdmin, user]);
 
   const handleLogout = () => {
     authAPI.logout();
@@ -233,6 +192,18 @@ export default function DashboardPage() {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (error && !isRefreshing) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <ApiErrorFallback 
+          error={error} 
+          onRetry={fetchBookings}
+          title="Error Loading Dashboard"
+        />
+      </div>
+    );
+  }
 
   if (isLoading && !error) {
     return (

@@ -1,4 +1,3 @@
-
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../../config.php';
@@ -8,7 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-User-ID');
     header('Content-Type: application/json');
     http_response_code(200);
     exit;
@@ -19,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     // Add CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-User-ID');
     header('Content-Type: application/json');
     
     http_response_code(405);
@@ -35,7 +34,7 @@ header("Expires: 0");
 // Add CORS headers for all responses
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-User-ID');
 header('Content-Type: application/json');
 
 // Log start of request processing
@@ -58,12 +57,28 @@ try {
     // Get the timestamp to help prevent caching
     $timestamp = isset($_GET['_t']) ? $_GET['_t'] : time();
     
+    // Explicitly get user_id from different sources (in priority order)
+    // 1. Query parameter
+    $userIdFromQuery = isset($_GET['user_id']) ? intval($_GET['user_id']) : null;
+    
+    // 2. Header parameter (X-User-ID)
+    $headers = getallheaders();
+    $userIdFromHeader = null;
+    foreach ($headers as $key => $value) {
+        if (strtolower($key) === 'x-user-id' && !empty($value)) {
+            $userIdFromHeader = intval($value);
+            break;
+        }
+    }
+    
     // Log the parameters
     logError("Request parameters", [
         'period' => $period,
         'status' => $statusFilter,
         'timestamp' => $timestamp,
-        'admin' => $isAdminMetricsRequest ? 'true' : 'false'
+        'admin' => $isAdminMetricsRequest ? 'true' : 'false',
+        'user_id_query' => $userIdFromQuery,
+        'user_id_header' => $userIdFromHeader
     ]);
     
     // Authenticate user with improved logging
@@ -120,11 +135,13 @@ try {
         exit;
     }
     
-    $userId = $userData['user_id'];
+    // Use the explicit user_id from query or header parameters if provided, otherwise use the one from token
+    $userId = $userIdFromQuery ?: ($userIdFromHeader ?: $userData['user_id']);
     $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
     
     logError("User authenticated successfully", [
-        'user_id' => $userId, 
+        'user_id_from_token' => $userData['user_id'],
+        'user_id_used' => $userId,
         'is_admin' => $isAdmin ? 'true' : 'false',
         'token_parts' => substr_count($token, '.') + 1
     ]);
@@ -138,7 +155,11 @@ try {
 
     // If this is an admin metrics request and the user is an admin
     if ($isAdmin) {
-        logError("Processing admin metrics request", ['period' => $period, 'status' => $statusFilter]);
+        logError("Processing admin metrics request", [
+            'period' => $period, 
+            'status' => $statusFilter,
+            'user_id' => $userId
+        ]);
         
         // Get date range based on period
         $dateCondition = "";
@@ -162,6 +183,17 @@ try {
             } else {
                 $dateCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "'";
             }
+        }
+        
+        // Add user_id filter for the specific admin if we have it
+        if ($userId) {
+            if (strpos($dateCondition, 'WHERE') !== false) {
+                $dateCondition .= " AND user_id = " . intval($userId);
+            } else {
+                $dateCondition = "WHERE user_id = " . intval($userId);
+            }
+            
+            logError("Added user_id filter to SQL condition", ['user_id' => $userId]);
         }
         
         // Log the SQL condition being used
@@ -270,7 +302,10 @@ try {
             'currentFilter' => $statusFilter
         ];
         
-        logError("Sending admin metrics response", ['metrics' => $metricsData, 'period' => $period]);
+        logError("Sending admin metrics response", ['metrics' => $metricsData, 'period' => $period, 'user_id' => $userId]);
+        
+        // Always include current user_id in the response for verification
+        $metricsData['userId'] = $userId;
         
         // Return the metrics data - ensure we return as data property
         sendJsonResponse(['status' => 'success', 'data' => $metricsData]);
@@ -337,8 +372,8 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
-    // Use the consistent response format - always send as an array property
-    sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
+    // Use the consistent response format - always send as an array property with userId
+    sendJsonResponse(['status' => 'success', 'bookings' => $bookings, 'userId' => $userId]);
     
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [
