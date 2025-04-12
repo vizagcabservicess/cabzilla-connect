@@ -11,39 +11,44 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $conn = getDbConnection();
 
 try {
-    // Get ONLY vehicles from the vehicles table
-    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name ASC";
+    // Get all vehicle types to ensure consistent mapping
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
     $vehicleMapping = [];
-    $normalizedColumns = [];
+    $normalizedColumns = [
+        'sedan' => 'sedan',
+        'ertiga' => 'ertiga',
+        'innova' => 'innova',
+        'tempo' => 'tempo',
+        'luxury' => 'luxury',
+        'innova_crysta' => 'innova_crysta',
+        'tempo_traveller' => 'tempo_traveller',
+        'mpv' => 'mpv',
+        'toyota' => 'toyota',
+        'dzire_cng' => 'dzire_cng',
+        'etios' => 'etios'
+    ];
     
-    // Log for debugging
-    error_log("Tours API: Fetching ONLY from vehicles table");
-    
-    // Build vehicle mapping ONLY from vehicles table
+    // Build complete vehicle mapping from database
     if ($vehiclesResult) {
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $id = $vehicle['id'];
             $vehicleId = $vehicle['vehicle_id'];
             $name = $vehicle['name'];
             
-            if (empty($vehicleId)) continue;
-            
-            // Create normalized column name based on vehicle_id for consistent mapping
-            $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));
+            // Create normalized column name
+            $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId ?: $name));
             
             // Add to mapping
             $vehicleMapping[$id] = $normalizedColumn;
             $vehicleMapping[$vehicleId] = $normalizedColumn;
-            
-            // Also add lowercase versions
+            $vehicleMapping[$name] = $normalizedColumn;
             $vehicleMapping[strtolower($vehicleId)] = $normalizedColumn;
+            $vehicleMapping[strtolower($name)] = $normalizedColumn;
             
             // Add to normalized columns
-            $normalizedColumns[$normalizedColumn] = $vehicleId;
-            
-            error_log("Tours API: Vehicle mapping: {$id} -> {$normalizedColumn} (from vehicle_id: {$vehicleId})");
+            $normalizedColumns[$normalizedColumn] = $normalizedColumn;
         }
     }
     
@@ -63,39 +68,38 @@ try {
             'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
         
-        // Process columns that match our vehicle mapping from the vehicles table ONLY
+        // Add all vehicle types from normalized columns
+        foreach ($normalizedColumns as $columnKey => $columnName) {
+            if (isset($row[$columnName])) {
+                $tourFare[$columnKey] = floatval($row[$columnName]);
+            } else {
+                $tourFare[$columnKey] = 0;
+            }
+        }
+        
+        // Add any additional vehicle types that might be in the database
         foreach ($row as $key => $value) {
-            // Skip non-vehicle columns
+            // Skip non-vehicle columns and ones we've already processed
             if (in_array($key, ['id', 'tour_id', 'tour_name', 'distance', 'days', 'created_at', 'updated_at'])) {
                 continue;
             }
             
-            // Only include columns that match our vehicle mapping from the vehicles table
-            $foundMatch = false;
-            foreach ($normalizedColumns as $normalizedVehicleColumn => $originalVehicleId) {
-                if (strtolower($key) === strtolower($normalizedVehicleColumn)) {
-                    $tourFare[$normalizedVehicleColumn] = floatval($value);
-                    $foundMatch = true;
-                    error_log("Tours API: Found matching column {$key} for vehicle {$originalVehicleId}");
-                    break;
-                }
+            // Skip columns we've already added
+            if (in_array($key, array_values($normalizedColumns))) {
+                continue;
             }
             
-            // Log skipped columns for debugging
-            if (!$foundMatch) {
-                error_log("Tours API: Skipping column {$key} as it doesn't match any vehicle from the vehicles table");
+            // Add any numeric value that might be a vehicle price
+            if (is_numeric($value)) {
+                $tourFare[$key] = floatval($value);
             }
         }
         
         $tourFares[] = $tourFare;
     }
 
-    // Send response as a simple array and add original vehicle IDs for debugging
-    sendJsonResponse([
-        'fares' => $tourFares,
-        'vehicleMappings' => $normalizedColumns
-    ]);
-    
+    // Send response as a simple array, not an object with numbered keys
+    sendJsonResponse($tourFares);
 } catch (Exception $e) {
     logError("Error fetching tour fares", ['error' => $e->getMessage()]);
     sendJsonResponse(['error' => 'Failed to fetch tour fares: ' . $e->getMessage()], 500);
@@ -103,7 +107,6 @@ try {
 
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
-    header('Content-Type: application/json');
     echo json_encode($data);
     exit;
 }

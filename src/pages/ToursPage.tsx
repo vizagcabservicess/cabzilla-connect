@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -16,7 +17,7 @@ import { TripType } from "@/lib/tripTypes";
 import { CabType, TourFares } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bookingAPI, fareAPI } from "@/services/api";
+import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { TourPackageSelector } from "@/components/TourPackageSelector";
 
@@ -33,37 +34,14 @@ const ToursPage = () => {
   const [dynamicTourFares, setDynamicTourFares] = useState<TourFares>(tourFares);
   const [isLoadingFares, setIsLoadingFares] = useState(false);
   
-  useEffect(() => {
-    const savedTour = sessionStorage.getItem('selectedTour');
-    if (savedTour) {
-      console.log(`Restoring previously selected tour: ${savedTour}`);
-      setSelectedTour(savedTour);
-    }
-  }, []);
-  
-  useEffect(() => {
-    if (selectedTour) {
-      sessionStorage.setItem('selectedTour', selectedTour);
-      console.log(`Selected tour stored in sessionStorage: ${selectedTour}`);
-      
-      setSelectedCab(null);
-    }
-  }, [selectedTour]);
-  
+  // Load dynamic tour fares from the API
   useEffect(() => {
     const fetchTourFares = async () => {
       setIsLoadingFares(true);
       try {
-        const fares = await loadTourFares(true);
+        const fares = await loadTourFares();
         console.log("Tour fares loaded successfully:", fares);
         setDynamicTourFares(fares);
-        
-        window.dispatchEvent(new CustomEvent('tour-fares-loaded', { 
-          detail: { 
-            fares,
-            timestamp: Date.now() 
-          } 
-        }));
       } catch (error) {
         console.error("Error loading tour fares:", error);
         toast({
@@ -80,44 +58,31 @@ const ToursPage = () => {
     fetchTourFares();
   }, [toast]);
   
-  useEffect(() => {
-    const handleTourFaresUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      if (customEvent.detail?.fares) {
-        console.log("Tour fares updated from event:", customEvent.detail.fares);
-        setDynamicTourFares(customEvent.detail.fares);
-      }
-    };
-    
-    window.addEventListener('tour-fares-loaded', handleTourFaresUpdated);
-    window.addEventListener('tour-fares-updated', handleTourFaresUpdated);
-    
-    return () => {
-      window.removeEventListener('tour-fares-loaded', handleTourFaresUpdated);
-      window.removeEventListener('tour-fares-updated', handleTourFaresUpdated);
-    };
-  }, []);
-  
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
     console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
     
+    // Normalize cab ID to match what's in the database
     const normalizedCabId = cabId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
+    // Check for the fare in our dynamically loaded fares
     if (dynamicTourFares[tourId]) {
-      if (dynamicTourFares[tourId][cabId]) {
-        const fare = dynamicTourFares[tourId][cabId];
+      // Try exact match first
+      if (dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]]) {
+        const fare = dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]];
         console.log(`Found exact fare match for ${cabId}: ${fare}`);
         return fare as number;
       }
       
-      if (dynamicTourFares[tourId][normalizedCabId]) {
-        const fare = dynamicTourFares[tourId][normalizedCabId];
+      // Try normalized cab ID
+      if (dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]]) {
+        const fare = dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]];
         console.log(`Found normalized fare match for ${normalizedCabId}: ${fare}`);
         return fare as number;
       }
       
+      // Try common mappings for cab types
       if (cabId.includes('sedan') && dynamicTourFares[tourId].sedan) {
         console.log(`Using sedan fare for ${cabId}: ${dynamicTourFares[tourId].sedan}`);
         return dynamicTourFares[tourId].sedan;
@@ -132,81 +97,21 @@ const ToursPage = () => {
         console.log(`Using ertiga fare for ${cabId}: ${dynamicTourFares[tourId].ertiga}`);
         return dynamicTourFares[tourId].ertiga;
       }
-      
-      if (cabId.includes('tempo') && dynamicTourFares[tourId].tempo) {
-        console.log(`Using tempo fare for ${cabId}: ${dynamicTourFares[tourId].tempo}`);
-        return dynamicTourFares[tourId].tempo;
-      }
-      
-      if (cabId.includes('luxury') && dynamicTourFares[tourId].luxury) {
-        console.log(`Using luxury fare for ${cabId}: ${dynamicTourFares[tourId].luxury}`);
-        return dynamicTourFares[tourId].luxury;
-      }
-      
-      if (cabId.includes('mpv') && dynamicTourFares[tourId].mpv) {
-        console.log(`Using mpv fare for ${cabId}: ${dynamicTourFares[tourId].mpv}`);
-        return dynamicTourFares[tourId].mpv;
-      }
-      
-      if (cabId.includes('dzire') && dynamicTourFares[tourId].dzire_cng) {
-        console.log(`Using dzire_cng fare for ${cabId}: ${dynamicTourFares[tourId].dzire_cng}`);
-        return dynamicTourFares[tourId].dzire_cng;
-      }
-      
-      if (cabId.includes('toyota') && dynamicTourFares[tourId].toyota) {
-        console.log(`Using toyota fare for ${cabId}: ${dynamicTourFares[tourId].toyota}`);
-        return dynamicTourFares[tourId].toyota;
-      }
     }
     
+    // Fallback to hardcoded values if nothing else works
     console.log(`No fare found for ${tourId}/${cabId}, using fallback pricing`);
+    if (cabId === 'sedan') return 3500;
+    if (cabId === 'ertiga') return 4500;
+    if (cabId.includes('innova')) return 5500;
     
-    const tourDistance = availableTours.find(tour => tour.id === tourId)?.distance || 100;
-    
-    if (cabId.includes('sedan')) return Math.max(3500, tourDistance * 15);
-    if (cabId.includes('ertiga')) return Math.max(4500, tourDistance * 18);
-    if (cabId.includes('innova')) return Math.max(5500, tourDistance * 22);
-    if (cabId.includes('tempo')) return Math.max(7500, tourDistance * 25);
-    if (cabId.includes('luxury')) return Math.max(9000, tourDistance * 30);
-    if (cabId.includes('mpv')) return Math.max(5000, tourDistance * 20);
-    if (cabId.includes('dzire')) return Math.max(3500, tourDistance * 15);
-    if (cabId.includes('toyota')) return Math.max(4000, tourDistance * 18);
-    
-    return Math.max(4000, tourDistance * 20);
+    return 4000; // Default fallback
   };
   
   const handleTourSelect = (tourId: string) => {
     console.log(`Tour selected: ${tourId}`);
     setSelectedTour(tourId);
     setSelectedCab(null);
-    
-    sessionStorage.setItem('selectedTour', tourId);
-    
-    window.dispatchEvent(new CustomEvent('tour-selected', { 
-      detail: { tourId, timestamp: Date.now() } 
-    }));
-    
-    cabTypes.forEach(cab => {
-      const fare = getTourFare(tourId, cab.id);
-      console.log(`Pre-calculated fare for ${tourId}/${cab.id}: ${fare}`);
-      
-      try {
-        localStorage.setItem(`fare_tour_${tourId}_${cab.id}`, fare.toString());
-      } catch (e) {
-        console.warn(`Could not store fare for ${cab.id} in localStorage:`, e);
-      }
-      
-      window.dispatchEvent(new CustomEvent('fare-calculated', {
-        detail: {
-          cabId: cab.id,
-          cabName: cab.name,
-          fare: fare,
-          tourId: tourId,
-          tripType: 'tour',
-          timestamp: Date.now()
-        }
-      }));
-    });
   };
   
   const handleBookNow = () => {

@@ -1,10 +1,10 @@
 
 <?php
-// airport-fares.php - Simple endpoint for retrieving airport fares
+// Redirect to admin endpoint for airport fares
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
@@ -16,201 +16,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Include the database config
-require_once __DIR__ . '/../config.php';
-
-// Simple sendJSON function 
-function sendJSON($data, $status = 200) {
-    http_response_code($status);
-    header('Content-Type: application/json');
-    echo json_encode($data);
-    exit;
-}
-
 // Create log directory
-$logDir = __DIR__ . '/../logs';
+$logDir = __DIR__ . '/logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-// Get the vehicle ID from query params
-$vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
-
-// Log for debugging
-$logFile = $logDir . '/airport_fares_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/airport_fares_redirect_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
-file_put_contents($logFile, "[$timestamp] Airport fares request for vehicle ID: $vehicleId\n", FILE_APPEND);
 
-try {
-    // Connect to database
-    $conn = getDbConnection();
-    if (!$conn) {
-        throw new Exception("Database connection failed");
+// Log this request
+file_put_contents($logFile, "[$timestamp] Airport fares request redirecting to admin endpoint\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+
+// Make sure we have a vehicle ID from any possible source before forwarding
+$vehicleId = null;
+$possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type', 'id'];
+
+// First check URL parameters (highest priority)
+foreach ($possibleKeys as $key) {
+    if (isset($_GET[$key]) && !empty($_GET[$key])) {
+        $vehicleId = $_GET[$key];
+        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter $key: $vehicleId\n", FILE_APPEND);
+        break;
     }
-    
-    // Check if airport_transfer_fares table exists and create if it doesn't
-    $tableCheckQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
-    $tableResult = $conn->query($tableCheckQuery);
-    
-    if ($tableResult->num_rows === 0) {
-        // Create the table if it doesn't exist
-        $createTableSql = "
-            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        if (!$conn->query($createTableSql)) {
-            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
-        }
-        
-        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
-    }
-    
-    // Query for fares
-    $sql = "SELECT * FROM airport_transfer_fares";
-    $params = [];
-    $types = "";
-    
-    // If vehicle ID is specified, filter by it (case-insensitive)
-    if ($vehicleId) {
-        // Use LOWER function for case-insensitive comparison
-        $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
-        $params[] = $vehicleId;
-        $types .= "s";
-        
-        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID (case-insensitive): $vehicleId\n", FILE_APPEND);
-    }
-    
-    // Prepare and execute the query
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        file_put_contents($logFile, "[$timestamp] Prepare statement failed: " . $conn->error . "\n", FILE_APPEND);
-        throw new Exception("Prepare statement failed: " . $conn->error);
-    }
-    
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    if (!$stmt->execute()) {
-        file_put_contents($logFile, "[$timestamp] Query execution failed: " . $stmt->error . "\n", FILE_APPEND);
-        throw new Exception("Query execution failed: " . $stmt->error);
-    }
-    
-    $result = $stmt->get_result();
-    
-    // Format the output
-    $fares = [];
-    while ($row = $result->fetch_assoc()) {
-        $fares[] = [
-            'id' => (int)$row['id'],
-            'vehicleId' => $row['vehicle_id'],
-            'vehicle_id' => $row['vehicle_id'],
-            'basePrice' => (float)$row['base_price'],
-            'base_price' => (float)$row['base_price'],
-            'pricePerKm' => (float)$row['price_per_km'],
-            'price_per_km' => (float)$row['price_per_km'],
-            'pickupPrice' => (float)$row['pickup_price'],
-            'pickup_price' => (float)$row['pickup_price'],
-            'dropPrice' => (float)$row['drop_price'],
-            'drop_price' => (float)$row['drop_price'],
-            'tier1Price' => (float)$row['tier1_price'],
-            'tier1_price' => (float)$row['tier1_price'],
-            'tier2Price' => (float)$row['tier2_price'],
-            'tier2_price' => (float)$row['tier2_price'],
-            'tier3Price' => (float)$row['tier3_price'],
-            'tier3_price' => (float)$row['tier3_price'],
-            'tier4Price' => (float)$row['tier4_price'],
-            'tier4_price' => (float)$row['tier4_price'],
-            'extraKmCharge' => (float)$row['extra_km_charge'],
-            'extra_km_charge' => (float)$row['extra_km_charge']
-        ];
-    }
-    
-    // If specific vehicle requested but no fare found, create default with ON DUPLICATE KEY UPDATE
-    if (empty($fares) && $vehicleId) {
-        file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
-        
-        // Insert a default record with ON DUPLICATE KEY UPDATE to handle conflicts
-        $defaultInsertSql = "
-            INSERT INTO airport_transfer_fares 
-            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
-            VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            ON DUPLICATE KEY UPDATE updated_at = NOW()
-        ";
-        
-        $insertStmt = $conn->prepare($defaultInsertSql);
-        if (!$insertStmt) {
-            file_put_contents($logFile, "[$timestamp] Failed to prepare insert statement: " . $conn->error . "\n", FILE_APPEND);
-            throw new Exception("Failed to prepare insert statement: " . $conn->error);
-        }
-        
-        $insertStmt->bind_param("s", $vehicleId);
-        if (!$insertStmt->execute()) {
-            file_put_contents($logFile, "[$timestamp] Failed to insert default fare: " . $insertStmt->error . "\n", FILE_APPEND);
-            throw new Exception("Failed to insert default fare: " . $insertStmt->error);
-        }
-        
-        // Return the default fare
-        $fares[] = [
-            'id' => $conn->insert_id,
-            'vehicleId' => $vehicleId,
-            'vehicle_id' => $vehicleId,
-            'basePrice' => 0,
-            'base_price' => 0,
-            'pricePerKm' => 0,
-            'price_per_km' => 0,
-            'pickupPrice' => 0,
-            'pickup_price' => 0,
-            'dropPrice' => 0,
-            'drop_price' => 0,
-            'tier1Price' => 0,
-            'tier1_price' => 0,
-            'tier2Price' => 0,
-            'tier2_price' => 0,
-            'tier3Price' => 0,
-            'tier3_price' => 0,
-            'tier4Price' => 0,
-            'tier4_price' => 0,
-            'extraKmCharge' => 0,
-            'extra_km_charge' => 0
-        ];
-    }
-    
-    file_put_contents($logFile, "[$timestamp] Returning " . count($fares) . " fares\n", FILE_APPEND);
-    
-    // Return the fares
-    sendJSON([
-        'status' => 'success',
-        'message' => 'Airport fares retrieved successfully',
-        'data' => $fares,
-        'fares' => $fares
-    ]);
-    
-} catch (Exception $e) {
-    // Log the error
-    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] Stack trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
-    
-    // Return error response
-    sendJSON([
-        'status' => 'error',
-        'message' => 'Failed to retrieve airport fares: ' . $e->getMessage()
-    ], 500);
 }
+
+// Clean up vehicle ID if it has a prefix like 'item-'
+if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+    file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
+}
+
+// If we found a vehicle ID, add it to $_GET for the forwarded request
+if ($vehicleId) {
+    $_GET['vehicleId'] = $vehicleId;
+    $_GET['vehicle_id'] = $vehicleId;
+    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
+    
+    // If this is a GET request, append vehicle_id to the query string
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos($_SERVER['REQUEST_URI'], 'vehicle_id=') === false) {
+        $_SERVER['QUERY_STRING'] = ($_SERVER['QUERY_STRING'] ? $_SERVER['QUERY_STRING'] . '&' : '') . 'vehicle_id=' . urlencode($vehicleId);
+        $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
+        file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
+    }
+}
+
+// Set the X-Force-Refresh header to ensure we get fresh data
+$_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
+// Set admin mode for direct access to tables
+$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+// Set debug mode for extra output
+$_SERVER['HTTP_X_DEBUG'] = 'true';
+
+// Force cache-busting 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Forward this request to the admin endpoint
+require_once __DIR__ . '/admin/direct-airport-fares.php';
