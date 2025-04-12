@@ -1,4 +1,3 @@
-
 // API configuration for all endpoints
 
 // Import from config
@@ -380,13 +379,51 @@ export const fareAPI = {
   
   getAirportFares: async () => {
     try {
-      const response = await api.get('/api/fares/airport');
-      // Log the response for debugging
+      const timestamp = new Date().getTime();
+      const response = await api.get(`/api/fares/airport?_t=${timestamp}`);
+      
+      // Add debug logging
       console.log('Airport fares API response:', response);
+      
+      // If response is empty or not properly structured, try the direct endpoint
+      if (!response || (typeof response === 'object' && Object.keys(response).length === 0)) {
+        console.log('Empty airport fares response, trying direct endpoint');
+        const directResponse = await fetch(`${apiBaseUrl}/api/airport-fares.php?_t=${timestamp}`, {
+          headers: {
+            ...getAuthHeaders(),
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        
+        const directData = await directResponse.json();
+        console.log('Direct airport fares response:', directData);
+        return directData;
+      }
+      
       return response;
     } catch (error) {
       console.error('Error fetching airport fares:', error);
-      throw error;
+      
+      // Fallback to direct endpoint if main API fails
+      try {
+        console.log('Falling back to direct airport fares endpoint');
+        const timestamp = new Date().getTime();
+        const directResponse = await fetch(`${apiBaseUrl}/api/airport-fares.php?_t=${timestamp}`, {
+          headers: {
+            ...getAuthHeaders(),
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        
+        const directData = await directResponse.json();
+        console.log('Direct airport fares fallback response:', directData);
+        return directData;
+      } catch (fallbackError) {
+        console.error('Error fetching from direct airport fares endpoint:', fallbackError);
+        throw error; // Throw the original error
+      }
     }
   },
   
