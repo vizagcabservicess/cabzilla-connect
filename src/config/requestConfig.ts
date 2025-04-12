@@ -82,6 +82,8 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     credentials: 'omit',
     headers: {
       ...getBypassHeaders(),
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...(options.headers || {})
     }
   };
@@ -95,6 +97,16 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
+      }
+      
+      // Check content type
+      const contentType = result.headers.get('content-type');
+      if (contentType && !contentType.includes('application/json')) {
+        console.warn(`API returned non-JSON content type: ${contentType}`);
+        // Get the response text for logging
+        const text = await result.text();
+        console.error('Non-JSON response:', text.substring(0, 500));
+        throw new Error('API returned non-JSON response');
       }
       
       return result;
@@ -120,6 +132,14 @@ export const checkApiHealth = async (): Promise<boolean> => {
     const response = await fetch(`/api/admin/status.php?_t=${Date.now()}`, {
       headers: getBypassHeaders()
     });
+    
+    // Check content type
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('API health endpoint returned non-JSON response');
+      return false;
+    }
+    
     return response.ok;
   } catch (error) {
     console.error('API health check failed:', error);

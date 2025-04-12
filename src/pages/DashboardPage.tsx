@@ -13,7 +13,7 @@ import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
-import { safeFetch } from "@/config/requestConfig";
+import { safeFetch, checkApiHealth } from "@/config/requestConfig";
 
 const MAX_RETRIES = 3;
 
@@ -85,6 +85,12 @@ export default function DashboardPage() {
       setError(null);
       console.log('Fetching user bookings...');
       
+      // First check if API is healthy
+      const isApiHealthy = await checkApiHealth();
+      if (!isApiHealthy) {
+        console.warn('API health check failed, but still attempting to fetch bookings');
+      }
+      
       // Add a timestamp to force refresh
       const timestamp = new Date().getTime();
       
@@ -97,62 +103,33 @@ export default function DashboardPage() {
       
       console.log('Using auth token:', token.substring(0, 10) + '...');
       
-      // First check if the API is accessible
-      try {
-        const statusResponse = await fetch(`/api/admin/status.php?_t=${timestamp}`, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (statusResponse.ok) {
-          console.log('API is accessible, proceeding with bookings fetch');
-        } else {
-          console.warn('API status check failed:', statusResponse.status);
-        }
-      } catch (statusError) {
-        console.warn('Could not check API status:', statusError);
-      }
-      
       // Use the enhanced safeFetch function for better reliability
       const response = await safeFetch(`/api/user/bookings.php?_t=${timestamp}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
+          'X-Force-Refresh': 'true',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
       
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const responseText = await response.text();
-      console.log('Raw bookings response:', responseText.substring(0, 500));
-      
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        setApiDebugInfo(data);
-        console.log('Parsed bookings response:', data);
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        throw new Error('Invalid JSON response from server');
-      }
+      const responseData = await response.json();
+      console.log('Parsed bookings response:', responseData);
       
       // Handle different response formats
       let bookingsData: Booking[] = [];
       
-      if (data && data.bookings && Array.isArray(data.bookings)) {
-        console.log(`Received ${data.bookings.length} bookings, source: ${data.source}`);
-        bookingsData = data.bookings;
-      } else if (Array.isArray(data)) {
-        console.log(`Received ${data.length} bookings (direct array)`);
-        bookingsData = data;
+      if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
+        console.log(`Received ${responseData.bookings.length} bookings, source: ${responseData.source}`);
+        bookingsData = responseData.bookings;
+        setApiDebugInfo(responseData);
+      } else if (Array.isArray(responseData)) {
+        console.log(`Received ${responseData.length} bookings (direct array)`);
+        bookingsData = responseData;
       } else {
-        console.warn('Unexpected response format. Expected bookings array:', data);
+        console.warn('Unexpected response format. Expected bookings array:', responseData);
         bookingsData = [];
       }
       

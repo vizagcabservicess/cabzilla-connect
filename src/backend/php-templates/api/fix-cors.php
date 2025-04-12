@@ -41,6 +41,9 @@ function sendJsonResponse($data, $statusCode = 200) {
     // Log response for debugging
     error_log("Sending JSON response: " . json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR));
     
+    // Set content type explicitly before sending response
+    header('Content-Type: application/json');
+    
     // Send JSON response
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
@@ -71,6 +74,9 @@ register_shutdown_function(function() {
         if (ob_get_level()) {
             ob_end_clean();
         }
+        
+        // Set content type explicitly
+        header('Content-Type: application/json');
         
         // Send proper error response
         http_response_code(500);

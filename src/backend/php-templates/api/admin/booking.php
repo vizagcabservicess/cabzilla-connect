@@ -1,16 +1,9 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CRITICAL: Set all response headers first before any output
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: *');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Include the fix-cors.php file for CORS headers and helper functions
+require_once __DIR__ . '/../fix-cors.php';
 
 // Debug mode - to diagnose problems
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -18,30 +11,11 @@ $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 // Log request info
 error_log("Admin booking endpoint request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 
-// Always use JSON response helper
-function sendJsonResponse($data, $statusCode = 200) {
-    // Ensure proper HTTP status code
-    http_response_code($statusCode);
-    
-    // Clear any output buffering to prevent HTML contamination
-    if (ob_get_level()) {
-        ob_end_clean();
-    }
-    
-    // Ensure proper JSON encoding
-    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    exit;
-}
+// Always use JSON response helper from fix-cors.php
+// Do not redefine sendJsonResponse here!
 
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
-// Connect to database with improved error handling
 try {
-    // Direct connection as fallback since we need maximum reliability
+    // Connect to database with improved error handling
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
