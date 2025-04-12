@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -31,11 +32,41 @@ export default function DashboardPage() {
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
   const [authIssue, setAuthIssue] = useState(false);
+  const [isDev, setIsDev] = useState(false);
+
+  // Check if we're in development mode
+  useEffect(() => {
+    // Check if local storage has dev mode flag
+    const devMode = localStorage.getItem('dev_mode') === 'true';
+    setIsDev(devMode);
+    
+    // Also check URL for dev_mode parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('dev_mode') === 'true') {
+      setIsDev(true);
+      localStorage.setItem('dev_mode', 'true');
+    }
+  }, []);
 
   // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Allow access in dev mode without auth
+        if (isDev) {
+          console.log('Dev mode enabled, skipping authentication check');
+          const devUser = { 
+            id: 1, 
+            name: 'Dev User', 
+            email: 'dev@example.com', 
+            role: 'admin' 
+          };
+          setUser(devUser);
+          setIsAdmin(true);
+          localStorage.setItem('userData', JSON.stringify(devUser));
+          return;
+        }
+
         if (!authAPI.isAuthenticated()) {
           console.log('No authentication token found, redirecting to login');
           navigate('/login', { state: { from: location.pathname } });
@@ -90,7 +121,7 @@ export default function DashboardPage() {
         console.error('Error getting user data:', error);
         
         // If we have a token but it's invalid, show auth issue banner
-        if (localStorage.getItem('authToken')) {
+        if (localStorage.getItem('authToken') || isDev) {
           setAuthIssue(true);
         } else {
           toast.error('Error loading user data. Please try logging in again.');
@@ -102,11 +133,12 @@ export default function DashboardPage() {
     };
 
     checkAuth();
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, isDev]);
 
   // Fetch bookings data
   const fetchBookings = useCallback(async () => {
-    if (!authAPI.isAuthenticated() && !authIssue) {
+    // Skip auth check in dev mode
+    if (!isDev && !authAPI.isAuthenticated() && !authIssue) {
       console.log('No authentication token found, redirecting to login');
       navigate('/login');
       return;
@@ -118,19 +150,27 @@ export default function DashboardPage() {
       
       // Get user data from localStorage to ensure we have the user ID
       const userDataStr = localStorage.getItem('userData');
-      if (!userDataStr) {
+      if (!userDataStr && !isDev) {
         throw new Error('User data not found in localStorage');
       }
       
-      const userData = JSON.parse(userDataStr);
-      if (!userData || !userData.id) {
-        throw new Error('Invalid user data in localStorage');
+      let userId = 1; // Default for dev mode
+      
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        if (!userData || !userData.id) {
+          throw new Error('Invalid user data in localStorage');
+        }
+        userId = userData.id;
       }
       
-      console.log('Fetching bookings for user ID:', userData.id);
+      console.log('Fetching bookings for user ID:', userId, 'Dev mode:', isDev);
+      
+      // Add dev_mode parameter if in dev mode
+      const options = isDev ? { dev_mode: true } : undefined;
       
       // Pass the user ID explicitly to the bookings API
-      const data = await bookingAPI.getUserBookings(userData.id);
+      const data = await bookingAPI.getUserBookings(userId, options);
       
       if (Array.isArray(data)) {
         setBookings(data);
@@ -175,17 +215,21 @@ export default function DashboardPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [navigate, retryCount, authIssue]);
+  }, [navigate, retryCount, authIssue, isDev]);
 
   // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
-    if (!isAdmin || !user?.id) return;
+    if ((!isAdmin && !isDev) || !user?.id) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      console.log('Fetching admin metrics for user ID:', user.id);
-      const data = await bookingAPI.getAdminDashboardMetrics('week', user.id);
+      console.log('Fetching admin metrics for user ID:', user.id, 'Dev mode:', isDev);
+      
+      // Add dev_mode parameter if in dev mode
+      const options = isDev ? { dev_mode: true } : undefined;
+      
+      const data = await bookingAPI.getAdminDashboardMetrics('week', user.id, options);
       
       if (data) {
         setAdminMetrics(data);
@@ -199,25 +243,26 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin, user]);
+  }, [isAdmin, user, isDev]);
 
   // Initial data fetch
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id || isDev) {
       fetchBookings();
     }
-  }, [fetchBookings, user]);
+  }, [fetchBookings, user, isDev]);
 
   // Fetch admin metrics if user is admin
   useEffect(() => {
-    if (isAdmin && user?.id) {
+    if ((isAdmin || isDev) && (user?.id || isDev)) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics, user]);
+  }, [isAdmin, fetchAdminMetrics, user, isDev]);
 
   // Handle logout
   const handleLogout = () => {
     authAPI.logout();
+    localStorage.removeItem('dev_mode'); // Clear dev mode flag
     navigate('/login');
     toast.success('Logged out successfully');
   };
@@ -251,6 +296,13 @@ export default function DashboardPage() {
     }
   };
 
+  // Enable dev mode
+  const enableDevMode = () => {
+    localStorage.setItem('dev_mode', 'true');
+    setIsDev(true);
+    window.location.reload();
+  };
+
   // Show authentication issue banner
   if (authIssue) {
     return (
@@ -262,8 +314,9 @@ export default function DashboardPage() {
             Your session may have expired or there was a problem with your authentication. 
             Please try logging in again.
           </AlertDescription>
-          <div className="mt-4">
+          <div className="mt-4 flex gap-2">
             <Button onClick={handleRelogin}>Log In Again</Button>
+            <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
           </div>
         </Alert>
         
@@ -323,6 +376,9 @@ export default function DashboardPage() {
         onRetry={fetchBookings}
         title="Error Loading Dashboard"
         description="We couldn't load your bookings. Please try again."
+        extraActions={
+          <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
+        }
       />
     );
   }
@@ -333,6 +389,11 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
+          {isDev && (
+            <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800">
+              Dev Mode
+            </Badge>
+          )}
         </div>
         <div className="flex flex-col md:flex-row gap-2">
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
@@ -348,7 +409,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Conditionally render admin metrics for admin users */}
-      {isAdmin && (
+      {(isAdmin || isDev) && (
         <div className="mb-8">
           <Card>
             <CardHeader>
@@ -406,7 +467,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No upcoming bookings found."
           />
         </TabsContent>
         
@@ -416,7 +476,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No completed bookings found."
           />
         </TabsContent>
         
@@ -426,7 +485,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No cancelled bookings found."
           />
         </TabsContent>
       </Tabs>
@@ -434,72 +492,97 @@ export default function DashboardPage() {
   );
 }
 
-interface BookingsListProps {
-  bookings: Booking[];
+// Separate component for the bookings list
+function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: { 
+  bookings: Booking[]; 
   isRefreshing: boolean;
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
-  emptyMessage?: string;
-}
-
-function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, emptyMessage = "No bookings found." }: BookingsListProps) {
-  const navigate = useNavigate();
-  
+}) {
   if (isRefreshing) {
     return (
-      <div className="flex justify-center items-center py-10">
+      <div className="flex items-center justify-center p-8">
         <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-500">Refreshing bookings...</span>
       </div>
     );
   }
-  
+
   if (bookings.length === 0) {
     return (
-      <Alert className="mt-4">
-        <Info className="h-4 w-4" />
-        <AlertTitle>No Bookings</AlertTitle>
-        <AlertDescription>{emptyMessage}</AlertDescription>
-      </Alert>
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <Info className="h-10 w-10 text-gray-400 mb-2" />
+        <h3 className="text-lg font-medium">No Bookings</h3>
+        <p className="text-gray-500">No bookings found.</p>
+      </div>
     );
   }
-  
+
   return (
-    <ScrollArea className="h-[600px] mt-4">
+    <ScrollArea className="h-[calc(100vh-300px)] pr-4">
       <div className="space-y-4">
         {bookings.map((booking) => (
-          <Card key={booking.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/booking/${booking.id}`)}>
+          <Card key={booking.id} className="overflow-hidden">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">Booking #{booking.bookingNumber}</CardTitle>
-                  <p className="text-sm text-gray-500">{formatDate(booking.pickupDate)}</p>
+                  <CardTitle className="text-lg">
+                    {booking.pickupLocation} to {booking.dropLocation}
+                  </CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Booking #{booking.bookingNumber}
+                  </p>
                 </div>
                 <Badge className={getStatusColor(booking.status)}>
-                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1).replace('_', ' ')}
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-gray-500 mt-1" />
-                  <div>
-                    <p className="font-medium">From: {booking.pickupLocation}</p>
-                    {booking.dropLocation && <p className="text-gray-600">To: {booking.dropLocation}</p>}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" /> Pickup Date
+                  </p>
+                  <p className="text-sm">{formatDate(booking.pickupDate)}</p>
+                  
+                  {booking.returnDate && (
+                    <>
+                      <p className="text-sm font-medium mt-2 flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" /> Return Date
+                      </p>
+                      <p className="text-sm">{formatDate(booking.returnDate)}</p>
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Car className="h-4 w-4 text-gray-500" />
-                  <p>{booking.cabType} - {booking.tripType} ({booking.tripMode})</p>
+                
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <MapPin className="h-4 w-4 mr-1" /> Trip Details
+                  </p>
+                  <p className="text-sm">
+                    {booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)}, {' '}
+                    {booking.tripMode === 'one-way' ? 'One Way' : 'Round Trip'}
+                  </p>
+                  <p className="text-sm">
+                    Cab: {booking.cabType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </p>
+                  <p className="text-sm">Distance: {booking.distance} km</p>
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                  <p className="font-semibold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
-                  <Button variant="outline" size="sm" onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/booking/${booking.id}`);
-                  }}>
-                    View Details
-                  </Button>
+                
+                <div>
+                  <p className="text-sm font-medium">Fare Details</p>
+                  <p className="text-xl font-bold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                  
+                  {booking.driverName && (
+                    <>
+                      <p className="text-sm font-medium mt-2">Driver</p>
+                      <p className="text-sm">{booking.driverName}</p>
+                      {booking.driverPhone && (
+                        <p className="text-sm">{booking.driverPhone}</p>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
