@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,7 +59,9 @@ export function DashboardMetrics({
             .map(status => String(status));
         } else if (typeof metricsData.availableStatuses === 'string') {
           console.log('availableStatuses is a string');
-          statusesArray = metricsData.availableStatuses.split(',').map(s => s.trim());
+          // Fix for TypeScript error: explicitly cast to string before using split
+          const statusesStr = String(metricsData.availableStatuses);
+          statusesArray = statusesStr.split(',').map(s => s.trim());
         } else {
           console.log('availableStatuses is in an unknown format:', typeof metricsData.availableStatuses);
           // If we can't determine the format, use default statuses
