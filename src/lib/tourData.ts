@@ -158,7 +158,7 @@ export const vehicleIdMapping: Record<string, string> = {
 let isFetchingTourFares = false;
 let lastFetchedTourFares: TourFares | null = null;
 let lastFetchTimestamp = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_DURATION = 60 * 1000; // 1 minute in milliseconds
 
 // Function to normalize vehicle type/id for consistent mapping
 const normalizeVehicleType = (vehicleId: string): string => {
@@ -204,22 +204,6 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
     console.log("Loading tour fares from API");
     
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          try {
-            const userData = JSON.parse(userStr);
-            if (userData?.token) {
-              localStorage.setItem('authToken', userData.token);
-              console.log('Retrieved token from user object for tour fares sync');
-            }
-          } catch (e) {
-            console.error('Error parsing user data:', e);
-          }
-        }
-      }
-      
       // Make sure tour fares table is synced with vehicle data first
       const syncSuccess = await syncTourFaresTable();
       console.log("Tour fares table sync result:", syncSuccess ? "success" : "failed");
@@ -234,16 +218,27 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
     const dynamicTourFares: TourFares = {};
     
     if (Array.isArray(tourFareData) && tourFareData.length > 0) {
+      // Process the API response data
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
           const tourId = tour.tourId;
           
-          // Initialize object with required vehicle types
-          dynamicTourFares[tourId] = {
-            sedan: tour.sedan || 0,
-            ertiga: tour.ertiga || 0,
-            innova: tour.innova || 0
-          };
+          // Create an object for this tour
+          dynamicTourFares[tourId] = {};
+          
+          // Add all vehicle prices to this tour
+          Object.entries(tour).forEach(([key, value]) => {
+            // Skip non-price properties
+            if (['id', 'tourId', 'tourName', 'distance', 'days', 'updated_at', 'created_at'].includes(key)) {
+              return;
+            }
+            
+            // Add all numeric values as vehicle prices
+            if (typeof value === 'number' && value > 0) {
+              const normalizedVehicleType = normalizeVehicleType(key);
+              dynamicTourFares[tourId][normalizedVehicleType] = value;
+            }
+          });
           
           // Add distance and days if available
           if (tour.distance) {
@@ -253,70 +248,42 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
           if (tour.days) {
             (dynamicTourFares[tourId] as any).days = tour.days;
           }
-          
-          // Add all additional vehicle types
-          if (tour.tempo) dynamicTourFares[tourId].tempo = tour.tempo;
-          if (tour.luxury) dynamicTourFares[tourId].luxury = tour.luxury;
-          if (tour.innova_crysta) dynamicTourFares[tourId].innova_crysta = tour.innova_crysta;
-          if (tour.tempo_traveller) dynamicTourFares[tourId].tempo_traveller = tour.tempo_traveller;
-          if (tour.mpv) dynamicTourFares[tourId].mpv = tour.mpv;
-          if (tour.toyota) dynamicTourFares[tourId].toyota = tour.toyota;
-          if (tour.dzire_cng) dynamicTourFares[tourId].dzire_cng = tour.dzire_cng;
-          if (tour.etios) dynamicTourFares[tourId].etios = tour.etios;
-          
-          // Process any other vehicle types that might exist in the data
-          Object.entries(tour).forEach(([key, value]) => {
-            if (['id', 'tourId', 'tourName', 'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 
-                'distance', 'days', 'updated_at', 'created_at', 'innova_crysta', 
-                'tempo_traveller', 'mpv', 'toyota', 'dzire_cng', 'etios'].includes(key)) {
-              return;
-            }
-            
-            if (typeof value === 'number') {
-              (dynamicTourFares[tourId] as any)[normalizeVehicleType(key)] = value;
-            }
-          });
-          
-          // If innova is missing but innova_crysta exists, use that as a fallback
-          if (!dynamicTourFares[tourId].innova && dynamicTourFares[tourId].innova_crysta) {
-            dynamicTourFares[tourId].innova = dynamicTourFares[tourId].innova_crysta;
-          }
         }
       });
       
-      // Update cache
-      lastFetchedTourFares = dynamicTourFares;
-      lastFetchTimestamp = now;
-      
-      console.log("Processed dynamic tour fares:", dynamicTourFares);
-      
-      try {
-        localStorage.setItem('tourFaresCache', JSON.stringify(dynamicTourFares));
-        localStorage.setItem('tourFaresCacheTimestamp', now.toString());
-      } catch (e) {
-        console.warn('Could not cache tour fares in localStorage:', e);
-      }
-      
-      // Dispatch an event to notify components that the tour fares have been updated
-      window.dispatchEvent(new CustomEvent('tour-fares-updated', { 
-        detail: { timestamp: now, source: 'api' } 
-      }));
-      
+      // Only if we have successfully parsed tour fares, update the cache
       if (Object.keys(dynamicTourFares).length > 0) {
+        console.log("Processed dynamic tour fares:", dynamicTourFares);
+        lastFetchedTourFares = dynamicTourFares;
+        lastFetchTimestamp = now;
+        
+        // Cache in localStorage for persistence
+        try {
+          localStorage.setItem('tourFaresCache', JSON.stringify(dynamicTourFares));
+          localStorage.setItem('tourFaresCacheTimestamp', now.toString());
+        } catch (e) {
+          console.warn('Could not cache tour fares in localStorage:', e);
+        }
+        
+        // Dispatch an event to notify components that the tour fares have been updated
+        window.dispatchEvent(new CustomEvent('tour-fares-updated', { 
+          detail: { timestamp: now, source: 'api' } 
+        }));
+        
         return dynamicTourFares;
       }
     }
     
-    // Try to get cached data if API fetch failed or returned empty
+    // If API failed or returned invalid data, try localStorage cache
     try {
       const cachedFares = localStorage.getItem('tourFaresCache');
       const cacheTimestamp = localStorage.getItem('tourFaresCacheTimestamp');
       
       if (cachedFares) {
         const parsedFares = JSON.parse(cachedFares);
-        console.log("Using cached tour fares from localStorage, cached at:", 
-          cacheTimestamp ? new Date(parseInt(cacheTimestamp)).toLocaleTimeString() : 'unknown');
+        console.log("Using cached tour fares from localStorage");
         
+        // Update memory cache
         lastFetchedTourFares = parsedFares;
         lastFetchTimestamp = cacheTimestamp ? parseInt(cacheTimestamp) : now;
         

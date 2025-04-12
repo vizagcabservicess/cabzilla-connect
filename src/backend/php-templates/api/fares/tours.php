@@ -11,31 +11,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $conn = getDbConnection();
 
 try {
-    // Get all vehicle types to ensure consistent mapping
-    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles";
+    // Get all vehicle types from the vehicles table ONLY
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
     $vehicleMapping = [];
-    $normalizedColumns = [
-        'sedan' => 'sedan',
-        'ertiga' => 'ertiga',
-        'innova' => 'innova',
-        'tempo' => 'tempo',
-        'luxury' => 'luxury',
-        'innova_crysta' => 'innova_crysta',
-        'tempo_traveller' => 'tempo_traveller',
-        'mpv' => 'mpv',
-        'toyota' => 'toyota',
-        'dzire_cng' => 'dzire_cng',
-        'etios' => 'etios'
-    ];
+    $normalizedColumns = [];
     
-    // Build complete vehicle mapping from database
+    // Build complete vehicle mapping from vehicles table only
     if ($vehiclesResult) {
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $id = $vehicle['id'];
             $vehicleId = $vehicle['vehicle_id'];
             $name = $vehicle['name'];
+            
+            if (empty($vehicleId) && empty($name)) continue;
             
             // Create normalized column name
             $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId ?: $name));
@@ -68,24 +58,10 @@ try {
             'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
         
-        // Add all vehicle types from normalized columns
-        foreach ($normalizedColumns as $columnKey => $columnName) {
-            if (isset($row[$columnName])) {
-                $tourFare[$columnKey] = floatval($row[$columnName]);
-            } else {
-                $tourFare[$columnKey] = 0;
-            }
-        }
-        
-        // Add any additional vehicle types that might be in the database
+        // Process all vehicle columns from the row
         foreach ($row as $key => $value) {
-            // Skip non-vehicle columns and ones we've already processed
+            // Skip non-vehicle columns
             if (in_array($key, ['id', 'tour_id', 'tour_name', 'distance', 'days', 'created_at', 'updated_at'])) {
-                continue;
-            }
-            
-            // Skip columns we've already added
-            if (in_array($key, array_values($normalizedColumns))) {
                 continue;
             }
             
@@ -98,7 +74,7 @@ try {
         $tourFares[] = $tourFare;
     }
 
-    // Send response as a simple array, not an object with numbered keys
+    // Send response as a simple array
     sendJsonResponse($tourFares);
 } catch (Exception $e) {
     logError("Error fetching tour fares", ['error' => $e->getMessage()]);
@@ -107,6 +83,7 @@ try {
 
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
+    header('Content-Type: application/json');
     echo json_encode($data);
     exit;
 }

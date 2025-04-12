@@ -16,65 +16,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Create log directory
+// Include the database config
+require_once __DIR__ . '/../config.php';
+
+// Simple sendJSON function 
+function sendJSON($data, $status = 200) {
+    http_response_code($status);
+    echo json_encode($data);
+    exit;
+}
+
+// Get the vehicle ID from query params
+$vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
+
+// Create log for debugging
 $logDir = __DIR__ . '/logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
-
-$logFile = $logDir . '/airport_fares_redirect_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
+file_put_contents($logFile, "[$timestamp] Airport fares request for vehicle ID: $vehicleId\n", FILE_APPEND);
 
-// Log this request
-file_put_contents($logFile, "[$timestamp] Airport fares request redirecting to admin endpoint\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
-
-// Make sure we have a vehicle ID from any possible source before forwarding
-$vehicleId = null;
-$possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type', 'id'];
-
-// First check URL parameters (highest priority)
-foreach ($possibleKeys as $key) {
-    if (isset($_GET[$key]) && !empty($_GET[$key])) {
-        $vehicleId = $_GET[$key];
-        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter $key: $vehicleId\n", FILE_APPEND);
-        break;
+try {
+    // Connect to database
+    $conn = getDbConnection();
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
-}
-
-// Clean up vehicle ID if it has a prefix like 'item-'
-if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
-    $vehicleId = substr($vehicleId, 5);
-    file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
-}
-
-// If we found a vehicle ID, add it to $_GET for the forwarded request
-if ($vehicleId) {
-    $_GET['vehicleId'] = $vehicleId;
-    $_GET['vehicle_id'] = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
     
-    // If this is a GET request, append vehicle_id to the query string
-    if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos($_SERVER['REQUEST_URI'], 'vehicle_id=') === false) {
-        $_SERVER['QUERY_STRING'] = ($_SERVER['QUERY_STRING'] ? $_SERVER['QUERY_STRING'] . '&' : '') . 'vehicle_id=' . urlencode($vehicleId);
-        $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
-        file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
+    // If no vehicle ID specified, return all fares
+    $sql = "SELECT * FROM airport_transfer_fares";
+    $params = [];
+    $types = "";
+    
+    // If vehicle ID is specified, filter by it
+    if ($vehicleId) {
+        $sql .= " WHERE vehicle_id = ?";
+        $params[] = $vehicleId;
+        $types .= "s";
     }
+    
+    // Prepare and execute the query
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
+    }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    // Format the output
+    $fares = [];
+    while ($row = $result->fetch_assoc()) {
+        $fares[] = [
+            'id' => (int)$row['id'],
+            'vehicleId' => $row['vehicle_id'],
+            'vehicle_id' => $row['vehicle_id'],
+            'basePrice' => (float)$row['base_price'],
+            'pricePerKm' => (float)$row['price_per_km'],
+            'pickupPrice' => (float)$row['pickup_price'],
+            'dropPrice' => (float)$row['drop_price'],
+            'tier1Price' => (float)$row['tier1_price'],
+            'tier2Price' => (float)$row['tier2_price'],
+            'tier3Price' => (float)$row['tier3_price'],
+            'tier4Price' => (float)$row['tier4_price'],
+            'extraKmCharge' => (float)$row['extra_km_charge'],
+            'updatedAt' => $row['updated_at']
+        ];
+    }
+    
+    // Return the fares
+    sendJSON([
+        'status' => 'success',
+        'message' => 'Airport fares retrieved successfully',
+        'data' => $fares,
+        'fares' => $fares
+    ]);
+    
+} catch (Exception $e) {
+    // Log the error
+    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    // Return error response
+    sendJSON([
+        'status' => 'error',
+        'message' => 'Failed to retrieve airport fares: ' . $e->getMessage()
+    ], 500);
 }
-
-// Set the X-Force-Refresh header to ensure we get fresh data
-$_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
-// Set admin mode for direct access to tables
-$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
-// Set debug mode for extra output
-$_SERVER['HTTP_X_DEBUG'] = 'true';
-
-// Force cache-busting 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
-
-// Forward this request to the admin endpoint
-require_once __DIR__ . '/admin/direct-airport-fares.php';

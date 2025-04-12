@@ -75,34 +75,23 @@ try {
             $existingColumns[] = $column['Field'];
         }
         
-        // Get vehicle types from vehicles table for syncing
-        $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
+        // Get ONLY vehicle types from vehicles table for syncing
+        $vehiclesQuery = "SELECT vehicle_id, name FROM vehicles WHERE is_active = 1";
         $vehiclesResult = $conn->query($vehiclesQuery);
-        
-        $standardVehicles = [
-            'sedan', 'ertiga', 'innova', 'tempo', 'luxury', 'innova_crysta', 
-            'tempo_traveller', 'mpv', 'toyota', 'dzire_cng', 'etios'
-        ];
         
         $vehicleColumns = [];
         
-        // Add standard vehicle columns first
-        foreach ($standardVehicles as $vehicle) {
-            $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicle));
-            if (!in_array($normalizedColumn, $existingColumns)) {
-                $vehicleColumns[] = $normalizedColumn;
-            }
-        }
-        
-        // Add columns from vehicles table
+        // Add columns from vehicles table only
         if ($vehiclesResult) {
             while ($vehicle = $vehiclesResult->fetch_assoc()) {
                 // Normalize the vehicle ID to create a valid column name
                 $vehicleId = $vehicle['vehicle_id'] ?: $vehicle['name'];
+                if (empty($vehicleId)) continue;
+                
                 $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));
                 
-                // Skip if this is a standard column we already added or if it already exists
-                if (!in_array($normalizedColumn, $existingColumns) && !in_array($normalizedColumn, $vehicleColumns)) {
+                // Skip if this column already exists
+                if (!in_array($normalizedColumn, $existingColumns)) {
                     $vehicleColumns[] = $normalizedColumn;
                 }
             }

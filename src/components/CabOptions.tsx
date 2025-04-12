@@ -43,10 +43,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
+  const [forceFareRefresh, setForceFareRefresh] = useState(0);
 
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
+    
+    // Dispatch an event when cab is selected
+    window.dispatchEvent(new CustomEvent('cab-selected', {
+      detail: {
+        cabType: cab.id,
+        cabName: cab.name,
+        tripType: tripType,
+        timestamp: Date.now()
+      }
+    }));
   };
 
   // Scroll to booking summary when a cab is selected
@@ -76,6 +87,20 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
   
+  useEffect(() => {
+    // Listen for tour fare updates
+    const handleTourFaresUpdated = () => {
+      console.log("Tour fares updated, refreshing cab options");
+      setForceFareRefresh(prev => prev + 1);
+    };
+    
+    window.addEventListener('tour-fares-updated', handleTourFaresUpdated);
+    
+    return () => {
+      window.removeEventListener('tour-fares-updated', handleTourFaresUpdated);
+    };
+  }, []);
+  
   // Load actual fares from localStorage or API
   useEffect(() => {
     setIsCalculatingFares(true);
@@ -84,94 +109,121 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       try {
         // For tour trip type, load the tour fares
         if (tripType === 'tour') {
-          const tourFares = await loadTourFares();
-          const currentFares: Record<string, number> = {};
-          
-          // Get the selected tour ID from sessionStorage or localStorage
           const selectedTour = sessionStorage.getItem('selectedTour') || localStorage.getItem('selectedTour');
           
-          if (selectedTour && tourFares[selectedTour]) {
-            console.log(`Loading tour fares for ${selectedTour}:`, tourFares[selectedTour]);
+          if (!selectedTour) {
+            console.warn("No selected tour found, using default fares");
+            setIsCalculatingFares(false);
+            return;
+          }
+          
+          console.log(`Loading fares for selected tour: ${selectedTour}`);
+          const tourFares = await loadTourFares(true); // Force refresh
+          const currentFares: Record<string, number> = {};
+          
+          if (tourFares[selectedTour]) {
+            console.log(`Found fares for tour ${selectedTour}:`, tourFares[selectedTour]);
             
+            // Process each cab type to find its corresponding fare
             cabTypes.forEach(cab => {
               const cabId = cab.id.toLowerCase();
-              const normalizedCabId = cabId.replace(/[^a-z0-9_]/g, '_');
-              let fare = 0;
               
-              // Try to find the fare for this cab using various matching strategies
-              // First try direct match on cab ID
+              // Try different ways to match cab with fare
               if (tourFares[selectedTour][cabId]) {
-                fare = tourFares[selectedTour][cabId];
-                console.log(`Found exact fare match for ${cabId}: ${fare}`);
+                // Direct match on cab ID
+                currentFares[cab.id] = tourFares[selectedTour][cabId];
+                console.log(`Direct fare match for ${cab.id}: ${currentFares[cab.id]}`);
               } 
-              // Then try normalized version
-              else if (tourFares[selectedTour][normalizedCabId]) {
-                fare = tourFares[selectedTour][normalizedCabId];
-                console.log(`Found normalized fare match for ${normalizedCabId}: ${fare}`);
-              } 
-              // Try vehicle type mappings
               else if (cabId.includes('sedan') && tourFares[selectedTour].sedan) {
-                fare = tourFares[selectedTour].sedan;
-                console.log(`Using sedan fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('innova_crysta') && tourFares[selectedTour].innova_crysta) {
-                fare = tourFares[selectedTour].innova_crysta;
-                console.log(`Using innova_crysta fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('innova') && tourFares[selectedTour].innova) {
-                fare = tourFares[selectedTour].innova;
-                console.log(`Using innova fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('ertiga') && tourFares[selectedTour].ertiga) {
-                fare = tourFares[selectedTour].ertiga;
-                console.log(`Using ertiga fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('tempo') && tourFares[selectedTour].tempo) {
-                fare = tourFares[selectedTour].tempo;
-                console.log(`Using tempo fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('luxury') && tourFares[selectedTour].luxury) {
-                fare = tourFares[selectedTour].luxury;
-                console.log(`Using luxury fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('dzire') && tourFares[selectedTour].dzire_cng) {
-                fare = tourFares[selectedTour].dzire_cng;
-                console.log(`Using dzire_cng fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('toyota') && tourFares[selectedTour].toyota) {
-                fare = tourFares[selectedTour].toyota;
-                console.log(`Using toyota fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('etios') && tourFares[selectedTour].etios) {
-                fare = tourFares[selectedTour].etios;
-                console.log(`Using etios fare for ${cabId}: ${fare}`);
-              } else if (cabId.includes('mpv') && tourFares[selectedTour].mpv) {
-                fare = tourFares[selectedTour].mpv;
-                console.log(`Using mpv fare for ${cabId}: ${fare}`);
-              } else {
-                // Fallback to cab's pre-defined price if available
-                if (cab.price && cab.price > 0) {
-                  fare = cab.price;
-                  console.log(`Using predefined price for ${cabId}: ${fare}`);
-                } else {
-                  // Last resort - calculate a reasonable fare based on type
-                  const baseFare = distance * (
-                    cabId.includes('luxury') ? 20 : 
-                    cabId.includes('innova') ? 15 : 
-                    cabId.includes('ertiga') ? 12 : 10
-                  );
-                  fare = Math.max(baseFare, 800); // Ensure minimum fare
-                  console.log(`Using calculated fare for ${cabId}: ${fare}`);
-                }
+                // Match by vehicle type - sedan
+                currentFares[cab.id] = tourFares[selectedTour].sedan;
+                console.log(`Type match (sedan) for ${cab.id}: ${currentFares[cab.id]}`);
+              } 
+              else if (cabId.includes('ertiga') && tourFares[selectedTour].ertiga) {
+                // Match by vehicle type - ertiga
+                currentFares[cab.id] = tourFares[selectedTour].ertiga;
+                console.log(`Type match (ertiga) for ${cab.id}: ${currentFares[cab.id]}`);
+              } 
+              else if (cabId.includes('innova_crysta') && tourFares[selectedTour].innova_crysta) {
+                // Match by vehicle type - innova_crysta
+                currentFares[cab.id] = tourFares[selectedTour].innova_crysta;
+                console.log(`Type match (innova_crysta) for ${cab.id}: ${currentFares[cab.id]}`);
+              } 
+              else if (cabId.includes('innova') && tourFares[selectedTour].innova) {
+                // Match by vehicle type - innova
+                currentFares[cab.id] = tourFares[selectedTour].innova;
+                console.log(`Type match (innova) for ${cab.id}: ${currentFares[cab.id]}`);
+              } 
+              else if (cabId.includes('tempo') && tourFares[selectedTour].tempo) {
+                // Match by vehicle type - tempo
+                currentFares[cab.id] = tourFares[selectedTour].tempo;
+                console.log(`Type match (tempo) for ${cab.id}: ${currentFares[cab.id]}`);
+              } 
+              else if (cabId.includes('luxury') && tourFares[selectedTour].luxury) {
+                // Match by vehicle type - luxury
+                currentFares[cab.id] = tourFares[selectedTour].luxury;
+                console.log(`Type match (luxury) for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              else if (cabId.includes('mpv') && tourFares[selectedTour].mpv) {
+                // Match by vehicle type - mpv
+                currentFares[cab.id] = tourFares[selectedTour].mpv;
+                console.log(`Type match (mpv) for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              else if (cabId.includes('toyota') && tourFares[selectedTour].toyota) {
+                // Match by vehicle type - toyota
+                currentFares[cab.id] = tourFares[selectedTour].toyota;
+                console.log(`Type match (toyota) for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              else if (cabId.includes('dzire') && tourFares[selectedTour].dzire_cng) {
+                // Match by vehicle type - dzire_cng
+                currentFares[cab.id] = tourFares[selectedTour].dzire_cng;
+                console.log(`Type match (dzire_cng) for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              else if (cabId.includes('etios') && tourFares[selectedTour].etios) {
+                // Match by vehicle type - etios
+                currentFares[cab.id] = tourFares[selectedTour].etios;
+                console.log(`Type match (etios) for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              else {
+                // Fallback to a calculated fare based on distance
+                const baseFare = (tourFares[selectedTour].distance || distance) * (
+                  cabId.includes('luxury') ? 20 : 
+                  cabId.includes('innova') ? 15 : 
+                  cabId.includes('ertiga') ? 12 : 10
+                );
+                currentFares[cab.id] = Math.max(baseFare, 1500);
+                console.log(`Calculated fare for ${cab.id}: ${currentFares[cab.id]}`);
               }
               
-              // Set the fare in our local state
-              currentFares[cab.id] = fare;
-              
-              // Also store it in localStorage for persistence
+              // Store the calculated fare in localStorage for persistence
               try {
-                localStorage.setItem(`fare_tour_${cab.id.toLowerCase()}`, fare.toString());
+                localStorage.setItem(`fare_tour_${cab.id}`, currentFares[cab.id].toString());
               } catch (e) {
                 console.warn(`Could not store fare for ${cab.id} in localStorage:`, e);
               }
             });
             
-            console.log("Tour fares loaded successfully:", currentFares);
+            // Update state with the calculated fares
             setCabFares(currentFares);
+            
+            // Dispatch an event with the fares for each cab
+            cabTypes.forEach(cab => {
+              if (currentFares[cab.id]) {
+                window.dispatchEvent(new CustomEvent('fare-calculated', {
+                  detail: {
+                    cabId: cab.id,
+                    cabName: cab.name,
+                    fare: currentFares[cab.id],
+                    tripType: 'tour',
+                    tourId: selectedTour,
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
+            
             setIsCalculatingFares(false);
-            return; // Exit early after setting tour fares
+            return;
           } else {
             console.warn(`No fares found for tour ${selectedTour}`);
           }
@@ -251,7 +303,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     };
     
     fetchFares();
-  }, [cabTypes, distance, tripType, hourlyPackage]);
+  }, [cabTypes, distance, tripType, hourlyPackage, forceFareRefresh]);
 
   // Generate fare details string
   const getFareDetails = (cab: CabType): string => {
