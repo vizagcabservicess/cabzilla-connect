@@ -14,10 +14,13 @@ function getDbConnectionWithRetry($maxRetries = 1) {
     $retries = 0;
     $error = null;
     
+    error_log("Attempting database connection with $maxRetries retries...");
+    
     while ($retries <= $maxRetries) {
         try {
             $conn = getDbConnection();
             if ($conn) {
+                error_log("Database connection successful on attempt " . ($retries + 1));
                 return $conn;
             }
         } catch (Exception $e) {
@@ -29,6 +32,7 @@ function getDbConnectionWithRetry($maxRetries = 1) {
         if ($retries <= $maxRetries) {
             // Wait before retrying
             usleep(500000); // 500ms
+            error_log("Retrying database connection, attempt $retries of $maxRetries");
         }
     }
     
@@ -58,6 +62,15 @@ function getDbConnection() {
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
+    // Set charset
+    $conn->set_charset("utf8mb4");
+    
+    // Test the connection
+    if (!$conn->ping()) {
+        error_log("Database connection is not active");
+        throw new Exception("Database connection is not active");
+    }
+    
     error_log("Database connection successful");
     return $conn;
 }
@@ -72,6 +85,8 @@ function getDbConnection() {
  * @throws Exception If query fails
  */
 function executeQuery($conn, $sql, $params = []) {
+    error_log("Executing query: " . $sql);
+    
     $stmt = $conn->prepare($sql);
     
     if (!$stmt) {
@@ -96,8 +111,17 @@ function executeQuery($conn, $sql, $params = []) {
             $bindParams[] = $param;
         }
         
+        error_log("Binding parameters with types: " . $types);
+        
         $bindParams = array_merge([$types], $bindParams);
-        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+        $bindParamsRefs = [];
+        
+        // Create references to $bindParams
+        foreach ($bindParams as $key => $value) {
+            $bindParamsRefs[$key] = &$bindParams[$key];
+        }
+        
+        call_user_func_array([$stmt, 'bind_param'], $bindParamsRefs);
     }
     
     if (!$stmt->execute()) {
@@ -108,5 +132,23 @@ function executeQuery($conn, $sql, $params = []) {
     $result = $stmt->get_result();
     $stmt->close();
     
+    if ($result !== false) {
+        error_log("Query execution successful, returned " . ($result->num_rows ?? 'unknown') . " rows");
+    } else {
+        error_log("Query execution successful (non-select query)");
+    }
+    
     return $result !== false ? $result : true;
+}
+
+/**
+ * Check if a table exists in the database
+ * 
+ * @param mysqli $conn Database connection
+ * @param string $tableName Table name to check
+ * @return bool True if table exists, false otherwise
+ */
+function tableExists($conn, $tableName) {
+    $result = $conn->query("SHOW TABLES LIKE '$tableName'");
+    return $result && $result->num_rows > 0;
 }

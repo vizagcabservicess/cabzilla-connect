@@ -187,42 +187,15 @@ try {
             (!$userId ? "No user ID available. " : ""));
     }
     
-    // If we have real bookings, return them
-    if (count($bookings) > 0) {
-        echo json_encode([
-            'status' => 'success', 
-            'bookings' => $bookings, 
-            'source' => $dataSource,
-            'userId' => $userId,
-            'isAdmin' => $isAdmin
-        ]);
-        exit;
-    }
-    
-    // If we get here, either we have no bookings or there was an error
-    // Return empty array for authenticated users with no bookings
-    if ($userId) {
-        echo json_encode([
-            'status' => 'success', 
-            'bookings' => [], 
-            'message' => 'No bookings found for this user',
-            'source' => $hasBookingsTable ? 'database_empty' : 'no_table',
-            'userId' => $userId,
-            'isAdmin' => $isAdmin
-        ]);
-        exit;
-    }
-    
-    // Last resort: return sample bookings
-    $fallbackBookings = createFallbackBookings($userId);
+    // CRITICAL FIX: Make sure we're always returning bookings in the proper format
     echo json_encode([
         'status' => 'success', 
-        'bookings' => $fallbackBookings, 
-        'source' => 'sample_fallback',
-        'message' => 'Using sample data because real data could not be retrieved',
+        'bookings' => $bookings, 
+        'source' => $bookings ? $dataSource : 'empty',
         'userId' => $userId,
         'isAdmin' => $isAdmin
     ]);
+    exit;
     
 } catch (Exception $e) {
     error_log("Error in bookings endpoint: " . $e->getMessage());

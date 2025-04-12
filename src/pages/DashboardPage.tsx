@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
+  const [apiDebugInfo, setApiDebugInfo] = useState<any | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -81,9 +82,59 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings();
-      setBookings(Array.isArray(data) ? data : []);
+      console.log('Fetching user bookings...');
+      
+      // Add a timestamp to force refresh
+      const timestamp = new Date().getTime();
+      
+      // Use fetch directly for more control
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/user/bookings?_t=${timestamp}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const responseText = await response.text();
+      console.log('Raw bookings response:', responseText.substring(0, 500));
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        setApiDebugInfo(data);
+        console.log('Parsed bookings response:', data);
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+      
+      // Handle different response formats
+      let bookingsData: Booking[] = [];
+      
+      if (data && data.bookings && Array.isArray(data.bookings)) {
+        console.log(`Received ${data.bookings.length} bookings, source: ${data.source}`);
+        bookingsData = data.bookings;
+      } else if (Array.isArray(data)) {
+        console.log(`Received ${data.length} bookings (direct array)`);
+        bookingsData = data;
+      } else {
+        console.warn('Unexpected response format. Expected bookings array:', data);
+        bookingsData = [];
+      }
+      
+      setBookings(bookingsData);
       setRetryCount(0);
+      
+      if (bookingsData.length === 0) {
+        console.log('No bookings found for this user');
+      }
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
@@ -322,6 +373,18 @@ export default function DashboardPage() {
 
       {renderAdminMetrics()}
 
+      {apiDebugInfo && (
+        <Alert className="mb-4">
+          <AlertTitle>API Debug Info</AlertTitle>
+          <AlertDescription>
+            <p>Source: {apiDebugInfo.source}</p>
+            <p>User ID: {apiDebugInfo.userId}</p>
+            <p>Admin: {apiDebugInfo.isAdmin ? 'Yes' : 'No'}</p>
+            {apiDebugInfo.error && <p>Error: {apiDebugInfo.error}</p>}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs defaultValue="all">
         <TabsList>
           <TabsTrigger value="all" className="flex items-center gap-1">
@@ -400,7 +463,7 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, empt
     );
   }
   
-  if (bookings.length === 0) {
+  if (!bookings || bookings.length === 0) {
     return (
       <Alert className="mt-4">
         <Info className="h-4 w-4" />
