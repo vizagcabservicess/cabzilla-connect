@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration and CORS fix
 require_once __DIR__ . '/../config.php';
@@ -23,6 +22,22 @@ $token = '';
 
 error_log("Headers received: " . json_encode($headers));
 
+// Check for explicit X-User-ID header
+$explicitUserId = null;
+foreach($headers as $key => $value) {
+    if (strtolower($key) === 'x-user-id') {
+        $explicitUserId = $value;
+        error_log("Found explicit X-User-ID header: " . $explicitUserId);
+        break;
+    }
+}
+
+// Check for user_id query parameter (highest priority)
+if (isset($_GET['user_id']) && !empty($_GET['user_id'])) {
+    $explicitUserId = $_GET['user_id'];
+    error_log("Found user_id in query parameters: " . $explicitUserId);
+}
+
 // Extract authorization header manually - handle both camel case and lowercase
 $authHeader = null;
 foreach($headers as $key => $value) {
@@ -41,11 +56,37 @@ if ($authHeader) {
         if (function_exists('verifyJwtToken')) {
             $payload = verifyJwtToken($token);
             if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
+                // Only use token user_id if no explicit ID was provided
+                if (!$explicitUserId) {
+                    $userId = $payload['user_id'];
+                } else {
+                    // If a force user match header is present, always use the explicit ID
+                    $forceUserMatch = false;
+                    foreach($headers as $key => $value) {
+                        if (strtolower($key) === 'x-force-user-match' && $value === 'true') {
+                            $forceUserMatch = true;
+                            break;
+                        }
+                    }
+                    
+                    if ($forceUserMatch) {
+                        $userId = $explicitUserId;
+                        error_log("Forcing use of explicit user ID: $userId instead of token user_id: {$payload['user_id']}");
+                    } else {
+                        $userId = $payload['user_id'];
+                        error_log("Using token user_id: $userId (explicit ID was present but not forced)");
+                    }
+                }
+                
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
                 error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             } else {
                 error_log("Token payload missing user_id: " . json_encode($payload));
+                // Use explicit ID if token didn't have user_id
+                if ($explicitUserId) {
+                    $userId = $explicitUserId;
+                    error_log("Using explicit user ID: $userId since token didn't contain user_id");
+                }
             }
         } else {
             error_log("verifyJwtToken function not available");
@@ -54,15 +95,53 @@ if ($authHeader) {
             if (count($tokenParts) >= 2) {
                 $payload = json_decode(base64_decode($tokenParts[1]), true);
                 if ($payload && isset($payload['user_id'])) {
-                    $userId = $payload['user_id'];
+                    // Only use token user_id if no explicit ID was provided or force match is not enabled
+                    if (!$explicitUserId) {
+                        $userId = $payload['user_id'];
+                    } else {
+                        // Check if force user match is enabled
+                        $forceUserMatch = false;
+                        foreach($headers as $key => $value) {
+                            if (strtolower($key) === 'x-force-user-match' && $value === 'true') {
+                                $forceUserMatch = true;
+                                break;
+                            }
+                        }
+                        
+                        if ($forceUserMatch) {
+                            $userId = $explicitUserId;
+                            error_log("Forcing use of explicit user ID: $userId instead of extracted token user_id: {$payload['user_id']}");
+                        } else {
+                            $userId = $payload['user_id'];
+                            error_log("Using extracted token user_id: $userId (explicit ID was present but not forced)");
+                        }
+                    }
+                    
                     $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
                     error_log("Manually extracted user from token: $userId");
+                } else if ($explicitUserId) {
+                    // Use explicit ID if token didn't have user_id
+                    $userId = $explicitUserId;
+                    error_log("Using explicit user ID: $userId since token didn't contain extractable user_id");
                 }
+            } else if ($explicitUserId) {
+                // Use explicit ID if token format is invalid
+                $userId = $explicitUserId;
+                error_log("Using explicit user ID: $userId since token format is invalid");
             }
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
+        // Use explicit ID if token verification failed
+        if ($explicitUserId) {
+            $userId = $explicitUserId;
+            error_log("Using explicit user ID: $userId since token verification failed");
+        }
     }
+} else if ($explicitUserId) {
+    // No auth token, but explicit user ID was provided
+    $userId = $explicitUserId;
+    error_log("No auth token found, using explicit user ID: $userId");
 }
 
 // Try to get user from database
@@ -94,8 +173,10 @@ try {
     if ($token && strpos($token, 'demo_token_') === 0) {
         error_log("Demo token detected, returning demo user data");
         
+        $demoUserId = $explicitUserId ?: 999;
+        
         $demoUser = [
-            'id' => 999,
+            'id' => intval($demoUserId),
             'name' => 'Demo User',
             'email' => 'demo@example.com',
             'phone' => '9876543210',
@@ -117,21 +198,7 @@ try {
     if ($tableCheck && $tableCheck->num_rows > 0) {
         error_log("Users table exists, proceeding with query");
         
-        // Try a simple select to get any user if userId is not set
-        if (!$userId) {
-            $userQuery = "SELECT id, name, email, phone, role, created_at FROM users LIMIT 1";
-            $userResult = $conn->query($userQuery);
-            
-            if ($userResult && $userResult->num_rows > 0) {
-                $userRow = $userResult->fetch_assoc();
-                $userId = $userRow['id'];
-                error_log("No userId in token, using first user found: " . $userId);
-            } else {
-                error_log("No users found in database");
-            }
-        }
-        
-        // Query for user data
+        // Query for user data based on determined user ID
         if ($userId) {
             $stmt = $conn->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
             $stmt->bind_param("i", $userId);
@@ -167,9 +234,11 @@ try {
     }
     
     // If we reach here, we were unable to get user data from database
-    // Return a sample user as fallback, but with a clear source indicator
+    // Return a sample user as fallback, but with the requested user ID if available
+    $sampleUserId = $userId ?: 2; // Default to ID 2 only if no user ID found
+    
     $sampleUser = [
-        'id' => $userId ?? 2, // Default to ID 2 if no user ID found
+        'id' => intval($sampleUserId),
         'name' => 'Sample User',
         'email' => 'sample@example.com',
         'phone' => '1234567890',
@@ -182,14 +251,16 @@ try {
         'user' => $sampleUser,
         'source' => 'sample_fallback'
     ]);
-    error_log("Returned sample user data as fallback with ID: " . ($userId ?? 2));
+    error_log("Returned sample user data as fallback with ID: " . $sampleUserId);
     
 } catch (Exception $e) {
     error_log("Error in user.php: " . $e->getMessage());
     
-    // Return fallback user data
+    // Return fallback user data with the requested ID if available
+    $fallbackUserId = $userId ?: 2; // Default to ID 2 only if no user ID found
+    
     $fallbackUser = [
-        'id' => $userId ?? 2, // Default to ID 2 if no user ID found
+        'id' => intval($fallbackUserId),
         'name' => 'Fallback User',
         'email' => 'fallback@example.com',
         'phone' => '9876543210',

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ const DEFAULT_METRICS: DashboardMetricsType = {
   activeRides: 0,
   totalRevenue: 0,
   availableDrivers: 0,
-  busyDrivers: 0,
+  busyDrivers: 0, 
   avgRating: 0,
   upcomingRides: 0,
   availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
@@ -52,18 +53,26 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
+          // Preserve the user ID from login if it exists
+          const storedUserId = localStorage.getItem('userId');
+          
           if (userData.id) {
-            const currentStoredId = localStorage.getItem('userId');
-            if (!currentStoredId || currentStoredId !== userData.id.toString()) {
+            // Only update userId in localStorage if it's not already set from login
+            // or if the IDs don't match (but avoid overriding with ID 1)
+            if (!storedUserId) {
               localStorage.setItem('userId', userData.id.toString());
-              console.log(`Stored user ID ${userData.id} in localStorage`);
+              console.log(`Stored user ID ${userData.id} in localStorage (no previous ID)`);
+            } else if (storedUserId !== userData.id.toString() && userData.id !== 1) {
+              // Only override if the new ID is not 1 (prevent downgrading to default admin)
+              localStorage.setItem('userId', userData.id.toString());
+              console.log(`Updated user ID in localStorage from ${storedUserId} to ${userData.id}`);
             } else {
-              console.log(`User ID ${userData.id} already stored in localStorage`);
+              console.log(`Kept existing user ID ${storedUserId} in localStorage`);
             }
           }
           
           setUser({
-            id: userData.id || 0,
+            id: userData.id || parseInt(storedUserId || '0', 10),
             name: userData.name || '',
             email: userData.email || '',
             role: userData.role || 'user'
@@ -72,7 +81,7 @@ export default function DashboardPage() {
           const isAdminUser = userData.role === 'admin';
           setIsAdmin(isAdminUser);
           
-          console.log(`User loaded: ID=${userData.id}, Name=${userData.name}, Role=${userData.role}, IsAdmin=${isAdminUser}`);
+          console.log(`User loaded: ID=${userData.id || storedUserId}, Name=${userData.name}, Role=${userData.role}, IsAdmin=${isAdminUser}`);
         } else {
           throw new Error('User data not found');
         }

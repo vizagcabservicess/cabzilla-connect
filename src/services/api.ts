@@ -1,3 +1,4 @@
+
 // API configuration for all endpoints
 
 // Import from config
@@ -21,20 +22,42 @@ class ApiService {
     return `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   }
 
+  // Helper to ensure consistent user ID in all requests
+  private ensureConsistentUserId(options: RequestInit = {}): RequestInit {
+    const userId = localStorage.getItem('userId');
+    const headers = {
+      ...(options.headers || {}),
+      ...getAuthHeaders()
+    };
+    
+    // Add user ID in headers for better consistency
+    if (userId) {
+      headers['X-User-ID'] = userId;
+      headers['X-Force-User-Match'] = 'true';
+    }
+    
+    return {
+      ...options,
+      headers
+    };
+  }
+
   // GET request with authorization
   async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = this.getFullUrl(endpoint);
-    const headers = {
-      ...getAuthHeaders(),
-      ...(options.headers || {})
-    };
+    const enhancedOptions = this.ensureConsistentUserId(options);
+    const userId = localStorage.getItem('userId');
+    
+    // Append userId as query parameter for better compatibility
+    const queryChar = endpoint.includes('?') ? '&' : '?';
+    const endpointWithUserId = userId ? `${endpoint}${queryChar}user_id=${userId}` : endpoint;
+    const fullUrl = this.getFullUrl(endpointWithUserId);
 
     try {
-      console.log(`API Request: GET ${endpoint}`);
-      const response = await safeFetch(url, {
+      console.log(`API Request: GET ${endpointWithUserId}`);
+      const response = await safeFetch(fullUrl, {
         method: 'GET',
-        headers,
-        ...options
+        ...enhancedOptions
       });
 
       if (!response.ok) {
@@ -72,10 +95,10 @@ class ApiService {
   // POST request with authorization
   async post<T>(endpoint: string, data: any, options: RequestInit = {}): Promise<T> {
     const url = this.getFullUrl(endpoint);
+    const enhancedOptions = this.ensureConsistentUserId(options);
     const headers = {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...(options.headers || {})
+      ...(enhancedOptions.headers || {})
     };
 
     try {
@@ -112,17 +135,13 @@ class ApiService {
   // DELETE request with authorization
   async delete<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = this.getFullUrl(endpoint);
-    const headers = {
-      ...getAuthHeaders(),
-      ...(options.headers || {})
-    };
-
+    const enhancedOptions = this.ensureConsistentUserId(options);
+    
     try {
       console.log(`API Request: DELETE ${endpoint}`);
       const response = await safeFetch(url, {
         method: 'DELETE',
-        headers,
-        ...options
+        ...enhancedOptions
       });
 
       if (!response.ok) {
@@ -146,10 +165,10 @@ class ApiService {
   // PUT request with authorization
   async put<T>(endpoint: string, data: any, options: RequestInit = {}): Promise<T> {
     const url = this.getFullUrl(endpoint);
+    const enhancedOptions = this.ensureConsistentUserId(options);
     const headers = {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...(options.headers || {})
+      ...(enhancedOptions.headers || {})
     };
 
     try {
@@ -345,8 +364,22 @@ export const bookingAPI = {
       const period = options.period || 'week';
       const status = options.status || 'all';
       
+      // Get user ID for request
+      const userId = localStorage.getItem('userId');
+      const requestOptions = {
+        headers: {
+          ...getAuthHeaders(),
+          'X-User-ID': userId || '',
+          'X-Force-User-Match': 'true',
+          'X-Admin-Mode': 'true'
+        }
+      };
+      
       // First try the original endpoint
-      return await api.get(`/api/admin/metrics?period=${period}${status ? `&status=${status}` : ''}`);
+      return await api.get(
+        `/api/admin/metrics?period=${period}${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
+        requestOptions
+      );
     } catch (error) {
       console.log('Primary metrics endpoint failed, trying alternatives...', error);
       
@@ -354,14 +387,42 @@ export const bookingAPI = {
         // Try the dashboard endpoint
         const period = options.period || 'week';
         const status = options.status || 'all';
-        return await api.get(`/api/user/dashboard?period=${period}&admin=true${status ? `&status=${status}` : ''}`);
+        const userId = localStorage.getItem('userId');
+        
+        const requestOptions = {
+          headers: {
+            ...getAuthHeaders(),
+            'X-User-ID': userId || '',
+            'X-Force-User-Match': 'true',
+            'X-Admin-Mode': 'true'
+          }
+        };
+        
+        return await api.get(
+          `/api/user/dashboard?period=${period}&admin=true${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
+          requestOptions
+        );
       } catch (error2) {
         console.log('Secondary metrics endpoint failed, trying one more pattern...', error2);
         
         // One more pattern to try
         const period = options.period || 'week';
         const status = options.status || 'all';
-        return await api.get(`/api/admin/dashboard/metrics?period=${period}${status ? `&status=${status}` : ''}`);
+        const userId = localStorage.getItem('userId');
+        
+        const requestOptions = {
+          headers: {
+            ...getAuthHeaders(),
+            'X-User-ID': userId || '',
+            'X-Force-User-Match': 'true',
+            'X-Admin-Mode': 'true'
+          }
+        };
+        
+        return await api.get(
+          `/api/admin/dashboard/metrics?period=${period}${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
+          requestOptions
+        );
       }
     }
   },

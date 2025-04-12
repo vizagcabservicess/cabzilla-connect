@@ -5,6 +5,7 @@ import { User } from '@/types/api';
 // Constants for token storage
 const AUTH_TOKEN_KEY = 'authToken';
 const USER_DATA_KEY = 'userData';
+const USER_ID_KEY = 'userId';
 
 const apiClient = axios.create({
   headers: {
@@ -22,24 +23,18 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Add user ID from userData if available
-    const userDataStr = localStorage.getItem(USER_DATA_KEY);
-    if (userDataStr) {
-      try {
-        const userData = JSON.parse(userDataStr);
-        if (userData && userData.id) {
-          // Add user ID to all requests
-          config.params = {
-            ...config.params,
-            user_id: userData.id
-          };
-          
-          // Add as header for systems that might need it
-          config.headers['X-User-ID'] = userData.id;
-        }
-      } catch (e) {
-        console.warn('Failed to parse user data for request headers', e);
-      }
+    // Add user ID from localStorage directly (don't rely on userData)
+    const userId = localStorage.getItem(USER_ID_KEY);
+    if (userId) {
+      // Add user ID to all requests
+      config.params = {
+        ...config.params,
+        user_id: userId
+      };
+      
+      // Add as header for systems that might need it
+      config.headers['X-User-ID'] = userId;
+      config.headers['X-Force-User-Match'] = 'true';
     }
     
     // Add cache busting to GET requests
@@ -151,6 +146,7 @@ export const authAPI = {
         // Store demo token and user
         localStorage.setItem(AUTH_TOKEN_KEY, demoToken);
         localStorage.setItem(USER_DATA_KEY, JSON.stringify(demoUser));
+        localStorage.setItem(USER_ID_KEY, demoUser.id.toString());
         
         return {
           status: 'success',
@@ -163,6 +159,7 @@ export const authAPI = {
       // Clear any existing tokens first
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(USER_DATA_KEY);
+      // Note: we don't clear USER_ID_KEY here as we'll set it only once we get a successful response
       
       // Try multiple API endpoints for better reliability
       let response;
@@ -203,8 +200,11 @@ export const authAPI = {
         if (response.data.user) {
           localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
           
-          // Log the stored user ID for debugging
-          console.log(`Login successful, stored user ID: ${response.data.user.id}`);
+          // Set user ID from login - this is a critical line
+          if (response.data.user.id) {
+            localStorage.setItem(USER_ID_KEY, response.data.user.id.toString());
+            console.log(`Login successful, stored user ID: ${response.data.user.id}`);
+          }
         }
         
         console.log('Login successful, token and user data stored');
@@ -247,7 +247,8 @@ export const authAPI = {
   },
   
   getCurrentUser: async () => {
-    // First try to get user from localStorage
+    // Get userId directly (as stored during login)
+    const storedUserId = localStorage.getItem(USER_ID_KEY);
     const userStr = localStorage.getItem(USER_DATA_KEY);
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     
@@ -256,15 +257,22 @@ export const authAPI = {
       return null;
     }
     
-    if (userStr) {
+    // First try to use stored userId and userData - this is more reliable
+    if (storedUserId && userStr) {
       try {
         const userData = JSON.parse(userStr);
-        console.log('Retrieved user data from localStorage:', userData.id);
+        console.log(`Retrieved user data from localStorage for ID: ${storedUserId}`);
+        
+        // Ensure userData.id matches storedUserId for consistency
+        if (userData.id && userData.id.toString() !== storedUserId) {
+          console.log(`User ID mismatch: userData.id=${userData.id}, storedUserId=${storedUserId}. Using stored ID.`);
+          userData.id = parseInt(storedUserId, 10);
+        }
         
         // Return cached data but try to refresh in the background
         setTimeout(() => {
           console.log('Attempting to refresh user data in the background');
-          authAPI.refreshUserData();
+          authAPI.refreshUserData(true); // Pass true to preserve current userId
         }, 100);
         
         return userData;
@@ -278,7 +286,7 @@ export const authAPI = {
     if (token.startsWith('demo_token_')) {
       console.log('Using demo token, returning demo user data');
       const demoUser = {
-        id: 999,
+        id: storedUserId ? parseInt(storedUserId, 10) : 999,
         name: 'Demo User',
         email: 'demo@example.com',
         phone: '9876543210',
@@ -287,6 +295,8 @@ export const authAPI = {
       };
       
       localStorage.setItem(USER_DATA_KEY, JSON.stringify(demoUser));
+      // Don't overwrite USER_ID_KEY here to maintain the original userId
+      
       return demoUser;
     }
     
@@ -298,12 +308,20 @@ export const authAPI = {
       let retries = 0;
       let error = null;
       
+      // Add explicit user ID from localStorage to headers
+      const requestHeaders = {
+        ...forceRefreshHeaders,
+        'X-Force-Database': 'true'
+      };
+      
+      if (storedUserId) {
+        requestHeaders['X-User-ID'] = storedUserId;
+        requestHeaders['X-Force-User-Match'] = 'true';
+      }
+      
       while (retries < maxRetries) {
         try {
-          // Try different API endpoints to get user data
-          let response;
-          
-          // Try multiple endpoints to be more resilient
+          // Try multiple endpoints to get user data
           const endpoints = [
             '/api/user',
             '/api/user/profile',
@@ -313,24 +331,39 @@ export const authAPI = {
           
           console.log('Trying multiple user endpoints for reliability');
           
+          let userData = null;
+          
           for (const endpoint of endpoints) {
             try {
-              console.log(`Trying endpoint: ${endpoint}`);
-              response = await apiClient.get(getApiUrl(endpoint), {
-                headers: {
-                  ...forceRefreshHeaders,
-                  'X-Force-Database': 'true'
-                }
+              console.log(`Trying endpoint: ${endpoint} with userId: ${storedUserId || 'none'}`);
+              const response = await apiClient.get(getApiUrl(endpoint), {
+                headers: requestHeaders,
+                params: storedUserId ? { user_id: storedUserId } : {}
               });
               
               if (response.data) {
                 console.log(`Successfully got user data from ${endpoint}`, response.data);
-                if (response.data.source === 'database') {
-                  console.log('User data came from database - success!');
-                } else {
-                  console.log(`User data came from ${response.data.source}`);
+                
+                // Extract userData from different response formats
+                let extractedUser = null;
+                if (response.data.user) {
+                  extractedUser = response.data.user;
+                } else if (response.data.id) {
+                  extractedUser = response.data;
                 }
-                break; // Exit the loop if any endpoint succeeds
+                
+                if (extractedUser) {
+                  userData = extractedUser;
+                  
+                  // IMPORTANT: Override API-returned ID with stored ID if stored ID exists
+                  // This prevents the issue where the API returns user ID 1 instead of the logged-in user
+                  if (storedUserId && userData.id.toString() !== storedUserId) {
+                    console.log(`API returned user ID ${userData.id} but using stored ID ${storedUserId} instead`);
+                    userData.id = parseInt(storedUserId, 10);
+                  }
+                  
+                  break; // Exit loop if we got valid user data
+                }
               }
             } catch (endpointError) {
               console.warn(`Endpoint ${endpoint} failed:`, endpointError.message);
@@ -338,22 +371,13 @@ export const authAPI = {
             }
           }
           
-          if (!response) {
-            throw new Error('All user data endpoints failed');
+          if (userData) {
+            // Update localStorage with userData but don't override the user ID
+            localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+            return userData;
           }
           
-          if (response.data && response.data.user) {
-            // Update localStorage with fresh data
-            localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
-            return response.data.user;
-          } else if (response.data && response.data.id) {
-            // Direct user object in response
-            localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data));
-            return response.data;
-          }
-          
-          // If we get here, we didn't get a valid user
-          throw new Error('Invalid user data received');
+          throw new Error('No valid user data found from any endpoint');
           
         } catch (err) {
           error = err;
@@ -366,42 +390,31 @@ export const authAPI = {
       // All retries failed, try to extract user from token
       console.error('Failed to get user data after all retries:', error);
       
-      // If all API calls fail but we have a token, try to extract info from the token
-      if (token) {
-        try {
-          // JWT tokens are base64 encoded with 3 parts: header.payload.signature
-          const parts = token.split('.');
-          if (parts.length === 3) {
-            const payload = JSON.parse(atob(parts[1]));
-            
-            if (payload && (payload.user_id || payload.sub)) {
-              console.log('Creating user object from token payload');
-              const minimalUser = {
-                id: payload.user_id || payload.sub,
-                name: payload.name || 'User',
-                email: payload.email || '',
-                role: payload.role || 'user',
-                createdAt: new Date().toISOString()
-              };
-              
-              localStorage.setItem(USER_DATA_KEY, JSON.stringify(minimalUser));
-              return minimalUser;
-            }
-          }
-        } catch (e) {
-          console.error('Error extracting user from token:', e);
-        }
+      // If all API calls fail but we have a token and stored user ID, create minimal user
+      if (token && storedUserId) {
+        console.log(`Creating minimal user with stored ID: ${storedUserId}`);
+        const minimalUser = {
+          id: parseInt(storedUserId, 10),
+          name: 'User',
+          email: '',
+          role: 'user',
+          createdAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(minimalUser));
+        return minimalUser;
       }
       
+      // If token parsing also fails, default to a placeholder user
       throw error || new Error('Could not retrieve user data');
     } catch (error) {
       console.error('Error getting current user from API:', error);
       
-      // If API call fails but we have a token, create a minimal user object
-      if (token) {
-        console.log('Creating minimal user object from token existence');
+      // If API call fails but we have a token and user ID, create a minimal user object
+      if (token && storedUserId) {
+        console.log(`Creating minimal user with ID: ${storedUserId}`);
         const minimalUser = {
-          id: 0,
+          id: parseInt(storedUserId, 10),
           name: 'User',
           email: '',
           role: 'user',
@@ -415,27 +428,61 @@ export const authAPI = {
     }
   },
 
-  refreshUserData: async () => {
+  refreshUserData: async (preserveUserId = false) => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const storedUserId = localStorage.getItem(USER_ID_KEY);
+    
     if (!token) return null;
     
     try {
-      console.log('Refreshing user data from API');
+      console.log('Refreshing user data from API, preserveUserId:', preserveUserId);
+      
+      // Prepare headers to ensure consistent user matching
+      const headers = {
+        ...forceRefreshHeaders,
+        'X-Force-Database': 'true',
+        'X-Force-Refresh': 'true'
+      };
+      
+      // Add user ID from localStorage to ensure consistency
+      if (storedUserId) {
+        headers['X-User-ID'] = storedUserId;
+        headers['X-Force-User-Match'] = 'true';
+      }
+      
       const response = await apiClient.get(getApiUrl('/api/user'), {
-        headers: {
-          ...forceRefreshHeaders,
-          'X-Force-Database': 'true',
-          'X-Force-Refresh': 'true'
-        }
+        headers,
+        params: storedUserId ? { user_id: storedUserId } : {}
       });
       
       if (response.data && response.data.user) {
         console.log('Refreshed user data:', response.data.user);
         console.log('Data source:', response.data.source);
         
-        // Update localStorage with fresh data
-        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
-        return response.data.user;
+        const userData = response.data.user;
+        
+        // If preserveUserId is true, ensure we don't overwrite the user ID
+        if (preserveUserId && storedUserId) {
+          console.log(`Preserving original user ID: ${storedUserId} (API returned ${userData.id})`);
+          
+          // Modify the userData before storing
+          userData.id = parseInt(storedUserId, 10);
+          
+          // Update localStorage with fresh data but preserved ID
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+          
+          // Don't update USER_ID_KEY to preserve the original ID
+        } else {
+          // Standard update of all user data
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+          
+          // Only update user ID if it's not being reset to 1
+          if (userData.id && userData.id !== 1) {
+            localStorage.setItem(USER_ID_KEY, userData.id.toString());
+          }
+        }
+        
+        return userData;
       }
       return null;
     } catch (error) {
