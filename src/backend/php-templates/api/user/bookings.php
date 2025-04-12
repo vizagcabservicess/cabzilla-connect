@@ -3,15 +3,22 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Include the fix-cors.php file for CORS headers and helper functions
-require_once __DIR__ . '/../fix-cors.php';
+// Check if db_helper exists and include it
+if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+    require_once __DIR__ . '/../common/db_helper.php';
+}
+
+// Set response headers first
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Log request for debugging
-logError("Bookings API request received", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'uri' => $_SERVER['REQUEST_URI'],
-    'headers' => getallheaders()
-]);
+error_log("Bookings API request received - Method: " . $_SERVER['REQUEST_METHOD'] . ", URI: " . $_SERVER['REQUEST_URI']);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -21,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Only allow GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
     exit;
 }
 
@@ -30,13 +37,14 @@ $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
-logError("User bookings request received");
+error_log("User bookings request received");
+error_log("Headers: " . json_encode($headers));
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
-    logError("Found auth token", ['token_preview' => substr($token, 0, 10) . '...']);
+    error_log("Found auth token: " . substr($token, 0, 10) . "...");
     
     try {
         if (function_exists('verifyJwtToken')) {
@@ -44,63 +52,74 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
             if ($payload && isset($payload['user_id'])) {
                 $userId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                logError("User authenticated", ['user_id' => $userId, 'is_admin' => $isAdmin ? 'yes' : 'no']);
+                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             } else {
-                logError("Token payload missing user_id", ['payload' => $payload]);
+                error_log("Token payload missing user_id: " . json_encode($payload));
             }
         } else {
-            logError("verifyJwtToken function not available");
+            error_log("verifyJwtToken function not available");
         }
     } catch (Exception $e) {
-        logError("JWT verification failed", ['error' => $e->getMessage()]);
+        error_log("JWT verification failed: " . $e->getMessage());
     }
-}
-
-// For demo token, still return sample bookings
-if ($token && strpos($token, 'demo_token_') === 0) {
-    logError("Demo token detected, returning demo bookings");
-    $fallbackBookings = createFallbackBookings(999);
-    sendJsonResponse([
-        'status' => 'success', 
-        'bookings' => $fallbackBookings, 
-        'source' => 'demo',
-        'userId' => 999,
-        'isAdmin' => false
-    ]);
-    exit;
 }
 
 // Connect to database
 try {
-    // Define database credentials
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    // Connect directly to database
-    logError("Connecting to database", ['host' => $dbHost, 'db' => $dbName]);
-    
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
+    // Connect to database - direct connection if helper functions are not available
+    $conn = null;
+    if (function_exists('getDbConnectionWithRetry')) {
+        $conn = getDbConnectionWithRetry(2);
+    } else if (function_exists('getDbConnection')) {
+        $conn = getDbConnection();
+    } else {
+        // Direct connection as fallback
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        } else {
+            error_log("Direct database connection successful for bookings");
+        }
     }
     
-    logError("Database connection established for bookings");
+    if (!$conn) {
+        throw new Exception("Database connection failed");
+    }
     
-    // Check if bookings table exists
+    error_log("Database connection established for bookings");
+    
+    // Check if bookings table exists - this is crucial
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     $hasBookingsTable = ($tableExists && $tableExists->num_rows > 0);
     
-    logError("Bookings table exists", ['exists' => $hasBookingsTable ? 'Yes' : 'No']);
+    error_log("Bookings table exists: " . ($hasBookingsTable ? 'Yes' : 'No'));
     
-    // Initialize bookings array and data source
+    // For demo token, still return sample bookings
+    if ($token && strpos($token, 'demo_token_') === 0) {
+        error_log("Demo token detected, returning demo bookings");
+        $fallbackBookings = createFallbackBookings(999);
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => $fallbackBookings, 
+            'source' => 'demo',
+            'userId' => 999,
+            'isAdmin' => false
+        ]);
+        exit;
+    }
+    
+    // Try to get real data if we have a valid user ID and bookings table
     $bookings = [];
     $dataSource = 'unknown';
     
     if ($hasBookingsTable && ($userId || $isAdmin)) {
         try {
-            logError("Attempting to get real bookings from database for user", ['user_id' => $userId]);
+            error_log("Attempting to get real bookings from database");
             
             // Prepare the SQL query based on user role
             if ($isAdmin) {
@@ -121,10 +140,7 @@ try {
             }
             
             // Execute the query
-            if (!$stmt->execute()) {
-                throw new Exception("Failed to execute query: " . $stmt->error);
-            }
-            
+            $stmt->execute();
             $result = $stmt->get_result();
             
             if (!$result) {
@@ -159,53 +175,61 @@ try {
             }
             
             $dataSource = 'database';
-            logError("Successfully retrieved bookings from database", ['count' => count($bookings)]);
+            error_log("Successfully retrieved " . count($bookings) . " bookings from database");
             
         } catch (Exception $e) {
-            logError("Error fetching bookings from database", ['error' => $e->getMessage()]);
-            // We'll use fallback data below
+            error_log("Error fetching bookings from database: " . $e->getMessage());
+            // We'll fall through to the fallback below
         }
     } else {
-        logError("Cannot get real bookings", [
-            'table_exists' => $hasBookingsTable ? 'Yes' : 'No',
-            'user_id' => $userId,
-            'is_admin' => $isAdmin ? 'Yes' : 'No'
+        error_log("Cannot get real bookings: " . 
+            (!$hasBookingsTable ? "Bookings table doesn't exist. " : "") .
+            (!$userId ? "No user ID available. " : ""));
+    }
+    
+    // If we have real bookings, return them
+    if (count($bookings) > 0) {
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => $bookings, 
+            'source' => $dataSource,
+            'userId' => $userId,
+            'isAdmin' => $isAdmin
         ]);
+        exit;
     }
     
-    // If no bookings were found or there was an error, use fallback data
-    if (empty($bookings)) {
-        // Check if this was because it's a new user with no bookings yet
-        if ($userId && $hasBookingsTable) {
-            // User exists but has no bookings
-            logError("User has no bookings yet", ['user_id' => $userId]);
-            $dataSource = 'empty';
-        } else {
-            // Generate fallback bookings
-            $bookings = createFallbackBookings($userId);
-            $dataSource = 'fallback';
-            logError("Using fallback booking data", ['count' => count($bookings)]);
-        }
+    // If we get here, either we have no bookings or there was an error
+    // Return empty array for authenticated users with no bookings
+    if ($userId) {
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => [], 
+            'message' => 'No bookings found for this user',
+            'source' => $hasBookingsTable ? 'database_empty' : 'no_table',
+            'userId' => $userId,
+            'isAdmin' => $isAdmin
+        ]);
+        exit;
     }
     
-    // Close database connection
-    $conn->close();
-    
-    // Return bookings
-    sendJsonResponse([
+    // Last resort: return sample bookings
+    $fallbackBookings = createFallbackBookings($userId);
+    echo json_encode([
         'status' => 'success', 
-        'bookings' => $bookings, 
-        'source' => $dataSource,
+        'bookings' => $fallbackBookings, 
+        'source' => 'sample_fallback',
+        'message' => 'Using sample data because real data could not be retrieved',
         'userId' => $userId,
         'isAdmin' => $isAdmin
     ]);
     
 } catch (Exception $e) {
-    logError("Error in bookings endpoint", ['error' => $e->getMessage()]);
+    error_log("Error in bookings endpoint: " . $e->getMessage());
     
     // Provide fallback data
     $fallbackBookings = createFallbackBookings($userId);
-    sendJsonResponse([
+    echo json_encode([
         'status' => 'success', 
         'bookings' => $fallbackBookings, 
         'source' => 'error_fallback', 

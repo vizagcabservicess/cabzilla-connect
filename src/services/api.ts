@@ -230,62 +230,8 @@ export const bookingAPI = {
   },
 
   getUserBookings: async () => {
-    try {
-      console.log('Fetching user bookings...');
-      const token = localStorage.getItem('authToken');
-      
-      // Force a bypass of the cache
-      const timestamp = new Date().getTime();
-      const headers = {
-        Authorization: token ? `Bearer ${token}` : '',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'X-Force-Refresh': 'true',
-        'X-Requested-With': 'fetch'
-      };
-      
-      // Using fetch API for more control
-      const response = await fetch(`/api/user/bookings?_t=${timestamp}`, {
-        method: 'GET',
-        headers: headers
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const responseText = await response.text();
-      console.log('Raw bookings response:', responseText.substring(0, 500));
-      
-      if (!responseText || responseText.trim() === '') {
-        console.error('Empty response received from user/bookings API');
-        return [];
-      }
-      
-      try {
-        const data = JSON.parse(responseText);
-        console.log('Parsed bookings response:', data);
-        
-        // Check if the response contains bookings array
-        if (data && data.bookings && Array.isArray(data.bookings)) {
-          console.log(`Received ${data.bookings.length} bookings, source: ${data.source}`);
-          return data.bookings;
-        } else if (Array.isArray(data)) {
-          // Handle case where the response is directly an array
-          console.log(`Received ${data.length} bookings (direct array)`);
-          return data;
-        } else {
-          console.error('Unexpected response format:', data);
-          return [];
-        }
-      } catch (parseError) {
-        console.error('Error parsing bookings response:', parseError);
-        throw new Error('Invalid JSON response from bookings API');
-      }
-    } catch (error) {
-      console.error('Error fetching user bookings:', error);
-      throw error;
-    }
+    const response = await apiClient.get('/user/bookings');
+    return response.data;
   },
 
   updateBookingStatus: async (id: string | number, status: string) => {

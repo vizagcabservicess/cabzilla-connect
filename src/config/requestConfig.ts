@@ -14,7 +14,7 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Expires': '0',
     'Origin': window.location.origin,
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': 'application/json'
+    'Accept': '*/*'
   };
 };
 
@@ -71,10 +71,6 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     throw new Error('No internet connection');
   }
   
-  // Add timestamp to prevent caching
-  const url = new URL(endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`);
-  url.searchParams.append('_t', Date.now().toString());
-  
   // Prepare enhanced options with CORS headers
   const enhancedOptions: RequestInit = {
     ...options,
@@ -82,31 +78,21 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     credentials: 'omit',
     headers: {
       ...getBypassHeaders(),
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
       ...(options.headers || {})
     }
   };
+  
+  // Use direct URL to API without proxy
+  const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
   // Try up to 3 times
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      console.log(`Fetch attempt ${attempt} for ${url.toString()}`);
-      const result = await fetch(url.toString(), enhancedOptions);
+      const result = await fetch(url, enhancedOptions);
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
-      }
-      
-      // Check content type
-      const contentType = result.headers.get('content-type');
-      if (contentType && !contentType.includes('application/json')) {
-        console.warn(`API returned non-JSON content type: ${contentType}`);
-        // Get the response text for logging
-        const text = await result.text();
-        console.error('Non-JSON response:', text.substring(0, 500));
-        throw new Error('API returned non-JSON response');
       }
       
       return result;
@@ -122,27 +108,4 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   
   // If we got here, all attempts failed
   throw lastError || new Error('Failed to fetch after multiple attempts');
-};
-
-/**
- * Check API health before making other requests
- */
-export const checkApiHealth = async (): Promise<boolean> => {
-  try {
-    const response = await fetch(`/api/admin/status.php?_t=${Date.now()}`, {
-      headers: getBypassHeaders()
-    });
-    
-    // Check content type
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.error('API health endpoint returned non-JSON response');
-      return false;
-    }
-    
-    return response.ok;
-  } catch (error) {
-    console.error('API health check failed:', error);
-    return false;
-  }
 };

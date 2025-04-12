@@ -14,13 +14,10 @@ function getDbConnectionWithRetry($maxRetries = 1) {
     $retries = 0;
     $error = null;
     
-    error_log("Attempting database connection with $maxRetries retries...");
-    
     while ($retries <= $maxRetries) {
         try {
             $conn = getDbConnection();
             if ($conn) {
-                error_log("Database connection successful on attempt " . ($retries + 1));
                 return $conn;
             }
         } catch (Exception $e) {
@@ -32,7 +29,6 @@ function getDbConnectionWithRetry($maxRetries = 1) {
         if ($retries <= $maxRetries) {
             // Wait before retrying
             usleep(500000); // 500ms
-            error_log("Retrying database connection, attempt $retries of $maxRetries");
         }
     }
     
@@ -62,15 +58,6 @@ function getDbConnection() {
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
-    // Set charset
-    $conn->set_charset("utf8mb4");
-    
-    // Test the connection
-    if (!$conn->ping()) {
-        error_log("Database connection is not active");
-        throw new Exception("Database connection is not active");
-    }
-    
     error_log("Database connection successful");
     return $conn;
 }
@@ -85,8 +72,6 @@ function getDbConnection() {
  * @throws Exception If query fails
  */
 function executeQuery($conn, $sql, $params = []) {
-    error_log("Executing query: " . $sql);
-    
     $stmt = $conn->prepare($sql);
     
     if (!$stmt) {
@@ -111,17 +96,8 @@ function executeQuery($conn, $sql, $params = []) {
             $bindParams[] = $param;
         }
         
-        error_log("Binding parameters with types: " . $types);
-        
         $bindParams = array_merge([$types], $bindParams);
-        $bindParamsRefs = [];
-        
-        // Create references to $bindParams
-        foreach ($bindParams as $key => $value) {
-            $bindParamsRefs[$key] = &$bindParams[$key];
-        }
-        
-        call_user_func_array([$stmt, 'bind_param'], $bindParamsRefs);
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
     }
     
     if (!$stmt->execute()) {
@@ -132,72 +108,5 @@ function executeQuery($conn, $sql, $params = []) {
     $result = $stmt->get_result();
     $stmt->close();
     
-    if ($result !== false) {
-        error_log("Query execution successful, returned " . ($result->num_rows ?? 'unknown') . " rows");
-    } else {
-        error_log("Query execution successful (non-select query)");
-    }
-    
     return $result !== false ? $result : true;
-}
-
-/**
- * Check if a table exists in the database
- * 
- * @param mysqli $conn Database connection
- * @param string $tableName Table name to check
- * @return bool True if table exists, false otherwise
- */
-function tableExists($conn, $tableName) {
-    $result = $conn->query("SHOW TABLES LIKE '$tableName'");
-    return $result && $result->num_rows > 0;
-}
-
-/**
- * Create the bookings table if it doesn't exist
- *
- * @param mysqli $conn Database connection
- * @return bool True if table exists or was created, false on error
- */
-function ensureBookingsTableExists($conn) {
-    if (tableExists($conn, 'bookings')) {
-        return true;
-    }
-    
-    error_log("Creating bookings table...");
-    
-    $sql = "CREATE TABLE IF NOT EXISTS bookings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT,
-        booking_number VARCHAR(50) NOT NULL UNIQUE,
-        pickup_location TEXT NOT NULL,
-        drop_location TEXT,
-        pickup_date DATETIME NOT NULL,
-        return_date DATETIME,
-        cab_type VARCHAR(50) NOT NULL,
-        distance DECIMAL(10,2),
-        trip_type VARCHAR(20) NOT NULL,
-        trip_mode VARCHAR(20) NOT NULL,
-        total_amount DECIMAL(10,2) NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
-        passenger_name VARCHAR(100) NOT NULL,
-        passenger_phone VARCHAR(20) NOT NULL,
-        passenger_email VARCHAR(100) NOT NULL,
-        driver_name VARCHAR(100),
-        driver_phone VARCHAR(20),
-        hourly_package VARCHAR(50),
-        tour_id VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-    
-    $result = $conn->query($sql);
-    
-    if ($result) {
-        error_log("Bookings table created successfully");
-        return true;
-    } else {
-        error_log("Failed to create bookings table: " . $conn->error);
-        return false;
-    }
 }
