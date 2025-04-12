@@ -61,20 +61,12 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
-        // Continue execution to provide fallback behavior
     }
-}
-
-if (!$userId) {
-    error_log("No user ID found in token. Sending fallback data");
-    $fallbackBookings = createFallbackBookings(null);
-    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_auth']);
-    exit;
 }
 
 // Connect to database
 try {
-    // Try using the helper function first
+    // Connect to database - direct connection if helper functions are not available
     $conn = null;
     if (function_exists('getDbConnectionWithRetry')) {
         $conn = getDbConnectionWithRetry(2);
@@ -90,6 +82,8 @@ try {
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         if ($conn->connect_error) {
             throw new Exception("Database connection failed: " . $conn->connect_error);
+        } else {
+            error_log("Direct database connection successful for bookings");
         }
     }
     
@@ -97,120 +91,135 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    error_log("Database connection established");
+    error_log("Database connection established for bookings");
     
-    // Check if bookings table exists
+    // Check if bookings table exists - this is crucial
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
-    if (!$tableExists || $tableExists->num_rows === 0) {
-        // Provide fallback bookings for testing
-        error_log("Bookings table does not exist");
-        $fallbackBookings = createFallbackBookings($userId);
-        echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
+    $hasBookingsTable = ($tableExists && $tableExists->num_rows > 0);
+    
+    error_log("Bookings table exists: " . ($hasBookingsTable ? 'Yes' : 'No'));
+    
+    // For demo token, still return sample bookings
+    if ($token && strpos($token, 'demo_token_') === 0) {
+        error_log("Demo token detected, returning demo bookings");
+        $fallbackBookings = createFallbackBookings(999);
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => $fallbackBookings, 
+            'source' => 'demo',
+            'userId' => 999,
+            'isAdmin' => false
+        ]);
         exit;
     }
     
-    // For new users, they won't have any bookings yet, so we'll check first
-    if ($userId) {
-        // Check if user exists in the database
-        $checkUserSql = "SELECT id FROM users WHERE id = ?";
-        $stmt = $conn->prepare($checkUserSql);
-        if (!$stmt) {
-            throw new Exception("Failed to prepare user check query: " . $conn->error);
-        }
-        
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            // User doesn't exist in database yet, common after signup
-            error_log("User $userId does not exist in database");
-            echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
-            exit;
-        }
-    }
-    
-    // Query to get bookings - modifications to handle various scenarios
-    if ($userId && !$isAdmin) {
-        // Get user's bookings if authenticated
-        error_log("Fetching bookings for user $userId");
-        $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $userId);
-    } else if ($isAdmin) {
-        // Admins can see all bookings
-        error_log("Admin user, fetching all bookings");
-        $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
-        $stmt = $conn->prepare($sql);
-    } else {
-        // For testing/demo purposes, return some bookings even without authentication
-        error_log("No auth or demo mode, returning limited bookings");
-        $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
-        $stmt = $conn->prepare($sql);
-    }
-    
-    if (!$stmt) {
-        throw new Exception("Failed to prepare query: " . $conn->error);
-    }
-    
-    $success = $stmt->execute();
-    
-    if (!$success) {
-        throw new Exception("Failed to execute query: " . $stmt->error);
-    }
-    
-    $result = $stmt->get_result();
-    
-    if (!$result) {
-        throw new Exception("Failed to get result: " . $stmt->error);
-    }
-    
-    // Create an array of bookings
+    // Try to get real data if we have a valid user ID and bookings table
     $bookings = [];
-    while ($row = $result->fetch_assoc()) {
-        $booking = [
-            'id' => (int)$row['id'],
-            'userId' => isset($row['user_id']) ? (int)$row['user_id'] : null,
-            'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
-            'pickupLocation' => $row['pickup_location'],
-            'dropLocation' => $row['drop_location'],
-            'pickupDate' => $row['pickup_date'],
-            'returnDate' => $row['return_date'],
-            'cabType' => $row['cab_type'],
-            'distance' => (float)($row['distance'] ?? 0),
-            'tripType' => $row['trip_type'],
-            'tripMode' => $row['trip_mode'],
-            'totalAmount' => (float)$row['total_amount'],
-            'status' => $row['status'],
-            'passengerName' => $row['passenger_name'],
-            'passengerPhone' => $row['passenger_phone'],
-            'passengerEmail' => $row['passenger_email'],
-            'driverName' => $row['driver_name'] ?? null,
-            'driverPhone' => $row['driver_phone'] ?? null,
-            'createdAt' => $row['created_at'],
-            'updatedAt' => $row['updated_at'] ?? $row['created_at']
-        ];
-        $bookings[] = $booking;
+    $dataSource = 'unknown';
+    
+    if ($hasBookingsTable && ($userId || $isAdmin)) {
+        try {
+            error_log("Attempting to get real bookings from database");
+            
+            // Prepare the SQL query based on user role
+            if ($isAdmin) {
+                // Admins can see all bookings
+                $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
+                $stmt = $conn->prepare($sql);
+            } else if ($userId) {
+                // Regular users see only their bookings
+                $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("i", $userId);
+            } else {
+                throw new Exception("No user ID available for query");
+            }
+            
+            if (!$stmt) {
+                throw new Exception("Failed to prepare query: " . $conn->error);
+            }
+            
+            // Execute the query
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if (!$result) {
+                throw new Exception("Failed to get result: " . $stmt->error);
+            }
+            
+            // Create an array of bookings
+            while ($row = $result->fetch_assoc()) {
+                $booking = [
+                    'id' => (int)$row['id'],
+                    'userId' => isset($row['user_id']) ? (int)$row['user_id'] : null,
+                    'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
+                    'pickupLocation' => $row['pickup_location'],
+                    'dropLocation' => $row['drop_location'],
+                    'pickupDate' => $row['pickup_date'],
+                    'returnDate' => $row['return_date'],
+                    'cabType' => $row['cab_type'],
+                    'distance' => (float)($row['distance'] ?? 0),
+                    'tripType' => $row['trip_type'],
+                    'tripMode' => $row['trip_mode'],
+                    'totalAmount' => (float)$row['total_amount'],
+                    'status' => $row['status'],
+                    'passengerName' => $row['passenger_name'],
+                    'passengerPhone' => $row['passenger_phone'],
+                    'passengerEmail' => $row['passenger_email'],
+                    'driverName' => $row['driver_name'] ?? null,
+                    'driverPhone' => $row['driver_phone'] ?? null,
+                    'createdAt' => $row['created_at'],
+                    'updatedAt' => $row['updated_at'] ?? $row['created_at']
+                ];
+                $bookings[] = $booking;
+            }
+            
+            $dataSource = 'database';
+            error_log("Successfully retrieved " . count($bookings) . " bookings from database");
+            
+        } catch (Exception $e) {
+            error_log("Error fetching bookings from database: " . $e->getMessage());
+            // We'll fall through to the fallback below
+        }
+    } else {
+        error_log("Cannot get real bookings: " . 
+            (!$hasBookingsTable ? "Bookings table doesn't exist. " : "") .
+            (!$userId ? "No user ID available. " : ""));
     }
     
-    error_log("Found " . count($bookings) . " bookings for request");
-    
-    // For new users who have no bookings yet, return an empty array with success
-    if (count($bookings) === 0 && $userId) {
+    // If we have real bookings, return them
+    if (count($bookings) > 0) {
         echo json_encode([
             'status' => 'success', 
-            'bookings' => [], 
-            'message' => 'No bookings found for this user yet',
+            'bookings' => $bookings, 
+            'source' => $dataSource,
             'userId' => $userId,
             'isAdmin' => $isAdmin
         ]);
         exit;
     }
     
-    // Return the bookings
+    // If we get here, either we have no bookings or there was an error
+    // Return empty array for authenticated users with no bookings
+    if ($userId) {
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => [], 
+            'message' => 'No bookings found for this user',
+            'source' => $hasBookingsTable ? 'database_empty' : 'no_table',
+            'userId' => $userId,
+            'isAdmin' => $isAdmin
+        ]);
+        exit;
+    }
+    
+    // Last resort: return sample bookings
+    $fallbackBookings = createFallbackBookings($userId);
     echo json_encode([
         'status' => 'success', 
-        'bookings' => $bookings, 
+        'bookings' => $fallbackBookings, 
+        'source' => 'sample_fallback',
+        'message' => 'Using sample data because real data could not be retrieved',
         'userId' => $userId,
         'isAdmin' => $isAdmin
     ]);
@@ -218,7 +227,7 @@ try {
 } catch (Exception $e) {
     error_log("Error in bookings endpoint: " . $e->getMessage());
     
-    // Instead of returning an error, provide fallback data
+    // Provide fallback data
     $fallbackBookings = createFallbackBookings($userId);
     echo json_encode([
         'status' => 'success', 

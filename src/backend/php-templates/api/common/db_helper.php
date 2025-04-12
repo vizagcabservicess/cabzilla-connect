@@ -1,187 +1,112 @@
 
 <?php
 /**
- * Common database helper functions
- * Production-ready database helpers for vizagup.com
+ * Database helper functions for consistent database access
  */
 
 /**
- * Get a database connection with retry mechanism
+ * Get a database connection with retry logic
  * 
- * @param int $maxRetries Maximum number of connection attempts
- * @return mysqli Database connection
- * @throws Exception If all connection attempts fail
+ * @param int $maxRetries Maximum number of retries
+ * @return mysqli|null Database connection or null on failure
  */
-function getDbConnectionWithRetry($maxRetries = 3) {
+function getDbConnectionWithRetry($maxRetries = 1) {
     $retries = 0;
-    $lastError = null;
+    $error = null;
     
-    while ($retries < $maxRetries) {
+    while ($retries <= $maxRetries) {
         try {
-            // Database credentials - ensure these match with database.php
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';
-            $dbUser = 'u644605165_usr_be';
-            $dbPass = 'Vizag@1213';
-            
-            // Create connection
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            // Check connection
-            if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
+            $conn = getDbConnection();
+            if ($conn) {
+                return $conn;
             }
-            
-            // Set proper charset
-            $conn->set_charset("utf8mb4");
-            
-            // Test connection with a simple query
-            $testResult = $conn->query("SELECT 1");
-            if (!$testResult) {
-                throw new Exception("Connection test query failed: " . $conn->error);
-            }
-            
-            error_log("Database connection successful using db_helper");
-            return $conn;
         } catch (Exception $e) {
-            $lastError = $e;
-            $retries++;
-            error_log("Database connection attempt $retries failed: " . $e->getMessage());
-            
-            if ($retries < $maxRetries) {
-                sleep(1); // Delay before retry
-            }
+            $error = $e;
+            error_log("Database connection attempt " . ($retries + 1) . " failed: " . $e->getMessage());
+        }
+        
+        $retries++;
+        if ($retries <= $maxRetries) {
+            // Wait before retrying
+            usleep(500000); // 500ms
         }
     }
     
-    // Log the error details
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    
-    $logFile = $logDir . '/db_connection_errors.log';
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$timestamp] All connection attempts failed: " . ($lastError ? $lastError->getMessage() : 'Unknown error') . "\n", FILE_APPEND);
-    
-    // If we've exhausted all retries, throw the last error
-    if ($lastError) {
-        throw $lastError;
-    } else {
-        throw new Exception("Failed to connect to database after {$maxRetries} attempts");
-    }
+    error_log("All database connection attempts failed");
+    throw new Exception("Failed to connect to database after $maxRetries retries: " . 
+        ($error ? $error->getMessage() : 'Unknown error'));
 }
 
 /**
- * Check database connection and return status
- *
- * @return array Connection status information
- */
-function checkDatabaseConnection() {
-    try {
-        $conn = getDbConnectionWithRetry(2);
-        
-        $isConnected = ($conn instanceof mysqli && !$conn->connect_error);
-        $version = null;
-        $tables = [];
-        
-        if ($isConnected) {
-            // Get database version
-            $versionResult = $conn->query("SELECT VERSION() as version");
-            if ($versionResult && $row = $versionResult->fetch_assoc()) {
-                $version = $row['version'];
-            }
-            
-            // Get list of tables
-            $tablesResult = $conn->query("SHOW TABLES");
-            if ($tablesResult) {
-                while ($row = $tablesResult->fetch_array()) {
-                    $tables[] = $row[0];
-                }
-            }
-            
-            $conn->close();
-        }
-        
-        return [
-            'status' => $isConnected ? 'success' : 'error',
-            'connection' => $isConnected,
-            'version' => $version,
-            'tables' => $tables,
-            'timestamp' => time()
-        ];
-    } catch (Exception $e) {
-        error_log("Database connection check failed: " . $e->getMessage());
-        return [
-            'status' => 'error',
-            'connection' => false,
-            'message' => $e->getMessage(),
-            'timestamp' => time()
-        ];
-    }
-}
-
-/**
- * Log message to a file with timestamp
+ * Get a database connection
  * 
- * @param string $message Message to log
- * @param string $logFile Log file name
- * @return void
+ * @return mysqli Database connection
+ * @throws Exception If connection fails
  */
-function logMessage($message, $logFile = 'api.log') {
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0755, true);
+function getDbConnection() {
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    error_log("Connecting to database: $dbName on $dbHost");
+    
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    if ($conn->connect_error) {
+        error_log("Database connection failed: " . $conn->connect_error);
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logDir . '/' . $logFile, "[$timestamp] " . $message . "\n", FILE_APPEND);
+    error_log("Database connection successful");
+    return $conn;
 }
 
 /**
- * Ensure the bookings table exists
+ * Execute a database query with error handling
  * 
  * @param mysqli $conn Database connection
- * @return bool True if table exists or was created successfully
+ * @param string $sql SQL query
+ * @param array $params Parameters for prepared statement
+ * @return mysqli_result|bool Query result
+ * @throws Exception If query fails
  */
-function ensureBookingsTableExists($conn) {
-    // Check if the bookings table exists
-    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
-    if ($tableResult->num_rows === 0) {
-        // Create the bookings table if it doesn't exist
-        $createTableSql = "
-        CREATE TABLE bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            booking_number VARCHAR(50) NOT NULL UNIQUE,
-            pickup_location TEXT NOT NULL,
-            drop_location TEXT,
-            pickup_date DATETIME NOT NULL,
-            return_date DATETIME,
-            cab_type VARCHAR(50) NOT NULL,
-            distance DECIMAL(10,2),
-            trip_type VARCHAR(20) NOT NULL,
-            trip_mode VARCHAR(20) NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL,
-            status VARCHAR(20) DEFAULT 'pending',
-            passenger_name VARCHAR(100) NOT NULL,
-            passenger_phone VARCHAR(20) NOT NULL,
-            passenger_email VARCHAR(100) NOT NULL,
-            hourly_package VARCHAR(50),
-            tour_id VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $tableCreationResult = $conn->query($createTableSql);
-        
-        if (!$tableCreationResult) {
-            error_log("Failed to create bookings table: " . $conn->error);
-            return false;
-        }
-        
-        error_log("Created bookings table successfully");
+function executeQuery($conn, $sql, $params = []) {
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        error_log("Query preparation failed: " . $conn->error);
+        throw new Exception("Query preparation failed: " . $conn->error);
     }
     
-    return true;
+    if (!empty($params)) {
+        $types = '';
+        $bindParams = [];
+        
+        foreach ($params as $param) {
+            if (is_int($param)) {
+                $types .= 'i';
+            } elseif (is_float($param)) {
+                $types .= 'd';
+            } elseif (is_string($param)) {
+                $types .= 's';
+            } else {
+                $types .= 'b';
+            }
+            $bindParams[] = $param;
+        }
+        
+        $bindParams = array_merge([$types], $bindParams);
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+    }
+    
+    if (!$stmt->execute()) {
+        error_log("Query execution failed: " . $stmt->error);
+        throw new Exception("Query execution failed: " . $stmt->error);
+    }
+    
+    $result = $stmt->get_result();
+    $stmt->close();
+    
+    return $result !== false ? $result : true;
 }

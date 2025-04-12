@@ -40,6 +40,12 @@ apiClient.interceptors.response.use(
   response => {
     console.log(`API Response from ${response.config.url}:`, 
       response.config.url?.includes('login') ? 'LOGIN RESPONSE (redacted)' : response.data);
+    
+    // Add additional debugging for data source
+    if (response.data && response.data.source) {
+      console.log(`Data source: ${response.data.source}`);
+    }
+    
     return response;
   },
   error => {
@@ -58,7 +64,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Sample user data as fallback
+// Sample user data as fallback - only used if all API attempts fail
 const sampleUsers: User[] = [
   {
     id: 101,
@@ -231,6 +237,13 @@ export const authAPI = {
       try {
         const userData = JSON.parse(userStr);
         console.log('Retrieved user data from localStorage:', userData.id);
+        
+        // Return cached data but try to refresh in the background
+        setTimeout(() => {
+          console.log('Attempting to refresh user data in the background');
+          authAPI.refreshUserData();
+        }, 100);
+        
         return userData;
       } catch (e) {
         console.error('Error parsing user data from localStorage', e);
@@ -281,11 +294,19 @@ export const authAPI = {
             try {
               console.log(`Trying endpoint: ${endpoint}`);
               response = await apiClient.get(getApiUrl(endpoint), {
-                headers: forceRefreshHeaders
+                headers: {
+                  ...forceRefreshHeaders,
+                  'X-Force-Database': 'true'
+                }
               });
               
               if (response.data) {
-                console.log(`Successfully got user data from ${endpoint}`);
+                console.log(`Successfully got user data from ${endpoint}`, response.data);
+                if (response.data.source === 'database') {
+                  console.log('User data came from database - success!');
+                } else {
+                  console.log(`User data came from ${response.data.source}`);
+                }
                 break; // Exit the loop if any endpoint succeeds
               }
             } catch (endpointError) {
@@ -318,6 +339,9 @@ export const authAPI = {
           await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
         }
       }
+      
+      // All retries failed, try to extract user from token
+      console.error('Failed to get user data after all retries:', error);
       
       // If all API calls fail but we have a token, try to extract info from the token
       if (token) {
@@ -368,6 +392,35 @@ export const authAPI = {
     }
   },
 
+  refreshUserData: async () => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return null;
+    
+    try {
+      console.log('Refreshing user data from API');
+      const response = await apiClient.get(getApiUrl('/api/user'), {
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Force-Database': 'true',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.data && response.data.user) {
+        console.log('Refreshed user data:', response.data.user);
+        console.log('Data source:', response.data.source);
+        
+        // Update localStorage with fresh data
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+        return response.data.user;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      return null;
+    }
+  },
+
   isAuthenticated: () => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     console.log('Auth check:', token ? 'User has token' : 'No token found');
@@ -399,11 +452,53 @@ export const authAPI = {
 
   getAllUsers: async (): Promise<User[]> => {
     try {
-      console.log('Fetching all users...');
-      // For demo purposes, return cached sample users
-      return sampleUsers;
+      console.log('Fetching all users from API...');
+      
+      // Try to get real users from API first
+      try {
+        // Try different API endpoints
+        const endpoints = [
+          '/api/admin/users',
+          '/api/admin/direct-user-data.php'
+        ];
+        
+        for (const endpoint of endpoints) {
+          try {
+            console.log(`Trying endpoint: ${endpoint}`);
+            const response = await apiClient.get(getApiUrl(endpoint), {
+              headers: {
+                ...forceRefreshHeaders,
+                'X-Force-Database': 'true',
+                'X-Admin-Mode': 'true'
+              }
+            });
+            
+            if (response.data && response.data.users && Array.isArray(response.data.users)) {
+              console.log(`Successfully got users from ${endpoint}:`, response.data.users.length);
+              console.log('Data source:', response.data.source);
+              return response.data.users;
+            }
+            
+            if (response.data && response.data.data && Array.isArray(response.data.data)) {
+              console.log(`Successfully got users from ${endpoint}:`, response.data.data.length);
+              console.log('Data source:', response.data.source);
+              return response.data.data;
+            }
+          } catch (endpointError) {
+            console.warn(`Endpoint ${endpoint} failed:`, endpointError.message);
+            // Continue to next endpoint
+          }
+        }
+        
+        // If we get here, no endpoint succeeded
+        throw new Error('All user endpoints failed');
+      } catch (apiError) {
+        console.error('Error fetching users from API:', apiError);
+        // Fall back to sample data
+        return sampleUsers;
+      }
     } catch (error) {
-      console.error('Error fetching all users:', error);
+      console.error('Error in getAllUsers:', error);
       return sampleUsers;
     }
   },

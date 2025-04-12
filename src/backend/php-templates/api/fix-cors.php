@@ -35,23 +35,4 @@ if ((strpos($_SERVER['REQUEST_URI'], 'dashboard') !== false ||
     
     // Add special header to indicate we're handling this endpoint
     header("X-API-Debug-Info: fix-cors-dashboard");
-    
-    // Safety net for response data - will be used by the handler if it checks for this
-    $fallbackMetricsData = [
-        'status' => 'success',
-        'data' => [
-            'totalBookings' => 0,
-            'activeRides' => 0,
-            'totalRevenue' => 0,
-            'availableDrivers' => 0,
-            'busyDrivers' => 0,
-            'avgRating' => 0,
-            'upcomingRides' => 0,
-            'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
-            'currentFilter' => 'all'
-        ]
-    ];
 }
-
-// Log debugging information
-error_log("CORS headers set by fix-cors.php for " . $_SERVER['REQUEST_URI']);
