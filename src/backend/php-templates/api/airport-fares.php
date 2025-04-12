@@ -1,6 +1,6 @@
 
 <?php
-// Redirect to admin endpoint for airport fares
+// airport-fares.php - Redirect to admin endpoint for airport fares
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -26,10 +26,8 @@ $logFile = $logDir . '/airport_fares_redirect_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Log this request
-file_put_contents($logFile, "[$timestamp] Airport fares request redirecting to admin endpoint\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Airport fares request received with: " . json_encode($_GET) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 
 // Make sure we have a vehicle ID from any possible source before forwarding
 $vehicleId = null;
@@ -75,6 +73,83 @@ $_SERVER['HTTP_X_DEBUG'] = 'true';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Before forwarding to the actual endpoint, check if we need to handle direct output
+if (isset($_GET['direct_output']) && $_GET['direct_output'] === 'true') {
+    file_put_contents($logFile, "[$timestamp] Using direct output mode for vehicle_id: $vehicleId\n", FILE_APPEND);
+    
+    // Define some default fares if needed
+    $defaultFares = [
+        'sedan' => [
+            'basePrice' => 800,
+            'pickupPrice' => 800,
+            'dropPrice' => 800,
+            'extraKmCharge' => 12
+        ],
+        'ertiga' => [
+            'basePrice' => 1200,
+            'pickupPrice' => 1000,
+            'dropPrice' => 1000,
+            'extraKmCharge' => 15
+        ],
+        'innova_crysta' => [
+            'basePrice' => 1500,
+            'pickupPrice' => 1200,
+            'dropPrice' => 1200,
+            'extraKmCharge' => 18
+        ],
+        'luxury' => [
+            'basePrice' => 2000,
+            'pickupPrice' => 1500,
+            'dropPrice' => 1500,
+            'extraKmCharge' => 22
+        ],
+        'tempo_traveller' => [
+            'basePrice' => 2500,
+            'pickupPrice' => 2000,
+            'dropPrice' => 2000,
+            'extraKmCharge' => 25
+        ]
+    ];
+    
+    // Try to normalize the vehicle ID to match our array keys
+    $normalizedVehicleId = strtolower(str_replace([' ', '-', '_'], '_', $vehicleId));
+    foreach (array_keys($defaultFares) as $key) {
+        if (strpos($normalizedVehicleId, $key) !== false) {
+            $normalizedVehicleId = $key;
+            break;
+        }
+    }
+    
+    $fare = $defaultFares[$normalizedVehicleId] ?? $defaultFares['sedan'];
+    
+    $response = [
+        'status' => 'success',
+        'message' => 'Airport fares retrieved successfully',
+        'fares' => [
+            [
+                'vehicleId' => $vehicleId,
+                'vehicle_id' => $vehicleId,
+                'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
+                'basePrice' => $fare['basePrice'],
+                'base_price' => $fare['basePrice'],
+                'pricePerKm' => $fare['extraKmCharge'],
+                'price_per_km' => $fare['extraKmCharge'],
+                'pickupPrice' => $fare['pickupPrice'],
+                'pickup_price' => $fare['pickupPrice'],
+                'dropPrice' => $fare['dropPrice'],
+                'drop_price' => $fare['dropPrice'],
+                'extraKmCharge' => $fare['extraKmCharge'],
+                'extra_km_charge' => $fare['extraKmCharge']
+            ]
+        ],
+        'count' => 1,
+        'timestamp' => time()
+    ];
+    
+    echo json_encode($response);
+    exit;
+}
 
 // Forward this request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';
