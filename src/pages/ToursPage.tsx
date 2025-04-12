@@ -16,7 +16,7 @@ import { TripType } from "@/lib/tripTypes";
 import { CabType, TourFares } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bookingAPI } from "@/services/api";
+import { bookingAPI, fareAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { TourPackageSelector } from "@/components/TourPackageSelector";
 
@@ -34,9 +34,19 @@ const ToursPage = () => {
   const [isLoadingFares, setIsLoadingFares] = useState(false);
   
   useEffect(() => {
+    const savedTour = sessionStorage.getItem('selectedTour');
+    if (savedTour) {
+      console.log(`Restoring previously selected tour: ${savedTour}`);
+      setSelectedTour(savedTour);
+    }
+  }, []);
+  
+  useEffect(() => {
     if (selectedTour) {
       sessionStorage.setItem('selectedTour', selectedTour);
       console.log(`Selected tour stored in sessionStorage: ${selectedTour}`);
+      
+      setSelectedCab(null);
     }
   }, [selectedTour]);
   
@@ -47,6 +57,13 @@ const ToursPage = () => {
         const fares = await loadTourFares(true);
         console.log("Tour fares loaded successfully:", fares);
         setDynamicTourFares(fares);
+        
+        window.dispatchEvent(new CustomEvent('tour-fares-loaded', { 
+          detail: { 
+            fares,
+            timestamp: Date.now() 
+          } 
+        }));
       } catch (error) {
         console.error("Error loading tour fares:", error);
         toast({
@@ -62,6 +79,24 @@ const ToursPage = () => {
     
     fetchTourFares();
   }, [toast]);
+  
+  useEffect(() => {
+    const handleTourFaresUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.fares) {
+        console.log("Tour fares updated from event:", customEvent.detail.fares);
+        setDynamicTourFares(customEvent.detail.fares);
+      }
+    };
+    
+    window.addEventListener('tour-fares-loaded', handleTourFaresUpdated);
+    window.addEventListener('tour-fares-updated', handleTourFaresUpdated);
+    
+    return () => {
+      window.removeEventListener('tour-fares-loaded', handleTourFaresUpdated);
+      window.removeEventListener('tour-fares-updated', handleTourFaresUpdated);
+    };
+  }, []);
   
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
@@ -107,6 +142,21 @@ const ToursPage = () => {
         console.log(`Using luxury fare for ${cabId}: ${dynamicTourFares[tourId].luxury}`);
         return dynamicTourFares[tourId].luxury;
       }
+      
+      if (cabId.includes('mpv') && dynamicTourFares[tourId].mpv) {
+        console.log(`Using mpv fare for ${cabId}: ${dynamicTourFares[tourId].mpv}`);
+        return dynamicTourFares[tourId].mpv;
+      }
+      
+      if (cabId.includes('dzire') && dynamicTourFares[tourId].dzire_cng) {
+        console.log(`Using dzire_cng fare for ${cabId}: ${dynamicTourFares[tourId].dzire_cng}`);
+        return dynamicTourFares[tourId].dzire_cng;
+      }
+      
+      if (cabId.includes('toyota') && dynamicTourFares[tourId].toyota) {
+        console.log(`Using toyota fare for ${cabId}: ${dynamicTourFares[tourId].toyota}`);
+        return dynamicTourFares[tourId].toyota;
+      }
     }
     
     console.log(`No fare found for ${tourId}/${cabId}, using fallback pricing`);
@@ -118,6 +168,9 @@ const ToursPage = () => {
     if (cabId.includes('innova')) return Math.max(5500, tourDistance * 22);
     if (cabId.includes('tempo')) return Math.max(7500, tourDistance * 25);
     if (cabId.includes('luxury')) return Math.max(9000, tourDistance * 30);
+    if (cabId.includes('mpv')) return Math.max(5000, tourDistance * 20);
+    if (cabId.includes('dzire')) return Math.max(3500, tourDistance * 15);
+    if (cabId.includes('toyota')) return Math.max(4000, tourDistance * 18);
     
     return Math.max(4000, tourDistance * 20);
   };
@@ -128,9 +181,32 @@ const ToursPage = () => {
     setSelectedCab(null);
     
     sessionStorage.setItem('selectedTour', tourId);
+    
     window.dispatchEvent(new CustomEvent('tour-selected', { 
       detail: { tourId, timestamp: Date.now() } 
     }));
+    
+    cabTypes.forEach(cab => {
+      const fare = getTourFare(tourId, cab.id);
+      console.log(`Pre-calculated fare for ${tourId}/${cab.id}: ${fare}`);
+      
+      try {
+        localStorage.setItem(`fare_tour_${tourId}_${cab.id}`, fare.toString());
+      } catch (e) {
+        console.warn(`Could not store fare for ${cab.id} in localStorage:`, e);
+      }
+      
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cab.id,
+          cabName: cab.name,
+          fare: fare,
+          tourId: tourId,
+          tripType: 'tour',
+          timestamp: Date.now()
+        }
+      }));
+    });
   };
   
   const handleBookNow = () => {

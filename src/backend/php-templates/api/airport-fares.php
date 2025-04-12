@@ -4,7 +4,7 @@
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
@@ -85,11 +85,12 @@ try {
     
     // If vehicle ID is specified, filter by it (case-insensitive)
     if ($vehicleId) {
+        // Use LOWER function for case-insensitive comparison
         $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
         $params[] = $vehicleId;
         $types .= "s";
         
-        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID: $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID (case-insensitive): $vehicleId\n", FILE_APPEND);
     }
     
     // Prepare and execute the query
@@ -136,16 +137,17 @@ try {
         ];
     }
     
-    // If specific vehicle requested but no fare found, create default
+    // If specific vehicle requested but no fare found, create default with ON DUPLICATE KEY UPDATE
     if (empty($fares) && $vehicleId) {
         file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
         
-        // Insert a default record
+        // Insert a default record with ON DUPLICATE KEY UPDATE to handle conflicts
         $defaultInsertSql = "
             INSERT INTO airport_transfer_fares 
             (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
             tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
             VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            ON DUPLICATE KEY UPDATE updated_at = NOW()
         ";
         
         $insertStmt = $conn->prepare($defaultInsertSql);

@@ -75,7 +75,7 @@ try {
             $existingColumns[] = $column['Field'];
         }
         
-        // FIXED: Get ONLY vehicle types from vehicles table for syncing
+        // EXPLICITLY ONLY get vehicle types from the vehicles table to avoid mixing with other data
         // Explicitly query only from the vehicles table with no joins
         $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
         $vehiclesResult = $conn->query($vehiclesQuery);
@@ -83,13 +83,13 @@ try {
         $vehicleColumns = [];
         
         // Log for debugging
-        error_log("Fetching vehicles from ONLY the vehicles table");
+        error_log("Fetching ONLY from the vehicles table for tour_fares column synchronization");
         
         // Add columns from vehicles table only
         if ($vehiclesResult) {
             while ($vehicle = $vehiclesResult->fetch_assoc()) {
                 // Normalize the vehicle ID to create a valid column name
-                $vehicleId = $vehicle['vehicle_id'] ?: $vehicle['name'];
+                $vehicleId = $vehicle['vehicle_id'] ?: '';
                 if (empty($vehicleId)) continue;
                 
                 $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));

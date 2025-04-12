@@ -4,7 +4,7 @@
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
@@ -78,137 +78,270 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
     
-    // If no vehicle ID specified, return all fares
-    $sql = "SELECT * FROM airport_transfer_fares";
-    $params = [];
-    $types = "";
+    // Define SQL query based on method
+    $method = $_SERVER['REQUEST_METHOD'];
     
-    // If vehicle ID is specified, filter by it
-    if ($vehicleId) {
-        $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
-        $params[] = $vehicleId;
-        $types .= "s";
+    // Handle different HTTP methods
+    if ($method === 'GET') {
+        // If no vehicle ID specified, return all fares
+        $sql = "SELECT * FROM airport_transfer_fares";
+        $params = [];
+        $types = "";
         
-        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID: $vehicleId\n", FILE_APPEND);
-    }
-    
-    // Prepare and execute the query
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        file_put_contents($logFile, "[$timestamp] Prepare statement failed: " . $conn->error . "\n", FILE_APPEND);
-        throw new Exception("Prepare statement failed: " . $conn->error);
-    }
-    
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    if (!$stmt->execute()) {
-        file_put_contents($logFile, "[$timestamp] Query execution failed: " . $stmt->error . "\n", FILE_APPEND);
-        throw new Exception("Query execution failed: " . $stmt->error);
-    }
-    
-    $result = $stmt->get_result();
-    
-    // Format the output
-    $fares = [];
-    while ($row = $result->fetch_assoc()) {
-        $fares[] = [
-            'id' => (int)$row['id'],
-            'vehicleId' => $row['vehicle_id'],
-            'vehicle_id' => $row['vehicle_id'],
-            'basePrice' => (float)$row['base_price'],
-            'base_price' => (float)$row['base_price'],
-            'pricePerKm' => (float)$row['price_per_km'],
-            'price_per_km' => (float)$row['price_per_km'],
-            'pickupPrice' => (float)$row['pickup_price'],
-            'pickup_price' => (float)$row['pickup_price'],
-            'dropPrice' => (float)$row['drop_price'],
-            'drop_price' => (float)$row['drop_price'],
-            'tier1Price' => (float)$row['tier1_price'],
-            'tier1_price' => (float)$row['tier1_price'],
-            'tier2Price' => (float)$row['tier2_price'],
-            'tier2_price' => (float)$row['tier2_price'],
-            'tier3Price' => (float)$row['tier3_price'],
-            'tier3_price' => (float)$row['tier3_price'],
-            'tier4Price' => (float)$row['tier4_price'],
-            'tier4_price' => (float)$row['tier4_price'],
-            'extraKmCharge' => (float)$row['extra_km_charge'],
-            'extra_km_charge' => (float)$row['extra_km_charge']
-        ];
-    }
-    
-    // If no specific vehicle and no fares yet, return empty array
-    if (empty($fares) && !$vehicleId) {
+        // If vehicle ID is specified, filter by it (case-insensitive)
+        if ($vehicleId) {
+            $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
+            $params[] = $vehicleId;
+            $types .= "s";
+            
+            file_put_contents($logFile, "[$timestamp] Querying for vehicle ID (case-insensitive): $vehicleId\n", FILE_APPEND);
+        }
+        
+        // Prepare and execute the query
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            file_put_contents($logFile, "[$timestamp] Prepare statement failed: " . $conn->error . "\n", FILE_APPEND);
+            throw new Exception("Prepare statement failed: " . $conn->error);
+        }
+        
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        if (!$stmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Query execution failed: " . $stmt->error . "\n", FILE_APPEND);
+            throw new Exception("Query execution failed: " . $stmt->error);
+        }
+        
+        $result = $stmt->get_result();
+        
+        // Format the output
+        $fares = [];
+        while ($row = $result->fetch_assoc()) {
+            $fares[] = [
+                'id' => (int)$row['id'],
+                'vehicleId' => $row['vehicle_id'],
+                'vehicle_id' => $row['vehicle_id'],
+                'basePrice' => (float)$row['base_price'],
+                'base_price' => (float)$row['base_price'],
+                'pricePerKm' => (float)$row['price_per_km'],
+                'price_per_km' => (float)$row['price_per_km'],
+                'pickupPrice' => (float)$row['pickup_price'],
+                'pickup_price' => (float)$row['pickup_price'],
+                'dropPrice' => (float)$row['drop_price'],
+                'drop_price' => (float)$row['drop_price'],
+                'tier1Price' => (float)$row['tier1_price'],
+                'tier1_price' => (float)$row['tier1_price'],
+                'tier2Price' => (float)$row['tier2_price'],
+                'tier2_price' => (float)$row['tier2_price'],
+                'tier3Price' => (float)$row['tier3_price'],
+                'tier3_price' => (float)$row['tier3_price'],
+                'tier4Price' => (float)$row['tier4_price'],
+                'tier4_price' => (float)$row['tier4_price'],
+                'extraKmCharge' => (float)$row['extra_km_charge'],
+                'extra_km_charge' => (float)$row['extra_km_charge']
+            ];
+        }
+        
+        // If no specific vehicle and no fares yet, return empty array
+        if (empty($fares) && !$vehicleId) {
+            sendJSON([
+                'status' => 'success',
+                'message' => 'No airport fares found',
+                'data' => [],
+                'fares' => []
+            ]);
+            exit;
+        }
+        
+        // If specific vehicle requested but no fare found, create default
+        if (empty($fares) && $vehicleId) {
+            file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
+            
+            // Insert a default record with ON DUPLICATE KEY UPDATE
+            $defaultInsertSql = "
+                INSERT INTO airport_transfer_fares 
+                (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
+                VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+                ON DUPLICATE KEY UPDATE updated_at = NOW()
+            ";
+            
+            $insertStmt = $conn->prepare($defaultInsertSql);
+            if (!$insertStmt) {
+                file_put_contents($logFile, "[$timestamp] Failed to prepare insert statement: " . $conn->error . "\n", FILE_APPEND);
+                throw new Exception("Failed to prepare insert statement: " . $conn->error);
+            }
+            
+            $insertStmt->bind_param("s", $vehicleId);
+            if (!$insertStmt->execute()) {
+                file_put_contents($logFile, "[$timestamp] Failed to insert default fare: " . $insertStmt->error . "\n", FILE_APPEND);
+                throw new Exception("Failed to insert default fare: " . $insertStmt->error);
+            }
+            
+            // Get the inserted record id
+            $newId = $conn->insert_id;
+            
+            // Return the default fare
+            $fares[] = [
+                'id' => $newId,
+                'vehicleId' => $vehicleId,
+                'vehicle_id' => $vehicleId,
+                'basePrice' => 0,
+                'base_price' => 0,
+                'pricePerKm' => 0,
+                'price_per_km' => 0,
+                'pickupPrice' => 0,
+                'pickup_price' => 0,
+                'dropPrice' => 0,
+                'drop_price' => 0,
+                'tier1Price' => 0,
+                'tier1_price' => 0,
+                'tier2Price' => 0,
+                'tier2_price' => 0,
+                'tier3Price' => 0,
+                'tier3_price' => 0,
+                'tier4Price' => 0,
+                'tier4_price' => 0,
+                'extraKmCharge' => 0,
+                'extra_km_charge' => 0
+            ];
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Returning " . count($fares) . " fares\n", FILE_APPEND);
+        
+        // Return success with fares
         sendJSON([
             'status' => 'success',
-            'message' => 'No airport fares found',
-            'data' => [],
-            'fares' => []
+            'message' => 'Airport fares retrieved successfully',
+            'data' => $fares,
+            'fares' => $fares
         ]);
-        exit;
     }
-    
-    // If specific vehicle requested but no fare found, create default
-    if (empty($fares) && $vehicleId) {
-        file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
+    // Handle POST request to update fares
+    else if ($method === 'POST') {
+        // Get request body
+        $inputData = json_decode(file_get_contents('php://input'), true);
         
-        // Insert a default record
-        $defaultInsertSql = "
-            INSERT INTO airport_transfer_fares 
-            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
-            VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            ON DUPLICATE KEY UPDATE updated_at = NOW()
-        ";
-        
-        $insertStmt = $conn->prepare($defaultInsertSql);
-        if (!$insertStmt) {
-            file_put_contents($logFile, "[$timestamp] Failed to prepare insert statement: " . $conn->error . "\n", FILE_APPEND);
-            throw new Exception("Failed to prepare insert statement: " . $conn->error);
+        if (!$inputData || !isset($inputData['vehicleId'])) {
+            throw new Exception("Invalid input data: vehicleId is required");
         }
         
-        $insertStmt->bind_param("s", $vehicleId);
-        if (!$insertStmt->execute()) {
-            file_put_contents($logFile, "[$timestamp] Failed to insert default fare: " . $insertStmt->error . "\n", FILE_APPEND);
-            throw new Exception("Failed to insert default fare: " . $insertStmt->error);
+        $inputVehicleId = $inputData['vehicleId'] ?? $inputData['vehicle_id'] ?? null;
+        
+        if (!$inputVehicleId) {
+            throw new Exception("Vehicle ID is required");
         }
         
-        // Return the default fare
-        $fares[] = [
-            'id' => $conn->insert_id,
-            'vehicleId' => $vehicleId,
-            'vehicle_id' => $vehicleId,
-            'basePrice' => 0,
-            'base_price' => 0,
-            'pricePerKm' => 0,
-            'price_per_km' => 0,
-            'pickupPrice' => 0,
-            'pickup_price' => 0,
-            'dropPrice' => 0,
-            'drop_price' => 0,
-            'tier1Price' => 0,
-            'tier1_price' => 0,
-            'tier2Price' => 0,
-            'tier2_price' => 0,
-            'tier3Price' => 0,
-            'tier3_price' => 0,
-            'tier4Price' => 0,
-            'tier4_price' => 0,
-            'extraKmCharge' => 0,
-            'extra_km_charge' => 0
-        ];
+        // Check if record exists
+        $checkSql = "SELECT id FROM airport_transfer_fares WHERE LOWER(vehicle_id) = LOWER(?)";
+        $checkStmt = $conn->prepare($checkSql);
+        $checkStmt->bind_param("s", $inputVehicleId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        // Prepare data for insert or update
+        $basePrice = isset($inputData['basePrice']) ? floatval($inputData['basePrice']) : (isset($inputData['base_price']) ? floatval($inputData['base_price']) : 0);
+        $pricePerKm = isset($inputData['pricePerKm']) ? floatval($inputData['pricePerKm']) : (isset($inputData['price_per_km']) ? floatval($inputData['price_per_km']) : 0);
+        $pickupPrice = isset($inputData['pickupPrice']) ? floatval($inputData['pickupPrice']) : (isset($inputData['pickup_price']) ? floatval($inputData['pickup_price']) : 0);
+        $dropPrice = isset($inputData['dropPrice']) ? floatval($inputData['dropPrice']) : (isset($inputData['drop_price']) ? floatval($inputData['drop_price']) : 0);
+        $tier1Price = isset($inputData['tier1Price']) ? floatval($inputData['tier1Price']) : (isset($inputData['tier1_price']) ? floatval($inputData['tier1_price']) : 0);
+        $tier2Price = isset($inputData['tier2Price']) ? floatval($inputData['tier2Price']) : (isset($inputData['tier2_price']) ? floatval($inputData['tier2_price']) : 0);
+        $tier3Price = isset($inputData['tier3Price']) ? floatval($inputData['tier3Price']) : (isset($inputData['tier3_price']) ? floatval($inputData['tier3_price']) : 0);
+        $tier4Price = isset($inputData['tier4Price']) ? floatval($inputData['tier4Price']) : (isset($inputData['tier4_price']) ? floatval($inputData['tier4_price']) : 0);
+        $extraKmCharge = isset($inputData['extraKmCharge']) ? floatval($inputData['extraKmCharge']) : (isset($inputData['extra_km_charge']) ? floatval($inputData['extra_km_charge']) : 0);
+        
+        // Insert or update record
+        if ($checkResult->num_rows > 0) {
+            // Update existing record
+            $updateSql = "
+                UPDATE airport_transfer_fares 
+                SET base_price = ?, price_per_km = ?, pickup_price = ?, drop_price = ?,
+                    tier1_price = ?, tier2_price = ?, tier3_price = ?, tier4_price = ?,
+                    extra_km_charge = ?, updated_at = NOW()
+                WHERE LOWER(vehicle_id) = LOWER(?)
+            ";
+            
+            $updateStmt = $conn->prepare($updateSql);
+            $updateStmt->bind_param(
+                "ddddddddds",
+                $basePrice, $pricePerKm, $pickupPrice, $dropPrice,
+                $tier1Price, $tier2Price, $tier3Price, $tier4Price,
+                $extraKmCharge, $inputVehicleId
+            );
+            
+            if (!$updateStmt->execute()) {
+                throw new Exception("Failed to update fare: " . $updateStmt->error);
+            }
+            
+            file_put_contents($logFile, "[$timestamp] Updated fare for vehicle $inputVehicleId\n", FILE_APPEND);
+        } else {
+            // Insert new record
+            $insertSql = "
+                INSERT INTO airport_transfer_fares 
+                (vehicle_id, base_price, price_per_km, pickup_price, drop_price,
+                tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                base_price = VALUES(base_price),
+                price_per_km = VALUES(price_per_km),
+                pickup_price = VALUES(pickup_price),
+                drop_price = VALUES(drop_price),
+                tier1_price = VALUES(tier1_price),
+                tier2_price = VALUES(tier2_price),
+                tier3_price = VALUES(tier3_price),
+                tier4_price = VALUES(tier4_price),
+                extra_km_charge = VALUES(extra_km_charge),
+                updated_at = NOW()
+            ";
+            
+            $insertStmt = $conn->prepare($insertSql);
+            $insertStmt->bind_param(
+                "sdddddddd",
+                $inputVehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice,
+                $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge
+            );
+            
+            if (!$insertStmt->execute()) {
+                throw new Exception("Failed to insert fare: " . $insertStmt->error);
+            }
+            
+            file_put_contents($logFile, "[$timestamp] Inserted fare for vehicle $inputVehicleId\n", FILE_APPEND);
+        }
+        
+        // Return success response
+        sendJSON([
+            'status' => 'success',
+            'message' => 'Airport fare saved successfully',
+            'data' => [
+                'vehicleId' => $inputVehicleId,
+                'vehicle_id' => $inputVehicleId,
+                'basePrice' => $basePrice,
+                'base_price' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'price_per_km' => $pricePerKm,
+                'pickupPrice' => $pickupPrice,
+                'pickup_price' => $pickupPrice,
+                'dropPrice' => $dropPrice,
+                'drop_price' => $dropPrice,
+                'tier1Price' => $tier1Price,
+                'tier1_price' => $tier1Price,
+                'tier2Price' => $tier2Price,
+                'tier2_price' => $tier2Price,
+                'tier3Price' => $tier3Price,
+                'tier3_price' => $tier3Price,
+                'tier4Price' => $tier4Price,
+                'tier4_price' => $tier4Price,
+                'extraKmCharge' => $extraKmCharge,
+                'extra_km_charge' => $extraKmCharge
+            ]
+        ]);
+    } else {
+        sendJSON([
+            'status' => 'error',
+            'message' => 'Method not allowed'
+        ], 405);
     }
-    
-    file_put_contents($logFile, "[$timestamp] Returning " . count($fares) . " fares\n", FILE_APPEND);
-    
-    // Return success with fares
-    sendJSON([
-        'status' => 'success',
-        'message' => 'Airport fares retrieved successfully',
-        'data' => $fares,
-        'fares' => $fares
-    ]);
     
 } catch (Exception $e) {
     // Log the error
@@ -218,6 +351,6 @@ try {
     // Return error response
     sendJSON([
         'status' => 'error',
-        'message' => 'Failed to retrieve airport fares: ' . $e->getMessage()
+        'message' => 'Failed to process airport fares: ' . $e->getMessage()
     ], 500);
 }

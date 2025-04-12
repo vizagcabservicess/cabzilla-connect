@@ -11,7 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $conn = getDbConnection();
 
 try {
-    // Get all vehicle types from the vehicles table ONLY
+    // CRITICAL CHANGE: Get ONLY vehicles from the vehicles table 
+    // Do not join with any other tables to avoid including unwanted vehicles
     $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name ASC";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
@@ -19,18 +20,18 @@ try {
     $normalizedColumns = [];
     
     // Log for debugging
-    error_log("Fetching vehicles from the vehicles table for tours.php");
+    error_log("Fetching ONLY from vehicles table for tours.php");
     
-    // Build vehicle mapping from vehicles table only
+    // Build vehicle mapping ONLY from vehicles table
     if ($vehiclesResult) {
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $id = $vehicle['id'];
             $vehicleId = $vehicle['vehicle_id'];
             $name = $vehicle['name'];
             
-            if (empty($vehicleId) && empty($name)) continue;
+            if (empty($vehicleId)) continue;
             
-            // Create normalized column name based on vehicle_id (NOT name)
+            // Create normalized column name based on vehicle_id
             $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));
             
             // Add to mapping
@@ -63,14 +64,14 @@ try {
             'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
         
-        // Process columns that match our vehicle mapping from the vehicles table
+        // Process columns that match our vehicle mapping from the vehicles table ONLY
         foreach ($row as $key => $value) {
             // Skip non-vehicle columns
             if (in_array($key, ['id', 'tour_id', 'tour_name', 'distance', 'days', 'created_at', 'updated_at'])) {
                 continue;
             }
             
-            // Only include columns that match our vehicle mapping from the vehicles table
+            // IMPORTANT CHANGE: Only include columns that match our vehicle mapping from the vehicles table
             $foundMatch = false;
             foreach ($vehicleMapping as $vehicleKey => $normalizedVehicleColumn) {
                 if (strtolower($key) === strtolower($normalizedVehicleColumn)) {
