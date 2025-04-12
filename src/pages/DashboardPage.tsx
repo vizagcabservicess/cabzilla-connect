@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -134,7 +135,7 @@ export default function DashboardPage() {
       setAdminMetricsError(null);
       
       const metrics = await bookingAPI.getAdminDashboardMetrics({ 
-        period: period as 'day' | 'week' | 'month', 
+        period, 
         status 
       });
       
