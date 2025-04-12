@@ -88,6 +88,8 @@ try {
         $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
         $params[] = $vehicleId;
         $types .= "s";
+        
+        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID: $vehicleId\n", FILE_APPEND);
     }
     
     // Prepare and execute the query
@@ -100,7 +102,10 @@ try {
         $stmt->bind_param($types, ...$params);
     }
     
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        throw new Exception("Query execution failed: " . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
     
     // Format the output
@@ -131,6 +136,56 @@ try {
         ];
     }
     
+    // If specific vehicle requested but no fare found, create default
+    if (empty($fares) && $vehicleId) {
+        file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
+        
+        // Insert a default record
+        $defaultInsertSql = "
+            INSERT INTO airport_transfer_fares 
+            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
+            VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        ";
+        
+        $insertStmt = $conn->prepare($defaultInsertSql);
+        if (!$insertStmt) {
+            throw new Exception("Failed to prepare insert statement: " . $conn->error);
+        }
+        
+        $insertStmt->bind_param("s", $vehicleId);
+        if (!$insertStmt->execute()) {
+            throw new Exception("Failed to insert default fare: " . $insertStmt->error);
+        }
+        
+        // Return the default fare
+        $fares[] = [
+            'id' => $conn->insert_id,
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'basePrice' => 0,
+            'base_price' => 0,
+            'pricePerKm' => 0,
+            'price_per_km' => 0,
+            'pickupPrice' => 0,
+            'pickup_price' => 0,
+            'dropPrice' => 0,
+            'drop_price' => 0,
+            'tier1Price' => 0,
+            'tier1_price' => 0,
+            'tier2Price' => 0,
+            'tier2_price' => 0,
+            'tier3Price' => 0,
+            'tier3_price' => 0,
+            'tier4Price' => 0,
+            'tier4_price' => 0,
+            'extraKmCharge' => 0,
+            'extra_km_charge' => 0
+        ];
+    }
+    
+    file_put_contents($logFile, "[$timestamp] Returning " . count($fares) . " fares\n", FILE_APPEND);
+    
     // Return the fares
     sendJSON([
         'status' => 'success',
@@ -142,6 +197,7 @@ try {
 } catch (Exception $e) {
     // Log the error
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Stack trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
     
     // Return error response
     sendJSON([

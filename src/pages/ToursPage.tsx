@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -34,12 +33,18 @@ const ToursPage = () => {
   const [dynamicTourFares, setDynamicTourFares] = useState<TourFares>(tourFares);
   const [isLoadingFares, setIsLoadingFares] = useState(false);
   
-  // Load dynamic tour fares from the API
+  useEffect(() => {
+    if (selectedTour) {
+      sessionStorage.setItem('selectedTour', selectedTour);
+      console.log(`Selected tour stored in sessionStorage: ${selectedTour}`);
+    }
+  }, [selectedTour]);
+  
   useEffect(() => {
     const fetchTourFares = async () => {
       setIsLoadingFares(true);
       try {
-        const fares = await loadTourFares();
+        const fares = await loadTourFares(true);
         console.log("Tour fares loaded successfully:", fares);
         setDynamicTourFares(fares);
       } catch (error) {
@@ -63,26 +68,21 @@ const ToursPage = () => {
     
     console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
     
-    // Normalize cab ID to match what's in the database
     const normalizedCabId = cabId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
-    // Check for the fare in our dynamically loaded fares
     if (dynamicTourFares[tourId]) {
-      // Try exact match first
-      if (dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]]) {
-        const fare = dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]];
+      if (dynamicTourFares[tourId][cabId]) {
+        const fare = dynamicTourFares[tourId][cabId];
         console.log(`Found exact fare match for ${cabId}: ${fare}`);
         return fare as number;
       }
       
-      // Try normalized cab ID
-      if (dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]]) {
-        const fare = dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]];
+      if (dynamicTourFares[tourId][normalizedCabId]) {
+        const fare = dynamicTourFares[tourId][normalizedCabId];
         console.log(`Found normalized fare match for ${normalizedCabId}: ${fare}`);
         return fare as number;
       }
       
-      // Try common mappings for cab types
       if (cabId.includes('sedan') && dynamicTourFares[tourId].sedan) {
         console.log(`Using sedan fare for ${cabId}: ${dynamicTourFares[tourId].sedan}`);
         return dynamicTourFares[tourId].sedan;
@@ -97,21 +97,40 @@ const ToursPage = () => {
         console.log(`Using ertiga fare for ${cabId}: ${dynamicTourFares[tourId].ertiga}`);
         return dynamicTourFares[tourId].ertiga;
       }
+      
+      if (cabId.includes('tempo') && dynamicTourFares[tourId].tempo) {
+        console.log(`Using tempo fare for ${cabId}: ${dynamicTourFares[tourId].tempo}`);
+        return dynamicTourFares[tourId].tempo;
+      }
+      
+      if (cabId.includes('luxury') && dynamicTourFares[tourId].luxury) {
+        console.log(`Using luxury fare for ${cabId}: ${dynamicTourFares[tourId].luxury}`);
+        return dynamicTourFares[tourId].luxury;
+      }
     }
     
-    // Fallback to hardcoded values if nothing else works
     console.log(`No fare found for ${tourId}/${cabId}, using fallback pricing`);
-    if (cabId === 'sedan') return 3500;
-    if (cabId === 'ertiga') return 4500;
-    if (cabId.includes('innova')) return 5500;
     
-    return 4000; // Default fallback
+    const tourDistance = availableTours.find(tour => tour.id === tourId)?.distance || 100;
+    
+    if (cabId.includes('sedan')) return Math.max(3500, tourDistance * 15);
+    if (cabId.includes('ertiga')) return Math.max(4500, tourDistance * 18);
+    if (cabId.includes('innova')) return Math.max(5500, tourDistance * 22);
+    if (cabId.includes('tempo')) return Math.max(7500, tourDistance * 25);
+    if (cabId.includes('luxury')) return Math.max(9000, tourDistance * 30);
+    
+    return Math.max(4000, tourDistance * 20);
   };
   
   const handleTourSelect = (tourId: string) => {
     console.log(`Tour selected: ${tourId}`);
     setSelectedTour(tourId);
     setSelectedCab(null);
+    
+    sessionStorage.setItem('selectedTour', tourId);
+    window.dispatchEvent(new CustomEvent('tour-selected', { 
+      detail: { tourId, timestamp: Date.now() } 
+    }));
   };
   
   const handleBookNow = () => {

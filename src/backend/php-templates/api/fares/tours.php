@@ -19,9 +19,9 @@ try {
     $normalizedColumns = [];
     
     // Log for debugging
-    error_log("Fetching vehicles ONLY from the vehicles table for tours.php");
+    error_log("Fetching vehicles from the vehicles table for tours.php");
     
-    // Build complete vehicle mapping from vehicles table only
+    // Build vehicle mapping from vehicles table only
     if ($vehiclesResult) {
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $id = $vehicle['id'];
@@ -30,20 +30,20 @@ try {
             
             if (empty($vehicleId) && empty($name)) continue;
             
-            // Create normalized column name
-            $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId ?: $name));
+            // Create normalized column name based on vehicle_id (NOT name)
+            $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));
             
             // Add to mapping
             $vehicleMapping[$id] = $normalizedColumn;
             $vehicleMapping[$vehicleId] = $normalizedColumn;
-            $vehicleMapping[$name] = $normalizedColumn;
+            
+            // Also add lowercase versions
             $vehicleMapping[strtolower($vehicleId)] = $normalizedColumn;
-            $vehicleMapping[strtolower($name)] = $normalizedColumn;
             
             // Add to normalized columns
             $normalizedColumns[$normalizedColumn] = $normalizedColumn;
             
-            error_log("Vehicle mapping: {$id} -> {$normalizedColumn}");
+            error_log("Vehicle mapping: {$id} -> {$normalizedColumn} (from vehicle_id: {$vehicleId})");
         }
     }
     
@@ -63,28 +63,27 @@ try {
             'days' => isset($row['days']) ? intval($row['days']) : 1
         ];
         
-        // Process all vehicle columns from the row
+        // Process columns that match our vehicle mapping from the vehicles table
         foreach ($row as $key => $value) {
             // Skip non-vehicle columns
             if (in_array($key, ['id', 'tour_id', 'tour_name', 'distance', 'days', 'created_at', 'updated_at'])) {
                 continue;
             }
             
-            // Check if this column matches any of our vehicle mappings
-            $normalizedKey = null;
-            
             // Only include columns that match our vehicle mapping from the vehicles table
+            $foundMatch = false;
             foreach ($vehicleMapping as $vehicleKey => $normalizedVehicleColumn) {
-                if (strtolower($key) === strtolower($vehicleKey) || 
-                    strtolower($key) === strtolower($normalizedVehicleColumn)) {
-                    $normalizedKey = $normalizedVehicleColumn;
+                if (strtolower($key) === strtolower($normalizedVehicleColumn)) {
+                    $tourFare[$normalizedVehicleColumn] = floatval($value);
+                    $foundMatch = true;
                     break;
                 }
             }
             
-            // If we found a match and the value is numeric, add it
-            if ($normalizedKey !== null && is_numeric($value)) {
-                $tourFare[$normalizedKey] = floatval($value);
+            // If this column didn't match any vehicle from our mapping, skip it
+            if (!$foundMatch) {
+                error_log("Skipping column $key as it doesn't match any vehicle from the vehicles table");
+                continue;
             }
         }
         

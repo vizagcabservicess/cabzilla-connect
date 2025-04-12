@@ -102,9 +102,24 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     };
   }, []);
   
+  // Listen for tour selection changes
+  useEffect(() => {
+    const handleTourSelected = () => {
+      console.log("Tour selection changed, refreshing cab options");
+      setForceFareRefresh(prev => prev + 1);
+    };
+    
+    window.addEventListener('tour-selected', handleTourSelected);
+    
+    return () => {
+      window.removeEventListener('tour-selected', handleTourSelected);
+    };
+  }, []);
+  
   // Load actual fares from localStorage or API
   useEffect(() => {
     setIsCalculatingFares(true);
+    console.log(`Calculating fares for trip type: ${tripType}`);
     
     const fetchFares = async () => {
       try {
@@ -128,6 +143,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             // Process each cab type to find its corresponding fare
             cabTypes.forEach(cab => {
               const cabId = cab.id.toLowerCase();
+              const normalizedCabId = cabId.replace(/[^a-z0-9_]/g, '_');
               
               // Try different ways to match cab with fare
               if (tourFares[selectedTour][cabId]) {
@@ -135,6 +151,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 currentFares[cab.id] = tourFares[selectedTour][cabId];
                 console.log(`Direct fare match for ${cab.id}: ${currentFares[cab.id]}`);
               } 
+              else if (tourFares[selectedTour][normalizedCabId]) {
+                // Match on normalized cab ID
+                currentFares[cab.id] = tourFares[selectedTour][normalizedCabId];
+                console.log(`Normalized fare match for ${cab.id}: ${currentFares[cab.id]}`);
+              }
               else if (cabId.includes('sedan') && tourFares[selectedTour].sedan) {
                 // Match by vehicle type - sedan
                 currentFares[cab.id] = tourFares[selectedTour].sedan;
@@ -187,21 +208,25 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               }
               else {
                 // Fallback to a calculated fare based on distance
-                const baseFare = distance * (
-                  cabId.includes('luxury') ? 20 : 
-                  cabId.includes('innova') ? 15 : 
-                  cabId.includes('ertiga') ? 12 : 10
+                const tourDistance = distance || 100;
+                const baseFare = tourDistance * (
+                  cabId.includes('luxury') ? 30 : 
+                  cabId.includes('innova') ? 22 : 
+                  cabId.includes('tempo') ? 25 :
+                  cabId.includes('ertiga') ? 18 : 15
                 );
                 currentFares[cab.id] = Math.max(baseFare, 1500);
-                console.log(`Calculated fare for ${cab.id}: ${currentFares[cab.id]}`);
+                console.log(`Calculated fallback fare for ${cab.id}: ${currentFares[cab.id]}`);
               }
               
               // Ensure fare is not zero or unreasonably low for a tour
-              if (currentFares[cab.id] <= 100) {
-                const reasonableFare = distance * (
-                  cabId.includes('luxury') ? 20 : 
-                  cabId.includes('innova') ? 15 : 
-                  cabId.includes('ertiga') ? 12 : 10
+              if (!currentFares[cab.id] || currentFares[cab.id] <= 100) {
+                const tourDistance = distance || 100;
+                const reasonableFare = tourDistance * (
+                  cabId.includes('luxury') ? 30 : 
+                  cabId.includes('innova') ? 22 : 
+                  cabId.includes('tempo') ? 25 :
+                  cabId.includes('ertiga') ? 18 : 15
                 );
                 currentFares[cab.id] = Math.max(reasonableFare, 1500);
                 console.log(`Using reasonable fare for ${cab.id}: ${currentFares[cab.id]}`);
@@ -209,7 +234,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               
               // Store the calculated fare in localStorage for persistence
               try {
-                localStorage.setItem(`fare_tour_${cab.id}`, currentFares[cab.id].toString());
+                localStorage.setItem(`fare_tour_${selectedTour}_${cab.id}`, currentFares[cab.id].toString());
               } catch (e) {
                 console.warn(`Could not store fare for ${cab.id} in localStorage:`, e);
               }

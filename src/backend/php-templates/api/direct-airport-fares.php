@@ -34,9 +34,9 @@ $logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
-$logFile = $logDir . '/airport_fares_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/airport_fares_direct_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
-file_put_contents($logFile, "[$timestamp] Airport fares request for vehicle ID: $vehicleId\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Direct airport fares request for vehicle ID: $vehicleId\n", FILE_APPEND);
 
 try {
     // Connect to database
@@ -88,11 +88,14 @@ try {
         $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
         $params[] = $vehicleId;
         $types .= "s";
+        
+        file_put_contents($logFile, "[$timestamp] Querying for vehicle ID: $vehicleId\n", FILE_APPEND);
     }
     
     // Prepare and execute the query
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
+        file_put_contents($logFile, "[$timestamp] Prepare statement failed: " . $conn->error . "\n", FILE_APPEND);
         throw new Exception("Prepare statement failed: " . $conn->error);
     }
     
@@ -100,7 +103,11 @@ try {
         $stmt->bind_param($types, ...$params);
     }
     
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        file_put_contents($logFile, "[$timestamp] Query execution failed: " . $stmt->error . "\n", FILE_APPEND);
+        throw new Exception("Query execution failed: " . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
     
     // Format the output
@@ -144,17 +151,28 @@ try {
     
     // If specific vehicle requested but no fare found, create default
     if (empty($fares) && $vehicleId) {
+        file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
+        
         // Insert a default record
         $defaultInsertSql = "
             INSERT INTO airport_transfer_fares 
             (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
             tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
             VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            ON DUPLICATE KEY UPDATE updated_at = NOW()
         ";
         
         $insertStmt = $conn->prepare($defaultInsertSql);
+        if (!$insertStmt) {
+            file_put_contents($logFile, "[$timestamp] Failed to prepare insert statement: " . $conn->error . "\n", FILE_APPEND);
+            throw new Exception("Failed to prepare insert statement: " . $conn->error);
+        }
+        
         $insertStmt->bind_param("s", $vehicleId);
-        $insertStmt->execute();
+        if (!$insertStmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Failed to insert default fare: " . $insertStmt->error . "\n", FILE_APPEND);
+            throw new Exception("Failed to insert default fare: " . $insertStmt->error);
+        }
         
         // Return the default fare
         $fares[] = [
@@ -182,6 +200,8 @@ try {
         ];
     }
     
+    file_put_contents($logFile, "[$timestamp] Returning " . count($fares) . " fares\n", FILE_APPEND);
+    
     // Return success with fares
     sendJSON([
         'status' => 'success',
@@ -193,6 +213,7 @@ try {
 } catch (Exception $e) {
     // Log the error
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Stack trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
     
     // Return error response
     sendJSON([
