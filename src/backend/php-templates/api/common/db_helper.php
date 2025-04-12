@@ -58,6 +58,9 @@ function getDbConnection() {
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
+    // Ensure proper UTF-8 connection
+    $conn->set_charset("utf8mb4");
+    
     error_log("Database connection successful");
     return $conn;
 }
@@ -109,4 +112,76 @@ function executeQuery($conn, $sql, $params = []) {
     $stmt->close();
     
     return $result !== false ? $result : true;
+}
+
+/**
+ * Create a test booking for a user
+ * 
+ * @param mysqli $conn Database connection
+ * @param int $userId User ID
+ * @return bool Success status
+ */
+function createTestBooking($conn, $userId) {
+    try {
+        $now = date('Y-m-d H:i:s');
+        $tomorrow = date('Y-m-d H:i:s', strtotime('+1 day'));
+        $bookingNumber = 'TB' . rand(10000, 99999);
+        
+        $sql = "INSERT INTO bookings (
+            user_id, booking_number, pickup_location, drop_location, pickup_date, 
+            return_date, cab_type, distance, trip_type, trip_mode, 
+            total_amount, status, passenger_name, passenger_phone, passenger_email,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $conn->prepare($sql);
+        
+        if (!$stmt) {
+            error_log("Failed to prepare test booking statement: " . $conn->error);
+            return false;
+        }
+        
+        $pickupLocation = "Test Pickup Location";
+        $dropLocation = "Test Drop Location";
+        $cabType = "sedan";
+        $distance = 15.5;
+        $tripType = "local";
+        $tripMode = "one-way";
+        $totalAmount = 1500;
+        $status = "pending";
+        $passengerName = "Test User";
+        $passengerPhone = "9876543210";
+        $passengerEmail = "test@example.com";
+        
+        $stmt->bind_param(
+            "issssssdssdssssss",
+            $userId,
+            $bookingNumber,
+            $pickupLocation,
+            $dropLocation,
+            $now,
+            $tomorrow,
+            $cabType,
+            $distance,
+            $tripType,
+            $tripMode,
+            $totalAmount,
+            $status,
+            $passengerName,
+            $passengerPhone,
+            $passengerEmail,
+            $now,
+            $now
+        );
+        
+        $result = $stmt->execute();
+        $stmt->close();
+        
+        error_log("Test booking created for user $userId: " . ($result ? "Success" : "Failed"));
+        
+        return $result;
+    } catch (Exception $e) {
+        error_log("Error creating test booking: " . $e->getMessage());
+        return false;
+    }
 }

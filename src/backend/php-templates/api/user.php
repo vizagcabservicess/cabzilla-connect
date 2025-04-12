@@ -14,7 +14,6 @@ header("Expires: 0");
 
 // Log request for debugging
 error_log("User API request received - Method: " . $_SERVER['REQUEST_METHOD'] . ", URI: " . $_SERVER['REQUEST_URI']);
-error_log("Headers: " . json_encode(getallheaders()));
 
 // Handle authentication
 $headers = getallheaders();
@@ -22,8 +21,18 @@ $userId = null;
 $isAdmin = false;
 $token = '';
 
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+error_log("Headers received: " . json_encode($headers));
+
+// Extract authorization header manually - handle both camel case and lowercase
+$authHeader = null;
+foreach($headers as $key => $value) {
+    if (strtolower($key) === 'authorization') {
+        $authHeader = $value;
+        break;
+    }
+}
+
+if ($authHeader) {
     $token = str_replace('Bearer ', '', $authHeader);
     
     error_log("Found auth token: " . substr($token, 0, 10) . "...");
@@ -40,6 +49,16 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
             }
         } else {
             error_log("verifyJwtToken function not available");
+            // Try to extract user_id directly from token (for demo/testing)
+            $tokenParts = explode('.', $token);
+            if (count($tokenParts) >= 2) {
+                $payload = json_decode(base64_decode($tokenParts[1]), true);
+                if ($payload && isset($payload['user_id'])) {
+                    $userId = $payload['user_id'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    error_log("Manually extracted user from token: $userId");
+                }
+            }
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
@@ -150,7 +169,7 @@ try {
     // If we reach here, we were unable to get user data from database
     // Return a sample user as fallback, but with a clear source indicator
     $sampleUser = [
-        'id' => $userId ?? 101,
+        'id' => $userId ?? 2, // Default to ID 2 if no user ID found
         'name' => 'Sample User',
         'email' => 'sample@example.com',
         'phone' => '1234567890',
@@ -163,14 +182,14 @@ try {
         'user' => $sampleUser,
         'source' => 'sample_fallback'
     ]);
-    error_log("Returned sample user data as fallback");
+    error_log("Returned sample user data as fallback with ID: " . ($userId ?? 2));
     
 } catch (Exception $e) {
     error_log("Error in user.php: " . $e->getMessage());
     
     // Return fallback user data
     $fallbackUser = [
-        'id' => $userId ?? 100,
+        'id' => $userId ?? 2, // Default to ID 2 if no user ID found
         'name' => 'Fallback User',
         'email' => 'fallback@example.com',
         'phone' => '9876543210',

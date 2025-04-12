@@ -25,6 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST
     exit;
 }
 
+// Add special handling for user endpoints
+if ((strpos($_SERVER['REQUEST_URI'], '/user') !== false || 
+     strpos($_SERVER['REQUEST_URI'], '/bookings') !== false) && 
+    $_SERVER['REQUEST_METHOD'] === 'GET') {
+    
+    // Log for debugging
+    error_log("Special handling for user API request: " . $_SERVER['REQUEST_URI']);
+    
+    // Add special header to indicate we're handling user endpoints
+    header("X-API-Debug-Info: fix-cors-user-endpoint");
+}
+
 // Add special handling for dashboard/metrics API endpoints
 if ((strpos($_SERVER['REQUEST_URI'], 'dashboard') !== false || 
      strpos($_SERVER['REQUEST_URI'], 'metrics') !== false) && 
