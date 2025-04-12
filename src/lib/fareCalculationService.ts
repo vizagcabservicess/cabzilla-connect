@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -183,6 +184,10 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       expire: Date.now() + 15 * 60 * 1000,
       price: fare
     });
+    
+    // Store in localStorage for other components to access
+    const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
+    localStorage.setItem(localStorageKey, fare.toString());
     
     return fare;
   } catch (error) {
