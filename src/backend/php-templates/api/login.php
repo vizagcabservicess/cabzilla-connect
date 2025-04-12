@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     header('Content-Type: application/json');
     http_response_code(200);
     exit;
@@ -19,20 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Set CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     header('Content-Type: application/json');
-    
-    // Check if this is a test request
-    $headers = getallheaders();
-    if (isset($headers['X-Test']) && $headers['X-Test'] === 'true') {
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'API endpoint accessible',
-            'test' => true,
-            'timestamp' => time()
-        ]);
-        exit;
-    }
     
     // Send friendly response for direct browser access
     echo json_encode([
@@ -48,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     // Add CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Test, Cache-Control, Pragma, Expires');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
@@ -74,30 +62,6 @@ try {
     $password = $data['password'];
     
     logError("Login attempt", ['email' => $email]);
-    
-    // Demo account for testing
-    if ($email === 'demo@example.com' && $password === 'password123') {
-        // Create demo user data
-        $demoUser = [
-            'id' => 999,
-            'name' => 'Demo User',
-            'email' => 'demo@example.com',
-            'phone' => '9876543210',
-            'role' => 'user'
-        ];
-        
-        // Generate JWT token
-        $token = generateJwtToken($demoUser['id'], $demoUser['email'], $demoUser['role']);
-        
-        // Send response
-        sendJsonResponse([
-            'status' => 'success',
-            'message' => 'Demo login successful',
-            'token' => $token,
-            'user' => $demoUser
-        ]);
-        exit;
-    }
     
     // Connect to database
     $conn = getDbConnection();

@@ -4,7 +4,7 @@
 // Base API URL - auto-detect between development and production
 export const apiBaseUrl = process.env.NODE_ENV === 'production' 
   ? 'https://vizagup.com' 
-  : window.location.origin; // Use the current origin to prevent CORS issues
+  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {
@@ -26,23 +26,12 @@ export const forceRefreshHeaders = {
 // Default headers for API requests
 export const defaultHeaders = {
   'Content-Type': 'application/json',
-  'X-Requested-With': 'XMLHttpRequest',
-  'Accept': 'application/json'
-};
-
-// Cross-domain request headers with specific CORS settings
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma, Expires',
-  'Access-Control-Max-Age': '86400'
+  'X-Requested-With': 'XMLHttpRequest'
 };
 
 // Export configuration options
 export default {
   baseUrl: apiBaseUrl,
   defaultHeaders,
-  forceRefreshHeaders,
-  corsHeaders,
-  getApiUrl
+  forceRefreshHeaders
 };

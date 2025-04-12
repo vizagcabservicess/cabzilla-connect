@@ -1,540 +1,496 @@
+import axios from 'axios';
+import { BookingRequest, Booking } from '@/types/api';
+import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 
-// API configuration for all endpoints
+const API_URL = '/api';
 
-// Import from config
-import { apiBaseUrl, getApiUrl } from '@/config/api';
-import { safeFetch, safeJsonParse, getAuthHeaders } from '@/config/requestConfig';
-
-// Import types
-import { Booking, DashboardMetrics, BookingStatus, User, LoginResponse, VehiclePricingUpdateRequest } from '@/types/api';
-
-// Base API service
-class ApiService {
-  // Base URL for API requests
-  private baseUrl: string;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+// Create an axios instance for better control
+const apiClient = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
   }
+});
 
-  // Helper to get full URL for API endpoint
-  private getFullUrl(endpoint: string): string {
-    return `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+// Log requests and responses globally
+apiClient.interceptors.request.use(
+  config => {
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, { 
+      data: config.data,
+      params: config.params,
+      headers: config.headers
+    });
+    return config;
+  }, 
+  error => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
   }
+);
 
-  // Helper to ensure consistent user ID in all requests
-  private ensureConsistentUserId(options: RequestInit = {}): RequestInit {
-    const userId = localStorage.getItem('userId');
-    const headers = {
-      ...(options.headers || {}),
-      ...getAuthHeaders()
-    };
-    
-    // Add user ID in headers for better consistency
-    if (userId) {
-      headers['X-User-ID'] = userId;
-      headers['X-Force-User-Match'] = 'true';
-    }
-    
-    return {
-      ...options,
-      headers
-    };
+apiClient.interceptors.response.use(
+  response => {
+    console.log(`API Response (${response.status}):`, response.data);
+    return response;
+  },
+  error => {
+    console.error('API Response Error:', error.response?.data || error.message);
+    return Promise.reject(error);
   }
+);
 
-  // GET request with authorization
-  async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = this.getFullUrl(endpoint);
-    const enhancedOptions = this.ensureConsistentUserId(options);
-    const userId = localStorage.getItem('userId');
-    
-    // Append userId as query parameter for better compatibility
-    const queryChar = endpoint.includes('?') ? '&' : '?';
-    const endpointWithUserId = userId ? `${endpoint}${queryChar}user_id=${userId}` : endpoint;
-    const fullUrl = this.getFullUrl(endpointWithUserId);
-
-    try {
-      console.log(`API Request: GET ${endpointWithUserId}`);
-      const response = await safeFetch(fullUrl, {
-        method: 'GET',
-        ...enhancedOptions
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await safeJsonParse(response);
-      console.log(`API Response data:`, data);
-      
-      // Handle wrapped responses where data is in a nested property
-      if (data && typeof data === 'object') {
-        // If the response has bookings, return that directly
-        if (data.bookings) {
-          return data as unknown as T;
-        }
-        // If the response has a data property, return that
-        if (data.data) {
-          return data.data as T;
-        }
-        // For user endpoint that returns user object
-        if (data.user) {
-          return data.user as T;
-        }
-        // Fallback to returning the whole response
-        return data as T;
-      }
-
-      return data as T;
-    } catch (error) {
-      console.error(`API Request failed for GET ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // POST request with authorization
-  async post<T>(endpoint: string, data: any, options: RequestInit = {}): Promise<T> {
-    const url = this.getFullUrl(endpoint);
-    const enhancedOptions = this.ensureConsistentUserId(options);
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(enhancedOptions.headers || {})
-    };
-
-    try {
-      console.log(`API Request: POST ${endpoint}`, data);
-      const response = await safeFetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data),
-        ...options
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      const responseData = await safeJsonParse(response);
-      console.log(`API Response data:`, responseData);
-      
-      // Handle wrapped responses
-      if (responseData && typeof responseData === 'object') {
-        if (responseData.data) {
-          return responseData.data as T;
-        }
-        return responseData as T;
-      }
-
-      return responseData as T;
-    } catch (error) {
-      console.error(`API Request failed for POST ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // DELETE request with authorization
-  async delete<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = this.getFullUrl(endpoint);
-    const enhancedOptions = this.ensureConsistentUserId(options);
-    
-    try {
-      console.log(`API Request: DELETE ${endpoint}`);
-      const response = await safeFetch(url, {
-        method: 'DELETE',
-        ...enhancedOptions
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await safeJsonParse(response);
-      
-      // Handle wrapped responses
-      if (data && typeof data === 'object' && data.data) {
-        return data.data as T;
-      }
-
-      return data as T;
-    } catch (error) {
-      console.error(`API Request failed for DELETE ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // PUT request with authorization
-  async put<T>(endpoint: string, data: any, options: RequestInit = {}): Promise<T> {
-    const url = this.getFullUrl(endpoint);
-    const enhancedOptions = this.ensureConsistentUserId(options);
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(enhancedOptions.headers || {})
-    };
-
-    try {
-      console.log(`API Request: PUT ${endpoint}`, data);
-      const response = await safeFetch(url, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(data),
-        ...options
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      const responseData = await safeJsonParse(response);
-      
-      // Handle wrapped responses
-      if (responseData && typeof responseData === 'object' && responseData.data) {
-        return responseData.data as T;
-      }
-
-      return responseData as T;
-    } catch (error) {
-      console.error(`API Request failed for PUT ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // Check API status
-  async checkStatus(): Promise<boolean> {
-    try {
-      const response = await safeFetch(this.getFullUrl('/api/status'));
-      return response.ok;
-    } catch (error) {
-      console.error('API status check failed:', error);
-      return false;
-    }
-  }
-}
-
-// Initialize the API service
-const api = new ApiService(apiBaseUrl);
-
-// Auth API
-export const authAPI = {
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('token');
+export const bookingAPI = {
+  getBookings: async (userId?: number) => {
+    const response = await apiClient.get(userId ? `/user/bookings?userId=${userId}` : '/bookings');
+    return response.data;
   },
   
-  getCurrentUser: async (): Promise<User | null> => {
+  getBookingById: async (id: string | number) => {
+    const response = await apiClient.get(`/bookings/${id}`);
+    return response.data;
+  },
+  
+  createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
     try {
-      // Add a custom header to ensure user ID is passed correctly
-      const headers = {
-        ...getAuthHeaders(),
-        'X-User-ID': localStorage.getItem('userId') || '',
-        'X-Force-User-Match': 'true'
-      };
+      console.log('Creating booking with data:', bookingData);
       
-      return await api.get<User>('/api/user', { headers });
+      // Enhanced validation - check all required fields with detailed logging
+      const requiredFields = ['pickupLocation', 'cabType', 'pickupDate', 'tripType', 
+                             'tripMode', 'totalAmount', 'passengerName', 
+                             'passengerPhone', 'passengerEmail'];
+      
+      // For non-local trips, require drop location
+      if (bookingData.tripType !== 'local') {
+        requiredFields.push('dropLocation');
+      }
+      
+      // Validate all fields are present
+      const missingFields = requiredFields.filter(field => {
+        const value = bookingData[field as keyof BookingRequest];
+        if (value === undefined || value === null) return true;
+        if (typeof value === 'string' && value.trim() === '') return true;
+        return false;
+      });
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        console.error('Booking data:', bookingData);
+        throw new Error(`Missing required booking information: ${missingFields.join(', ')}`);
+      }
+      
+      // For local trips, ensure dropLocation has at least an empty string
+      if (bookingData.tripType === 'local' && bookingData.dropLocation === undefined) {
+        bookingData.dropLocation = '';
+      }
+      
+      // Get the absolute URL for book.php
+      const bookingUrl = getApiUrl('/api/book.php');
+      console.log('Booking endpoint URL:', bookingUrl);
+      
+      // Use direct fetch with proper error handling and debugging
+      console.log('Sending booking request with data:', JSON.stringify(bookingData));
+      
+      const response = await fetch(bookingUrl, {
+        method: 'POST',
+        headers: {
+          ...defaultHeaders,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Requested-With': 'fetch'
+        },
+        body: JSON.stringify(bookingData),
+      });
+      
+      console.log('Response status:', response.status, response.statusText);
+      
+      // Get the response text first to debug potential issues
+      const responseText = await response.text();
+      console.log('Raw server response text length:', responseText.length);
+      console.log('Raw server response:', responseText.substring(0, 500));
+      
+      // Safety check - empty responses
+      if (!responseText || responseText.trim() === '') {
+        console.error('Server returned an empty response');
+        throw new Error('Server returned an empty response');
+      }
+      
+      // Parse the response text into JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log('Parsed JSON result:', result);
+      } catch (parseError) {
+        console.error('Failed to parse server response as JSON:', parseError);
+        // Try to extract JSON if there's any HTML content before/after it
+        const jsonMatch = responseText.match(/\{.*\}/s);
+        if (jsonMatch) {
+          try {
+            result = JSON.parse(jsonMatch[0]);
+            console.log('Extracted JSON from response:', result);
+          } catch (extractError) {
+            console.error('Failed to extract JSON from response:', extractError);
+            throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+          }
+        } else {
+          throw new Error('Server returned invalid JSON: ' + responseText.substring(0, 100));
+        }
+      }
+      
+      // Check if the result contains expected data
+      if (!result || result.status === 'error') {
+        throw new Error(result?.message || 'Unknown error occurred during booking');
+      }
+      
+      console.log('Booking created successfully:', result);
+      
+      // Send email confirmation separately with improved error handling
+      try {
+        if (result.data && result.data.passengerEmail) {
+          console.log('Sending email confirmation for booking:', result.data.bookingNumber);
+          
+          // Send to the dedicated email confirmation endpoint
+          const confirmEmailUrl = getApiUrl('/api/send-booking-confirmation.php');
+          console.log('Email confirmation URL:', confirmEmailUrl);
+          console.log('Email confirmation data:', JSON.stringify(result.data));
+          
+          const confirmResponse = await fetch(confirmEmailUrl, {
+            method: 'POST',
+            headers: {
+              ...defaultHeaders,
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            body: JSON.stringify(result.data)
+          });
+          
+          console.log('Email confirmation response status:', confirmResponse.status);
+          
+          // Try to parse the response as JSON with proper error handling
+          try {
+            const confirmText = await confirmResponse.text();
+            console.log('Email confirmation response:', confirmText.substring(0, 500));
+            
+            if (confirmText && confirmText.trim() !== '') {
+              try {
+                const confirmResult = JSON.parse(confirmText);
+                console.log('Parsed email confirmation result:', confirmResult);
+                
+                // Add email confirmation result to the booking response
+                result.data.emailConfirmation = confirmResult.status === 'success';
+                result.data.emailDetails = confirmResult.details || {};
+              } catch (parseError) {
+                console.warn('Could not parse email confirmation response as JSON:', confirmText.substring(0, 200));
+                result.data.emailConfirmation = false;
+                result.data.emailError = 'Invalid response from email service';
+              }
+            } else {
+              console.warn('Empty response from email confirmation endpoint');
+              result.data.emailConfirmation = false;
+              result.data.emailError = 'Empty response from email service';
+            }
+          } catch (textError) {
+            console.warn('Error reading email confirmation response:', textError);
+            result.data.emailConfirmation = false;
+            result.data.emailError = 'Could not read email service response';
+          }
+        } else {
+          console.warn('Email confirmation skipped - missing passenger email in booking data');
+          result.data.emailConfirmation = false;
+          result.data.emailError = 'Missing passenger email';
+        }
+      } catch (emailError) {
+        // Don't fail booking just because email failed
+        console.warn('Failed to trigger confirmation email:', emailError);
+        result.data.emailConfirmation = false;
+        result.data.emailError = emailError.message || 'Unknown email error';
+      }
+      
+      return result.data;
+    } catch (error) {
+      console.error('Error in createBooking:', error);
+      throw error;
+    }
+  },
+  
+  updateBooking: async (id: string | number, data: any) => {
+    const response = await apiClient.put(`/update-booking/${id}`, data);
+    return response.data;
+  },
+  
+  cancelBooking: async (id: string | number) => {
+    const response = await apiClient.put(`/update-booking/${id}`, { status: 'cancelled' });
+    return response.data;
+  },
+
+  getAllBookings: async () => {
+    const response = await apiClient.get('/admin/bookings');
+    return response.data;
+  },
+
+  getUserBookings: async () => {
+    const response = await apiClient.get('/user/bookings');
+    return response.data;
+  },
+
+  updateBookingStatus: async (id: string | number, status: string) => {
+    const response = await apiClient.put(`/update-booking/${id}`, { status });
+    return response.data;
+  },
+
+  deleteBooking: async (id: string | number) => {
+    const response = await apiClient.delete(`/admin/booking/${id}`);
+    return response.data;
+  },
+
+  getAdminDashboardMetrics: async (period: string) => {
+    const response = await apiClient.get(`/admin/dashboard-metrics?period=${period}`);
+    return response.data;
+  }
+};
+
+export const authAPI = {
+  login: async (credentials: { email: string; password: string }) => {
+    const response = await apiClient.post('/login', credentials);
+    return response.data;
+  },
+  
+  signup: async (userData: { name: string; email: string; password: string; phone?: string }) => {
+    const response = await apiClient.post('/signup', userData);
+    return response.data;
+  },
+  
+  getCurrentUser: async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return null;
+    
+    try {
+      const response = await apiClient.get('/user', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;
     }
   },
-  
-  login: async (credentials: { email: string; password: string }) => {
-    const response = await api.post<LoginResponse>('/api/login', credentials);
-    if (response && response.token) {
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
+
+  isAuthenticated: () => {
+    return !!localStorage.getItem('authToken');
+  },
+
+  isAdmin: () => {
+    const userDataStr = localStorage.getItem('userData');
+    if (!userDataStr) return false;
+    
+    try {
+      const userData = JSON.parse(userDataStr);
+      return userData.role === 'admin';
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      return false;
     }
-    return response;
   },
-  
-  signup: async (userData: { name: string; email: string; password: string; phone: string }) => {
-    return await api.post('/api/signup', userData);
-  },
-  
+
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
   },
-  
-  isAdmin: (): boolean => {
+
+  getAllUsers: async () => {
+    const response = await apiClient.get('/admin/users');
+    return response.data;
+  },
+
+  updateUserRole: async (userId: number, role: string) => {
+    const response = await apiClient.put(`/admin/users/${userId}/role`, { role });
+    return response.data;
+  }
+};
+
+export const vehicleAPI = {
+  getVehicles: async () => {
     try {
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        const user = JSON.parse(userData);
-        return user.role === 'admin';
+      // Try multiple endpoints with fallbacks
+      const urls = [
+        '/api/admin/get-vehicles.php',
+        '/api/vehicles.php',
+        '/api/vehicles/list',
+        '/data/vehicles.json'  // Added local JSON as last resort
+      ];
+      
+      let response = null;
+      let error = null;
+      
+      for (const url of urls) {
+        try {
+          console.log(`Attempting to fetch vehicles from: ${url}`);
+          response = await fetch(getApiUrl(url), {
+            headers: {
+              ...forceRefreshHeaders,
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          
+          if (response.ok) {
+            const responseText = await response.text();
+            
+            // Skip empty responses
+            if (!responseText || responseText.trim() === '') {
+              console.log(`Empty response from ${url}, trying next endpoint`);
+              continue;
+            }
+            
+            // Try to parse JSON
+            try {
+              const data = JSON.parse(responseText);
+              console.log(`Successfully fetched vehicles from ${url}:`, data);
+              return data;
+            } catch (parseError) {
+              console.error(`Error parsing JSON from ${url}:`, parseError);
+              console.log(`Response was:`, responseText.substring(0, 100));
+              // Continue to next endpoint if JSON parsing fails
+              continue;
+            }
+          }
+        } catch (err) {
+          console.error(`Error fetching from ${url}:`, err);
+          error = err;
+        }
       }
-      return false;
+      
+      // Last resort - static fallback data
+      console.warn('All vehicle fetch attempts failed, using fallback data');
+      return {
+        status: 'success',
+        message: 'Fallback vehicle data',
+        vehicles: [
+          {
+            id: "sedan",
+            name: "Sedan",
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: "/cars/sedan.png",
+            amenities: ["AC", "Bottle Water", "Music System"],
+            description: "Comfortable sedan suitable for 4 passengers.",
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: "ertiga",
+            name: "Ertiga",
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: "/cars/ertiga.png",
+            amenities: ["AC", "Bottle Water", "Music System", "Extra Legroom"],
+            description: "Spacious SUV suitable for 6 passengers.",
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ]
+      };
     } catch (error) {
-      console.error('Error checking admin status:', error);
-      return false;
+      console.error('All vehicle fetch attempts failed:', error);
+      
+      // Return fallback data if everything fails
+      return {
+        status: 'success',
+        message: 'Fallback vehicle data',
+        vehicles: []
+      };
     }
   }
 };
 
-// Booking API
-export const bookingAPI = {
-  getUserBookings: async (): Promise<Booking[]> => {
-    try {
-      console.log('Fetching user bookings...');
-      
-      // Add user ID in query params and headers for better matching
-      const userId = localStorage.getItem('userId');
-      const options = {
-        headers: {
-          ...getAuthHeaders(),
-          'X-User-ID': userId || '',
-          'X-Force-User-Match': 'true'
-        }
-      };
-      
-      // Append user_id as query parameter to help PHP backend match the correct user
-      const endpoint = `/api/user/bookings${userId ? `?user_id=${userId}` : ''}`;
-      const response = await api.get<{bookings: Booking[], status: string}>(endpoint, options);
-      console.log('User bookings response:', response);
-      
-      // Handle different response formats
-      if (response && Array.isArray(response)) {
-        return response;
-      } else if (response && response.bookings && Array.isArray(response.bookings)) {
-        return response.bookings;
-      } else if (response && typeof response === 'object') {
-        console.warn('Unexpected bookings response format:', response);
-        // Try to extract bookings from an unknown structure
-        const possibleBookings = Object.values(response).find(value => 
-          Array.isArray(value) && value.length > 0 && 
-          value[0] && typeof value[0] === 'object' && 
-          'bookingNumber' in value[0]
-        );
-        
-        if (Array.isArray(possibleBookings)) {
-          return possibleBookings as Booking[];
-        }
-      }
-      
-      console.warn('No bookings found in response');
-      return [];
-    } catch (error) {
-      console.error('Error getting user bookings:', error);
-      throw error;
-    }
-  },
-  
-  getBookingById: async (id: number | string): Promise<Booking> => {
-    return await api.get(`/api/booking/${id}`);
-  },
-  
-  createBooking: async (bookingData: any): Promise<any> => {
-    return await api.post('/api/book', bookingData);
-  },
-  
-  updateBookingStatus: async (id: number | string, status: BookingStatus): Promise<Booking> => {
-    return await api.put(`/api/admin/booking/${id}`, { status });
-  },
-  
-  updateBooking: async (id: number | string, bookingData: any): Promise<Booking> => {
-    return await api.put(`/api/booking/${id}`, bookingData);
-  },
-  
-  cancelBooking: async (id: number | string): Promise<any> => {
-    return await api.put(`/api/booking/${id}/cancel`, {});
-  },
-  
-  getAdminBookings: async (status?: BookingStatus): Promise<Booking[]> => {
-    const endpoint = status && status !== 'all' 
-      ? `/api/admin/booking?status=${status}` 
-      : '/api/admin/booking';
-      
-    const response = await api.get<{bookings: Booking[], status: string}>(endpoint);
-    return response && response.bookings ? response.bookings : [];
-  },
-  
-  getAllBookings: async (status?: BookingStatus | 'all'): Promise<Booking[]> => {
-    const endpoint = status && status !== 'all' 
-      ? `/api/admin/booking?status=${status}` 
-      : '/api/admin/booking';
-      
-    const response = await api.get<{bookings: Booking[], status: string}>(endpoint);
-    return response && response.bookings ? response.bookings : [];
-  },
-  
-  getAdminDashboardMetrics: async (options: { 
-    period?: 'day' | 'week' | 'month', 
-    status?: string 
-  } = {}): Promise<DashboardMetrics> => {
-    // Try multiple endpoint patterns - the path was /api/admin/metrics but should be /api/user/dashboard
-    try {
-      // Extract options or use defaults
-      const period = options.period || 'week';
-      const status = options.status || 'all';
-      
-      // Get user ID for request
-      const userId = localStorage.getItem('userId');
-      const requestOptions = {
-        headers: {
-          ...getAuthHeaders(),
-          'X-User-ID': userId || '',
-          'X-Force-User-Match': 'true',
-          'X-Admin-Mode': 'true'
-        }
-      };
-      
-      // First try the original endpoint
-      return await api.get(
-        `/api/admin/metrics?period=${period}${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
-        requestOptions
-      );
-    } catch (error) {
-      console.log('Primary metrics endpoint failed, trying alternatives...', error);
-      
-      try {
-        // Try the dashboard endpoint
-        const period = options.period || 'week';
-        const status = options.status || 'all';
-        const userId = localStorage.getItem('userId');
-        
-        const requestOptions = {
-          headers: {
-            ...getAuthHeaders(),
-            'X-User-ID': userId || '',
-            'X-Force-User-Match': 'true',
-            'X-Admin-Mode': 'true'
-          }
-        };
-        
-        return await api.get(
-          `/api/user/dashboard?period=${period}&admin=true${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
-          requestOptions
-        );
-      } catch (error2) {
-        console.log('Secondary metrics endpoint failed, trying one more pattern...', error2);
-        
-        // One more pattern to try
-        const period = options.period || 'week';
-        const status = options.status || 'all';
-        const userId = localStorage.getItem('userId');
-        
-        const requestOptions = {
-          headers: {
-            ...getAuthHeaders(),
-            'X-User-ID': userId || '',
-            'X-Force-User-Match': 'true',
-            'X-Admin-Mode': 'true'
-          }
-        };
-        
-        return await api.get(
-          `/api/admin/dashboard/metrics?period=${period}${status ? `&status=${status}` : ''}${userId ? `&user_id=${userId}` : ''}`,
-          requestOptions
-        );
-      }
-    }
-  },
-  
-  deleteBooking: async (id: number | string): Promise<any> => {
-    return await api.delete(`/api/admin/booking/${id}`);
-  }
-};
-
-// Fare API for managing vehicle fares and pricing
 export const fareAPI = {
-  getLocalFares: async () => {
-    return await api.get('/api/fares/local');
+  getTourFares: async () => {
+    const response = await apiClient.get('/admin/tour-fares');
+    return response.data;
   },
   
-  getAirportFares: async () => {
-    try {
-      const timestamp = new Date().getTime();
-      const response = await api.get(`/api/fares/airport?_t=${timestamp}`);
-      
-      // Add debug logging
-      console.log('Airport fares API response:', response);
-      
-      // If response is empty or not properly structured, try the direct endpoint
-      if (!response || (typeof response === 'object' && Object.keys(response).length === 0)) {
-        console.log('Empty airport fares response, trying direct endpoint');
-        const directResponse = await fetch(`${apiBaseUrl}/api/airport-fares.php?_t=${timestamp}`, {
-          headers: {
-            ...getAuthHeaders(),
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        
-        const directData = await directResponse.json();
-        console.log('Direct airport fares response:', directData);
-        return directData;
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Error fetching airport fares:', error);
-      
-      // Fallback to direct endpoint if main API fails
-      try {
-        console.log('Falling back to direct airport fares endpoint');
-        const timestamp = new Date().getTime();
-        const directResponse = await fetch(`${apiBaseUrl}/api/airport-fares.php?_t=${timestamp}`, {
-          headers: {
-            ...getAuthHeaders(),
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        
-        const directData = await directResponse.json();
-        console.log('Direct airport fares fallback response:', directData);
-        return directData;
-      } catch (fallbackError) {
-        console.error('Error fetching from direct airport fares endpoint:', fallbackError);
-        throw error; // Throw the original error
-      }
-    }
+  updateTourFare: async (tourId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/tour-fares/${tourId}`, fares);
+    return response.data;
+  },
+  
+  updateTourFares: async (fares: any) => {
+    const response = await apiClient.put(`/admin/tour-fares/${fares.tourId}`, fares);
+    return response.data;
+  },
+  
+  addTourFare: async (fareData: any) => {
+    const response = await apiClient.post('/admin/tour-fares', fareData);
+    return response.data;
+  },
+  
+  deleteTourFare: async (tourId: string) => {
+    const response = await apiClient.delete(`/admin/tour-fares/${tourId}`);
+    return response.data;
+  },
+  
+  getVehiclePricing: async () => {
+    const response = await apiClient.get('/admin/vehicle-pricing');
+    return response.data;
+  },
+  
+  updateVehiclePricing: async (pricingData: any) => {
+    const response = await apiClient.put('/admin/vehicle-pricing', pricingData);
+    return response.data;
+  },
+  
+  getVehicleFares: async () => {
+    const response = await apiClient.get('/admin/vehicle-fares');
+    return response.data;
+  },
+  
+  updateVehicleFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/vehicle-fares/${vehicleId}`, fares);
+    return response.data;
   },
   
   getOutstationFares: async () => {
-    return await api.get('/api/fares/outstation');
+    const response = await apiClient.get('/admin/outstation-fares');
+    return response.data;
   },
   
-  getTourFares: async () => {
-    return await api.get('/api/fares/tours');
+  getLocalFares: async () => {
+    const response = await apiClient.get('/admin/local-fares');
+    return response.data;
   },
   
-  getVehiclePricing: async (vehicleId: number | string = '') => {
-    const endpoint = vehicleId ? `/api/admin/vehicle-pricing/${vehicleId}` : '/api/admin/vehicle-pricing';
-    return await api.get(endpoint);
+  getAirportFares: async () => {
+    const response = await apiClient.get('/admin/airport-fares');
+    return response.data;
   },
   
-  updateVehiclePricing: async (vehicleId: number | string | VehiclePricingUpdateRequest, pricingData?: any) => {
-    // Handle both calling patterns: updateVehiclePricing(vehicleId, data) and updateVehiclePricing(data)
-    if (typeof vehicleId === 'object') {
-      // New pattern: updateVehiclePricing(data) where data contains vehicleType
-      return await api.put(`/api/admin/vehicle-pricing/${vehicleId.vehicleType}`, vehicleId);
-    } else {
-      // Old pattern: updateVehiclePricing(vehicleId, data)
-      return await api.put(`/api/admin/vehicle-pricing/${vehicleId}`, pricingData);
-    }
+  updateOutstationFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/outstation-fares/${vehicleId}`, fares);
+    return response.data;
   },
   
-  updateLocalFares: async (fareData: any) => {
-    return await api.put('/api/admin/fare-update/local', fareData);
+  updateLocalFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/local-fares/${vehicleId}`, fares);
+    return response.data;
   },
   
-  updateAirportFares: async (fareData: any) => {
-    return await api.put('/api/admin/fare-update/airport', fareData);
-  },
-  
-  updateOutstationFares: async (fareData: any) => {
-    return await api.put('/api/admin/fare-update/outstation', fareData);
-  },
-  
-  updateTourFares: async (fareData: any) => {
-    return await api.put('/api/admin/fare-update/tours', fareData);
-  },
-
-  addTourFare: async (tourFareData: any) => {
-    return await api.post('/api/admin/fare-update/tour', tourFareData);
-  },
-
-  deleteTourFare: async (tourId: string) => {
-    return await api.delete(`/api/admin/fare-update/tour/${tourId}`);
+  updateAirportFare: async (vehicleId: string, fares: any) => {
+    const response = await apiClient.put(`/admin/airport-fares/${vehicleId}`, fares);
+    return response.data;
   }
 };
 
-export default api;
+export default {
+  booking: bookingAPI,
+  auth: authAPI,
+  vehicle: vehicleAPI,
+  fare: fareAPI
+};

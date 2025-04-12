@@ -1,3 +1,5 @@
+
+// We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -30,11 +32,13 @@ const ToursPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // This function gets the direct tour fare without adding GST
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
     console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
     
+    // Try to get fare from tourFares mapping
     const tourFareMatrix = tourFares[tourId];
     if (tourFareMatrix) {
       const fare = tourFareMatrix[cabId as keyof typeof tourFareMatrix];
@@ -42,10 +46,12 @@ const ToursPage = () => {
       if (fare) return fare as number;
     }
     
+    // Fallback to default pricing if not found in the matrix
     if (cabId === 'sedan') return 3500;
     if (cabId === 'ertiga') return 4500;
     if (cabId === 'innova_crysta') return 5500;
     
+    // Last resort default
     return 4000;
   };
   
@@ -267,12 +273,13 @@ const ToursPage = () => {
                   </div>
                   
                   <CabOptions
-                    cabTypes={cabTypes.slice(0, 3)}
+                    cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
                     selectedCab={selectedCab}
                     onSelectCab={setSelectedCab}
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     tripType="tour"
-                    tripMode="one-way"
+                    tripMode="one-way" // Tours are considered one-way
+                    pickupDate={pickupDate}
                   />
                   
                   <Button
@@ -300,13 +307,12 @@ const ToursPage = () => {
                 {selectedTour && selectedCab && pickupLocation && pickupDate && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
-                    dropLocation={null}
+                    dropLocation={null} // Tours don't have drop locations
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     totalPrice={getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
-                    tripMode="one-way"
                   />
                 )}
               </div>

@@ -62,27 +62,6 @@ export const isOnline = (): boolean => {
 };
 
 /**
- * Get auth token from localStorage
- */
-export const getAuthToken = (): string | null => {
-  return localStorage.getItem('token');
-};
-
-/**
- * Get auth headers with token if available
- */
-export const getAuthHeaders = (): Record<string, string> => {
-  const token = getAuthToken();
-  const headers: Record<string, string> = getBypassHeaders();
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
-};
-
-/**
  * Universal function to perform CORS-safe fetch with retry logic
  * Use this for critical API calls
  */
@@ -92,24 +71,19 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     throw new Error('No internet connection');
   }
   
-  // Add auth token if available
-  const authHeaders = getAuthHeaders();
-  
   // Prepare enhanced options with CORS headers
   const enhancedOptions: RequestInit = {
     ...options,
     mode: 'cors',
     credentials: 'omit',
     headers: {
-      ...authHeaders,
+      ...getBypassHeaders(),
       ...(options.headers || {})
     }
   };
   
   // Use direct URL to API without proxy
   const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-  
-  console.log(`API Request: ${endpoint}`);
   
   // Try up to 3 times
   let lastError: Error | null = null;
@@ -119,27 +93,6 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
-      }
-      
-      // Log successful response for debugging
-      if (result.ok) {
-        try {
-          // Clone the response to avoid consuming it
-          const clonedResponse = result.clone();
-          const jsonData = await clonedResponse.json();
-          console.log(`API Response (${result.status}):`, jsonData);
-        } catch (err) {
-          console.log(`API Response (${result.status}): Non-JSON response`);
-        }
-      } else {
-        console.error(`API Error (${result.status}):`, result.statusText);
-        // Try to get error details
-        try {
-          const errorData = await result.json();
-          console.error('Error details:', errorData);
-        } catch (e) {
-          // Ignore error parsing issues
-        }
       }
       
       return result;
@@ -155,42 +108,4 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   
   // If we got here, all attempts failed
   throw lastError || new Error('Failed to fetch after multiple attempts');
-};
-
-/**
- * Helper to safely parse JSON responses and handle common error patterns
- */
-export const safeJsonParse = async (response: Response): Promise<any> => {
-  try {
-    const text = await response.text();
-    // Check if the response is empty
-    if (!text || text.trim() === '') {
-      console.warn('Empty response received');
-      return { status: 'error', message: 'Empty response from server' };
-    }
-    
-    // Check if it's HTML instead of JSON
-    if (text.trim().startsWith('<!DOCTYPE html>') || text.trim().startsWith('<html')) {
-      console.error('HTML response received instead of JSON');
-      return { 
-        status: 'error', 
-        message: 'HTML response received instead of JSON', 
-        htmlReceived: true 
-      };
-    }
-    
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error('Failed to parse JSON response:', text);
-      return { 
-        status: 'error', 
-        message: 'Invalid JSON response', 
-        rawResponse: text.substring(0, 500) // First 500 chars for debugging
-      };
-    }
-  } catch (e) {
-    console.error('Error processing response:', e);
-    return { status: 'error', message: 'Failed to process response' };
-  }
 };

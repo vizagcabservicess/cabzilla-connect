@@ -1,50 +1,55 @@
 
 <?php
-// Set proper CORS headers for all API endpoints
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma, Expires');
-header('Access-Control-Max-Age: 86400'); // 24 hours
-header('Content-Type: application/json');
+/**
+ * fix-cors.php - Set proper CORS headers for preflight and test connectivity
+ */
 
-// Ultra aggressive cache control to prevent browser caching for admin endpoints
+// Set comprehensive CORS headers
+header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Force-Refresh, *');
+header('Access-Control-Max-Age: 86400');
+header('Access-Control-Expose-Headers: *');
 
-// Handle preflight OPTIONS request immediately
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'CORS preflight request successful',
+        'cors' => 'enabled',
+        'origin' => $_SERVER['HTTP_ORIGIN'] ?? 'unknown',
+        'timestamp' => time()
+    ]);
     exit;
 }
 
-// For 405 error responses (Method Not Allowed)
-if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT' && $_SERVER['REQUEST_METHOD'] !== 'DELETE') {
-    http_response_code(405);
-    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
-    exit;
+// Return CORS status and echo back any query parameters
+$params = [];
+if (!empty($_GET)) {
+    $params['get'] = $_GET;
 }
 
-// Add special handling for user endpoints
-if ((strpos($_SERVER['REQUEST_URI'], '/user') !== false || 
-     strpos($_SERVER['REQUEST_URI'], '/bookings') !== false) && 
-    $_SERVER['REQUEST_METHOD'] === 'GET') {
-    
-    // Log for debugging
-    error_log("Special handling for user API request: " . $_SERVER['REQUEST_URI']);
-    
-    // Add special header to indicate we're handling user endpoints
-    header("X-API-Debug-Info: fix-cors-user-endpoint");
+if (!empty($_POST)) {
+    $params['post'] = $_POST;
 }
 
-// Add special handling for dashboard/metrics API endpoints
-if ((strpos($_SERVER['REQUEST_URI'], 'dashboard') !== false || 
-     strpos($_SERVER['REQUEST_URI'], 'metrics') !== false) && 
-    $_SERVER['REQUEST_METHOD'] === 'GET') {
-    
-    // Log for debugging
-    error_log("Special handling for dashboard/metrics API request: " . $_SERVER['REQUEST_URI']);
-    
-    // Add special header to indicate we're handling this endpoint
-    header("X-API-Debug-Info: fix-cors-dashboard");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SERVER['CONTENT_TYPE'] === 'application/json') {
+    $jsonData = file_get_contents('php://input');
+    if ($jsonData) {
+        $params['json'] = json_decode($jsonData, true);
+    }
 }
+
+echo json_encode([
+    'status' => 'success',
+    'message' => 'CORS is properly configured',
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'headers' => getallheaders(),
+    'params' => $params,
+    'timestamp' => time()
+]);

@@ -17,9 +17,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
-import { LoginRequest, LoginResponse } from '@/types/api';
+import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const loginSchema = z.object({
@@ -35,21 +35,17 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
-  const [loginAttempts, setLoginAttempts] = useState(0);
-  const [debugMode, setDebugMode] = useState(false);
 
   useEffect(() => {
     // Display API URL for debugging
-    const url = window.location.origin;
+    const url = import.meta.env.VITE_API_BASE_URL || '';
     setApiUrl(url);
     
     // Clear any stale tokens on login page load
     localStorage.removeItem('authToken');
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
-    localStorage.removeItem('userData');
     localStorage.removeItem('user');
-    localStorage.removeItem('userId'); // Also clear userId to prevent using wrong ID
     
     // Only test connection on component mount if we have an API URL
     if (url) {
@@ -71,179 +67,92 @@ export function LoginForm() {
       setIsTesting(true);
       console.log(`Testing API connection to ${apiUrl}`);
       
-      // First, try the dedicated CORS fix endpoint
-      try {
-        // Set a timeout for the fetch request
-        const corsPromise = fetch(`${apiUrl}/api/fix-cors.php`, {
-          method: 'GET',
-          headers: { 
-            'Accept': 'application/json',
-            'X-Test': 'true'
-          },
-          cache: 'no-store'
-        });
-        
-        // Race the fetch against a timeout
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout")), 5000)
-        );
-        
-        const corsResponse = await Promise.race([corsPromise, timeoutPromise]);
-        
-        if (corsResponse instanceof Response && corsResponse.ok) {
-          console.log('CORS fix response OK');
-          try {
-            const data = await corsResponse.json();
-            console.log('CORS fix response:', data);
-          } catch (parseError) {
-            console.warn('CORS fix endpoint returned non-JSON:', parseError);
-          }
-        }
-      } catch (corsError) {
-        console.warn('CORS fix endpoint not available:', corsError);
-      }
+      // Try OPTIONS request first (preflight)
+      const response = await fetch(`${apiUrl}/api/login`, {
+        method: 'OPTIONS',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        },
+        // Add cache busting
+        cache: 'no-store'
+      });
       
-      // Try OPTIONS request for login endpoint with timeout
-      try {
-        const loginOptionsPromise = fetch(`${apiUrl}/api/login`, {
-          method: 'OPTIONS',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store',
-            'X-Test': 'true'
-          },
-          cache: 'no-store'
+      // Log response information for debugging
+      console.log('API connection test response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
+      });
+      
+      if (response.ok) {
+        setConnectionStatus('success');
+        console.log('API connection test successful');
+        
+        toast.success('API connection successful', {
+          duration: 3000,
+          description: `Connected to ${apiUrl}`
         });
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout")), 5000)
-        );
-        
-        const response = await Promise.race([loginOptionsPromise, timeoutPromise]);
-        
-        if (response instanceof Response) {
-          // Log response information for debugging
-          console.log('API connection test response:', {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries([...response.headers.entries()])
-          });
-          
-          if (response.ok) {
-            setConnectionStatus('success');
-            console.log('API connection test successful');
-            
-            toast.success('API connection successful', {
-              duration: 3000,
-              description: `Connected to ${apiUrl}`
-            });
-          } else {
-            // Try a GET request to login as fallback
-            try {
-              const getResponse = await fetch(`${apiUrl}/api/login`, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json', 'X-Test': 'true' },
-                cache: 'no-store'
-              });
-              
-              if (getResponse.ok) {
-                setConnectionStatus('success');
-                console.log('API GET connection test successful');
-                
-                toast.success('API connection successful', {
-                  duration: 3000,
-                  description: `Connected to ${apiUrl} (fallback method)`
-                });
-                return;
-              }
-            } catch (getError) {
-              console.warn('GET fallback test failed:', getError);
-            }
-            
-            setConnectionStatus('failed');
-            console.error('API connection test failed with status:', response.status);
-            
-            toast.error('API connection failed', {
-              description: `Server returned status ${response.status}: ${response.statusText}`,
-              duration: 5000,
-            });
-          }
-        }
-      } catch (error) {
+      } else {
         setConnectionStatus('failed');
-        console.error('API connection test error:', error);
+        console.error('API connection test failed with status:', response.status);
         
-        toast.error('API Connection Failed', {
-          description: error instanceof Error ? error.message : "Unknown error",
+        toast.error('API connection failed', {
+          description: `Server returned status ${response.status}: ${response.statusText}`,
           duration: 5000,
         });
-      } finally {
-        setIsTesting(false);
       }
     } catch (error) {
       setConnectionStatus('failed');
+      console.error('API connection test error:', error);
+      
+      toast.error('API Connection Failed', {
+        description: error instanceof Error ? error.message : "Unknown error",
+        duration: 5000,
+      });
+    } finally {
       setIsTesting(false);
-      console.error('API connection overall test error:', error);
     }
   };
 
   const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
     setError(null);
-    setLoginAttempts(prev => prev + 1);
     
     try {
       // Display a toast to show login is in progress
       toast.loading('Logging in...', { id: 'login-toast' });
       
-      // Clear any existing tokens and user data first
+      // Clear any existing tokens first
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
-      localStorage.removeItem('userData');
       localStorage.removeItem('user');
-      localStorage.removeItem('userId'); // Clear userId explicitly
       
-      // Log form values for debugging (only email for privacy)
+      // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
-      // Special handling for demo credentials
-      if (values.email === 'demo@example.com' && values.password === 'password123') {
-        console.log('Using demo credentials for easier testing');
-      }
+      // Use HTTP-only cookies to store authentication token
+      const response = await authAPI.login(values);
       
-      // Attempt login
-      const response = await authAPI.login(values) as LoginResponse;
-      
-      if (response && response.token) {
+      if (response.token) {
         // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
           description: `Welcome back, ${response.user?.name || 'User'}!` 
         });
         
-        console.log("Login successful, redirecting to dashboard", { 
-          user: response.user?.id,
-          role: response.user?.role
+        console.log("Login successful, token saved", { 
+          tokenLength: response.token.length,
+          tokenParts: response.token.split('.').length,
+          user: response.user?.id
         });
         
-        // Ensure the token is saved before redirecting
-        localStorage.setItem('authToken', response.token);
-        
-        // Store user data for easier access
-        if (response.user) {
-          localStorage.setItem('userData', JSON.stringify(response.user));
-          // Store user ID separately for explicit access
-          localStorage.setItem('userId', response.user.id.toString());
-          console.log(`Stored user ID ${response.user.id} in localStorage`);
-        }
-        
-        // Add a slight delay before redirecting to ensure token is saved
+        // Force a page reload to ensure fresh state
         setTimeout(() => {
-          // Navigate to dashboard - don't use window.location.href to avoid full page reload
-          navigate('/dashboard');
-        }, 800);
+          window.location.href = '/dashboard';
+        }, 500);
       } else {
         throw new Error("Authentication failed: No token received");
       }
@@ -258,15 +167,6 @@ export function LoginForm() {
       
       // Set error state for UI display
       setError(error as Error);
-      
-      // If we've tried multiple times and keep failing, suggest fallback credentials
-      if (loginAttempts >= 1) {
-        uiToast({
-          title: "Login Suggestion",
-          description: "Try using demo@example.com with password: password123",
-          variant: "default"
-        });
-      }
     } finally {
       setIsLoading(false);
     }
@@ -275,15 +175,6 @@ export function LoginForm() {
   const handleRetry = () => {
     setError(null);
     testApiConnection();
-  };
-  
-  const toggleDebugMode = () => {
-    setDebugMode(!debugMode);
-  };
-
-  const useDemoCredentials = () => {
-    form.setValue('email', 'demo@example.com');
-    form.setValue('password', 'password123');
   };
 
   if (error) {
@@ -304,29 +195,19 @@ export function LoginForm() {
             <AlertCircle className="w-4 h-4 mr-1" />
             <span>API URL: {apiUrl}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={testApiConnection}
-              disabled={isTesting}
-              className="gap-1"
-            >
-              {isTesting ? (
-                <>Testing <RefreshCw className="ml-1 w-3 h-3 animate-spin" /></>
-              ) : (
-                <>Test <ExternalLink className="ml-1 w-3 h-3" /></>
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleDebugMode}
-              className="gap-1"
-            >
-              {debugMode ? 'Hide Debug' : 'Debug'}
-            </Button>
-          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={testApiConnection}
+            disabled={isTesting}
+            className="gap-1"
+          >
+            {isTesting ? (
+              <>Testing <RefreshCw className="ml-1 w-3 h-3 animate-spin" /></>
+            ) : (
+              <>Test <ExternalLink className="ml-1 w-3 h-3" /></>
+            )}
+          </Button>
         </div>
       )}
       
@@ -353,20 +234,6 @@ export function LoginForm() {
               : connectionStatus === 'success' 
                 ? 'Server connection successful. You can proceed with login.' 
                 : 'Server connection failed. The API may be unavailable.'}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      {debugMode && (
-        <Alert className="mb-4 bg-slate-50 border-slate-200">
-          <AlertDescription>
-            <p className="text-xs mb-2">Debug Information:</p>
-            <ul className="text-xs list-disc pl-5 space-y-1">
-              <li>Connection Status: {connectionStatus}</li>
-              <li>Login Attempts: {loginAttempts}</li>
-              <li>Token Present: {localStorage.getItem('authToken') ? 'Yes' : 'No'}</li>
-              <li>User Data Present: {localStorage.getItem('userData') ? 'Yes' : 'No'}</li>
-            </ul>
           </AlertDescription>
         </Alert>
       )}
@@ -408,32 +275,15 @@ export function LoginForm() {
               </FormItem>
             )}
           />
-          <div className="flex flex-col space-y-2">
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
-            >
-              {isLoading ? "Logging in..." : "Login"}
-            </Button>
-            
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={useDemoCredentials}
-            >
-              Use Demo Credentials
-            </Button>
-          </div>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
+          >
+            {isLoading ? "Logging in..." : "Login"}
+          </Button>
         </form>
       </Form>
-      
-      <div className="mt-4 text-center text-sm text-gray-500">
-        <p>For demo access, use:</p>
-        <p className="font-medium">email: demo@example.com</p>
-        <p className="font-medium">password: password123</p>
-      </div>
     </>
   );
 }

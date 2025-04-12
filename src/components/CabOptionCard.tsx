@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
 import { Users, Briefcase, Info, Check } from 'lucide-react';
@@ -23,31 +23,6 @@ export function CabOptionCard({
   isCalculating
 }: CabOptionCardProps) {
   const [expandedDetails, setExpandedDetails] = useState(false);
-  const [displayedFare, setDisplayedFare] = useState<number>(fare);
-  
-  // Listen for fare calculation events
-  useEffect(() => {
-    const handleFareCalculated = (event: CustomEvent) => {
-      const { cabId, fare: calculatedFare } = event.detail;
-      
-      // Only update if this event is for our cab
-      if (cabId === cab.id) {
-        console.log(`CabOptionCard: Updating fare for ${cab.name} to ${calculatedFare}`);
-        setDisplayedFare(calculatedFare);
-      }
-    };
-
-    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
-    
-    return () => {
-      window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
-    };
-  }, [cab.id]);
-  
-  // Update displayed fare when prop changes
-  useEffect(() => {
-    setDisplayedFare(fare);
-  }, [fare]);
   
   const toggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -55,18 +30,7 @@ export function CabOptionCard({
   };
 
   const handleCardClick = () => {
-    console.log('Card clicked, selecting cab:', cab.name, 'with fare:', displayedFare);
-    
-    // Dispatch a custom event when a cab is selected with its fare
-    window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-      detail: {
-        cabType: cab.id,
-        cabName: cab.name,
-        fare: displayedFare,
-        timestamp: Date.now()
-      }
-    }));
-    
+    console.log('Card clicked, selecting cab:', cab.name);
     onSelect(cab);
   };
 
@@ -114,8 +78,8 @@ export function CabOptionCard({
             )}>
               {isCalculating ? (
                 <span className="text-sm text-gray-400">Calculating...</span>
-              ) : displayedFare > 0 ? (
-                formatPrice(displayedFare)
+              ) : fare > 0 ? (
+                formatPrice(fare)
               ) : (
                 <span className="text-sm text-gray-400">Price unavailable</span>
               )}

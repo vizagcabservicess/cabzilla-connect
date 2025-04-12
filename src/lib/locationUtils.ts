@@ -111,7 +111,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   if (!location) return false;
   
   // Check if isInVizag is already set
-  if ('isInVizag' in location && typeof location.isInVizag === 'boolean') {
+  if (typeof location.isInVizag === 'boolean') {
     return location.isInVizag;
   }
   
@@ -135,7 +135,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   return vizagNames.some(vizagName => 
     safeIncludes(location.address, vizagName) ||
     safeIncludes(location.name, vizagName) ||
-    ('city' in location && safeIncludes(location.city, vizagName))
+    safeIncludes((location as AppLocation).city, vizagName)
   );
 };
 

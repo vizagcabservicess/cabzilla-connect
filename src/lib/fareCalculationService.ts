@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -155,35 +156,28 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const airportFares = await getAirportFaresForVehicle(cabType.id);
     console.log(`Retrieved airport fares for ${cabType.name} from vehicle_pricing:`, airportFares);
     
-    let fare = 0;
+    let fare = airportFares.basePrice;
     
-    // FIXED: Ensure consistent fare calculation with tier-based pricing
+    // Determine tier based on distance
     if (distance <= 10) {
-      fare = airportFares.tier1Price || 800;
+      fare = airportFares.tier1Price;
     } else if (distance <= 20) {
-      fare = airportFares.tier2Price || 1200;
+      fare = airportFares.tier2Price;
     } else if (distance <= 30) {
-      fare = airportFares.tier3Price || 1800;
+      fare = airportFares.tier3Price;
     } else {
-      fare = airportFares.tier4Price || 2500;
+      fare = airportFares.tier4Price;
     }
     
     // Add extra km costs if distance exceeds tiers
     if (distance > 30) {
       const extraKm = distance - 30;
-      const extraKmCost = extraKm * (airportFares.extraKmCharge || 14);
+      const extraKmCost = extraKm * airportFares.extraKmCharge;
       fare += extraKmCost;
     }
     
-    // Add driver allowance (fixed at 250 for consistency)
-    const driverAllowance = 250;
-    fare += driverAllowance;
-    
-    // Log the calculated fare for debugging
-    console.log(`Airport fare calculation for ${cabType.name}: Base=${fare-driverAllowance}, Driver=${driverAllowance}, Distance=${distance}km, Total=${fare}`);
-    
-    // Ensure we're using consistent rounding
-    fare = Math.ceil(fare / 10) * 10;
+    // Add driver allowance
+    fare += airportFares.dropPrice > 0 ? 250 : 0;
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -191,31 +185,53 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       price: fare
     });
     
-    // Dispatch event to update UI
-    window.dispatchEvent(new CustomEvent('fare-calculated', {
-      detail: {
-        cabId: cabType.id,
-        tripType: 'airport',
-        fare: fare,
-        timestamp: Date.now(),
-        breakdown: {
-          baseFare: fare - driverAllowance,
-          driverAllowance: driverAllowance
-        }
-      }
-    }));
-    
     return fare;
   } catch (error) {
     console.error(`Error calculating airport fare for ${cabType.name}:`, error);
     
-    // If API fails, fallback to values from cab type or default
+    // If API fails, fallback to values from cab type
+    if (cabType.airportFares) {
+      console.log(`Using fallback airport fares for ${cabType.name} from cabType:`, cabType.airportFares);
+      
+      let fare = cabType.airportFares.basePrice;
+      
+      // Determine tier based on distance
+      if (distance <= 10) {
+        fare = cabType.airportFares.tier1Price;
+      } else if (distance <= 20) {
+        fare = cabType.airportFares.tier2Price;
+      } else if (distance <= 30) {
+        fare = cabType.airportFares.tier3Price;
+      } else {
+        fare = cabType.airportFares.tier4Price;
+      }
+      
+      // Add extra km costs if distance exceeds tiers
+      if (distance > 30) {
+        const extraKm = distance - 30;
+        const extraKmCost = extraKm * cabType.airportFares.extraKmCharge;
+        fare += extraKmCost;
+      }
+      
+      // Add driver allowance
+      fare += cabType.airportFares.dropPrice > 0 ? 250 : 0;
+      
+      // Cache the result
+      fareCache.set(cacheKey, {
+        expire: Date.now() + 15 * 60 * 1000,
+        price: fare
+      });
+      
+      return fare;
+    }
+    
+    // Default airport fare values for fallback
     const defaultFare = {
-      basePrice: 800,
+      basePrice: 1000,
       pricePerKm: 14,
-      airportFee: 0,
-      dropPrice: 0,
-      pickupPrice: 0,
+      airportFee: 150,
+      dropPrice: 1200,
+      pickupPrice: 1500,
       tier1Price: 800,    // 0-10 KM
       tier2Price: 1200,   // 11-20 KM
       tier3Price: 1800,   // 21-30 KM
@@ -223,58 +239,37 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       extraKmCharge: 14
     };
     
-    let fare = 0;
+    let fare = defaultFare.basePrice;
     
-    // Get fares from cabType if available, otherwise use defaults
-    const airportFares = cabType.airportFares || defaultFare;
-    
-    // FIXED: Ensure consistent fare calculation with tier-based pricing
+    // Determine tier based on distance
     if (distance <= 10) {
-      fare = airportFares.tier1Price || 800;
+      fare = defaultFare.tier1Price;
     } else if (distance <= 20) {
-      fare = airportFares.tier2Price || 1200;
+      fare = defaultFare.tier2Price;
     } else if (distance <= 30) {
-      fare = airportFares.tier3Price || 1800;
+      fare = defaultFare.tier3Price;
     } else {
-      fare = airportFares.tier4Price || 2500;
+      fare = defaultFare.tier4Price;
     }
     
     // Add extra km costs if distance exceeds tiers
     if (distance > 30) {
       const extraKm = distance - 30;
-      const extraKmCost = extraKm * (airportFares.extraKmCharge || 14);
+      const extraKmCost = extraKm * defaultFare.extraKmCharge;
       fare += extraKmCost;
     }
     
-    // Add driver allowance (fixed at 250 for consistency)
-    const driverAllowance = 250;
-    fare += driverAllowance;
+    // Add driver allowance
+    fare += 250;
     
-    // Log the calculated fare for debugging
-    console.log(`Fallback airport fare for ${cabType.name}: Base=${fare-driverAllowance}, Driver=${driverAllowance}, Distance=${distance}km, Total=${fare}`);
-    
-    // Ensure we're using consistent rounding
-    fare = Math.ceil(fare / 10) * 10;
+    // Add airport fee
+    fare += defaultFare.airportFee;
     
     // Cache the result
     fareCache.set(cacheKey, {
       expire: Date.now() + 15 * 60 * 1000,
       price: fare
     });
-    
-    // Dispatch event to update UI
-    window.dispatchEvent(new CustomEvent('fare-calculated', {
-      detail: {
-        cabId: cabType.id,
-        tripType: 'airport',
-        fare: fare,
-        timestamp: Date.now(),
-        breakdown: {
-          baseFare: fare - driverAllowance,
-          driverAllowance: driverAllowance
-        }
-      }
-    }));
     
     return fare;
   }
@@ -318,7 +313,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     let calculatedFare = 0;
     
     if (tripType === 'airport') {
-      // For airport transfers - use the fixed calculation method
+      // For airport transfers
       calculatedFare = await calculateAirportFare(cabType, distance);
       console.log(`Calculated airport fare: ₹${calculatedFare}`);
     }
@@ -585,9 +580,6 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       
       console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
-    
-    // Ensure consistent rounding
-    calculatedFare = Math.ceil(calculatedFare / 10) * 10;
     
     // Dispatch fare calculation event to update UI components
     window.dispatchEvent(new CustomEvent('fare-calculated', {

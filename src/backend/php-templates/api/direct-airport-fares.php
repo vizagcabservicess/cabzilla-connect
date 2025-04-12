@@ -9,7 +9,6 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
-header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -73,31 +72,6 @@ $_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 // Set debug mode for extra output
 $_SERVER['HTTP_X_DEBUG'] = 'true';
-
-// CRITICAL - If admin endpoint doesn't exist, provide a fallback response
-if (!file_exists(__DIR__ . '/admin/direct-airport-fares.php')) {
-    file_put_contents($logFile, "[$timestamp] WARNING: Admin endpoint not found, using fallback response\n", FILE_APPEND);
-    
-    // Create a fallback response for the requested vehicle
-    $response = [
-        'status' => 'success',
-        'message' => 'Airport fares retrieved (fallback)',
-        'fares' => [
-            [
-                'vehicleId' => $vehicleId,
-                'tier1Price' => 800,  // 0-10 KM
-                'tier2Price' => 1200, // 11-20 KM
-                'tier3Price' => 1800, // 21-30 KM
-                'tier4Price' => 2500, // 31+ KM
-                'extraKmCharge' => 14
-            ]
-        ]
-    ];
-    
-    // Output the fallback response
-    echo json_encode($response);
-    exit;
-}
 
 // Force cache-busting 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

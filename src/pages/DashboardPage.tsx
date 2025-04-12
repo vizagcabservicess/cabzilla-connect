@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -17,18 +16,6 @@ import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
 
-const DEFAULT_METRICS: DashboardMetricsType = {
-  totalBookings: 0,
-  activeRides: 0,
-  totalRevenue: 0,
-  availableDrivers: 0,
-  busyDrivers: 0, 
-  avgRating: 0,
-  upcomingRides: 0,
-  availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
-  currentFilter: 'all'
-};
-
 export default function DashboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,6 +30,7 @@ export default function DashboardPage() {
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
 
+  // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
       if (!authAPI.isAuthenticated()) {
@@ -53,35 +41,13 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
-          // Preserve the user ID from login if it exists
-          const storedUserId = localStorage.getItem('userId');
-          
-          if (userData.id) {
-            // Only update userId in localStorage if it's not already set from login
-            // or if the IDs don't match (but avoid overriding with ID 1)
-            if (!storedUserId) {
-              localStorage.setItem('userId', userData.id.toString());
-              console.log(`Stored user ID ${userData.id} in localStorage (no previous ID)`);
-            } else if (storedUserId !== userData.id.toString() && userData.id !== 1) {
-              // Only override if the new ID is not 1 (prevent downgrading to default admin)
-              localStorage.setItem('userId', userData.id.toString());
-              console.log(`Updated user ID in localStorage from ${storedUserId} to ${userData.id}`);
-            } else {
-              console.log(`Kept existing user ID ${storedUserId} in localStorage`);
-            }
-          }
-          
           setUser({
-            id: userData.id || parseInt(storedUserId || '0', 10),
+            id: userData.id || 0,
             name: userData.name || '',
             email: userData.email || '',
             role: userData.role || 'user'
           });
-          
-          const isAdminUser = userData.role === 'admin';
-          setIsAdmin(isAdminUser);
-          
-          console.log(`User loaded: ID=${userData.id || storedUserId}, Name=${userData.name}, Role=${userData.role}, IsAdmin=${isAdminUser}`);
+          setIsAdmin(userData.role === 'admin');
         } else {
           throw new Error('User data not found');
         }
@@ -94,6 +60,7 @@ export default function DashboardPage() {
     checkAuth();
   }, [navigate, location.pathname]);
 
+  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
       navigate('/login');
@@ -103,78 +70,70 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      
-      const userId = user?.id || localStorage.getItem('userId');
-      console.log('Fetching bookings for user ID:', userId);
-      
       const data = await bookingAPI.getUserBookings();
-      
-      console.log('Bookings data received:', data);
-      setBookings(Array.isArray(data) ? data : []);
-      setRetryCount(0);
+      setBookings(data);
+      setRetryCount(0); // Reset retry count on success
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      setError(error as Error);
+      setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
+      // Only show toast on first error
+      if (retryCount === 0) {
+        toast.error('Error loading bookings. Retrying...');
+      }
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
+      
+      // Auto-retry if under max retries
       if (retryCount < MAX_RETRIES) {
-        setRetryCount(prevCount => prevCount + 1);
         setTimeout(() => {
-          console.log(`Retrying booking fetch (${retryCount + 1}/${MAX_RETRIES})...`);
           fetchBookings();
-        }, 2000 * Math.pow(2, retryCount));
+        }, 3000); // Wait 3 seconds before retrying
       }
     } finally {
-      setIsRefreshing(false);
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [navigate, retryCount, user]);
+  }, [navigate, retryCount]);
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchBookings();
-    }
-  }, [fetchBookings, user]);
-
-  const fetchAdminMetrics = useCallback(async (period: 'day' | 'week' | 'month' = 'week', status: string = 'all') => {
-    if (!isAdmin || !user) return;
+  // Fetch admin metrics if user is admin
+  const fetchAdminMetrics = useCallback(async () => {
+    if (!isAdmin) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      
-      const metrics = await bookingAPI.getAdminDashboardMetrics({ 
-        period, 
-        status 
-      });
-      
-      console.log('Admin metrics loaded:', metrics);
-      setAdminMetrics(metrics || DEFAULT_METRICS);
+      const data = await bookingAPI.getAdminDashboardMetrics('week');
+      setAdminMetrics(data);
     } catch (error) {
-      console.error('Error loading admin metrics:', error);
-      setAdminMetricsError(error as Error);
-      setAdminMetrics(DEFAULT_METRICS);
-      
-      toast.error('Error loading metrics', {
-        description: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('Error fetching admin metrics:', error);
+      setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin, user]);
+  }, [isAdmin]);
 
+  // Initial data fetch
   useEffect(() => {
-    if (isAdmin && user?.id) {
+    fetchBookings();
+  }, [fetchBookings]);
+
+  // Fetch admin metrics if user is admin
+  useEffect(() => {
+    if (isAdmin) {
       fetchAdminMetrics();
     }
-  }, [fetchAdminMetrics, isAdmin, user]);
+  }, [isAdmin, fetchAdminMetrics]);
 
+  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
-    localStorage.removeItem('userId');
     navigate('/login');
     toast.success('Logged out successfully');
   };
 
+  // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -186,6 +145,7 @@ export default function DashboardPage() {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
+  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -196,18 +156,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (error && !isRefreshing) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <ApiErrorFallback 
-          error={error} 
-          onRetry={fetchBookings}
-          title="Error Loading Dashboard"
-        />
-      </div>
-    );
-  }
-
+  // If still loading initial data
   if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -238,6 +187,7 @@ export default function DashboardPage() {
     );
   }
 
+  // If error occurred and max retries exceeded
   if (error && retryCount >= MAX_RETRIES) {
     return (
       <ApiErrorFallback 
@@ -248,45 +198,6 @@ export default function DashboardPage() {
       />
     );
   }
-
-  const renderAdminMetrics = () => {
-    if (!isAdmin) return null;
-    
-    const safeMetrics: DashboardMetricsType = {
-      ...DEFAULT_METRICS,
-      ...(adminMetrics || {})
-    };
-    
-    if (!Array.isArray(safeMetrics.availableStatuses)) {
-      safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-    }
-    
-    return (
-      <div className="mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-amber-500" />
-              Admin Metrics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-gray-600">You have admin privileges. <Button variant="link" className="p-0 h-auto text-blue-600" onClick={() => navigate('/admin')}>Go to Admin Dashboard</Button></p>
-            
-            <DashboardMetrics 
-              metrics={safeMetrics}
-              isLoading={isLoadingAdminMetrics}
-              error={adminMetricsError}
-              onFilterChange={(status: BookingStatus | 'all') => {
-                console.log('Filtering by status:', status);
-              }}
-              selectedPeriod="week"
-            />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  };
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -308,7 +219,33 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {renderAdminMetrics()}
+      {/* Conditionally render admin metrics for admin users */}
+      {isAdmin && (
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-500" />
+                Admin Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-gray-600">You have admin privileges. <Button variant="link" className="p-0 h-auto text-blue-600" onClick={() => navigate('/admin')}>Go to Admin Dashboard</Button></p>
+              
+              <DashboardMetrics 
+                metrics={adminMetrics}
+                isLoading={isLoadingAdminMetrics}
+                error={adminMetricsError}
+                onFilterChange={(status: BookingStatus | 'all') => {
+                  console.log('Filtering by status:', status);
+                  // Logic to filter metrics by status if needed
+                }}
+                selectedPeriod="week"
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Tabs defaultValue="all">
         <TabsList>
