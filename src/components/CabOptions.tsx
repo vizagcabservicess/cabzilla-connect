@@ -44,7 +44,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState(true);
+  const [isCalculatingFares, setIsCalculatingFares] = useState<boolean>(true);
+  const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
+  const [pendingBookingSummaryFareRequests, setPendingBookingSummaryFareRequests] = useState<Record<string, boolean>>({});
 
   // Store the current trip type in localStorage for better fare syncing
   useEffect(() => {
@@ -82,6 +84,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     
     // Emit event when a cab is selected, which BookingSummary will listen for
     const cabFare = cabFares[cab.id] || 0;
+    const now = Date.now();
     
     try {
       // First emit event without fare to ensure component selection state updates
@@ -91,7 +94,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           cabName: cab.name,
           tripType: tripType,
           tripMode: tripMode,
-          timestamp: Date.now()
+          timestamp: now
         }
       }));
       
@@ -103,33 +106,52 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           fare: cabFare,
           tripType: tripType,
           tripMode: tripMode,
-          timestamp: Date.now()
+          timestamp: now + 1 // Use different timestamp to prevent event merging
         }
       }));
       console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
       
-      // For airport transfers, trigger an explicit request for fare recalculation
-      if (tripType === 'airport') {
-        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-          detail: {
-            cabId: cab.id,
-            cabName: cab.name,
-            tripType: tripType,
-            tripMode: tripMode,
-            timestamp: Date.now()
-          }
+      // For airport transfers, use a debounced request for fare recalculation
+      if (tripType === 'airport' && !pendingBookingSummaryFareRequests[cab.id]) {
+        // Mark this request as pending
+        setPendingBookingSummaryFareRequests(prev => ({
+          ...prev,
+          [cab.id]: true
         }));
         
-        // Also explicitly request a fare from BookingSummary
-        window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
-          detail: {
-            cabId: cab.id,
-            cabName: cab.name,
-            tripType: tripType,
-            tripMode: tripMode,
-            timestamp: Date.now()
-          }
-        }));
+        // Use setTimeout to add debouncing
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+            detail: {
+              cabId: cab.id,
+              cabName: cab.name,
+              tripType: tripType,
+              tripMode: tripMode,
+              timestamp: now + 2 // Different timestamp
+            }
+          }));
+          
+          // Delay the booking summary request
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+              detail: {
+                cabId: cab.id,
+                cabName: cab.name,
+                tripType: tripType,
+                tripMode: tripMode,
+                timestamp: now + 3 // Different timestamp
+              }
+            }));
+            
+            // Clear the pending state after a delay
+            setTimeout(() => {
+              setPendingBookingSummaryFareRequests(prev => ({
+                ...prev,
+                [cab.id]: false
+              }));
+            }, 1000);
+          }, 100);
+        }, 0);
       }
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
@@ -252,17 +274,32 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           }));
           console.log(`CabOptions: Dispatched fare update event for existing selected cab ${selectedCab.id}: ${actualFares[selectedCab.id]}`);
           
-          // For airport transfers, also request booking summary fare
-          if (tripType === 'airport') {
-            window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
-              detail: {
-                cabId: selectedCab.id,
-                cabName: selectedCab.name,
-                tripType: tripType,
-                tripMode: tripMode,
-                timestamp: Date.now()
-              }
+          // For airport transfers, also request booking summary fare with debouncing
+          if (tripType === 'airport' && !pendingBookingSummaryFareRequests[selectedCab.id]) {
+            setPendingBookingSummaryFareRequests(prev => ({
+              ...prev,
+              [selectedCab.id]: true
             }));
+            
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+                detail: {
+                  cabId: selectedCab.id,
+                  cabName: selectedCab.name,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  timestamp: Date.now()
+                }
+              }));
+              
+              // Clear pending state
+              setTimeout(() => {
+                setPendingBookingSummaryFareRequests(prev => ({
+                  ...prev,
+                  [selectedCab.id]: false
+                }));
+              }, 1000);
+            }, 0);
           }
         } catch (error) {
           console.error('Error dispatching cab selection event:', error);
@@ -301,6 +338,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
           
+          // Update timestamp to force re-renders
+          setLastFareUpdate(Date.now());
+          
           // Re-emit as cab-selected-with-fare if this is the currently selected cab
           if (selectedCab?.id === cabId) {
             try {
@@ -324,6 +364,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             const updated = { ...prev, [cabId]: fare };
             return updated;
           });
+          
+          // Update timestamp to force re-renders
+          setLastFareUpdate(Date.now());
         }
       }
     };
@@ -338,6 +381,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           const updated = { ...prev, [cabType]: fare };
           return updated;
         });
+        
+        // Update timestamp to force re-renders
+        setLastFareUpdate(Date.now());
         
         // For airport transfers, store this fare and notify other components
         if (tripType === 'airport' && calculated) {
@@ -398,6 +444,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           // Save to localStorage
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
           localStorage.setItem(localStorageKey, calculatedFare.toString());
+          
+          // Update timestamp to force re-renders
+          setLastFareUpdate(Date.now());
           
           // Emit an event for the CabList to update
           setTimeout(() => {
