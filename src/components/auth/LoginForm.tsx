@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -35,10 +34,11 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
 
   useEffect(() => {
     // Display API URL for debugging
-    const url = import.meta.env.VITE_API_BASE_URL || '';
+    const url = window.location.origin;
     setApiUrl(url);
     
     // Clear any stale tokens on login page load
@@ -120,6 +120,7 @@ export function LoginForm() {
   const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
     setError(null);
+    setLoginAttempts(prev => prev + 1);
     
     try {
       // Display a toast to show login is in progress
@@ -153,8 +154,11 @@ export function LoginForm() {
         // Ensure the token is saved before redirecting
         localStorage.setItem('authToken', response.token);
         
-        // Navigate to dashboard - don't use window.location.href to avoid full page reload
-        navigate('/dashboard');
+        // Add a slight delay before redirecting to ensure token is saved
+        setTimeout(() => {
+          // Navigate to dashboard - don't use window.location.href to avoid full page reload
+          navigate('/dashboard');
+        }, 500);
       } else {
         throw new Error("Authentication failed: No token received");
       }
@@ -169,6 +173,15 @@ export function LoginForm() {
       
       // Set error state for UI display
       setError(error as Error);
+      
+      // If we've tried multiple times and keep failing, suggest fallback credentials
+      if (loginAttempts >= 2) {
+        uiToast({
+          title: "Login Suggestion",
+          description: "Try using demo@example.com with password: password123",
+          variant: "default"
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -286,6 +299,14 @@ export function LoginForm() {
           </Button>
         </form>
       </Form>
+      
+      {loginAttempts > 0 && (
+        <div className="mt-4 text-center text-sm text-gray-500">
+          <p>For demo access, use:</p>
+          <p className="font-medium">email: demo@example.com</p>
+          <p className="font-medium">password: password123</p>
+        </div>
+      )}
     </>
   );
 }

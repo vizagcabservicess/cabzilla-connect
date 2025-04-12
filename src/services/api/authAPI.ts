@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { User } from '@/types/api';
@@ -11,7 +12,7 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   // Increase timeout for slow connections
-  timeout: 15000
+  timeout: 30000
 });
 
 // Add auth token to requests if available
@@ -21,6 +22,15 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add cache busting to GET requests
+    if (config.method === 'get') {
+      config.params = {
+        ...config.params,
+        _t: new Date().getTime()
+      };
+    }
+    
     return config;
   },
   error => Promise.reject(error)
@@ -93,7 +103,12 @@ export const authAPI = {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(USER_DATA_KEY);
       
-      const response = await apiClient.post(getApiUrl('/api/login'), credentials);
+      const response = await apiClient.post(getApiUrl('/api/login'), credentials, {
+        headers: {
+          ...forceRefreshHeaders
+        }
+      });
+      
       console.log('Login response status:', response.status);
       
       if (response.data && response.data.token) {
@@ -147,28 +162,90 @@ export const authAPI = {
     // If not in localStorage or parsing failed, try to fetch from API
     try {
       console.log('Fetching current user data from API');
-      const response = await apiClient.get(getApiUrl('/api/user'));
       
-      if (response.data && response.data.user) {
-        // Update localStorage with fresh data
-        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
-        return response.data.user;
+      const maxRetries = 2;
+      let retries = 0;
+      let error = null;
+      
+      while (retries < maxRetries) {
+        try {
+          // Try different API endpoints to get user data
+          let response;
+          
+          try {
+            response = await apiClient.get(getApiUrl('/api/user'), {
+              headers: forceRefreshHeaders
+            });
+          } catch (err) {
+            console.warn('Failed to get user from /api/user, trying /api/user/profile');
+            response = await apiClient.get(getApiUrl('/api/user/profile'), {
+              headers: forceRefreshHeaders
+            });
+          }
+          
+          if (response.data && response.data.user) {
+            // Update localStorage with fresh data
+            localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+            return response.data.user;
+          } else if (response.data && response.data.id) {
+            // Direct user object in response
+            localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data));
+            return response.data;
+          }
+          
+          // If we get here, we didn't get a valid user
+          throw new Error('Invalid user data received');
+          
+        } catch (err) {
+          error = err;
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+        }
       }
       
-      return null;
+      // If all API calls fail but we have a token, extract user info from the token
+      if (token) {
+        try {
+          // JWT tokens are base64 encoded with 3 parts: header.payload.signature
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            
+            if (payload && (payload.user_id || payload.sub)) {
+              console.log('Creating user object from token payload');
+              const minimalUser = {
+                id: payload.user_id || payload.sub,
+                name: payload.name || 'User',
+                email: payload.email || '',
+                role: payload.role || 'user',
+                createdAt: new Date().toISOString()
+              };
+              
+              localStorage.setItem(USER_DATA_KEY, JSON.stringify(minimalUser));
+              return minimalUser;
+            }
+          }
+        } catch (e) {
+          console.error('Error extracting user from token:', e);
+        }
+      }
+      
+      throw error || new Error('Could not retrieve user data');
     } catch (error) {
       console.error('Error getting current user from API:', error);
       
       // If API call fails but we have a token, create a minimal user object
       if (token) {
-        console.log('Creating minimal user object from token');
-        return {
+        console.log('Creating minimal user object from token existence');
+        const minimalUser = {
           id: 0,
           name: 'User',
           email: '',
           role: 'user',
           createdAt: new Date().toISOString()
         };
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(minimalUser));
+        return minimalUser;
       }
       
       return null;

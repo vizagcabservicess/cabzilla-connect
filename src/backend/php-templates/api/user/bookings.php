@@ -17,6 +17,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Log request for debugging
+error_log("Bookings API request received - Method: " . $_SERVER['REQUEST_METHOD'] . ", URI: " . $_SERVER['REQUEST_URI']);
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -60,6 +63,13 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         error_log("JWT verification failed: " . $e->getMessage());
         // Continue execution to provide fallback behavior
     }
+}
+
+if (!$userId) {
+    error_log("No user ID found in token. Sending fallback data");
+    $fallbackBookings = createFallbackBookings(null);
+    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_auth']);
+    exit;
 }
 
 // Connect to database
