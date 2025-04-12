@@ -1,3 +1,4 @@
+
 import { CabType, HourlyPackage, FareCache, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
 import { hourlyPackages } from './packageData';
@@ -111,7 +112,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     
     // If API didn't return valid fare, try fetching all airport fares
     console.log(`No specific airport fare found for vehicle ${cabType.id}, fetching all fares`);
-    const allFares = await fareService.getAllAirportFares();
+    const allFares = await fareService.getAirportFares();
     
     // Try to find a matching fare in the list
     if (allFares && allFares.fares && allFares.fares.length > 0) {
