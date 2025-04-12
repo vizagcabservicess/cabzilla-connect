@@ -114,17 +114,17 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (options?: { 
+  getAdminDashboardMetrics: async (options: { 
     period?: 'day' | 'week' | 'month', 
     status?: string 
-  }): Promise<DashboardMetrics> => {
+  } = {}): Promise<DashboardMetrics> => {
     try {
       // Get user ID from localStorage
       const userIdToUse = Number(localStorage.getItem('userId'));
       
       // Extract options or use defaults
-      const period = options?.period || 'week';
-      const status = options?.status || 'all';
+      const period = options.period || 'week';
+      const status = options.status || 'all';
       
       console.log(`Fetching admin dashboard metrics with user ID: ${userIdToUse}, period: ${period}, status: ${status}`);
       
