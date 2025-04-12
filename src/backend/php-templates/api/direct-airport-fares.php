@@ -33,7 +33,7 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-// Get the vehicle ID from query params
+// Get the vehicle ID from query params or body
 $vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
 
 // Log for debugging

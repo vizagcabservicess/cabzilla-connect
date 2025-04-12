@@ -66,7 +66,6 @@ const AirportFareManagement: React.FC = () => {
       setFares(null);
     }
 
-    // Clear any retry timeout when component unmounts or selection changes
     return () => {
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
@@ -88,14 +87,9 @@ const AirportFareManagement: React.FC = () => {
     try {
       console.log(`Fetching airport fares for vehicle ID: ${vehicleId}${isRetry ? ` (retry attempt ${retryCountRef.current})` : ''}`);
       
-      // Generate a unique timestamp to avoid caching
-      const timestamp = new Date().getTime();
       const response: ApiResponse = await fetchAirportFares(vehicleId);
       
-      console.log('Airport fares response:', response);
-      
       const extractFareData = (response: ApiResponse): ApiResponseFare | null => {
-        // Check for fares in data.fares array
         if (response.data?.fares) {
           if (Array.isArray(response.data.fares) && response.data.fares.length > 0) {
             console.log('Found fares in data.fares array:', response.data.fares.length);
@@ -114,7 +108,6 @@ const AirportFareManagement: React.FC = () => {
             return response.data.fares[0];
           }
           
-          // Check for fares in data.fares object
           if (typeof response.data.fares === 'object' && response.data.fares !== null) {
             console.log('Found fares in data.fares object');
             
@@ -138,7 +131,6 @@ const AirportFareManagement: React.FC = () => {
           }
         }
         
-        // Check for fares directly in the response
         if (response.fares) {
           if (Array.isArray(response.fares) && response.fares.length > 0) {
             console.log('Found fares in direct fares array:', response.fares.length);
@@ -204,7 +196,7 @@ const AirportFareManagement: React.FC = () => {
         console.log('Normalized fare data:', normalizedFareData);
         setFares(normalizedFareData);
         setInitialized(true);
-        retryCountRef.current = 0; // Reset retry count on success
+        retryCountRef.current = 0;
       } else {
         console.log('No valid fare data found, creating default');
         setFares({
@@ -225,7 +217,6 @@ const AirportFareManagement: React.FC = () => {
     } catch (error) {
       console.error('Error loading airport fares:', error);
       
-      // If we haven't reached the maximum number of retries, try again after a delay
       if (retryCountRef.current < maxRetries) {
         console.log(`Retry ${retryCountRef.current + 1}/${maxRetries} will be attempted in 2 seconds...`);
         
@@ -235,7 +226,6 @@ const AirportFareManagement: React.FC = () => {
           variant: "default"
         });
         
-        // Schedule a retry
         retryTimeoutRef.current = setTimeout(() => {
           loadFares(vehicleId, true);
         }, 2000);
@@ -273,10 +263,8 @@ const AirportFareManagement: React.FC = () => {
     setSelectedVehicleId(vehicleId);
     setInitialized(false);
     
-    // Reset retry count when vehicle changes
     retryCountRef.current = 0;
     
-    // Clear any existing retry timeout
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
@@ -329,13 +317,10 @@ const AirportFareManagement: React.FC = () => {
 
     console.log("Saving fare data:", fareToSave);
     
-    // Reset retry count
     retryCountRef.current = 0;
     setLoading(true);
     
     try {
-      // Generate a unique timestamp to avoid caching
-      const timestamp = new Date().getTime();
       await updateAirportFares(fareToSave);
       
       toast({
@@ -349,7 +334,6 @@ const AirportFareManagement: React.FC = () => {
     } catch (error) {
       console.error('Error saving fares:', error);
       
-      // Try a direct API call as fallback
       try {
         console.log("Attempting direct API call as fallback...");
         const directApiUrl = `/api/direct-airport-fares.php?_t=${Date.now()}`;

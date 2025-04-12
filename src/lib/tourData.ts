@@ -1,3 +1,4 @@
+
 import { TourInfo, TourFares } from '@/types/cab';
 import { fareAPI, syncTourFaresTable } from '@/services/api';
 
@@ -274,7 +275,7 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
         
         // Dispatch an event to notify components that the tour fares have been updated
         window.dispatchEvent(new CustomEvent('tour-fares-updated', { 
-          detail: { timestamp: now, source: 'api' } 
+          detail: { timestamp: now, source: 'api', fares: dynamicTourFares } 
         }));
         
         return dynamicTourFares;
