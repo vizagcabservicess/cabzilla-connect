@@ -336,22 +336,33 @@ export const bookingAPI = {
     return response && response.bookings ? response.bookings : [];
   },
   
-  getAdminDashboardMetrics: async (period: 'day' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (options: { 
+    period?: 'day' | 'week' | 'month', 
+    status?: string 
+  } = {}): Promise<DashboardMetrics> => {
     // Try multiple endpoint patterns - the path was /api/admin/metrics but should be /api/user/dashboard
     try {
+      // Extract options or use defaults
+      const period = options.period || 'week';
+      const status = options.status || 'all';
+      
       // First try the original endpoint
-      return await api.get(`/api/admin/metrics?period=${period}`);
+      return await api.get(`/api/admin/metrics?period=${period}${status ? `&status=${status}` : ''}`);
     } catch (error) {
       console.log('Primary metrics endpoint failed, trying alternatives...', error);
       
       try {
         // Try the dashboard endpoint
-        return await api.get(`/api/user/dashboard?period=${period}&admin=true`);
+        const period = options.period || 'week';
+        const status = options.status || 'all';
+        return await api.get(`/api/user/dashboard?period=${period}&admin=true${status ? `&status=${status}` : ''}`);
       } catch (error2) {
         console.log('Secondary metrics endpoint failed, trying one more pattern...', error2);
         
         // One more pattern to try
-        return await api.get(`/api/admin/dashboard/metrics?period=${period}`);
+        const period = options.period || 'week';
+        const status = options.status || 'all';
+        return await api.get(`/api/admin/dashboard/metrics?period=${period}${status ? `&status=${status}` : ''}`);
       }
     }
   },
