@@ -114,7 +114,10 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (options?: { period?: 'day' | 'week' | 'month', status?: string }): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (options?: { 
+    period?: 'day' | 'week' | 'month', 
+    status?: string 
+  }): Promise<DashboardMetrics> => {
     try {
       // Get user ID from localStorage
       const userIdToUse = Number(localStorage.getItem('userId'));
