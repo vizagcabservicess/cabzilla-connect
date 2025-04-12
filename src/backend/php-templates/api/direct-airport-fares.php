@@ -56,7 +56,6 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
 if ($vehicleId) {
     $_GET['vehicleId'] = $vehicleId;
     $_GET['vehicle_id'] = $vehicleId;
-    $_GET['original_vehicle_id'] = $vehicleId; // Ensure original ID is preserved
     file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
     
     // If this is a GET request, append vehicle_id to the query string

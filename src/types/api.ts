@@ -20,7 +20,7 @@ export interface Booking {
   pickupDate: string;
   returnDate?: string;
   cabType: string;
-  distance: number;
+  distance: number; // Added this property to fix the error
   passengers?: number;
   days?: number;
   hours?: number;
@@ -102,7 +102,7 @@ export interface FareData {
 export interface VehiclePricingData {
   id: number;
   vehicleType: string;
-  vehicleId?: string;
+  vehicleId?: string;  // Added to support both column names
   basePrice: number;
   pricePerKm: number;
   hourlyPrice?: number;
@@ -115,6 +115,7 @@ export interface VehiclePricingData {
   driverAllowance?: number;
 }
 
+// New interfaces for different fare types
 export interface OutstationFareData {
   basePrice: number;
   pricePerKm: number;
@@ -130,6 +131,7 @@ export interface LocalPackageFareData {
   package10hr100km: number;
   extraKmRate: number;
   extraHourRate: number;
+  // Alternative field names for flexibility
   price4hrs40km?: number;
   price8hrs80km?: number;
   price10hrs100km?: number;
@@ -191,7 +193,6 @@ export interface BookingRequest {
   passengerEmail?: string;
   hourlyPackage?: string | null;
   tourId?: string;
-  userId?: number;
 }
 
 export interface TourFare {
@@ -218,13 +219,14 @@ export type VehiclePricing = VehiclePricingData;
 
 export interface VehiclePricingUpdateRequest {
   vehicleType: string;
-  vehicleId?: string;
+  vehicleId?: string;  // Added to support both column names
   basePrice: number;
   pricePerKm: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
 }
 
+// Outstation fare update request
 export interface OutstationFareUpdateRequest {
   vehicleId: string;
   basePrice: number;
@@ -235,6 +237,7 @@ export interface OutstationFareUpdateRequest {
   driverAllowance: number;
 }
 
+// Local package fare update request
 export interface LocalPackageFareUpdateRequest {
   vehicleId: string;
   package4hr40km?: number;
@@ -242,6 +245,7 @@ export interface LocalPackageFareUpdateRequest {
   package10hr100km?: number;
   extraKmRate?: number;
   extraHourRate?: number;
+  // Alternative field names for flexibility
   price4hrs40km?: number;
   price8hrs80km?: number;
   price10hrs100km?: number;
@@ -249,6 +253,7 @@ export interface LocalPackageFareUpdateRequest {
   priceExtraHour?: number;
 }
 
+// Airport fare update request
 export interface AirportFareUpdateRequest {
   vehicleId: string;
   basePrice: number;
@@ -262,6 +267,7 @@ export interface AirportFareUpdateRequest {
   extraKmCharge: number;
 }
 
+// Booking update request
 export interface BookingUpdateRequest {
   passengerName?: string;
   passengerPhone?: string;

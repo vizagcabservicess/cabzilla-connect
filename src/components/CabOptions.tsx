@@ -102,54 +102,30 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   return;
                 }
               }
-            } else if (tripType === 'airport') {
-              // For airport trips, check for the specific airport fare in localStorage
-              const airportFareKey = `airport_fare_${cab.id.toLowerCase()}`;
-              const storedFare = localStorage.getItem(airportFareKey);
-              if (storedFare) {
-                const fareValue = parseInt(storedFare, 10);
-                if (!isNaN(fareValue) && fareValue > 0) {
-                  fares[cab.id] = fareValue;
-                  console.log(`Found airport fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
-                  return;
-                }
-              }
             }
             
-            // General fare lookup based on trip type
+            // If not found in price matrix or not a local package, check vehicle-specific localStorage
             const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
             const storedFare = localStorage.getItem(localStorageKey);
             if (storedFare) {
-              const fareValue = parseInt(storedFare, 10);
-              if (!isNaN(fareValue) && fareValue > 0) {
-                fares[cab.id] = fareValue;
-                console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
-                return;
-              }
+              fares[cab.id] = parseInt(storedFare, 10);
+              console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
+              return;
             }
             
-            // If still not found, use a reasonable default fare based on cab's pre-defined price
+            // If still not found, use a reasonable default fare
             if (!fares[cab.id]) {
               // Fallback to cab's pre-defined price if available
               if (cab.price && cab.price > 0) {
                 fares[cab.id] = cab.price;
               } else {
-                // Last resort - calculate a reasonable fare based on type and distance
-                const baseRate = cab.id.includes('luxury') ? 20 : 
-                              cab.id.includes('innova') ? 15 : 
-                              cab.id.includes('ertiga') ? 12 : 10;
-                
-                // For airport, we use different calculation
-                if (tripType === 'airport') {
-                  // Base fare for airport transfers
-                  const baseFare = cab.id.includes('luxury') ? 1500 : 
-                                cab.id.includes('innova') ? 1200 : 
-                                cab.id.includes('ertiga') ? 1000 : 800;
-                  fares[cab.id] = baseFare;
-                } else {
-                  const baseFare = distance * baseRate;
-                  fares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
-                }
+                // Last resort - calculate a reasonable fare based on type
+                const baseFare = distance * (
+                  cab.id.includes('luxury') ? 20 : 
+                  cab.id.includes('innova') ? 15 : 
+                  cab.id.includes('ertiga') ? 12 : 10
+                );
+                fares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
               }
             }
           } catch (error) {

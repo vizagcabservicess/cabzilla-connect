@@ -22,14 +22,8 @@ export const getBypassHeaders = (): Record<string, string> => {
  * Get forced request configuration with bypass headers and cache settings
  */
 export const getForcedRequestConfig = () => {
-  const token = localStorage.getItem('authToken');
-  const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
-  
   return {
-    headers: {
-      ...getBypassHeaders(),
-      ...authHeader
-    },
+    headers: getBypassHeaders(),
     timeout: 60000, // Increased timeout for maximum reliability
     cache: 'no-store' as const,
     mode: 'cors' as const,
@@ -77,9 +71,6 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     throw new Error('No internet connection');
   }
   
-  // Get auth token
-  const token = localStorage.getItem('authToken');
-  
   // Prepare enhanced options with CORS headers
   const enhancedOptions: RequestInit = {
     ...options,
@@ -87,7 +78,6 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     credentials: 'omit',
     headers: {
       ...getBypassHeaders(),
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   };
@@ -95,41 +85,14 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   // Use direct URL to API without proxy
   const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
-  // Add timestamp to prevent caching
-  const urlWithTimestamp = url.includes('?') 
-    ? `${url}&_t=${Date.now()}` 
-    : `${url}?_t=${Date.now()}`;
-  
   // Try up to 3 times
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const result = await fetch(urlWithTimestamp, enhancedOptions);
+      const result = await fetch(url, enhancedOptions);
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
-      }
-      
-      // If we get a 401, try once more without auth header for fallback behavior
-      if (result.status === 401 && token && attempt === 1) {
-        console.warn('Auth request failed, trying without Authorization header');
-        
-        const noAuthOptions = { ...enhancedOptions };
-        if (noAuthOptions.headers) {
-          // Remove Authorization header
-          delete (noAuthOptions.headers as any).Authorization;
-        }
-        
-        try {
-          const fallbackResult = await fetch(urlWithTimestamp, noAuthOptions);
-          if (fallbackResult.status !== 401) {
-            return fallbackResult;
-          } else {
-            console.error('Fallback request also failed:', fallbackResult.status);
-          }
-        } catch (fallbackError) {
-          console.error('Fallback request error:', fallbackError);
-        }
       }
       
       return result;
