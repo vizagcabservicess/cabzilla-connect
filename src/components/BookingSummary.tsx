@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -62,12 +63,33 @@ export const BookingSummary = ({
       console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
       setCalculatedFare(totalPrice);
       
+      // Also store the fare in localStorage for CabList to access
+      if (selectedCab) {
+        try {
+          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, totalPrice.toString());
+          console.log(`BookingSummary: Stored fare in localStorage: ${localStorageKey} = ${totalPrice}`);
+          
+          // Dispatch event to notify CabList of updated fare
+          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+            detail: {
+              cabType: selectedCab.id,
+              fare: totalPrice,
+              tripType: tripType,
+              timestamp: Date.now()
+            }
+          }));
+        } catch (error) {
+          console.error('Error storing fare in localStorage:', error);
+        }
+      }
+      
       const estimatedBaseFare = totalPrice - driverAllowance - nightCharges - extraDistanceFare;
       if (estimatedBaseFare > 0) {
         setBaseFare(estimatedBaseFare);
       }
     }
-  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare]);
+  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare, selectedCab, tripType]);
 
   useEffect(() => {
     if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
@@ -88,6 +110,25 @@ export const BookingSummary = ({
       
       if (totalPrice > 0) {
         setCalculatedFare(totalPrice);
+        
+        // Store the fare in localStorage for CabList to access
+        try {
+          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, totalPrice.toString());
+          console.log(`BookingSummary: Stored fare in localStorage: ${localStorageKey} = ${totalPrice}`);
+          
+          // Dispatch event to notify CabList of updated fare
+          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+            detail: {
+              cabType: selectedCab.id,
+              fare: totalPrice,
+              tripType: tripType,
+              timestamp: Date.now()
+            }
+          }));
+        } catch (error) {
+          console.error('Error storing fare in localStorage:', error);
+        }
       }
       
       calculationTimeoutRef.current = setTimeout(() => {
@@ -95,9 +136,19 @@ export const BookingSummary = ({
       }, 100);
 
       const handleDirectFareUpdate = (event: CustomEvent) => {
-        if (event.detail && event.detail.cabId === selectedCab.id && event.detail.fare > 0) {
+        if (event.detail && event.detail.cabType === selectedCab.id && event.detail.fare > 0) {
           console.log(`BookingSummary: Received direct fare update for ${selectedCab.id}: ${event.detail.fare}`);
           setCalculatedFare(event.detail.fare);
+          totalPriceRef.current = event.detail.fare;
+          
+          // Store this fare in localStorage for CabList to access
+          try {
+            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+            localStorage.setItem(localStorageKey, event.detail.fare.toString());
+            console.log(`BookingSummary: Stored direct fare in localStorage: ${localStorageKey} = ${event.detail.fare}`);
+          } catch (error) {
+            console.error('Error storing fare in localStorage:', error);
+          }
           
           const estimatedBaseFare = event.detail.fare - driverAllowance - nightCharges - extraDistanceFare;
           if (estimatedBaseFare > 0) {
@@ -116,7 +167,7 @@ export const BookingSummary = ({
         window.removeEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
       };
     }
-  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare]);
+  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare, tripType]);
 
   useEffect(() => {
     if (
@@ -318,6 +369,29 @@ export const BookingSummary = ({
       setCalculatedFare(finalFare);
       totalPriceRef.current = finalFare;
       
+      // Update localStorage with the calculated fare
+      try {
+        const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+        localStorage.setItem(localStorageKey, finalFare.toString());
+        console.log(`BookingSummary: Stored calculated fare in localStorage: ${localStorageKey} = ${finalFare}`);
+        
+        // For airport transfers, dispatch a fare-calculated event to update cab cards
+        if (tripType === 'airport') {
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: selectedCab.id,
+              tripType: tripType,
+              tripMode: tripMode,
+              calculated: true,
+              fare: finalFare,
+              timestamp: Date.now()
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('Error storing fare in localStorage:', error);
+      }
+      
       if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
         console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
       }
@@ -349,6 +423,30 @@ export const BookingSummary = ({
         if (customEvent.detail.fare && customEvent.detail.fare > 0) {
           setCalculatedFare(customEvent.detail.fare);
           totalPriceRef.current = customEvent.detail.fare;
+          
+          // Store this fare in localStorage
+          try {
+            const localStorageKey = `fare_${tripType}_${customEvent.detail.cabType.toLowerCase()}`;
+            localStorage.setItem(localStorageKey, customEvent.detail.fare.toString());
+            console.log(`BookingSummary: Stored selected cab fare in localStorage: ${localStorageKey} = ${customEvent.detail.fare}`);
+            
+            // Broadcast the fare calculation back to CabList
+            if (tripType === 'airport') {
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: customEvent.detail.cabType,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  calculated: true,
+                  fare: customEvent.detail.fare,
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          } catch (error) {
+            console.error('Error storing fare in localStorage:', error);
+          }
+          
           setShowDetailsLoading(false);
         }
         return;
@@ -412,6 +510,32 @@ export const BookingSummary = ({
       if (totalPrice > 0) {
         setCalculatedFare(totalPrice);
         totalPriceRef.current = totalPrice;
+        
+        // Store this fare in localStorage for CabList to access
+        if (selectedCab) {
+          try {
+            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+            localStorage.setItem(localStorageKey, totalPrice.toString());
+            console.log(`BookingSummary: Stored initial fare in localStorage: ${localStorageKey} = ${totalPrice}`);
+            
+            // For airport transfers, dispatch fare event immediately
+            if (tripType === 'airport') {
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: selectedCab.id,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  calculated: true,
+                  fare: totalPrice,
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          } catch (error) {
+            console.error('Error storing fare in localStorage:', error);
+          }
+        }
+        
         recalculateFareDetails();
       } else {
         recalculateFareDetails();
@@ -438,7 +562,7 @@ export const BookingSummary = ({
       window.removeEventListener('fare-cache-cleared', handleEventsWithThrottling);
       window.removeEventListener('cab-selected', handleCabSelected);
     };
-  }, [totalPrice]);
+  }, [totalPrice, selectedCab, tripType, tripMode]);
 
   useEffect(() => {
     const checkPendingInterval = setInterval(() => {
