@@ -50,6 +50,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [fareUpdateTriggered, setFareUpdateTriggered] = useState<boolean>(false);
   const [initialAirportFaresLoaded, setInitialAirportFaresLoaded] = useState<boolean>(false);
   const [calculatedAirportFares, setCalculatedAirportFares] = useState<Record<string, number>>({});
+  const [forceSyncAttempted, setForceSyncAttempted] = useState<boolean>(false);
 
   // Store the current trip type in localStorage for better fare syncing
   useEffect(() => {
@@ -71,6 +72,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         localStorage.setItem('forceCacheRefresh', 'true');
         setInitialAirportFaresLoaded(false);
         setCalculatedAirportFares({});
+        setForceSyncAttempted(false);
         
         setTimeout(() => {
           localStorage.removeItem('forceCacheRefresh');
@@ -117,6 +119,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               tripMode: tripMode,
               calculated: true,
               fare: parsedFare,
+              forceSync: true,
               timestamp: Date.now()
             }
           }));
@@ -138,11 +141,25 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             cabId: cab.id,
             cabName: cab.name,
             tripType: 'airport',
+            forceSync: true,
             timestamp: Date.now() + index
           }
         }));
       }, index * 50);
     });
+    
+    // Also trigger a request for fare sync
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('request-fare-sync', {
+        detail: {
+          tripType: 'airport',
+          forceSync: true,
+          timestamp: Date.now()
+        }
+      }));
+      
+      setForceSyncAttempted(true);
+    }, cabTypes.length * 50 + 100);
     
     setInitialAirportFaresLoaded(true);
   };
@@ -181,6 +198,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           fare: cabFare,
           tripType: tripType,
           tripMode: tripMode,
+          forceSync: tripType === 'airport',
           timestamp: now + 1 // Use different timestamp to prevent event merging
         }
       }));
@@ -202,6 +220,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               cabName: cab.name,
               tripType: tripType,
               tripMode: tripMode,
+              forceSync: true,
               timestamp: now + 2 // Different timestamp
             }
           }));
@@ -214,6 +233,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 cabName: cab.name,
                 tripType: tripType,
                 tripMode: tripMode,
+                forceSync: true,
                 timestamp: now + 3 // Different timestamp
               }
             }));
@@ -364,6 +384,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 fare: fareToUse,
                 tripType: tripType,
                 tripMode: tripMode,
+                forceSync: tripType === 'airport',
                 timestamp: Date.now()
               }
             }));
@@ -383,6 +404,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                     cabName: selectedCab.name,
                     tripType: tripType,
                     tripMode: tripMode,
+                    forceSync: true,
                     timestamp: Date.now()
                   }
                 }));
@@ -450,6 +472,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   fare: fare,
                   tripType: tripType,
                   tripMode: tripMode,
+                  forceSync: true,
                   timestamp: Date.now()
                 }
               }));
@@ -489,6 +512,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           const localStorageKey = `fare_${tripType}_${cabType.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
           
+          // Update airport fares for dedicated tracking
+          setCalculatedAirportFares(prev => ({...prev, [cabType]: fare}));
+          
           // Re-emit as a fare-calculated event to ensure CabList gets updated
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('fare-calculated', {
@@ -498,6 +524,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 tripMode: tripMode,
                 calculated: true,
                 fare: fare,
+                forceSync: true,
                 timestamp: Date.now()
               }
             }));
@@ -512,17 +539,37 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         console.log(`CabOptions: Received fare recalculation request for ${event.detail.cabId}`);
         
         // If this is the currently selected cab, trigger fare event with latest fare
-        if (cabFares[event.detail.cabId] > 0) {
+        const fareToUse = tripType === 'airport' && calculatedAirportFares[event.detail.cabId]
+          ? calculatedAirportFares[event.detail.cabId]
+          : cabFares[event.detail.cabId];
+        
+        if (fareToUse > 0) {
           window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
             detail: {
               cabType: event.detail.cabId,
               cabName: event.detail.cabName || selectedCab.name,
-              fare: cabFares[event.detail.cabId],
+              fare: fareToUse,
               tripType: tripType,
               tripMode: tripMode,
+              forceSync: true,
               timestamp: Date.now()
             }
           }));
+        }
+      }
+    };
+    
+    // Handle request for fare sync
+    const handleRequestFareSync = (event: CustomEvent) => {
+      if (!event.detail) return;
+      
+      const { tripType: eventTripType } = event.detail;
+      console.log(`CabOptions: Received request-fare-sync event for ${eventTripType || 'all'} trips`);
+      
+      if (tripType === 'airport' && (eventTripType === 'airport' || !eventTripType)) {
+        if (!forceSyncAttempted) {
+          preloadAirportFares();
+          setForceSyncAttempted(true);
         }
       }
     };
@@ -559,6 +606,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 tripMode: tripMode,
                 calculated: true,
                 fare: calculatedFare,
+                forceSync: true,
                 timestamp: Date.now()
               }
             }));
@@ -571,16 +619,33 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     window.addEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
     window.addEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
     window.addEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
+    window.addEventListener('request-fare-sync', handleRequestFareSync as EventListener);
     window.addEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
+    
+    // Trigger initial sync for airport transfers
+    if (tripType === 'airport' && !forceSyncAttempted) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('request-fare-sync', {
+          detail: {
+            tripType: 'airport',
+            forceSync: true,
+            timestamp: Date.now()
+          }
+        }));
+        
+        setForceSyncAttempted(true);
+      }, 500);
+    }
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
       window.removeEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
       window.removeEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
       window.removeEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
+      window.removeEventListener('request-fare-sync', handleRequestFareSync as EventListener);
       window.removeEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     };
-  }, [cabFares, selectedCab, tripType, tripMode, calculatedAirportFares]);
+  }, [cabFares, selectedCab, tripType, tripMode, calculatedAirportFares, forceSyncAttempted]);
 
   // Generate fare details string
   const getFareDetails = (cab: CabType): string => {

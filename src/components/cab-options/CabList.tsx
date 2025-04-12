@@ -35,13 +35,14 @@ export function CabList({
   const tripTypeRef = useRef<string | null>(null);
   const requestedBookingSummaryFaresRef = useRef<Record<string, boolean>>({});
   const lastRequestTimeRef = useRef<Record<string, number>>({});
-  const REQUEST_THROTTLE_MS = 1000;
+  const REQUEST_THROTTLE_MS = 500; // Reduced throttle time for faster updates
   const airportFaresLoadedRef = useRef<boolean>(false);
   const fareUpdateTriggeredRef = useRef<Record<string, boolean>>({});
   const fareDisplayedRef = useRef<Record<string, boolean>>({});
   const forceAirportFareRefreshRef = useRef<boolean>(true);
   const processingCountRef = useRef<number>(0);
   const maxProcessingAttempts = 5;
+  const forceSyncAttemptedRef = useRef<boolean>(false);
 
   // Pre-load trip type from localStorage on component mount
   useEffect(() => {
@@ -52,10 +53,46 @@ export function CabList({
       
       if (storedTripType === 'airport') {
         forceAirportFareRefreshRef.current = true;
-        setTimeout(() => loadCalculatedAirportFares(), 50);
+        setTimeout(() => {
+          loadCalculatedAirportFares();
+          triggerForceSyncWithBookingSummary();
+        }, 50);
       }
     }
   }, []);
+
+  // NEW: Force sync with booking summary on initial load
+  const triggerForceSyncWithBookingSummary = () => {
+    if (forceSyncAttemptedRef.current) return;
+    
+    console.log('CabList: Triggering force sync with booking summary');
+    forceSyncAttemptedRef.current = true;
+    
+    // Request booking summary fares for all cab types
+    setTimeout(() => {
+      cabTypes.forEach(cab => {
+        console.log(`CabList: Requesting initial booking summary fare for ${cab.id}`);
+        window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: 'airport',
+            forceSync: true,
+            timestamp: Date.now()
+          }
+        }));
+      });
+      
+      // Also trigger a general fare-sync event
+      window.dispatchEvent(new CustomEvent('request-fare-sync', {
+        detail: {
+          tripType: 'airport',
+          forceSync: true,
+          timestamp: Date.now()
+        }
+      }));
+    }, 100);
+  };
 
   // Initialize fares when cabFares prop changes
   useEffect(() => {
@@ -89,12 +126,16 @@ export function CabList({
                   cabId: cab.id,
                   cabName: cab.name,
                   tripType: 'airport',
-                  timestamp: Date.now()
+                  timestamp: Date.now(),
+                  forceSync: true
                 }
               }));
               fareUpdateTriggeredRef.current[cab.id] = true;
             }
           });
+          
+          // NEW: Also trigger sync with booking summary
+          triggerForceSyncWithBookingSummary();
         }, 50);
       }
     }
@@ -125,13 +166,19 @@ export function CabList({
           
           newUpdates[cab.id] = parsedFare;
           foundAnyFares = true;
+          
+          // NEW: Immediately apply fares without waiting for processPendingUpdates
+          setDisplayedFares(prev => ({
+            ...prev,
+            [cab.id]: parsedFare
+          }));
         }
       }
     });
     
     if (foundAnyFares) {
       pendingUpdatesRef.current = {...pendingUpdatesRef.current, ...newUpdates};
-      processPendingUpdates();
+      processPendingUpdates(true); // Force immediate processing
     }
     
     airportFaresLoadedRef.current = true;
@@ -140,25 +187,25 @@ export function CabList({
     // Request fare calculations for all cabs to ensure up-to-date values
     setTimeout(() => {
       cabTypes.forEach(cab => {
-        if (!fareUpdateTriggeredRef.current[cab.id]) {
-          console.log(`CabList: Requesting booking summary fare for ${cab.id}`);
-          window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
-            detail: {
-              cabId: cab.id,
-              cabName: cab.name,
-              tripType: 'airport',
-              timestamp: Date.now()
-            }
-          }));
-          fareUpdateTriggeredRef.current[cab.id] = true;
-        }
+        console.log(`CabList: Requesting booking summary fare for ${cab.id}`);
+        window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: 'airport',
+            forceSync: true,
+            timestamp: Date.now()
+          }
+        }));
+        fareUpdateTriggeredRef.current[cab.id] = true;
       });
     }, 100);
   };
 
   // Process pending fare updates with anti-recursion protection
-  const processPendingUpdates = () => {
-    if (Object.keys(pendingUpdatesRef.current).length === 0 || isProcessingRef.current) {
+  const processPendingUpdates = (force = false) => {
+    if ((Object.keys(pendingUpdatesRef.current).length === 0 && !force) || 
+        (isProcessingRef.current && !force)) {
       return;
     }
     
@@ -201,6 +248,7 @@ export function CabList({
               cabType: cabId,
               cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
               fare: fare,
+              tripType: tripTypeRef.current || 'airport',
               timestamp: Date.now()
             }
           }));
@@ -212,7 +260,7 @@ export function CabList({
     const processingPendingUpdates = {...pendingUpdatesRef.current};
     pendingUpdatesRef.current = {};
     
-    if (hasChanges) {
+    if (hasChanges || force) {
       setFadeIn(newFadeIn);
       refreshCountRef.current += 1;
       
@@ -222,6 +270,25 @@ export function CabList({
       
       // Apply the fare updates
       setDisplayedFares(updatedFares);
+      
+      // NEW: Sync with booking summary for airport transfers
+      if (tripTypeRef.current === 'airport') {
+        // For each updated fare, notify booking summary
+        Object.entries(updatedFares).forEach(([cabId, fare]) => {
+          if (fare > 0) {
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+              detail: {
+                cabType: cabId,
+                cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
+                fare: fare,
+                tripType: 'airport',
+                calculated: true,
+                timestamp: Date.now()
+              }
+            }));
+          }
+        });
+      }
       
       // Reset the processing state and fade effect after a delay
       setTimeout(() => {
@@ -236,9 +303,15 @@ export function CabList({
   };
 
   // Schedule update with debouncing
-  const scheduleUpdate = () => {
+  const scheduleUpdate = (immediate = false) => {
     if (updateTimeoutRef.current !== null) {
       window.clearTimeout(updateTimeoutRef.current);
+    }
+    
+    if (immediate) {
+      processPendingUpdates(true);
+      updateTimeoutRef.current = null;
+      return;
     }
     
     updateTimeoutRef.current = window.setTimeout(() => {
@@ -262,7 +335,7 @@ export function CabList({
         });
         
         if (Object.keys(pendingUpdatesRef.current).length > 0) {
-          scheduleUpdate();
+          scheduleUpdate(true); // Force immediate update for airport fares
           return;
         }
       }
@@ -300,7 +373,7 @@ export function CabList({
       console.log('CabList: Received fare-calculated event', customEvent.detail);
       
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare, calculated = false, timestamp = Date.now(), tripType } = customEvent.detail;
+        const { cabId, fare, calculated = false, timestamp = Date.now(), tripType, forceSync = false } = customEvent.detail;
         
         if (tripType) {
           tripTypeRef.current = tripType;
@@ -322,6 +395,18 @@ export function CabList({
               ...prev,
               [cabId]: fare
             }));
+            
+            // NEW: Notify booking summary of the fare update
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+              detail: {
+                cabType: cabId,
+                cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
+                fare: fare,
+                tripType: 'airport',
+                calculated: true,
+                timestamp: Date.now()
+              }
+            }));
           }
         }
         
@@ -332,7 +417,7 @@ export function CabList({
           fareDisplayedRef.current[cabId] = true;
           
           // Process immediately to update UI
-          processPendingUpdates();
+          processPendingUpdates(forceSync);
         }
       }
     };
@@ -344,7 +429,11 @@ export function CabList({
       console.log('CabList: Received cab-selected-with-fare event', customEvent.detail);
       
       if (customEvent.detail && customEvent.detail.cabType && customEvent.detail.fare) {
-        const { cabType, fare, timestamp, tripType } = customEvent.detail;
+        const { cabType, fare, timestamp, tripType, forceSync = false } = customEvent.detail;
+        
+        if (tripType) {
+          tripTypeRef.current = tripType;
+        }
         
         if (fare > 0) {
           pendingUpdatesRef.current[cabType] = fare;
@@ -357,7 +446,7 @@ export function CabList({
             calculatedFaresRef.current[cabType] = { fare, timestamp: Date.now() };
           }
           
-          scheduleUpdate();
+          scheduleUpdate(forceSync || tripType === 'airport');
         }
       }
     };
@@ -367,8 +456,20 @@ export function CabList({
       if (!customEvent.detail) return;
       
       if (customEvent.detail.cabType && customEvent.detail.fare > 0) {
-        const { cabType, fare, calculated = false } = customEvent.detail;
+        const { cabType, fare, calculated = false, forceSync = false, tripType } = customEvent.detail;
         console.log(`CabList: Received direct fare update for ${cabType}: ${fare}, calculated=${calculated}`);
+        
+        if (tripType) {
+          tripTypeRef.current = tripType;
+        }
+        
+        // For airport transfers, store the calculated fare
+        if (tripType === 'airport' || tripTypeRef.current === 'airport') {
+          calculatedFaresRef.current[cabType] = { fare, timestamp: Date.now() };
+          
+          const localStorageKey = `fare_${tripType || 'airport'}_${cabType.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, fare.toString());
+        }
         
         setDisplayedFares(prev => {
           const updated = { ...prev, [cabType]: fare };
@@ -396,12 +497,21 @@ export function CabList({
       fareDisplayedRef.current = {};
       processingCountRef.current = 0;
       forceAirportFareRefreshRef.current = true;
+      forceSyncAttemptedRef.current = false;
       
       if (customEvent.detail && customEvent.detail.tripType) {
         tripTypeRef.current = customEvent.detail.tripType;
         
         setDisplayedFares({});
         fareHistoryRef.current = {};
+        
+        // If switching to airport, trigger immediate sync
+        if (customEvent.detail.tripType === 'airport') {
+          setTimeout(() => {
+            loadCalculatedAirportFares();
+            triggerForceSyncWithBookingSummary();
+          }, 100);
+        }
       }
     };
     
@@ -424,6 +534,18 @@ export function CabList({
           ...prev,
           [cabId]: calculatedFare
         }));
+        
+        // NEW: Notify booking summary of the fare update
+        window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+          detail: {
+            cabType: cabId,
+            cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
+            fare: calculatedFare,
+            tripType: 'airport',
+            calculated: true,
+            timestamp: Date.now()
+          }
+        }));
       }
     };
     
@@ -434,17 +556,17 @@ export function CabList({
       console.log(`CabList: Received request for fare calculation for ${customEvent.detail.cabId}`);
       
       const isAirportTransfer = tripTypeRef.current === 'airport';
+      const { cabId, forceSync = false } = customEvent.detail;
       
-      if (fareDisplayedRef.current[customEvent.detail.cabId]) {
+      if (fareDisplayedRef.current[customEvent.detail.cabId] && !forceSync) {
         console.log(`CabList: Skipping fare calculation request for ${customEvent.detail.cabId} - fare already displayed`);
         return;
       }
       
-      const cabId = customEvent.detail.cabId;
       const now = Date.now();
       const lastRequestTime = lastRequestTimeRef.current[cabId] || 0;
       
-      if (now - lastRequestTime < REQUEST_THROTTLE_MS) {
+      if (!forceSync && now - lastRequestTime < REQUEST_THROTTLE_MS) {
         console.log(`CabList: Throttling fare calculation request for ${cabId}, last request was ${now - lastRequestTime}ms ago`);
         return;
       }
@@ -461,6 +583,20 @@ export function CabList({
         }));
         
         fareDisplayedRef.current[customEvent.detail.cabId] = true;
+        
+        // NEW: Notify booking summary of the fare
+        if (forceSync) {
+          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+            detail: {
+              cabType: cabId,
+              cabName: customEvent.detail.cabName,
+              fare: calculatedFare,
+              tripType: 'airport',
+              calculated: true,
+              timestamp: now
+            }
+          }));
+        }
       }
     };
     
@@ -468,16 +604,16 @@ export function CabList({
       const customEvent = event as CustomEvent;
       if (!customEvent.detail || !customEvent.detail.cabId) return;
       
-      const { cabId, cabName, tripType } = customEvent.detail;
+      const { cabId, cabName, tripType, forceSync = false } = customEvent.detail;
       const now = Date.now();
       
-      if (requestedBookingSummaryFaresRef.current[cabId]) {
+      if (!forceSync && requestedBookingSummaryFaresRef.current[cabId]) {
         console.log(`CabList: Skipping duplicate booking summary fare request for ${cabId}`);
         return;
       }
       
       const lastRequestTime = lastRequestTimeRef.current[cabId] || 0;
-      if (now - lastRequestTime < REQUEST_THROTTLE_MS) {
+      if (!forceSync && now - lastRequestTime < REQUEST_THROTTLE_MS) {
         console.log(`CabList: Throttling booking summary fare request for ${cabId}, last request was ${now - lastRequestTime}ms ago`);
         return;
       }
@@ -487,7 +623,7 @@ export function CabList({
       requestedBookingSummaryFaresRef.current[cabId] = true;
       lastRequestTimeRef.current[cabId] = now;
       
-      const isAirportTransfer = tripTypeRef.current === 'airport';
+      const isAirportTransfer = tripTypeRef.current === 'airport' || tripType === 'airport';
       
       if (isAirportTransfer && calculatedFaresRef.current[cabId]) {
         const calculatedFare = calculatedFaresRef.current[cabId].fare;
@@ -506,12 +642,61 @@ export function CabList({
           
           setTimeout(() => {
             requestedBookingSummaryFaresRef.current[cabId] = false;
-          }, 500);
+          }, 300);
         }, 0);
+      } else if (isAirportTransfer) {
+        // If no calculated fare available, check displayed fare
+        if (displayedFares[cabId] && displayedFares[cabId] > 0) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+              detail: {
+                cabType: cabId,
+                cabName: cabName,
+                fare: displayedFares[cabId],
+                tripType: 'airport',
+                calculated: true,
+                timestamp: now
+              }
+            }));
+            
+            setTimeout(() => {
+              requestedBookingSummaryFaresRef.current[cabId] = false;
+            }, 300);
+          }, 0);
+        } else {
+          // If no fare found, clear request flag
+          setTimeout(() => {
+            requestedBookingSummaryFaresRef.current[cabId] = false;
+          }, 300);
+        }
       } else {
         setTimeout(() => {
           requestedBookingSummaryFaresRef.current[cabId] = false;
-        }, 500);
+        }, 300);
+      }
+    };
+    
+    // NEW: Handle request for fare sync
+    const handleRequestFareSync = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (!customEvent.detail) return;
+      
+      const { tripType, forceSync = false } = customEvent.detail;
+      console.log(`CabList: Received request-fare-sync event for ${tripType || 'all'} trips`);
+      
+      if (tripType === 'airport' || tripTypeRef.current === 'airport') {
+        // Force reload of calculated airport fares
+        forceAirportFareRefreshRef.current = true;
+        airportFaresLoadedRef.current = false;
+        
+        setTimeout(() => {
+          loadCalculatedAirportFares();
+          
+          // Force process any pending updates
+          if (Object.keys(pendingUpdatesRef.current).length > 0 || Object.keys(calculatedFaresRef.current).length > 0) {
+            processPendingUpdates(true);
+          }
+        }, 50);
       }
     };
     
@@ -526,6 +711,15 @@ export function CabList({
       fareUpdateTriggeredRef.current = {};
       forceAirportFareRefreshRef.current = true;
       airportFaresLoadedRef.current = false;
+      forceSyncAttemptedRef.current = false;
+      
+      // For airport transfers, trigger immediate sync
+      if (tripTypeRef.current === 'airport') {
+        setTimeout(() => {
+          loadCalculatedAirportFares();
+          triggerForceSyncWithBookingSummary();
+        }, 100);
+      }
     };
     
     setTimeout(() => {
@@ -539,7 +733,16 @@ export function CabList({
     window.addEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     window.addEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
     window.addEventListener('request-booking-summary-fare', handleRequestBookingSummaryFare as EventListener);
+    window.addEventListener('request-fare-sync', handleRequestFareSync as EventListener);
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
+    
+    // NEW: Trigger initial sync with booking summary for airport transfers
+    if (tripTypeRef.current === 'airport' && !forceSyncAttemptedRef.current) {
+      setTimeout(() => {
+        loadCalculatedAirportFares();
+        triggerForceSyncWithBookingSummary();
+      }, 200);
+    }
     
     return () => {
       window.removeEventListener('cab-selected-with-fare', handleCabSelectedWithFare as EventListener);
@@ -549,6 +752,7 @@ export function CabList({
       window.removeEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
       window.removeEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
       window.removeEventListener('request-booking-summary-fare', handleRequestBookingSummaryFare as EventListener);
+      window.removeEventListener('request-fare-sync', handleRequestFareSync as EventListener);
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
       
       if (updateTimeoutRef.current !== null) {
@@ -582,6 +786,15 @@ export function CabList({
         const parsedFare = parseInt(storedFare, 10);
         if (parsedFare > 0) {
           console.log(`CabList: Using localStorage fare for ${cabId}: ${parsedFare}`);
+          
+          // Store in calculated fares for future use
+          calculatedFaresRef.current[cabId] = { fare: parsedFare, timestamp: Date.now() };
+          
+          // Update display fares for consistent UI
+          setTimeout(() => {
+            setDisplayedFares(prev => ({...prev, [cabId]: parsedFare}));
+          }, 0);
+          
           return parsedFare;
         }
       }
@@ -636,6 +849,7 @@ export function CabList({
       [cab.id]: true
     }));
     
+    // First emit the standard cab selection event
     window.dispatchEvent(new CustomEvent('cab-selected', {
       bubbles: true,
       detail: {
@@ -647,49 +861,8 @@ export function CabList({
       }
     }));
     
-    if (isAirport) {
-      const now = Date.now();
-      const lastRequestTime = lastRequestTimeRef.current[cab.id] || 0;
-      
-      if (!requestedBookingSummaryFaresRef.current[cab.id] && 
-          (now - lastRequestTime > REQUEST_THROTTLE_MS)) {
-        
-        requestedBookingSummaryFaresRef.current[cab.id] = true;
-        lastRequestTimeRef.current[cab.id] = now;
-        
-        setTimeout(() => {
-          if (isAirport) {
-            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-              bubbles: true,
-              detail: {
-                cabId: cab.id,
-                cabName: cab.name,
-                tripType: 'airport',
-                timestamp: now
-              }
-            }));
-            
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
-                bubbles: true,
-                detail: {
-                  cabId: cab.id,
-                  cabName: cab.name,
-                  tripType: 'airport',
-                  timestamp: now + 1
-                }
-              }));
-              
-              setTimeout(() => {
-                requestedBookingSummaryFaresRef.current[cab.id] = false;
-              }, 500);
-            }, 100);
-          }
-        }, 0);
-      }
-    }
-    
-    if (currentFare > 0) {
+    // Then emit the fare-specific event with a slight delay
+    setTimeout(() => {
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         bubbles: true,
         detail: {
@@ -697,9 +870,40 @@ export function CabList({
           cabName: cab.name,
           fare: currentFare,
           tripType: tripType,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          forceSync: isAirport // Force sync for airport transfers
         }
       }));
+    }, 50);
+    
+    if (isAirport) {
+      const now = Date.now();
+      
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+          bubbles: true,
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: 'airport',
+            timestamp: now,
+            forceSync: true
+          }
+        }));
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+            bubbles: true,
+            detail: {
+              cabId: cab.id,
+              cabName: cab.name,
+              tripType: 'airport',
+              timestamp: now + 1,
+              forceSync: true
+            }
+          }));
+        }, 100);
+      }, 0);
     }
     
     setTimeout(() => {
@@ -717,42 +921,39 @@ export function CabList({
     if (isAirportTransfer && cabTypes.length > 0 && !isCalculatingFares && initializedRef.current) {
       console.log('CabList: Auto-triggering fare update for airport transfer cabs');
       
-      cabTypes.forEach((cab, index) => {
-        // Skip already processed cabs
-        if (fareDisplayedRef.current[cab.id]) {
-          console.log(`CabList: Skipping auto-update for ${cab.id} - fare already displayed`);
-          return;
-        }
-        
-        // Use already calculated fares if available
-        if (calculatedFaresRef.current[cab.id]) {
-          console.log(`CabList: Already have calculated fare for ${cab.id}: ${calculatedFaresRef.current[cab.id].fare}`);
-          
-          if (displayedFares[cab.id] !== calculatedFaresRef.current[cab.id].fare) {
-            setDisplayedFares(prev => ({
-              ...prev,
-              [cab.id]: calculatedFaresRef.current[cab.id].fare
-            }));
+      // First, process any pending updates to ensure UI is up-to-date
+      if (Object.keys(pendingUpdatesRef.current).length > 0) {
+        processPendingUpdates(true);
+      }
+      
+      // NEW: Try to sync with booking summary if not attempted yet
+      if (!forceSyncAttemptedRef.current) {
+        triggerForceSyncWithBookingSummary();
+      }
+      
+      setTimeout(() => {
+        cabTypes.forEach((cab) => {
+          // Skip already processed cabs
+          if (fareDisplayedRef.current[cab.id]) {
+            return;
           }
           
-          fareDisplayedRef.current[cab.id] = true;
-          return;
-        }
-        
-        // Apply throttling to prevent too many requests
-        const now = Date.now();
-        const lastRequestTime = lastRequestTimeRef.current[cab.id] || 0;
-        if (requestedBookingSummaryFaresRef.current[cab.id] || 
-            (now - lastRequestTime < REQUEST_THROTTLE_MS)) {
-          console.log(`CabList: Skipping auto-update for ${cab.id} - already requested or throttled`);
-          return;
-        }
-        
-        // Request fare calculation with staggered timing
-        requestedBookingSummaryFaresRef.current[cab.id] = true;
-        lastRequestTimeRef.current[cab.id] = now;
-        
-        setTimeout(() => {
+          // Use already calculated fares if available
+          if (calculatedFaresRef.current[cab.id]) {
+            console.log(`CabList: Already have calculated fare for ${cab.id}: ${calculatedFaresRef.current[cab.id].fare}`);
+            
+            if (displayedFares[cab.id] !== calculatedFaresRef.current[cab.id].fare) {
+              setDisplayedFares(prev => ({
+                ...prev,
+                [cab.id]: calculatedFaresRef.current[cab.id].fare
+              }));
+            }
+            
+            fareDisplayedRef.current[cab.id] = true;
+            return;
+          }
+          
+          // Request fare calculation for cabs without calculated fares
           console.log(`CabList: Requesting fare calculation for ${cab.id}`);
           
           window.dispatchEvent(new CustomEvent('request-fare-calculation', {
@@ -760,28 +961,14 @@ export function CabList({
               cabId: cab.id,
               cabName: cab.name,
               tripType: 'airport',
-              timestamp: now
+              timestamp: Date.now(),
+              forceSync: true // Force syncing
             }
           }));
           
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
-              detail: {
-                cabId: cab.id,
-                cabName: cab.name,
-                tripType: 'airport',
-                timestamp: now + 1
-              }
-            }));
-            
-            fareDisplayedRef.current[cab.id] = true;
-            
-            setTimeout(() => {
-              requestedBookingSummaryFaresRef.current[cab.id] = false;
-            }, 500);
-          }, 100);
-        }, Math.random() * 200 + index * 50);
-      });
+          fareDisplayedRef.current[cab.id] = true;
+        });
+      }, 100);
     }
   }, [cabTypes, isCalculatingFares, displayedFares]);
 
