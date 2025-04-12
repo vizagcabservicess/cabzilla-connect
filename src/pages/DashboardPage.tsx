@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -139,7 +138,7 @@ export default function DashboardPage() {
         
         if (typeof safeMetrics.availableStatuses === 'string') {
           // Convert comma-separated string to array
-          safeMetrics.availableStatuses = safeMetrics.availableStatuses
+          safeMetrics.availableStatuses = (safeMetrics.availableStatuses as string)
             .split(',')
             .map(s => s.trim())
             .filter(s => s !== '') as BookingStatus[];

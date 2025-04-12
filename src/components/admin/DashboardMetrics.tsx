@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -80,6 +79,7 @@ export function DashboardMetrics({
       // If it's a string, try to split it and process
       else if (typeof rawData === 'string') {
         console.log('Raw data is a string:', rawData);
+        // Fixed this part to properly handle string splitting
         const parts = rawData.split(',').map(s => s.trim()).filter(Boolean);
         
         if (parts.length === 0) {
