@@ -28,6 +28,7 @@ export interface ApiErrorFallbackProps {
   onRetry?: () => void;
   title?: string;
   description?: string;
+  children?: React.ReactNode; // Add children prop to support extra actions
 }
 
 export function ApiErrorFallback({
@@ -35,7 +36,8 @@ export function ApiErrorFallback({
   resetErrorBoundary,
   onRetry,
   title = "Connection Error",
-  description
+  description,
+  children
 }: ApiErrorFallbackProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isExecutingFix, setIsExecutingFix] = useState(false);
@@ -383,6 +385,9 @@ export function ApiErrorFallback({
           >
             Return to Home
           </Button>
+          
+          {/* Add support for additional custom actions */}
+          {children}
         </div>
         
         <Button 

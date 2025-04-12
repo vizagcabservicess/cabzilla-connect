@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -34,13 +33,10 @@ export default function DashboardPage() {
   const [authIssue, setAuthIssue] = useState(false);
   const [isDev, setIsDev] = useState(false);
 
-  // Check if we're in development mode
   useEffect(() => {
-    // Check if local storage has dev mode flag
     const devMode = localStorage.getItem('dev_mode') === 'true';
     setIsDev(devMode);
     
-    // Also check URL for dev_mode parameter
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('dev_mode') === 'true') {
       setIsDev(true);
@@ -48,96 +44,75 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        // Allow access in dev mode without auth
-        if (isDev) {
-          console.log('Dev mode enabled, skipping authentication check');
-          const devUser = { 
-            id: 1, 
-            name: 'Dev User', 
-            email: 'dev@example.com', 
-            role: 'admin' 
-          };
-          setUser(devUser);
-          setIsAdmin(true);
-          localStorage.setItem('userData', JSON.stringify(devUser));
-          return;
-        }
+      if (isDev) {
+        console.log('Dev mode enabled, skipping authentication check');
+        const devUser = { 
+          id: 1, 
+          name: 'Dev User', 
+          email: 'dev@example.com', 
+          role: 'admin' 
+        };
+        setUser(devUser);
+        setIsAdmin(true);
+        localStorage.setItem('userData', JSON.stringify(devUser));
+        return;
+      }
 
-        if (!authAPI.isAuthenticated()) {
-          console.log('No authentication token found, redirecting to login');
-          navigate('/login', { state: { from: location.pathname } });
-          return;
-        }
+      if (!authAPI.isAuthenticated()) {
+        console.log('No authentication token found, redirecting to login');
+        navigate('/login', { state: { from: location.pathname } });
+        return;
+      }
 
-        // Try to get user data from localStorage first
-        const userDataStr = localStorage.getItem('userData');
-        let userData = null;
-        
-        if (userDataStr) {
-          try {
-            const cachedUser = JSON.parse(userDataStr);
-            if (cachedUser && cachedUser.id) {
-              console.log('Using cached user data:', cachedUser);
-              userData = {
-                id: cachedUser.id || 0,
-                name: cachedUser.name || '',
-                email: cachedUser.email || '',
-                role: cachedUser.role || 'user'
-              };
-              setUser(userData);
-              setIsAdmin(cachedUser.role === 'admin');
-            }
-          } catch (e) {
-            console.warn('Error parsing cached user data:', e);
+      const userDataStr = localStorage.getItem('userData');
+      let userData = null;
+      
+      if (userDataStr) {
+        try {
+          const cachedUser = JSON.parse(userDataStr);
+          if (cachedUser && cachedUser.id) {
+            console.log('Using cached user data:', cachedUser);
+            userData = {
+              id: cachedUser.id || 0,
+              name: cachedUser.name || '',
+              email: cachedUser.email || '',
+              role: cachedUser.role || 'user'
+            };
+            setUser(userData);
+            setIsAdmin(cachedUser.role === 'admin');
           }
+        } catch (e) {
+          console.warn('Error parsing cached user data:', e);
         }
+      }
 
-        // If cached data isn't available or valid, fetch from server
-        if (!userData) {
-          userData = await authAPI.getCurrentUser();
-          if (userData) {
-            setUser({
-              id: userData.id || 0,
-              name: userData.name || '',
-              email: userData.email || '',
-              role: userData.role || 'user'
-            });
-            setIsAdmin(userData.role === 'admin');
-            console.log('User data loaded from API:', userData);
-          } else {
-            throw new Error('User data not found');
-          }
-        }
-        
-        // Make sure localStorage has the updated user data
+      if (!userData) {
+        userData = await authAPI.getCurrentUser();
         if (userData) {
-          localStorage.setItem('userData', JSON.stringify(userData));
-        }
-      } catch (error) {
-        console.error('Error getting user data:', error);
-        
-        // If we have a token but it's invalid, show auth issue banner
-        if (localStorage.getItem('authToken') || isDev) {
-          setAuthIssue(true);
+          setUser({
+            id: userData.id || 0,
+            name: userData.name || '',
+            email: userData.email || '',
+            role: userData.role || 'user'
+          });
+          setIsAdmin(userData.role === 'admin');
+          console.log('User data loaded from API:', userData);
         } else {
-          toast.error('Error loading user data. Please try logging in again.');
-          // Clear token and redirect to login if we can't get user data
-          localStorage.removeItem('authToken');
-          navigate('/login');
+          throw new Error('User data not found');
         }
+      }
+      
+      if (userData) {
+        localStorage.setItem('userData', JSON.stringify(userData));
       }
     };
 
     checkAuth();
   }, [navigate, location.pathname, isDev]);
 
-  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
-    // Skip auth check in dev mode
     if (!isDev && !authAPI.isAuthenticated() && !authIssue) {
       console.log('No authentication token found, redirecting to login');
       navigate('/login');
@@ -148,13 +123,12 @@ export default function DashboardPage() {
       setIsRefreshing(true);
       setError(null);
       
-      // Get user data from localStorage to ensure we have the user ID
       const userDataStr = localStorage.getItem('userData');
       if (!userDataStr && !isDev) {
         throw new Error('User data not found in localStorage');
       }
       
-      let userId = 1; // Default for dev mode
+      let userId = 1;
       
       if (userDataStr) {
         const userData = JSON.parse(userDataStr);
@@ -166,16 +140,13 @@ export default function DashboardPage() {
       
       console.log('Fetching bookings for user ID:', userId, 'Dev mode:', isDev);
       
-      // Add dev_mode parameter if in dev mode
       const options = isDev ? { dev_mode: true } : undefined;
       
-      // Pass the user ID explicitly to the bookings API
       const data = await bookingAPI.getUserBookings(userId, options);
       
       if (Array.isArray(data)) {
         setBookings(data);
         
-        // If we got data, clear auth issue flag
         if (data.length > 0) {
           setAuthIssue(false);
         }
@@ -184,20 +155,17 @@ export default function DashboardPage() {
         setBookings([]);
       }
       
-      setRetryCount(0); // Reset retry count on success
+      setRetryCount(0);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      // Only show toast on first error
       if (retryCount === 0) {
         toast.error('Error loading bookings. Retrying...');
       }
       
-      // Increment retry count
       setRetryCount(prev => prev + 1);
       
-      // Check if this might be an auth issue
       if (error instanceof Error && 
           (error.message.includes('401') || 
            error.message.includes('authentication') || 
@@ -205,11 +173,10 @@ export default function DashboardPage() {
         setAuthIssue(true);
       }
       
-      // Auto-retry if under max retries
       if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
           fetchBookings();
-        }, 3000); // Wait 3 seconds before retrying
+        }, 3000);
       }
     } finally {
       setIsLoading(false);
@@ -217,7 +184,6 @@ export default function DashboardPage() {
     }
   }, [navigate, retryCount, authIssue, isDev]);
 
-  // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
     if ((!isAdmin && !isDev) || !user?.id) return;
     
@@ -226,10 +192,9 @@ export default function DashboardPage() {
       setAdminMetricsError(null);
       console.log('Fetching admin metrics for user ID:', user.id, 'Dev mode:', isDev);
       
-      // Add dev_mode parameter if in dev mode
       const options = isDev ? { dev_mode: true } : undefined;
       
-      const data = await bookingAPI.getAdminDashboardMetrics('week', user.id, options);
+      const data = await bookingAPI.getAdminDashboardMetrics('week', options);
       
       if (data) {
         setAdminMetrics(data);
@@ -245,35 +210,30 @@ export default function DashboardPage() {
     }
   }, [isAdmin, user, isDev]);
 
-  // Initial data fetch
   useEffect(() => {
     if (user?.id || isDev) {
       fetchBookings();
     }
   }, [fetchBookings, user, isDev]);
 
-  // Fetch admin metrics if user is admin
   useEffect(() => {
     if ((isAdmin || isDev) && (user?.id || isDev)) {
       fetchAdminMetrics();
     }
   }, [isAdmin, fetchAdminMetrics, user, isDev]);
 
-  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
-    localStorage.removeItem('dev_mode'); // Clear dev mode flag
+    localStorage.removeItem('dev_mode');
     navigate('/login');
     toast.success('Logged out successfully');
   };
 
-  // Handle re-login
   const handleRelogin = () => {
     localStorage.removeItem('authToken');
     navigate('/login', { state: { from: location.pathname } });
   };
 
-  // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -285,7 +245,6 @@ export default function DashboardPage() {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
-  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -296,14 +255,12 @@ export default function DashboardPage() {
     }
   };
 
-  // Enable dev mode
   const enableDevMode = () => {
     localStorage.setItem('dev_mode', 'true');
     setIsDev(true);
     window.location.reload();
   };
 
-  // Show authentication issue banner
   if (authIssue) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -337,7 +294,6 @@ export default function DashboardPage() {
     );
   }
 
-  // If still loading initial data
   if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -368,7 +324,6 @@ export default function DashboardPage() {
     );
   }
 
-  // If error occurred and max retries exceeded
   if (error && retryCount >= MAX_RETRIES) {
     return (
       <ApiErrorFallback 
@@ -376,10 +331,9 @@ export default function DashboardPage() {
         onRetry={fetchBookings}
         title="Error Loading Dashboard"
         description="We couldn't load your bookings. Please try again."
-        extraActions={
-          <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
-        }
-      />
+      >
+        <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
+      </ApiErrorFallback>
     );
   }
 
@@ -408,7 +362,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Conditionally render admin metrics for admin users */}
       {(isAdmin || isDev) && (
         <div className="mb-8">
           <Card>
@@ -427,7 +380,6 @@ export default function DashboardPage() {
                 error={adminMetricsError}
                 onFilterChange={(status: BookingStatus | 'all') => {
                   console.log('Filtering by status:', status);
-                  // Logic to filter metrics by status if needed
                 }}
                 selectedPeriod="week"
               />
@@ -492,7 +444,6 @@ export default function DashboardPage() {
   );
 }
 
-// Separate component for the bookings list
 function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: { 
   bookings: Booking[]; 
   isRefreshing: boolean;
