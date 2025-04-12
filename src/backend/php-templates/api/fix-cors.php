@@ -38,7 +38,18 @@ if ((strpos($_SERVER['REQUEST_URI'], 'dashboard') !== false ||
     
     // Safety net for response data - will be used by the handler if it checks for this
     $fallbackMetricsData = [
-        'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled']
+        'status' => 'success',
+        'data' => [
+            'totalBookings' => 0,
+            'activeRides' => 0,
+            'totalRevenue' => 0,
+            'availableDrivers' => 0,
+            'busyDrivers' => 0,
+            'avgRating' => 0,
+            'upcomingRides' => 0,
+            'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
+            'currentFilter' => 'all'
+        ]
     ];
 }
 

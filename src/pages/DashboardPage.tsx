@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,19 @@ import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
+
+// Default metrics to use as fallback in case of API failure
+const DEFAULT_METRICS: DashboardMetricsType = {
+  totalBookings: 0,
+  activeRides: 0,
+  totalRevenue: 0,
+  availableDrivers: 0,
+  busyDrivers: 0,
+  avgRating: 0,
+  upcomingRides: 0,
+  availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
+  currentFilter: 'all'
+};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -69,7 +83,7 @@ export default function DashboardPage() {
       setIsRefreshing(true);
       setError(null);
       const data = await bookingAPI.getUserBookings();
-      setBookings(data);
+      setBookings(Array.isArray(data) ? data : []);
       setRetryCount(0);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -110,48 +124,55 @@ export default function DashboardPage() {
       
       console.log('Admin metrics received:', data);
       
-      if (!data.availableStatuses) {
+      // Create safe metrics object with defaults for missing fields
+      const safeMetrics: DashboardMetricsType = {
+        ...DEFAULT_METRICS,
+        ...data
+      };
+      
+      // Handle different types of availableStatuses
+      if (!safeMetrics.availableStatuses) {
         console.log('Adding missing availableStatuses array');
-        data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
-      } else if (!Array.isArray(data.availableStatuses)) {
-        console.log('Converting non-array availableStatuses to array:', data.availableStatuses);
-        if (typeof data.availableStatuses === 'string') {
-          data.availableStatuses = data.availableStatuses.split(',')
+        safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+      } else if (!Array.isArray(safeMetrics.availableStatuses)) {
+        console.log('Converting non-array availableStatuses to array:', safeMetrics.availableStatuses);
+        
+        if (typeof safeMetrics.availableStatuses === 'string') {
+          // Convert comma-separated string to array
+          safeMetrics.availableStatuses = safeMetrics.availableStatuses
+            .split(',')
             .map(s => s.trim())
-            .filter(s => s !== '');
-        } else if (typeof data.availableStatuses === 'object' && data.availableStatuses !== null) {
-          data.availableStatuses = Object.values(data.availableStatuses);
+            .filter(s => s !== '') as BookingStatus[];
+        } else if (typeof safeMetrics.availableStatuses === 'object' && safeMetrics.availableStatuses !== null) {
+          // Convert object to array of values
+          safeMetrics.availableStatuses = Object.values(safeMetrics.availableStatuses) as BookingStatus[];
         } else {
-          data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+          // Fallback to default array
+          safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
         }
       }
       
-      if (!Array.isArray(data.availableStatuses) || data.availableStatuses.length === 0) {
-        data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+      // Final safety check to ensure it's a valid array
+      if (!Array.isArray(safeMetrics.availableStatuses) || safeMetrics.availableStatuses.length === 0) {
+        safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
       }
       
-      data.totalBookings = Number(data.totalBookings) || 0;
-      data.activeRides = Number(data.activeRides) || 0;
-      data.totalRevenue = Number(data.totalRevenue) || 0;
-      data.availableDrivers = Number(data.availableDrivers) || 0;
-      data.busyDrivers = Number(data.busyDrivers) || 0;
-      data.avgRating = Number(data.avgRating) || 0;
-      data.upcomingRides = Number(data.upcomingRides) || 0;
+      // Ensure all numeric values are numbers
+      safeMetrics.totalBookings = Number(safeMetrics.totalBookings) || 0;
+      safeMetrics.activeRides = Number(safeMetrics.activeRides) || 0;
+      safeMetrics.totalRevenue = Number(safeMetrics.totalRevenue) || 0;
+      safeMetrics.availableDrivers = Number(safeMetrics.availableDrivers) || 0;
+      safeMetrics.busyDrivers = Number(safeMetrics.busyDrivers) || 0;
+      safeMetrics.avgRating = Number(safeMetrics.avgRating) || 0;
+      safeMetrics.upcomingRides = Number(safeMetrics.upcomingRides) || 0;
       
-      setAdminMetrics(data);
+      console.log('Processed safe metrics:', safeMetrics);
+      setAdminMetrics(safeMetrics);
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       
       const fallbackMetrics: DashboardMetricsType = {
-        totalBookings: 0,
-        activeRides: 0,
-        totalRevenue: 0,
-        availableDrivers: 0,
-        busyDrivers: 0,
-        avgRating: 0,
-        upcomingRides: 0,
-        availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
-        currentFilter: 'all'
+        ...DEFAULT_METRICS
       };
       
       setAdminMetrics(fallbackMetrics);
@@ -242,19 +263,16 @@ export default function DashboardPage() {
   const renderAdminMetrics = () => {
     if (!isAdmin) return null;
     
+    // Create a safe metrics object with guaranteed structure
     const safeMetrics: DashboardMetricsType = {
-      totalBookings: adminMetrics?.totalBookings || 0,
-      activeRides: adminMetrics?.activeRides || 0,
-      totalRevenue: adminMetrics?.totalRevenue || 0,
-      availableDrivers: adminMetrics?.availableDrivers || 0,
-      busyDrivers: adminMetrics?.busyDrivers || 0,
-      avgRating: adminMetrics?.avgRating || 0,
-      upcomingRides: adminMetrics?.upcomingRides || 0,
-      availableStatuses: Array.isArray(adminMetrics?.availableStatuses) 
-        ? adminMetrics.availableStatuses 
-        : ['pending', 'confirmed', 'completed', 'cancelled'],
-      currentFilter: adminMetrics?.currentFilter || 'all'
+      ...DEFAULT_METRICS,
+      ...(adminMetrics || {})
     };
+    
+    // Final safety check for availableStatuses
+    if (!Array.isArray(safeMetrics.availableStatuses)) {
+      safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+    }
     
     return (
       <div className="mb-8">

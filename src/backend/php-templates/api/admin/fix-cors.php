@@ -29,7 +29,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Debug-Method: ' . $_SERVER['REQUEST_METHOD']);
 header('X-PHP-Version: ' . PHP_VERSION);
 
-// Emergency fix - setup empty array if needed for metrics data
+// Emergency fix - setup proper array for metrics data
 // This will be caught by clients before type errors happen
 if (strpos($_SERVER['REQUEST_URI'], '/dashboard') !== false || 
     strpos($_SERVER['REQUEST_URI'], '/metrics') !== false) {

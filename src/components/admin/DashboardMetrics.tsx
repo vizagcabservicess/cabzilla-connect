@@ -36,80 +36,95 @@ export function DashboardMetrics({
   const [selectedStatus, setSelectedStatus] = useState<BookingStatus | 'all'>('all');
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
-  // Helper function to ensure we always have a valid array of statuses
-  const ensureValidStatusesArray = (inputValue: any): Array<BookingStatus | 'all'> => {
-    // Start with a base array that always includes 'all'
-    const result: Array<BookingStatus | 'all'> = ['all'];
+  // Safe function to ensure we always have an array of valid statuses
+  const getValidStatuses = (rawData: any): Array<BookingStatus | 'all'> => {
+    console.log('Processing statuses from raw data:', rawData);
     
-    // If the input is null or undefined, return just the default
-    if (inputValue === null || inputValue === undefined) {
-      console.log('Input statuses is null or undefined, using default');
-      return result;
+    // Default statuses to include if we can't extract from raw data
+    const defaultStatuses: Array<BookingStatus | 'all'> = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
+    
+    // If no data provided, return defaults
+    if (!rawData) {
+      console.log('No raw data provided, using default statuses');
+      return defaultStatuses;
     }
-
+    
     try {
-      // Handle different types of input
-      if (Array.isArray(inputValue)) {
-        console.log('Input is an array with length:', inputValue.length);
+      // If the data is already an array, process it
+      if (Array.isArray(rawData)) {
+        console.log('Raw data is an array with length:', rawData.length);
         
-        // Filter out null/undefined and convert everything to string
-        const validStatuses = inputValue
+        if (rawData.length === 0) {
+          console.log('Empty array provided, using default statuses');
+          return defaultStatuses;
+        }
+        
+        // Filter out invalid items and convert all to strings
+        const validStatuses: Array<BookingStatus | 'all'> = rawData
           .filter(item => item !== null && item !== undefined)
-          .map(item => String(item))
-          .filter(status => status.trim() !== '')
+          .map(item => String(item) as BookingStatus)
           .filter(status => {
-            const isValidStatus = [
-              'pending', 'confirmed', 'assigned', 'payment_received', 
-              'payment_pending', 'completed', 'continued', 'cancelled'
-            ].includes(status);
-            return isValidStatus;
+            // Check if it's a valid status
+            return ['all', 'pending', 'confirmed', 'assigned', 'payment_received', 
+                   'payment_pending', 'completed', 'cancelled'].includes(status);
           });
-          
-        // Add valid statuses to our result array
-        validStatuses.forEach(status => {
-          if (!result.includes(status as BookingStatus)) {
-            result.push(status as BookingStatus);
-          }
-        });
+        
+        // Always ensure 'all' is included
+        if (!validStatuses.includes('all')) {
+          validStatuses.unshift('all');
+        }
+        
+        console.log('Processed valid statuses:', validStatuses);
+        return validStatuses.length > 1 ? validStatuses : defaultStatuses;
       } 
-      else if (typeof inputValue === 'object' && inputValue !== null) {
-        console.log('Input is an object, converting to array');
-        // Convert object values to array
-        const objectValues = Object.values(inputValue);
-        return ensureValidStatusesArray(objectValues); // Recursive call with the array of values
+      // If it's a string, try to split it and process
+      else if (typeof rawData === 'string') {
+        console.log('Raw data is a string:', rawData);
+        const parts = rawData.split(',').map(s => s.trim()).filter(Boolean);
+        
+        if (parts.length === 0) {
+          console.log('No valid parts after splitting string, using default statuses');
+          return defaultStatuses;
+        }
+        
+        const validStatuses: Array<BookingStatus | 'all'> = parts
+          .filter(status => {
+            return ['all', 'pending', 'confirmed', 'assigned', 'payment_received', 
+                   'payment_pending', 'completed', 'cancelled'].includes(status);
+          }) as Array<BookingStatus | 'all'>;
+        
+        // Always ensure 'all' is included
+        if (!validStatuses.includes('all')) {
+          validStatuses.unshift('all');
+        }
+        
+        console.log('Processed valid statuses from string:', validStatuses);
+        return validStatuses.length > 1 ? validStatuses : defaultStatuses;
       }
-      else if (typeof inputValue === 'string') {
-        console.log('Input is a string:', inputValue);
-        // Split string by commas and process each part
-        const stringParts = inputValue.split(',').map(s => s.trim()).filter(s => s !== '');
-        return ensureValidStatusesArray(stringParts); // Recursive call with the array of string parts
-      }
-      else {
-        console.log('Input is in an unknown format:', typeof inputValue);
-        // For any other format, just return the default
+      // If it's an object, try to extract values
+      else if (typeof rawData === 'object' && rawData !== null) {
+        console.log('Raw data is an object, extracting values');
+        const objectValues = Object.values(rawData);
+        return getValidStatuses(objectValues);
       }
     } catch (err) {
       console.error('Error processing statuses:', err);
     }
     
-    // If result only has 'all', add some default statuses
-    if (result.length === 1) {
-      const defaultStatuses: BookingStatus[] = ['pending', 'confirmed', 'completed', 'cancelled'];
-      defaultStatuses.forEach(status => {
-        result.push(status);
-      });
-    }
-    
-    console.log('Final processed statuses:', result);
-    return result;
+    console.log('Unable to process raw data, using default statuses');
+    return defaultStatuses;
   };
 
   useEffect(() => {
     if (metricsData) {
-      console.log('Processing metrics data:', metricsData);
-      // Process availableStatuses in a safe way
-      const processedStatuses = ensureValidStatusesArray(metricsData.availableStatuses);
-      setAvailableStatuses(processedStatuses);
+      console.log('Processing metrics data for statuses:', metricsData);
+      try {
+        const processedStatuses = getValidStatuses(metricsData.availableStatuses);
+        setAvailableStatuses(processedStatuses);
+      } catch (err) {
+        console.error('Error setting available statuses:', err);
+        setAvailableStatuses(['all', 'pending', 'confirmed', 'completed', 'cancelled']);
+      }
     } else {
       console.log('No metrics data available, using default statuses');
       setAvailableStatuses(['all', 'pending', 'confirmed', 'completed', 'cancelled']);
