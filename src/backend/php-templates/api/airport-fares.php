@@ -45,6 +45,39 @@ try {
         throw new Exception("Database connection failed");
     }
     
+    // Check if airport_transfer_fares table exists
+    $tableCheckQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
+    $tableResult = $conn->query($tableCheckQuery);
+    
+    if ($tableResult->num_rows === 0) {
+        // Create the table if it doesn't exist
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        }
+        
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+    }
+    
     // If no vehicle ID specified, return all fares
     $sql = "SELECT * FROM airport_transfer_fares";
     $params = [];

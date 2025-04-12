@@ -18,6 +18,9 @@ try {
     $vehicleMapping = [];
     $normalizedColumns = [];
     
+    // Log for debugging
+    error_log("Fetching vehicles from ONLY the vehicles table for tours.php");
+    
     // Build complete vehicle mapping from vehicles table only
     if ($vehiclesResult) {
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
@@ -39,6 +42,8 @@ try {
             
             // Add to normalized columns
             $normalizedColumns[$normalizedColumn] = $normalizedColumn;
+            
+            error_log("Vehicle mapping: {$id} -> {$normalizedColumn}");
         }
     }
     

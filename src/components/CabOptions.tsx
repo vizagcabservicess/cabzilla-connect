@@ -125,8 +125,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           if (tourFares[selectedTour]) {
             console.log(`Found fares for tour ${selectedTour}:`, tourFares[selectedTour]);
             
-            // Get the tour's distance (if available in the tour data)
-            const tourDistance = distance; // Use the provided distance prop instead of accessing it from tourFares
+            // Use the provided distance prop 
+            const tourDistance = distance;
             
             // Process each cab type to find its corresponding fare
             cabTypes.forEach(cab => {

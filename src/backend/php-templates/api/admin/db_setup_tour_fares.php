@@ -75,11 +75,15 @@ try {
             $existingColumns[] = $column['Field'];
         }
         
-        // Get ONLY vehicle types from vehicles table for syncing
-        $vehiclesQuery = "SELECT vehicle_id, name FROM vehicles WHERE is_active = 1";
+        // FIXED: Get ONLY vehicle types from vehicles table for syncing
+        // Explicitly query only from the vehicles table with no joins
+        $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
         $vehiclesResult = $conn->query($vehiclesQuery);
         
         $vehicleColumns = [];
+        
+        // Log for debugging
+        error_log("Fetching vehicles from ONLY the vehicles table");
         
         // Add columns from vehicles table only
         if ($vehiclesResult) {
@@ -89,6 +93,7 @@ try {
                 if (empty($vehicleId)) continue;
                 
                 $normalizedColumn = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', $vehicleId));
+                error_log("Processing vehicle: " . $vehicleId . " -> normalized column: " . $normalizedColumn);
                 
                 // Skip if this column already exists
                 if (!in_array($normalizedColumn, $existingColumns)) {
