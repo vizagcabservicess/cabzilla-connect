@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -175,8 +176,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // FIXED: Completely remove driver allowance for airport transfers
-    // No driver allowance for airport transfers
+    // Airport transfers have NO driver allowance
+    // This is intentionally blank - we've removed all driver allowance code for airport transfers
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -212,8 +213,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare += extraKmCost;
       }
       
-      // FIXED: Completely remove driver allowance for airport transfers
-      // No driver allowance for airport transfers
+      // Airport transfers have NO driver allowance
+      // This is intentionally blank - we've removed all driver allowance code for airport transfers
       
       // Cache the result
       fareCache.set(cacheKey, {
@@ -258,8 +259,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // FIXED: Completely remove driver allowance for airport transfers
-    // No driver allowance for airport transfers
+    // Airport transfers have NO driver allowance
+    // This is intentionally blank - we've removed all driver allowance code for airport transfers
     
     // Add airport fee
     fare += defaultFare.airportFee;
@@ -613,7 +614,7 @@ export const calculateTotalFare = (
   tripType: string,
   surcharge?: number
 ): number => {
-  // For airport transfers, set driver allowance to 0
+  // For airport transfers, ALWAYS set driver allowance to 0
   if (tripType === 'airport') {
     driverAllowance = 0;
   }

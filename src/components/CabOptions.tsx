@@ -47,6 +47,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [isCalculatingFares, setIsCalculatingFares] = useState<boolean>(true);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [pendingBookingSummaryFareRequests, setPendingBookingSummaryFareRequests] = useState<Record<string, boolean>>({});
+  const [fareUpdateTriggered, setFareUpdateTriggered] = useState<boolean>(false);
 
   // Store the current trip type in localStorage for better fare syncing
   useEffect(() => {
@@ -63,12 +64,15 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       }));
       console.log(`CabOptions: Dispatched trip-type-changed event for ${tripType}`);
       
-      // Clear fare cache in localStorage when trip type changes
+      // Clear fare cache in localStorage when trip type changes, especially for airport transfers
       if (tripType === 'airport') {
         localStorage.setItem('forceCacheRefresh', 'true');
         setTimeout(() => {
           localStorage.removeItem('forceCacheRefresh');
         }, 500);
+        
+        // Reset our fare update tracker when trip type changes
+        setFareUpdateTriggered(false);
       }
     } catch (error) {
       console.error('Error dispatching trip type change event:', error);
@@ -258,6 +262,26 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       const actualFares = loadActualFares();
       setCabFares(actualFares);
       
+      // IMPORTANT: For airport transfers, trigger immediate fare calculation
+      if (tripType === 'airport' && !fareUpdateTriggered) {
+        setTimeout(() => {
+          cabTypes.forEach((cab, index) => {
+            // Stagger the requests to avoid overwhelming the system
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: cab.id,
+                  cabName: cab.name,
+                  tripType: 'airport',
+                  timestamp: Date.now() + index // Different timestamp
+                }
+              }));
+            }, index * 100); // Stagger each request by 100ms
+          });
+          setFareUpdateTriggered(true);
+        }, 500);
+      }
+      
       // CRITICAL FIX: If we already have a selected cab, emit an event with its fare
       // This ensures BookingSummary gets the correct fare immediately
       if (selectedCab && actualFares[selectedCab.id] > 0) {
@@ -316,7 +340,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     } finally {
       setIsCalculatingFares(false);
     }
-  }, [cabTypes, distance, tripType, hourlyPackage, selectedCab, tripMode]);
+  }, [cabTypes, distance, tripType, hourlyPackage, selectedCab, tripMode, fareUpdateTriggered]);
 
   // Listen for fare calculation events and update our fares accordingly
   useEffect(() => {
