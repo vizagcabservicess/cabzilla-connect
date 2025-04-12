@@ -81,6 +81,33 @@ try {
     
     logError("Token received", ['token_length' => strlen($token), 'token_parts' => substr_count($token, '.') + 1]);
     
+    // Special handling for demo token
+    if (strpos($token, 'demo_token_') === 0) {
+        logError("Demo token detected, providing demo data");
+        
+        // Create demo metrics
+        $demoMetrics = [
+            'totalBookings' => 45,
+            'activeRides' => 8,
+            'totalRevenue' => 85000,
+            'availableDrivers' => 12,
+            'busyDrivers' => 8,
+            'avgRating' => 4.7,
+            'upcomingRides' => 15,
+            'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
+            'currentFilter' => $statusFilter
+        ];
+        
+        if ($isAdminMetricsRequest) {
+            sendJsonResponse(['status' => 'success', 'data' => $demoMetrics]);
+            exit;
+        }
+        
+        // Return demo bookings (already handled by bookings.php)
+        sendJsonResponse(['status' => 'success', 'message' => 'Please use the /api/user/bookings.php endpoint for bookings data']);
+        exit;
+    }
+    
     $userData = verifyJwtToken($token);
     if (!$userData || !isset($userData['user_id'])) {
         logError("Authentication failed in dashboard.php", [

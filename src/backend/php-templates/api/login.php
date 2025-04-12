@@ -63,6 +63,30 @@ try {
     
     logError("Login attempt", ['email' => $email]);
     
+    // Demo account for testing
+    if ($email === 'demo@example.com' && $password === 'password123') {
+        // Create demo user data
+        $demoUser = [
+            'id' => 999,
+            'name' => 'Demo User',
+            'email' => 'demo@example.com',
+            'phone' => '9876543210',
+            'role' => 'user'
+        ];
+        
+        // Generate JWT token
+        $token = generateJwtToken($demoUser['id'], $demoUser['email'], $demoUser['role']);
+        
+        // Send response
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'Demo login successful',
+            'token' => $token,
+            'user' => $demoUser
+        ]);
+        exit;
+    }
+    
     // Connect to database
     $conn = getDbConnection();
     

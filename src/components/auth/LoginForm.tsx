@@ -68,7 +68,22 @@ export function LoginForm() {
       setIsTesting(true);
       console.log(`Testing API connection to ${apiUrl}`);
       
-      // Try OPTIONS request first (preflight)
+      // First, try the dedicated CORS fix endpoint
+      try {
+        const corsResponse = await fetch(`${apiUrl}/api/fix-cors.php`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
+        
+        if (corsResponse.ok) {
+          console.log('CORS fix response:', await corsResponse.json());
+        }
+      } catch (corsError) {
+        console.warn('CORS fix endpoint not available:', corsError);
+      }
+      
+      // Try OPTIONS request for login endpoint
       const response = await fetch(`${apiUrl}/api/login`, {
         method: 'OPTIONS',
         headers: {
@@ -136,6 +151,11 @@ export function LoginForm() {
       // Log form values for debugging (only email for privacy)
       console.log("Login attempt with email:", values.email);
       
+      // Special handling for demo credentials
+      if (values.email === 'demo@example.com' && values.password === 'password123') {
+        console.log('Using demo credentials for easier testing');
+      }
+      
       // Attempt login
       const response = await authAPI.login(values);
       
@@ -153,6 +173,11 @@ export function LoginForm() {
         
         // Ensure the token is saved before redirecting
         localStorage.setItem('authToken', response.token);
+        
+        // Store user data for easier access
+        if (response.user) {
+          localStorage.setItem('userData', JSON.stringify(response.user));
+        }
         
         // Add a slight delay before redirecting to ensure token is saved
         setTimeout(() => {
@@ -175,7 +200,7 @@ export function LoginForm() {
       setError(error as Error);
       
       // If we've tried multiple times and keep failing, suggest fallback credentials
-      if (loginAttempts >= 2) {
+      if (loginAttempts >= 1) {
         uiToast({
           title: "Login Suggestion",
           description: "Try using demo@example.com with password: password123",
@@ -300,13 +325,11 @@ export function LoginForm() {
         </form>
       </Form>
       
-      {loginAttempts > 0 && (
-        <div className="mt-4 text-center text-sm text-gray-500">
-          <p>For demo access, use:</p>
-          <p className="font-medium">email: demo@example.com</p>
-          <p className="font-medium">password: password123</p>
-        </div>
-      )}
+      <div className="mt-4 text-center text-sm text-gray-500">
+        <p>For demo access, use:</p>
+        <p className="font-medium">email: demo@example.com</p>
+        <p className="font-medium">password: password123</p>
+      </div>
     </>
   );
 }

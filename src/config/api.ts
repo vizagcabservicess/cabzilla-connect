@@ -30,11 +30,12 @@ export const defaultHeaders = {
   'Accept': 'application/json'
 };
 
-// Cross-domain request headers
+// Cross-domain request headers with specific CORS settings
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Cache-Control, Pragma, Expires',
+  'Access-Control-Max-Age': '86400'
 };
 
 // Export configuration options
@@ -42,5 +43,6 @@ export default {
   baseUrl: apiBaseUrl,
   defaultHeaders,
   forceRefreshHeaders,
-  corsHeaders
+  corsHeaders,
+  getApiUrl
 };
