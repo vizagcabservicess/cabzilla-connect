@@ -102,7 +102,8 @@ export default function DashboardPage() {
       const userId = user?.id || localStorage.getItem('userId');
       console.log('Fetching bookings for user ID:', userId);
       
-      const data = await bookingAPI.getUserBookings(userId ? Number(userId) : undefined);
+      // Fix: Remove the argument since getUserBookings can handle getting userId internally
+      const data = await bookingAPI.getUserBookings();
       
       console.log('Bookings data received:', data);
       setBookings(Array.isArray(data) ? data : []);
@@ -138,11 +139,8 @@ export default function DashboardPage() {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
       
-      // Get the user ID from localStorage or user state
-      const userId = user?.id || localStorage.getItem('userId');
-      console.log(`Fetching admin metrics with user ID: ${userId}, period: ${period}, status: ${status}`);
-      
-      const metrics = await bookingAPI.getAdminDashboardMetrics(period, status, userId ? Number(userId) : undefined);
+      // Fix: Only pass the period and status as arguments, not userId
+      const metrics = await bookingAPI.getAdminDashboardMetrics(period, status);
       
       console.log('Admin metrics loaded:', metrics);
       setAdminMetrics(metrics || DEFAULT_METRICS);

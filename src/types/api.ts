@@ -83,6 +83,15 @@ export interface BookingRequest {
   tourId?: string;
 }
 
+// Add the missing BookingResponse interface
+export interface BookingResponse {
+  status?: string;
+  message?: string;
+  booking: Booking;
+  bookingId?: number;
+  bookingNumber?: string;
+}
+
 export interface DashboardMetrics {
   totalBookings: number;
   activeRides: number;

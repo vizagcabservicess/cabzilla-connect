@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { Booking, BookingRequest, BookingResponse, DashboardMetrics } from '@/types/api';
@@ -56,10 +55,10 @@ export const bookingAPI = {
     }
   },
   
-  getUserBookings: async (userId?: number): Promise<Booking[]> => {
+  getUserBookings: async (): Promise<Booking[]> => {
     try {
-      // Get user ID from parameter or localStorage
-      const userIdToUse = userId || Number(localStorage.getItem('userId'));
+      // Get user ID from localStorage
+      const userIdToUse = Number(localStorage.getItem('userId'));
       console.log(`Fetching bookings for user ID: ${userIdToUse}`);
       
       // Prepare URL and query parameters
@@ -115,30 +114,10 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (period: string = 'week', status: string = 'all', userId?: number): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (period: string = 'week', status: string = 'all'): Promise<DashboardMetrics> => {
     try {
-      // Get user ID from parameter, localStorage, or user data in localStorage
-      let userIdToUse = userId;
-      
-      if (!userIdToUse) {
-        const storedId = localStorage.getItem('userId');
-        if (storedId) {
-          userIdToUse = Number(storedId);
-        } else {
-          // Try to get from userData in localStorage
-          const userDataStr = localStorage.getItem('userData');
-          if (userDataStr) {
-            try {
-              const userData = JSON.parse(userDataStr);
-              if (userData && userData.id) {
-                userIdToUse = userData.id;
-              }
-            } catch (e) {
-              console.warn('Failed to parse user data for metrics', e);
-            }
-          }
-        }
-      }
+      // Get user ID from localStorage
+      const userIdToUse = Number(localStorage.getItem('userId'));
       
       console.log(`Fetching admin dashboard metrics with user ID: ${userIdToUse}, period: ${period}, status: ${status}`);
       
