@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -339,7 +338,10 @@ const AirportFareManagement: React.FC = () => {
     try {
       // Generate a unique timestamp to avoid caching
       const timestamp = new Date().getTime();
-      await updateAirportFares(fareToSave, { timestamp });
+      await updateAirportFares({
+        ...fareToSave,
+        timestamp
+      });
       
       toast({
         title: "Success",
@@ -397,15 +399,13 @@ const AirportFareManagement: React.FC = () => {
   const handleSyncTables = async () => {
     setSyncing(true);
     try {
-      // Add timestamp to avoid caching
-      await syncAirportFares({ timestamp: Date.now() });
+      await syncAirportFares();
       toast({
         title: "Success",
         description: "Airport fare tables synchronized successfully.",
       });
       
       if (selectedVehicleId) {
-        // Reset retry count
         retryCountRef.current = 0;
         setRefreshKey(prev => prev + 1);
       }
@@ -424,7 +424,6 @@ const AirportFareManagement: React.FC = () => {
   const handleFixDatabase = async () => {
     setSyncing(true);
     try {
-      // Add timestamp to avoid caching
       const timestamp = new Date().getTime();
       const response = await fetch(`/api/admin/fix-collation.php?_t=${timestamp}`, {
         method: 'GET',
@@ -444,9 +443,8 @@ const AirportFareManagement: React.FC = () => {
           description: `Database collation fixed successfully for ${result.data?.tables_count || 0} tables.`,
         });
         
-        await syncAirportFares({ timestamp: Date.now() });
+        await syncAirportFares();
         
-        // Reset retry count
         retryCountRef.current = 0;
         setRefreshKey(prev => prev + 1);
       } else {
