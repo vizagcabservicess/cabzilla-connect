@@ -116,14 +116,22 @@ export interface TourFareData {
   updatedAt?: string;
 }
 
+// Expanded TourFare interface to include all properties used in components
 export interface TourFare {
   id?: number;
   tourId: string;
-  cabType: string;
-  price: number;
+  tourName: string;
+  cabType?: string;
+  price?: number;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
   updatedAt?: string;
 }
 
+// Expanded VehiclePricing interface to include all properties used in components
 export interface VehiclePricing {
   id?: number;
   vehicleType: string;
@@ -132,24 +140,37 @@ export interface VehiclePricing {
   minDistance?: number;
   waitingCharges?: number;
   nightCharges?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
   surgeMultiplier?: number;
   updatedAt?: string;
 }
 
+// Updated FareUpdateRequest to include properties used in components
 export interface FareUpdateRequest {
-  cabType: string;
-  basePrice: number;
-  pricePerKm: number;
+  tourId?: string;
+  cabType?: string;
+  basePrice?: number;
+  pricePerKm?: number;
   minDistance?: number;
   waitingCharges?: number;
   nightCharges?: number;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
+// Updated VehiclePricingUpdateRequest to include all properties used in components
 export interface VehiclePricingUpdateRequest {
+  vehicleType?: string;
   basePrice: number;
   pricePerKm: number;
   minDistance?: number;
   waitingCharges?: number;
   nightCharges?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
   surgeMultiplier?: number;
 }

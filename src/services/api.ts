@@ -1,4 +1,3 @@
-
 // API configuration for all endpoints
 
 // Import from config
@@ -6,7 +5,7 @@ import { apiBaseUrl, getApiUrl } from '@/config/api';
 import { safeFetch, safeJsonParse, getAuthHeaders } from '@/config/requestConfig';
 
 // Import types
-import { Booking, DashboardMetrics, BookingStatus, User, LoginResponse } from '@/types/api';
+import { Booking, DashboardMetrics, BookingStatus, User, LoginResponse, VehiclePricingUpdateRequest } from '@/types/api';
 
 // Base API service
 class ApiService {
@@ -343,12 +342,20 @@ export const fareAPI = {
     return await api.get('/api/fares/tours');
   },
   
-  getVehiclePricing: async (vehicleId: number | string) => {
-    return await api.get(`/api/admin/vehicle-pricing/${vehicleId}`);
+  getVehiclePricing: async (vehicleId: number | string = '') => {
+    const endpoint = vehicleId ? `/api/admin/vehicle-pricing/${vehicleId}` : '/api/admin/vehicle-pricing';
+    return await api.get(endpoint);
   },
   
-  updateVehiclePricing: async (vehicleId: number | string, pricingData: any) => {
-    return await api.put(`/api/admin/vehicle-pricing/${vehicleId}`, pricingData);
+  updateVehiclePricing: async (vehicleId: number | string | VehiclePricingUpdateRequest, pricingData?: any) => {
+    // Handle both calling patterns: updateVehiclePricing(vehicleId, data) and updateVehiclePricing(data)
+    if (typeof vehicleId === 'object') {
+      // New pattern: updateVehiclePricing(data) where data contains vehicleType
+      return await api.put(`/api/admin/vehicle-pricing/${vehicleId.vehicleType}`, vehicleId);
+    } else {
+      // Old pattern: updateVehiclePricing(vehicleId, data)
+      return await api.put(`/api/admin/vehicle-pricing/${vehicleId}`, pricingData);
+    }
   },
   
   updateLocalFares: async (fareData: any) => {
