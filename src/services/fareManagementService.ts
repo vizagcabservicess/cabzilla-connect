@@ -4,15 +4,16 @@ import axios from 'axios';
 export interface FareData {
   vehicleId?: string;
   vehicle_id?: string;
-  basePrice: number;
-  pricePerKm: number;
-  pickupPrice: number;
-  dropPrice: number;
-  tier1Price: number;
-  tier2Price: number;
-  tier3Price: number;
-  tier4Price: number;
-  extraKmCharge: number;
+  // Make all these properties optional with '?'
+  basePrice?: number;
+  pricePerKm?: number;
+  pickupPrice?: number;
+  dropPrice?: number;
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
+  extraKmCharge?: number;
   // Local fare fields
   price4hrs40km?: number;
   price8hrs80km?: number;
@@ -101,9 +102,10 @@ export const fetchLocalFares = async (vehicleId: string): Promise<any[]> => {
 
 export const updateLocalFares = async (fareData: FareData): Promise<any> => {
   try {
-    // Ensure all required properties are present with defaults
+    // Create a complete data object with default values for required fields in API
     const completeData: FareData = {
       ...fareData,
+      // Add defaults for any missing required fields
       basePrice: fareData.basePrice ?? 0,
       pricePerKm: fareData.pricePerKm ?? 0,
       pickupPrice: fareData.pickupPrice ?? 0,
@@ -174,8 +176,17 @@ export const fetchAirportFares = async (vehicleId: string): Promise<any> => {
 
 export const updateAirportFares = async (fareData: FareData): Promise<any> => {
   try {
+    // Create a complete data object with default values for required fields
+    const completeData: FareData = {
+      ...fareData,
+      // Add defaults for any missing required fields
+      basePrice: fareData.basePrice ?? 0,
+      pricePerKm: fareData.pricePerKm ?? 0,
+      extraKmCharge: fareData.extraKmCharge ?? 0
+    };
+    
     const timestamp = new Date().getTime();
-    const response = await axios.post(`/api/direct-airport-fares.php?_t=${timestamp}`, fareData, {
+    const response = await axios.post(`/api/direct-airport-fares.php?_t=${timestamp}`, completeData, {
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
