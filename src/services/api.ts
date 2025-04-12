@@ -1,3 +1,4 @@
+
 // API configuration for all endpoints
 
 // Import from config
@@ -5,7 +6,7 @@ import { apiBaseUrl, getApiUrl } from '@/config/api';
 import { safeFetch, safeJsonParse, getAuthHeaders } from '@/config/requestConfig';
 
 // Import types
-import { Booking, DashboardMetrics, BookingStatus, User } from '@/types/api';
+import { Booking, DashboardMetrics, BookingStatus, User, LoginResponse } from '@/types/api';
 
 // Base API service
 class ApiService {
@@ -210,7 +211,7 @@ export const authAPI = {
   },
   
   login: async (credentials: { email: string; password: string }) => {
-    const response = await api.post<{token: string; user: User}>('/api/login', credentials);
+    const response = await api.post<LoginResponse>('/api/login', credentials);
     if (response && response.token) {
       localStorage.setItem('token', response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
@@ -364,6 +365,15 @@ export const fareAPI = {
   
   updateTourFares: async (fareData: any) => {
     return await api.put('/api/admin/fare-update/tours', fareData);
+  },
+
+  // Add missing methods for FareManagement component
+  addTourFare: async (tourFareData: any) => {
+    return await api.post('/api/admin/fare-update/tour', tourFareData);
+  },
+
+  deleteTourFare: async (tourId: string) => {
+    return await api.delete(`/api/admin/fare-update/tour/${tourId}`);
   }
 };
 
