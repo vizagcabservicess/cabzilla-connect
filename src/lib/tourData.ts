@@ -223,8 +223,12 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
         if (tour && tour.tourId) {
           const tourId = tour.tourId;
           
-          // Create an object for this tour
-          dynamicTourFares[tourId] = {};
+          // Create an object for this tour with default required properties
+          dynamicTourFares[tourId] = {
+            sedan: 0,  // Add default required properties
+            ertiga: 0, 
+            innova: 0
+          };
           
           // Add all vehicle prices to this tour
           Object.entries(tour).forEach(([key, value]) => {
@@ -240,7 +244,12 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
             }
           });
           
-          // Add distance and days if available
+          // If we don't have any real values for the required properties, set reasonable defaults
+          if (dynamicTourFares[tourId].sedan === 0) dynamicTourFares[tourId].sedan = 3000;
+          if (dynamicTourFares[tourId].ertiga === 0) dynamicTourFares[tourId].ertiga = 4500;
+          if (dynamicTourFares[tourId].innova === 0) dynamicTourFares[tourId].innova = 6000;
+          
+          // Store distance and days as separate properties if available
           if (tour.distance) {
             (dynamicTourFares[tourId] as any).distance = tour.distance;
           }

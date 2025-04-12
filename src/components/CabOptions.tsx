@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -124,6 +125,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           if (tourFares[selectedTour]) {
             console.log(`Found fares for tour ${selectedTour}:`, tourFares[selectedTour]);
             
+            // Get the tour's distance (if available in the tour data)
+            const tourDistance = distance; // Use the provided distance prop instead of accessing it from tourFares
+            
             // Process each cab type to find its corresponding fare
             cabTypes.forEach(cab => {
               const cabId = cab.id.toLowerCase();
@@ -186,7 +190,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               }
               else {
                 // Fallback to a calculated fare based on distance
-                const baseFare = (tourFares[selectedTour].distance || distance) * (
+                const baseFare = tourDistance * (
                   cabId.includes('luxury') ? 20 : 
                   cabId.includes('innova') ? 15 : 
                   cabId.includes('ertiga') ? 12 : 10
