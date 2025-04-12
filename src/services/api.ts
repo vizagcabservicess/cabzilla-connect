@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
 import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
@@ -263,19 +264,53 @@ export const bookingAPI = {
   },
 
   getUserBookings: async (userId?: number) => {
-    const user_id = userId || getCurrentUserId();
-    console.log('Fetching bookings for user ID:', user_id);
-    
-    if (!user_id) {
-      console.warn('No user ID available for fetching bookings');
-    }
-    
-    const url = user_id 
-      ? `/user/bookings?user_id=${user_id}` 
-      : '/user/bookings';
+    try {
+      const user_id = userId || getCurrentUserId();
+      console.log('Fetching bookings for user ID:', user_id);
       
-    const response = await apiClient.get(url);
-    return response.data;
+      if (!user_id) {
+        console.warn('No user ID available for fetching bookings');
+        return [];
+      }
+      
+      // Use the proper endpoint based on the PHP backend structure
+      const apiUrl = getApiUrl(`/api/user/bookings.php?user_id=${user_id}`);
+      console.log('User bookings endpoint URL:', apiUrl);
+      
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          ...defaultHeaders,
+          ...forceRefreshHeaders,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Bookings API error:', response.status, response.statusText);
+        throw new Error(`Failed to fetch bookings: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('User bookings response:', data);
+      
+      // Check if the response has a bookings array property
+      if (data && data.bookings && Array.isArray(data.bookings)) {
+        return data.bookings;
+      } else if (data && Array.isArray(data)) {
+        // Some endpoints may return an array directly
+        return data;
+      }
+      
+      // Fallback to empty array
+      console.warn('Unexpected bookings response format:', data);
+      return [];
+    } catch (error) {
+      console.error('Error fetching user bookings:', error);
+      // Return empty array instead of throwing to prevent UI from breaking
+      return [];
+    }
   },
 
   updateBookingStatus: async (id: string | number, status: string) => {
@@ -289,20 +324,101 @@ export const bookingAPI = {
   },
 
   getAdminDashboardMetrics: async (period: string, userId?: number) => {
-    const user_id = userId || getCurrentUserId();
-    const url = user_id 
-      ? `/admin/dashboard-metrics?period=${period}&user_id=${user_id}` 
-      : `/admin/dashboard-metrics?period=${period}`;
+    try {
+      const user_id = userId || getCurrentUserId();
+      console.log('Fetching admin metrics for user ID:', user_id);
       
-    const response = await apiClient.get(url);
-    return response.data;
+      if (!user_id) {
+        console.warn('No user ID available for fetching admin metrics');
+        return null;
+      }
+      
+      // Use correct PHP endpoint path
+      const url = getApiUrl(`/api/admin/metrics.php?period=${period}&user_id=${user_id}`);
+      console.log('Admin metrics URL:', url);
+      
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...defaultHeaders,
+          ...forceRefreshHeaders,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Admin metrics API error:', response.status, response.statusText);
+        throw new Error(`Failed to fetch admin metrics: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Admin metrics response:', data);
+      
+      // Check if the response has a data property
+      if (data && data.status === 'success' && data.data) {
+        return data.data;
+      }
+      
+      // Fallback to null
+      return null;
+    } catch (error) {
+      console.error('Error fetching admin metrics:', error);
+      return null;
+    }
   }
 };
 
 export const authAPI = {
   login: async (credentials: { email: string; password: string }) => {
-    const response = await apiClient.post('/login', credentials);
-    return response.data;
+    try {
+      console.log('Logging in with credentials:', credentials.email);
+      
+      // Use the direct URL for login with proper error handling
+      const loginUrl = getApiUrl('/api/login.php');
+      console.log('Login endpoint URL:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          ...defaultHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(credentials)
+      });
+      
+      console.log('Login response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Login failed with status ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Login response data:', data);
+      
+      if (data.status === 'error') {
+        throw new Error(data.message || 'Login failed');
+      }
+      
+      if (!data.token) {
+        throw new Error('No token received from server');
+      }
+      
+      // Store token and user data in localStorage
+      localStorage.setItem('authToken', data.token);
+      
+      // Ensure we have a proper user object with ID and role
+      if (data.user && data.user.id) {
+        localStorage.setItem('userData', JSON.stringify(data.user));
+      } else {
+        throw new Error('Invalid user data received from server');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   },
   
   signup: async (userData: { name: string; email: string; password: string; phone?: string }) => {
@@ -311,14 +427,64 @@ export const authAPI = {
   },
   
   getCurrentUser: async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) return null;
-    
     try {
-      const response = await apiClient.get('/user', {
-        headers: { Authorization: `Bearer ${token}` }
+      const token = localStorage.getItem('authToken');
+      const userDataStr = localStorage.getItem('userData');
+      
+      if (!token) {
+        console.log('No auth token found in localStorage');
+        return null;
+      }
+      
+      // First try to use cached user data
+      if (userDataStr) {
+        try {
+          const cachedUser = JSON.parse(userDataStr);
+          console.log('Using cached user data:', cachedUser);
+          
+          // If we have complete user data, return it
+          if (cachedUser && cachedUser.id && cachedUser.email) {
+            return cachedUser;
+          }
+        } catch (error) {
+          console.warn('Error parsing cached user data:', error);
+          // Continue to fetch fresh data
+        }
+      }
+      
+      // Fetch fresh user data from server
+      console.log('Fetching fresh user data from server');
+      const userUrl = getApiUrl('/api/user.php');
+      
+      const response = await fetch(userUrl, {
+        method: 'GET',
+        headers: {
+          ...defaultHeaders,
+          'Authorization': `Bearer ${token}`
+        }
       });
-      return response.data;
+      
+      if (!response.ok) {
+        console.error('Error fetching user data:', response.status, response.statusText);
+        throw new Error(`Failed to fetch user data: ${response.status} ${response.statusText}`);
+      }
+      
+      const userData = await response.json();
+      console.log('User data response:', userData);
+      
+      // Check if response has user data in expected format
+      if (userData.status === 'success' && userData.user) {
+        // Update cached user data
+        localStorage.setItem('userData', JSON.stringify(userData.user));
+        return userData.user;
+      } else if (userData.id) {
+        // Some endpoints may return user data directly
+        localStorage.setItem('userData', JSON.stringify(userData));
+        return userData;
+      }
+      
+      console.warn('Unexpected user response format:', userData);
+      return null;
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;

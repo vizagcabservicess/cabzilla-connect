@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -35,11 +36,34 @@ export default function DashboardPage() {
   useEffect(() => {
     const checkAuth = async () => {
       if (!authAPI.isAuthenticated()) {
+        console.log('No authentication token found, redirecting to login');
         navigate('/login', { state: { from: location.pathname } });
         return;
       }
 
       try {
+        // Try to get user data from localStorage first
+        const userDataStr = localStorage.getItem('userData');
+        if (userDataStr) {
+          try {
+            const cachedUser = JSON.parse(userDataStr);
+            if (cachedUser && cachedUser.id) {
+              console.log('Using cached user data:', cachedUser);
+              setUser({
+                id: cachedUser.id || 0,
+                name: cachedUser.name || '',
+                email: cachedUser.email || '',
+                role: cachedUser.role || 'user'
+              });
+              setIsAdmin(cachedUser.role === 'admin');
+              return;
+            }
+          } catch (e) {
+            console.warn('Error parsing cached user data:', e);
+          }
+        }
+
+        // If cached data isn't available or valid, fetch from server
         const userData = await authAPI.getCurrentUser();
         if (userData) {
           setUser({
@@ -49,13 +73,15 @@ export default function DashboardPage() {
             role: userData.role || 'user'
           });
           setIsAdmin(userData.role === 'admin');
-          console.log('User data loaded:', userData);
+          console.log('User data loaded from API:', userData);
         } else {
           throw new Error('User data not found');
         }
       } catch (error) {
         console.error('Error getting user data:', error);
         toast.error('Error loading user data. Please try logging in again.');
+        // Clear token and redirect to login if we can't get user data
+        localStorage.removeItem('authToken');
         navigate('/login');
       }
     };
@@ -66,6 +92,7 @@ export default function DashboardPage() {
   // Fetch bookings data
   const fetchBookings = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
+      console.log('No authentication token found, redirecting to login');
       navigate('/login');
       return;
     }
@@ -74,17 +101,29 @@ export default function DashboardPage() {
       setIsRefreshing(true);
       setError(null);
       
-      // Get current user to ensure we have the latest user data
-      const userData = await authAPI.getCurrentUser();
+      // Get user data from localStorage to ensure we have the user ID
+      const userDataStr = localStorage.getItem('userData');
+      if (!userDataStr) {
+        throw new Error('User data not found in localStorage');
+      }
+      
+      const userData = JSON.parse(userDataStr);
       if (!userData || !userData.id) {
-        throw new Error('Unable to fetch user data for bookings');
+        throw new Error('Invalid user data in localStorage');
       }
       
       console.log('Fetching bookings for user ID:', userData.id);
       
       // Pass the user ID explicitly to the bookings API
       const data = await bookingAPI.getUserBookings(userData.id);
-      setBookings(data);
+      
+      if (Array.isArray(data)) {
+        setBookings(data);
+      } else {
+        console.warn('Unexpected bookings data format:', data);
+        setBookings([]);
+      }
+      
       setRetryCount(0); // Reset retry count on success
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -119,7 +158,13 @@ export default function DashboardPage() {
       setAdminMetricsError(null);
       console.log('Fetching admin metrics for user ID:', user.id);
       const data = await bookingAPI.getAdminDashboardMetrics('week', user.id);
-      setAdminMetrics(data);
+      
+      if (data) {
+        setAdminMetrics(data);
+      } else {
+        console.warn('No admin metrics data received');
+        setAdminMetrics(null);
+      }
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
