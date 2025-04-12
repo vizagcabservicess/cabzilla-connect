@@ -30,7 +30,6 @@ export default function DashboardPage() {
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
 
-  // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
       if (!authAPI.isAuthenticated()) {
@@ -60,7 +59,6 @@ export default function DashboardPage() {
     checkAuth();
   }, [navigate, location.pathname]);
 
-  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
       navigate('/login');
@@ -72,24 +70,21 @@ export default function DashboardPage() {
       setError(null);
       const data = await bookingAPI.getUserBookings();
       setBookings(data);
-      setRetryCount(0); // Reset retry count on success
+      setRetryCount(0);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      // Only show toast on first error
       if (retryCount === 0) {
         toast.error('Error loading bookings. Retrying...');
       }
       
-      // Increment retry count
       setRetryCount(prev => prev + 1);
       
-      // Auto-retry if under max retries
       if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
           fetchBookings();
-        }, 3000); // Wait 3 seconds before retrying
+        }, 3000);
       }
     } finally {
       setIsLoading(false);
@@ -97,43 +92,68 @@ export default function DashboardPage() {
     }
   }, [navigate, retryCount]);
 
-  // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
     if (!isAdmin) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
+      
+      console.log('Fetching admin dashboard metrics...');
+      
       const data = await bookingAPI.getAdminDashboardMetrics('week');
+      
+      if (!data) {
+        console.error('No data returned from getAdminDashboardMetrics');
+        throw new Error('No dashboard metrics data received');
+      }
+      
+      console.log('Admin metrics received:', data);
+      
+      if (!data.availableStatuses || !Array.isArray(data.availableStatuses)) {
+        console.log('Fixing missing or invalid availableStatuses array');
+        data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+      }
+      
       setAdminMetrics(data);
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
+      
+      const fallbackMetrics: DashboardMetricsType = {
+        totalBookings: 0,
+        activeRides: 0,
+        totalRevenue: 0,
+        availableDrivers: 0,
+        busyDrivers: 0,
+        avgRating: 0,
+        upcomingRides: 0,
+        availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
+        currentFilter: 'all'
+      };
+      
+      setAdminMetrics(fallbackMetrics);
       setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
     } finally {
       setIsLoadingAdminMetrics(false);
     }
   }, [isAdmin]);
 
-  // Initial data fetch
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
 
-  // Fetch admin metrics if user is admin
   useEffect(() => {
     if (isAdmin) {
       fetchAdminMetrics();
     }
   }, [isAdmin, fetchAdminMetrics]);
 
-  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
     navigate('/login');
     toast.success('Logged out successfully');
   };
 
-  // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -145,7 +165,6 @@ export default function DashboardPage() {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
-  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -156,7 +175,6 @@ export default function DashboardPage() {
     }
   };
 
-  // If still loading initial data
   if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -187,7 +205,6 @@ export default function DashboardPage() {
     );
   }
 
-  // If error occurred and max retries exceeded
   if (error && retryCount >= MAX_RETRIES) {
     return (
       <ApiErrorFallback 
@@ -198,6 +215,48 @@ export default function DashboardPage() {
       />
     );
   }
+
+  const renderAdminMetrics = () => {
+    if (!isAdmin) return null;
+    
+    const safeMetrics = adminMetrics || {
+      totalBookings: 0,
+      activeRides: 0,
+      totalRevenue: 0,
+      availableDrivers: 0,
+      busyDrivers: 0,
+      avgRating: 0,
+      upcomingRides: 0,
+      availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
+      currentFilter: 'all'
+    };
+    
+    return (
+      <div className="mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+              Admin Metrics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-gray-600">You have admin privileges. <Button variant="link" className="p-0 h-auto text-blue-600" onClick={() => navigate('/admin')}>Go to Admin Dashboard</Button></p>
+            
+            <DashboardMetrics 
+              metrics={safeMetrics}
+              isLoading={isLoadingAdminMetrics}
+              error={adminMetricsError}
+              onFilterChange={(status: BookingStatus | 'all') => {
+                console.log('Filtering by status:', status);
+              }}
+              selectedPeriod="week"
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -219,33 +278,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Conditionally render admin metrics for admin users */}
-      {isAdmin && (
-        <div className="mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-500" />
-                Admin Metrics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-gray-600">You have admin privileges. <Button variant="link" className="p-0 h-auto text-blue-600" onClick={() => navigate('/admin')}>Go to Admin Dashboard</Button></p>
-              
-              <DashboardMetrics 
-                metrics={adminMetrics}
-                isLoading={isLoadingAdminMetrics}
-                error={adminMetricsError}
-                onFilterChange={(status: BookingStatus | 'all') => {
-                  console.log('Filtering by status:', status);
-                  // Logic to filter metrics by status if needed
-                }}
-                selectedPeriod="week"
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {renderAdminMetrics()}
 
       <Tabs defaultValue="all">
         <TabsList>

@@ -86,6 +86,8 @@ try {
         logError("Demo token detected, providing demo data");
         
         // Create demo metrics with valid array for availableStatuses
+        $defaultStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        
         $demoMetrics = [
             'totalBookings' => 45,
             'activeRides' => 8,
@@ -94,7 +96,7 @@ try {
             'busyDrivers' => 8,
             'avgRating' => 4.7,
             'upcomingRides' => 15,
-            'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
+            'availableStatuses' => $defaultStatuses,
             'currentFilter' => $statusFilter
         ];
         
@@ -233,14 +235,19 @@ try {
             }
         }
         
-        // Ensure statuses is always an array, even if empty
-        if (!is_array($statuses)) {
-            $statuses = [];
+        // Define a default set of statuses
+        $defaultStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        
+        // Ensure statuses is always an array with at least the default values
+        if (!is_array($statuses) || empty($statuses)) {
+            $statuses = $defaultStatuses;
         }
         
-        // Fallback to predefined statuses if none found in database
-        if (empty($statuses)) {
-            $statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        // Make sure all default statuses are included
+        foreach ($defaultStatuses as $defaultStatus) {
+            if (!in_array($defaultStatus, $statuses)) {
+                $statuses[] = $defaultStatus;
+            }
         }
         
         // Simulate driver metrics (since drivers table might not exist)
@@ -250,7 +257,7 @@ try {
         // Get average rating (simulated)
         $avgRating = 4.7;
         
-        // Prepare the metrics response - ensure it's an array for proper JSON encoding
+        // Prepare the metrics response - ensure it's a properly formatted array for JSON encoding
         $metricsData = [
             'totalBookings' => (int)$totalBookings,
             'activeRides' => (int)$activeRides,
@@ -259,7 +266,7 @@ try {
             'busyDrivers' => (int)$busyDrivers,
             'avgRating' => (float)$avgRating,
             'upcomingRides' => (int)$upcomingRides,
-            'availableStatuses' => $statuses, // This is now guaranteed to be an array
+            'availableStatuses' => $statuses, // This is now guaranteed to be an array with values
             'currentFilter' => $statusFilter
         ];
         
@@ -340,7 +347,24 @@ try {
         'line' => $e->getLine()
     ]);
     
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+    // Return fallback data with valid availableStatuses
+    $fallbackData = [
+        'status' => 'error',
+        'message' => 'Server error: ' . $e->getMessage(),
+        'data' => [
+            'totalBookings' => 0,
+            'activeRides' => 0,
+            'totalRevenue' => 0,
+            'availableDrivers' => 0,
+            'busyDrivers' => 0,
+            'avgRating' => 0,
+            'upcomingRides' => 0,
+            'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
+            'currentFilter' => 'all'
+        ]
+    ];
+    
+    sendJsonResponse($fallbackData, 500);
 }
 
 // Helper function to send JSON responses with a consistent format

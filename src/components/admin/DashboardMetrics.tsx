@@ -37,39 +37,62 @@ export function DashboardMetrics({
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
   useEffect(() => {
-    if (metricsData?.availableStatuses) {
-      let statusesArray: string[] = [];
+    try {
+      // Safeguard at the beginning - always have 'all' as a default option
+      const safeStatuses: Array<BookingStatus | 'all'> = ['all'];
       
-      // First, ensure availableStatuses is in a format we can work with
-      if (Array.isArray(metricsData.availableStatuses)) {
-        // If it's already an array, use it directly
-        statusesArray = metricsData.availableStatuses.map(status => String(status));
-      } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
-        // If it's an object, extract values
-        statusesArray = Object.values(metricsData.availableStatuses).map(status => String(status));
-      } else if (typeof metricsData.availableStatuses === 'string') {
-        // If it's a comma-separated string, split it
-        statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
-      }
-      
-      // Initialize with 'all' status
-      const statuses: Array<BookingStatus | 'all'> = ['all'];
-      
-      // Only add valid booking statuses to the array
-      for (const status of statusesArray) {
-        if (typeof status === 'string') {
-          const isValidStatus = [
-            'pending', 'confirmed', 'assigned', 'payment_received', 
-            'payment_pending', 'completed', 'continued', 'cancelled'
-          ].includes(status);
-          
-          if (isValidStatus) {
-            statuses.push(status as BookingStatus);
+      // Only proceed if we have metrics data
+      if (metricsData && metricsData.availableStatuses) {
+        console.log('Processing availableStatuses:', metricsData.availableStatuses);
+        
+        // Make sure availableStatuses is in a format we can safely work with
+        let statusesArray: string[] = [];
+        
+        // Handle different possible formats
+        if (Array.isArray(metricsData.availableStatuses)) {
+          console.log('availableStatuses is an array');
+          statusesArray = metricsData.availableStatuses.filter(status => status !== null && status !== undefined)
+            .map(status => String(status));
+        } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
+          console.log('availableStatuses is an object');
+          statusesArray = Object.values(metricsData.availableStatuses)
+            .filter(status => status !== null && status !== undefined)
+            .map(status => String(status));
+        } else if (typeof metricsData.availableStatuses === 'string') {
+          console.log('availableStatuses is a string');
+          statusesArray = metricsData.availableStatuses.split(',').map(s => s.trim());
+        } else {
+          console.log('availableStatuses is in an unknown format:', typeof metricsData.availableStatuses);
+          // If we can't determine the format, use default statuses
+          statusesArray = ['pending', 'confirmed', 'completed', 'cancelled'];
+        }
+        
+        console.log('Processed statusesArray:', statusesArray);
+        
+        // Add only valid booking statuses to the array
+        if (Array.isArray(statusesArray)) {
+          for (const status of statusesArray) {
+            if (typeof status === 'string' && status.trim() !== '') {
+              const isValidStatus = [
+                'pending', 'confirmed', 'assigned', 'payment_received', 
+                'payment_pending', 'completed', 'continued', 'cancelled'
+              ].includes(status);
+              
+              if (isValidStatus) {
+                safeStatuses.push(status as BookingStatus);
+              }
+            }
           }
         }
       }
       
-      setAvailableStatuses(statuses);
+      // Always update with at least the default 'all' value
+      console.log('Final statuses array:', safeStatuses);
+      setAvailableStatuses(safeStatuses);
+    } catch (err) {
+      console.error('Error processing availableStatuses:', err);
+      // Fallback to default statuses
+      setAvailableStatuses(['all', 'pending', 'confirmed', 'completed', 'cancelled']);
     }
   }, [metricsData]);
 
