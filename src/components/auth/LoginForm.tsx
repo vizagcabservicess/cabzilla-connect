@@ -45,6 +45,7 @@ export function LoginForm() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
+    localStorage.removeItem('userData');
     localStorage.removeItem('user');
     
     // Only test connection on component mount if we have an API URL
@@ -128,31 +129,32 @@ export function LoginForm() {
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
+      localStorage.removeItem('userData');
       localStorage.removeItem('user');
       
-      // Log form values for debugging
+      // Log form values for debugging (only email for privacy)
       console.log("Login attempt with email:", values.email);
       
-      // Use HTTP-only cookies to store authentication token
+      // Attempt login
       const response = await authAPI.login(values);
       
-      if (response.token) {
+      if (response && response.token) {
         // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
           description: `Welcome back, ${response.user?.name || 'User'}!` 
         });
         
-        console.log("Login successful, token saved", { 
-          tokenLength: response.token.length,
-          tokenParts: response.token.split('.').length,
-          user: response.user?.id
+        console.log("Login successful, redirecting to dashboard", { 
+          user: response.user?.id,
+          role: response.user?.role
         });
         
-        // Force a page reload to ensure fresh state
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 500);
+        // Ensure the token is saved before redirecting
+        localStorage.setItem('authToken', response.token);
+        
+        // Navigate to dashboard - don't use window.location.href to avoid full page reload
+        navigate('/dashboard');
       } else {
         throw new Error("Authentication failed: No token received");
       }

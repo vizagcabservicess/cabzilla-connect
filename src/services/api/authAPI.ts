@@ -1,7 +1,10 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { User } from '@/types/api';
+
+// Constants for token storage
+const AUTH_TOKEN_KEY = 'authToken';
+const USER_DATA_KEY = 'userData';
 
 const apiClient = axios.create({
   headers: {
@@ -14,7 +17,7 @@ const apiClient = axios.create({
 // Add auth token to requests if available
 apiClient.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -26,13 +29,13 @@ apiClient.interceptors.request.use(
 // Add response logging for debugging
 apiClient.interceptors.response.use(
   response => {
-    if (response.config.url?.includes('users') || response.config.url?.includes('user-data')) {
-      console.log(`API Response for ${response.config.url}:`, response.data);
-    }
+    console.log(`API Response from ${response.config.url}:`, 
+      response.config.url?.includes('login') ? 'LOGIN RESPONSE (redacted)' : response.data);
     return response;
   },
   error => {
-    console.error(`API Error for ${error.config?.url || 'unknown endpoint'}:`, error.response?.data || error.message);
+    console.error(`API Error for ${error.config?.url || 'unknown endpoint'}:`, 
+      error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
@@ -83,8 +86,36 @@ const sampleUsers: User[] = [
 
 export const authAPI = {
   login: async (credentials: { email: string; password: string }) => {
-    const response = await apiClient.post(getApiUrl('/api/login'), credentials);
-    return response.data;
+    try {
+      console.log(`Attempting login for ${credentials.email} to ${getApiUrl('/api/login')}`);
+      
+      // Clear any existing tokens first
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(USER_DATA_KEY);
+      
+      const response = await apiClient.post(getApiUrl('/api/login'), credentials);
+      console.log('Login response status:', response.status);
+      
+      if (response.data && response.data.token) {
+        // Store the token securely
+        localStorage.setItem(AUTH_TOKEN_KEY, response.data.token);
+        
+        // Store user data separately
+        if (response.data.user) {
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+        }
+        
+        console.log('Login successful, token and user data stored');
+      } else {
+        console.error('Login response missing token:', response.data);
+        throw new Error('Authentication failed: Invalid server response');
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   },
   
   signup: async (userData: { name: string; email: string; password: string; phone?: string }) => {
@@ -93,24 +124,65 @@ export const authAPI = {
   },
   
   getCurrentUser: async () => {
-    const token = localStorage.getItem('authToken');
-    if (!token) return null;
+    // First try to get user from localStorage
+    const userStr = localStorage.getItem(USER_DATA_KEY);
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
     
+    if (!token) {
+      console.log('No auth token found, user is not authenticated');
+      return null;
+    }
+    
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        console.log('Retrieved user data from localStorage:', userData.id);
+        return userData;
+      } catch (e) {
+        console.error('Error parsing user data from localStorage', e);
+        // Continue to try fetching from API
+      }
+    }
+    
+    // If not in localStorage or parsing failed, try to fetch from API
     try {
+      console.log('Fetching current user data from API');
       const response = await apiClient.get(getApiUrl('/api/user'));
-      return response.data;
+      
+      if (response.data && response.data.user) {
+        // Update localStorage with fresh data
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.data.user));
+        return response.data.user;
+      }
+      
+      return null;
     } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error('Error getting current user from API:', error);
+      
+      // If API call fails but we have a token, create a minimal user object
+      if (token) {
+        console.log('Creating minimal user object from token');
+        return {
+          id: 0,
+          name: 'User',
+          email: '',
+          role: 'user',
+          createdAt: new Date().toISOString()
+        };
+      }
+      
       return null;
     }
   },
 
   isAuthenticated: () => {
-    return !!localStorage.getItem('authToken');
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    console.log('Auth check:', token ? 'User has token' : 'No token found');
+    return !!token;
   },
 
   isAdmin: () => {
-    const userDataStr = localStorage.getItem('userData');
+    const userDataStr = localStorage.getItem(USER_DATA_KEY);
     if (!userDataStr) return false;
     
     try {
@@ -123,8 +195,9 @@ export const authAPI = {
   },
 
   logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
+    console.log('Logging out, clearing auth data');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(USER_DATA_KEY);
   },
 
   getAllUsers: async (): Promise<User[]> => {

@@ -35,10 +35,13 @@ $userId = null;
 $isAdmin = false;
 
 error_log("User bookings request received");
+error_log("Headers: " . json_encode($headers));
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
+    
+    error_log("Found auth token: " . substr($token, 0, 10) . "...");
     
     try {
         if (function_exists('verifyJwtToken')) {
@@ -47,7 +50,11 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
                 $userId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
                 error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+            } else {
+                error_log("Token payload missing user_id: " . json_encode($payload));
             }
+        } else {
+            error_log("verifyJwtToken function not available");
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
@@ -80,11 +87,14 @@ try {
         throw new Exception("Database connection failed");
     }
     
+    error_log("Database connection established");
+    
     // Check if bookings table exists
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     if (!$tableExists || $tableExists->num_rows === 0) {
         // Provide fallback bookings for testing
-        $fallbackBookings = createFallbackBookings();
+        error_log("Bookings table does not exist");
+        $fallbackBookings = createFallbackBookings($userId);
         echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
         exit;
     }
@@ -104,6 +114,7 @@ try {
         
         if ($result->num_rows === 0) {
             // User doesn't exist in database yet, common after signup
+            error_log("User $userId does not exist in database");
             echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
             exit;
         }
@@ -112,15 +123,18 @@ try {
     // Query to get bookings - modifications to handle various scenarios
     if ($userId && !$isAdmin) {
         // Get user's bookings if authenticated
+        error_log("Fetching bookings for user $userId");
         $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
         // Admins can see all bookings
+        error_log("Admin user, fetching all bookings");
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
     } else {
         // For testing/demo purposes, return some bookings even without authentication
+        error_log("No auth or demo mode, returning limited bookings");
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
     }
@@ -169,32 +183,52 @@ try {
         $bookings[] = $booking;
     }
     
+    error_log("Found " . count($bookings) . " bookings for request");
+    
     // For new users who have no bookings yet, return an empty array with success
     if (count($bookings) === 0 && $userId) {
-        echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => [], 
+            'message' => 'No bookings found for this user yet',
+            'userId' => $userId,
+            'isAdmin' => $isAdmin
+        ]);
         exit;
     }
     
     // Return the bookings
-    echo json_encode(['status' => 'success', 'bookings' => $bookings]);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $bookings, 
+        'userId' => $userId,
+        'isAdmin' => $isAdmin
+    ]);
     
 } catch (Exception $e) {
     error_log("Error in bookings endpoint: " . $e->getMessage());
     
     // Instead of returning an error, provide fallback data
-    $fallbackBookings = createFallbackBookings();
-    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'error_fallback', 'error' => $e->getMessage()]);
+    $fallbackBookings = createFallbackBookings($userId);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $fallbackBookings, 
+        'source' => 'error_fallback', 
+        'error' => $e->getMessage(),
+        'userId' => $userId,
+        'isAdmin' => $isAdmin
+    ]);
 }
 
 // Helper function to create fallback booking data
-function createFallbackBookings() {
+function createFallbackBookings($userId = null) {
     $now = date('Y-m-d H:i:s');
     $tomorrow = date('Y-m-d H:i:s', strtotime('+1 day'));
     
     return [
         [
             'id' => 1001,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
             'pickupLocation' => 'Fallback Airport',
             'dropLocation' => 'Fallback Hotel',
@@ -216,7 +250,7 @@ function createFallbackBookings() {
         ],
         [
             'id' => 1002,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
             'pickupLocation' => 'Fallback Hotel',
             'dropLocation' => 'Fallback Beach',
@@ -228,9 +262,9 @@ function createFallbackBookings() {
             'tripMode' => 'round-trip',
             'totalAmount' => 2500,
             'status' => 'confirmed',
-            'passengerName' => 'Demo Admin',
+            'passengerName' => 'Demo User',
             'passengerPhone' => '9876543200',
-            'passengerEmail' => 'admin@example.com',
+            'passengerEmail' => 'demo@example.com',
             'driverName' => 'Demo Driver',
             'driverPhone' => '9876543201',
             'createdAt' => $now,

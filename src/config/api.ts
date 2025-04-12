@@ -26,12 +26,21 @@ export const forceRefreshHeaders = {
 // Default headers for API requests
 export const defaultHeaders = {
   'Content-Type': 'application/json',
-  'X-Requested-With': 'XMLHttpRequest'
+  'X-Requested-With': 'XMLHttpRequest',
+  'Accept': 'application/json'
+};
+
+// Cross-domain request headers
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
 // Export configuration options
 export default {
   baseUrl: apiBaseUrl,
   defaultHeaders,
-  forceRefreshHeaders
+  forceRefreshHeaders,
+  corsHeaders
 };
