@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
 
-// Default metrics to use as fallback in case of API failure
 const DEFAULT_METRICS: DashboardMetricsType = {
   totalBookings: 0,
   activeRides: 0,
@@ -54,7 +52,6 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
-          // Store userId in localStorage for API requests - but don't overwrite if exists
           if (userData.id) {
             const currentStoredId = localStorage.getItem('userId');
             if (!currentStoredId || currentStoredId !== userData.id.toString()) {
@@ -75,7 +72,6 @@ export default function DashboardPage() {
           const isAdminUser = userData.role === 'admin';
           setIsAdmin(isAdminUser);
           
-          // Log for debugging purposes
           console.log(`User loaded: ID=${userData.id}, Name=${userData.name}, Role=${userData.role}, IsAdmin=${isAdminUser}`);
         } else {
           throw new Error('User data not found');
@@ -99,11 +95,9 @@ export default function DashboardPage() {
       setIsRefreshing(true);
       setError(null);
       
-      // Get the user ID from localStorage or user state
       const userId = user?.id || localStorage.getItem('userId');
       console.log('Fetching bookings for user ID:', userId);
       
-      // Fix: Remove the argument since getUserBookings can handle getting userId internally
       const data = await bookingAPI.getUserBookings();
       
       console.log('Bookings data received:', data);
@@ -113,7 +107,6 @@ export default function DashboardPage() {
       console.error('Error fetching bookings:', error);
       setError(error as Error);
       
-      // Retry logic
       if (retryCount < MAX_RETRIES) {
         setRetryCount(prevCount => prevCount + 1);
         setTimeout(() => {
@@ -133,15 +126,17 @@ export default function DashboardPage() {
     }
   }, [fetchBookings, user]);
 
-  const fetchAdminMetrics = useCallback(async (period: string = 'week', status: string = 'all') => {
+  const fetchAdminMetrics = useCallback(async (period: 'day' | 'week' | 'month' = 'week', status: string = 'all') => {
     if (!isAdmin || !user) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
       
-      // Fix: Pass only one argument with options object
-      const metrics = await bookingAPI.getAdminDashboardMetrics({ period, status });
+      const metrics = await bookingAPI.getAdminDashboardMetrics({ 
+        period: period as 'day' | 'week' | 'month', 
+        status 
+      });
       
       console.log('Admin metrics loaded:', metrics);
       setAdminMetrics(metrics || DEFAULT_METRICS);
@@ -166,7 +161,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     authAPI.logout();
-    localStorage.removeItem('userId'); // Clear user ID on logout
+    localStorage.removeItem('userId');
     navigate('/login');
     toast.success('Logged out successfully');
   };
@@ -248,13 +243,11 @@ export default function DashboardPage() {
   const renderAdminMetrics = () => {
     if (!isAdmin) return null;
     
-    // Create a safe metrics object with guaranteed structure
     const safeMetrics: DashboardMetricsType = {
       ...DEFAULT_METRICS,
       ...(adminMetrics || {})
     };
     
-    // Final safety check for availableStatuses
     if (!Array.isArray(safeMetrics.availableStatuses)) {
       safeMetrics.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
     }

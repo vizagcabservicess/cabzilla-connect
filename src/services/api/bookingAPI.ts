@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { Booking, BookingRequest, BookingResponse, DashboardMetrics } from '@/types/api';
@@ -115,7 +114,7 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (options?: { period?: string, status?: string }): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (options?: { period?: 'day' | 'week' | 'month', status?: string }): Promise<DashboardMetrics> => {
     try {
       // Get user ID from localStorage
       const userIdToUse = Number(localStorage.getItem('userId'));
