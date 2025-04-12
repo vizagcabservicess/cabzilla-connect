@@ -202,7 +202,14 @@ export const authAPI = {
   
   getCurrentUser: async (): Promise<User | null> => {
     try {
-      return await api.get<User>('/api/user');
+      // Add a custom header to ensure user ID is passed correctly
+      const headers = {
+        ...getAuthHeaders(),
+        'X-User-ID': localStorage.getItem('userId') || '',
+        'X-Force-User-Match': 'true'
+      };
+      
+      return await api.get<User>('/api/user', { headers });
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;
@@ -247,7 +254,20 @@ export const bookingAPI = {
   getUserBookings: async (): Promise<Booking[]> => {
     try {
       console.log('Fetching user bookings...');
-      const response = await api.get<{bookings: Booking[], status: string}>('/api/user/bookings');
+      
+      // Add user ID in query params and headers for better matching
+      const userId = localStorage.getItem('userId');
+      const options = {
+        headers: {
+          ...getAuthHeaders(),
+          'X-User-ID': userId || '',
+          'X-Force-User-Match': 'true'
+        }
+      };
+      
+      // Append user_id as query parameter to help PHP backend match the correct user
+      const endpoint = `/api/user/bookings${userId ? `?user_id=${userId}` : ''}`;
+      const response = await api.get<{bookings: Booking[], status: string}>(endpoint, options);
       console.log('User bookings response:', response);
       
       // Handle different response formats
@@ -316,7 +336,23 @@ export const bookingAPI = {
   },
   
   getAdminDashboardMetrics: async (period: 'day' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> => {
-    return await api.get(`/api/admin/metrics?period=${period}`);
+    // Try multiple endpoint patterns - the path was /api/admin/metrics but should be /api/user/dashboard
+    try {
+      // First try the original endpoint
+      return await api.get(`/api/admin/metrics?period=${period}`);
+    } catch (error) {
+      console.log('Primary metrics endpoint failed, trying alternatives...', error);
+      
+      try {
+        // Try the dashboard endpoint
+        return await api.get(`/api/user/dashboard?period=${period}&admin=true`);
+      } catch (error2) {
+        console.log('Secondary metrics endpoint failed, trying one more pattern...', error2);
+        
+        // One more pattern to try
+        return await api.get(`/api/admin/dashboard/metrics?period=${period}`);
+      }
+    }
   },
   
   deleteBooking: async (id: number | string): Promise<any> => {

@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -19,6 +18,7 @@ header('Expires: 0');
 
 // Log request for debugging
 error_log("Bookings API request received - Method: " . $_SERVER['REQUEST_METHOD'] . ", URI: " . $_SERVER['REQUEST_URI']);
+error_log("Bookings API query string: " . $_SERVER['QUERY_STRING']);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -36,8 +36,35 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
+$forceUserMatch = false;
 
 error_log("User bookings request received with headers: " . json_encode($headers));
+
+// Check for forced user match header
+foreach ($headers as $key => $value) {
+    $headerName = strtolower($key);
+    if ($headerName === 'x-force-user-match' && $value === 'true') {
+        $forceUserMatch = true;
+        error_log("Force user match flag is set to true");
+    }
+    
+    // Check for explicit user ID in header
+    if ($headerName === 'x-user-id' && !empty($value)) {
+        error_log("X-User-ID header found with value: $value");
+        $explicitUserId = intval($value);
+        if ($explicitUserId > 0) {
+            error_log("Using explicit user ID from header: $explicitUserId");
+            // Don't set $userId yet - we'll validate it against the token first
+        }
+    }
+}
+
+// Also check for user_id in query string
+if (isset($_GET['user_id']) && !empty($_GET['user_id'])) {
+    $queryUserId = intval($_GET['user_id']);
+    error_log("user_id in query string: $queryUserId");
+    // Don't set $userId yet - we'll validate it below
+}
 
 // Extract authorization header manually - handle both camel case and lowercase
 $authHeader = null;
@@ -59,7 +86,7 @@ if ($authHeader) {
             if ($payload && isset($payload['user_id'])) {
                 $userId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+                error_log("User authenticated from token: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             } else {
                 error_log("Token payload missing user_id: " . json_encode($payload));
             }
@@ -80,6 +107,27 @@ if ($authHeader) {
         error_log("JWT verification failed: " . $e->getMessage());
     }
 }
+
+// Now validate and override userId if necessary
+if (isset($queryUserId) && $queryUserId > 0) {
+    if ($isAdmin || $queryUserId == $userId) {
+        error_log("Using user ID from query string: $queryUserId (original token ID: $userId)");
+        $userId = $queryUserId;
+    } else {
+        error_log("Query user ID ($queryUserId) doesn't match token user ID ($userId) and user is not admin");
+    }
+}
+
+if (isset($explicitUserId) && $explicitUserId > 0) {
+    if ($isAdmin || $explicitUserId == $userId) {
+        error_log("Using user ID from header: $explicitUserId (original token ID: $userId)");
+        $userId = $explicitUserId;
+    } else {
+        error_log("Header user ID ($explicitUserId) doesn't match token user ID ($userId) and user is not admin");
+    }
+}
+
+error_log("Final user ID for bookings query: $userId");
 
 // Connect to database
 try {

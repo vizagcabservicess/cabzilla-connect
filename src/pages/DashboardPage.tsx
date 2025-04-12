@@ -53,13 +53,24 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
+          // Store userId in localStorage for API requests
+          if (userData.id) {
+            localStorage.setItem('userId', userData.id.toString());
+            console.log(`Stored user ID ${userData.id} in localStorage`);
+          }
+          
           setUser({
             id: userData.id || 0,
             name: userData.name || '',
             email: userData.email || '',
             role: userData.role || 'user'
           });
-          setIsAdmin(userData.role === 'admin');
+          
+          const isAdminUser = userData.role === 'admin';
+          setIsAdmin(isAdminUser);
+          
+          // Log for debugging purposes
+          console.log(`User loaded: ID=${userData.id}, Name=${userData.name}, Role=${userData.role}, IsAdmin=${isAdminUser}`);
         } else {
           throw new Error('User data not found');
         }
@@ -81,7 +92,11 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
+      
+      console.log('Fetching bookings for user ID:', localStorage.getItem('userId'));
       const data = await bookingAPI.getUserBookings();
+      
+      console.log('Bookings data received:', data);
       setBookings(Array.isArray(data) ? data : []);
       setRetryCount(0);
     } catch (error) {
@@ -112,7 +127,7 @@ export default function DashboardPage() {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
       
-      console.log('Fetching admin dashboard metrics...');
+      console.log('Fetching admin dashboard metrics with user ID:', localStorage.getItem('userId'));
       
       const data = await bookingAPI.getAdminDashboardMetrics('week');
       
@@ -193,6 +208,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     authAPI.logout();
+    localStorage.removeItem('userId'); // Clear user ID on logout
     navigate('/login');
     toast.success('Logged out successfully');
   };
