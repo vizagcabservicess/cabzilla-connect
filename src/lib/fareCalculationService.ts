@@ -176,8 +176,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Add driver allowance
-    fare += airportFares.dropPrice > 0 ? 250 : 0;
+    // Remove driver allowance for airport transfers
+    // fare += airportFares.dropPrice > 0 ? 250 : 0;
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -213,8 +213,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare += extraKmCost;
       }
       
-      // Add driver allowance
-      fare += cabType.airportFares.dropPrice > 0 ? 250 : 0;
+      // Remove driver allowance for airport transfers
+      // fare += cabType.airportFares.dropPrice > 0 ? 250 : 0;
       
       // Cache the result
       fareCache.set(cacheKey, {
@@ -259,8 +259,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Add driver allowance
-    fare += 250;
+    // Remove driver allowance for airport transfers
+    // fare += 250;
     
     // Add airport fee
     fare += defaultFare.airportFee;

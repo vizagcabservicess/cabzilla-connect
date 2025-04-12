@@ -43,6 +43,27 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
+  const [cabFares, setCabFares] = useState<Record<string, number>>({});
+  const [isCalculatingFares, setIsCalculatingFares] = useState(true);
+
+  // Store the current trip type in localStorage for better fare syncing
+  useEffect(() => {
+    localStorage.setItem('tripType', tripType.toString());
+    
+    // When trip type changes, dispatch an event to notify other components
+    try {
+      window.dispatchEvent(new CustomEvent('trip-type-changed', {
+        detail: {
+          tripType: tripType,
+          tripMode: tripMode,
+          timestamp: Date.now()
+        }
+      }));
+      console.log(`CabOptions: Dispatched trip-type-changed event for ${tripType}`);
+    } catch (error) {
+      console.error('Error dispatching trip type change event:', error);
+    }
+  }, [tripType, tripMode]);
 
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
@@ -93,10 +114,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   }, [selectedCab, hasSelectedCab]);
 
-  // Set up data for the CabList component with actual fares
-  const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState(true);
-  
   // Load actual fares from localStorage and listen for fare calculation events
   useEffect(() => {
     setIsCalculatingFares(true);
@@ -125,13 +142,24 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               }
             }
             
-            // If not found in price matrix or not a local package, check vehicle-specific localStorage
-            const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-            const storedFare = localStorage.getItem(localStorageKey);
-            if (storedFare) {
-              fares[cab.id] = parseInt(storedFare, 10);
-              console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
-              return;
+            // For airport transfers, prioritize dynamically calculated fares
+            if (tripType === 'airport') {
+              const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
+              const storedFare = localStorage.getItem(localStorageKey);
+              if (storedFare) {
+                fares[cab.id] = parseInt(storedFare, 10);
+                console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
+                return;
+              }
+            } else {
+              // For other trip types, use the standard localStorage key
+              const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
+              const storedFare = localStorage.getItem(localStorageKey);
+              if (storedFare) {
+                fares[cab.id] = parseInt(storedFare, 10);
+                console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
+                return;
+              }
             }
             
             // If still not found, use a reasonable default fare
@@ -214,22 +242,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           // Save to localStorage for other components
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
-          
-          // Emit a fare update event for airport transfers (with calculated flag)
-          if (calculated) {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('fare-calculated', {
-                detail: {
-                  cabId: cabId,
-                  tripType: tripType,
-                  tripMode: tripMode,
-                  calculated: true,
-                  fare: fare,
-                  timestamp: Date.now()
-                }
-              }));
-            }, 50);
-          }
         } else {
           setCabFares(prev => {
             const updated = { ...prev, [cabId]: fare };
@@ -250,7 +262,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           return updated;
         });
         
-        // For airport transfers, we want to store this fare and notify other components
+        // For airport transfers, store this fare and notify other components
         if (tripType === 'airport' && calculated) {
           const localStorageKey = `fare_${tripType}_${cabType.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
