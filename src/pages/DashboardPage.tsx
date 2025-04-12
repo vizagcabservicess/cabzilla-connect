@@ -110,10 +110,33 @@ export default function DashboardPage() {
       
       console.log('Admin metrics received:', data);
       
-      if (!data.availableStatuses || !Array.isArray(data.availableStatuses)) {
-        console.log('Fixing missing or invalid availableStatuses array');
+      if (!data.availableStatuses) {
+        console.log('Adding missing availableStatuses array');
+        data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+      } else if (!Array.isArray(data.availableStatuses)) {
+        console.log('Converting non-array availableStatuses to array:', data.availableStatuses);
+        if (typeof data.availableStatuses === 'string') {
+          data.availableStatuses = data.availableStatuses.split(',')
+            .map(s => s.trim())
+            .filter(s => s !== '');
+        } else if (typeof data.availableStatuses === 'object' && data.availableStatuses !== null) {
+          data.availableStatuses = Object.values(data.availableStatuses);
+        } else {
+          data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        }
+      }
+      
+      if (!Array.isArray(data.availableStatuses) || data.availableStatuses.length === 0) {
         data.availableStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
       }
+      
+      data.totalBookings = Number(data.totalBookings) || 0;
+      data.activeRides = Number(data.activeRides) || 0;
+      data.totalRevenue = Number(data.totalRevenue) || 0;
+      data.availableDrivers = Number(data.availableDrivers) || 0;
+      data.busyDrivers = Number(data.busyDrivers) || 0;
+      data.avgRating = Number(data.avgRating) || 0;
+      data.upcomingRides = Number(data.upcomingRides) || 0;
       
       setAdminMetrics(data);
     } catch (error) {
@@ -219,16 +242,18 @@ export default function DashboardPage() {
   const renderAdminMetrics = () => {
     if (!isAdmin) return null;
     
-    const safeMetrics = adminMetrics || {
-      totalBookings: 0,
-      activeRides: 0,
-      totalRevenue: 0,
-      availableDrivers: 0,
-      busyDrivers: 0,
-      avgRating: 0,
-      upcomingRides: 0,
-      availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
-      currentFilter: 'all'
+    const safeMetrics: DashboardMetricsType = {
+      totalBookings: adminMetrics?.totalBookings || 0,
+      activeRides: adminMetrics?.activeRides || 0,
+      totalRevenue: adminMetrics?.totalRevenue || 0,
+      availableDrivers: adminMetrics?.availableDrivers || 0,
+      busyDrivers: adminMetrics?.busyDrivers || 0,
+      avgRating: adminMetrics?.avgRating || 0,
+      upcomingRides: adminMetrics?.upcomingRides || 0,
+      availableStatuses: Array.isArray(adminMetrics?.availableStatuses) 
+        ? adminMetrics.availableStatuses 
+        : ['pending', 'confirmed', 'completed', 'cancelled'],
+      currentFilter: adminMetrics?.currentFilter || 'all'
     };
     
     return (
