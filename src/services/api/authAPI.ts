@@ -83,8 +83,33 @@ const sampleUsers: User[] = [
 
 export const authAPI = {
   login: async (credentials: { email: string; password: string }) => {
-    const response = await apiClient.post(getApiUrl('/api/login'), credentials);
-    return response.data;
+    try {
+      console.log('Login attempt with:', credentials.email);
+      const response = await axios.post(getApiUrl('/api/login'), credentials, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...forceRefreshHeaders
+        }
+      });
+      
+      console.log('Login response:', response.data);
+      
+      if (response.data && response.data.token) {
+        // Store the token in localStorage
+        localStorage.setItem('authToken', response.data.token);
+        
+        // Store user data in localStorage
+        if (response.data.user) {
+          localStorage.setItem('userData', JSON.stringify(response.data.user));
+          console.log('Stored user data in localStorage:', response.data.user);
+        }
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   },
   
   signup: async (userData: { name: string; email: string; password: string; phone?: string }) => {
@@ -97,10 +122,35 @@ export const authAPI = {
     if (!token) return null;
     
     try {
-      const response = await apiClient.get(getApiUrl('/api/user'));
-      return response.data;
+      const response = await axios.get(getApiUrl('/api/user'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...forceRefreshHeaders
+        }
+      });
+      
+      if (response.data && response.data.user) {
+        return response.data.user;
+      } else if (response.data) {
+        return response.data;
+      }
+      
+      // Fallback to localStorage if API fails but we have data
+      const storedUser = localStorage.getItem('userData');
+      if (storedUser) {
+        return JSON.parse(storedUser);
+      }
+      
+      return null;
     } catch (error) {
       console.error('Error getting current user:', error);
+      
+      // Fallback to localStorage if API fails
+      const storedUser = localStorage.getItem('userData');
+      if (storedUser) {
+        return JSON.parse(storedUser);
+      }
+      
       return null;
     }
   },

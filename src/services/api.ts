@@ -15,6 +15,12 @@ const apiClient = axios.create({
 // Log requests and responses globally
 apiClient.interceptors.request.use(
   config => {
+    // Add auth token to all requests if available
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, { 
       data: config.data,
       params: config.params,
@@ -39,9 +45,25 @@ apiClient.interceptors.response.use(
   }
 );
 
+// Helper to get current user ID from localStorage
+const getCurrentUserId = (): number | null => {
+  try {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      return parsed.id || null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting user ID from localStorage:', error);
+    return null;
+  }
+};
+
 export const bookingAPI = {
   getBookings: async (userId?: number) => {
-    const response = await apiClient.get(userId ? `/user/bookings?userId=${userId}` : '/bookings');
+    const user_id = userId || getCurrentUserId();
+    const response = await apiClient.get(user_id ? `/user/bookings?user_id=${user_id}` : '/bookings');
     return response.data;
   },
   
@@ -82,6 +104,13 @@ export const bookingAPI = {
       if (bookingData.tripType === 'local' && bookingData.dropLocation === undefined) {
         bookingData.dropLocation = '';
       }
+
+      // Add user ID from localStorage if available and not already set
+      const userId = getCurrentUserId();
+      if (userId && !bookingData.userId) {
+        bookingData.userId = userId;
+        console.log('Added user ID to booking:', userId);
+      }
       
       // Get the absolute URL for book.php
       const bookingUrl = getApiUrl('/api/book.php');
@@ -97,7 +126,11 @@ export const bookingAPI = {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'X-Requested-With': 'fetch'
+          'X-Requested-With': 'fetch',
+          // Add auth token if available
+          ...(localStorage.getItem('authToken') ? {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          } : {})
         },
         body: JSON.stringify(bookingData),
       });
@@ -229,8 +262,19 @@ export const bookingAPI = {
     return response.data;
   },
 
-  getUserBookings: async () => {
-    const response = await apiClient.get('/user/bookings');
+  getUserBookings: async (userId?: number) => {
+    const user_id = userId || getCurrentUserId();
+    console.log('Fetching bookings for user ID:', user_id);
+    
+    if (!user_id) {
+      console.warn('No user ID available for fetching bookings');
+    }
+    
+    const url = user_id 
+      ? `/user/bookings?user_id=${user_id}` 
+      : '/user/bookings';
+      
+    const response = await apiClient.get(url);
     return response.data;
   },
 
@@ -244,8 +288,13 @@ export const bookingAPI = {
     return response.data;
   },
 
-  getAdminDashboardMetrics: async (period: string) => {
-    const response = await apiClient.get(`/admin/dashboard-metrics?period=${period}`);
+  getAdminDashboardMetrics: async (period: string, userId?: number) => {
+    const user_id = userId || getCurrentUserId();
+    const url = user_id 
+      ? `/admin/dashboard-metrics?period=${period}&user_id=${user_id}` 
+      : `/admin/dashboard-metrics?period=${period}`;
+      
+    const response = await apiClient.get(url);
     return response.data;
   }
 };

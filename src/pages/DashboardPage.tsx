@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
-import { bookingAPI, authAPI } from '@/services/api';
+import { bookingAPI } from '@/services/api';
+import { authAPI } from '@/services/api/authAPI';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
@@ -48,12 +49,14 @@ export default function DashboardPage() {
             role: userData.role || 'user'
           });
           setIsAdmin(userData.role === 'admin');
+          console.log('User data loaded:', userData);
         } else {
           throw new Error('User data not found');
         }
       } catch (error) {
         console.error('Error getting user data:', error);
         toast.error('Error loading user data. Please try logging in again.');
+        navigate('/login');
       }
     };
 
@@ -70,7 +73,17 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings();
+      
+      // Get current user to ensure we have the latest user data
+      const userData = await authAPI.getCurrentUser();
+      if (!userData || !userData.id) {
+        throw new Error('Unable to fetch user data for bookings');
+      }
+      
+      console.log('Fetching bookings for user ID:', userData.id);
+      
+      // Pass the user ID explicitly to the bookings API
+      const data = await bookingAPI.getUserBookings(userData.id);
       setBookings(data);
       setRetryCount(0); // Reset retry count on success
     } catch (error) {
@@ -99,12 +112,13 @@ export default function DashboardPage() {
 
   // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !user?.id) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      const data = await bookingAPI.getAdminDashboardMetrics('week');
+      console.log('Fetching admin metrics for user ID:', user.id);
+      const data = await bookingAPI.getAdminDashboardMetrics('week', user.id);
       setAdminMetrics(data);
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
@@ -112,19 +126,21 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   // Initial data fetch
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+    if (user?.id) {
+      fetchBookings();
+    }
+  }, [fetchBookings, user]);
 
   // Fetch admin metrics if user is admin
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && user?.id) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics]);
+  }, [isAdmin, fetchAdminMetrics, user]);
 
   // Handle logout
   const handleLogout = () => {

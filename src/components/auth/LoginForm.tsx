@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { authAPI } from '@/services/api';
+import { authAPI } from '@/services/api/authAPI';
 import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
@@ -43,9 +43,7 @@ export function LoginForm() {
     
     // Clear any stale tokens on login page load
     localStorage.removeItem('authToken');
-    localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('userData');
     
     // Only test connection on component mount if we have an API URL
     if (url) {
@@ -126,14 +124,11 @@ export function LoginForm() {
       
       // Clear any existing tokens first
       localStorage.removeItem('authToken');
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('userData');
       
       // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
-      // Use HTTP-only cookies to store authentication token
       const response = await authAPI.login(values);
       
       if (response.token) {
@@ -149,10 +144,8 @@ export function LoginForm() {
           user: response.user?.id
         });
         
-        // Force a page reload to ensure fresh state
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 500);
+        // Navigate to dashboard
+        navigate('/dashboard');
       } else {
         throw new Error("Authentication failed: No token received");
       }
