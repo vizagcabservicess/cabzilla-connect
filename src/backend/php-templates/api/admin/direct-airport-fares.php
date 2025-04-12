@@ -235,7 +235,7 @@ try {
             
             $fare = $defaultFares[$fareKey];
             
-            $fare = [
+            $fares[] = [
                 'id' => 1,
                 'vehicleId' => $vehicleId,
                 'vehicle_id' => $vehicleId,
@@ -259,8 +259,6 @@ try {
                 'extraKmCharge' => $fare['extraKmCharge'],
                 'extra_km_charge' => $fare['extraKmCharge']
             ];
-            
-            $fares[] = $fare;
         } else {
             // If no specific vehicle ID requested, return all default fares
             foreach ($defaultFares as $type => $fare) {
@@ -295,7 +293,7 @@ try {
     // Debug: Log the fares for troubleshooting
     file_put_contents($logFile, "[$timestamp] Airport fares response for vehicleId $vehicleId: " . json_encode($fares) . "\n", FILE_APPEND);
     
-    // Return success response
+    // Return success response with fares in the correct format
     if (function_exists('sendSuccessResponse')) {
         sendSuccessResponse([
             'fares' => $fares,
@@ -308,10 +306,12 @@ try {
         echo json_encode([
             'status' => 'success',
             'message' => 'Airport fares retrieved successfully',
-            'fares' => $fares,
-            'count' => count($fares),
-            'debug' => true,
-            'timestamp' => time()
+            'data' => [
+                'fares' => $fares,
+                'count' => count($fares),
+                'debug' => true,
+                'timestamp' => time()
+            ]
         ]);
     }
     
@@ -397,11 +397,13 @@ try {
         echo json_encode([
             'status' => 'success', // Use success instead of error for compatibility
             'message' => 'Error fetching airport fares, using fallback data',
-            'fares' => $fallbackFares,
-            'count' => count($fallbackFares),
-            'error' => $e->getMessage(),
-            'fallback' => true,
-            'timestamp' => time()
+            'data' => [
+                'fares' => $fallbackFares,
+                'count' => count($fallbackFares),
+                'error' => $e->getMessage(),
+                'fallback' => true,
+                'timestamp' => time()
+            ]
         ]);
     }
 }
