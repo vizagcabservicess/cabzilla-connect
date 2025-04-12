@@ -85,7 +85,7 @@ try {
     if (strpos($token, 'demo_token_') === 0) {
         logError("Demo token detected, providing demo data");
         
-        // Create demo metrics
+        // Create demo metrics with valid array for availableStatuses
         $demoMetrics = [
             'totalBookings' => 45,
             'activeRides' => 8,
@@ -227,8 +227,20 @@ try {
         
         if ($statusesResult) {
             while ($statusRow = $statusesResult->fetch_assoc()) {
-                $statuses[] = $statusRow['status'];
+                if (!empty($statusRow['status'])) {
+                    $statuses[] = $statusRow['status'];
+                }
             }
+        }
+        
+        // Ensure statuses is always an array, even if empty
+        if (!is_array($statuses)) {
+            $statuses = [];
+        }
+        
+        // Fallback to predefined statuses if none found in database
+        if (empty($statuses)) {
+            $statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
         }
         
         // Simulate driver metrics (since drivers table might not exist)
@@ -247,7 +259,7 @@ try {
             'busyDrivers' => (int)$busyDrivers,
             'avgRating' => (float)$avgRating,
             'upcomingRides' => (int)$upcomingRides,
-            'availableStatuses' => $statuses,
+            'availableStatuses' => $statuses, // This is now guaranteed to be an array
             'currentFilter' => $statusFilter
         ];
         

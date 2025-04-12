@@ -20,6 +20,7 @@ error_log("Headers: " . json_encode(getallheaders()));
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
+$token = '';
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];

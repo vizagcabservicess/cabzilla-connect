@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,17 +40,23 @@ export function DashboardMetrics({
     if (metricsData?.availableStatuses) {
       let statusesArray: string[] = [];
       
+      // First, ensure availableStatuses is in a format we can work with
       if (Array.isArray(metricsData.availableStatuses)) {
+        // If it's already an array, use it directly
         statusesArray = metricsData.availableStatuses.map(status => String(status));
       } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
+        // If it's an object, extract values
         statusesArray = Object.values(metricsData.availableStatuses).map(status => String(status));
       } else if (typeof metricsData.availableStatuses === 'string') {
+        // If it's a comma-separated string, split it
         statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
       }
       
+      // Initialize with 'all' status
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       
-      statusesArray.forEach(status => {
+      // Only add valid booking statuses to the array
+      for (const status of statusesArray) {
         if (typeof status === 'string') {
           const isValidStatus = [
             'pending', 'confirmed', 'assigned', 'payment_received', 
@@ -60,7 +67,7 @@ export function DashboardMetrics({
             statuses.push(status as BookingStatus);
           }
         }
-      });
+      }
       
       setAvailableStatuses(statuses);
     }
