@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -176,8 +175,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Airport transfers have NO driver allowance
-    // This is intentionally blank - we've removed all driver allowance code for airport transfers
+    // IMPORTANT: Airport transfers have NO driver allowance
+    // This comment is preserved to explicitly document this requirement
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -614,9 +613,11 @@ export const calculateTotalFare = (
   tripType: string,
   surcharge?: number
 ): number => {
-  // For airport transfers, ALWAYS set driver allowance to 0
+  // CRITICAL FIX: For airport transfers, ALWAYS set driver allowance to 0
+  // This ensures driver allowance is not factored into the total fare for airport transfers
   if (tripType === 'airport') {
     driverAllowance = 0;
+    console.log("Airport transfer detected: Setting driver allowance to 0");
   }
   
   const total = baseFare + driverAllowance + nightHaltCharges + otherCharges;

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -48,6 +47,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [pendingBookingSummaryFareRequests, setPendingBookingSummaryFareRequests] = useState<Record<string, boolean>>({});
   const [fareUpdateTriggered, setFareUpdateTriggered] = useState<boolean>(false);
+  const [initialAirportFaresLoaded, setInitialAirportFaresLoaded] = useState<boolean>(false);
 
   // Store the current trip type in localStorage for better fare syncing
   useEffect(() => {
@@ -67,8 +67,15 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       // Clear fare cache in localStorage when trip type changes, especially for airport transfers
       if (tripType === 'airport') {
         localStorage.setItem('forceCacheRefresh', 'true');
+        setInitialAirportFaresLoaded(false);
+        
         setTimeout(() => {
           localStorage.removeItem('forceCacheRefresh');
+          
+          // Pre-load airport fares for all cabs
+          if (!initialAirportFaresLoaded) {
+            preloadAirportFares();
+          }
         }, 500);
         
         // Reset our fare update tracker when trip type changes
@@ -78,6 +85,63 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       console.error('Error dispatching trip type change event:', error);
     }
   }, [tripType, tripMode]);
+  
+  // New function to preload airport fares
+  const preloadAirportFares = () => {
+    if (tripType !== 'airport' || initialAirportFaresLoaded) return;
+    
+    console.log('CabOptions: Preloading airport fares for all cabs');
+    
+    // First, try to load fares from localStorage
+    const loadedFares: Record<string, number> = {};
+    let foundAny = false;
+    
+    cabTypes.forEach(cab => {
+      const localStorageKey = `fare_airport_${cab.id.toLowerCase()}`;
+      const storedFare = localStorage.getItem(localStorageKey);
+      
+      if (storedFare) {
+        const parsedFare = parseInt(storedFare, 10);
+        if (parsedFare > 0) {
+          loadedFares[cab.id] = parsedFare;
+          foundAny = true;
+          
+          // Emit fare-calculated event for this cab
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: cab.id,
+              tripType: 'airport',
+              tripMode: tripMode,
+              calculated: true,
+              fare: parsedFare,
+              timestamp: Date.now()
+            }
+          }));
+        }
+      }
+    });
+    
+    if (foundAny) {
+      setCabFares(prev => ({...prev, ...loadedFares}));
+    }
+    
+    // Now trigger fare calculation requests for all cabs
+    cabTypes.forEach((cab, index) => {
+      // Stagger requests to avoid overwhelming the system
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: 'airport',
+            timestamp: Date.now() + index
+          }
+        }));
+      }, index * 100);
+    });
+    
+    setInitialAirportFaresLoaded(true);
+  };
 
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
@@ -197,22 +261,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         // For each cab type, attempt to get the fare from localStorage
         cabTypes.forEach(cab => {
           try {
-            // For local packages, check for the specific package fare
-            if (tripType === 'local' && hourlyPackage) {
-              // Try to load from price matrix in localStorage
-              const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
-              if (priceMatrixStr) {
-                const priceMatrix = JSON.parse(priceMatrixStr);
-                
-                // Check if we have pricing for this specific package and cab
-                if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
-                  fares[cab.id] = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
-                  console.log(`Found fare for ${cab.id} in price matrix: ${fares[cab.id]}`);
-                  return;
-                }
-              }
-            }
-            
             // For airport transfers, prioritize dynamically calculated fares
             if (tripType === 'airport') {
               const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
@@ -221,6 +269,22 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 fares[cab.id] = parseInt(storedFare, 10);
                 console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
                 return;
+              }
+            } else if (tripType === 'local' && hourlyPackage) {
+              // For local packages, check for the specific package fare
+              if (hourlyPackage) {
+                // Try to load from price matrix in localStorage
+                const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
+                if (priceMatrixStr) {
+                  const priceMatrix = JSON.parse(priceMatrixStr);
+                  
+                  // Check if we have pricing for this specific package and cab
+                  if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
+                    fares[cab.id] = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
+                    console.log(`Found fare for ${cab.id} in price matrix: ${fares[cab.id]}`);
+                    return;
+                  }
+                }
               }
             } else {
               // For other trip types, use the standard localStorage key
@@ -265,19 +329,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       // IMPORTANT: For airport transfers, trigger immediate fare calculation
       if (tripType === 'airport' && !fareUpdateTriggered) {
         setTimeout(() => {
-          cabTypes.forEach((cab, index) => {
-            // Stagger the requests to avoid overwhelming the system
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: cab.id,
-                  cabName: cab.name,
-                  tripType: 'airport',
-                  timestamp: Date.now() + index // Different timestamp
-                }
-              }));
-            }, index * 100); // Stagger each request by 100ms
-          });
+          if (!initialAirportFaresLoaded) {
+            preloadAirportFares();
+          }
           setFareUpdateTriggered(true);
         }, 500);
       }
