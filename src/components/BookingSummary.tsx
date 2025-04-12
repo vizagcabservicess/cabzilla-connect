@@ -39,6 +39,12 @@ export function BookingSummary({
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [fareUpdated, setFareUpdated] = useState<boolean>(false);
 
+  // Reset fare updated flag when cab changes
+  useEffect(() => {
+    console.log('BookingSummary: selectedCab changed to:', selectedCab.name);
+    setFareUpdated(false);
+  }, [selectedCab.id]);
+
   // Listen for fare calculation events to update the summary
   useEffect(() => {
     const handleFareCalculated = (event: CustomEvent) => {
@@ -53,6 +59,9 @@ export function BookingSummary({
         if (breakdown) {
           setBaseFare(breakdown.baseFare || fare - driverAllowance);
           setDriverAllowance(breakdown.driverAllowance || 250);
+        } else {
+          // If no breakdown, calculate base fare by subtracting driver allowance
+          setBaseFare(fare - driverAllowance);
         }
         
         setFareUpdated(true);
@@ -64,7 +73,7 @@ export function BookingSummary({
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
     };
-  }, [selectedCab.id, tripType]);
+  }, [selectedCab.id, tripType, driverAllowance]);
 
   // Recalculate fare when key parameters change
   useEffect(() => {
@@ -119,7 +128,7 @@ export function BookingSummary({
     if (selectedCab && distance > 0 && pickupDate && !fareUpdated) {
       calculateFareForSummary();
     }
-  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, fareUpdated]);
+  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, fareUpdated, driverAllowance]);
   
   // Update total price when totalPrice prop changes
   useEffect(() => {
@@ -128,7 +137,7 @@ export function BookingSummary({
       // Estimate the base fare by subtracting driver allowance
       setBaseFare(totalPrice - driverAllowance);
     }
-  }, [totalPrice]);
+  }, [totalPrice, fareUpdated, driverAllowance]);
 
   const finalAmount = calculatedFare - discountAmount;
 

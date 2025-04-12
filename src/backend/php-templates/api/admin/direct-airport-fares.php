@@ -196,7 +196,7 @@ try {
                 file_put_contents($logFile, "[$timestamp] Found vehicle in vehicles table: {$vehicleData['vehicle_id']} with name {$vehicleName}\n", FILE_APPEND);
             } else {
                 // Vehicle doesn't exist, try to insert it first with a default name
-                $insertVehicleQuery = "INSERT IGNORE INTO vehicles (vehicle_id, name, status) VALUES (?, ?, 'active')";
+                $insertVehicleQuery = "INSERT IGNORE INTO vehicles (vehicle_id, name) VALUES (?, ?)";
                 $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
                 
                 if ($insertVehicleStmt) {

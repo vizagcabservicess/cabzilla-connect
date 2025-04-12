@@ -52,6 +52,8 @@ export function CabOptions({
         // Calculate fare for each cab type
         for (const cab of cabTypes) {
           try {
+            console.log(`CabOptions: Calculating fare for ${cab.name} (${cab.id})`);
+            
             const params: FareCalculationParams = {
               cabType: cab,
               distance,
@@ -60,6 +62,7 @@ export function CabOptions({
               hourlyPackage,
               pickupDate,
               returnDate,
+              forceRefresh: true // Force refresh to ensure we get the latest fares
             };
             
             const fare = await calculateFare(params);
@@ -76,6 +79,25 @@ export function CabOptions({
             }
             
             console.log(`CabOptions: Calculated fare for ${cab.name}: ${fare}, Trip: ${tripType}, Mode: ${tripMode}`);
+            
+            // If this is the selected cab, dispatch an event to update the BookingSummary
+            if (selectedCab && cab.id === selectedCab.id) {
+              const fareCalculatedEvent = new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: cab.id,
+                  cabName: cab.name,
+                  fare: fare,
+                  tripType: tripType,
+                  breakdown: {
+                    baseFare: fare - (cab.driverAllowance || 250),
+                    driverAllowance: cab.driverAllowance || 250
+                  }
+                }
+              });
+              
+              console.log(`CabOptions: Dispatching fare event for selected cab ${cab.name}: ${fare}`);
+              window.dispatchEvent(fareCalculatedEvent);
+            }
           } catch (error) {
             console.error(`Error calculating fare for ${cab.name}:`, error);
             calculatedFares[cab.id] = 0;
@@ -92,7 +114,34 @@ export function CabOptions({
     };
     
     calculateFares();
-  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, selectedCab]);
+  
+  // Handle cab selection - ensure we update the BookingSummary
+  const handleSelectCab = (cab: CabType) => {
+    // First, update the selected cab in the parent component
+    onSelectCab(cab);
+    
+    // Then, dispatch an event to update the BookingSummary
+    if (fares[cab.id]) {
+      const fare = fares[cab.id];
+      
+      const fareCalculatedEvent = new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cab.id,
+          cabName: cab.name,
+          fare: fare,
+          tripType: tripType,
+          breakdown: {
+            baseFare: fare - (cab.driverAllowance || 250),
+            driverAllowance: cab.driverAllowance || 250
+          }
+        }
+      });
+      
+      console.log(`CabOptions: Dispatching fare event on cab selection ${cab.name}: ${fare}`);
+      window.dispatchEvent(fareCalculatedEvent);
+    }
+  };
   
   // Listen for fare calculation events
   useEffect(() => {
@@ -127,27 +176,6 @@ export function CabOptions({
       setPendingFareUpdates({});
     }
   }, [pendingFareUpdates]);
-  
-  // Listen for cab selection with fare events
-  useEffect(() => {
-    const handleCabSelected = (event: CustomEvent) => {
-      const { cabType, cabName, fare } = event.detail;
-      
-      console.log(`CabOptions: Cab selected event received: ${cabName} with fare ${fare}`);
-      
-      // Update the fares state with this info
-      setFares(prev => ({
-        ...prev,
-        [cabType]: fare
-      }));
-    };
-    
-    window.addEventListener('cab-selected-with-fare', handleCabSelected as EventListener);
-    
-    return () => {
-      window.removeEventListener('cab-selected-with-fare', handleCabSelected as EventListener);
-    };
-  }, []);
 
   return (
     <div className="mt-6">
@@ -172,7 +200,7 @@ export function CabOptions({
             cab={cab}
             fare={fares[cab.id] || 0}
             isSelected={selectedCab?.id === cab.id}
-            onSelect={onSelectCab}
+            onSelect={() => handleSelectCab(cab)}
             fareDetails={fareDetails[cab.id] || ''}
             isCalculating={isCalculating}
           />
