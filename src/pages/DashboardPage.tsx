@@ -140,9 +140,12 @@ export default function DashboardPage() {
       
       console.log('Fetching bookings for user ID:', userId, 'Dev mode:', isDev);
       
-      const options = isDev ? { dev_mode: true } : undefined;
-      
-      const data = await bookingAPI.getUserBookings(userId, options);
+      let data;
+      if (isDev) {
+        data = await bookingAPI.getUserBookings(userId, { dev_mode: true });
+      } else {
+        data = await bookingAPI.getUserBookings(userId);
+      }
       
       if (Array.isArray(data)) {
         setBookings(data);
@@ -192,9 +195,12 @@ export default function DashboardPage() {
       setAdminMetricsError(null);
       console.log('Fetching admin metrics for user ID:', user.id, 'Dev mode:', isDev);
       
-      const options = isDev ? { dev_mode: true } : undefined;
-      
-      const data = await bookingAPI.getAdminDashboardMetrics('week', options);
+      let data;
+      if (isDev) {
+        data = await bookingAPI.getAdminDashboardMetrics('week', { dev_mode: true });
+      } else {
+        data = await bookingAPI.getAdminDashboardMetrics('week');
+      }
       
       if (data) {
         setAdminMetrics(data);

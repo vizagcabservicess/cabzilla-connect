@@ -262,7 +262,7 @@ export const bookingAPI = {
     return response.data;
   },
 
-  getUserBookings: async (userId?: number) => {
+  getUserBookings: async (userId?: number, options?: { dev_mode?: boolean }) => {
     try {
       const user_id = userId || getCurrentUserId();
       console.log('Fetching bookings for user ID:', user_id);
@@ -278,7 +278,8 @@ export const bookingAPI = {
       
       // Get token and add dev_mode parameter for fallback
       const token = localStorage.getItem('authToken');
-      const urlWithParams = `${apiUrl}?user_id=${user_id}&dev_mode=true`;
+      const devMode = options?.dev_mode ? 'true' : 'false';
+      const urlWithParams = `${apiUrl}?user_id=${user_id}&dev_mode=${devMode}`;
       
       console.log('Making request to:', urlWithParams);
       console.log('With token available:', !!token);
@@ -321,7 +322,7 @@ export const bookingAPI = {
         // If authentication fails, try without Authorization header but with user_id parameter
         console.warn('Auth request failed, trying without Authorization header:', authError);
         
-        const fallbackUrl = `${apiUrl}?user_id=${user_id}&fallback=true&dev_mode=true`;
+        const fallbackUrl = `${apiUrl}?user_id=${user_id}&fallback=true&dev_mode=${devMode}`;
         const response = await fetch(fallbackUrl, {
           method: 'GET',
           headers: {
@@ -367,9 +368,9 @@ export const bookingAPI = {
     return response.data;
   },
 
-  getAdminDashboardMetrics: async (period: string, userId?: number) => {
+  getAdminDashboardMetrics: async (period: string, options?: { dev_mode?: boolean }) => {
     try {
-      const user_id = userId || getCurrentUserId();
+      const user_id = getCurrentUserId();
       console.log('Fetching admin metrics for user ID:', user_id);
       
       if (!user_id) {
@@ -378,7 +379,8 @@ export const bookingAPI = {
       }
       
       // Use correct PHP endpoint path with .php extension
-      const url = getApiUrl(`/api/admin/metrics.php?period=${period}`);
+      const devMode = options?.dev_mode ? 'true' : 'false';
+      const url = getApiUrl(`/api/admin/metrics.php?period=${period}&dev_mode=${devMode}`);
       console.log('Admin metrics URL:', url);
       
       const token = localStorage.getItem('authToken');
