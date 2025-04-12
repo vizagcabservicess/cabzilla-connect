@@ -14,7 +14,7 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Expires': '0',
     'Origin': window.location.origin,
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': '*/*'
+    'Accept': 'application/json'
   };
 };
 
@@ -71,6 +71,10 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     throw new Error('No internet connection');
   }
   
+  // Add timestamp to prevent caching
+  const url = new URL(endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`);
+  url.searchParams.append('_t', Date.now().toString());
+  
   // Prepare enhanced options with CORS headers
   const enhancedOptions: RequestInit = {
     ...options,
@@ -82,14 +86,12 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
     }
   };
   
-  // Use direct URL to API without proxy
-  const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-  
   // Try up to 3 times
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const result = await fetch(url, enhancedOptions);
+      console.log(`Fetch attempt ${attempt} for ${url.toString()}`);
+      const result = await fetch(url.toString(), enhancedOptions);
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
@@ -108,4 +110,19 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   
   // If we got here, all attempts failed
   throw lastError || new Error('Failed to fetch after multiple attempts');
+};
+
+/**
+ * Check API health before making other requests
+ */
+export const checkApiHealth = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`/api/admin/status.php?_t=${Date.now()}`, {
+      headers: getBypassHeaders()
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('API health check failed:', error);
+    return false;
+  }
 };

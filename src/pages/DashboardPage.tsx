@@ -7,12 +7,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, Wifi, WifiOff } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
+import { safeFetch } from "@/config/requestConfig";
 
 const MAX_RETRIES = 3;
 
@@ -87,9 +88,35 @@ export default function DashboardPage() {
       // Add a timestamp to force refresh
       const timestamp = new Date().getTime();
       
-      // Use fetch directly for more control
+      // Get the auth token
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/user/bookings?_t=${timestamp}`, {
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      console.log('Using auth token:', token.substring(0, 10) + '...');
+      
+      // First check if the API is accessible
+      try {
+        const statusResponse = await fetch(`/api/admin/status.php?_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (statusResponse.ok) {
+          console.log('API is accessible, proceeding with bookings fetch');
+        } else {
+          console.warn('API status check failed:', statusResponse.status);
+        }
+      } catch (statusError) {
+        console.warn('Could not check API status:', statusError);
+      }
+      
+      // Use the enhanced safeFetch function for better reliability
+      const response = await safeFetch(`/api/user/bookings.php?_t=${timestamp}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
@@ -248,6 +275,40 @@ export default function DashboardPage() {
     toast.success('Logged out successfully');
   };
 
+  const handleVerifyApiConnection = async () => {
+    try {
+      setIsRefreshing(true);
+      
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/admin/status.php?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        toast.success('API is operational', {
+          description: `Server time: ${data.server_time}`
+        });
+        console.log('API status check successful:', data);
+      } else {
+        toast.error('API connectivity issue', {
+          description: `Status code: ${response.status}`
+        });
+        console.error('API status check failed with status:', response.status);
+      }
+    } catch (error) {
+      console.error('Error checking API connection:', error);
+      toast.error('Failed to check API connection', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -301,12 +362,31 @@ export default function DashboardPage() {
 
   if (error && retryCount >= MAX_RETRIES) {
     return (
-      <ApiErrorFallback 
-        error={error} 
-        onRetry={fetchBookings}
-        title="Error Loading Dashboard"
-        description="We couldn't load your bookings. Please try again."
-      />
+      <div className="container mx-auto py-10 px-4">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-500">We're having trouble loading your bookings</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleVerifyApiConnection} disabled={isRefreshing}>
+              {isRefreshing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
+              Check API
+            </Button>
+            <Button onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-1" />
+              Logout
+            </Button>
+          </div>
+        </div>
+        
+        <ApiErrorFallback 
+          error={error} 
+          onRetry={fetchBookings}
+          title="Error Loading Dashboard"
+          description="We couldn't load your bookings. Please try again."
+        />
+      </div>
     );
   }
 
@@ -362,6 +442,10 @@ export default function DashboardPage() {
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleVerifyApiConnection} disabled={isRefreshing}>
+            <Wifi className="h-4 w-4 mr-1" />
+            Verify API
           </Button>
           <Button onClick={() => navigate('/')}>Book New Cab</Button>
           <Button variant="outline" onClick={handleLogout}>

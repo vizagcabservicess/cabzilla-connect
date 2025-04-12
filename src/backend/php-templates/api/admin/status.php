@@ -1,33 +1,17 @@
 
 <?php
-// status.php - A simple endpoint to check API status
+// Include CORS headers
+require_once __DIR__ . '/../fix-cors.php';
 
-// Set CORS headers to allow requests from anywhere
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-// Handle OPTIONS preflight requests immediately
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    header('HTTP/1.1 200 OK');
-    exit();
-}
-
-// Set content type
-header('Content-Type: application/json');
-
-// Basic API status response
+// Return a simple JSON response with server status
 $response = [
-    'status' => 'success',
-    'message' => 'API is operational',
-    'timestamp' => time(),
+    'status' => 'ok',
     'server_time' => date('Y-m-d H:i:s'),
-    'server_info' => [
-        'php_version' => phpversion(),
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-        'request_method' => $_SERVER['REQUEST_METHOD']
-    ]
+    'timestamp' => time(),
+    'environment' => 'production',
+    'api_version' => '1.0.0',
+    'php_version' => PHP_VERSION
 ];
 
-// Output as JSON
-echo json_encode($response);
+// Send the response
+sendJsonResponse($response);

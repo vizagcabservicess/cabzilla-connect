@@ -152,3 +152,52 @@ function tableExists($conn, $tableName) {
     $result = $conn->query("SHOW TABLES LIKE '$tableName'");
     return $result && $result->num_rows > 0;
 }
+
+/**
+ * Create the bookings table if it doesn't exist
+ *
+ * @param mysqli $conn Database connection
+ * @return bool True if table exists or was created, false on error
+ */
+function ensureBookingsTableExists($conn) {
+    if (tableExists($conn, 'bookings')) {
+        return true;
+    }
+    
+    error_log("Creating bookings table...");
+    
+    $sql = "CREATE TABLE IF NOT EXISTS bookings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        booking_number VARCHAR(50) NOT NULL UNIQUE,
+        pickup_location TEXT NOT NULL,
+        drop_location TEXT,
+        pickup_date DATETIME NOT NULL,
+        return_date DATETIME,
+        cab_type VARCHAR(50) NOT NULL,
+        distance DECIMAL(10,2),
+        trip_type VARCHAR(20) NOT NULL,
+        trip_mode VARCHAR(20) NOT NULL,
+        total_amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        passenger_name VARCHAR(100) NOT NULL,
+        passenger_phone VARCHAR(20) NOT NULL,
+        passenger_email VARCHAR(100) NOT NULL,
+        driver_name VARCHAR(100),
+        driver_phone VARCHAR(20),
+        hourly_package VARCHAR(50),
+        tour_id VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+    
+    $result = $conn->query($sql);
+    
+    if ($result) {
+        error_log("Bookings table created successfully");
+        return true;
+    } else {
+        error_log("Failed to create bookings table: " . $conn->error);
+        return false;
+    }
+}
