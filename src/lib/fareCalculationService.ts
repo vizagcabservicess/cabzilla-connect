@@ -4,7 +4,7 @@ import { TripType, TripMode } from './tripTypes';
 import { hourlyPackages } from './packageData';
 import { fareService } from '@/services/fareService';
 
-// Cache for fare calculations to prevent recalculating the same fare
+// Initialize the cache for fare calculations to prevent recalculating the same fare
 const fareCache: FareCache = {
   timestamp: Date.now(),
   fares: {}

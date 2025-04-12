@@ -273,8 +273,8 @@ export const bookingAPI = {
         return [];
       }
       
-      // Use the proper endpoint based on the PHP backend structure
-      const apiUrl = getApiUrl(`/api/user/bookings.php?user_id=${user_id}`);
+      // Use the correct endpoint path with .php extension
+      const apiUrl = getApiUrl('/api/user/bookings.php');
       console.log('User bookings endpoint URL:', apiUrl);
       
       const token = localStorage.getItem('authToken');
@@ -333,8 +333,8 @@ export const bookingAPI = {
         return null;
       }
       
-      // Use correct PHP endpoint path
-      const url = getApiUrl(`/api/admin/metrics.php?period=${period}&user_id=${user_id}`);
+      // Use correct PHP endpoint path with .php extension
+      const url = getApiUrl(`/api/admin/metrics.php?period=${period}`);
       console.log('Admin metrics URL:', url);
       
       const token = localStorage.getItem('authToken');

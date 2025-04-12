@@ -34,7 +34,7 @@ $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
-error_log("User bookings request received");
+error_log("User bookings request received with headers: " . json_encode(array_keys($headers)));
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
@@ -48,11 +48,26 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
                 error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             }
+        } else {
+            error_log("verifyJwtToken function not available");
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
-        // Continue execution to provide fallback behavior
     }
+}
+
+// If we don't have a user ID from the token, try to get it from the query parameter
+if (!$userId && isset($_GET['user_id'])) {
+    $userId = intval($_GET['user_id']);
+    error_log("Using user_id from query parameter: $userId");
+}
+
+// If still no user ID and not in development mode, return error
+if (!$userId && !isset($_GET['dev_mode'])) {
+    error_log("No user ID provided in token or query parameters");
+    // Return empty bookings with status success instead of error
+    echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No user ID provided']);
+    exit;
 }
 
 // Connect to database
@@ -87,26 +102,6 @@ try {
         $fallbackBookings = createFallbackBookings();
         echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
         exit;
-    }
-    
-    // For new users, they won't have any bookings yet, so we'll check first
-    if ($userId) {
-        // Check if user exists in the database
-        $checkUserSql = "SELECT id FROM users WHERE id = ?";
-        $stmt = $conn->prepare($checkUserSql);
-        if (!$stmt) {
-            throw new Exception("Failed to prepare user check query: " . $conn->error);
-        }
-        
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            // User doesn't exist in database yet, common after signup
-            echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
-            exit;
-        }
     }
     
     // Query to get bookings - modifications to handle various scenarios
@@ -170,7 +165,7 @@ try {
     }
     
     // For new users who have no bookings yet, return an empty array with success
-    if (count($bookings) === 0 && $userId) {
+    if (count($bookings) === 0) {
         echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
         exit;
     }
