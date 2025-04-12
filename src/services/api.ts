@@ -1,3 +1,4 @@
+
 // API configuration for all endpoints
 
 // Import from config
@@ -367,7 +368,15 @@ export const fareAPI = {
   },
   
   getAirportFares: async () => {
-    return await api.get('/api/fares/airport');
+    try {
+      const response = await api.get('/api/fares/airport');
+      // Log the response for debugging
+      console.log('Airport fares API response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error fetching airport fares:', error);
+      throw error;
+    }
   },
   
   getOutstationFares: async () => {
@@ -410,7 +419,6 @@ export const fareAPI = {
     return await api.put('/api/admin/fare-update/tours', fareData);
   },
 
-  // Add missing methods for FareManagement component
   addTourFare: async (tourFareData: any) => {
     return await api.post('/api/admin/fare-update/tour', tourFareData);
   },
