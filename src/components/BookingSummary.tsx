@@ -39,11 +39,11 @@ export function BookingSummary({
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [fareUpdated, setFareUpdated] = useState<boolean>(false);
 
-  // Reset fare updated flag when cab changes
+  // Reset fare updated flag when cab changes or key parameters change
   useEffect(() => {
-    console.log('BookingSummary: selectedCab changed to:', selectedCab.name);
+    console.log('BookingSummary: Parameters changed, resetting fare updated flag');
     setFareUpdated(false);
-  }, [selectedCab.id]);
+  }, [selectedCab.id, tripType, tripMode, hourlyPackage, distance]);
 
   // Listen for fare calculation events to update the summary
   useEffect(() => {

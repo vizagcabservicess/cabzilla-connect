@@ -177,12 +177,12 @@ try {
             throw new Exception("Failed to ensure bookings table exists");
         }
         
-        // Prepare the SQL query
+        // Prepare the SQL query - NO STATUS COLUMN - FIXED
         $sql = "INSERT INTO bookings (
             booking_number, pickup_location, drop_location, pickup_date, return_date,
-            cab_type, distance, trip_type, trip_mode, total_amount, status,
+            cab_type, distance, trip_type, trip_mode, total_amount,
             passenger_name, passenger_phone, passenger_email, hourly_package
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -198,9 +198,9 @@ try {
             $returnDateFormatted = date('Y-m-d H:i:s', strtotime($booking['returnDate']));
         }
         
-        // Bind parameters
+        // Bind parameters - REMOVED STATUS PARAMETER
         $stmt->bind_param(
-            "ssssssdssdsssss",
+            "sssssdssdssss",
             $booking['bookingNumber'],
             $booking['pickupLocation'],
             $booking['dropLocation'],
@@ -211,7 +211,6 @@ try {
             $booking['tripType'],
             $booking['tripMode'],
             $booking['totalAmount'],
-            $booking['status'],
             $booking['passengerName'],
             $booking['passengerPhone'],
             $booking['passengerEmail'],

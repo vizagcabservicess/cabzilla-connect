@@ -80,24 +80,22 @@ export function CabOptions({
             
             console.log(`CabOptions: Calculated fare for ${cab.name}: ${fare}, Trip: ${tripType}, Mode: ${tripMode}`);
             
-            // If this is the selected cab, dispatch an event to update the BookingSummary
-            if (selectedCab && cab.id === selectedCab.id) {
-              const fareCalculatedEvent = new CustomEvent('fare-calculated', {
-                detail: {
-                  cabId: cab.id,
-                  cabName: cab.name,
-                  fare: fare,
-                  tripType: tripType,
-                  breakdown: {
-                    baseFare: fare - (cab.driverAllowance || 250),
-                    driverAllowance: cab.driverAllowance || 250
-                  }
+            // Always dispatch an event to update the BookingSummary
+            const fareCalculatedEvent = new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: cab.id,
+                cabName: cab.name,
+                fare: fare,
+                tripType: tripType,
+                breakdown: {
+                  baseFare: fare - (cab.driverAllowance || 250),
+                  driverAllowance: cab.driverAllowance || 250
                 }
-              });
-              
-              console.log(`CabOptions: Dispatching fare event for selected cab ${cab.name}: ${fare}`);
-              window.dispatchEvent(fareCalculatedEvent);
-            }
+              }
+            });
+            
+            console.log(`CabOptions: Dispatching fare event for cab ${cab.name}: ${fare}`);
+            window.dispatchEvent(fareCalculatedEvent);
           } catch (error) {
             console.error(`Error calculating fare for ${cab.name}:`, error);
             calculatedFares[cab.id] = 0;
@@ -114,7 +112,7 @@ export function CabOptions({
     };
     
     calculateFares();
-  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, selectedCab]);
+  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
   
   // Handle cab selection - ensure we update the BookingSummary
   const handleSelectCab = (cab: CabType) => {
