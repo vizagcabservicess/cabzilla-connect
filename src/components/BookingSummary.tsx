@@ -57,10 +57,17 @@ export const BookingSummary = ({
 
   useEffect(() => {
     totalPriceRef.current = totalPrice;
-    if (totalPrice > 0 && calculatedFare === 0) {
+    
+    if (totalPrice > 0) {
+      console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
       setCalculatedFare(totalPrice);
+      
+      const estimatedBaseFare = totalPrice - driverAllowance - nightCharges - extraDistanceFare;
+      if (estimatedBaseFare > 0) {
+        setBaseFare(estimatedBaseFare);
+      }
     }
-  }, [totalPrice]);
+  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare]);
 
   useEffect(() => {
     if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
@@ -91,6 +98,12 @@ export const BookingSummary = ({
         if (event.detail && event.detail.cabId === selectedCab.id && event.detail.fare > 0) {
           console.log(`BookingSummary: Received direct fare update for ${selectedCab.id}: ${event.detail.fare}`);
           setCalculatedFare(event.detail.fare);
+          
+          const estimatedBaseFare = event.detail.fare - driverAllowance - nightCharges - extraDistanceFare;
+          if (estimatedBaseFare > 0) {
+            setBaseFare(estimatedBaseFare);
+          }
+          
           setShowDetailsLoading(false);
         }
       };
@@ -103,7 +116,7 @@ export const BookingSummary = ({
         window.removeEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
       };
     }
-  }, [selectedCab, totalPrice]);
+  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare]);
 
   useEffect(() => {
     if (
@@ -125,11 +138,15 @@ export const BookingSummary = ({
       
       setShowDetailsLoading(true);
       
+      if (totalPrice > 0) {
+        setCalculatedFare(totalPrice);
+      }
+      
       calculationTimeoutRef.current = setTimeout(() => {
         recalculateFareDetails();
       }, 100);
     }
-  }, [distance, tripMode]);
+  }, [distance, tripMode, totalPrice]);
 
   const recalculateFareDetails = async () => {
     if (!selectedCab) {
@@ -160,6 +177,10 @@ export const BookingSummary = ({
     console.log(`BookingSummary: Calculating fare details for ${selectedCab.name} (attempt ${calculationAttemptsRef.current}/${maxCalculationAttempts})`);
     
     try {
+      if (totalPrice > 0 && calculationAttemptsRef.current === 1) {
+        setCalculatedFare(totalPrice);
+      }
+      
       let newBaseFare = 0;
       let newDriverAllowance = 250;
       let newNightCharges = 0;
@@ -292,20 +313,13 @@ export const BookingSummary = ({
       setEffectiveDistance(newEffectiveDistance);
       
       const newCalculatedFare = newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare;
-      setCalculatedFare(newCalculatedFare);
       
-      totalPriceRef.current = newCalculatedFare;
+      const finalFare = (totalPrice > 0) ? totalPrice : newCalculatedFare;
+      setCalculatedFare(finalFare);
+      totalPriceRef.current = finalFare;
       
-      if (Math.abs(newCalculatedFare - totalPrice) > 10) {
-        window.dispatchEvent(new CustomEvent('fare-calculated', {
-          detail: {
-            cabId: selectedCab.id,
-            tripType,
-            tripMode,
-            calculated: true,
-            fare: newCalculatedFare
-          }
-        }));
+      if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
+        console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
       }
     } catch (error) {
       console.error('Error calculating fare details:', error);
@@ -448,16 +462,16 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  let finalTotal = baseFare + driverAllowance + nightCharges + extraDistanceFare;
+  let finalTotal = calculatedFare;
   
-  if (finalTotal <= 0 && calculatedFare > 0) {
-    finalTotal = calculatedFare;
-  } else if (finalTotal <= 0 && totalPrice > 0) {
-    finalTotal = totalPrice;
-  } else if (finalTotal <= 0 && selectedCab.price) {
-    finalTotal = selectedCab.price;
-  } else if (finalTotal <= 0) {
-    finalTotal = tripType === 'airport' ? 500 : tripType === 'local' ? 1500 : 2500;
+  if (finalTotal <= 0) {
+    if (totalPrice > 0) {
+      finalTotal = totalPrice;
+    } else if (selectedCab.price) {
+      finalTotal = selectedCab.price;
+    } else {
+      finalTotal = tripType === 'airport' ? 500 : tripType === 'local' ? 1500 : 2500;
+    }
   }
 
   return (
@@ -575,33 +589,13 @@ export const BookingSummary = ({
                 )}
               </>
             )}
-          </div>
-          
-          <div className="border-t mt-4 pt-4">
-            <div className="flex justify-between text-xl font-bold">
+            
+            <Separator />
+            
+            <div className="flex justify-between text-lg font-bold pt-2">
               <span>Total Amount</span>
-              <span className="flex items-center">
-                {(isRefreshing || showDetailsLoading) && (
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
-                )}
-                ₹{finalTotal.toLocaleString()}
-              </span>
+              <span>₹{finalTotal.toLocaleString()}</span>
             </div>
-          </div>
-          
-          <div className="bg-blue-50 p-3 rounded-md flex items-start gap-2 text-sm text-gray-700 mt-4">
-            <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <p>
-              {tripType === 'outstation' && tripMode === 'round-trip'
-                ? 'Fare includes round trip journey (both ways). Driver allowance included for overnight stays.'
-                : tripType === 'outstation' && tripMode === 'one-way'
-                ? 'Minimum 300 km fare applies for one-way trips. Driver allowance included for return journey.'
-                : tripType === 'tour'
-                ? 'All-inclusive tour package fare includes driver allowance and wait charges.'
-                : tripType === 'local'
-                ? 'Package includes 8 hours and 80 km. Additional charges apply beyond package limits.'
-                : 'Base fare for one-way trip. Additional wait charges may apply.'}
-            </p>
           </div>
         </div>
       </div>
