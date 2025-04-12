@@ -336,10 +336,7 @@ const AirportFareManagement: React.FC = () => {
     try {
       // Generate a unique timestamp to avoid caching
       const timestamp = new Date().getTime();
-      await updateAirportFares({
-        ...fareToSave,
-        timestamp
-      });
+      await updateAirportFares(fareToSave);
       
       toast({
         title: "Success",
