@@ -114,11 +114,21 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     console.log(`No specific airport fare found for vehicle ${cabType.id}, fetching all fares`);
     const airportFaresResponse = await fareService.getAirportFares();
     
+    // Type guard to check if the response is an object with a status field
+    interface ApiResponse {
+      status: string;
+      data?: {
+        fares?: any[];
+        [key: string]: any;
+      };
+      [key: string]: any;
+    }
+    
     // Check if response contains fares array and has status success
     if (airportFaresResponse && 
         typeof airportFaresResponse === 'object' &&
         'status' in airportFaresResponse &&
-        airportFaresResponse.status === "success" && 
+        (airportFaresResponse as ApiResponse).status === "success" && 
         'data' in airportFaresResponse &&
         airportFaresResponse.data && 
         'fares' in airportFaresResponse.data &&
@@ -162,7 +172,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     } else if (airportFaresResponse && 
               typeof airportFaresResponse === 'object' &&
               'status' in airportFaresResponse &&
-              airportFaresResponse.status === "success") {
+              (airportFaresResponse as ApiResponse).status === "success") {
       console.log("API returned success but no valid fare data structure:", airportFaresResponse);
     }
     
