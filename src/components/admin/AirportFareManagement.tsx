@@ -90,10 +90,8 @@ const AirportFareManagement: React.FC = () => {
       
       // Generate a unique timestamp to avoid caching
       const timestamp = new Date().getTime();
-      const response: ApiResponse = await fetchAirportFares(vehicleId, { 
-        forceRefresh: true, 
-        timestamp: timestamp 
-      });
+      const response: ApiResponse = await fetchAirportFares(vehicleId);
+      
       console.log('Airport fares response:', response);
       
       const extractFareData = (response: ApiResponse): ApiResponseFare | null => {
