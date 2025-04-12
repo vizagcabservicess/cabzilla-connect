@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { Booking, BookingRequest, BookingResponse, DashboardMetrics } from '@/types/api';
@@ -114,10 +115,14 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (period: string = 'week', status: string = 'all'): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (options?: { period?: string, status?: string }): Promise<DashboardMetrics> => {
     try {
       // Get user ID from localStorage
       const userIdToUse = Number(localStorage.getItem('userId'));
+      
+      // Extract options or use defaults
+      const period = options?.period || 'week';
+      const status = options?.status || 'all';
       
       console.log(`Fetching admin dashboard metrics with user ID: ${userIdToUse}, period: ${period}, status: ${status}`);
       

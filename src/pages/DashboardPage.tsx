@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -139,8 +140,8 @@ export default function DashboardPage() {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
       
-      // Fix: Only pass the period and status as arguments, not userId
-      const metrics = await bookingAPI.getAdminDashboardMetrics(period, status);
+      // Fix: Pass only one argument with options object
+      const metrics = await bookingAPI.getAdminDashboardMetrics({ period, status });
       
       console.log('Admin metrics loaded:', metrics);
       setAdminMetrics(metrics || DEFAULT_METRICS);
