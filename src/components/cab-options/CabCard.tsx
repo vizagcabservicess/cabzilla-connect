@@ -1,27 +1,50 @@
 
-import React, { ReactNode } from 'react';
+import React from 'react';
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatPrice } from '@/lib/cabData';
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 interface CabCardProps {
+  children: React.ReactNode;
   className?: string;
   onClick?: () => void;
-  children: ReactNode;
 }
 
 export const CabCard: React.FC<CabCardProps> = ({ 
-  className, 
-  onClick, 
-  children 
+  children, 
+  className,
+  onClick
 }) => {
   return (
     <Card 
-      className={cn("mb-4 overflow-hidden", className)} 
+      className={cn("mb-4 p-4 cursor-pointer hover:shadow-md", className)}
       onClick={onClick}
     >
       {children}
+    </Card>
+  );
+};
+
+export const CabCardLoading = () => {
+  return (
+    <Card className="mb-4 p-4 animate-pulse">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center">
+          <div className="w-16 h-16 bg-gray-200 rounded-md"></div>
+          <div className="ml-3">
+            <div className="h-5 w-24 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      </div>
+      <div className="mt-4 flex justify-between items-center">
+        <div className="h-6 bg-gray-200 rounded w-20"></div>
+        <div className="h-9 bg-gray-200 rounded w-24"></div>
+      </div>
     </Card>
   );
 };
@@ -31,19 +54,21 @@ interface CabCardHeaderProps {
   name: string;
 }
 
-export const CabCardHeader: React.FC<CabCardHeaderProps> = ({ 
-  image, 
-  name 
-}) => {
+export const CabCardHeader: React.FC<CabCardHeaderProps> = ({ image, name }) => {
   return (
-    <div className="px-4 pt-4 flex items-center space-x-4">
-      <div 
-        className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: image ? `url(${image})` : 'none' }}
-      >
-        {!image && <span className="text-gray-500 text-xs">{name.charAt(0)}</span>}
+    <div className="flex justify-between items-center mb-4">
+      <div className="flex items-center">
+        {image ? (
+          <img src={image} alt={name} className="w-16 h-16 object-cover rounded-md" />
+        ) : (
+          <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center text-gray-400">
+            Car
+          </div>
+        )}
+        <div className="ml-3">
+          <h3 className="text-lg font-semibold">{name}</h3>
+        </div>
       </div>
-      <h3 className="font-semibold text-lg">{name}</h3>
     </div>
   );
 };
@@ -52,7 +77,7 @@ interface CabCardContentProps {
   capacity: number;
   luggageCapacity: number;
   ac: boolean;
-  description: string;
+  description?: string;
 }
 
 export const CabCardContent: React.FC<CabCardContentProps> = ({ 
@@ -62,13 +87,31 @@ export const CabCardContent: React.FC<CabCardContentProps> = ({
   description 
 }) => {
   return (
-    <div className="p-4">
-      <p className="text-sm text-gray-600 mb-2">{description}</p>
-      <div className="flex flex-wrap gap-2">
-        <span className="text-xs bg-gray-100 px-2 py-1 rounded">{capacity} persons</span>
-        <span className="text-xs bg-gray-100 px-2 py-1 rounded">{luggageCapacity} luggage</span>
-        {ac && <span className="text-xs bg-gray-100 px-2 py-1 rounded">AC</span>}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-4 text-sm text-gray-600">
+        <div className="flex items-center">
+          <span className="font-medium">{capacity} persons</span>
+        </div>
+        <div className="flex items-center">
+          <span className="font-medium">{luggageCapacity} luggage</span>
+        </div>
+        <div className="flex items-center">
+          {ac ? (
+            <span className="flex items-center text-green-600">
+              <Check size={16} className="mr-1" />
+              AC
+            </span>
+          ) : (
+            <span className="flex items-center text-red-600">
+              <X size={16} className="mr-1" />
+              Non-AC
+            </span>
+          )}
+        </div>
       </div>
+      {description && (
+        <p className="text-sm text-gray-500">{description}</p>
+      )}
     </div>
   );
 };
@@ -81,46 +124,21 @@ interface CabCardFooterProps {
 
 export const CabCardFooter: React.FC<CabCardFooterProps> = ({ 
   price, 
-  fareDetails, 
-  isSelected 
+  fareDetails,
+  isSelected
 }) => {
   return (
-    <div className="px-4 pb-4 flex justify-between items-center border-t pt-3">
-      <div>
-        <div className="font-bold text-lg">{formatPrice(price)}</div>
-        <div className="text-xs text-blue-600">{fareDetails}</div>
+    <div className="mt-4 flex justify-between items-center">
+      <div className="text-sm text-gray-500">
+        {fareDetails}
       </div>
-      {isSelected && (
-        <div className="flex items-center text-blue-600 text-sm font-medium">
-          <Check size={16} className="mr-1" />
-          Selected
-        </div>
-      )}
+      <div className={cn(
+        "px-4 py-1.5 rounded-md flex items-center",
+        isSelected ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
+      )}>
+        <span className="text-lg font-bold">{formatPrice(price)}</span>
+        {isSelected && <Check size={18} className="ml-2" />}
+      </div>
     </div>
-  );
-};
-
-export const CabCardLoading = () => {
-  return (
-    <Card className="mb-4 overflow-hidden animate-pulse">
-      <div className="p-4">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-md bg-gray-200"></div>
-          <div className="h-5 bg-gray-200 rounded w-32"></div>
-        </div>
-        <div className="mt-4 space-y-2">
-          <div className="h-3 bg-gray-200 rounded w-full"></div>
-          <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <div className="h-5 bg-gray-200 rounded w-16"></div>
-          <div className="h-5 bg-gray-200 rounded w-16"></div>
-        </div>
-        <div className="mt-4 border-t pt-3 flex justify-between">
-          <div className="h-6 bg-gray-200 rounded w-20"></div>
-          <div className="h-6 bg-gray-200 rounded w-16"></div>
-        </div>
-      </div>
-    </Card>
   );
 };

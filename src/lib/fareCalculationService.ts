@@ -1,4 +1,3 @@
-
 import { CabType, HourlyPackage, FareCache, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
 import { hourlyPackages } from './packageData';
@@ -22,61 +21,175 @@ export const clearFareCache = () => {
   window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
 };
 
+// Helper function to normalize vehicle IDs for consistent lookup
+const normalizeVehicleId = (vehicleId: string): string => {
+  // Convert to lowercase and remove spaces
+  let normalized = vehicleId.toLowerCase().replace(/[\s-]+/g, '_');
+  
+  // Map common vehicle types to standard IDs
+  if (normalized.includes('innova') && normalized.includes('crysta')) {
+    return 'innova_crysta';
+  } else if (normalized.includes('innova') && normalized.includes('hycross')) {
+    return 'innova_crysta'; // Map Hycross to Crysta for fare lookup
+  } else if (normalized.includes('innova')) {
+    return 'innova_crysta';
+  } else if (normalized.includes('ertiga')) {
+    return 'ertiga';
+  } else if (normalized.includes('sedan') || normalized.includes('dzire')) {
+    return 'sedan';
+  } else if (normalized.includes('luxury')) {
+    return 'luxury';
+  } else if (normalized.includes('tempo')) {
+    return 'tempo';
+  } else if (normalized.includes('mpv')) {
+    return 'innova_crysta'; // Map MPV to Innova Crysta as fallback
+  }
+  
+  return normalized;
+};
+
 // Calculate airport fare
 export const calculateAirportFare = async (cabType: CabType, distance: number): Promise<number> => {
-  const cacheKey = `airport_${cabType.id}_${Math.round(distance)}`;
+  // First, normalize the vehicle ID for consistent lookup
+  const normalizedVehicleId = normalizeVehicleId(cabType.id);
   
-  // Check if we have an airport fare in localStorage
-  const localStorageKey = `airport_fare_${cabType.id.toLowerCase()}`;
-  const storedFare = localStorage.getItem(localStorageKey);
+  // Get a list of possible cache keys to check
+  const possibleCacheKeys = [
+    `airport_${cabType.id}_${Math.round(distance)}`,
+    `airport_${normalizedVehicleId}_${Math.round(distance)}`
+  ];
   
-  if (storedFare) {
-    const fareValue = parseInt(storedFare, 10);
-    if (!isNaN(fareValue) && fareValue > 0) {
-      console.log(`Using stored airport fare for ${cabType.id}: ${fareValue}`);
-      fareCache.fares[cacheKey] = fareValue;
-      return fareValue;
+  // Check if we have a cached result for any of the possible keys
+  for (const cacheKey of possibleCacheKeys) {
+    if (fareCache.fares[cacheKey]) {
+      console.log(`Using cached airport fare for ${cabType.id}: ${fareCache.fares[cacheKey]}`);
+      return fareCache.fares[cacheKey];
     }
   }
   
-  // If we have a cached result, return it
-  if (fareCache.fares[cacheKey]) {
-    return fareCache.fares[cacheKey];
+  // List of possible localStorage keys to check
+  const possibleLocalStorageKeys = [
+    `airport_fare_${cabType.id.toLowerCase()}`,
+    `airport_fare_${normalizedVehicleId}`
+  ];
+  
+  // Check if we have an airport fare in localStorage
+  for (const localStorageKey of possibleLocalStorageKeys) {
+    const storedFare = localStorage.getItem(localStorageKey);
+    if (storedFare) {
+      const fareValue = parseInt(storedFare, 10);
+      if (!isNaN(fareValue) && fareValue > 0) {
+        console.log(`Using stored airport fare for ${cabType.id}: ${fareValue}`);
+        fareCache.fares[possibleCacheKeys[0]] = fareValue;
+        return fareValue;
+      }
+    }
   }
   
   try {
-    // Try to get the fare from the API
-    const airportFare = await fareService.getAirportFaresForVehicle(cabType.id);
+    // Try to get the fare from the API using the original ID
+    console.log(`Fetching airport fares for vehicle ${cabType.id} (normalized: ${normalizedVehicleId}) with timestamp: ${Date.now()}`);
+    let airportFare = await fareService.getAirportFaresForVehicle(cabType.id);
     
+    // If no results with original ID, try with normalized ID
+    if (!airportFare || !airportFare.basePrice) {
+      console.log(`No results with original ID, trying normalized ID: ${normalizedVehicleId}`);
+      airportFare = await fareService.getAirportFaresForVehicle(normalizedVehicleId);
+    }
+    
+    // If we got a valid fare from API, use it
     if (airportFare && airportFare.basePrice) {
-      // Save the base fare to localStorage for future use
-      localStorage.setItem(localStorageKey, airportFare.basePrice.toString());
+      console.log(`Got valid airport fare from API for ${cabType.id}: ${airportFare.basePrice}`);
+      
+      // Save to localStorage for future use
+      localStorage.setItem(possibleLocalStorageKeys[0], airportFare.basePrice.toString());
       
       // Cache and return the base fare
-      fareCache.fares[cacheKey] = airportFare.basePrice;
+      fareCache.fares[possibleCacheKeys[0]] = airportFare.basePrice;
       return airportFare.basePrice;
+    }
+    
+    // If API didn't return valid fare, try fetching all airport fares
+    console.log(`No specific airport fare found for vehicle ${cabType.id}, fetching all fares`);
+    const allFares = await fareService.getAllAirportFares();
+    
+    // Try to find a matching fare in the list
+    if (allFares && allFares.fares && allFares.fares.length > 0) {
+      // Try to find an exact match first
+      const matchingFare = allFares.fares.find(fare => 
+        fare.vehicle_id === cabType.id || 
+        fare.vehicleId === cabType.id ||
+        fare.vehicle_id === normalizedVehicleId || 
+        fare.vehicleId === normalizedVehicleId
+      );
+      
+      if (matchingFare && matchingFare.basePrice) {
+        console.log(`Found matching fare in all fares for ${cabType.id}: ${matchingFare.basePrice}`);
+        
+        // Save to localStorage for future use
+        localStorage.setItem(possibleLocalStorageKeys[0], matchingFare.basePrice.toString());
+        
+        // Cache and return the base fare
+        fareCache.fares[possibleCacheKeys[0]] = matchingFare.basePrice;
+        return matchingFare.basePrice;
+      }
     }
     
     // Fallback calculation if API doesn't return a valid fare
     console.log(`No valid airport fare found for ${cabType.id}, using fallback calculation`);
-    const baseFare = cabType.id.includes('luxury') ? 2000 : 
-                   cabType.id.includes('innova') ? 1500 : 
-                   cabType.id.includes('ertiga') ? 1200 : 800;
+    
+    // Use our database values as fallbacks based on screenshots
+    let baseFare: number;
+    
+    if (normalizedVehicleId.includes('sedan')) {
+      baseFare = 3900;
+    } else if (normalizedVehicleId.includes('ertiga')) {
+      baseFare = 3200;
+    } else if (normalizedVehicleId.includes('innova')) {
+      baseFare = 4000;
+    } else if (normalizedVehicleId.includes('luxury')) {
+      baseFare = 7000;
+    } else if (normalizedVehicleId.includes('tempo')) {
+      baseFare = 6000;
+    } else if (normalizedVehicleId.includes('mpv')) {
+      baseFare = 4000; // MPV maps to Innova fare
+    } else {
+      baseFare = 3900; // Default to sedan
+    }
     
     // Cache the result
-    fareCache.fares[cacheKey] = baseFare;
+    fareCache.fares[possibleCacheKeys[0]] = baseFare;
+    
+    // Store in localStorage for future reference
+    localStorage.setItem(possibleLocalStorageKeys[0], baseFare.toString());
+    
     return baseFare;
     
   } catch (error) {
     console.error('Error calculating airport fare:', error);
     
     // Fallback calculation if API fails
-    const baseFare = cabType.id.includes('luxury') ? 2000 : 
-                   cabType.id.includes('innova') ? 1500 : 
-                   cabType.id.includes('ertiga') ? 1200 : 800;
+    // Use our database values as fallbacks based on screenshots
+    let baseFare: number;
+    
+    if (normalizedVehicleId.includes('sedan')) {
+      baseFare = 3900;
+    } else if (normalizedVehicleId.includes('ertiga')) {
+      baseFare = 3200;
+    } else if (normalizedVehicleId.includes('innova')) {
+      baseFare = 4000;
+    } else if (normalizedVehicleId.includes('luxury')) {
+      baseFare = 7000;
+    } else if (normalizedVehicleId.includes('tempo')) {
+      baseFare = 6000;
+    } else if (normalizedVehicleId.includes('mpv')) {
+      baseFare = 4000; // MPV maps to Innova fare
+    } else {
+      baseFare = 3900; // Default to sedan
+    }
     
     // Cache the result
-    fareCache.fares[cacheKey] = baseFare;
+    fareCache.fares[possibleCacheKeys[0]] = baseFare;
     return baseFare;
   }
 };

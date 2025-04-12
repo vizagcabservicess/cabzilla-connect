@@ -48,11 +48,43 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
-// If we found a vehicle ID, add it to $_GET for the forwarded request
+// Normalize the vehicle ID for consistent lookup
+function normalizeVehicleId($id) {
+    // Convert to lowercase and remove spaces/hyphens
+    $id = strtolower(preg_replace('/[\s-]+/', '_', $id));
+    
+    // Map common vehicle types to standard IDs
+    if (strpos($id, 'innova') !== false && strpos($id, 'crysta') !== false) {
+        return 'innova_crysta';
+    } else if (strpos($id, 'innova') !== false && strpos($id, 'hycross') !== false) {
+        return 'innova_crysta'; // Map Hycross to Crysta for fare lookup
+    } else if (strpos($id, 'innova') !== false) {
+        return 'innova_crysta';
+    } else if (strpos($id, 'ertiga') !== false) {
+        return 'ertiga';
+    } else if (strpos($id, 'sedan') !== false || strpos($id, 'dzire') !== false) {
+        return 'sedan';
+    } else if (strpos($id, 'luxury') !== false) {
+        return 'luxury';
+    } else if (strpos($id, 'tempo') !== false) {
+        return 'tempo';
+    } else if (strpos($id, 'mpv') !== false) {
+        return 'innova_crysta'; // Map MPV to Innova Crysta as fallback
+    }
+    
+    return $id;
+}
+
+// Normalize the vehicle ID if we have one
 if ($vehicleId) {
+    $originalVehicleId = $vehicleId;
+    $vehicleId = normalizeVehicleId($vehicleId);
+    file_put_contents($logFile, "[$timestamp] Normalized vehicle ID: $originalVehicleId -> $vehicleId\n", FILE_APPEND);
+    
+    // Add both original and normalized IDs to the query parameters
     $_GET['vehicleId'] = $vehicleId;
     $_GET['vehicle_id'] = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
+    $_GET['original_vehicle_id'] = $originalVehicleId;
     
     // If this is a GET request, append vehicle_id to the query string
     if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos($_SERVER['REQUEST_URI'], 'vehicle_id=') === false) {
@@ -78,50 +110,53 @@ header('Expires: 0');
 if (isset($_GET['direct_output']) && $_GET['direct_output'] === 'true') {
     file_put_contents($logFile, "[$timestamp] Using direct output mode for vehicle_id: $vehicleId\n", FILE_APPEND);
     
-    // Define some default fares if needed
+    // Define updated fares based on DB screenshot
     $defaultFares = [
         'sedan' => [
-            'basePrice' => 800,
+            'basePrice' => 3900,
             'pickupPrice' => 800,
             'dropPrice' => 800,
             'extraKmCharge' => 12
         ],
         'ertiga' => [
-            'basePrice' => 1200,
+            'basePrice' => 3200,
             'pickupPrice' => 1000,
             'dropPrice' => 1000,
             'extraKmCharge' => 15
         ],
         'innova_crysta' => [
-            'basePrice' => 1500,
+            'basePrice' => 4000,
             'pickupPrice' => 1200,
             'dropPrice' => 1200,
-            'extraKmCharge' => 18
+            'extraKmCharge' => 17
         ],
         'luxury' => [
-            'basePrice' => 2000,
-            'pickupPrice' => 1500,
-            'dropPrice' => 1500,
+            'basePrice' => 7000,
+            'pickupPrice' => 2500,
+            'dropPrice' => 2500,
             'extraKmCharge' => 22
         ],
-        'tempo_traveller' => [
-            'basePrice' => 2500,
+        'tempo' => [
+            'basePrice' => 6000,
             'pickupPrice' => 2000,
             'dropPrice' => 2000,
-            'extraKmCharge' => 25
+            'extraKmCharge' => 19
+        ],
+        'mpv' => [
+            'basePrice' => 4000, // Same as innova_crysta
+            'pickupPrice' => 1200,
+            'dropPrice' => 1200,
+            'extraKmCharge' => 17
         ]
     ];
     
     // Try to normalize the vehicle ID to match our array keys
     $normalizedVehicleId = strtolower(str_replace([' ', '-', '_'], '_', $vehicleId));
-    foreach (array_keys($defaultFares) as $key) {
-        if (strpos($normalizedVehicleId, $key) !== false) {
-            $normalizedVehicleId = $key;
-            break;
-        }
-    }
     
-    $fare = $defaultFares[$normalizedVehicleId] ?? $defaultFares['sedan'];
+    // Try to find a matching fare in our default fares
+    $fare = isset($defaultFares[$normalizedVehicleId]) 
+        ? $defaultFares[$normalizedVehicleId] 
+        : $defaultFares['sedan']; // Default to sedan
     
     $response = [
         'status' => 'success',
@@ -140,13 +175,22 @@ if (isset($_GET['direct_output']) && $_GET['direct_output'] === 'true') {
                 'dropPrice' => $fare['dropPrice'],
                 'drop_price' => $fare['dropPrice'],
                 'extraKmCharge' => $fare['extraKmCharge'],
-                'extra_km_charge' => $fare['extraKmCharge']
+                'extra_km_charge' => $fare['extraKmCharge'],
+                'tier1Price' => isset($fare['tier1Price']) ? $fare['tier1Price'] : $fare['basePrice'],
+                'tier1_price' => isset($fare['tier1Price']) ? $fare['tier1Price'] : $fare['basePrice'],
+                'tier2Price' => isset($fare['tier2Price']) ? $fare['tier2Price'] : $fare['basePrice'] + 200,
+                'tier2_price' => isset($fare['tier2Price']) ? $fare['tier2Price'] : $fare['basePrice'] + 200,
+                'tier3Price' => isset($fare['tier3Price']) ? $fare['tier3Price'] : $fare['basePrice'] + 400,
+                'tier3_price' => isset($fare['tier3Price']) ? $fare['tier3Price'] : $fare['basePrice'] + 400,
+                'tier4Price' => isset($fare['tier4Price']) ? $fare['tier4Price'] : $fare['basePrice'] + 600,
+                'tier4_price' => isset($fare['tier4Price']) ? $fare['tier4Price'] : $fare['basePrice'] + 600
             ]
         ],
         'count' => 1,
         'timestamp' => time()
     ];
     
+    file_put_contents($logFile, "[$timestamp] Direct output response: " . json_encode($response) . "\n", FILE_APPEND);
     echo json_encode($response);
     exit;
 }
