@@ -5,13 +5,17 @@ import { hourlyPackages } from './packageData';
 import { fareService } from '@/services/fareService';
 
 // Cache for fare calculations to prevent recalculating the same fare
-const fareCache: FareCache = {};
+const fareCache: FareCache = {
+  timestamp: Date.now(),
+  fares: {}
+};
 
 // Clear cache for fare calculations
 export const clearFareCache = () => {
-  Object.keys(fareCache).forEach((key) => {
-    delete fareCache[key];
-  });
+  // Reset the cache with new timestamp and empty fares object
+  fareCache.timestamp = Date.now();
+  fareCache.fares = {};
+  
   console.log('Fare cache cleared');
   
   // Dispatch an event to notify components about the cleared cache
@@ -30,14 +34,14 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const fareValue = parseInt(storedFare, 10);
     if (!isNaN(fareValue) && fareValue > 0) {
       console.log(`Using stored airport fare for ${cabType.id}: ${fareValue}`);
-      fareCache[cacheKey] = fareValue;
+      fareCache.fares[cacheKey] = fareValue;
       return fareValue;
     }
   }
   
   // If we have a cached result, return it
-  if (fareCache[cacheKey]) {
-    return fareCache[cacheKey];
+  if (fareCache.fares[cacheKey]) {
+    return fareCache.fares[cacheKey];
   }
   
   try {
@@ -49,7 +53,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       localStorage.setItem(localStorageKey, airportFare.basePrice.toString());
       
       // Cache and return the base fare
-      fareCache[cacheKey] = airportFare.basePrice;
+      fareCache.fares[cacheKey] = airportFare.basePrice;
       return airportFare.basePrice;
     }
     
@@ -60,7 +64,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
                    cabType.id.includes('ertiga') ? 1200 : 800;
     
     // Cache the result
-    fareCache[cacheKey] = baseFare;
+    fareCache.fares[cacheKey] = baseFare;
     return baseFare;
     
   } catch (error) {
@@ -72,7 +76,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
                    cabType.id.includes('ertiga') ? 1200 : 800;
     
     // Cache the result
-    fareCache[cacheKey] = baseFare;
+    fareCache.fares[cacheKey] = baseFare;
     return baseFare;
   }
 };
