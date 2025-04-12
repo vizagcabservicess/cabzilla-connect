@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -394,6 +393,42 @@ export const BookingSummary = ({
       
       if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
         console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
+        
+        // CRITICAL FIX: Emit a custom event for significant fare differences
+        // CabList and CabOptions will listen for this event to update their displayed fares
+        window.dispatchEvent(new CustomEvent('significant-fare-difference', {
+          detail: {
+            cabId: selectedCab.id,
+            calculatedFare: newCalculatedFare,
+            parentFare: totalPrice,
+            tripType: tripType,
+            tripMode: tripMode,
+            timestamp: Date.now()
+          }
+        }));
+        
+        // For airport transfers, we need to make sure the calculated fare is used
+        if (tripType === 'airport' && Math.abs(newCalculatedFare - totalPrice) > 50) {
+          console.log(`BookingSummary: Using calculated fare ${newCalculatedFare} for airport transfer instead of ${totalPrice}`);
+          setCalculatedFare(newCalculatedFare);
+          totalPriceRef.current = newCalculatedFare;
+          
+          // Store this calculated fare in localStorage and re-emit
+          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, newCalculatedFare.toString());
+          
+          // Emit an event for the CabList to update with this calculated fare
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: selectedCab.id,
+              tripType: tripType,
+              tripMode: tripMode,
+              calculated: true,
+              fare: newCalculatedFare,
+              timestamp: Date.now()
+            }
+          }));
+        }
       }
     } catch (error) {
       console.error('Error calculating fare details:', error);

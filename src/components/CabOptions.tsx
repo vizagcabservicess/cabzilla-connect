@@ -199,8 +199,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   useEffect(() => {
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
-        const { cabId, fare, tripType: eventTripType } = event.detail;
-        console.log(`CabOptions: Received fare-calculated event for ${cabId}: ${fare}`);
+        const { cabId, fare, tripType: eventTripType, calculated = false } = event.detail;
+        console.log(`CabOptions: Received fare-calculated event for ${cabId}: ${fare}, calculated=${calculated}`);
         
         // For airport transfers in particular, we want to update immediately
         if (tripType === 'airport' || eventTripType === 'airport') {
@@ -214,6 +214,22 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           // Save to localStorage for other components
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
+          
+          // Emit a fare update event for airport transfers (with calculated flag)
+          if (calculated) {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: cabId,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  calculated: true,
+                  fare: fare,
+                  timestamp: Date.now()
+                }
+              }));
+            }, 50);
+          }
         } else {
           setCabFares(prev => {
             const updated = { ...prev, [cabId]: fare };
@@ -226,13 +242,33 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     // Handle direct fare update events
     const handleDirectFareUpdate = (event: CustomEvent) => {
       if (event.detail && event.detail.cabType && event.detail.fare > 0) {
-        const { cabType, fare } = event.detail;
-        console.log(`CabOptions: Received direct fare update for ${cabType}: ${fare}`);
+        const { cabType, fare, calculated = false } = event.detail;
+        console.log(`CabOptions: Received direct fare update for ${cabType}: ${fare}, calculated=${calculated}`);
         
         setCabFares(prev => {
           const updated = { ...prev, [cabType]: fare };
           return updated;
         });
+        
+        // For airport transfers, we want to store this fare and notify other components
+        if (tripType === 'airport' && calculated) {
+          const localStorageKey = `fare_${tripType}_${cabType.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, fare.toString());
+          
+          // Re-emit as a fare-calculated event to ensure CabList gets updated
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: cabType,
+                tripType: tripType,
+                tripMode: tripMode,
+                calculated: true,
+                fare: fare,
+                timestamp: Date.now()
+              }
+            }));
+          }, 50);
+        }
       }
     };
     
@@ -257,16 +293,52 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       }
     };
     
+    // Handle significant fare difference events from BookingSummary
+    const handleSignificantFareDifference = (event: CustomEvent) => {
+      if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
+        const { calculatedFare, parentFare, cabId } = event.detail;
+        console.log(`CabOptions: Received significant fare difference for ${cabId}: calculated=${calculatedFare}, parent=${parentFare}`);
+        
+        if (tripType === 'airport') {
+          // Update our fares with the calculatedFare
+          setCabFares(prev => {
+            const updated = { ...prev, [cabId]: calculatedFare };
+            return updated;
+          });
+          
+          // Save to localStorage
+          const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, calculatedFare.toString());
+          
+          // Emit an event for the CabList to update
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: cabId,
+                tripType: tripType,
+                tripMode: tripMode,
+                calculated: true,
+                fare: calculatedFare,
+                timestamp: Date.now()
+              }
+            }));
+          }, 50);
+        }
+      }
+    };
+    
     window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
     window.addEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
     window.addEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
     window.addEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
+    window.addEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
       window.removeEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
       window.removeEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
       window.removeEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
+      window.removeEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     };
   }, [cabFares, selectedCab, tripType, tripMode]);
 
