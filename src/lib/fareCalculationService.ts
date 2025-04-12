@@ -604,3 +604,25 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     return 0;
   }
 };
+
+export const calculateTotalFare = (
+  baseFare: number,
+  driverAllowance: number,
+  nightHaltCharges: number,
+  otherCharges: number,
+  tripType: string,
+  surcharge?: number
+): number => {
+  // For airport transfers, set driver allowance to 0
+  if (tripType === 'airport') {
+    driverAllowance = 0;
+  }
+  
+  const total = baseFare + driverAllowance + nightHaltCharges + otherCharges;
+  
+  if (surcharge && surcharge > 0) {
+    return total + surcharge;
+  }
+  
+  return total;
+};
