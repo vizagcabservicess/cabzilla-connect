@@ -60,6 +60,14 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         }
       }));
       console.log(`CabOptions: Dispatched trip-type-changed event for ${tripType}`);
+      
+      // Clear fare cache in localStorage when trip type changes
+      if (tripType === 'airport') {
+        localStorage.setItem('forceCacheRefresh', 'true');
+        setTimeout(() => {
+          localStorage.removeItem('forceCacheRefresh');
+        }, 500);
+      }
     } catch (error) {
       console.error('Error dispatching trip type change event:', error);
     }
@@ -74,7 +82,20 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     
     // Emit event when a cab is selected, which BookingSummary will listen for
     const cabFare = cabFares[cab.id] || 0;
+    
     try {
+      // First emit event without fare to ensure component selection state updates
+      window.dispatchEvent(new CustomEvent('cab-selected', {
+        detail: {
+          cabType: cab.id,
+          cabName: cab.name,
+          tripType: tripType,
+          tripMode: tripMode,
+          timestamp: Date.now()
+        }
+      }));
+      
+      // Then emit with fare information
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: cab.id,
@@ -86,6 +107,30 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         }
       }));
       console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
+      
+      // For airport transfers, trigger an explicit request for fare recalculation
+      if (tripType === 'airport') {
+        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: tripType,
+            tripMode: tripMode,
+            timestamp: Date.now()
+          }
+        }));
+        
+        // Also explicitly request a fare from BookingSummary
+        window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+          detail: {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: tripType,
+            tripMode: tripMode,
+            timestamp: Date.now()
+          }
+        }));
+      }
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
     }
@@ -206,6 +251,19 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             }
           }));
           console.log(`CabOptions: Dispatched fare update event for existing selected cab ${selectedCab.id}: ${actualFares[selectedCab.id]}`);
+          
+          // For airport transfers, also request booking summary fare
+          if (tripType === 'airport') {
+            window.dispatchEvent(new CustomEvent('request-booking-summary-fare', {
+              detail: {
+                cabId: selectedCab.id,
+                cabName: selectedCab.name,
+                tripType: tripType,
+                tripMode: tripMode,
+                timestamp: Date.now()
+              }
+            }));
+          }
         } catch (error) {
           console.error('Error dispatching cab selection event:', error);
         }
@@ -242,6 +300,25 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           // Save to localStorage for other components
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
           localStorage.setItem(localStorageKey, fare.toString());
+          
+          // Re-emit as cab-selected-with-fare if this is the currently selected cab
+          if (selectedCab?.id === cabId) {
+            try {
+              window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+                detail: {
+                  cabType: cabId,
+                  cabName: selectedCab.name,
+                  fare: fare,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  timestamp: Date.now()
+                }
+              }));
+              console.log(`CabOptions: Re-emitted fare update for selected cab ${cabId}: ${fare}`);
+            } catch (error) {
+              console.error('Error dispatching cab selection event:', error);
+            }
+          }
         } else {
           setCabFares(prev => {
             const updated = { ...prev, [cabId]: fare };

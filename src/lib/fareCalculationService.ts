@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -176,8 +175,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Remove driver allowance for airport transfers
-    // fare += airportFares.dropPrice > 0 ? 250 : 0;
+    // FIXED: Completely remove driver allowance for airport transfers
+    // No driver allowance for airport transfers
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -213,8 +212,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare += extraKmCost;
       }
       
-      // Remove driver allowance for airport transfers
-      // fare += cabType.airportFares.dropPrice > 0 ? 250 : 0;
+      // FIXED: Completely remove driver allowance for airport transfers
+      // No driver allowance for airport transfers
       
       // Cache the result
       fareCache.set(cacheKey, {
@@ -259,8 +258,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Remove driver allowance for airport transfers
-    // fare += 250;
+    // FIXED: Completely remove driver allowance for airport transfers
+    // No driver allowance for airport transfers
     
     // Add airport fee
     fare += defaultFare.airportFee;
@@ -587,13 +586,14 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         cabId: cabType.id,
         tripType,
         tripMode,
+        calculated: true,
         fare: calculatedFare,
         timestamp: Date.now()
       }
     }));
     
     // Cache the calculated fare
-    fareCache.set(cacheKey, {
+    fareCache.set(generateCacheKey(params), {
       expire: Date.now() + 15 * 60 * 1000, // Cache for 15 minutes
       price: calculatedFare
     });
