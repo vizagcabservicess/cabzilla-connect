@@ -12,14 +12,14 @@ $conn = getDbConnection();
 
 try {
     // Get all vehicle types from the vehicles table ONLY
-    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1";
+    $vehiclesQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name ASC";
     $vehiclesResult = $conn->query($vehiclesQuery);
     
     $vehicleMapping = [];
     $normalizedColumns = [];
     
     // Log for debugging
-    error_log("Fetching vehicles from ONLY the vehicles table for tours.php");
+    error_log("Fetching vehicles ONLY from the vehicles table for tours.php");
     
     // Build complete vehicle mapping from vehicles table only
     if ($vehiclesResult) {
@@ -70,9 +70,21 @@ try {
                 continue;
             }
             
-            // Add any numeric value that might be a vehicle price
-            if (is_numeric($value)) {
-                $tourFare[$key] = floatval($value);
+            // Check if this column matches any of our vehicle mappings
+            $normalizedKey = null;
+            
+            // Only include columns that match our vehicle mapping from the vehicles table
+            foreach ($vehicleMapping as $vehicleKey => $normalizedVehicleColumn) {
+                if (strtolower($key) === strtolower($vehicleKey) || 
+                    strtolower($key) === strtolower($normalizedVehicleColumn)) {
+                    $normalizedKey = $normalizedVehicleColumn;
+                    break;
+                }
+            }
+            
+            // If we found a match and the value is numeric, add it
+            if ($normalizedKey !== null && is_numeric($value)) {
+                $tourFare[$normalizedKey] = floatval($value);
             }
         }
         

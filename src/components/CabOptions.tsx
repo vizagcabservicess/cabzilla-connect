@@ -125,9 +125,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           if (tourFares[selectedTour]) {
             console.log(`Found fares for tour ${selectedTour}:`, tourFares[selectedTour]);
             
-            // Use the provided distance prop 
-            const tourDistance = distance;
-            
             // Process each cab type to find its corresponding fare
             cabTypes.forEach(cab => {
               const cabId = cab.id.toLowerCase();
@@ -190,13 +187,24 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               }
               else {
                 // Fallback to a calculated fare based on distance
-                const baseFare = tourDistance * (
+                const baseFare = distance * (
                   cabId.includes('luxury') ? 20 : 
                   cabId.includes('innova') ? 15 : 
                   cabId.includes('ertiga') ? 12 : 10
                 );
                 currentFares[cab.id] = Math.max(baseFare, 1500);
                 console.log(`Calculated fare for ${cab.id}: ${currentFares[cab.id]}`);
+              }
+              
+              // Ensure fare is not zero or unreasonably low for a tour
+              if (currentFares[cab.id] <= 100) {
+                const reasonableFare = distance * (
+                  cabId.includes('luxury') ? 20 : 
+                  cabId.includes('innova') ? 15 : 
+                  cabId.includes('ertiga') ? 12 : 10
+                );
+                currentFares[cab.id] = Math.max(reasonableFare, 1500);
+                console.log(`Using reasonable fare for ${cab.id}: ${currentFares[cab.id]}`);
               }
               
               // Store the calculated fare in localStorage for persistence

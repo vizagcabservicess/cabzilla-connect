@@ -1,6 +1,6 @@
 
 <?php
-// Redirect to admin endpoint for airport fares
+// airport-fares.php - Simple endpoint for retrieving airport fares
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -29,8 +29,8 @@ function sendJSON($data, $status = 200) {
 // Get the vehicle ID from query params
 $vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
 
-// Create log for debugging
-$logDir = __DIR__ . '/logs';
+// Create log directory
+$logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
@@ -45,7 +45,7 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Check if airport_transfer_fares table exists
+    // Check if airport_transfer_fares table exists and create if it doesn't
     $tableCheckQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
     $tableResult = $conn->query($tableCheckQuery);
     
@@ -78,14 +78,14 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
     
-    // If no vehicle ID specified, return all fares
+    // Query for fares
     $sql = "SELECT * FROM airport_transfer_fares";
     $params = [];
     $types = "";
     
-    // If vehicle ID is specified, filter by it
+    // If vehicle ID is specified, filter by it (case-insensitive)
     if ($vehicleId) {
-        $sql .= " WHERE vehicle_id = ?";
+        $sql .= " WHERE LOWER(vehicle_id) = LOWER(?)";
         $params[] = $vehicleId;
         $types .= "s";
     }
@@ -111,15 +111,23 @@ try {
             'vehicleId' => $row['vehicle_id'],
             'vehicle_id' => $row['vehicle_id'],
             'basePrice' => (float)$row['base_price'],
+            'base_price' => (float)$row['base_price'],
             'pricePerKm' => (float)$row['price_per_km'],
+            'price_per_km' => (float)$row['price_per_km'],
             'pickupPrice' => (float)$row['pickup_price'],
+            'pickup_price' => (float)$row['pickup_price'],
             'dropPrice' => (float)$row['drop_price'],
+            'drop_price' => (float)$row['drop_price'],
             'tier1Price' => (float)$row['tier1_price'],
+            'tier1_price' => (float)$row['tier1_price'],
             'tier2Price' => (float)$row['tier2_price'],
+            'tier2_price' => (float)$row['tier2_price'],
             'tier3Price' => (float)$row['tier3_price'],
+            'tier3_price' => (float)$row['tier3_price'],
             'tier4Price' => (float)$row['tier4_price'],
+            'tier4_price' => (float)$row['tier4_price'],
             'extraKmCharge' => (float)$row['extra_km_charge'],
-            'updatedAt' => $row['updated_at']
+            'extra_km_charge' => (float)$row['extra_km_charge']
         ];
     }
     

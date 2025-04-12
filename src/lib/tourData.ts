@@ -1,4 +1,3 @@
-
 import { TourInfo, TourFares } from '@/types/cab';
 import { fareAPI, syncTourFaresTable } from '@/services/api';
 
@@ -234,6 +233,14 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
           Object.entries(tour).forEach(([key, value]) => {
             // Skip non-price properties
             if (['id', 'tourId', 'tourName', 'distance', 'days', 'updated_at', 'created_at'].includes(key)) {
+              // Store distance and days as separate metadata
+              if (key === 'distance' && typeof value === 'number') {
+                (dynamicTourFares[tourId] as any)._distance = value;
+              }
+              
+              if (key === 'days' && typeof value === 'number') {
+                (dynamicTourFares[tourId] as any)._days = value;
+              }
               return;
             }
             
@@ -248,15 +255,6 @@ export const loadTourFares = async (force = false): Promise<TourFares> => {
           if (dynamicTourFares[tourId].sedan === 0) dynamicTourFares[tourId].sedan = 3000;
           if (dynamicTourFares[tourId].ertiga === 0) dynamicTourFares[tourId].ertiga = 4500;
           if (dynamicTourFares[tourId].innova === 0) dynamicTourFares[tourId].innova = 6000;
-          
-          // Store distance and days as separate properties if available
-          if (tour.distance) {
-            (dynamicTourFares[tourId] as any).distance = tour.distance;
-          }
-          
-          if (tour.days) {
-            (dynamicTourFares[tourId] as any).days = tour.days;
-          }
         }
       });
       
