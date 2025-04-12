@@ -1,4 +1,5 @@
 
+// We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -12,14 +13,13 @@ import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { cabTypes, formatPrice } from "@/lib/cabData";
-import { availableTours, tourFares, loadTourFares } from '@/lib/tourData';
+import { availableTours, tourFares } from "@/lib/tourData";
 import { TripType } from "@/lib/tripTypes";
-import { CabType, TourFares } from "@/types/cab";
+import { CabType } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
-import { TourPackageSelector } from "@/components/TourPackageSelector";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -31,85 +31,31 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dynamicTourFares, setDynamicTourFares] = useState<TourFares>(tourFares);
-  const [isLoadingFares, setIsLoadingFares] = useState(false);
   
-  // Load dynamic tour fares from the API
-  useEffect(() => {
-    const fetchTourFares = async () => {
-      setIsLoadingFares(true);
-      try {
-        const fares = await loadTourFares();
-        console.log("Tour fares loaded successfully:", fares);
-        setDynamicTourFares(fares);
-      } catch (error) {
-        console.error("Error loading tour fares:", error);
-        toast({
-          title: "Could not load tour fares",
-          description: "Using default tour pricing.",
-          variant: "destructive",
-          duration: 3000,
-        });
-      } finally {
-        setIsLoadingFares(false);
-      }
-    };
-    
-    fetchTourFares();
-  }, [toast]);
-  
+  // This function gets the direct tour fare without adding GST
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
     console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
     
-    // Normalize cab ID to match what's in the database
-    const normalizedCabId = cabId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    
-    // Check for the fare in our dynamically loaded fares
-    if (dynamicTourFares[tourId]) {
-      // Try exact match first
-      if (dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]]) {
-        const fare = dynamicTourFares[tourId][cabId as keyof typeof dynamicTourFares[typeof tourId]];
-        console.log(`Found exact fare match for ${cabId}: ${fare}`);
-        return fare as number;
-      }
-      
-      // Try normalized cab ID
-      if (dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]]) {
-        const fare = dynamicTourFares[tourId][normalizedCabId as keyof typeof dynamicTourFares[typeof tourId]];
-        console.log(`Found normalized fare match for ${normalizedCabId}: ${fare}`);
-        return fare as number;
-      }
-      
-      // Try common mappings for cab types
-      if (cabId.includes('sedan') && dynamicTourFares[tourId].sedan) {
-        console.log(`Using sedan fare for ${cabId}: ${dynamicTourFares[tourId].sedan}`);
-        return dynamicTourFares[tourId].sedan;
-      }
-      
-      if ((cabId.includes('innova') || cabId.includes('crysta')) && dynamicTourFares[tourId].innova) {
-        console.log(`Using innova fare for ${cabId}: ${dynamicTourFares[tourId].innova}`);
-        return dynamicTourFares[tourId].innova;
-      }
-      
-      if (cabId.includes('ertiga') && dynamicTourFares[tourId].ertiga) {
-        console.log(`Using ertiga fare for ${cabId}: ${dynamicTourFares[tourId].ertiga}`);
-        return dynamicTourFares[tourId].ertiga;
-      }
+    // Try to get fare from tourFares mapping
+    const tourFareMatrix = tourFares[tourId];
+    if (tourFareMatrix) {
+      const fare = tourFareMatrix[cabId as keyof typeof tourFareMatrix];
+      console.log(`Tour fare from matrix: ${fare}`);
+      if (fare) return fare as number;
     }
     
-    // Fallback to hardcoded values if nothing else works
-    console.log(`No fare found for ${tourId}/${cabId}, using fallback pricing`);
+    // Fallback to default pricing if not found in the matrix
     if (cabId === 'sedan') return 3500;
     if (cabId === 'ertiga') return 4500;
-    if (cabId.includes('innova')) return 5500;
+    if (cabId === 'innova_crysta') return 5500;
     
-    return 4000; // Default fallback
+    // Last resort default
+    return 4000;
   };
   
   const handleTourSelect = (tourId: string) => {
-    console.log(`Tour selected: ${tourId}`);
     setSelectedTour(tourId);
     setSelectedCab(null);
   };
@@ -327,12 +273,12 @@ const ToursPage = () => {
                   </div>
                   
                   <CabOptions
-                    cabTypes={cabTypes.slice(0, 3)}
+                    cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
                     selectedCab={selectedCab}
                     onSelectCab={setSelectedCab}
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     tripType="tour"
-                    tripMode="one-way"
+                    tripMode="one-way" // Tours are considered one-way
                     pickupDate={pickupDate}
                   />
                   
@@ -361,7 +307,7 @@ const ToursPage = () => {
                 {selectedTour && selectedCab && pickupLocation && pickupDate && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
-                    dropLocation={null}
+                    dropLocation={null} // Tours don't have drop locations
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}

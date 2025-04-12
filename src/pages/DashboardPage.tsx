@@ -14,7 +14,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
-const MAX_RETRIES = 1;
+const MAX_RETRIES = 3;
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -29,12 +29,11 @@ export default function DashboardPage() {
   const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
-  const [showFallbackBookings, setShowFallbackBookings] = useState(false);
 
+  // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
       if (!authAPI.isAuthenticated()) {
-        console.log('User not authenticated, redirecting to login');
         navigate('/login', { state: { from: location.pathname } });
         return;
       }
@@ -42,7 +41,6 @@ export default function DashboardPage() {
       try {
         const userData = await authAPI.getCurrentUser();
         if (userData) {
-          console.log('User data loaded:', { ...userData, token: userData.token ? '(token exists)' : '(no token)' });
           setUser({
             id: userData.id || 0,
             name: userData.name || '',
@@ -62,9 +60,9 @@ export default function DashboardPage() {
     checkAuth();
   }, [navigate, location.pathname]);
 
+  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
-      console.log('Not authenticated, redirecting to login');
       navigate('/login');
       return;
     }
@@ -72,93 +70,70 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      
-      console.log('Fetching user bookings, authenticated:', authAPI.isAuthenticated(), 'isAdmin:', isAdmin);
-      const token = localStorage.getItem('authToken');
-      console.log('Current token status:', token ? `${token.substring(0, 15)}...` : 'No token');
-      
       const data = await bookingAPI.getUserBookings();
-      console.log('Bookings data received:', data);
-      
-      if (Array.isArray(data) && data.length > 0) {
-        setBookings(data);
-        setShowFallbackBookings(false);
-      } else {
-        console.log('No bookings found, using fallback data');
-        setShowFallbackBookings(true);
-        setBookings(getFallbackBookings());
-      }
-      
-      setRetryCount(0);
+      setBookings(data);
+      setRetryCount(0); // Reset retry count on success
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      if (retryCount < MAX_RETRIES) {
+      // Only show toast on first error
+      if (retryCount === 0) {
         toast.error('Error loading bookings. Retrying...');
-        setRetryCount(prev => prev + 1);
-        
+      }
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
+      
+      // Auto-retry if under max retries
+      if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
           fetchBookings();
-        }, 3000);
-      } else {
-        console.log('Using fallback booking data after max retries');
-        setShowFallbackBookings(true);
-        setBookings(getFallbackBookings());
+        }, 3000); // Wait 3 seconds before retrying
       }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [navigate, retryCount, isAdmin]);
+  }, [navigate, retryCount]);
 
+  // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
     if (!isAdmin) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      
-      console.log('Fetching admin metrics...');
-      const token = localStorage.getItem('authToken');
-      console.log('Admin metrics token status:', token ? `${token.substring(0, 15)}...` : 'No token');
-      
       const data = await bookingAPI.getAdminDashboardMetrics('week');
-      console.log('Admin metrics received:', data);
-      
-      if (data) {
-        setAdminMetrics(data);
-      } else {
-        console.warn('No admin metrics data received');
-        setAdminMetrics(getFallbackMetrics());
-      }
+      setAdminMetrics(data);
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
-      
-      console.log('Using fallback metrics data after error');
-      setAdminMetrics(getFallbackMetrics());
     } finally {
       setIsLoadingAdminMetrics(false);
     }
   }, [isAdmin]);
 
+  // Initial data fetch
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
 
+  // Fetch admin metrics if user is admin
   useEffect(() => {
     if (isAdmin) {
       fetchAdminMetrics();
     }
   }, [isAdmin, fetchAdminMetrics]);
 
+  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
     navigate('/login');
     toast.success('Logged out successfully');
   };
 
+  // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -170,6 +145,7 @@ export default function DashboardPage() {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
+  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -180,74 +156,7 @@ export default function DashboardPage() {
     }
   };
 
-  const getFallbackBookings = (): Booking[] => {
-    return [
-      {
-        id: 1001,
-        user_id: user?.id || 1,
-        bookingNumber: 'BK12345',
-        pickupLocation: 'Airport Terminal 1',
-        dropLocation: 'Taj Hotel, City Center',
-        pickupDate: new Date().toISOString(),
-        returnDate: null,
-        cabType: 'sedan',
-        distance: 15.5,
-        tripType: 'airport',
-        tripMode: 'one-way',
-        totalAmount: 1500,
-        status: 'confirmed',
-        passengerName: user?.name || 'Demo User',
-        passengerPhone: '9876543210',
-        passengerEmail: user?.email || 'demo@example.com',
-        driverName: 'Raj Kumar',
-        driverPhone: '9876543211',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 1002,
-        user_id: user?.id || 1,
-        bookingNumber: 'BK12346',
-        pickupLocation: 'Home Address',
-        dropLocation: 'Office Complex',
-        pickupDate: new Date(Date.now() + 86400000).toISOString(),
-        returnDate: null,
-        cabType: 'suv',
-        distance: 8.2,
-        tripType: 'local',
-        tripMode: 'one-way',
-        totalAmount: 950,
-        status: 'pending',
-        passengerName: user?.name || 'Demo User',
-        passengerPhone: '9876543210',
-        passengerEmail: user?.email || 'demo@example.com',
-        driverName: null,
-        driverPhone: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ];
-  };
-
-  const getFallbackMetrics = (): DashboardMetricsType => {
-    return {
-      totalBookings: 24,
-      pendingBookings: 5,
-      completedBookings: 12,
-      todayBookings: 3,
-      recentBookings: [],
-      monthlyRevenue: 28000,
-      totalRevenue: 35600,
-      activeRides: 3,
-      availableDrivers: 8,
-      busyDrivers: 6,
-      avgRating: 4.7,
-      upcomingRides: 5,
-      availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
-      currentFilter: 'all'
-    };
-  };
-
+  // If still loading initial data
   if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -278,7 +187,8 @@ export default function DashboardPage() {
     );
   }
 
-  if (error && retryCount >= MAX_RETRIES && !showFallbackBookings) {
+  // If error occurred and max retries exceeded
+  if (error && retryCount >= MAX_RETRIES) {
     return (
       <ApiErrorFallback 
         error={error} 
@@ -309,16 +219,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {showFallbackBookings && (
-        <Alert className="mb-8 bg-blue-50 border-blue-200">
-          <Info className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-700">Demo Mode</AlertTitle>
-          <AlertDescription className="text-blue-600">
-            Showing sample booking data. Your real bookings will appear here once available.
-          </AlertDescription>
-        </Alert>
-      )}
-
+      {/* Conditionally render admin metrics for admin users */}
       {isAdmin && (
         <div className="mb-8">
           <Card>
@@ -337,6 +238,7 @@ export default function DashboardPage() {
                 error={adminMetricsError}
                 onFilterChange={(status: BookingStatus | 'all') => {
                   console.log('Filtering by status:', status);
+                  // Logic to filter metrics by status if needed
                 }}
                 selectedPeriod="week"
               />

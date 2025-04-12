@@ -1,172 +1,37 @@
 
-// API configuration and helpers
+// API configuration
 
-// Base API URL - can be overridden by environment variable
-export const apiBaseUrl = '/'; // Default to relative path for API requests
+// Base API URL - auto-detect between development and production
+export const apiBaseUrl = process.env.NODE_ENV === 'production' 
+  ? 'https://vizagup.com' 
+  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
 
-// Default headers to use with API requests
-export const defaultHeaders = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache'
+// Helper function to get full API URL
+export const getApiUrl = (path: string): string => {
+  // Ensure path starts with a slash if it doesn't already
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Remove any duplicate slashes that might occur when joining
+  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
+  return fullUrl;
 };
 
-// Force refresh headers for bypassing cache
+// Force refresh headers for API requests to bypass cache
 export const forceRefreshHeaders = {
   'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
   'Pragma': 'no-cache',
   'Expires': '0'
 };
 
-// Helper function to construct an API URL
-export function getApiUrl(path: string): string {
-  // If the path is already a full URL, return it
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path;
-  }
-  
-  // Ensure the path starts with a slash if necessary
-  const formattedPath = path.startsWith('/') ? path : `/${path}`;
-  
-  // Combine with API base URL, ensuring no double slashes
-  return `${apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl}${formattedPath}`;
-}
-
-// Function to get the authorization header with the token
-export function getAuthorizationHeader(): { Authorization?: string } {
-  // Try to get token from localStorage
-  let token = localStorage.getItem('authToken');
-  
-  // If token is missing or invalid, try to recover from user object
-  if (!token || token === 'null' || token === 'undefined') {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        if (userData && userData.token) {
-          // Restore token to localStorage
-          localStorage.setItem('authToken', userData.token);
-          token = userData.token;
-          console.log('Recovered auth token from user data');
-        }
-      } catch (e) {
-        console.error('Error parsing user data for auth token:', e);
-      }
-    }
-  }
-  
-  if (!token || token === 'null' || token === 'undefined') {
-    console.warn('No valid auth token available, returning empty auth header');
-    return {};
-  }
-  
-  return { Authorization: `Bearer ${token}` };
-}
-
-// Map frontend vehicle IDs to database column names
-export const vehicleIdMapping: Record<string, string> = {
-  // ID mapping for standard vehicles
-  'sedan': 'sedan',
-  'ertiga': 'ertiga',
-  'innova': 'innova',
-  'tempo': 'tempo',
-  'luxury': 'luxury',
-  
-  // Map vehicle display names to database columns
-  'Sedan': 'sedan',
-  'Ertiga': 'ertiga',
-  'Innova': 'innova',
-  'Tempo Traveller': 'tempo',
-  'Luxury': 'luxury',
-  
-  // Map specific vehicle models
-  'MPV': 'innova',
-  'innova_crysta': 'innova',
-  'innova_hycross': 'innova',
-  'etios': 'sedan',
-  'dzire_cng': 'sedan',
-  'tempo_traveller': 'tempo',
-  'Toyota': 'sedan',
-  'Dzire CNG': 'sedan',
-  
-  // Handle numeric IDs that might come from the vehicles table
-  '1': 'sedan',
-  '2': 'ertiga',
-  '1266': 'innova',
-  '1299': 'sedan',
-  '1311': 'sedan',
-  '1313': 'innova',
-  '1314': 'tempo'
+// Default headers for API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
 };
 
-// Get dynamic vehicle mapping from backend
-export async function getDynamicVehicleMapping(): Promise<Record<string, string>> {
-  try {
-    console.log('Fetching dynamic vehicle mapping from backend...');
-    
-    // Ensure auth token is available for this request
-    let token = localStorage.getItem('authToken');
-    if (!token || token === 'null' || token === 'undefined') {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          if (userData && userData.token) {
-            localStorage.setItem('authToken', userData.token);
-            token = userData.token;
-            console.log('Retrieved token from user object for vehicle mapping');
-          }
-        } catch (e) {
-          console.error('Error parsing user data:', e);
-        }
-      }
-    }
-    
-    // Start with the static mapping
-    const mapping = { ...vehicleIdMapping };
-    
-    // Try to fetch vehicle data to build mapping
-    const response = await fetch('/api/admin/vehicles-data.php', {
-      method: 'GET',
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Authorization': token ? `Bearer ${token}` : '',
-        ...getAuthorizationHeader()
-      }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Vehicle data for mapping:', data);
-      
-      if (data.vehicles && Array.isArray(data.vehicles)) {
-        data.vehicles.forEach((vehicle: any) => {
-          if (vehicle.id && vehicle.vehicle_id) {
-            // Map numeric ID to safe column name
-            const safeColumnName = vehicle.vehicle_id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-            mapping[vehicle.id] = safeColumnName;
-            
-            // Also map the vehicle_id itself
-            mapping[vehicle.vehicle_id] = safeColumnName;
-            
-            // Map vehicle name too if available
-            if (vehicle.name) {
-              mapping[vehicle.name] = safeColumnName;
-            }
-          }
-        });
-      }
-    } else {
-      console.warn('Failed to fetch vehicle data for mapping:', response.status, response.statusText);
-    }
-    
-    console.log('Dynamic vehicle mapping:', mapping);
-    return mapping;
-  } catch (error) {
-    console.error('Error getting dynamic vehicle mapping:', error);
-    return vehicleIdMapping; // Fall back to static mapping on error
-  }
-}
+// Export configuration options
+export default {
+  baseUrl: apiBaseUrl,
+  defaultHeaders,
+  forceRefreshHeaders
+};

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -23,7 +22,6 @@ import {
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
-import { availableTours } from "@/lib/tourData"; // Add this import
 import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";
@@ -53,7 +51,6 @@ const CabsPage = () => {
   const [tripType, setTripType] = useState<TripType>((urlTripType as TripType) || "outstation");
   const [tripMode, setTripMode] = useState<TripMode>(getInitialFromSession('tripMode', "one-way"));
   const [hourlyPackage, setHourlyPackage] = useState(getInitialFromSession('hourlyPackage', hourlyPackages[0].id));
-  const [selectedTour, setSelectedTour] = useState<string | null>(getInitialFromSession('selectedTour', null));
   
   const [pickup, setPickup] = useState<Location | null>(getInitialFromSession('pickupLocation', null));
   const [dropoff, setDropoff] = useState<Location | null>(getInitialFromSession('dropLocation', null));
@@ -79,11 +76,10 @@ const CabsPage = () => {
     if (pickupDate) sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
     if (returnDate) sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
     if (selectedCab) sessionStorage.setItem('selectedCab', JSON.stringify(selectedCab));
-    if (selectedTour) sessionStorage.setItem('selectedTour', selectedTour);
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
     sessionStorage.setItem('tripType', tripType);
-  }, [pickup, dropoff, pickupDate, returnDate, selectedCab, tripMode, hourlyPackage, tripType, selectedTour]);
+  }, [pickup, dropoff, pickupDate, returnDate, selectedCab, tripMode, hourlyPackage, tripType]);
 
   useEffect(() => {
     setSelectedCab(null);
@@ -162,24 +158,6 @@ const CabsPage = () => {
     } else if (type === "local") {
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
-    } else if (type === "tour") {
-      setDropoff(null);
-      setSelectedTour(null);
-    }
-  };
-  
-  const handleTourChange = (tourId: string) => {
-    setSelectedTour(tourId);
-    setSelectedCab(null);
-    setTotalPrice(0);
-    
-    const tourDetails = availableTours.find(tour => tour.id === tourId);
-    if (tourDetails) {
-      setDistance(tourDetails.distance);
-      
-      const estimatedMinutes = Math.round((tourDetails.distance / 40) * 60);
-      setTravelTime(estimatedMinutes);
-      setShowMap(false);
     }
   };
   
@@ -222,8 +200,10 @@ const CabsPage = () => {
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
+        // For local trips, use the hourly package distance
         const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
         if (selectedPackage) {
+          // Reset to exactly the package kilometers
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
@@ -275,6 +255,18 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
   
+  // When trip type changes to local, reset any cached distance from previous trip types
+  useEffect(() => {
+    if (tripType === "local") {
+      const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
+      if (selectedPackage) {
+        // Reset to exactly the package kilometers
+        setDistance(selectedPackage.kilometers);
+        console.log(`Trip type changed to local: resetting distance to ${selectedPackage.kilometers}km`);
+      }
+    }
+  }, [tripType, hourlyPackage]);
+
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fetchFare = async () => {
@@ -307,6 +299,7 @@ const CabsPage = () => {
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
+      // Reset to exactly the package kilometers
       setDistance(selectedPackage.kilometers);
       const estimatedTime = selectedPackage.hours * 60;
       setTravelTime(estimatedTime);
@@ -409,6 +402,7 @@ const CabsPage = () => {
         duration: 3000,
       });
       
+      // Fix the navigation to match the route in router.tsx
       navigate(`/booking-confirmation`);
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -454,8 +448,6 @@ const CabsPage = () => {
                   tripMode={tripMode}
                   onTabChange={handleTripTypeChange}
                   onTripModeChange={setTripMode}
-                  selectedTour={selectedTour}
-                  onTourChange={handleTourChange}
                 />
               </div>
 
@@ -470,17 +462,15 @@ const CabsPage = () => {
                   readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
                 />
                 
-                {(tripType === "outstation" || tripType === "airport") && (
-                  <LocationInput 
-                    label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
-                    placeholder="Enter destination location" 
-                    value={dropoff ? convertToApiLocation(dropoff) : undefined}
-                    onLocationChange={handleDropoffLocationChange}
-                    isPickupLocation={false}
-                    isAirportTransfer={tripType === "airport"}
-                    readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
-                  />
-                )}
+                <LocationInput 
+                  label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
+                  placeholder="Enter destination location" 
+                  value={dropoff ? convertToApiLocation(dropoff) : undefined}
+                  onLocationChange={handleDropoffLocationChange}
+                  isPickupLocation={false}
+                  isAirportTransfer={tripType === "airport"}
+                  readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
+                />
 
                 <DateTimePicker 
                   label="PICKUP DATE & TIME" 

@@ -38,42 +38,12 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
-// Detailed logging for debugging
-error_log("Dashboard.php request: " . $_SERVER['REQUEST_URI']);
-error_log("Request headers: " . json_encode(getallheaders()));
-
-// Helper function to send JSON responses with a consistent format
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    echo json_encode($data);
-    exit;
-}
-
-// Helper function to generate fallback metrics
-function getFallbackMetrics($period) {
-    $metrics = [
-        'totalBookings' => 24,
-        'activeRides' => 3,
-        'totalRevenue' => 35600,
-        'availableDrivers' => 8,
-        'busyDrivers' => 6,
-        'avgRating' => 4.7,
-        'upcomingRides' => 5,
-        'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
-        'currentFilter' => 'all'
-    ];
-    
-    // Modify metrics based on period
-    if ($period === 'today') {
-        $metrics['totalBookings'] = 8;
-        $metrics['totalRevenue'] = 12500;
-    } else if ($period === 'month') {
-        $metrics['totalBookings'] = 72;
-        $metrics['totalRevenue'] = 95000;
-    }
-    
-    return $metrics;
-}
+// Log start of request processing
+logError("Dashboard.php request initiated", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'headers' => getallheaders(),
+    'query' => $_GET
+]);
 
 try {
     // Check if this is an admin metrics request
@@ -85,145 +55,258 @@ try {
     // Get status filter if provided
     $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
     
+    // Get the timestamp to help prevent caching
+    $timestamp = isset($_GET['_t']) ? $_GET['_t'] : time();
+    
     // Log the parameters
-    error_log("Request parameters: admin=" . ($isAdminMetricsRequest ? 'true' : 'false') . ", period=$period, status=$statusFilter");
+    logError("Request parameters", [
+        'period' => $period,
+        'status' => $statusFilter,
+        'timestamp' => $timestamp,
+        'admin' => $isAdminMetricsRequest ? 'true' : 'false'
+    ]);
     
     // Authenticate user with improved logging
     $headers = getallheaders();
+    logError("Request headers", ['headers' => array_keys($headers)]);
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-        error_log("Missing authorization header - returning fallback data");
-        // Return fallback data instead of error
-        sendJsonResponse(['status' => 'success', 'data' => getFallbackMetrics($period), 'authenticated' => false]);
+        logError("Missing authorization header");
+        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
         exit;
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
-    error_log("Token received: " . substr($token, 0, 20) . "...");
+    logError("Token received", ['token_length' => strlen($token), 'token_parts' => substr_count($token, '.') + 1]);
     
-    // Try to verify the token, but continue with fallback data if it fails
-    $userData = null;
-    $isAdmin = false;
-    try {
-        if (function_exists('verifyJwtToken')) {
-            $userData = verifyJwtToken($token);
-            if ($userData && isset($userData['user_id'])) {
-                $userId = $userData['user_id'];
-                $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
-                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
-            } else {
-                error_log("Token verification failed: invalid payload");
-            }
-        } else {
-            error_log("verifyJwtToken function not available");
-        }
-    } catch (Exception $e) {
-        error_log("JWT verification failed: " . $e->getMessage());
+    $userData = verifyJwtToken($token);
+    if (!$userData || !isset($userData['user_id'])) {
+        logError("Authentication failed in dashboard.php", [
+            'token_length' => strlen($token),
+            'token_parts' => substr_count($token, '.') + 1
+        ]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token. Please login again.'], 401);
+        exit;
+    }
+    
+    $userId = $userData['user_id'];
+    $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
+    
+    logError("User authenticated successfully", [
+        'user_id' => $userId, 
+        'is_admin' => $isAdmin ? 'true' : 'false',
+        'token_parts' => substr_count($token, '.') + 1
+    ]);
+
+    // Connect to database
+    $conn = getDbConnection();
+    if (!$conn) {
+        logError("Database connection failed in dashboard.php");
+        throw new Exception('Database connection failed');
     }
 
-    // If this is an admin metrics request and the user is an admin, or we're in debug mode
-    if ($isAdminMetricsRequest) {
-        // Return fallback metrics for now to ensure frontend works
-        $metricsData = getFallbackMetrics($period);
+    // If this is an admin metrics request and the user is an admin
+    if ($isAdmin) {
+        logError("Processing admin metrics request", ['period' => $period, 'status' => $statusFilter]);
         
-        error_log("Sending admin metrics response for period: $period");
+        // Get date range based on period
+        $dateCondition = "";
+        switch ($period) {
+            case 'today':
+                $dateCondition = "WHERE DATE(created_at) = CURDATE()";
+                break;
+            case 'week':
+                $dateCondition = "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+                break;
+            case 'month':
+            default:
+                $dateCondition = "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+                break;
+        }
+        
+        // Add status filter if provided
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
+            if (strpos($dateCondition, 'WHERE') !== false) {
+                $dateCondition .= " AND status = '" . $conn->real_escape_string($statusFilter) . "'";
+            } else {
+                $dateCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "'";
+            }
+        }
+        
+        // Log the SQL condition being used
+        logError("SQL condition for metrics", ['sql_condition' => $dateCondition]);
+        
+        // Get total bookings for the period
+        $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
+        $totalBookingsResult = $conn->query($totalBookingsQuery);
+        
+        if (!$totalBookingsResult) {
+            logError("SQL error in total bookings query", ['error' => $conn->error]);
+            throw new Exception("Database error: " . $conn->error);
+        }
+        
+        $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
+        
+        // Get active rides (confirmed status with today's date)
+        $activeRidesCondition = "WHERE status = 'confirmed' AND DATE(pickup_date) = CURDATE()";
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
+            $activeRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) = CURDATE()";
+        }
+        $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings $activeRidesCondition";
+        $activeRidesResult = $conn->query($activeRidesQuery);
+        
+        if (!$activeRidesResult) {
+            logError("SQL error in active rides query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $activeRides = 0;
+        } else {
+            $activeRides = $activeRidesResult->fetch_assoc()['total'] ?? 0;
+        }
+        
+        // Get total revenue for the period
+        $totalRevenueQuery = "SELECT SUM(total_amount) as total FROM bookings $dateCondition";
+        $totalRevenueResult = $conn->query($totalRevenueQuery);
+        
+        if (!$totalRevenueResult) {
+            logError("SQL error in total revenue query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $totalRevenue = 0;
+        } else {
+            $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
+        }
+        
+        // Get upcoming rides (pending/confirmed with future date)
+        $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed') AND DATE(pickup_date) > CURDATE()";
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
+            $upcomingRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) > CURDATE()";
+        }
+        $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings $upcomingRidesCondition";
+        $upcomingRidesResult = $conn->query($upcomingRidesQuery);
+        
+        if (!$upcomingRidesResult) {
+            logError("SQL error in upcoming rides query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $upcomingRides = 0;
+        } else {
+            $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
+        }
+        
+        // Get all booking statuses for dropdown filtering
+        $statusesQuery = "SELECT DISTINCT status FROM bookings WHERE status IS NOT NULL AND status != ''";
+        $statusesResult = $conn->query($statusesQuery);
+        $statuses = [];
+        
+        if ($statusesResult) {
+            while ($statusRow = $statusesResult->fetch_assoc()) {
+                $statuses[] = $statusRow['status'];
+            }
+        }
+        
+        // Simulate driver metrics (since drivers table might not exist)
+        $availableDrivers = 12;
+        $busyDrivers = 8;
+        
+        // Get average rating (simulated)
+        $avgRating = 4.7;
+        
+        // Prepare the metrics response - ensure it's an array for proper JSON encoding
+        $metricsData = [
+            'totalBookings' => (int)$totalBookings,
+            'activeRides' => (int)$activeRides,
+            'totalRevenue' => (float)$totalRevenue,
+            'availableDrivers' => (int)$availableDrivers,
+            'busyDrivers' => (int)$busyDrivers,
+            'avgRating' => (float)$avgRating,
+            'upcomingRides' => (int)$upcomingRides,
+            'availableStatuses' => $statuses,
+            'currentFilter' => $statusFilter
+        ];
+        
+        logError("Sending admin metrics response", ['metrics' => $metricsData, 'period' => $period]);
         
         // Return the metrics data - ensure we return as data property
         sendJsonResponse(['status' => 'success', 'data' => $metricsData]);
         exit;
     }
 
-    // For regular user dashboard requests, return fallback bookings
-    // This ensures the frontend always has data to display
-    error_log("Returning fallback bookings for user dashboard");
+    // Get user's bookings - adding more logging for debugging
+    logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
+
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
+    if (!$stmt) {
+        logError("Prepare statement failed", ['error' => $conn->error]);
+        throw new Exception('Database prepare error: ' . $conn->error);
+    }
     
-    // Create fallback bookings
-    $fallbackBookings = [
-        [
-            'id' => 1001,
-            'userId' => $userId ?? 1,
-            'bookingNumber' => 'BK' . rand(10000, 99999),
-            'pickupLocation' => 'Visakhapatnam Airport',
-            'dropLocation' => 'Gateway Hotel, Beach Road',
-            'pickupDate' => date('Y-m-d H:i:s'),
-            'returnDate' => null,
-            'cabType' => 'sedan',
-            'distance' => 15.5,
-            'tripType' => 'airport',
-            'tripMode' => 'one-way',
-            'totalAmount' => 1500,
-            'status' => 'confirmed',
-            'passengerName' => $userData['name'] ?? 'Demo User',
-            'passengerPhone' => '9876543210',
-            'passengerEmail' => $userData['email'] ?? 'demo@example.com',
-            'driverName' => 'Raj Kumar',
-            'driverPhone' => '9876543211',
-            'createdAt' => date('Y-m-d H:i:s'),
-            'updatedAt' => date('Y-m-d H:i:s')
-        ],
-        [
-            'id' => 1002,
-            'userId' => $userId ?? 1,
-            'bookingNumber' => 'BK' . rand(10000, 99999),
-            'pickupLocation' => 'Novotel Hotel, Beach Road',
-            'dropLocation' => 'Rushikonda Beach',
-            'pickupDate' => date('Y-m-d H:i:s', strtotime('+1 day')),
-            'returnDate' => date('Y-m-d H:i:s', strtotime('+1 day +4 hours')),
-            'cabType' => 'innova_crysta',
-            'distance' => 25.0,
-            'tripType' => 'local',
-            'tripMode' => 'round-trip',
-            'totalAmount' => 2500,
-            'status' => 'pending',
-            'passengerName' => $userData['name'] ?? 'Demo User',
-            'passengerPhone' => '9876543210',
-            'passengerEmail' => $userData['email'] ?? 'demo@example.com',
-            'driverName' => null,
-            'driverPhone' => null,
-            'createdAt' => date('Y-m-d H:i:s'),
-            'updatedAt' => date('Y-m-d H:i:s')
-        ]
-    ];
+    $stmt->bind_param("i", $userId);
+    $executed = $stmt->execute();
     
-    // Return the bookings in the expected format
-    sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings]);
+    if (!$executed) {
+        logError("Execute statement failed", ['error' => $stmt->error]);
+        throw new Exception('Database execute error: ' . $stmt->error);
+    }
+    
+    $result = $stmt->get_result();
+    
+    if (!$result) {
+        logError("Get result failed", ['error' => $stmt->error]);
+        throw new Exception('Database result error: ' . $stmt->error);
+    }
+
+    // Debug: Log the SQL query for debugging
+    logError("SQL Query executed", [
+        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC"
+    ]);
+
+    $bookings = [];
+    while ($row = $result->fetch_assoc()) {
+        // Ensure all required fields are present
+        $booking = [
+            'id' => (int)$row['id'],
+            'userId' => (int)$row['user_id'],
+            'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
+            'pickupLocation' => $row['pickup_location'],
+            'dropLocation' => $row['drop_location'],
+            'pickupDate' => $row['pickup_date'],
+            'returnDate' => $row['return_date'] ?? null,
+            'cabType' => $row['cab_type'] ?? 'Sedan',
+            'distance' => floatval($row['distance'] ?? 0),
+            'tripType' => $row['trip_type'] ?? 'local',
+            'tripMode' => $row['trip_mode'] ?? 'one-way',
+            'totalAmount' => floatval($row['total_amount'] ?? 0),
+            'status' => $row['status'] ?? 'pending',
+            'passengerName' => $row['passenger_name'] ?? $userData['name'],
+            'passengerPhone' => $row['passenger_phone'] ?? '',
+            'passengerEmail' => $row['passenger_email'] ?? $userData['email'],
+            'driverName' => $row['driver_name'] ?? null,
+            'driverPhone' => $row['driver_phone'] ?? null,
+            'createdAt' => $row['created_at'],
+            'updatedAt' => $row['updated_at'] ?? $row['created_at']
+        ];
+        $bookings[] = $booking;
+    }
+
+    // Log count of real bookings found
+    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
+
+    // Use the consistent response format - always send as an array property
+    sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
     
 } catch (Exception $e) {
-    error_log("Exception in dashboard.php: " . $e->getMessage());
+    logError("Exception in dashboard.php", [
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ]);
     
-    // Return fallback data instead of error
-    if (isset($_GET['admin']) && $_GET['admin'] === 'true') {
-        $period = isset($_GET['period']) ? $_GET['period'] : 'week';
-        sendJsonResponse(['status' => 'success', 'data' => getFallbackMetrics($period), 'error' => $e->getMessage()]);
-    } else {
-        // Return fallback bookings
-        $fallbackBookings = [
-            [
-                'id' => 1001,
-                'userId' => 1,
-                'bookingNumber' => 'BK' . rand(10000, 99999),
-                'pickupLocation' => 'Error Fallback - Airport',
-                'dropLocation' => 'Error Fallback - Hotel',
-                'pickupDate' => date('Y-m-d H:i:s'),
-                'returnDate' => null,
-                'cabType' => 'sedan',
-                'distance' => 15.5,
-                'tripType' => 'airport',
-                'tripMode' => 'one-way',
-                'totalAmount' => 1500,
-                'status' => 'confirmed',
-                'passengerName' => 'Demo User',
-                'passengerPhone' => '9876543210',
-                'passengerEmail' => 'demo@example.com',
-                'driverName' => 'Error Handler Driver',
-                'driverPhone' => '9876543211',
-                'createdAt' => date('Y-m-d H:i:s'),
-                'updatedAt' => date('Y-m-d H:i:s')
-            ]
-        ];
-        
-        sendJsonResponse(['status' => 'success', 'bookings' => $fallbackBookings, 'error' => $e->getMessage()]);
-    }
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+}
+
+// Helper function to send JSON responses with a consistent format
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data);
+    exit;
 }
