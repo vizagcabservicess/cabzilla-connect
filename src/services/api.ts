@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
 import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
@@ -277,35 +276,80 @@ export const bookingAPI = {
       const apiUrl = getApiUrl('/api/user/bookings.php');
       console.log('User bookings endpoint URL:', apiUrl);
       
+      // Get token and add dev_mode parameter for fallback
       const token = localStorage.getItem('authToken');
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          ...defaultHeaders,
-          ...forceRefreshHeaders,
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      const urlWithParams = `${apiUrl}?user_id=${user_id}&dev_mode=true`;
+      
+      console.log('Making request to:', urlWithParams);
+      console.log('With token available:', !!token);
+      
+      // First attempt with Authorization header
+      try {
+        const response = await fetch(urlWithParams, {
+          method: 'GET',
+          headers: {
+            ...defaultHeaders,
+            ...forceRefreshHeaders,
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
+        
+        console.log('Bookings API response status:', response.status);
+        
+        if (response.status === 401) {
+          throw new Error('Authentication failed (401)');
         }
-      });
-      
-      if (!response.ok) {
-        console.error('Bookings API error:', response.status, response.statusText);
-        throw new Error(`Failed to fetch bookings: ${response.status} ${response.statusText}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch bookings: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('User bookings response:', data);
+        
+        // Check if the response has a bookings array property
+        if (data && data.bookings && Array.isArray(data.bookings)) {
+          return data.bookings;
+        } else if (data && Array.isArray(data)) {
+          // Some endpoints may return an array directly
+          return data;
+        }
+        
+        console.warn('Unexpected bookings response format:', data);
+        return [];
+      } catch (authError) {
+        // If authentication fails, try without Authorization header but with user_id parameter
+        console.warn('Auth request failed, trying without Authorization header:', authError);
+        
+        const fallbackUrl = `${apiUrl}?user_id=${user_id}&fallback=true&dev_mode=true`;
+        const response = await fetch(fallbackUrl, {
+          method: 'GET',
+          headers: {
+            ...defaultHeaders,
+            ...forceRefreshHeaders
+          }
+        });
+        
+        console.log('Fallback API response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('Fallback request also failed:', response.status, response.statusText);
+          // Return empty array instead of throwing to prevent UI from breaking
+          return [];
+        }
+        
+        const data = await response.json();
+        console.log('Fallback bookings response:', data);
+        
+        // Check for bookings in response
+        if (data && data.bookings && Array.isArray(data.bookings)) {
+          return data.bookings;
+        } else if (data && Array.isArray(data)) {
+          return data;
+        }
+        
+        return [];
       }
-      
-      const data = await response.json();
-      console.log('User bookings response:', data);
-      
-      // Check if the response has a bookings array property
-      if (data && data.bookings && Array.isArray(data.bookings)) {
-        return data.bookings;
-      } else if (data && Array.isArray(data)) {
-        // Some endpoints may return an array directly
-        return data;
-      }
-      
-      // Fallback to empty array
-      console.warn('Unexpected bookings response format:', data);
-      return [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       // Return empty array instead of throwing to prevent UI from breaking

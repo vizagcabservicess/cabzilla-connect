@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle } from "lucide-react";
 import { bookingAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
@@ -31,32 +30,35 @@ export default function DashboardPage() {
   const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
+  const [authIssue, setAuthIssue] = useState(false);
 
   // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
-      if (!authAPI.isAuthenticated()) {
-        console.log('No authentication token found, redirecting to login');
-        navigate('/login', { state: { from: location.pathname } });
-        return;
-      }
-
       try {
+        if (!authAPI.isAuthenticated()) {
+          console.log('No authentication token found, redirecting to login');
+          navigate('/login', { state: { from: location.pathname } });
+          return;
+        }
+
         // Try to get user data from localStorage first
         const userDataStr = localStorage.getItem('userData');
+        let userData = null;
+        
         if (userDataStr) {
           try {
             const cachedUser = JSON.parse(userDataStr);
             if (cachedUser && cachedUser.id) {
               console.log('Using cached user data:', cachedUser);
-              setUser({
+              userData = {
                 id: cachedUser.id || 0,
                 name: cachedUser.name || '',
                 email: cachedUser.email || '',
                 role: cachedUser.role || 'user'
-              });
+              };
+              setUser(userData);
               setIsAdmin(cachedUser.role === 'admin');
-              return;
             }
           } catch (e) {
             console.warn('Error parsing cached user data:', e);
@@ -64,25 +66,38 @@ export default function DashboardPage() {
         }
 
         // If cached data isn't available or valid, fetch from server
-        const userData = await authAPI.getCurrentUser();
+        if (!userData) {
+          userData = await authAPI.getCurrentUser();
+          if (userData) {
+            setUser({
+              id: userData.id || 0,
+              name: userData.name || '',
+              email: userData.email || '',
+              role: userData.role || 'user'
+            });
+            setIsAdmin(userData.role === 'admin');
+            console.log('User data loaded from API:', userData);
+          } else {
+            throw new Error('User data not found');
+          }
+        }
+        
+        // Make sure localStorage has the updated user data
         if (userData) {
-          setUser({
-            id: userData.id || 0,
-            name: userData.name || '',
-            email: userData.email || '',
-            role: userData.role || 'user'
-          });
-          setIsAdmin(userData.role === 'admin');
-          console.log('User data loaded from API:', userData);
-        } else {
-          throw new Error('User data not found');
+          localStorage.setItem('userData', JSON.stringify(userData));
         }
       } catch (error) {
         console.error('Error getting user data:', error);
-        toast.error('Error loading user data. Please try logging in again.');
-        // Clear token and redirect to login if we can't get user data
-        localStorage.removeItem('authToken');
-        navigate('/login');
+        
+        // If we have a token but it's invalid, show auth issue banner
+        if (localStorage.getItem('authToken')) {
+          setAuthIssue(true);
+        } else {
+          toast.error('Error loading user data. Please try logging in again.');
+          // Clear token and redirect to login if we can't get user data
+          localStorage.removeItem('authToken');
+          navigate('/login');
+        }
       }
     };
 
@@ -91,7 +106,7 @@ export default function DashboardPage() {
 
   // Fetch bookings data
   const fetchBookings = useCallback(async () => {
-    if (!authAPI.isAuthenticated()) {
+    if (!authAPI.isAuthenticated() && !authIssue) {
       console.log('No authentication token found, redirecting to login');
       navigate('/login');
       return;
@@ -119,6 +134,11 @@ export default function DashboardPage() {
       
       if (Array.isArray(data)) {
         setBookings(data);
+        
+        // If we got data, clear auth issue flag
+        if (data.length > 0) {
+          setAuthIssue(false);
+        }
       } else {
         console.warn('Unexpected bookings data format:', data);
         setBookings([]);
@@ -137,6 +157,14 @@ export default function DashboardPage() {
       // Increment retry count
       setRetryCount(prev => prev + 1);
       
+      // Check if this might be an auth issue
+      if (error instanceof Error && 
+          (error.message.includes('401') || 
+           error.message.includes('authentication') || 
+           error.message.includes('unauthorized'))) {
+        setAuthIssue(true);
+      }
+      
       // Auto-retry if under max retries
       if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
@@ -147,7 +175,7 @@ export default function DashboardPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [navigate, retryCount]);
+  }, [navigate, retryCount, authIssue]);
 
   // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
@@ -194,6 +222,12 @@ export default function DashboardPage() {
     toast.success('Logged out successfully');
   };
 
+  // Handle re-login
+  const handleRelogin = () => {
+    localStorage.removeItem('authToken');
+    navigate('/login', { state: { from: location.pathname } });
+  };
+
   // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
@@ -216,6 +250,39 @@ export default function DashboardPage() {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Show authentication issue banner
+  if (authIssue) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Authentication Issue</AlertTitle>
+          <AlertDescription>
+            Your session may have expired or there was a problem with your authentication. 
+            Please try logging in again.
+          </AlertDescription>
+          <div className="mt-4">
+            <Button onClick={handleRelogin}>Log In Again</Button>
+          </div>
+        </Alert>
+        
+        {bookings.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold mb-4">Cached Bookings</h2>
+            <p className="text-gray-500 mb-4">These bookings were previously loaded and may not be up to date.</p>
+            
+            <BookingsList 
+              bookings={bookings} 
+              isRefreshing={false}
+              formatDate={formatDate}
+              getStatusColor={getStatusColor}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // If still loading initial data
   if (isLoading && !error) {

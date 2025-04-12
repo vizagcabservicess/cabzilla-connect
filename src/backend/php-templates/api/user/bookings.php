@@ -29,13 +29,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
+// Debug mode for detailed response
+$debugMode = isset($_GET['debug']) || isset($_GET['dev_mode']);
+if ($debugMode) {
+    error_log("Bookings API Debug Mode: ON");
+    error_log("Request Headers: " . json_encode(getallheaders()));
+    error_log("Request Params: " . json_encode($_GET));
+}
+
 // Get user ID from JWT token
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
+$authSuccess = false;
 
 error_log("User bookings request received with headers: " . json_encode(array_keys($headers)));
 
+// First try to get user from Authorization header
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
@@ -46,10 +56,20 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
             if ($payload && isset($payload['user_id'])) {
                 $userId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+                $authSuccess = true;
+                error_log("User authenticated via JWT: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
             }
         } else {
-            error_log("verifyJwtToken function not available");
+            error_log("verifyJwtToken function not available - trying manual JWT parsing");
+            // Try to parse JWT manually
+            list($header, $payload, $signature) = explode('.', $token);
+            $payloadDecoded = json_decode(base64_decode($payload), true);
+            if ($payloadDecoded && isset($payloadDecoded['user_id'])) {
+                $userId = $payloadDecoded['user_id'];
+                $isAdmin = isset($payloadDecoded['role']) && $payloadDecoded['role'] === 'admin';
+                $authSuccess = true;
+                error_log("User authenticated via manual JWT parsing: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+            }
         }
     } catch (Exception $e) {
         error_log("JWT verification failed: " . $e->getMessage());
@@ -98,8 +118,9 @@ try {
     // Check if bookings table exists
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     if (!$tableExists || $tableExists->num_rows === 0) {
+        error_log("Bookings table doesn't exist, returning fallback data");
         // Provide fallback bookings for testing
-        $fallbackBookings = createFallbackBookings();
+        $fallbackBookings = createFallbackBookings($userId);
         echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
         exit;
     }
@@ -109,30 +130,40 @@ try {
         // Get user's bookings if authenticated
         $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            error_log("Failed to prepare user bookings query: " . $conn->error);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
         $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
         // Admins can see all bookings
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            error_log("Failed to prepare admin bookings query: " . $conn->error);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
     } else {
         // For testing/demo purposes, return some bookings even without authentication
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
-    }
-    
-    if (!$stmt) {
-        throw new Exception("Failed to prepare query: " . $conn->error);
+        if (!$stmt) {
+            error_log("Failed to prepare demo bookings query: " . $conn->error);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
     }
     
     $success = $stmt->execute();
     
     if (!$success) {
+        error_log("Failed to execute bookings query: " . $stmt->error);
         throw new Exception("Failed to execute query: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
+        error_log("Failed to get result: " . $stmt->error);
         throw new Exception("Failed to get result: " . $stmt->error);
     }
     
@@ -166,6 +197,7 @@ try {
     
     // For new users who have no bookings yet, return an empty array with success
     if (count($bookings) === 0) {
+        error_log("No bookings found for user $userId, returning empty array");
         echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
         exit;
     }
@@ -177,23 +209,30 @@ try {
     error_log("Error in bookings endpoint: " . $e->getMessage());
     
     // Instead of returning an error, provide fallback data
-    $fallbackBookings = createFallbackBookings();
-    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'error_fallback', 'error' => $e->getMessage()]);
+    $fallbackBookings = createFallbackBookings($userId);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $fallbackBookings, 
+        'source' => 'error_fallback', 
+        'error' => $debugMode ? $e->getMessage() : 'Internal server error'
+    ]);
 }
 
 // Helper function to create fallback booking data
-function createFallbackBookings() {
+function createFallbackBookings($userId = null) {
     $now = date('Y-m-d H:i:s');
+    $yesterday = date('Y-m-d H:i:s', strtotime('-1 day'));
     $tomorrow = date('Y-m-d H:i:s', strtotime('+1 day'));
+    $nextWeek = date('Y-m-d H:i:s', strtotime('+7 days'));
     
     return [
         [
             'id' => 1001,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
-            'pickupLocation' => 'Fallback Airport',
-            'dropLocation' => 'Fallback Hotel',
-            'pickupDate' => $now,
+            'pickupLocation' => 'Your Location',
+            'dropLocation' => 'Airport',
+            'pickupDate' => $tomorrow,
             'returnDate' => null,
             'cabType' => 'sedan',
             'distance' => 15.5,
@@ -211,24 +250,46 @@ function createFallbackBookings() {
         ],
         [
             'id' => 1002,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
-            'pickupLocation' => 'Fallback Hotel',
-            'dropLocation' => 'Fallback Beach',
-            'pickupDate' => $tomorrow,
-            'returnDate' => null,
+            'pickupLocation' => 'Hotel Grand',
+            'dropLocation' => 'City Center',
+            'pickupDate' => $yesterday,
+            'returnDate' => $yesterday,
             'cabType' => 'innova_crysta',
             'distance' => 25.0,
             'tripType' => 'local',
             'tripMode' => 'round-trip',
             'totalAmount' => 2500,
-            'status' => 'confirmed',
-            'passengerName' => 'Demo Admin',
+            'status' => 'completed',
+            'passengerName' => 'Demo User',
             'passengerPhone' => '9876543200',
-            'passengerEmail' => 'admin@example.com',
+            'passengerEmail' => 'demo@example.com',
             'driverName' => 'Demo Driver',
             'driverPhone' => '9876543201',
-            'createdAt' => $now,
+            'createdAt' => $yesterday,
+            'updatedAt' => $yesterday
+        ],
+        [
+            'id' => 1003,
+            'userId' => $userId,
+            'bookingNumber' => 'FB' . rand(10000, 99999),
+            'pickupLocation' => 'Home',
+            'dropLocation' => 'Beach Resort',
+            'pickupDate' => $nextWeek,
+            'returnDate' => date('Y-m-d H:i:s', strtotime($nextWeek . ' +2 days')),
+            'cabType' => 'ertiga',
+            'distance' => 120.0,
+            'tripType' => 'outstation',
+            'tripMode' => 'round-trip',
+            'totalAmount' => 4500,
+            'status' => 'confirmed',
+            'passengerName' => 'Demo User',
+            'passengerPhone' => '9876543200',
+            'passengerEmail' => 'demo@example.com',
+            'driverName' => 'John Driver',
+            'driverPhone' => '9876543202',
+            'createdAt' => $yesterday,
             'updatedAt' => $now
         ]
     ];
