@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,9 @@ const AirportFareManagement: React.FC = () => {
   const [initialized, setInitialized] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const { toast } = useToast();
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef<number>(0);
+  const maxRetries = 3;
 
   useEffect(() => {
     if (selectedVehicleId) {
@@ -62,18 +66,39 @@ const AirportFareManagement: React.FC = () => {
     } else {
       setFares(null);
     }
+
+    // Clear any retry timeout when component unmounts or selection changes
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
   }, [selectedVehicleId, refreshKey]);
 
-  const loadFares = async (vehicleId: string) => {
+  const loadFares = async (vehicleId: string, isRetry = false) => {
     if (!vehicleId) return;
+    
+    if (isRetry) {
+      retryCountRef.current++;
+    } else {
+      retryCountRef.current = 0;
+    }
     
     setLoading(true);
     try {
-      console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
-      const response: ApiResponse = await fetchAirportFares(vehicleId);
+      console.log(`Fetching airport fares for vehicle ID: ${vehicleId}${isRetry ? ` (retry attempt ${retryCountRef.current})` : ''}`);
+      
+      // Generate a unique timestamp to avoid caching
+      const timestamp = new Date().getTime();
+      const response: ApiResponse = await fetchAirportFares(vehicleId, { 
+        forceRefresh: true, 
+        timestamp: timestamp 
+      });
       console.log('Airport fares response:', response);
       
       const extractFareData = (response: ApiResponse): ApiResponseFare | null => {
+        // Check for fares in data.fares array
         if (response.data?.fares) {
           if (Array.isArray(response.data.fares) && response.data.fares.length > 0) {
             console.log('Found fares in data.fares array:', response.data.fares.length);
@@ -92,6 +117,7 @@ const AirportFareManagement: React.FC = () => {
             return response.data.fares[0];
           }
           
+          // Check for fares in data.fares object
           if (typeof response.data.fares === 'object' && response.data.fares !== null) {
             console.log('Found fares in data.fares object');
             
@@ -115,6 +141,7 @@ const AirportFareManagement: React.FC = () => {
           }
         }
         
+        // Check for fares directly in the response
         if (response.fares) {
           if (Array.isArray(response.fares) && response.fares.length > 0) {
             console.log('Found fares in direct fares array:', response.fares.length);
@@ -180,6 +207,7 @@ const AirportFareManagement: React.FC = () => {
         console.log('Normalized fare data:', normalizedFareData);
         setFares(normalizedFareData);
         setInitialized(true);
+        retryCountRef.current = 0; // Reset retry count on success
       } else {
         console.log('No valid fare data found, creating default');
         setFares({
@@ -199,9 +227,28 @@ const AirportFareManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading airport fares:', error);
+      
+      // If we haven't reached the maximum number of retries, try again after a delay
+      if (retryCountRef.current < maxRetries) {
+        console.log(`Retry ${retryCountRef.current + 1}/${maxRetries} will be attempted in 2 seconds...`);
+        
+        toast({
+          title: "Loading fares failed",
+          description: `Retrying (${retryCountRef.current + 1}/${maxRetries})...`,
+          variant: "default"
+        });
+        
+        // Schedule a retry
+        retryTimeoutRef.current = setTimeout(() => {
+          loadFares(vehicleId, true);
+        }, 2000);
+        
+        return;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load airport fares. Please try again.",
+        description: "Failed to load airport fares after multiple attempts. Using default values.",
         variant: "destructive"
       });
       
@@ -228,6 +275,15 @@ const AirportFareManagement: React.FC = () => {
     console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
     setInitialized(false);
+    
+    // Reset retry count when vehicle changes
+    retryCountRef.current = 0;
+    
+    // Clear any existing retry timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
   };
 
   const handleFareChange = (fareData: FareData) => {
@@ -276,9 +332,15 @@ const AirportFareManagement: React.FC = () => {
 
     console.log("Saving fare data:", fareToSave);
     
+    // Reset retry count
+    retryCountRef.current = 0;
     setLoading(true);
+    
     try {
-      await updateAirportFares(fareToSave);
+      // Generate a unique timestamp to avoid caching
+      const timestamp = new Date().getTime();
+      await updateAirportFares(fareToSave, { timestamp });
+      
       toast({
         title: "Success",
         description: "Airport fares saved successfully.",
@@ -289,11 +351,44 @@ const AirportFareManagement: React.FC = () => {
       }, 1000);
     } catch (error) {
       console.error('Error saving fares:', error);
-      toast({
-        title: "Error",
-        description: `Failed to save airport fares: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+      
+      // Try a direct API call as fallback
+      try {
+        console.log("Attempting direct API call as fallback...");
+        const directApiUrl = `/api/direct-airport-fares.php?_t=${Date.now()}`;
+        
+        const response = await fetch(directApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Force-Refresh': 'true'
+          },
+          body: JSON.stringify(fareToSave)
+        });
+        
+        if (response.ok) {
+          toast({
+            title: "Success",
+            description: "Airport fares saved successfully using fallback method.",
+          });
+          
+          setTimeout(() => {
+            setRefreshKey(prev => prev + 1);
+          }, 1000);
+          
+          return;
+        } else {
+          console.error('Fallback API call failed:', await response.text());
+          throw new Error('Fallback API call failed');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError);
+        toast({
+          title: "Error",
+          description: `Failed to save airport fares: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -302,13 +397,16 @@ const AirportFareManagement: React.FC = () => {
   const handleSyncTables = async () => {
     setSyncing(true);
     try {
-      await syncAirportFares();
+      // Add timestamp to avoid caching
+      await syncAirportFares({ timestamp: Date.now() });
       toast({
         title: "Success",
         description: "Airport fare tables synchronized successfully.",
       });
       
       if (selectedVehicleId) {
+        // Reset retry count
+        retryCountRef.current = 0;
         setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
@@ -326,6 +424,7 @@ const AirportFareManagement: React.FC = () => {
   const handleFixDatabase = async () => {
     setSyncing(true);
     try {
+      // Add timestamp to avoid caching
       const timestamp = new Date().getTime();
       const response = await fetch(`/api/admin/fix-collation.php?_t=${timestamp}`, {
         method: 'GET',
@@ -345,8 +444,10 @@ const AirportFareManagement: React.FC = () => {
           description: `Database collation fixed successfully for ${result.data?.tables_count || 0} tables.`,
         });
         
-        await syncAirportFares();
+        await syncAirportFares({ timestamp: Date.now() });
         
+        // Reset retry count
+        retryCountRef.current = 0;
         setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(result.message || 'Failed to fix database collation');

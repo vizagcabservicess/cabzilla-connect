@@ -7,7 +7,7 @@
 
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
@@ -58,14 +58,17 @@ function sendErrorResponse($message, $code = 400) {
 
 // Log this request
 file_put_contents($logFile, "[$timestamp] Airport fares update request received\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 
 // Get request data and debug
 $rawInput = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] Raw input: $rawInput\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] POST data: " . json_encode($_POST) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] GET data: " . json_encode($_GET) . "\n", FILE_APPEND);
 
 try {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        throw new Exception('Only POST method is allowed');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
+        throw new Exception('Only POST or PUT methods are allowed');
     }
 
     // Get request data
@@ -77,6 +80,7 @@ try {
         
         if (!empty($json)) {
             $postData = json_decode($json, true);
+            
             if (json_last_error() !== JSON_ERROR_NONE) {
                 // Try to handle non-JSON data (might be URL encoded or form data)
                 parse_str($json, $parsedData);
@@ -112,6 +116,17 @@ try {
         }
     }
 
+    // If vehicle ID not found in POST data, check URL parameters
+    if (!$vehicleId) {
+        foreach ($possibleKeys as $key) {
+            if (isset($_GET[$key]) && !empty($_GET[$key])) {
+                $vehicleId = trim($_GET[$key]);
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
+    }
+
     if (!$vehicleId) {
         file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
             implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
@@ -119,15 +134,15 @@ try {
     }
 
     // Extract fare data - support various naming conventions
-    $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : 0;
-    $pricePerKm = isset($postData['pricePerKm']) ? floatval($postData['pricePerKm']) : 0;
-    $pickupPrice = isset($postData['pickupPrice']) ? floatval($postData['pickupPrice']) : 0;
-    $dropPrice = isset($postData['dropPrice']) ? floatval($postData['dropPrice']) : 0;
-    $tier1Price = isset($postData['tier1Price']) ? floatval($postData['tier1Price']) : 0;
-    $tier2Price = isset($postData['tier2Price']) ? floatval($postData['tier2Price']) : 0;
-    $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : 0;
-    $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : 0;
-    $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 0;
+    $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : (isset($postData['base_price']) ? floatval($postData['base_price']) : 0);
+    $pricePerKm = isset($postData['pricePerKm']) ? floatval($postData['pricePerKm']) : (isset($postData['price_per_km']) ? floatval($postData['price_per_km']) : 0);
+    $pickupPrice = isset($postData['pickupPrice']) ? floatval($postData['pickupPrice']) : (isset($postData['pickup_price']) ? floatval($postData['pickup_price']) : 0);
+    $dropPrice = isset($postData['dropPrice']) ? floatval($postData['dropPrice']) : (isset($postData['drop_price']) ? floatval($postData['drop_price']) : 0);
+    $tier1Price = isset($postData['tier1Price']) ? floatval($postData['tier1Price']) : (isset($postData['tier1_price']) ? floatval($postData['tier1_price']) : 0);
+    $tier2Price = isset($postData['tier2Price']) ? floatval($postData['tier2Price']) : (isset($postData['tier2_price']) ? floatval($postData['tier2_price']) : 0);
+    $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : (isset($postData['tier3_price']) ? floatval($postData['tier3_price']) : 0);
+    $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : (isset($postData['tier4_price']) ? floatval($postData['tier4_price']) : 0);
+    $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : (isset($postData['extra_km_charge']) ? floatval($postData['extra_km_charge']) : 0);
     
     // Connect to the database
     $conn = getDbConnection();
@@ -171,7 +186,7 @@ try {
         file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
     }
 
-    // Insert or update airport_transfer_fares table
+    // Insert or update with ON DUPLICATE KEY UPDATE to simplify the process
     $updateSql = "
         INSERT INTO airport_transfer_fares 
         (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
@@ -220,14 +235,23 @@ try {
         'vehicleId' => $vehicleId,
         'vehicle_id' => $vehicleId,
         'basePrice' => (float)$basePrice,
+        'base_price' => (float)$basePrice,
         'pricePerKm' => (float)$pricePerKm,
+        'price_per_km' => (float)$pricePerKm,
         'pickupPrice' => (float)$pickupPrice,
+        'pickup_price' => (float)$pickupPrice,
         'dropPrice' => (float)$dropPrice,
+        'drop_price' => (float)$dropPrice,
         'tier1Price' => (float)$tier1Price,
+        'tier1_price' => (float)$tier1Price,
         'tier2Price' => (float)$tier2Price,
+        'tier2_price' => (float)$tier2Price,
         'tier3Price' => (float)$tier3Price,
+        'tier3_price' => (float)$tier3Price,
         'tier4Price' => (float)$tier4Price,
-        'extraKmCharge' => (float)$extraKmCharge
+        'tier4_price' => (float)$tier4Price,
+        'extraKmCharge' => (float)$extraKmCharge,
+        'extra_km_charge' => (float)$extraKmCharge
     ], 'Airport fare updated successfully');
     
 } catch (Exception $e) {

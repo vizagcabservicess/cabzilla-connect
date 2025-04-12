@@ -22,18 +22,21 @@ require_once __DIR__ . '/../config.php';
 // Simple sendJSON function 
 function sendJSON($data, $status = 200) {
     http_response_code($status);
+    header('Content-Type: application/json');
     echo json_encode($data);
     exit;
 }
-
-// Get the vehicle ID from query params
-$vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
 
 // Create log directory
 $logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
+
+// Get the vehicle ID from query params
+$vehicleId = $_GET['vehicleId'] ?? $_GET['vehicle_id'] ?? null;
+
+// Log for debugging
 $logFile = $logDir . '/airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 file_put_contents($logFile, "[$timestamp] Airport fares request for vehicle ID: $vehicleId\n", FILE_APPEND);
@@ -96,6 +99,7 @@ try {
     // Prepare and execute the query
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
+        file_put_contents($logFile, "[$timestamp] Prepare statement failed: " . $conn->error . "\n", FILE_APPEND);
         throw new Exception("Prepare statement failed: " . $conn->error);
     }
     
@@ -104,6 +108,7 @@ try {
     }
     
     if (!$stmt->execute()) {
+        file_put_contents($logFile, "[$timestamp] Query execution failed: " . $stmt->error . "\n", FILE_APPEND);
         throw new Exception("Query execution failed: " . $stmt->error);
     }
     
@@ -152,11 +157,13 @@ try {
         
         $insertStmt = $conn->prepare($defaultInsertSql);
         if (!$insertStmt) {
+            file_put_contents($logFile, "[$timestamp] Failed to prepare insert statement: " . $conn->error . "\n", FILE_APPEND);
             throw new Exception("Failed to prepare insert statement: " . $conn->error);
         }
         
         $insertStmt->bind_param("s", $vehicleId);
         if (!$insertStmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Failed to insert default fare: " . $insertStmt->error . "\n", FILE_APPEND);
             throw new Exception("Failed to insert default fare: " . $insertStmt->error);
         }
         

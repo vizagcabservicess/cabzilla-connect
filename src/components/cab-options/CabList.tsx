@@ -37,6 +37,12 @@ export const CabList: React.FC<CabListProps> = ({
     }
   }, [isCalculatingFares, cabFares, faresReady]);
   
+  // Debug whenever cabFares change
+  useEffect(() => {
+    console.log('CabList: Fares updated:', cabFares);
+    console.log('CabList: Selected cab ID:', selectedCabId);
+  }, [cabFares, selectedCabId]);
+  
   const displayPrice = (cabId: string): React.ReactNode => {
     // For debugging
     console.log(`CabList: Displaying price for cab ${cabId}:`, cabFares[cabId]);
@@ -57,11 +63,30 @@ export const CabList: React.FC<CabListProps> = ({
     );
   };
   
-  const sortedCabTypes = [...cabTypes].sort((a, b) => {
-    const fareA = cabFares[a.id] || 0;
-    const fareB = cabFares[b.id] || 0;
-    return fareA - fareB;
-  });
+  // Sort cabs by price (lowest first), but only if fares are available
+  const sortedCabTypes = React.useMemo(() => {
+    const hasFares = Object.values(cabFares).some(fare => fare > 0);
+    
+    if (!hasFares) {
+      console.log('CabList: No valid fares found, not sorting cab types');
+      return [...cabTypes];
+    }
+    
+    console.log('CabList: Sorting cab types by fare');
+    return [...cabTypes].sort((a, b) => {
+      const fareA = cabFares[a.id] || 0;
+      const fareB = cabFares[b.id] || 0;
+      
+      // If both fares are 0, maintain original order
+      if (fareA === 0 && fareB === 0) return 0;
+      // If only fareA is 0, push it to the end
+      if (fareA === 0) return 1;
+      // If only fareB is 0, push it to the end
+      if (fareB === 0) return -1;
+      
+      return fareA - fareB;
+    });
+  }, [cabTypes, cabFares]);
 
   return (
     <div className="space-y-6">
@@ -97,6 +122,7 @@ export const CabList: React.FC<CabListProps> = ({
                 }
               }));
               
+              console.log(`CabList: Selected cab ${cab.id} with fare ${fare}`);
               handleSelectCab(cab);
             }}
           >
