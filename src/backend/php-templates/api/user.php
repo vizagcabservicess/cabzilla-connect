@@ -27,85 +27,159 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
+// Create logs directory if needed
+$logDir = __DIR__ . '/logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+$logFile = $logDir . '/user_api_' . date('Y-m-d') . '.log';
+
+// Log function for debugging
+function logDebug($message, $data = null) {
+    global $logFile;
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message";
+    
+    if ($data !== null) {
+        $logMessage .= ': ' . (is_array($data) || is_object($data) ? json_encode($data) : $data);
+    }
+    
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+    error_log($logMessage);
+}
+
 // Get the Authorization header
 $authHeader = getAuthorizationHeader();
 $token = null;
 
 // Log the incoming request for debugging
-error_log("User API request received with headers: " . json_encode(array_keys(getallheaders())));
+logDebug("User API request received", ['headers' => array_keys(getallheaders())]);
 
 // Extract the token from the Authorization header
 if ($authHeader) {
     if (strpos($authHeader, 'Bearer ') === 0) {
         $token = substr($authHeader, 7);
-        error_log("Bearer token extracted, length: " . strlen($token));
+        logDebug("Bearer token extracted", ['length' => strlen($token)]);
     } else {
-        error_log("Invalid Authorization header format: " . $authHeader);
+        logDebug("Invalid Authorization header format", ['header' => $authHeader]);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid Authorization header format'], 401);
     }
 }
 
+// Check for token in query parameter as fallback (for testing)
+if (!$token && isset($_GET['token'])) {
+    $token = $_GET['token'];
+    logDebug("Using token from query parameter", ['length' => strlen($token)]);
+}
+
+// Check for dev_mode parameter
+$devMode = isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true';
+
+// If in dev mode, we can bypass token validation
+if ($devMode) {
+    logDebug("Dev mode enabled, bypassing authentication");
+    $user = [
+        'id' => isset($_GET['user_id']) ? intval($_GET['user_id']) : 1,
+        'name' => 'Dev User',
+        'email' => 'dev@example.com',
+        'phone' => '9876543210',
+        'role' => isset($_GET['role']) && $_GET['role'] === 'admin' ? 'admin' : 'user'
+    ];
+    
+    sendJsonResponse([
+        'status' => 'success',
+        'message' => 'User data retrieved in dev mode',
+        'user' => $user,
+        'source' => 'dev_mode'
+    ]);
+    exit;
+}
+
 if (!$token) {
-    error_log("No token provided in request");
+    logDebug("No token provided in request");
     sendJsonResponse(['status' => 'error', 'message' => 'Authentication token is required'], 401);
 }
 
 try {
-    // First check if verifyJwtToken function exists
-    if (!function_exists('verifyJwtToken')) {
-        error_log("verifyJwtToken function not found, attempting to create fallback");
+    // Improved token validation with better error handling
+    $userData = null;
+    $validationError = null;
+    
+    // Try using verifyJwtToken function if available
+    if (function_exists('verifyJwtToken')) {
+        try {
+            logDebug("Using verifyJwtToken function");
+            $userData = verifyJwtToken($token);
+            if (!$userData) {
+                $validationError = "Token validation failed with verifyJwtToken";
+            }
+        } catch (Exception $e) {
+            $validationError = "Exception in verifyJwtToken: " . $e->getMessage();
+            logDebug($validationError);
+        }
+    }
+    
+    // If verifyJwtToken failed or isn't available, try manual validation
+    if (!$userData) {
+        logDebug("Attempting manual JWT validation");
         
-        // Define a simple fallback function to extract data from JWT token
-        if (!function_exists('validateJwtToken')) {
-            function validateJwtToken($token) {
-                $tokenParts = explode('.', $token);
-                if (count($tokenParts) !== 3) {
-                    return null;
-                }
-                
-                try {
-                    // Base64 decode the payload part (index 1)
-                    $payload = json_decode(base64_decode(str_replace(
-                        ['-', '_'], 
-                        ['+', '/'], 
-                        $tokenParts[1]
-                    )), true);
-                    
-                    // Check if token has expired
-                    if (isset($payload['exp']) && $payload['exp'] < time()) {
-                        error_log("Token has expired");
+        try {
+            // Define validateJwtToken function if not exists
+            if (!function_exists('validateJwtToken')) {
+                function validateJwtToken($token) {
+                    $tokenParts = explode('.', $token);
+                    if (count($tokenParts) !== 3) {
                         return null;
                     }
                     
-                    return $payload;
-                } catch (Exception $e) {
-                    error_log("Error decoding token: " . $e->getMessage());
-                    return null;
+                    try {
+                        // Base64 decode the payload part (index 1)
+                        $payload = json_decode(base64_decode(str_replace(
+                            ['-', '_'], 
+                            ['+', '/'], 
+                            $tokenParts[1]
+                        )), true);
+                        
+                        // Check if token has expired
+                        if (isset($payload['exp']) && $payload['exp'] < time()) {
+                            error_log("Token has expired");
+                            return null;
+                        }
+                        
+                        return $payload;
+                    } catch (Exception $e) {
+                        error_log("Error decoding token: " . $e->getMessage());
+                        return null;
+                    }
                 }
             }
+            
+            // Use the fallback function 
+            $userData = validateJwtToken($token);
+            if (!$userData) {
+                $validationError = "Manual token validation failed";
+            }
+        } catch (Exception $e) {
+            $validationError = "Exception in manual validation: " . $e->getMessage();
+            logDebug($validationError);
         }
-        
-        // Use the fallback function 
-        $userData = validateJwtToken($token);
-    } else {
-        // Use the proper function
-        $userData = verifyJwtToken($token);
     }
     
+    // Final check if we have valid user data
     if (!$userData) {
-        error_log("Token validation failed, token length: " . strlen($token));
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
+        logDebug("All token validation methods failed", ['error' => $validationError]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token: ' . $validationError], 401);
     }
 
     // Get user ID from token payload
-    $userId = $userData['user_id'] ?? $userData['id'] ?? null;
+    $userId = $userData['user_id'] ?? $userData['id'] ?? $userData['sub'] ?? null;
     
     if (!$userId) {
-        error_log("No user ID in token payload: " . json_encode($userData));
+        logDebug("No user ID in token payload", ['payload' => json_encode($userData)]);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid token: no user ID found'], 401);
     }
     
-    error_log("Token validated successfully, user ID: " . $userId);
+    logDebug("Token validated successfully", ['user_id' => $userId]);
     
     // Try to connect to database
     $conn = null;
@@ -129,13 +203,12 @@ try {
         }
     } catch (Exception $e) {
         $dbError = $e->getMessage();
-        error_log("Database connection error: " . $dbError);
+        logDebug("Database connection error", ['error' => $dbError]);
     }
     
-    // If we couldn't connect to the database or users table doesn't exist, 
-    // return user data from token
+    // If we couldn't connect to the database, return user data from token
     if (!$conn) {
-        error_log("No database connection, using token data for user response");
+        logDebug("No database connection, using token data for user response");
         
         // Create a user object from token data
         $user = [
@@ -158,7 +231,7 @@ try {
     // Check if users table exists
     $tableExists = $conn->query("SHOW TABLES LIKE 'users'");
     if (!$tableExists || $tableExists->num_rows === 0) {
-        error_log("Users table doesn't exist in database");
+        logDebug("Users table doesn't exist in database");
         
         // Create a user object from token data
         $user = [
@@ -181,7 +254,7 @@ try {
     // Query to get full user information
     $stmt = $conn->prepare("SELECT id, name, email, phone, role FROM users WHERE id = ?");
     if (!$stmt) {
-        error_log("Statement preparation failed: " . $conn->error);
+        logDebug("Statement preparation failed", ['error' => $conn->error]);
         throw new Exception('Database prepare error: ' . $conn->error);
     }
     
@@ -189,14 +262,14 @@ try {
     $executed = $stmt->execute();
     
     if (!$executed) {
-        error_log("Statement execution failed: " . $stmt->error);
+        logDebug("Statement execution failed", ['error' => $stmt->error]);
         throw new Exception('Database execute error: ' . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
-        error_log("User not found in database, ID: " . $userId);
+        logDebug("User not found in database", ['user_id' => $userId]);
         
         // Create a user object from token data as fallback
         $user = [
@@ -219,7 +292,7 @@ try {
     
     // Get user data from database
     $user = $result->fetch_assoc();
-    error_log("User found in database, ID: " . $user['id']);
+    logDebug("User found in database", ['user_id' => $user['id']]);
     
     // Send response
     sendJsonResponse([
@@ -230,7 +303,7 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log('User data exception: ' . $e->getMessage());
+    logDebug('User data exception', ['error' => $e->getMessage()]);
     sendJsonResponse(['status' => 'error', 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
 }
 

@@ -1,7 +1,7 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { User } from '@/types/api';
+import { getForcedRequestConfig } from '@/config/requestConfig';
 
 const apiClient = axios.create({
   headers: {
@@ -85,6 +85,11 @@ export const authAPI = {
   login: async (credentials: { email: string; password: string }) => {
     try {
       console.log('Login attempt with:', credentials.email);
+      
+      // Clear any existing tokens and user data before login
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      
       const response = await axios.post(getApiUrl('/api/login'), credentials, {
         headers: {
           'Content-Type': 'application/json',
@@ -122,32 +127,68 @@ export const authAPI = {
     if (!token) return null;
     
     try {
+      console.log('Attempting to get current user with token:', token.substring(0, 10) + '...');
+      
+      // First try getting user from API
       const response = await axios.get(getApiUrl('/api/user'), {
         headers: {
           'Authorization': `Bearer ${token}`,
-          ...forceRefreshHeaders
-        }
+          ...forceRefreshHeaders,
+          'X-Debug': 'true'
+        },
+        ...getForcedRequestConfig()
       });
       
       if (response.data && response.data.user) {
+        console.log('Current user data retrieved successfully:', response.data.user);
+        
+        // Update stored user data
+        localStorage.setItem('userData', JSON.stringify(response.data.user));
+        
         return response.data.user;
       } else if (response.data) {
+        console.log('API returned data but no user object:', response.data);
         return response.data;
       }
       
       // Fallback to localStorage if API fails but we have data
       const storedUser = localStorage.getItem('userData');
       if (storedUser) {
+        console.log('Using stored user data as fallback');
         return JSON.parse(storedUser);
       }
       
+      console.warn('No user data found in API response or localStorage');
       return null;
     } catch (error) {
       console.error('Error getting current user:', error);
       
+      // Try with direct request without forceRefreshHeaders
+      try {
+        console.log('Trying alternate request without forceRefreshHeaders');
+        const alternateResponse = await axios.get(getApiUrl('/api/user'), {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          timeout: 10000
+        });
+        
+        if (alternateResponse.data && alternateResponse.data.user) {
+          console.log('Alternate request successful:', alternateResponse.data.user);
+          
+          // Update stored user data
+          localStorage.setItem('userData', JSON.stringify(alternateResponse.data.user));
+          
+          return alternateResponse.data.user;
+        }
+      } catch (alternateError) {
+        console.error('Alternate request also failed:', alternateError);
+      }
+      
       // Fallback to localStorage if API fails
       const storedUser = localStorage.getItem('userData');
       if (storedUser) {
+        console.log('Using stored user data after API failure');
         return JSON.parse(storedUser);
       }
       
@@ -156,7 +197,31 @@ export const authAPI = {
   },
 
   isAuthenticated: () => {
-    return !!localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken');
+    if (!token) return false;
+    
+    // Basic token validation check
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      console.warn('Invalid token format detected, clearing auth state');
+      localStorage.removeItem('authToken');
+      return false;
+    }
+    
+    try {
+      // Decode the payload to check expiration
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        console.warn('Token has expired, clearing auth state');
+        localStorage.removeItem('authToken');
+        return false;
+      }
+    } catch (e) {
+      console.error('Error parsing token:', e);
+      return false;
+    }
+    
+    return true;
   },
 
   isAdmin: () => {
@@ -175,6 +240,7 @@ export const authAPI = {
   logout: () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
+    console.log('User logged out successfully');
   },
 
   getAllUsers: async (): Promise<User[]> => {

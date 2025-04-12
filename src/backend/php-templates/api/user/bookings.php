@@ -37,78 +37,36 @@ if ($debugMode) {
     error_log("Request Params: " . json_encode($_GET));
 }
 
-// Get user ID from JWT token
-$headers = getallheaders();
-$userId = null;
-$isAdmin = false;
-$authSuccess = false;
-
-// Create debugging log
+// Create logging directory if it doesn't exist
 $logDir = __DIR__ . '/logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 $logFile = $logDir . '/bookings_api_' . date('Y-m-d') . '.log';
 
-error_log("User bookings request received with headers: " . json_encode(array_keys($headers)));
-file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Request headers: " . json_encode($headers) . "\n", FILE_APPEND);
-
-// First try to get user from Authorization header
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
+// Helper logging function
+function logMessage($message, $data = null) {
+    global $logFile;
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message";
     
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Found auth token, length: " . strlen($token) . "\n", FILE_APPEND);
-    
-    try {
-        if (function_exists('verifyJwtToken')) {
-            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Using verifyJwtToken function\n", FILE_APPEND);
-            $payload = verifyJwtToken($token);
-            if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
-                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                $authSuccess = true;
-                error_log("User authenticated via JWT: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
-                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] JWT verification successful, userId: $userId\n", FILE_APPEND);
-            } else {
-                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] JWT verification failed, invalid payload\n", FILE_APPEND);
-            }
+    if ($data !== null) {
+        if (is_array($data) || is_object($data)) {
+            $logMessage .= ": " . json_encode($data);
         } else {
-            error_log("verifyJwtToken function not available - trying manual JWT parsing");
-            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] verifyJwtToken not available, trying manual parsing\n", FILE_APPEND);
-            // Try to parse JWT manually
-            $tokenParts = explode('.', $token);
-            if (count($tokenParts) === 3) {
-                $payload = json_decode(base64_decode(strtr($tokenParts[1], '-_', '+/')), true);
-                if ($payload && isset($payload['user_id'])) {
-                    $userId = $payload['user_id'];
-                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                    $authSuccess = true;
-                    error_log("User authenticated via manual JWT parsing: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
-                    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Manual JWT parsing successful, userId: $userId\n", FILE_APPEND);
-                } else {
-                    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Manual JWT parsing failed, invalid payload\n", FILE_APPEND);
-                }
-            } else {
-                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Token doesn't have 3 parts, can't parse manually\n", FILE_APPEND);
-            }
+            $logMessage .= ": $data";
         }
-    } catch (Exception $e) {
-        error_log("JWT verification failed: " . $e->getMessage());
-        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] JWT verification exception: " . $e->getMessage() . "\n", FILE_APPEND);
     }
+    
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+    error_log($logMessage);
 }
 
-// If we don't have a user ID from the token, try to get it from the query parameter
-if (!$userId && isset($_GET['user_id'])) {
-    $userId = intval($_GET['user_id']);
-    error_log("Using user_id from query parameter: $userId");
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Using user_id from query: $userId\n", FILE_APPEND);
-}
+logMessage("User bookings request received", ['headers' => array_keys(getallheaders())]);
 
-// Always succeed with dev_mode, regardless of authentication
+// Check for dev_mode parameter - always succeed with sample data
 if (isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true') {
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Dev mode enabled, proceeding regardless of auth\n", FILE_APPEND);
+    logMessage("Dev mode enabled, proceeding with sample data");
     
     // If we have a user_id in the query, use it
     if (isset($_GET['user_id'])) {
@@ -129,9 +87,85 @@ if (isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true') {
     exit;
 }
 
+// Get user ID from JWT token with improved handling
+$headers = getallheaders();
+$userId = null;
+$isAdmin = false;
+$authSuccess = false;
+
+// First try to get user from Authorization header
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
+    logMessage("Found auth token", ['length' => strlen($token)]);
+    
+    // If token exists but is empty or just whitespace, reject it
+    if (trim($token) === '') {
+        logMessage("Empty token provided");
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Invalid authentication token', 
+            'code' => 401,
+            'bookings' => []
+        ]);
+        exit;
+    }
+    
+    try {
+        if (function_exists('verifyJwtToken')) {
+            logMessage("Using verifyJwtToken function");
+            $payload = verifyJwtToken($token);
+            if ($payload && isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                $authSuccess = true;
+                logMessage("JWT verification successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+            } else {
+                logMessage("JWT verification failed, invalid payload");
+            }
+        } else {
+            logMessage("verifyJwtToken function not available, trying manual parsing");
+            // Try to parse JWT manually
+            $tokenParts = explode('.', $token);
+            if (count($tokenParts) === 3) {
+                $payload = json_decode(base64_decode(strtr($tokenParts[1], '-_', '+/')), true);
+                if ($payload && isset($payload['user_id'])) {
+                    $userId = $payload['user_id'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else if ($payload && isset($payload['id'])) {
+                    $userId = $payload['id'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful (using 'id' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else if ($payload && isset($payload['sub'])) {
+                    $userId = $payload['sub'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful (using 'sub' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else {
+                    logMessage("Manual JWT parsing failed, invalid payload", ['payload_keys' => json_encode(array_keys($payload ?? []))]);
+                }
+            } else {
+                logMessage("Token doesn't have 3 parts, can't parse manually");
+            }
+        }
+    } catch (Exception $e) {
+        logMessage("JWT verification failed", ['error' => $e->getMessage()]);
+    }
+}
+
+// If we don't have a user ID from the token, try to get it from the query parameter
+if (!$userId && isset($_GET['user_id'])) {
+    $userId = intval($_GET['user_id']);
+    logMessage("Using user_id from query parameter", ['user_id' => $userId]);
+}
+
 // If still no user ID, return empty bookings with status success instead of error
 if (!$userId) {
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] No user ID provided in token or query parameters\n", FILE_APPEND);
+    logMessage("No user ID provided in token or query parameters");
     // Return empty bookings with status success instead of error
     echo json_encode([
         'status' => 'success', 
@@ -170,8 +204,7 @@ try {
     // Check if bookings table exists
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     if (!$tableExists || $tableExists->num_rows === 0) {
-        error_log("Bookings table doesn't exist, returning fallback data");
-        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Bookings table doesn't exist\n", FILE_APPEND);
+        logMessage("Bookings table doesn't exist, returning fallback data");
         // Provide fallback bookings for testing
         $fallbackBookings = createFallbackBookings($userId);
         echo json_encode([
@@ -189,8 +222,7 @@ try {
         $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            error_log("Failed to prepare user bookings query: " . $conn->error);
-            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Failed to prepare query: " . $conn->error . "\n", FILE_APPEND);
+            logMessage("Failed to prepare user bookings query", ['error' => $conn->error]);
             throw new Exception("Failed to prepare query: " . $conn->error);
         }
         $stmt->bind_param("i", $userId);
@@ -199,8 +231,7 @@ try {
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            error_log("Failed to prepare admin bookings query: " . $conn->error);
-            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Failed to prepare admin query: " . $conn->error . "\n", FILE_APPEND);
+            logMessage("Failed to prepare admin bookings query", ['error' => $conn->error]);
             throw new Exception("Failed to prepare query: " . $conn->error);
         }
     } else {
@@ -208,8 +239,7 @@ try {
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            error_log("Failed to prepare demo bookings query: " . $conn->error);
-            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Failed to prepare demo query: " . $conn->error . "\n", FILE_APPEND);
+            logMessage("Failed to prepare demo bookings query", ['error' => $conn->error]);
             throw new Exception("Failed to prepare query: " . $conn->error);
         }
     }
@@ -217,16 +247,14 @@ try {
     $success = $stmt->execute();
     
     if (!$success) {
-        error_log("Failed to execute bookings query: " . $stmt->error);
-        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Failed to execute query: " . $stmt->error . "\n", FILE_APPEND);
+        logMessage("Failed to execute bookings query", ['error' => $stmt->error]);
         throw new Exception("Failed to execute query: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
-        error_log("Failed to get result: " . $stmt->error);
-        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Failed to get result: " . $stmt->error . "\n", FILE_APPEND);
+        logMessage("Failed to get result", ['error' => $stmt->error]);
         throw new Exception("Failed to get result: " . $stmt->error);
     }
     
@@ -258,12 +286,11 @@ try {
         $bookings[] = $booking;
     }
     
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Found " . count($bookings) . " bookings for user $userId\n", FILE_APPEND);
+    logMessage("Found bookings for user", ['count' => count($bookings), 'user_id' => $userId]);
     
     // For new users who have no bookings yet, return an empty array with success
     if (count($bookings) === 0) {
-        error_log("No bookings found for user $userId, returning empty array");
-        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] No bookings found, returning empty array\n", FILE_APPEND);
+        logMessage("No bookings found for user, returning empty array", ['user_id' => $userId]);
         echo json_encode([
             'status' => 'success', 
             'bookings' => [], 
@@ -283,8 +310,7 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log("Error in bookings endpoint: " . $e->getMessage());
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Error: " . $e->getMessage() . "\n", FILE_APPEND);
+    logMessage("Error in bookings endpoint", ['error' => $e->getMessage()]);
     
     // Instead of returning an error, provide fallback data
     $fallbackBookings = createFallbackBookings($userId);
