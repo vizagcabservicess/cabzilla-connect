@@ -25,10 +25,10 @@ function logDbConnection($message, $data = []) {
     error_log($logEntry);
 }
 
-// FIXED: Get database connection with improved error handling and reliability
+// Get database connection with improved error handling
 function getDbConnection() {
     // Disable any output buffering to prevent HTML contamination
-    while (ob_get_level()) ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
     
     // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
     $dbHost = 'localhost';
@@ -37,8 +37,10 @@ function getDbConnection() {
     $dbPass = 'Vizag@1213';
     
     try {
-        // Log attempt but don't include credentials
-        logDbConnection("Attempting database connection", ['host' => $dbHost, 'dbname' => $dbName]);
+        logDbConnection("Attempting database connection", [
+            'host' => $dbHost, 
+            'dbname' => $dbName
+        ]);
         
         // Create connection with error reporting
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
@@ -66,36 +68,14 @@ function getDbConnection() {
         logDbConnection("Database connection error", ['error' => $e->getMessage()]);
         error_log("Database connection error: " . $e->getMessage());
         
-        // Try to connect one more time with a small delay
-        try {
-            // Wait a moment before retry
-            usleep(100000); // 100ms delay
-            
-            // Create connection again
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            // Check connection
-            if ($conn->connect_error) {
-                logDbConnection("Database retry connection failed", ['error' => $conn->connect_error]);
-                return null;
-            }
-            
-            // Set charset
-            $conn->set_charset("utf8mb4");
-            
-            logDbConnection("Database retry connection successful", ['server_info' => $conn->server_info]);
-            return $conn;
-        } catch (Exception $retryError) {
-            logDbConnection("Database retry connection error", ['error' => $retryError->getMessage()]);
-            return null;
-        }
+        return null;
     }
 }
 
 // Function for sending JSON responses
 function sendDbJsonResponse($data, $statusCode = 200) {
     // Clear any existing output to prevent contamination
-    while (ob_get_level()) ob_clean();
+    if (ob_get_length()) ob_clean();
     
     // Set HTTP status code
     http_response_code($statusCode);
@@ -111,7 +91,7 @@ function sendDbJsonResponse($data, $statusCode = 200) {
 // Enhanced direct database connection function that NEVER fails silently
 function getDirectDatabaseConnection() {
     // Disable any output buffering
-    while (ob_get_level()) ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
     
     // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
     $dbHost = 'localhost';
@@ -147,21 +127,6 @@ function getDirectDatabaseConnection() {
     } catch (Exception $e) {
         // Log the error
         error_log("Direct database connection error: " . $e->getMessage());
-        
-        // Try once more with a short delay
-        try {
-            usleep(100000); // 100ms delay
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            if (!$conn->connect_error) {
-                $conn->set_charset("utf8mb4");
-                error_log("Direct database retry connection successful");
-                return $conn;
-            }
-        } catch (Exception $retryError) {
-            error_log("Direct database retry connection error: " . $retryError->getMessage());
-        }
-        
         return null;
     }
 }
@@ -189,7 +154,7 @@ function tableExists($conn, $tableName) {
 // Direct database testing function for diagnostics
 function testDirectDatabaseConnection() {
     // Disable any output buffering
-    while (ob_get_level()) ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
     
     $result = [
         'status' => 'error',

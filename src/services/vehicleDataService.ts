@@ -4,8 +4,8 @@ import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
 
 // Shorter cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 5 * 1000; // 5 seconds
-const API_CACHE_DURATION = 3 * 1000; // 3 seconds
+const JSON_CACHE_DURATION = 10 * 1000; // 10 seconds
+const API_CACHE_DURATION = 5 * 1000; // 5 seconds
 const ADMIN_CACHE_DURATION = 0; // No caching for admin views
 
 // Store fetched vehicle data in memory to reduce API calls
@@ -21,7 +21,7 @@ let pendingRefreshPromise: Promise<CabType[]> | null = null;
 
 // Add throttling for cache clearing to prevent cascading refreshes
 let lastCacheClearTime = 0;
-const CACHE_CLEAR_THROTTLE = 1000; // 1 second minimum between cache clears
+const CACHE_CLEAR_THROTTLE = 3000; // 3 seconds minimum between cache clears
 let clearingInProgress = false;
 let cacheOperationsQueue: Array<() => Promise<void>> = [];
 
@@ -91,7 +91,7 @@ const processQueue = async () => {
   } finally {
     clearingInProgress = false;
     if (cacheOperationsQueue.length > 0) {
-      setTimeout(processQueue, 50); // Process next operation after a short delay
+      setTimeout(processQueue, 100); // Process next operation after a short delay
     }
   }
 };
@@ -152,40 +152,33 @@ export const clearVehicleDataCache = () => {
  */
 const refreshVehicleData = async (forceRefresh = false, includeInactive = false): Promise<CabType[]> => {
   try {
-    // First, try direct database endpoints with priority flags
+    // First, try direct database endpoints
     const endpoints = [
       // Prioritize direct database endpoints
-      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}&priorityDb=true`,
-      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}&priorityDb=true`,
-      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}&priorityDb=true`,
+      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
+      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
+      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`,
       // Add admin endpoint specifically for fare management
-      `api/admin/direct-vehicle-pricing.php?action=load_vehicles&_t=${Date.now()}&priorityDb=true`
+      `api/admin/direct-vehicle-pricing.php?action=load_vehicles&_t=${Date.now()}`
     ];
     
     let vehicles: CabType[] | null = null;
     let errorMessage = '';
     
-    // Try each endpoint in sequence with a shorter timeout to avoid long waits
+    // Try each endpoint in sequence until we get valid data
     for (const endpoint of endpoints) {
       try {
         console.log(`Fetching vehicle data from: ${window.location.origin}/${endpoint}`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5 second timeout
-        
         const response = await fetch(getApiUrl(endpoint), {
           method: 'GET',
           headers: {
             ...forceRefreshHeaders,
             'X-Admin-Mode': includeInactive ? 'true' : 'false',
             'X-Bypass-Cache': 'true',
-            'X-Database-First': 'true',
-            'X-Priority-DB': 'true'
+            'X-Database-First': 'true'
           },
-          cache: 'no-store', // Force fresh request
-          signal: controller.signal
+          cache: 'no-store' // Force fresh request
         });
-        
-        clearTimeout(timeoutId);
         
         // Check if response is OK
         if (!response.ok) {
@@ -262,10 +255,7 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
     // If direct API calls failed, try the static JSON file as a fallback
     console.log('Fetching from vehicles.json');
     const jsonResponse = await fetch(getApiUrl(`data/vehicles.json?_t=${Date.now()}`), {
-      cache: 'no-store', // Disable caching for this request
-      headers: {
-        'X-Priority-DB': 'true'
-      }
+      cache: 'no-store' // Disable caching for this request
     });
     
     if (jsonResponse.ok) {
@@ -337,13 +327,6 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
  */
 export const getVehicleData = async (forceRefresh = false, includeInactive = false): Promise<CabType[]> => {
   console.log(`getVehicleData called with forceRefresh=${forceRefresh}, includeInactive=${includeInactive}`);
-  
-  // Always force refresh on page load
-  const alwaysForceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
-  if (alwaysForceRefresh) {
-    console.log('Forcing refresh due to forceCacheRefresh flag');
-    forceRefresh = true;
-  }
   
   // Check if we're currently refreshing
   if (pendingRefreshPromise) {
@@ -458,9 +441,9 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
     
     // Try direct admin endpoints first
     const adminEndpoints = [
-      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}&priorityDb=true`,
-      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=${forceRefresh}&priorityDb=true`,
-      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=true&priorityDb=true`
+      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
+      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=${forceRefresh}`,
+      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=true`
     ];
     
     for (const endpoint of adminEndpoints) {
@@ -472,8 +455,7 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
             ...forceRefreshHeaders,
             'X-Admin-Mode': 'true',
             'X-Bypass-Cache': 'true',
-            'X-Database-First': 'true',
-            'X-Priority-DB': 'true'
+            'X-Database-First': 'true'
           },
           cache: 'no-store'
         });

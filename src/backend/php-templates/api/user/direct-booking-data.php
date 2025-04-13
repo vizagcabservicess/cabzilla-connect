@@ -11,10 +11,8 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.61'); // Increment version to avoid caching issues
+header('X-API-Version: 1.0.56');
 header('X-Timestamp: ' . time());
-header('X-Priority-DB: true');
-header('X-Vehicle-Request-Time: ' . microtime(true));
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,226 +20,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// IMPROVED: Handle vehicle fare data with better error handling and reliability
+// Log the request
+error_log("Direct booking data request received: " . json_encode($_GET));
+
+// Check if the request is for local package fares
 if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
+    error_log("Local package fares sync check request received");
+    
     $vehicleId = $_GET['vehicle_id'];
-    $forceDb = isset($_GET['force_db']) && $_GET['force_db'] === 'true';
-    $tripType = isset($_GET['trip_type']) ? $_GET['trip_type'] : 'outstation';
     
     // Try to connect to database
     $conn = null;
     try {
         $conn = getDbConnection();
-        error_log("Connected to database for vehicle sync: " . $vehicleId);
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }
     
     if ($conn) {
         try {
-            // First check if we need trip-specific fare data
-            if ($tripType === 'airport') {
-                // Check for airport fares
-                $tableCheckResult = $conn->query("SHOW TABLES LIKE 'airport_fares'");
-                $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
-                
-                if ($tableExists) {
-                    $query = "SELECT * FROM airport_fares WHERE vehicle_id = ? LIMIT 1";
-                    $stmt = $conn->prepare($query);
-                    
-                    if ($stmt) {
-                        $stmt->bind_param("s", $vehicleId);
-                        $stmt->execute();
-                        $result = $stmt->get_result();
-                        
-                        if ($result && $result->num_rows > 0) {
-                            $row = $result->fetch_assoc();
-                            
-                            echo json_encode([
-                                'status' => 'success',
-                                'exists' => true,
-                                'source' => 'database',
-                                'tripType' => 'airport',
-                                'data' => [
-                                    'vehicleId' => $row['vehicle_id'],
-                                    'basePrice' => (float)$row['base_price'],
-                                    'airportPrice' => (float)$row['price'],
-                                    'driverAllowance' => 0, // No driver allowance for airport
-                                ],
-                                'timestamp' => time()
-                            ]);
-                            exit;
-                        }
-                    }
-                }
-            } else if ($tripType === 'local') {
-                // Try the local_package_fares table
-                $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
-                $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
-                
-                if ($tableExists) {
-                    $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-                    $stmt = $conn->prepare($query);
-                    
-                    if ($stmt) {
-                        $stmt->bind_param("s", $vehicleId);
-                        $stmt->execute();
-                        $result = $stmt->get_result();
-                        
-                        if ($result && $result->num_rows > 0) {
-                            $row = $result->fetch_assoc();
-                            
-                            echo json_encode([
-                                'status' => 'success',
-                                'exists' => true,
-                                'source' => 'database',
-                                'tripType' => 'local',
-                                'data' => [
-                                    'vehicleId' => $row['vehicle_id'],
-                                    'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                                    'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                                    'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                                    'priceExtraKm' => (float)$row['price_extra_km'],
-                                    'priceExtraHour' => (float)$row['price_extra_hour'],
-                                    'driverAllowance' => (float)($row['driver_allowance'] ?? 250),
-                                ],
-                                'timestamp' => time()
-                            ]);
-                            exit;
-                        }
-                    }
-                }
-            } else if ($tripType === 'outstation') {
-                // Try outstation_fares table
-                $tableCheckResult = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-                $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
-                
-                if ($tableExists) {
-                    $query = "SELECT * FROM outstation_fares WHERE vehicle_id = ? LIMIT 1";
-                    $stmt = $conn->prepare($query);
-                    
-                    if ($stmt) {
-                        $stmt->bind_param("s", $vehicleId);
-                        $stmt->execute();
-                        $result = $stmt->get_result();
-                        
-                        if ($result && $result->num_rows > 0) {
-                            $row = $result->fetch_assoc();
-                            
-                            echo json_encode([
-                                'status' => 'success',
-                                'exists' => true,
-                                'source' => 'database',
-                                'tripType' => 'outstation',
-                                'data' => [
-                                    'vehicleId' => $row['vehicle_id'],
-                                    'pricePerKm' => (float)$row['price_per_km'],
-                                    'basePrice' => (float)($row['base_price'] ?? 0),
-                                    'driverAllowance' => (float)($row['driver_allowance'] ?? 250),
-                                ],
-                                'timestamp' => time()
-                            ]);
-                            exit;
-                        }
-                    }
-                }
-            }
-            
-            // If no trip-specific fare found, try vehicle_pricing table for general pricing
-            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-            $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
+            // Check if local_package_fares table exists
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
+            $tableExists = ($tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
-                $query = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ? LIMIT 1";
+                // Query for the vehicle's fare data
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
                 $stmt = $conn->prepare($query);
+                $stmt->bind_param("s", $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
                 
-                if ($stmt) {
-                    $stmt->bind_param("s", $vehicleId);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
                     
-                    if ($result && $result->num_rows > 0) {
-                        $row = $result->fetch_assoc();
-                        
-                        // Apply special rules for driver allowance
-                        $driverAllowance = ($tripType === 'airport') ? 0 : ((float)$row['driver_allowance'] ?? 250);
-                        
-                        echo json_encode([
-                            'status' => 'success',
-                            'exists' => true,
-                            'source' => 'database',
-                            'tripType' => $tripType,
-                            'data' => [
-                                'vehicleId' => $row['vehicle_id'],
-                                'pricePerKm' => (float)$row['price_per_km'],
-                                'basePrice' => (float)$row['base_price'],
-                                'airportPrice' => (float)$row['airport_price'],
-                                'driverAllowance' => $driverAllowance,
-                            ],
-                            'timestamp' => time()
-                        ]);
-                        exit;
-                    }
+                    echo json_encode([
+                        'status' => 'success',
+                        'exists' => true,
+                        'data' => [
+                            'vehicleId' => $row['vehicle_id'],
+                            'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                            'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                            'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                            'priceExtraKm' => floatval($row['price_extra_km']),
+                            'priceExtraHour' => floatval($row['price_extra_hour']),
+                        ],
+                        'timestamp' => time()
+                    ]);
+                    exit;
+                } else {
+                    echo json_encode([
+                        'status' => 'success',
+                        'exists' => false,
+                        'message' => "No fares found for vehicle ID $vehicleId",
+                        'timestamp' => time()
+                    ]);
+                    exit;
                 }
+            } else {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => "Table local_package_fares does not exist",
+                    'timestamp' => time()
+                ]);
+                exit;
             }
-            
-            // If no vehicle-specific pricing found, try the vehicles table
-            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
-            $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
-            
-            if ($tableExists) {
-                // IMPROVED: Better query to match vehicle IDs
-                $query = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ? OR LOWER(id) = LOWER(?) OR LOWER(vehicle_id) = LOWER(?) LIMIT 1";
-                $stmt = $conn->prepare($query);
-                
-                if ($stmt) {
-                    $stmt->bind_param("ssss", $vehicleId, $vehicleId, $vehicleId, $vehicleId);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    
-                    if ($result && $result->num_rows > 0) {
-                        $row = $result->fetch_assoc();
-                        
-                        // Apply special rules for driver allowance
-                        $driverAllowance = ($tripType === 'airport') ? 0 : ((float)$row['driver_allowance'] ?? 250);
-                        
-                        echo json_encode([
-                            'status' => 'success',
-                            'exists' => true,
-                            'source' => 'database',
-                            'tripType' => $tripType,
-                            'data' => [
-                                'vehicleId' => $row['id'] ?? $row['vehicle_id'],
-                                'pricePerKm' => (float)($row['price_per_km'] ?? $row['price'] ?? 0),
-                                'basePrice' => (float)($row['base_price'] ?? $row['price'] ?? 0),
-                                'airportPrice' => (float)($row['airport_price'] ?? $row['price'] ?? 0),
-                                'driverAllowance' => $driverAllowance,
-                                'id' => $row['id'] ?? $row['vehicle_id'],
-                                'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
-                            ],
-                            'timestamp' => time()
-                        ]);
-                        exit;
-                    }
-                }
-            }
-            
-            // No data found in any table
-            echo json_encode([
-                'status' => 'success',
-                'exists' => false,
-                'source' => 'database_query',
-                'tripType' => $tripType,
-                'message' => "No pricing data found for vehicle ID $vehicleId",
-                'timestamp' => time()
-            ]);
-            exit;
         } catch (Exception $e) {
-            error_log("Error checking fare data: " . $e->getMessage());
+            error_log("Error checking local package fares: " . $e->getMessage());
             echo json_encode([
                 'status' => 'error',
-                'source' => 'database_exception',
-                'tripType' => $tripType,
                 'message' => "Database error: " . $e->getMessage(),
                 'timestamp' => time()
             ]);
@@ -250,8 +97,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     } else {
         echo json_encode([
             'status' => 'error',
-            'source' => 'no_database',
-            'tripType' => $tripType,
             'message' => "Database connection failed",
             'timestamp' => time()
         ]);
@@ -293,7 +138,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.60'
+        'version' => '1.0.56'
     ]);
     exit;
 }
@@ -373,7 +218,6 @@ try {
     $conn = null;
     try {
         $conn = getDbConnection();
-        error_log("Successfully connected to database in direct-booking-data.php");
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }
@@ -457,7 +301,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.60'
+        'version' => '1.0.56'
     ]);
     
 } catch (Exception $e) {
@@ -471,6 +315,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.60'
+        'version' => '1.0.56'
     ]);
 }
