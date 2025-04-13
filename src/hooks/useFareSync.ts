@@ -29,6 +29,7 @@ export const useFareSync = ({
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const processingEventRef = useRef<boolean>(false);
   const hasLoadedFromDatabaseRef = useRef<Record<string, boolean>>({});
+  const initialSyncCompletedRef = useRef<boolean>(false);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -42,6 +43,7 @@ export const useFareSync = ({
       fareTracker.resetTracking();
       setCabFares({});
       hasLoadedFromDatabaseRef.current = {};
+      initialSyncCompletedRef.current = false;
       
       // Force refresh localStorage cache when trip type changes
       localStorage.setItem('forceCacheRefresh', 'true');
@@ -58,15 +60,18 @@ export const useFareSync = ({
   
   // Initial load of fares from database and immediate sync request
   useEffect(() => {
-    if (shouldSync && cabTypes.length > 0) {
+    if (shouldSync && cabTypes.length > 0 && !initialSyncCompletedRef.current) {
       // Only load from localStorage if we don't already have fares
       const hasFares = Object.keys(cabFares).length > 0;
       if (!hasFares) {
         loadFaresFromStorage();
       }
       
-      // Request immediate sync on mount
-      requestFareSync(true);
+      // Request immediate sync on mount - CRITICAL FIX: Use immediate timeout to trigger sync
+      setTimeout(() => {
+        requestFareSync(true);
+        initialSyncCompletedRef.current = true;
+      }, 50);
     }
   }, [cabTypes.length, shouldSync]);
   
@@ -121,19 +126,21 @@ export const useFareSync = ({
     syncAttemptsRef.current++;
     setSyncInProgress(true);
     
+    // CRITICAL FIX: Add explicit flag for airport transfers
+    const noDriverAllowance = !shouldShowDriverAllowance(tripType);
+    
     // System-wide fare sync request
     dispatchFareEvent('request-fare-sync', {
       tripType: tripType,
       forceSync: true,
       instant: true,
-      noDriverAllowance: tripType === 'airport'
+      noDriverAllowance: noDriverAllowance,
+      showDriverAllowance: !noDriverAllowance
     });
     
-    // Only trigger individual requests if we don't have fares yet or forcing
-    const needsIndividualRequests = cabTypes.some(cab => !cabFares[cab.id] || forceSync);
-    
-    if (needsIndividualRequests) {
-      // Individual requests for each cab - use a more sustainable approach to avoid stack overflow
+    // CRITICAL FIX: Always trigger individual requests to ensure fares are updated immediately
+    const processIndividualRequests = () => {
+      // Process requests in sequence to avoid overloading the event system
       const requestCab = (index: number) => {
         if (index >= cabTypes.length) {
           // All cab requests processed
@@ -146,12 +153,6 @@ export const useFareSync = ({
         }
         
         const cab = cabTypes[index];
-        
-        // Skip if we already have this cab's fare and not forcing
-        if (cabFares[cab.id] && !forceSync) {
-          requestCab(index + 1);
-          return;
-        }
         
         // CRITICAL FIX: Add explicit flag for airport transfers
         const noDriverAllowance = !shouldShowDriverAllowance(tripType);
@@ -171,14 +172,10 @@ export const useFareSync = ({
       
       // Start processing cabs
       requestCab(0);
-    } else {
-      // Finish sync and release lock if no individual requests needed
-      setTimeout(() => {
-        fareTracker.releaseSyncLock();
-        setSyncInProgress(false);
-        setLastSyncTime(Date.now());
-      }, 100);
-    }
+    };
+    
+    // Start processing individual requests
+    processIndividualRequests();
   };
   
   // Throttled function to request fare sync

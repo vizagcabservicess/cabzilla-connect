@@ -188,7 +188,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
     localStorage.setItem(localStorageKey, fare.toString());
     
-    // Emit event to notify other components with explicit tripType marker
+    // Emit event to notify other components with explicit tripType marker and noDriverAllowance flag
     try {
       window.dispatchEvent(new CustomEvent('fare-calculated', {
         detail: {
@@ -197,7 +197,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
           tripType: 'airport',
           calculated: true,
           timestamp: Date.now(),
-          noDriverAllowance: true  // Explicit flag to prevent driver allowance
+          noDriverAllowance: true,  // CRITICAL: Force this flag to true for airport transfers
+          showDriverAllowance: false // CRITICAL: Force this flag to false for airport transfers
         }
       }));
     } catch (error) {
@@ -244,6 +245,23 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       // Store in localStorage
       const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
       localStorage.setItem(localStorageKey, fare.toString());
+      
+      // Dispatch event with noDriverAllowance flag
+      try {
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: cabType.id,
+            fare: fare,
+            tripType: 'airport',
+            calculated: true, 
+            timestamp: Date.now(),
+            noDriverAllowance: true,  // CRITICAL: Force this flag to true for airport transfers
+            showDriverAllowance: false // CRITICAL: Force this flag to false for airport transfers
+          }
+        }));
+      } catch (error) {
+        console.error('Error dispatching fare-calculated event:', error);
+      }
       
       return fare;
     }
@@ -307,7 +325,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
           tripType: 'airport',
           calculated: true,
           timestamp: Date.now(),
-          noDriverAllowance: true
+          noDriverAllowance: true,  // CRITICAL: Force this flag to true for airport transfers
+          showDriverAllowance: false // CRITICAL: Force this flag to false for airport transfers
         }
       }));
     } catch (error) {
@@ -359,6 +378,23 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       // For airport transfers
       calculatedFare = await calculateAirportFare(cabType, distance);
       console.log(`Calculated airport fare: ₹${calculatedFare}`);
+      
+      // Dispatch event immediately with fare and noDriverAllowance flag
+      try {
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: cabType.id,
+            fare: calculatedFare,
+            tripType: 'airport',
+            calculated: true,
+            timestamp: Date.now(),
+            noDriverAllowance: true,  // CRITICAL: Force this flag to true for airport transfers
+            showDriverAllowance: false // CRITICAL: Force this flag to false for airport transfers
+          }
+        }));
+      } catch (error) {
+        console.error('Error dispatching fare-calculated event:', error);
+      }
     }
     else if (tripType === 'local') {
       try {

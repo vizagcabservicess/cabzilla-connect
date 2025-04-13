@@ -35,6 +35,7 @@ export const CabList: React.FC<CabListProps> = ({
   const isProcessingFaresRef = useRef<boolean>(false);
   const dbSyncCompletedRef = useRef<boolean>(false);
   const fareUpdateAttemptsRef = useRef<Record<string, number>>({});
+  const initialFetchCompletedRef = useRef<boolean>(false);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -49,12 +50,13 @@ export const CabList: React.FC<CabListProps> = ({
       hasSyncedRef.current = false;
       dbSyncCompletedRef.current = false;
       fareUpdateAttemptsRef.current = {};
+      initialFetchCompletedRef.current = false;
       setLocalFares({}); // Clear local fares on trip type change
       
       // Request a fresh fare sync with minimal delay
       setTimeout(() => {
         throttledRequestFareSync(true);
-      }, 100);
+      }, 50);
     }
   }, [tripType]);
   
@@ -85,8 +87,19 @@ export const CabList: React.FC<CabListProps> = ({
       
       if (!hasSyncedRef.current) {
         // Only request fare sync once after initial render
-        throttledRequestFareSync(true);
-        hasSyncedRef.current = true;
+        setTimeout(() => {
+          throttledRequestFareSync(true);
+          hasSyncedRef.current = true;
+          
+          // CRITICAL FIX: Set a timeout to force another sync attempt after 500ms
+          // This ensures fares are loaded even if initial sync fails
+          setTimeout(() => {
+            if (!initialFetchCompletedRef.current) {
+              console.log('CabList: Forcing another sync attempt after timeout');
+              throttledRequestFareSync(true);
+            }
+          }, 500);
+        }, 50);
       }
       
       setIsInitialRender(false);
@@ -173,78 +186,54 @@ export const CabList: React.FC<CabListProps> = ({
     
     syncAttemptsRef.current++;
     
+    // CRITICAL FIX: Get the appropriate driver allowance flag
+    const noDriverAllowance = !shouldShowDriverAllowance(tripType);
+    
     // Request fare sync at system level
     dispatchFareEvent('request-fare-sync', {
       tripType: tripType,
       forceSync: true,
       instant: true,
-      noDriverAllowance: !shouldShowDriverAllowance(tripType)
+      noDriverAllowance: noDriverAllowance,
+      showDriverAllowance: !noDriverAllowance
     });
     
-    // Only dispatch individual requests if we don't have fares yet or we're forcing
-    const needsIndividualRequests = cabTypes.some(cab => !localFares[cab.id] || forceSync);
-    
-    if (needsIndividualRequests) {
-      // Safer implementation to avoid stack overflows - process cabs sequentially
-      const processCab = (index: number) => {
-        if (index >= cabTypes.length) {
-          // All cabs processed, release lock
-          setTimeout(() => {
-            fareTracker.releaseSyncLock();
-          }, 50);
-          return;
-        }
-        
-        const cab = cabTypes[index];
-        
-        // Skip if we already have this cab's fare and not forcing
-        if (localFares[cab.id] > 0 && !forceSync) {
-          processCab(index + 1);
-          return;
-        }
-        
-        // Check if we've already tracked this cab's fare
-        if (!fareTracker.isFareChanged(cab.id, localFares[cab.id] || 0) && !forceSync) {
-          processCab(index + 1);
-          return;
-        }
-        
-        // Increment fare update attempts for this cab
-        fareUpdateAttemptsRef.current[cab.id] = (fareUpdateAttemptsRef.current[cab.id] || 0) + 1;
-        
-        // If we've tried too many times for this cab, skip it
-        if (fareUpdateAttemptsRef.current[cab.id] > 3 && !forceSync) {
-          processCab(index + 1);
-          return;
-        }
-        
-        // CRITICAL FIX: Use proper driver allowance logic
-        const noDriverAllowance = !shouldShowDriverAllowance(tripType);
-        
-        dispatchFareEvent('request-fare-calculation', {
-          cabId: cab.id,
-          cabName: cab.name,
-          tripType: tripType,
-          forceSync: true,
-          noDriverAllowance: noDriverAllowance,
-          showDriverAllowance: !noDriverAllowance
-        });
-        
-        // Track this dispatch
-        fareTracker.trackFare(cab.id, localFares[cab.id] || 0);
-        
-        // Process next cab after a slight delay
-        setTimeout(() => processCab(index + 1), 20);
-      };
+    // CRITICAL FIX: Always process individual requests to ensure fares are fetched
+    // Safer implementation to avoid stack overflows - process cabs sequentially
+    const processCab = (index: number) => {
+      if (index >= cabTypes.length) {
+        // All cabs processed, release lock
+        setTimeout(() => {
+          fareTracker.releaseSyncLock();
+          // Mark that we've completed initial fetch
+          initialFetchCompletedRef.current = true;
+        }, 50);
+        return;
+      }
       
-      // Start processing from the first cab
-      processCab(0);
-    } else {
-      // Release sync lock after a short delay
-      setTimeout(() => {
-        fareTracker.releaseSyncLock();
-      }, 50);
-    }
+      const cab = cabTypes[index];
+      
+      // CRITICAL FIX: Add explicit flag for airport transfers
+      const noDriverAllowance = !shouldShowDriverAllowance(tripType);
+        
+      dispatchFareEvent('request-fare-calculation', {
+        cabId: cab.id,
+        cabName: cab.name,
+        tripType: tripType,
+        forceSync: true,
+        noDriverAllowance: noDriverAllowance,
+        showDriverAllowance: !noDriverAllowance
+      });
+      
+      // Track this dispatch
+      fareTracker.trackFare(cab.id, localFares[cab.id] || 0);
+      
+      // Process next cab after a slight delay
+      setTimeout(() => processCab(index + 1), 20);
+    };
+    
+    // Start processing from the first cab
+    processCab(0);
   };
   
   // Listen for fare calculation events and other fare-related events
@@ -257,16 +246,16 @@ export const CabList: React.FC<CabListProps> = ({
       processingEventRef.current = true;
       
       try {
-        const { cabId, fare, tripType: eventTripType, source = 'unknown' } = event.detail;
+        const { cabId, fare, tripType: eventTripType, source = 'unknown', noDriverAllowance = tripType === 'airport' } = event.detail;
         
-        // Skip if the fare hasn't changed in our local state
-        if (!fareTracker.isFareChanged(cabId, fare)) {
+        // Skip if this event isn't for our trip type
+        if (eventTripType && eventTripType !== tripType) {
           processingEventRef.current = false;
           return;
         }
         
-        // Skip if this event isn't for our trip type
-        if (eventTripType && eventTripType !== tripType) {
+        // Skip if the fare hasn't changed in our local state and it's not a forced update
+        if (!event.detail.forceSync && !fareTracker.isFareChanged(cabId, fare)) {
           processingEventRef.current = false;
           return;
         }
@@ -315,7 +304,13 @@ export const CabList: React.FC<CabListProps> = ({
       processingEventRef.current = true;
       
       try {
-        const { calculatedFare, cabId } = event.detail;
+        const { calculatedFare, cabId, tripType: eventTripType } = event.detail;
+        
+        // Skip if this event isn't for our trip type
+        if (eventTripType && eventTripType !== tripType) {
+          processingEventRef.current = false;
+          return;
+        }
         
         // Skip if the fare hasn't changed
         if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
@@ -361,6 +356,28 @@ export const CabList: React.FC<CabListProps> = ({
       }
     };
   }, [tripType, localFares]);
+  
+  // CRITICAL FIX: Force fare sync on mount and periodically to ensure up-to-date fares
+  useEffect(() => {
+    // Force initial sync
+    if (!initialFetchCompletedRef.current) {
+      setTimeout(() => {
+        throttledRequestFareSync(true);
+      }, 200);
+    }
+    
+    // Set up a periodic sync to ensure fares stay up to date
+    const intervalId = setInterval(() => {
+      // Only do periodic sync if we haven't completed DB sync yet
+      if (!dbSyncCompletedRef.current) {
+        throttledRequestFareSync(false);
+      }
+    }, 3000); // Every 3 seconds until we get DB values
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
   
   return (
     <div className="space-y-4 mt-4">

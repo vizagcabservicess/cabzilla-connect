@@ -11,14 +11,23 @@ export const useFareSyncTracker = () => {
   const syncLock = useRef<boolean>(false);
   const knownFareKeys = useRef<Set<string>>(new Set());
   const syncHistory = useRef<Map<string, number>>(new Map());
+  const lastProcessedEventId = useRef<Record<string, number>>({});
   
   // Check if a fare is different from what we've tracked
-  const isFareChanged = (cabId: string, fare: number): boolean => {
+  const isFareChanged = (cabId: string, fare: number, tolerance: number = 0): boolean => {
     const key = `${cabId}_${fare}`;
     if (knownFareKeys.current.has(key)) {
       return false;
     }
-    return trackedFares.current[cabId] !== fare;
+    
+    const previousFare = trackedFares.current[cabId];
+    
+    // If we have no previous fare, it's a change
+    if (previousFare === undefined) return true;
+    
+    // Check for minimum difference to avoid micro-adjustments
+    const diff = Math.abs(previousFare - fare);
+    return diff > tolerance;
   };
   
   // Track a fare value to prevent duplicate updates
@@ -36,6 +45,26 @@ export const useFareSyncTracker = () => {
     // Add to known fare keys to prevent duplicate processing
     const key = `${cabId}_${fare}`;
     knownFareKeys.current.add(key);
+    
+    // Maintain a reasonable set size to prevent memory leaks
+    if (knownFareKeys.current.size > 1000) {
+      // Clear older entries
+      const keysArray = Array.from(knownFareKeys.current);
+      const keysToDelete = keysArray.slice(0, 500); // Remove half the cache
+      keysToDelete.forEach(k => knownFareKeys.current.delete(k));
+    }
+  };
+  
+  // Track event IDs to prevent duplicate processing
+  const hasProcessedEvent = (cabId: string, eventId: number): boolean => {
+    if (!eventId) return false;
+    return lastProcessedEventId.current[cabId] === eventId;
+  };
+  
+  // Track that we've processed an event
+  const trackProcessedEvent = (cabId: string, eventId: number): void => {
+    if (!eventId) return;
+    lastProcessedEventId.current[cabId] = eventId;
   };
   
   // Check if we should throttle updates for this cab
@@ -46,13 +75,19 @@ export const useFareSyncTracker = () => {
     // Check if we've already processed this sync recently
     if (syncHistory.current.has(cabId)) {
       const lastSync = syncHistory.current.get(cabId) || 0;
-      if (now - lastSync < minInterval * 2) {
+      if (now - lastSync < minInterval) {
         return true;
       }
     }
     
     // Record this sync attempt
     syncHistory.current.set(cabId, now);
+    
+    // Clean up history if it gets too large
+    if (syncHistory.current.size > 100) {
+      const keysToDelete = Array.from(syncHistory.current.keys()).slice(0, 50);
+      keysToDelete.forEach(k => syncHistory.current.delete(k));
+    }
     
     return (now - lastTime) < minInterval;
   };
@@ -69,11 +104,17 @@ export const useFareSyncTracker = () => {
     syncLock.current = false;
   };
   
+  // Check if lock is currently held
+  const isLockHeld = (): boolean => {
+    return syncLock.current;
+  };
+  
   // Reset tracking for a specific cab or all cabs
   const resetTracking = (cabId?: string): void => {
     if (cabId) {
       delete trackedFares.current[cabId];
       delete lastDispatchTime.current[cabId];
+      delete lastProcessedEventId.current[cabId];
       
       // Clear fare keys related to this cabId
       const keysToRemove: string[] = [];
@@ -84,9 +125,11 @@ export const useFareSyncTracker = () => {
       });
       
       keysToRemove.forEach(key => knownFareKeys.current.delete(key));
+      syncHistory.current.delete(cabId);
     } else {
       trackedFares.current = {};
       lastDispatchTime.current = {};
+      lastProcessedEventId.current = {};
       knownFareKeys.current.clear();
       syncHistory.current.clear();
     }
@@ -99,6 +142,9 @@ export const useFareSyncTracker = () => {
     shouldThrottle,
     acquireSyncLock,
     releaseSyncLock,
-    resetTracking
+    isLockHeld,
+    resetTracking,
+    hasProcessedEvent,
+    trackProcessedEvent
   };
 };
