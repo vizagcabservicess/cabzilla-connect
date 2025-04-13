@@ -27,6 +27,7 @@ export const useFareSync = ({
   const maxSyncAttemptsRef = useRef<number>(5);
   const previousTripTypeRef = useRef<string>(tripType);
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processingEventRef = useRef<boolean>(false);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -127,44 +128,66 @@ export const useFareSync = ({
     dispatchFareEvent('request-fare-sync', {
       tripType: tripType,
       forceSync: true,
-      instant: true
+      instant: true,
+      noDriverAllowance: tripType === 'airport'
     });
     
     // Only trigger individual requests if we don't have fares yet or forcing
     const needsIndividualRequests = cabTypes.some(cab => !cabFares[cab.id] || forceSync);
     
     if (needsIndividualRequests) {
-      // Individual requests for each cab
-      cabTypes.forEach((cab, index) => {
-        // Skip if we already have this cab's fare and not forcing
-        if (cabFares[cab.id] && !forceSync) {
+      // Individual requests for each cab - use a more sustainable approach to avoid stack overflow
+      const requestCab = (index: number) => {
+        if (index >= cabTypes.length) {
+          // All cab requests processed
+          setTimeout(() => {
+            fareTracker.releaseSyncLock();
+            setSyncInProgress(false);
+            setLastSyncTime(Date.now());
+          }, 100);
           return;
         }
         
-        setTimeout(() => {
-          dispatchFareEvent('request-fare-calculation', {
-            cabId: cab.id,
-            cabName: cab.name,
-            tripType: tripType,
-            forceSync: true,
-            noDriverAllowance: tripType === 'airport' // CRITICAL FIX: Add explicit flag for airport transfers
-          });
-        }, index * 20);
-      });
+        const cab = cabTypes[index];
+        
+        // Skip if we already have this cab's fare and not forcing
+        if (cabFares[cab.id] && !forceSync) {
+          requestCab(index + 1);
+          return;
+        }
+        
+        // CRITICAL FIX: Add explicit flag for airport transfers
+        const noDriverAllowance = tripType === 'airport';
+        
+        dispatchFareEvent('request-fare-calculation', {
+          cabId: cab.id,
+          cabName: cab.name,
+          tripType: tripType,
+          forceSync: true,
+          noDriverAllowance: noDriverAllowance,
+          showDriverAllowance: !noDriverAllowance
+        });
+        
+        // Process next cab after a slight delay
+        setTimeout(() => requestCab(index + 1), 20);
+      };
+      
+      // Start processing cabs
+      requestCab(0);
+    } else {
+      // Finish sync and release lock if no individual requests needed
+      setTimeout(() => {
+        fareTracker.releaseSyncLock();
+        setSyncInProgress(false);
+        setLastSyncTime(Date.now());
+      }, 100);
     }
-    
-    // Finish sync and release lock
-    setTimeout(() => {
-      fareTracker.releaseSyncLock();
-      setSyncInProgress(false);
-      setLastSyncTime(Date.now());
-    }, cabTypes.length * 20 + 100);
   };
   
   // Throttled function to request fare sync
   const throttledRequestFareSync = (forceSync = false) => {
     // Use shorter throttle time for airport to ensure faster initial display
-    const throttleTime = tripType === 'airport' ? 300 : 2000;
+    const throttleTime = tripType === 'airport' ? 300 : 1000;
     
     // Check if we should throttle this request
     if (fareTracker.shouldThrottle('sync', throttleTime) && !forceSync) {
@@ -190,16 +213,23 @@ export const useFareSync = ({
     if (!shouldSync) return;
     
     const handleFareCalculated = (event: CustomEvent) => {
-      if (event.detail && event.detail.cabId && event.detail.fare > 0) {
+      if (processingEventRef.current) return; // Prevent recursion
+      if (!event.detail || !event.detail.cabId || event.detail.fare <= 0) return;
+      
+      processingEventRef.current = true;
+      
+      try {
         const { cabId, fare, tripType: eventTripType, noDriverAllowance = false } = event.detail;
         
         // Only process events for our trip type
         if (eventTripType && eventTripType !== tripType) {
+          processingEventRef.current = false;
           return;
         }
         
         // Skip if this is the same value we already have
         if (!fareTracker.isFareChanged(cabId, fare)) {
+          processingEventRef.current = false;
           return;
         }
         
@@ -223,16 +253,24 @@ export const useFareSync = ({
         }
         
         setLastSyncTime(Date.now());
+      } finally {
+        processingEventRef.current = false;
       }
     };
     
     // Handle significant fare difference events
     const handleSignificantFareDifference = (event: CustomEvent) => {
-      if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
+      if (processingEventRef.current) return; // Prevent recursion
+      if (!event.detail || !event.detail.calculatedFare || !event.detail.cabId) return;
+      
+      processingEventRef.current = true;
+      
+      try {
         const { calculatedFare, cabId, noDriverAllowance = false } = event.detail;
         
         // Skip if this is the same value we already have
         if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
+          processingEventRef.current = false;
           return;
         }
         
@@ -257,6 +295,8 @@ export const useFareSync = ({
         
         // Force a sync time update to trigger renders
         setLastSyncTime(Date.now());
+      } finally {
+        processingEventRef.current = false;
       }
     };
     
@@ -308,7 +348,7 @@ export const useFareSync = ({
           cabName: selectedCab.name,
           tripType: tripType,
           forceSync: true,
-          noDriverAllowance: tripType === 'airport', // CRITICAL FIX: Add explicit flag for airport transfers
+          noDriverAllowance: tripType === 'airport', // Add explicit flag for airport transfers
           showDriverAllowance: tripType !== 'airport'
         });
       }

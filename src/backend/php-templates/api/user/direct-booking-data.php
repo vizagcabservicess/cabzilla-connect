@@ -11,8 +11,9 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.56');
+header('X-API-Version: 1.0.57');
 header('X-Timestamp: ' . time());
+header('X-Priority-DB: true');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -28,6 +29,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     error_log("Local package fares sync check request received");
     
     $vehicleId = $_GET['vehicle_id'];
+    $forceDb = isset($_GET['force_db']) && $_GET['force_db'] === 'true';
     
     // Try to connect to database
     $conn = null;
@@ -57,6 +59,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     echo json_encode([
                         'status' => 'success',
                         'exists' => true,
+                        'source' => 'database',
                         'data' => [
                             'vehicleId' => $row['vehicle_id'],
                             'price4hrs40km' => floatval($row['price_4hrs_40km']),
@@ -72,6 +75,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     echo json_encode([
                         'status' => 'success',
                         'exists' => false,
+                        'source' => 'database_query',
                         'message' => "No fares found for vehicle ID $vehicleId",
                         'timestamp' => time()
                     ]);
@@ -80,6 +84,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             } else {
                 echo json_encode([
                     'status' => 'error',
+                    'source' => 'database_check',
                     'message' => "Table local_package_fares does not exist",
                     'timestamp' => time()
                 ]);
@@ -89,6 +94,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             error_log("Error checking local package fares: " . $e->getMessage());
             echo json_encode([
                 'status' => 'error',
+                'source' => 'database_exception',
                 'message' => "Database error: " . $e->getMessage(),
                 'timestamp' => time()
             ]);
@@ -97,6 +103,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     } else {
         echo json_encode([
             'status' => 'error',
+            'source' => 'no_database',
             'message' => "Database connection failed",
             'timestamp' => time()
         ]);
@@ -138,7 +145,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
     exit;
 }
@@ -218,6 +225,7 @@ try {
     $conn = null;
     try {
         $conn = getDbConnection();
+        error_log("Successfully connected to database in direct-booking-data.php");
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }
@@ -301,7 +309,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
     
 } catch (Exception $e) {
@@ -315,6 +323,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
 }

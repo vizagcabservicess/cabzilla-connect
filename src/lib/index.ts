@@ -101,7 +101,7 @@ export { Skeleton } from '@/components/ui/skeleton';
 
 // Helper function to check if driver allowance should be shown
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, we NEVER show driver allowance
+  // For airport transfers, NEVER show driver allowance
   if (tripType === 'airport') {
     console.log("Airport transfer detected: Driver allowance should NOT be shown");
     return false;
@@ -123,6 +123,12 @@ export const dispatchFareEvent = (
   detail: Record<string, any>,
   preventDuplicates: boolean = true
 ): void => {
+  // Force set driver allowance flag for airport transfers to ensure consistency
+  if (detail.tripType === 'airport') {
+    detail.noDriverAllowance = true;
+    detail.showDriverAllowance = false;
+  }
+  
   // Add unique event ID
   detail.eventId = getFareEventId();
   
