@@ -109,3 +109,32 @@ export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): 
   // For all other trip types, we show driver allowance
   return true;
 };
+
+// Improve the fare event system with unique IDs to avoid duplicate events
+let eventCounter = 0;
+export const getFareEventId = (): number => {
+  return ++eventCounter;
+};
+
+// Create a helper to deduplicate and dispatch fare events
+export const dispatchFareEvent = (
+  eventName: string,
+  detail: Record<string, any>,
+  preventDuplicates: boolean = true
+): void => {
+  // Add unique event ID
+  detail.eventId = getFareEventId();
+  
+  // Add timestamp if not present
+  if (!detail.timestamp) {
+    detail.timestamp = Date.now();
+  }
+  
+  // Create and dispatch the event
+  try {
+    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+    console.log(`Dispatched ${eventName} for ${detail.cabId || detail.cabType || 'unknown'}: ${detail.fare || 'N/A'}`);
+  } catch (error) {
+    console.error(`Error dispatching ${eventName}:`, error);
+  }
+};

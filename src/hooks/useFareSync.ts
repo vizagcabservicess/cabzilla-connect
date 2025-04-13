@@ -1,6 +1,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
+import { useFareSyncTracker } from './useFareSyncTracker';
+import { dispatchFareEvent } from '@/lib';
 
 interface UseFareSyncOptions {
   tripType: string;
@@ -24,11 +26,10 @@ export const useFareSync = ({
   const syncAttemptsRef = useRef<number>(0);
   const maxSyncAttemptsRef = useRef<number>(5);
   const previousTripTypeRef = useRef<string>(tripType);
-  const processedUpdatesRef = useRef<Record<string, number>>({});
-  const syncLockRef = useRef<boolean>(false);
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSyncTimeRef = useRef<number>(0);
-  const lastFareByCab = useRef<Record<string, number>>({});
+  
+  // Use the fare sync tracker to prevent duplicate events
+  const fareTracker = useFareSyncTracker();
   
   // Track when trip type changes to force re-sync
   useEffect(() => {
@@ -36,8 +37,7 @@ export const useFareSync = ({
       console.log(`useFareSync: Trip type changed from ${previousTripTypeRef.current} to ${tripType}`);
       previousTripTypeRef.current = tripType;
       syncAttemptsRef.current = 0;
-      processedUpdatesRef.current = {};
-      lastFareByCab.current = {}; // Reset fare tracking on trip type change
+      fareTracker.resetTracking();
       setCabFares({});
       
       // Force refresh localStorage cache when trip type changes
@@ -77,6 +77,7 @@ export const useFareSync = ({
           const parsedFare = parseInt(storedFare, 10);
           if (!isNaN(parsedFare) && parsedFare > 0) {
             storedFares[cab.id] = parsedFare;
+            fareTracker.trackFare(cab.id, parsedFare);
             foundAny = true;
           }
         }
@@ -87,48 +88,10 @@ export const useFareSync = ({
     
     if (foundAny) {
       setCabFares(prev => ({...prev, ...storedFares}));
-      
-      // Track these initial fares to avoid duplicate updates
-      Object.keys(storedFares).forEach(cabId => {
-        lastFareByCab.current[cabId] = storedFares[cabId];
-      });
-      
       return true;
     }
     
     return false;
-  };
-  
-  // Throttled function to request fare sync
-  const throttledRequestFareSync = (forceSync = false) => {
-    // If we're already sync locked or attempted too many times, skip
-    if (syncLockRef.current && !forceSync) {
-      console.log('useFareSync: Sync locked, skipping request');
-      return;
-    }
-    
-    const now = Date.now();
-    // Use shorter throttle time for airport to ensure faster initial display
-    const throttleTime = tripType === 'airport' ? 300 : 2000;
-    
-    // Check if we're within throttle window
-    if (now - lastSyncTimeRef.current < throttleTime && !forceSync) {
-      console.log(`useFareSync: Throttling fare sync request (${now - lastSyncTimeRef.current}ms < ${throttleTime}ms)`);
-      
-      // Set a timeout to try again later if we don't already have one
-      if (!syncThrottleTimeoutRef.current) {
-        syncThrottleTimeoutRef.current = setTimeout(() => {
-          lastSyncTimeRef.current = Date.now();
-          requestFareSync(forceSync);
-          syncThrottleTimeoutRef.current = null;
-        }, throttleTime);
-      }
-      return;
-    }
-    
-    // Update last sync time and request sync
-    lastSyncTimeRef.current = now;
-    requestFareSync(forceSync);
   };
   
   // Request fare sync for all cabs or specific cab
@@ -145,22 +108,22 @@ export const useFareSync = ({
       return;
     }
     
-    // Set sync lock to prevent multiple simultaneous sync attempts
-    syncLockRef.current = true;
+    // Try to acquire the sync lock
+    if (!fareTracker.acquireSyncLock(forceSync)) {
+      return;
+    }
+    
     syncAttemptsRef.current++;
     setSyncInProgress(true);
     
     console.log(`useFareSync: Requesting fare sync (attempt ${syncAttemptsRef.current})`);
     
     // System-wide fare sync request
-    window.dispatchEvent(new CustomEvent('request-fare-sync', {
-      detail: {
-        tripType: tripType,
-        forceSync: true,
-        instant: true,
-        timestamp: Date.now()
-      }
-    }));
+    dispatchFareEvent('request-fare-sync', {
+      tripType: tripType,
+      forceSync: true,
+      instant: true
+    });
     
     // Only trigger individual requests if we don't have fares yet or forcing
     const needsIndividualRequests = cabTypes.some(cab => !cabFares[cab.id] || forceSync);
@@ -169,30 +132,51 @@ export const useFareSync = ({
       // Individual requests for each cab
       cabTypes.forEach((cab, index) => {
         // Skip if we already have this cab's fare and not forcing
-        if (lastFareByCab.current[cab.id] && !forceSync) {
+        if (cabFares[cab.id] && !forceSync) {
           return;
         }
         
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-            detail: {
-              cabId: cab.id,
-              cabName: cab.name,
-              tripType: tripType,
-              forceSync: true,
-              timestamp: Date.now() + index
-            }
-          }));
+          dispatchFareEvent('request-fare-calculation', {
+            cabId: cab.id,
+            cabName: cab.name,
+            tripType: tripType,
+            forceSync: true
+          });
         }, index * 20);
       });
     }
     
     // Finish sync and release lock
     setTimeout(() => {
-      syncLockRef.current = false;
+      fareTracker.releaseSyncLock();
       setSyncInProgress(false);
       setLastSyncTime(Date.now());
     }, cabTypes.length * 20 + 100);
+  };
+  
+  // Throttled function to request fare sync
+  const throttledRequestFareSync = (forceSync = false) => {
+    // Use shorter throttle time for airport to ensure faster initial display
+    const throttleTime = tripType === 'airport' ? 300 : 2000;
+    
+    // Check if we should throttle this request
+    if (fareTracker.shouldThrottle('sync', throttleTime) && !forceSync) {
+      console.log(`useFareSync: Throttling fare sync request`);
+      
+      // Set a timeout to try again later if we don't already have one
+      if (!syncThrottleTimeoutRef.current) {
+        syncThrottleTimeoutRef.current = setTimeout(() => {
+          requestFareSync(forceSync);
+          syncThrottleTimeoutRef.current = null;
+        }, throttleTime);
+      }
+      return;
+    }
+    
+    // Track this sync attempt
+    fareTracker.trackFare('sync', Date.now());
+    requestFareSync(forceSync);
   };
   
   // Listen for fare calculation events
@@ -209,18 +193,12 @@ export const useFareSync = ({
         }
         
         // Skip if this is the same value we already have
-        if (cabFares[cabId] === fare) {
-          return;
-        }
-        
-        // Skip if we've already processed this exact update
-        if (lastFareByCab.current[cabId] === fare) {
+        if (!fareTracker.isFareChanged(cabId, fare)) {
           return;
         }
         
         // Track this update to avoid duplicates
-        lastFareByCab.current[cabId] = fare;
-        processedUpdatesRef.current[cabId] = fare;
+        fareTracker.trackFare(cabId, fare);
         
         console.log(`useFareSync: Received fare update for ${cabId}: ${fare}`);
         
@@ -248,14 +226,14 @@ export const useFareSync = ({
         const { calculatedFare, cabId } = event.detail;
         
         // Skip if this is the same value we already have
-        if (cabFares[cabId] === calculatedFare || lastFareByCab.current[cabId] === calculatedFare) {
+        if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
           return;
         }
         
         console.log(`useFareSync: Received significant fare difference for ${cabId}: ${calculatedFare}`);
         
-        // Track this update to avoid duplicates
-        lastFareByCab.current[cabId] = calculatedFare;
+        // Track this update
+        fareTracker.trackFare(cabId, calculatedFare);
         
         // Update our local fares
         setCabFares(prev => {
@@ -296,36 +274,30 @@ export const useFareSync = ({
       const currentFare = cabFares[selectedCab.id];
       
       if (currentFare && currentFare > 0) {
-        // Skip if we've already dispatched this same fare
-        if (lastFareByCab.current[selectedCab.id] === currentFare) {
+        // Skip if we've already tracked this fare for this cab
+        if (!fareTracker.isFareChanged(selectedCab.id, currentFare)) {
           return;
         }
         
         // Track this dispatch to avoid duplicates
-        lastFareByCab.current[selectedCab.id] = currentFare;
+        fareTracker.trackFare(selectedCab.id, currentFare);
         
-        // If we have a valid fare, emit update
-        window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-          detail: {
-            cabType: selectedCab.id,
-            cabName: selectedCab.name,
-            fare: currentFare,
-            tripType: tripType,
-            forceSync: true,
-            timestamp: Date.now()
-          }
-        }));
+        // Dispatch the cab selection with fare
+        dispatchFareEvent('cab-selected-with-fare', {
+          cabType: selectedCab.id,
+          cabName: selectedCab.name,
+          fare: currentFare,
+          tripType: tripType,
+          forceSync: true
+        });
       } else {
         // If no valid fare, request calculation
-        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-          detail: {
-            cabId: selectedCab.id,
-            cabName: selectedCab.name,
-            tripType: tripType,
-            forceSync: true,
-            timestamp: Date.now()
-          }
-        }));
+        dispatchFareEvent('request-fare-calculation', {
+          cabId: selectedCab.id,
+          cabName: selectedCab.name,
+          tripType: tripType,
+          forceSync: true
+        });
       }
     }
   }, [selectedCab, cabFares, shouldSync, tripType]);
