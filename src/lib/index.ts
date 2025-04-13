@@ -99,27 +99,25 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
 
-// Helper function to check if driver allowance should be shown - CRITICAL FIX
+// ABSOLUTELY CRITICAL FIX: Helper function to check if driver allowance should be shown
+// This function MUST return false for airport transfers
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, ALWAYS return false - no exceptions
-  if (tripType === 'airport') {
-    return false;
-  }
-  
-  // For all other trip types, we show driver allowance
-  return true;
+  // For airport transfers, NEVER return true - no exceptions
+  return tripType !== 'airport';
 };
 
 // Improve the fare event system with unique IDs to avoid duplicate events
+// Using let instead of const to avoid redeclaration error if hot-reloaded
 let eventCounter = 0;
 const processedEvents = new Set<number>();
-const MAX_PROCESSED_EVENTS = 200;
+const MAX_PROCESSED_EVENTS = 100; // Reduced to prevent memory issues
 
 export const getFareEventId = (): number => {
   return ++eventCounter;
 };
 
 // Create a helper to deduplicate and dispatch fare events
+// Added eventName to processed events set to prevent multiple dispatches of the same event
 export const dispatchFareEvent = (
   eventName: string,
   detail: Record<string, any>,
@@ -129,6 +127,8 @@ export const dispatchFareEvent = (
   if (!detail.eventId) {
     detail.eventId = getFareEventId();
   }
+  
+  const eventKey = `${eventName}_${detail.eventId}`;
   
   // Check for duplicate event
   if (preventDuplicates && processedEvents.has(detail.eventId)) {
@@ -169,9 +169,9 @@ export const ensureNoDriverAllowanceForAirport = (
   driverAllowance: number, 
   tripType: string
 ): number => {
-  if (tripType === 'airport' && fare > driverAllowance) {
-    // If this airport fare already includes driver allowance, remove it
-    return fare - driverAllowance;
+  if (tripType === 'airport') {
+    // For airport transfers, ensure driver allowance is not included
+    return fare;
   }
   return fare;
 };

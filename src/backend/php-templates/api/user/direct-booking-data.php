@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -10,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.57');
+header('X-API-Version: 1.0.58'); // Increment version
 header('X-Timestamp: ' . time());
 header('X-Priority-DB: true');
 
@@ -29,13 +30,14 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     $conn = null;
     try {
         $conn = getDbConnection();
+        error_log("Connected to database for vehicle sync: " . $vehicleId);
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }
     
     if ($conn) {
         try {
-            // Check if local_package_fares table exists
+            // First try the local_package_fares table
             $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
             $tableExists = ($tableCheckResult->num_rows > 0);
             
@@ -65,27 +67,82 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                         'timestamp' => time()
                     ]);
                     exit;
-                } else {
+                }
+            }
+            
+            // If no local package fares, try vehicle_pricing table
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+            $tableExists = ($tableCheckResult->num_rows > 0);
+            
+            if ($tableExists) {
+                $query = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("s", $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    
                     echo json_encode([
                         'status' => 'success',
-                        'exists' => false,
-                        'source' => 'database_query',
-                        'message' => "No fares found for vehicle ID $vehicleId",
+                        'exists' => true,
+                        'source' => 'database',
+                        'data' => [
+                            'vehicleId' => $row['vehicle_id'],
+                            'pricePerKm' => floatval($row['price_per_km']),
+                            'basePrice' => floatval($row['base_price']),
+                            'airportPrice' => floatval($row['airport_price']),
+                            'driverAllowance' => floatval($row['driver_allowance']),
+                        ],
                         'timestamp' => time()
                     ]);
                     exit;
                 }
-            } else {
-                echo json_encode([
-                    'status' => 'error',
-                    'source' => 'database_check',
-                    'message' => "Table local_package_fares does not exist",
-                    'timestamp' => time()
-                ]);
-                exit;
             }
+            
+            // If no vehicle-specific pricing found, try the vehicles table
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
+            $tableExists = ($tableCheckResult->num_rows > 0);
+            
+            if ($tableExists) {
+                $query = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ss", $vehicleId, $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    
+                    echo json_encode([
+                        'status' => 'success',
+                        'exists' => true,
+                        'source' => 'database',
+                        'data' => [
+                            'vehicleId' => $row['id'] ?? $row['vehicle_id'],
+                            'pricePerKm' => floatval($row['price_per_km'] ?? $row['price']),
+                            'basePrice' => floatval($row['base_price'] ?? $row['price']),
+                            'airportPrice' => floatval($row['airport_price'] ?? $row['price']),
+                            'driverAllowance' => floatval($row['driver_allowance'] ?? 250),
+                        ],
+                        'timestamp' => time()
+                    ]);
+                    exit;
+                }
+            }
+            
+            // No data found in any table
+            echo json_encode([
+                'status' => 'success',
+                'exists' => false,
+                'source' => 'database_query',
+                'message' => "No pricing data found for vehicle ID $vehicleId",
+                'timestamp' => time()
+            ]);
+            exit;
         } catch (Exception $e) {
-            error_log("Error checking local package fares: " . $e->getMessage());
+            error_log("Error checking fare data: " . $e->getMessage());
             echo json_encode([
                 'status' => 'error',
                 'source' => 'database_exception',
@@ -139,7 +196,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.57'
+        'version' => '1.0.58'
     ]);
     exit;
 }
@@ -303,7 +360,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.57'
+        'version' => '1.0.58'
     ]);
     
 } catch (Exception $e) {
@@ -317,6 +374,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.57'
+        'version' => '1.0.58'
     ]);
 }

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { CabType } from '@/types/cab';
 import { useFareSyncTracker } from '@/hooks/useFareSyncTracker';
-import { dispatchFareEvent, shouldShowDriverAllowance, ensureNoDriverAllowanceForAirport } from '@/lib';
+import { dispatchFareEvent, shouldShowDriverAllowance } from '@/lib';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -72,46 +72,16 @@ export const CabList: React.FC<CabListProps> = ({
   useEffect(() => {
     if (isProcessingFaresRef.current) return;
     
-    // Process each cab fare separately to ensure airport transfers are handled correctly
     const hasChanges = Object.entries(cabFares).some(([cabId, fare]) => {
       if (fare <= 0) return false; // Skip invalid fares
-      
-      // CRITICAL FIX: For airport transfers, ensure driver allowance is removed
-      if (tripType === 'airport') {
-        const cab = cabTypes.find(c => c.id === cabId);
-        if (cab && cab.driverAllowance) {
-          const adjustedFare = ensureNoDriverAllowanceForAirport(fare, cab.driverAllowance, tripType);
-          return adjustedFare !== localFares[cabId];
-        }
-      }
-      
       return fare !== localFares[cabId];
     });
     
     if (hasChanges) {
-      // For airport transfers, ensure driver allowance is removed from all fares
-      if (tripType === 'airport') {
-        const adjustedFares: Record<string, number> = {};
-        
-        Object.entries(cabFares).forEach(([cabId, fare]) => {
-          if (fare <= 0) return; // Skip invalid fares
-          
-          const cab = cabTypes.find(c => c.id === cabId);
-          if (cab && cab.driverAllowance) {
-            adjustedFares[cabId] = ensureNoDriverAllowanceForAirport(fare, cab.driverAllowance, tripType);
-          } else {
-            adjustedFares[cabId] = fare;
-          }
-        });
-        
-        setLocalFares(adjustedFares);
-      } else {
-        setLocalFares(cabFares);
-      }
-      
+      setLocalFares(cabFares);
       setLastUpdated(Date.now());
     }
-  }, [cabFares, cabTypes, tripType]);
+  }, [cabFares]);
   
   // Load fares from localStorage - only on initial render
   const loadFaresFromLocalStorage = () => {
@@ -130,15 +100,7 @@ export const CabList: React.FC<CabListProps> = ({
           if (storedFare) {
             const parsedFare = parseInt(storedFare, 10);
             if (!isNaN(parsedFare) && parsedFare > 0) {
-              // For airport transfers, ensure driver allowance is removed
-              if (tripType === 'airport' && cab.driverAllowance) {
-                storedFares[cab.id] = ensureNoDriverAllowanceForAirport(
-                  parsedFare, cab.driverAllowance, tripType
-                );
-              } else {
-                storedFares[cab.id] = parsedFare;
-              }
-              
+              storedFares[cab.id] = parsedFare;
               fareTracker.trackFare(cab.id, storedFares[cab.id]);
               foundAny = true;
             }
@@ -180,7 +142,7 @@ export const CabList: React.FC<CabListProps> = ({
       
       syncAttemptsRef.current++;
       
-      // CRITICAL FIX: Get the appropriate driver allowance flag
+      // Get the appropriate driver allowance flag
       const noDriverAllowance = !shouldShowDriverAllowance(tripType);
       
       // Request fare sync at system level
@@ -193,6 +155,8 @@ export const CabList: React.FC<CabListProps> = ({
       });
       
       // Process cabs sequentially to avoid overwhelming the event system
+      let processedCount = 0;
+      
       const processCab = (index: number) => {
         if (index >= cabTypes.length) {
           // All cabs processed, release lock
@@ -207,7 +171,7 @@ export const CabList: React.FC<CabListProps> = ({
         
         const cab = cabTypes[index];
         
-        // CRITICAL FIX: Add explicit flag for airport transfers
+        // Add explicit flag for airport transfers
         const noDriverAllowance = !shouldShowDriverAllowance(tripType);
           
         dispatchFareEvent('request-fare-calculation', {
@@ -222,8 +186,10 @@ export const CabList: React.FC<CabListProps> = ({
         // Track this dispatch
         fareTracker.trackFare(cab.id, localFares[cab.id] || 0);
         
-        // Process next cab after a slight delay
-        setTimeout(() => processCab(index + 1), 50);
+        processedCount++;
+        
+        // Process next cab after a slight delay - use increasing delays for later cabs
+        setTimeout(() => processCab(index + 1), 50 + (index * 5));
       };
       
       // Start processing from the first cab
@@ -274,11 +240,6 @@ export const CabList: React.FC<CabListProps> = ({
         // Find the cab to get driver allowance value
         const cab = cabTypes.find(c => c.id === cabId);
         let finalFare = fare;
-        
-        // For airport transfers, ensure driver allowance is removed
-        if (tripType === 'airport' && cab && cab.driverAllowance) {
-          finalFare = ensureNoDriverAllowanceForAirport(fare, cab.driverAllowance, tripType);
-        }
         
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, finalFare);
@@ -332,28 +293,19 @@ export const CabList: React.FC<CabListProps> = ({
           return;
         }
         
-        // Find the cab to get driver allowance value
-        const cab = cabTypes.find(c => c.id === cabId);
-        let finalFare = calculatedFare;
-        
-        // For airport transfers, ensure driver allowance is removed
-        if (tripType === 'airport' && cab && cab.driverAllowance) {
-          finalFare = ensureNoDriverAllowanceForAirport(calculatedFare, cab.driverAllowance, tripType);
-        }
-        
         // Track this update to avoid duplicates
-        fareTracker.trackFare(cabId, finalFare);
+        fareTracker.trackFare(cabId, calculatedFare);
         
         // Update our local fares
         setLocalFares(prev => {
-          const updated = { ...prev, [cabId]: finalFare };
+          const updated = { ...prev, [cabId]: calculatedFare };
           return updated;
         });
         
         // Store to localStorage
         try {
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, finalFare.toString());
+          localStorage.setItem(localStorageKey, calculatedFare.toString());
         } catch (error) {
           console.error(`Error saving ${cabId} fare to localStorage:`, error);
         }
@@ -380,7 +332,7 @@ export const CabList: React.FC<CabListProps> = ({
     };
   }, [tripType, localFares, cabTypes]);
   
-  // CRITICAL FIX: Initial setup - load localStorage and then sync on mount
+  // Initial setup - load localStorage and then sync on mount
   useEffect(() => {
     // Load cached fares from localStorage first
     loadFaresFromLocalStorage();

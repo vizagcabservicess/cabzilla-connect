@@ -46,6 +46,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [formattedTravelTime, setFormattedTravelTime] = useState<string>('');
   
   // CRITICAL FIX: Use the shouldShowDriverAllowance helper directly
+  // This MUST return false for airport transfers
   const showDriverAllowance = shouldShowDriverAllowance(tripType, tripMode);
   
   useEffect(() => {
@@ -55,28 +56,18 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   }, [travelTime]);
   
   useEffect(() => {
-    let basePrice = 0;
+    // Calculate the base fare excluding driver allowance
+    let basePrice = totalPrice;
     let driverAllowanceAmount = 0;
     
-    // Calculate the base fare without driver allowance for pricing breakdown
+    // CRITICAL: Handle airport transfers differently
     if (selectedCab) {
-      // AIRPORT TRANSFER SPECIAL CASE - Never include driver allowance
       if (tripType === 'airport') {
-        // For airport transfers, handle driver allowance separately to ensure it's never included
+        // For airport transfers, there is absolutely no driver allowance
         driverAllowanceAmount = 0;
-        
-        // Set base fare to total price since there's no driver allowance
-        basePrice = totalPrice;
-      } else if (tripType === 'local') {
-        // For local packages, driver allowance is already included in the total price
-        driverAllowanceAmount = selectedCab.driverAllowance || 250;
-        basePrice = totalPrice - driverAllowanceAmount;
-      } else if (tripType === 'outstation') {
-        // For outstation trips, break down driver allowance if applicable
-        driverAllowanceAmount = selectedCab.driverAllowance || 250;
-        basePrice = totalPrice - driverAllowanceAmount;
-      } else {
-        // For all other trip types, assume driver allowance is already included
+        basePrice = totalPrice; // Base price equals total price
+      } else if (tripType === 'local' || tripType === 'outstation') {
+        // For local and outstation, handle driver allowance
         driverAllowanceAmount = selectedCab.driverAllowance || 250;
         basePrice = totalPrice - driverAllowanceAmount;
       }
@@ -241,7 +232,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
               <span>₹{formatPrice(baseFare)}</span>
             </div>
             
-            {/* CRITICAL FIX: Only show driver allowance when appropriate */}
+            {/* CRITICAL FIX: Only show driver allowance for non-airport transfers */}
             {showDriverAllowance && driverAllowance > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Driver allowance</span>

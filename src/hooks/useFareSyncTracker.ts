@@ -26,6 +26,7 @@ export const useFareSyncTracker = () => {
     try {
       processingStack.current.add(key);
       
+      // Known fares should not trigger another update
       if (knownFareKeys.current.has(key)) {
         return false;
       }
@@ -61,10 +62,10 @@ export const useFareSyncTracker = () => {
     knownFareKeys.current.add(key);
     
     // Maintain a reasonable set size to prevent memory leaks
-    if (knownFareKeys.current.size > 1000) {
+    if (knownFareKeys.current.size > 200) {
       // Clear older entries
       const keysArray = Array.from(knownFareKeys.current);
-      const keysToDelete = keysArray.slice(0, 500); // Remove half the cache
+      const keysToDelete = keysArray.slice(0, 100); // Remove half the cache
       keysToDelete.forEach(k => knownFareKeys.current.delete(k));
     }
   };

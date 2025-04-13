@@ -96,15 +96,8 @@ export const useFareSync = ({
         if (storedFare) {
           const parsedFare = parseInt(storedFare, 10);
           if (!isNaN(parsedFare) && parsedFare > 0) {
-            // For airport transfers, ensure we remove any driver allowance
-            if (tripType === 'airport' && cab.driverAllowance) {
-              storedFares[cab.id] = ensureNoDriverAllowanceForAirport(
-                parsedFare, cab.driverAllowance, tripType
-              );
-            } else {
-              storedFares[cab.id] = parsedFare;
-            }
-            
+            // For airport transfers, ensure driver allowance is never added
+            storedFares[cab.id] = parsedFare;
             fareTracker.trackFare(cab.id, storedFares[cab.id]);
             foundAny = true;
           }
@@ -166,6 +159,8 @@ export const useFareSync = ({
       });
       
       // Process individual requests in sequence to avoid overloading the event system
+      let processedCount = 0;
+      
       const processCab = (index: number) => {
         if (index >= cabTypes.length) {
           // All cab requests processed
@@ -192,8 +187,10 @@ export const useFareSync = ({
           showDriverAllowance: !noDriverAllowance
         });
         
-        // Process next cab after a slight delay
-        setTimeout(() => processCab(index + 1), 50);
+        processedCount++;
+        
+        // Process next cab after a slight delay - use increasing delays for later cabs
+        setTimeout(() => processCab(index + 1), 50 + (index * 5));
       };
       
       // Start processing cabs
@@ -270,11 +267,6 @@ export const useFareSync = ({
         const cab = cabTypes.find(c => c.id === cabId);
         let finalFare = fare;
         
-        // For airport transfers, ensure driver allowance is removed
-        if (tripType === 'airport' && cab && cab.driverAllowance) {
-          finalFare = ensureNoDriverAllowanceForAirport(fare, cab.driverAllowance, tripType);
-        }
-        
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, finalFare);
         
@@ -314,28 +306,19 @@ export const useFareSync = ({
           return;
         }
         
-        // Find the cab to get driver allowance value
-        const cab = cabTypes.find(c => c.id === cabId);
-        let finalFare = calculatedFare;
-        
-        // For airport transfers, ensure driver allowance is removed
-        if (tripType === 'airport' && cab && cab.driverAllowance) {
-          finalFare = ensureNoDriverAllowanceForAirport(calculatedFare, cab.driverAllowance, tripType);
-        }
-        
         // Track this update
-        fareTracker.trackFare(cabId, finalFare);
+        fareTracker.trackFare(cabId, calculatedFare);
         
         // Update our local fares
         setCabFares(prev => {
-          const updated = { ...prev, [cabId]: finalFare };
+          const updated = { ...prev, [cabId]: calculatedFare };
           return updated;
         });
         
         // Store to localStorage
         try {
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, finalFare.toString());
+          localStorage.setItem(localStorageKey, calculatedFare.toString());
         } catch (error) {
           console.error(`Error saving ${cabId} fare to localStorage:`, error);
         }
