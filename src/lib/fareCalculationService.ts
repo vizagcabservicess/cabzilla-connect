@@ -176,8 +176,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // IMPORTANT: Airport transfers have NO driver allowance
-    // This comment is preserved to explicitly document this requirement
+    // CRITICAL: Airport transfers have NO driver allowance
+    // This is intentionally enforced at multiple levels
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -185,9 +185,24 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       price: fare
     });
     
-    // Store in localStorage for other components to access
+    // Immediately store in localStorage for other components to access
     const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
     localStorage.setItem(localStorageKey, fare.toString());
+    
+    // Emit event to notify other components
+    try {
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          fare: fare,
+          tripType: 'airport',
+          calculated: true,
+          timestamp: Date.now()
+        }
+      }));
+    } catch (error) {
+      console.error('Error dispatching fare-calculated event:', error);
+    }
     
     return fare;
   } catch (error) {
@@ -217,14 +232,18 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare += extraKmCost;
       }
       
-      // Airport transfers have NO driver allowance
-      // This is intentionally blank - we've removed all driver allowance code for airport transfers
+      // CRITICAL: Airport transfers have NO driver allowance
+      // This is intentionally enforced at multiple levels
       
       // Cache the result
       fareCache.set(cacheKey, {
         expire: Date.now() + 15 * 60 * 1000,
         price: fare
       });
+      
+      // Store in localStorage
+      const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
+      localStorage.setItem(localStorageKey, fare.toString());
       
       return fare;
     }
@@ -263,17 +282,21 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Airport transfers have NO driver allowance
-    // This is intentionally blank - we've removed all driver allowance code for airport transfers
-    
     // Add airport fee
     fare += defaultFare.airportFee;
+    
+    // CRITICAL: Airport transfers have NO driver allowance
+    // This is intentionally enforced at multiple levels
     
     // Cache the result
     fareCache.set(cacheKey, {
       expire: Date.now() + 15 * 60 * 1000,
       price: fare
     });
+    
+    // Store in localStorage
+    const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
+    localStorage.setItem(localStorageKey, fare.toString());
     
     return fare;
   }
@@ -619,10 +642,9 @@ export const calculateTotalFare = (
   surcharge?: number
 ): number => {
   // CRITICAL FIX: For airport transfers, ALWAYS set driver allowance to 0
-  // This ensures driver allowance is not factored into the total fare for airport transfers
   if (tripType === 'airport') {
-    driverAllowance = 0;
     console.log("Airport transfer detected: Setting driver allowance to 0");
+    driverAllowance = 0;
   }
   
   const total = baseFare + driverAllowance + nightHaltCharges + otherCharges;
