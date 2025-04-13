@@ -27,6 +27,7 @@ export const CabList: React.FC<CabListProps> = ({
   const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
   
+  // Use refs to track state without causing re-renders
   const syncAttemptsRef = useRef<number>(0);
   const tripTypeRef = useRef<string>(tripType);
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -69,21 +70,24 @@ export const CabList: React.FC<CabListProps> = ({
     }
   }, [tripType]);
   
-  // FIXED: Properly update local fares when cabFares changes from parent
+  // CRITICAL FIX: Better update local fares when cabFares changes
   useEffect(() => {
     if (isProcessingFaresRef.current) return;
     
     const hasChanges = Object.entries(cabFares).some(([cabId, fare]) => {
-      if (fare <= 0) return false; // Skip invalid fares
       return fare !== localFares[cabId];
     });
     
-    if (hasChanges) {
-      setLocalFares(cabFares);
-      setLastUpdated(Date.now());
+    if (hasChanges || Object.keys(localFares).length === 0) {
+      // Only update if we have fares or our local state is empty
+      if (Object.keys(cabFares).length > 0 || Object.keys(localFares).length === 0) {
+        console.log('CabList: Updating local fares from parent:', cabFares);
+        setLocalFares(cabFares);
+        setLastUpdated(Date.now());
+      }
     }
     
-    // FIXED: Force a sync if we haven't received fares
+    // Force a sync if we haven't received fares
     if (Object.keys(cabFares).length === 0 && !hasSyncedRef.current) {
       requestFareSync(true);
       hasSyncedRef.current = true;
@@ -118,7 +122,9 @@ export const CabList: React.FC<CabListProps> = ({
       });
       
       if (foundAny) {
+        console.log('CabList: Loaded fares from localStorage:', storedFares);
         setLocalFares(prev => ({ ...prev, ...storedFares }));
+        setLastUpdated(Date.now());
       }
     } finally {
       isProcessingFaresRef.current = false;
@@ -129,6 +135,7 @@ export const CabList: React.FC<CabListProps> = ({
   const requestFareSync = (forceSync = false) => {
     // Prevent multiple simultaneous sync requests
     if (syncLockRef.current && !forceSync) {
+      console.log('CabList: Sync already in progress, skipping');
       return;
     }
     
@@ -137,12 +144,14 @@ export const CabList: React.FC<CabListProps> = ({
     try {
       // Check if we've exceeded max attempts (unless forcing)
       if (syncAttemptsRef.current > 3 && !forceSync) {
+        console.log('CabList: Max sync attempts reached, skipping');
         syncLockRef.current = false;
         return;
       }
       
       // Try to acquire the sync lock
       if (!fareTracker.acquireSyncLock(forceSync)) {
+        console.log('CabList: Failed to acquire sync lock, skipping');
         syncLockRef.current = false;
         return;
       }
@@ -244,15 +253,16 @@ export const CabList: React.FC<CabListProps> = ({
           lastFareDbUpdateRef.current = Date.now();
         }
         
-        // FIXED: Handle airport transfers - never include driver allowance
+        // Handle airport transfers - never include driver allowance
         let finalFare = fare;
         
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, finalFare);
         
-        // Update our local fares
+        // CRITICAL FIX: Force UI update with setState rather than direct object manipulation
         setLocalFares(prev => {
-          const updated = { ...prev, [cabId]: finalFare };
+          const updated = { ...prev };
+          updated[cabId] = finalFare;
           return updated;
         });
         
@@ -264,6 +274,7 @@ export const CabList: React.FC<CabListProps> = ({
           console.error(`Error saving ${cabId} fare to localStorage:`, error);
         }
         
+        // CRITICAL FIX: Force UI refresh with timestamp update
         setLastUpdated(Date.now());
       } finally {
         processingEventRef.current = false;
@@ -302,9 +313,10 @@ export const CabList: React.FC<CabListProps> = ({
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, calculatedFare);
         
-        // Update our local fares
+        // CRITICAL FIX: Force UI update with setState 
         setLocalFares(prev => {
-          const updated = { ...prev, [cabId]: calculatedFare };
+          const updated = { ...prev };
+          updated[cabId] = calculatedFare;
           return updated;
         });
         
@@ -339,27 +351,29 @@ export const CabList: React.FC<CabListProps> = ({
         clearTimeout(forceUpdateTimeoutRef.current);
       }
     };
-  }, [tripType, localFares, cabTypes]);
+  }, [tripType]);
   
   // Initial setup - load localStorage and then sync on mount
   useEffect(() => {
     // Load cached fares from localStorage first
     loadFaresFromLocalStorage();
     
-    // FIXED: Force initial sync on mount and only do it once
-    if (!initialFetchCompletedRef.current) {
-      setTimeout(() => {
+    // CRITICAL FIX: Force initial sync on mount with dedicated timeout
+    setTimeout(() => {
+      if (!initialFetchCompletedRef.current) {
+        console.log('CabList: Initial fare sync on mount');
         requestFareSync(true);
-      }, 200);
-      
-      // FIXED: Schedule another sync in case the first one doesn't succeed
-      forceUpdateTimeoutRef.current = setTimeout(() => {
-        if (!dbSyncCompletedRef.current) {
-          console.log("Forced fare sync after initial load didn't get DB values, retrying...");
-          requestFareSync(true);
-        }
-      }, 2000);
-    }
+        initialFetchCompletedRef.current = true;
+      }
+    }, 200);
+    
+    // FIXED: Schedule another sync in case the first one doesn't succeed
+    forceUpdateTimeoutRef.current = setTimeout(() => {
+      if (!dbSyncCompletedRef.current) {
+        console.log("CabList: Forced fare sync after initial load didn't get DB values, retrying...");
+        requestFareSync(true);
+      }
+    }, 2000);
     
     // Set up a periodic sync to ensure fares stay up to date
     // But do it with much less frequency to avoid performance issues
@@ -379,6 +393,11 @@ export const CabList: React.FC<CabListProps> = ({
       }
     };
   }, []);
+  
+  // CRITICAL FIX: Add debug useEffect to log changes to localFares
+  useEffect(() => {
+    console.log('CabList: Local fares updated:', localFares);
+  }, [localFares]);
   
   return (
     <div className="space-y-4 mt-4">

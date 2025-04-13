@@ -45,7 +45,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [nightHaltCharge, setNightHaltCharge] = useState<number>(0);
   const [formattedTravelTime, setFormattedTravelTime] = useState<string>('');
   
-  // FIXED: Use the shouldShowDriverAllowance helper to determine if driver allowance should be shown
+  // CRITICAL FIX: Use shouldShowDriverAllowance helper with explicit check
   const showDriverAllowance = shouldShowDriverAllowance(tripType, tripMode);
   
   useEffect(() => {
@@ -59,7 +59,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     let driverAllowanceAmount = 0;
     
     if (selectedCab) {
-      // FIXED: Ensure airport transfers never include driver allowance
+      // CRITICAL FIX: Always check tripType first - ensures airport transfers never include driver allowance
       if (tripType === 'airport') {
         // For airport transfers, driver allowance is ALWAYS zero
         driverAllowanceAmount = 0;
@@ -233,7 +233,8 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
               <span>{formatPrice(baseFare)}</span>
             </div>
             
-            {showDriverAllowance && driverAllowance > 0 && (
+            {/* CRITICAL FIX: Double check we never show driver allowance for airport transfers */}
+            {showDriverAllowance && driverAllowance > 0 && tripType !== 'airport' && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Driver allowance</span>
                 <span>{formatPrice(driverAllowance)}</span>

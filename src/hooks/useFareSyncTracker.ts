@@ -39,7 +39,13 @@ export const useFareSyncTracker = () => {
       // If we have no previous fare, it's a change
       if (previousFare === undefined) return true;
       
-      // FIXED: Track fare change history to detect oscillations
+      // CRITICAL FIX: Ensure fare is a valid number before tracking
+      if (isNaN(fare) || fare <= 0) {
+        // Don't consider invalid fares as changes
+        return false;
+      }
+      
+      // Track fare change history to detect oscillations
       if (!fareChangeHistory.current.has(cabId)) {
         fareChangeHistory.current.set(cabId, []);
       }
@@ -62,6 +68,11 @@ export const useFareSyncTracker = () => {
   
   // Track a fare value to prevent duplicate updates
   const trackFare = (cabId: string, fare: number, isFromDatabase: boolean = false): void => {
+    // CRITICAL FIX: Ignore invalid fares (prevent tracking of zeros)
+    if (isNaN(fare) || fare <= 0) {
+      return;
+    }
+    
     const previousFare = trackedFares.current[cabId];
     
     // Only log when fare actually changes to reduce console spam
@@ -81,7 +92,7 @@ export const useFareSyncTracker = () => {
     const key = `${cabId}_${fare}`;
     knownFareKeys.current.add(key);
     
-    // FIXED: Maintain a reasonable set size to prevent memory leaks
+    // CRITICAL FIX: Maintain a reasonable set size to prevent memory leaks
     if (knownFareKeys.current.size > 200) {
       // Clear older entries
       const keysArray = Array.from(knownFareKeys.current);
@@ -112,18 +123,18 @@ export const useFareSyncTracker = () => {
     return databaseFaresRef.current[cabId] || 0;
   };
   
-  // FIXED: Improved throttling for refreshes to prevent cascading updates
+  // CRITICAL FIX: Improved throttling to prevent cascading updates
   const shouldThrottle = (cabId: string, minInterval: number = 300): boolean => {
     const now = Date.now();
     const lastTime = lastDispatchTime.current[cabId] || 0;
     
-    // Throttle based on refresh count
+    // CRITICAL FIX: Track consecutive refresh counts to prevent oscillation
     const refreshCount = refreshCountRef.current[cabId] || 0;
     let adjustedInterval = minInterval;
     
     if (refreshCount > 3) {
-      // Increase throttle time for cabId with multiple refreshes
-      adjustedInterval = Math.min(minInterval * Math.max(1, refreshCount / 2), 2000);
+      // Increase throttle time exponentially for cabId with multiple refreshes
+      adjustedInterval = Math.min(minInterval * Math.pow(1.5, Math.min(refreshCount - 3, 5)), 5000);
       
       // Reset counter after a period of time to avoid permanent throttling
       if (now - lastTime > 10000) {
@@ -214,7 +225,7 @@ export const useFareSyncTracker = () => {
     return processingStack.current.has(key);
   };
   
-  // FIXED: Get the fare variation for a cab to detect oscillations
+  // Get the fare variation for a cab to detect oscillations
   const getFareVariation = (cabId: string): number => {
     const history = fareChangeHistory.current.get(cabId);
     if (!history || history.length < 2) return 0;
@@ -228,7 +239,7 @@ export const useFareSyncTracker = () => {
     return maxVariation;
   };
   
-  // FIXED: Check if fare value is oscillating (changing back and forth)
+  // Check if fare value is oscillating (changing back and forth)
   const isOscillating = (cabId: string): boolean => {
     const history = fareChangeHistory.current.get(cabId);
     if (!history || history.length < 4) return false;

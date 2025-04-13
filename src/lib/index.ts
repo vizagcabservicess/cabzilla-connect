@@ -111,9 +111,9 @@ export const formatPrice = (price: number | string): string => {
   return `₹${numPrice.toLocaleString('en-IN')}`;
 };
 
-// FIXED: Helper function to check if driver allowance should be shown - complete rewrite with better tripType checking
+// NEW IMPLEMENTATION: Fixed shouldShowDriverAllowance to absolutely never show for airport transfers
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // Airport transfers must NEVER show driver allowance
+  // For airport transfers, NEVER show driver allowance - no exceptions
   if (tripType === 'airport') {
     return false;
   }
