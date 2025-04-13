@@ -90,11 +90,103 @@ export type {
   AirportFare
 } from '@/types/cab';
 
-// Add formatPrice export from cabData
-export { formatPrice } from './cabData';
+// Improved formatPrice implementation that prevents double currency symbols
+export const formatPrice = (price: number | string): string => {
+  // Handle null, undefined, or invalid values
+  if (price === null || price === undefined || isNaN(Number(price))) {
+    return '₹0';
+  }
+  
+  // Convert to number and ensure it's not negative
+  const numPrice = Math.max(0, Number(price));
+  
+  // Check if the input already contains the ₹ symbol
+  if (typeof price === 'string' && price.includes('₹')) {
+    // Extract just the numeric part and format that
+    const numericPart = price.replace(/[^\d.]/g, '');
+    return `₹${Number(numericPart).toLocaleString('en-IN')}`;
+  }
+  
+  // Format with Indian locale and add ₹ symbol
+  return `₹${numPrice.toLocaleString('en-IN')}`;
+};
 
-// Export the CabLoading component from the correct path
-export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
+// NEW IMPLEMENTATION: Fixed shouldShowDriverAllowance to absolutely never show for airport transfers
+export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
+  // For airport transfers, NEVER show driver allowance - no exceptions
+  if (tripType === 'airport') {
+    return false;
+  }
+  
+  // For all other trip types, driver allowance should be shown
+  return true;
+};
 
-// Export the Skeleton component
-export { Skeleton } from '@/components/ui/skeleton';
+// Improve the fare event system with better deduplication
+const processedEvents = new Set<string>();
+const MAX_PROCESSED_EVENTS = 100;
+let eventCounter = 0;
+
+export const getFareEventId = (): number => {
+  return ++eventCounter;
+};
+
+// FIXED: Create a helper to deduplicate and dispatch fare events with better event key tracking
+export const dispatchFareEvent = (
+  eventName: string,
+  detail: Record<string, any>,
+  preventDuplicates: boolean = true
+): void => {
+  // Add unique event ID if not present
+  if (!detail.eventId) {
+    detail.eventId = getFareEventId();
+  }
+  
+  // Create a unique event key based on name, cab, and fare
+  const eventKey = `${eventName}_${detail.cabId || detail.cabType || ''}_${detail.fare || ''}`;
+  
+  // Check for duplicate event to prevent processing same event multiple times
+  if (preventDuplicates && processedEvents.has(eventKey)) {
+    return; // Skip duplicate event
+  }
+  
+  // Track this event
+  processedEvents.add(eventKey);
+  
+  // Clean up event tracking if too many events
+  if (processedEvents.size > MAX_PROCESSED_EVENTS) {
+    const oldestEvents = Array.from(processedEvents).slice(0, 50);
+    oldestEvents.forEach(id => processedEvents.delete(id));
+  }
+  
+  // CRITICAL: Force set driver allowance flag for airport transfers to ensure consistency
+  if (detail.tripType === 'airport') {
+    detail.noDriverAllowance = true;
+    detail.showDriverAllowance = false;
+  }
+  
+  // Add timestamp if not present
+  if (!detail.timestamp) {
+    detail.timestamp = Date.now();
+  }
+  
+  // Create and dispatch the event
+  try {
+    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+  } catch (error) {
+    console.error(`Error dispatching ${eventName}:`, error);
+  }
+};
+
+// Add a helper to ensure driver allowance is removed for airport transfers
+export const ensureNoDriverAllowanceForAirport = (
+  fare: number, 
+  driverAllowance: number, 
+  tripType: string
+): number => {
+  if (tripType === 'airport') {
+    // For airport transfers, ensure driver allowance is not included
+    return fare;
+  }
+  return fare;
+};

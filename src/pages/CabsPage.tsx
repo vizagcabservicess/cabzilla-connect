@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useRef } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
@@ -17,8 +18,9 @@ import {
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { 
   cabTypes, 
-  formatPrice
-} from "@/lib/cabData";
+  formatPrice,
+  dispatchFareEvent
+} from "@/lib";
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
@@ -69,6 +71,10 @@ const CabsPage = () => {
   
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
+
+  // Track previous trip type for cleanup
+  const prevTripTypeRef = useRef<string>("");
+  const fareCalculationInProgressRef = useRef<boolean>(false);
   
   useEffect(() => {
     if (pickup) sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
@@ -76,14 +82,31 @@ const CabsPage = () => {
     if (pickupDate) sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
     if (returnDate) sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
     if (selectedCab) sessionStorage.setItem('selectedCab', JSON.stringify(selectedCab));
-    sessionStorage.setItem('tripMode', tripMode);
-    sessionStorage.setItem('hourlyPackage', hourlyPackage);
-    sessionStorage.setItem('tripType', tripType);
+    sessionStorage.setItem('tripMode', JSON.stringify(tripMode));
+    sessionStorage.setItem('hourlyPackage', JSON.stringify(hourlyPackage));
+    sessionStorage.setItem('tripType', JSON.stringify(tripType));
   }, [pickup, dropoff, pickupDate, returnDate, selectedCab, tripMode, hourlyPackage, tripType]);
 
+  // Clear selections when trip type or mode changes
   useEffect(() => {
-    setSelectedCab(null);
-    setTotalPrice(0);
+    // Only clear if trip type actually changed
+    if (prevTripTypeRef.current !== tripType) {
+      console.log(`Trip type changed from ${prevTripTypeRef.current} to ${tripType}`);
+      prevTripTypeRef.current = tripType;
+      
+      setSelectedCab(null);
+      setTotalPrice(0);
+      
+      // Clear fare cache from localStorage for all cabs to prevent stale data
+      cabTypes.forEach(cab => {
+        try {
+          const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
+          localStorage.removeItem(localStorageKey);
+        } catch (error) {
+          console.error(`Error clearing ${cab.id} fare cache:`, error);
+        }
+      });
+    }
   }, [tripType, tripMode]);
 
   useEffect(() => {
@@ -135,17 +158,28 @@ const CabsPage = () => {
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
 
+  // Clear fare when locations change
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
   }, [pickup, dropoff]);
 
   const handleTripTypeChange = (type: TripType) => {
+    // Clear all caches when trip type changes
+    localStorage.setItem('forceCacheRefresh', 'true');
+    
     setSelectedCab(null);
     setDistance(0);
     setTravelTime(0);
     setShowMap(false);
     setTotalPrice(0);
+    
+    // Force fare sync for the new trip type
+    dispatchFareEvent('request-fare-sync', {
+      tripType: type,
+      forceSync: true,
+      instant: true
+    });
     
     setTripType(type);
     navigate(`/cabs/${type}`);
@@ -159,6 +193,11 @@ const CabsPage = () => {
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
     }
+    
+    // Clear localStorage cache for this trip type after a short delay
+    setTimeout(() => {
+      localStorage.removeItem('forceCacheRefresh');
+    }, 100);
   };
   
   const handlePickupLocationChange = (location: Location) => {
@@ -267,10 +306,13 @@ const CabsPage = () => {
     }
   }, [tripType, hourlyPackage]);
 
+  // Calculate fare when cab, distance, or trip details change
   useEffect(() => {
-    if (selectedCab && distance > 0) {
+    if (selectedCab && distance > 0 && !fareCalculationInProgressRef.current) {
       const fetchFare = async () => {
         try {
+          fareCalculationInProgressRef.current = true;
+          
           const fare = await calculateFare({
             cabType: selectedCab, 
             distance, 
@@ -281,7 +323,7 @@ const CabsPage = () => {
             returnDate
           });
           
-          // CRITICAL FIX: Store the fare in localStorage for persistence between components
+          // Store the fare in localStorage for persistence between components
           try {
             const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
             localStorage.setItem(localStorageKey, fare.toString());
@@ -292,18 +334,21 @@ const CabsPage = () => {
           
           setTotalPrice(fare);
           
-          // CRITICAL FIX: Dispatch event to synchronize fare across components
+          // Dispatch event to synchronize fare across components
           try {
-            window.dispatchEvent(new CustomEvent('fare-calculated', {
-              detail: {
-                cabId: selectedCab.id,
-                tripType,
-                tripMode,
-                calculated: true,
-                fare: fare,
-                timestamp: Date.now()
-              }
-            }));
+            // FIXED: Add required flags to prevent driver allowance for airport transfers
+            const noDriverAllowance = tripType === 'airport';
+            
+            dispatchFareEvent('fare-calculated', {
+              cabId: selectedCab.id,
+              tripType,
+              tripMode,
+              calculated: true,
+              fare: fare,
+              timestamp: Date.now(),
+              noDriverAllowance: noDriverAllowance,
+              showDriverAllowance: !noDriverAllowance
+            });
             console.log(`CabsPage: Dispatched fare-calculated event for ${selectedCab.id}: ${fare}`);
           } catch (error) {
             console.error('Error dispatching fare event:', error);
@@ -311,11 +356,13 @@ const CabsPage = () => {
         } catch (error) {
           console.error("Error calculating fare:", error);
           setTotalPrice(0);
+        } finally {
+          fareCalculationInProgressRef.current = false;
         }
       };
       
       fetchFare();
-    } else {
+    } else if (!selectedCab || distance <= 0) {
       setTotalPrice(0);
     }
   }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
@@ -532,7 +579,7 @@ const CabsPage = () => {
                         >
                           <div className="font-medium">{pkg.name}</div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Base price: ₹{pkg.basePrice}
+                            Base price: {formatPrice(pkg.basePrice)}
                           </div>
                         </button>
                       ))}
