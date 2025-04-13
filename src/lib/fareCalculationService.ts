@@ -18,6 +18,7 @@ export const clearFareCache = () => {
   
   lastCacheClearTime = now;
   fareCache.clear();
+  fareStateManager.clearCache();
   
   // Throttle event dispatching to prevent loops
   if (eventThrottleCount < MAX_EVENTS_PER_MINUTE) {
@@ -117,36 +118,11 @@ export const calculateAirportFare = async (cabType: any, distance: number): Prom
     console.error('Error getting airport fare from localStorage:', error);
   }
   
-  // As a last resort, return a reasonable default based on the vehicle type
-  console.log(`FareCalculationService: Using fallback airport fare calculation for ${cabType.id}`);
-  let fallbackFare = 0;
-  
-  if (distance <= 10) {
-    fallbackFare = cabType.id.includes('sedan') ? 800 : 
-                 cabType.id.includes('ertiga') ? 1000 : 
-                 cabType.id.includes('innova') ? 1200 : 900;
-  } else if (distance <= 20) {
-    fallbackFare = cabType.id.includes('sedan') ? 1200 : 
-                 cabType.id.includes('ertiga') ? 1500 : 
-                 cabType.id.includes('innova') ? 1800 : 1400;
-  } else {
-    // Base fare for distances over 20km
-    const baseFare = cabType.id.includes('sedan') ? 1200 : 
-                    cabType.id.includes('ertiga') ? 1500 : 
-                    cabType.id.includes('innova') ? 1800 : 1400;
-    
-    // Extra per km charge
-    const extraKm = distance - 20;
-    const extraRate = cabType.id.includes('sedan') ? 11 : 
-                      cabType.id.includes('ertiga') ? 14 : 
-                      cabType.id.includes('innova') ? 18 : 12;
-    fallbackFare = baseFare + (extraKm * extraRate);
-  }
-  
-  // Round to nearest 10
-  fallbackFare = Math.round(fallbackFare / 10) * 10;
-  
-  return fallbackFare;
+  // As a last resort, let the FareStateManager handle the fallback
+  return await fareStateManager.calculateAirportFare({
+    vehicleId: cabType.id,
+    distance
+  });
 };
 
 // Main fare calculation function using FareStateManager
@@ -239,23 +215,8 @@ export const calculateFare = async (params: FarCalculationParams): Promise<numbe
       return calculatedFare;
     }
     
-    // If FareStateManager failed, try to get from localStorage as a fallback
-    try {
-      const localStorageKey = `fare_${tripType}_${cabType.id.toLowerCase()}`;
-      const storedFare = localStorage.getItem(localStorageKey);
-      if (storedFare && !isNaN(Number(storedFare))) {
-        const fareValue = parseInt(storedFare, 10);
-        if (fareValue > 0) {
-          console.log(`FareCalculationService: Using localStorage fare for ${cabType.id}: ${fareValue}`);
-          return fareValue;
-        }
-      }
-    } catch (error) {
-      console.error(`Error getting ${tripType} fare from localStorage:`, error);
-    }
-    
-    // As a last resort, return a reasonable default
-    console.warn(`FareCalculationService: Unable to calculate fare for ${cabType.id}, using fallback`);
+    // If no fare was calculated, return 0
+    console.warn(`No fare calculated for ${cabType.id} ${tripType}`);
     return 0;
   } catch (error) {
     console.error('Error calculating fare:', error);
