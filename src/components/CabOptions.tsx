@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -66,6 +67,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       setCalculatedAirportFares({});
       setForceSyncAttempted(false);
       setInitialAirportFaresLoaded(false);
+      lastDispatchedFares.current = {}; // Reset tracked dispatches on trip type change
       localStorage.setItem('forceCacheRefresh', 'true');
       
       // Reset our fare update tracker when trip type changes
@@ -558,18 +560,28 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     // Handle request for fare recalculation
     const handleRequestFareCalculation = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId) {
-        console.log(`CabOptions: Received fare recalculation request for ${event.detail.cabId}`);
+        const { cabId } = event.detail;
+        console.log(`CabOptions: Received fare recalculation request for ${cabId}`);
+        
+        // If we already have this fare and dispatched it recently, skip
+        if (lastDispatchedFares.current[cabId] && lastDispatchedFares.current[cabId] > 0) {
+          console.log(`CabOptions: Already dispatched fare for ${cabId} recently, skipping`);
+          return;
+        }
         
         // If this is the currently selected cab, trigger fare event with latest fare
-        if (selectedCab?.id === event.detail.cabId) {
-          const fareToUse = tripType === 'airport' && calculatedAirportFares[event.detail.cabId]
-            ? calculatedAirportFares[event.detail.cabId]
-            : cabFares[event.detail.cabId];
+        if (selectedCab?.id === cabId) {
+          const fareToUse = tripType === 'airport' && calculatedAirportFares[cabId]
+            ? calculatedAirportFares[cabId]
+            : cabFares[cabId];
           
           if (fareToUse > 0) {
+            // Track this dispatch to avoid duplicates
+            lastDispatchedFares.current[cabId] = fareToUse;
+            
             window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
               detail: {
-                cabType: event.detail.cabId,
+                cabType: cabId,
                 cabName: event.detail.cabName || selectedCab.name,
                 fare: fareToUse,
                 tripType: tripType,
@@ -581,22 +593,27 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           }
         } else {
           // Even if not selected, we should update the fare in our local state
-          const fareToUse = tripType === 'airport' && calculatedAirportFares[event.detail.cabId]
-            ? calculatedAirportFares[event.detail.cabId]
-            : cabFares[event.detail.cabId];
+          const fareToUse = tripType === 'airport' && calculatedAirportFares[cabId]
+            ? calculatedAirportFares[cabId]
+            : cabFares[cabId];
           
           if (fareToUse > 0) {
-            window.dispatchEvent(new CustomEvent('fare-calculated', {
-              detail: {
-                cabId: event.detail.cabId,
-                tripType: tripType,
-                tripMode: tripMode,
-                calculated: true,
-                fare: fareToUse,
-                forceSync: true,
-                timestamp: Date.now()
-              }
-            }));
+            // Only emit if we haven't already dispatched this fare
+            if (lastDispatchedFares.current[cabId] !== fareToUse) {
+              lastDispatchedFares.current[cabId] = fareToUse;
+              
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: cabId,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  calculated: true,
+                  fare: fareToUse,
+                  forceSync: true,
+                  timestamp: Date.now()
+                }
+              }));
+            }
           }
         }
       }
@@ -608,6 +625,17 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       const { tripType: eventTripType, instant = false } = event.detail;
       console.log(`CabOptions: Received request-fare-sync event for ${eventTripType || 'all'} trips, instant=${instant}`);
+      
+      // Check if this is a duplicate sync request we can skip
+      const now = Date.now();
+      const lastSync = lastFareUpdate;
+      const timeSinceLastSync = now - lastSync;
+      
+      // Skip if we've synced recently (within last 300ms) unless forcing
+      if (timeSinceLastSync < 300 && !instant) {
+        console.log(`CabOptions: Skipping sync request, last sync was ${timeSinceLastSync}ms ago`);
+        return;
+      }
       
       if ((tripType === 'airport' && (eventTripType === 'airport' || !eventTripType)) || instant) {
         if (!forceSyncAttempted || instant) {
@@ -622,6 +650,13 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     const handleSignificantFareDifference = (event: CustomEvent) => {
       if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
         const { calculatedFare, parentFare, cabId } = event.detail;
+        
+        // Skip if fare hasn't changed
+        if (cabFares[cabId] === calculatedFare) {
+          console.log(`CabOptions: Skipping significant fare difference for ${cabId} (no change)`);
+          return;
+        }
+        
         console.log(`CabOptions: Received significant fare difference for ${cabId}: calculated=${calculatedFare}, parent=${parentFare}`);
         
         // Update our fares with the calculatedFare
@@ -642,20 +677,25 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         // Update timestamp to force re-renders
         setLastFareUpdate(Date.now());
         
-        // Emit an event for the CabList to update
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: cabId,
-              tripType: tripType,
-              tripMode: tripMode,
-              calculated: true,
-              fare: calculatedFare,
-              forceSync: true,
-              timestamp: Date.now()
-            }
-          }));
-        }, 20);
+        // Only re-emit if fare is different from last dispatched
+        if (lastDispatchedFares.current[cabId] !== calculatedFare) {
+          lastDispatchedFares.current[cabId] = calculatedFare;
+          
+          // Emit an event for the CabList to update
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: cabId,
+                tripType: tripType,
+                tripMode: tripMode,
+                calculated: true,
+                fare: calculatedFare,
+                forceSync: true,
+                timestamp: Date.now()
+              }
+            }));
+          }, 20);
+        }
       }
     };
     
@@ -667,7 +707,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     window.addEventListener('request-fare-sync', handleRequestFareSync as EventListener);
     window.addEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     
-    // Trigger initial sync for all trips
+    // Trigger initial sync for all trips - but only once
     if (!forceSyncAttempted) {
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('request-fare-sync', {
@@ -691,7 +731,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.removeEventListener('request-fare-sync', handleRequestFareSync as EventListener);
       window.removeEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     };
-  }, [cabFares, selectedCab, tripType, tripMode, calculatedAirportFares, forceSyncAttempted, fareSyncCounter]);
+  }, [cabFares, selectedCab, tripType, tripMode, calculatedAirportFares, forceSyncAttempted, fareSyncCounter, lastFareUpdate]);
 
   // Generate fare details string
   const getFareDetails = (cab: CabType): string => {

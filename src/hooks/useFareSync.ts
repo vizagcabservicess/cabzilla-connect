@@ -28,6 +28,7 @@ export const useFareSync = ({
   const syncLockRef = useRef<boolean>(false);
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSyncTimeRef = useRef<number>(0);
+  const lastFareByCab = useRef<Record<string, number>>({});
   
   // Track when trip type changes to force re-sync
   useEffect(() => {
@@ -36,6 +37,7 @@ export const useFareSync = ({
       previousTripTypeRef.current = tripType;
       syncAttemptsRef.current = 0;
       processedUpdatesRef.current = {};
+      lastFareByCab.current = {}; // Reset fare tracking on trip type change
       setCabFares({});
       
       // Force refresh localStorage cache when trip type changes
@@ -85,6 +87,12 @@ export const useFareSync = ({
     
     if (foundAny) {
       setCabFares(prev => ({...prev, ...storedFares}));
+      
+      // Track these initial fares to avoid duplicate updates
+      Object.keys(storedFares).forEach(cabId => {
+        lastFareByCab.current[cabId] = storedFares[cabId];
+      });
+      
       return true;
     }
     
@@ -160,18 +168,21 @@ export const useFareSync = ({
     if (needsIndividualRequests) {
       // Individual requests for each cab
       cabTypes.forEach((cab, index) => {
+        // Skip if we already have this cab's fare and not forcing
+        if (lastFareByCab.current[cab.id] && !forceSync) {
+          return;
+        }
+        
         setTimeout(() => {
-          if (!cabFares[cab.id] || forceSync) {
-            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-              detail: {
-                cabId: cab.id,
-                cabName: cab.name,
-                tripType: tripType,
-                forceSync: true,
-                timestamp: Date.now() + index
-              }
-            }));
-          }
+          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+            detail: {
+              cabId: cab.id,
+              cabName: cab.name,
+              tripType: tripType,
+              forceSync: true,
+              timestamp: Date.now() + index
+            }
+          }));
         }, index * 20);
       });
     }
@@ -203,11 +214,12 @@ export const useFareSync = ({
         }
         
         // Skip if we've already processed this exact update
-        if (processedUpdatesRef.current[cabId] === fare) {
+        if (lastFareByCab.current[cabId] === fare) {
           return;
         }
         
         // Track this update to avoid duplicates
+        lastFareByCab.current[cabId] = fare;
         processedUpdatesRef.current[cabId] = fare;
         
         console.log(`useFareSync: Received fare update for ${cabId}: ${fare}`);
@@ -236,11 +248,14 @@ export const useFareSync = ({
         const { calculatedFare, cabId } = event.detail;
         
         // Skip if this is the same value we already have
-        if (cabFares[cabId] === calculatedFare) {
+        if (cabFares[cabId] === calculatedFare || lastFareByCab.current[cabId] === calculatedFare) {
           return;
         }
         
         console.log(`useFareSync: Received significant fare difference for ${cabId}: ${calculatedFare}`);
+        
+        // Track this update to avoid duplicates
+        lastFareByCab.current[cabId] = calculatedFare;
         
         // Update our local fares
         setCabFares(prev => {
@@ -281,6 +296,14 @@ export const useFareSync = ({
       const currentFare = cabFares[selectedCab.id];
       
       if (currentFare && currentFare > 0) {
+        // Skip if we've already dispatched this same fare
+        if (lastFareByCab.current[selectedCab.id] === currentFare) {
+          return;
+        }
+        
+        // Track this dispatch to avoid duplicates
+        lastFareByCab.current[selectedCab.id] = currentFare;
+        
         // If we have a valid fare, emit update
         window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
           detail: {

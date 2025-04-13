@@ -98,3 +98,14 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
+
+// Helper function to check if driver allowance should be shown
+export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
+  // For airport transfers, we don't show driver allowance
+  if (tripType === 'airport') {
+    return false;
+  }
+  
+  // For all other trip types, we show driver allowance
+  return true;
+};

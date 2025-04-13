@@ -32,6 +32,7 @@ export const CabList: React.FC<CabListProps> = ({
   const lastSyncTimeRef = useRef<number>(0);
   const syncLockRef = useRef<boolean>(false);
   const hasSyncedRef = useRef<boolean>(false);
+  const lastDispatchedFares = useRef<Record<string, number>>({});
   
   // Track when trip type changes to trigger re-sync and clear old fare cache
   useEffect(() => {
@@ -40,6 +41,7 @@ export const CabList: React.FC<CabListProps> = ({
       tripTypeRef.current = tripType;
       syncAttemptsRef.current = 0;
       processedUpdatesRef.current = {};
+      lastDispatchedFares.current = {};
       hasSyncedRef.current = false;
       setLocalFares({}); // Clear local fares on trip type change
       
@@ -176,20 +178,31 @@ export const CabList: React.FC<CabListProps> = ({
     const needsIndividualRequests = cabTypes.some(cab => !localFares[cab.id] || forceSync);
     
     if (needsIndividualRequests) {
-      // Request individual fare updates for each cab
+      // Request individual fare updates for each cab with throttling
       cabTypes.forEach((cab, index) => {
+        // Skip if we already have this cab's fare and not forcing
+        if (localFares[cab.id] > 0 && !forceSync) {
+          return;
+        }
+        
+        // Check if we've already requested this fare recently
+        if (lastDispatchedFares.current[cab.id] === localFares[cab.id] && !forceSync) {
+          return;
+        }
+        
         setTimeout(() => {
-          if (!localFares[cab.id] || forceSync) {
-            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-              detail: {
-                cabId: cab.id,
-                cabName: cab.name,
-                tripType: tripType,
-                forceSync: true,
-                timestamp: Date.now() + index
-              }
-            }));
-          }
+          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+            detail: {
+              cabId: cab.id,
+              cabName: cab.name,
+              tripType: tripType,
+              forceSync: true,
+              timestamp: Date.now() + index
+            }
+          }));
+          
+          // Track this dispatch
+          lastDispatchedFares.current[cab.id] = localFares[cab.id] || 0;
         }, index * 20);
       });
     }
@@ -209,16 +222,19 @@ export const CabList: React.FC<CabListProps> = ({
         
         // Skip if this is a duplicate or unchanged update we've already processed
         if (processedUpdatesRef.current[cabId] === fare) {
+          console.log(`CabList: Skipping duplicate fare update for ${cabId}: ${fare}`);
           return;
         }
         
         // Skip if the fare hasn't changed in our local state
         if (localFares[cabId] === fare) {
+          console.log(`CabList: Fare for ${cabId} is already ${fare}, skipping update`);
           return;
         }
         
         // Skip if this event isn't for our trip type
         if (eventTripType && eventTripType !== tripType) {
+          console.log(`CabList: Skipping fare update for ${cabId} as it's for ${eventTripType} (we are ${tripType})`);
           return;
         }
         
@@ -249,6 +265,7 @@ export const CabList: React.FC<CabListProps> = ({
     const handleFareCacheCleared = () => {
       console.log('CabList: Fare cache cleared, refreshing fares');
       processedUpdatesRef.current = {};
+      lastDispatchedFares.current = {};
       throttledRequestFareSync(true);
     };
     
@@ -259,6 +276,7 @@ export const CabList: React.FC<CabListProps> = ({
         
         // Skip if the fare hasn't changed
         if (localFares[cabId] === calculatedFare) {
+          console.log(`CabList: Calculated fare for ${cabId} is already ${calculatedFare}, skipping update`);
           return;
         }
         
