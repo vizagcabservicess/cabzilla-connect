@@ -16,6 +16,7 @@ export const useFareSyncTracker = () => {
   const preventLogging = useRef<boolean>(false);
   const refreshCountRef = useRef<Record<string, number>>({});
   const fareChangeHistory = useRef<Map<string, number[]>>(new Map());
+  const databaseFaresRef = useRef<Record<string, number>>({});
   
   // Check if a fare is different from what we've tracked
   const isFareChanged = (cabId: string, fare: number, tolerance: number = 0): boolean => {
@@ -60,16 +61,21 @@ export const useFareSyncTracker = () => {
   };
   
   // Track a fare value to prevent duplicate updates
-  const trackFare = (cabId: string, fare: number): void => {
+  const trackFare = (cabId: string, fare: number, isFromDatabase: boolean = false): void => {
     const previousFare = trackedFares.current[cabId];
     
     // Only log when fare actually changes to reduce console spam
     if (previousFare !== fare && !preventLogging.current) {
-      console.log(`Tracking fare for ${cabId}: ${fare}`);
+      console.log(`Tracking fare for ${cabId}: ${fare}${isFromDatabase ? ' (from database)' : ''}`);
     }
     
     trackedFares.current[cabId] = fare;
     lastDispatchTime.current[cabId] = Date.now();
+    
+    // If this is from database, also store in database fares ref
+    if (isFromDatabase) {
+      databaseFaresRef.current[cabId] = fare;
+    }
     
     // Add to known fare keys to prevent duplicate processing
     const key = `${cabId}_${fare}`;
@@ -94,6 +100,16 @@ export const useFareSyncTracker = () => {
   const trackProcessedEvent = (cabId: string, eventId: number): void => {
     if (!eventId) return;
     lastProcessedEventId.current[cabId] = eventId;
+  };
+  
+  // Check if we have database fare for a specific cab
+  const hasDatabaseFare = (cabId: string): boolean => {
+    return !!databaseFaresRef.current[cabId];
+  };
+  
+  // Get database fare for a specific cab
+  const getDatabaseFare = (cabId: string): number => {
+    return databaseFaresRef.current[cabId] || 0;
   };
   
   // FIXED: Improved throttling for refreshes to prevent cascading updates
@@ -165,6 +181,7 @@ export const useFareSyncTracker = () => {
       delete lastDispatchTime.current[cabId];
       delete lastProcessedEventId.current[cabId];
       delete refreshCountRef.current[cabId];
+      delete databaseFaresRef.current[cabId];
       
       // Clear fare keys related to this cabId
       const keysToRemove: string[] = [];
@@ -186,6 +203,7 @@ export const useFareSyncTracker = () => {
       processingStack.current.clear();
       refreshCountRef.current = {};
       fareChangeHistory.current.clear();
+      databaseFaresRef.current = {};
     }
     syncLock.current = false;
   };
@@ -233,6 +251,8 @@ export const useFareSyncTracker = () => {
     isProcessing,
     setLoggingEnabled,
     getFareVariation,
-    isOscillating
+    isOscillating,
+    hasDatabaseFare,
+    getDatabaseFare
   };
 };

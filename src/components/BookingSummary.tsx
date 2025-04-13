@@ -59,14 +59,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     let driverAllowanceAmount = 0;
     
     if (selectedCab) {
-      // FIXED: Explicitly check trip type to determine if driver allowance should be included
+      // FIXED: Ensure airport transfers never include driver allowance
       if (tripType === 'airport') {
         // For airport transfers, driver allowance is ALWAYS zero
         driverAllowanceAmount = 0;
         basePrice = totalPrice;
       } else if (tripType === 'local' || tripType === 'outstation') {
-        // For local and outstation trips, include driver allowance
+        // For local and outstation trips, calculate driver allowance
         driverAllowanceAmount = selectedCab.driverAllowance || 250;
+        
+        // Ensure driver allowance is not greater than the total price
+        if (driverAllowanceAmount > totalPrice) {
+          driverAllowanceAmount = Math.max(0, totalPrice - 500); // Keep at least 500 for base fare
+        }
+        
         basePrice = totalPrice - driverAllowanceAmount;
       }
     }
@@ -174,7 +180,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           </div>
         </div>
         
-        {tripMode === 'roundtrip' && returnDate && (
+        {tripMode === 'round-trip' && returnDate && (
           <div className="mb-5">
             <h3 className="text-sm font-medium text-muted-foreground mb-1">RETURN DATE & TIME</h3>
             <div className="flex items-start gap-3">

@@ -90,23 +90,35 @@ export type {
   AirportFare
 } from '@/types/cab';
 
-// Add formatPrice export from cabData
-export { formatPrice } from './cabData';
+// Improved formatPrice implementation that prevents double currency symbols
+export const formatPrice = (price: number | string): string => {
+  // Handle null, undefined, or invalid values
+  if (price === null || price === undefined || isNaN(Number(price))) {
+    return '₹0';
+  }
+  
+  // Convert to number and ensure it's not negative
+  const numPrice = Math.max(0, Number(price));
+  
+  // Check if the input already contains the ₹ symbol
+  if (typeof price === 'string' && price.includes('₹')) {
+    // Extract just the numeric part and format that
+    const numericPart = price.replace(/[^\d.]/g, '');
+    return `₹${Number(numericPart).toLocaleString('en-IN')}`;
+  }
+  
+  // Format with Indian locale and add ₹ symbol
+  return `₹${numPrice.toLocaleString('en-IN')}`;
+};
 
-// Export the CabLoading component from the correct path
-export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
-
-// Export the Skeleton component
-export { Skeleton } from '@/components/ui/skeleton';
-
-// FIXED: Helper function to check if driver allowance should be shown - complete rewrite
+// FIXED: Helper function to check if driver allowance should be shown - complete rewrite with better tripType checking
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, driver allowance must NEVER be shown
+  // Airport transfers must NEVER show driver allowance
   if (tripType === 'airport') {
     return false;
   }
   
-  // For local and outstation trips, driver allowance should be shown
+  // For all other trip types, driver allowance should be shown
   return true;
 };
 
