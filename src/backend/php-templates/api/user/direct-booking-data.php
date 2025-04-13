@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.58'); // Increment version
+header('X-API-Version: 1.0.59'); // Increment version
 header('X-Timestamp: ' . time());
 header('X-Priority-DB: true');
 
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Check if the request is for local package fares
+// FIXED: Handle vehicle fare data with improved error handling
 if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     $vehicleId = $_GET['vehicle_id'];
     $forceDb = isset($_GET['force_db']) && $_GET['force_db'] === 'true';
@@ -106,15 +106,17 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             $tableExists = ($tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
-                $query = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ?";
+                // FIXED: Improved query to better match vehicle IDs
+                $query = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ? OR LOWER(id) = LOWER(?) OR LOWER(vehicle_id) = LOWER(?)";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ss", $vehicleId, $vehicleId);
+                $stmt->bind_param("ssss", $vehicleId, $vehicleId, $vehicleId, $vehicleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
                 if ($result && $result->num_rows > 0) {
                     $row = $result->fetch_assoc();
                     
+                    // FIXED: Return consistent field structure
                     echo json_encode([
                         'status' => 'success',
                         'exists' => true,
@@ -125,6 +127,8 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                             'basePrice' => floatval($row['base_price'] ?? $row['price']),
                             'airportPrice' => floatval($row['airport_price'] ?? $row['price']),
                             'driverAllowance' => floatval($row['driver_allowance'] ?? 250),
+                            'id' => $row['id'] ?? $row['vehicle_id'],
+                            'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
                         ],
                         'timestamp' => time()
                     ]);
@@ -196,7 +200,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.58'
+        'version' => '1.0.59'
     ]);
     exit;
 }
@@ -360,7 +364,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.58'
+        'version' => '1.0.59'
     ]);
     
 } catch (Exception $e) {
@@ -374,6 +378,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.58'
+        'version' => '1.0.59'
     ]);
 }

@@ -14,10 +14,11 @@ export const useFareSyncTracker = () => {
   const lastProcessedEventId = useRef<Record<string, number>>({});
   const processingStack = useRef<Set<string>>(new Set());
   const preventLogging = useRef<boolean>(false);
+  const refreshCountRef = useRef<Record<string, number>>({});
   
   // Check if a fare is different from what we've tracked
   const isFareChanged = (cabId: string, fare: number, tolerance: number = 0): boolean => {
-    // If we're already processing this exact fare, prevent re-entry
+    // FIXED: If we're already processing this exact fare, prevent re-entry
     const key = `${cabId}_${fare}`;
     if (processingStack.current.has(key)) {
       return false;
@@ -26,7 +27,7 @@ export const useFareSyncTracker = () => {
     try {
       processingStack.current.add(key);
       
-      // Known fares should not trigger another update
+      // FIXED: Known fares should not trigger another update
       if (knownFareKeys.current.has(key)) {
         return false;
       }
@@ -61,7 +62,7 @@ export const useFareSyncTracker = () => {
     const key = `${cabId}_${fare}`;
     knownFareKeys.current.add(key);
     
-    // Maintain a reasonable set size to prevent memory leaks
+    // FIXED: Maintain a reasonable set size to prevent memory leaks
     if (knownFareKeys.current.size > 200) {
       // Clear older entries
       const keysArray = Array.from(knownFareKeys.current);
@@ -82,10 +83,22 @@ export const useFareSyncTracker = () => {
     lastProcessedEventId.current[cabId] = eventId;
   };
   
-  // Check if we should throttle updates for this cab
+  // FIXED: Improved throttling for refreshes to prevent cascading updates
   const shouldThrottle = (cabId: string, minInterval: number = 300): boolean => {
     const now = Date.now();
     const lastTime = lastDispatchTime.current[cabId] || 0;
+    
+    // FIXED: Throttle based on refresh count
+    const refreshCount = refreshCountRef.current[cabId] || 0;
+    if (refreshCount > 3) {
+      // Increase throttle time for cabId with multiple refreshes
+      minInterval = Math.min(minInterval * 2, 2000);
+      
+      // Reset counter after a period of time to avoid permanent throttling
+      if (now - lastTime > 10000) {
+        refreshCountRef.current[cabId] = 0;
+      }
+    }
     
     // Check if we've already processed this sync recently
     if (syncHistory.current.has(cabId)) {
@@ -95,8 +108,9 @@ export const useFareSyncTracker = () => {
       }
     }
     
-    // Record this sync attempt
+    // Record this sync attempt and increment counter
     syncHistory.current.set(cabId, now);
+    refreshCountRef.current[cabId] = (refreshCountRef.current[cabId] || 0) + 1;
     
     // Clean up history if it gets too large
     if (syncHistory.current.size > 100) {
@@ -135,6 +149,7 @@ export const useFareSyncTracker = () => {
       delete trackedFares.current[cabId];
       delete lastDispatchTime.current[cabId];
       delete lastProcessedEventId.current[cabId];
+      delete refreshCountRef.current[cabId];
       
       // Clear fare keys related to this cabId
       const keysToRemove: string[] = [];
@@ -153,6 +168,7 @@ export const useFareSyncTracker = () => {
       knownFareKeys.current.clear();
       syncHistory.current.clear();
       processingStack.current.clear();
+      refreshCountRef.current = {};
     }
     syncLock.current = false;
   };

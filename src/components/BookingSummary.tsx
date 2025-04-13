@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Clock, MapPin, Calendar, ArrowRight, ArrowDown, Car, User, PlusCircle, InfoIcon } from 'lucide-react';
 import { formatPrice, shouldShowDriverAllowance } from '@/lib';
@@ -45,9 +44,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [nightHaltCharge, setNightHaltCharge] = useState<number>(0);
   const [formattedTravelTime, setFormattedTravelTime] = useState<string>('');
   
-  // CRITICAL FIX: Use the shouldShowDriverAllowance helper directly
-  // This MUST return false for airport transfers
-  const showDriverAllowance = shouldShowDriverAllowance(tripType, tripMode);
+  const showDriverAllowance = tripType !== 'airport';
   
   useEffect(() => {
     if (travelTime) {
@@ -56,31 +53,24 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   }, [travelTime]);
   
   useEffect(() => {
-    // Calculate the base fare excluding driver allowance
     let basePrice = totalPrice;
     let driverAllowanceAmount = 0;
     
-    // CRITICAL: Handle airport transfers differently
     if (selectedCab) {
       if (tripType === 'airport') {
-        // For airport transfers, there is absolutely no driver allowance
         driverAllowanceAmount = 0;
-        basePrice = totalPrice; // Base price equals total price
+        basePrice = totalPrice;
       } else if (tripType === 'local' || tripType === 'outstation') {
-        // For local and outstation, handle driver allowance
         driverAllowanceAmount = selectedCab.driverAllowance || 250;
         basePrice = totalPrice - driverAllowanceAmount;
       }
     }
 
-    // Ensure we never show negative base fare
     if (basePrice < 0) basePrice = 0;
     
-    // Update state for the breakdown
     setBaseFare(basePrice);
     setDriverAllowance(driverAllowanceAmount);
     
-    // Set extra charges if provided
     if (extraCharges.extraKm) {
       setExtraKmCharge(extraCharges.extraKm);
     }
@@ -232,7 +222,6 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
               <span>₹{formatPrice(baseFare)}</span>
             </div>
             
-            {/* CRITICAL FIX: Only show driver allowance for non-airport transfers */}
             {showDriverAllowance && driverAllowance > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Driver allowance</span>
@@ -255,7 +244,6 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
             )}
             
             {Object.entries(extraCharges).map(([key, value]) => {
-              // Skip any charges that we're already displaying separately
               if (key === 'extraKm' || key === 'nightHalt') return null;
               if (value <= 0) return null;
               

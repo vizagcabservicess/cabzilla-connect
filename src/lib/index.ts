@@ -99,25 +99,23 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
 
-// ABSOLUTELY CRITICAL FIX: Helper function to check if driver allowance should be shown
-// This function MUST return false for airport transfers
+// FIXED: Helper function to check if driver allowance should be shown
+// This is a strict check for airport transfers - must always return false
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, NEVER return true - no exceptions
+  // For airport transfers, driver allowance must never be shown under any circumstances
   return tripType !== 'airport';
 };
 
 // Improve the fare event system with unique IDs to avoid duplicate events
-// Using let instead of const to avoid redeclaration error if hot-reloaded
 let eventCounter = 0;
 const processedEvents = new Set<number>();
-const MAX_PROCESSED_EVENTS = 100; // Reduced to prevent memory issues
+const MAX_PROCESSED_EVENTS = 100;
 
 export const getFareEventId = (): number => {
   return ++eventCounter;
 };
 
-// Create a helper to deduplicate and dispatch fare events
-// Added eventName to processed events set to prevent multiple dispatches of the same event
+// FIXED: Create a helper to deduplicate and dispatch fare events
 export const dispatchFareEvent = (
   eventName: string,
   detail: Record<string, any>,
@@ -128,9 +126,7 @@ export const dispatchFareEvent = (
     detail.eventId = getFareEventId();
   }
   
-  const eventKey = `${eventName}_${detail.eventId}`;
-  
-  // Check for duplicate event
+  // Check for duplicate event to prevent processing same event multiple times
   if (preventDuplicates && processedEvents.has(detail.eventId)) {
     return; // Skip duplicate event
   }
@@ -163,7 +159,7 @@ export const dispatchFareEvent = (
   }
 };
 
-// Add a helper to remove driver allowance from fare calculations for airport transfers
+// Add a helper to ensure driver allowance is removed for airport transfers
 export const ensureNoDriverAllowanceForAirport = (
   fare: number, 
   driverAllowance: number, 

@@ -37,6 +37,7 @@ export const CabList: React.FC<CabListProps> = ({
   const initialFetchCompletedRef = useRef<boolean>(false);
   const lastFareDbUpdateRef = useRef<number>(Date.now());
   const syncLockRef = useRef<boolean>(false);
+  const forceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -68,7 +69,7 @@ export const CabList: React.FC<CabListProps> = ({
     }
   }, [tripType]);
   
-  // When cabFares changes from parent, update our local fares
+  // FIXED: Properly update local fares when cabFares changes from parent
   useEffect(() => {
     if (isProcessingFaresRef.current) return;
     
@@ -80,6 +81,12 @@ export const CabList: React.FC<CabListProps> = ({
     if (hasChanges) {
       setLocalFares(cabFares);
       setLastUpdated(Date.now());
+    }
+    
+    // FIXED: Force a sync if we haven't received fares
+    if (Object.keys(cabFares).length === 0 && !hasSyncedRef.current) {
+      requestFareSync(true);
+      hasSyncedRef.current = true;
     }
   }, [cabFares]);
   
@@ -237,8 +244,7 @@ export const CabList: React.FC<CabListProps> = ({
           lastFareDbUpdateRef.current = Date.now();
         }
         
-        // Find the cab to get driver allowance value
-        const cab = cabTypes.find(c => c.id === cabId);
+        // FIXED: Handle airport transfers - never include driver allowance
         let finalFare = fare;
         
         // Track this update to avoid duplicates
@@ -329,6 +335,9 @@ export const CabList: React.FC<CabListProps> = ({
       if (syncThrottleTimeoutRef.current) {
         clearTimeout(syncThrottleTimeoutRef.current);
       }
+      if (forceUpdateTimeoutRef.current) {
+        clearTimeout(forceUpdateTimeoutRef.current);
+      }
     };
   }, [tripType, localFares, cabTypes]);
   
@@ -337,11 +346,19 @@ export const CabList: React.FC<CabListProps> = ({
     // Load cached fares from localStorage first
     loadFaresFromLocalStorage();
     
-    // Force initial sync on mount and only do it once
+    // FIXED: Force initial sync on mount and only do it once
     if (!initialFetchCompletedRef.current) {
       setTimeout(() => {
         requestFareSync(true);
       }, 200);
+      
+      // FIXED: Schedule another sync in case the first one doesn't succeed
+      forceUpdateTimeoutRef.current = setTimeout(() => {
+        if (!dbSyncCompletedRef.current) {
+          console.log("Forced fare sync after initial load didn't get DB values, retrying...");
+          requestFareSync(true);
+        }
+      }, 2000);
     }
     
     // Set up a periodic sync to ensure fares stay up to date
@@ -357,6 +374,9 @@ export const CabList: React.FC<CabListProps> = ({
     
     return () => {
       clearInterval(intervalId);
+      if (forceUpdateTimeoutRef.current) {
+        clearTimeout(forceUpdateTimeoutRef.current);
+      }
     };
   }, []);
   

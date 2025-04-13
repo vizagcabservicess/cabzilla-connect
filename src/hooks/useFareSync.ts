@@ -32,6 +32,7 @@ export const useFareSync = ({
   const hasLoadedFromDatabaseRef = useRef<Record<string, boolean>>({});
   const initialSyncCompletedRef = useRef<boolean>(false);
   const syncLockRef = useRef<boolean>(false);
+  const forceRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -75,12 +76,27 @@ export const useFareSync = ({
         loadFaresFromStorage();
       }
       
-      // Request immediate sync on mount - CRITICAL FIX: Use immediate timeout to trigger sync
+      // Request immediate sync on mount - FIXED: Use immediate timeout to trigger sync
       setTimeout(() => {
         requestFareSync(true);
         initialSyncCompletedRef.current = true;
       }, 50);
+      
+      // FIXED: Set up a timer to force refresh if we don't get database values quickly
+      forceRefreshTimeoutRef.current = setTimeout(() => {
+        const hasAnyDbValues = Object.keys(hasLoadedFromDatabaseRef.current).length > 0;
+        if (!hasAnyDbValues) {
+          console.log("No database values received yet, forcing secondary refresh");
+          requestFareSync(true);
+        }
+      }, 3000);
     }
+    
+    return () => {
+      if (forceRefreshTimeoutRef.current) {
+        clearTimeout(forceRefreshTimeoutRef.current);
+      }
+    };
   }, [cabTypes.length, shouldSync]);
   
   // Load fares from localStorage
@@ -96,7 +112,7 @@ export const useFareSync = ({
         if (storedFare) {
           const parsedFare = parseInt(storedFare, 10);
           if (!isNaN(parsedFare) && parsedFare > 0) {
-            // For airport transfers, ensure driver allowance is never added
+            // FIXED: For airport transfers, ensure driver allowance is never added
             storedFares[cab.id] = parsedFare;
             fareTracker.trackFare(cab.id, storedFares[cab.id]);
             foundAny = true;
@@ -146,7 +162,7 @@ export const useFareSync = ({
       syncAttemptsRef.current++;
       setSyncInProgress(true);
       
-      // CRITICAL FIX: Add explicit flag for airport transfers
+      // FIXED: Add explicit flag for airport transfers
       const noDriverAllowance = !shouldShowDriverAllowance(tripType);
       
       // System-wide fare sync request
@@ -175,7 +191,7 @@ export const useFareSync = ({
         
         const cab = cabTypes[index];
         
-        // CRITICAL FIX: Add explicit flag for airport transfers
+        // FIXED: Add explicit flag for airport transfers
         const noDriverAllowance = !shouldShowDriverAllowance(tripType);
         
         dispatchFareEvent('request-fare-calculation', {
@@ -263,8 +279,7 @@ export const useFareSync = ({
           hasLoadedFromDatabaseRef.current[cabId] = true;
         }
         
-        // Find the cab to get driver allowance value
-        const cab = cabTypes.find(c => c.id === cabId);
+        // FIXED: For airport transfers, ensure driver allowance is never added
         let finalFare = fare;
         
         // Track this update to avoid duplicates
@@ -341,6 +356,9 @@ export const useFareSync = ({
       if (syncThrottleTimeoutRef.current) {
         clearTimeout(syncThrottleTimeoutRef.current);
       }
+      if (forceRefreshTimeoutRef.current) {
+        clearTimeout(forceRefreshTimeoutRef.current);
+      }
     };
   }, [cabFares, shouldSync, tripType, cabTypes]);
   
@@ -358,7 +376,7 @@ export const useFareSync = ({
         // Track this dispatch to avoid duplicates
         fareTracker.trackFare(selectedCab.id, currentFare);
         
-        // CRITICAL FIX: Add explicit flag for airport transfers
+        // FIXED: Add explicit flag for airport transfers
         const noDriverAllowance = !shouldShowDriverAllowance(tripType);
         
         // Dispatch the cab selection with fare
