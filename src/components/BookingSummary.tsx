@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
+import fareStateManager from '@/services/FareStateManager';
 
 interface BookingSummaryProps {
   pickupLocation: any;
@@ -76,22 +78,59 @@ export const BookingSummary = ({
 
   // Handle initial fare calculation and updates
   useEffect(() => {
-    if (selectedCab && initialPrice > 0) {
-      setTotalPrice(initialPrice);
-      updateFareDetails(initialPrice, tripType, distance, selectedCab);
+    if (selectedCab && selectedCab.id) {
+      setIsLoading(true);
       
-      // Store the fare in localStorage for consistency across components
-      try {
-        const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-        localStorage.setItem(localStorageKey, initialPrice.toString());
-      } catch (error) {
-        console.error('Error storing fare in localStorage:', error);
-      }
+      const loadFareForSelectedCab = async () => {
+        try {
+          let fare = initialPrice;
+          
+          // If fare is 0, try to calculate it from the database
+          if (fare <= 0) {
+            if (tripType === 'outstation') {
+              fare = await fareStateManager.calculateOutstationFare({
+                vehicleId: selectedCab.id,
+                distance,
+                tripMode,
+                pickupDate
+              });
+            } else if (tripType === 'local') {
+              const hourlyPackage = localStorage.getItem('hourlyPackage') || '8hrs-80km';
+              fare = await fareStateManager.calculateLocalFare({
+                vehicleId: selectedCab.id,
+                hourlyPackage
+              });
+            } else if (tripType === 'airport') {
+              fare = await fareStateManager.calculateAirportFare({
+                vehicleId: selectedCab.id,
+                distance
+              });
+            }
+          }
+          
+          if (fare > 0) {
+            setTotalPrice(fare);
+            updateFareDetails(fare, tripType, distance, selectedCab);
+          } else {
+            // If we still don't have a fare, use the initial price
+            setTotalPrice(initialPrice > 0 ? initialPrice : 0);
+            updateFareDetails(initialPrice > 0 ? initialPrice : 0, tripType, distance, selectedCab);
+          }
+        } catch (error) {
+          console.error('Error loading fare for selected cab:', error);
+          setTotalPrice(initialPrice > 0 ? initialPrice : 0);
+          updateFareDetails(initialPrice > 0 ? initialPrice : 0, tripType, distance, selectedCab);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      loadFareForSelectedCab();
     }
-  }, [initialPrice, selectedCab, tripType, distance]);
+  }, [initialPrice, selectedCab, tripType, distance, tripMode, pickupDate]);
 
   // Calculate fare breakdowns based on trip type
-  const updateFareDetails = (fare: number, tripType: string, distance: number, cab: CabType) => {
+  const updateFareDetails = async (fare: number, tripType: string, distance: number, cab: CabType) => {
     setIsLoading(true);
     
     try {
@@ -100,6 +139,70 @@ export const BookingSummary = ({
         : distance;
       
       setEffectiveDistance(effectiveDist);
+      
+      // Try to get fare details from the database based on trip type
+      if (tripType === 'outstation' && cab.id) {
+        const outstationFare = await fareStateManager.getOutstationFareForVehicle(cab.id);
+        
+        if (outstationFare) {
+          // Driver allowance from the database
+          const driverAllowanceAmount = outstationFare.driverAllowance || 300;
+          setDriverAllowance(driverAllowanceAmount);
+          
+          const minimumKm = 300;
+          
+          // Check if night charges apply (usually 10% of base fare)
+          const hasNightSurcharge = pickupDate && 
+            (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
+          
+          const nightChargeAmount = hasNightSurcharge ? Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
+          setNightCharges(nightChargeAmount);
+          
+          if (effectiveDist > minimumKm) {
+            const extraKm = effectiveDist - minimumKm;
+            const perKmRate = tripMode === 'one-way' ? 
+              outstationFare.pricePerKm : 
+              outstationFare.roundTripPricePerKm;
+            
+            const extraFare = extraKm * perKmRate;
+            setExtraDistanceFare(extraFare);
+            setBaseFare(fare - extraFare - driverAllowanceAmount - nightChargeAmount);
+          } else {
+            setExtraDistanceFare(0);
+            setBaseFare(fare - driverAllowanceAmount - nightChargeAmount);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      } else if (tripType === 'local' && cab.id) {
+        const localFare = await fareStateManager.getLocalFareForVehicle(cab.id);
+        
+        if (localFare) {
+          // Driver allowance from the database
+          const driverAllowanceAmount = localFare.driverAllowance || 250;
+          setDriverAllowance(driverAllowanceAmount);
+          
+          // For local packages, base fare is the total minus driver allowance
+          setBaseFare(fare - driverAllowanceAmount);
+          setExtraDistanceFare(0);
+          setNightCharges(0);
+          
+          setIsLoading(false);
+          return;
+        }
+      } else if (tripType === 'airport') {
+        // For airport transfers, the entire amount is base fare
+        setBaseFare(fare);
+        setExtraDistanceFare(0);
+        setNightCharges(0);
+        setDriverAllowance(0);
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // If we don't have database details, use the fallback calculations
       
       // Driver allowance is not applicable for airport transfers
       const isAirportTransfer = tripType === 'airport';
@@ -110,8 +213,8 @@ export const BookingSummary = ({
       if (tripType === 'local') {
         // For local packages, base fare is the total minus driver allowance
         setBaseFare(fare - driverAllowanceAmount);
-        // Use existing extraDistanceKm value, not trying to set it
         setExtraDistanceFare(0);
+        setNightCharges(0);
       } else if (tripType === 'outstation') {
         // For outstation, calculate base fare and extra distance charges
         const minimumKm = 300;
@@ -145,9 +248,16 @@ export const BookingSummary = ({
         // Default case
         setBaseFare(fare);
         setExtraDistanceFare(0);
+        setNightCharges(0);
       }
     } catch (error) {
       console.error('Error calculating fare details:', error);
+      
+      // Default fallback if all else fails
+      setBaseFare(fare);
+      setExtraDistanceFare(0);
+      setDriverAllowance(0);
+      setNightCharges(0);
     }
     
     setIsLoading(false);

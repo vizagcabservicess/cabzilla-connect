@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
+import fareStateManager from '@/services/FareStateManager';
+import { calculateFare } from '@/lib/fareCalculationService';
 
 export interface CabListProps {
   cabTypes: CabType[];
@@ -41,152 +43,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
+  const [fareListenerInitialized, setFareListenerInitialized] = useState(false);
   
-  // Load initial fares or update fares when trip details change
+  // Store current trip type for fare calculations
   useEffect(() => {
-    const loadFares = () => {
-      setIsCalculatingFares(true);
-      
-      try {
-        const storedFares: Record<string, number> = {};
-        let fareFound = false;
-        
-        // Try to load fares from localStorage for each cab
-        cabTypes.forEach(cab => {
-          if (!cab.id) return;
-          
-          // Check for existing fare in localStorage
-          const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-          const storedFare = localStorage.getItem(localStorageKey);
-          
-          if (storedFare && !isNaN(Number(storedFare))) {
-            const fareValue = parseInt(storedFare, 10);
-            if (fareValue > 0) {
-              storedFares[cab.id] = fareValue;
-              fareFound = true;
-              console.log(`CabOptions: Loaded fare from localStorage for ${cab.id}: ${fareValue}`);
-            }
-          }
-          
-          // For local packages, try to get package price
-          if (tripType === 'local' && hourlyPackage && !storedFares[cab.id]) {
-            try {
-              // Get from local price matrix if available
-              const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
-              if (priceMatrixStr) {
-                const priceMatrix = JSON.parse(priceMatrixStr);
-                if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
-                  const packagePrice = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
-                  if (packagePrice > 0) {
-                    storedFares[cab.id] = packagePrice;
-                    fareFound = true;
-                    console.log(`CabOptions: Loaded package price for ${cab.id}: ${packagePrice}`);
-                  }
-                }
-              }
-            } catch (error) {
-              console.error('Error getting package price:', error);
-            }
-          }
-          
-          // Use cab's default price as fallback
-          if (!storedFares[cab.id] && cab.price && cab.price > 0) {
-            storedFares[cab.id] = cab.price;
-            console.log(`CabOptions: Using default price for ${cab.id}: ${cab.price}`);
-            fareFound = true;
-          }
-          
-          // Last resort: generate a reasonable default price based on vehicle type
-          if (!storedFares[cab.id] || storedFares[cab.id] <= 0) {
-            let baseFare = 0;
-            
-            if (tripType === 'local') {
-              // Local package pricing
-              if (cab.id.includes('sedan')) baseFare = 1500;
-              else if (cab.id.includes('ertiga')) baseFare = 1800;
-              else if (cab.id.includes('innova')) baseFare = 2400;
-              else baseFare = 1800;
-              
-              // Adjust based on package
-              if (hourlyPackage === '4hrs-40km') {
-                baseFare = Math.round(baseFare * 0.6); // 60% of 8hr package
-              } else if (hourlyPackage === '10hrs-100km') {
-                baseFare = Math.round(baseFare * 1.2); // 120% of 8hr package
-              }
-            } else if (tripType === 'airport') {
-              // Airport transfer pricing
-              if (cab.id.includes('sedan')) baseFare = 899;
-              else if (cab.id.includes('ertiga')) baseFare = 1199;
-              else if (cab.id.includes('innova')) baseFare = 1499;
-              else baseFare = 999;
-              
-              // Adjust based on distance
-              if (distance > 20) {
-                const extraKm = distance - 20;
-                const perKmRate = cab.id.includes('sedan') ? 11 : 
-                                 cab.id.includes('ertiga') ? 14 : 
-                                 cab.id.includes('innova') ? 18 : 12;
-                baseFare += extraKm * perKmRate;
-              }
-            } else {
-              // Outstation pricing
-              const basePrice = cab.id?.includes('sedan') ? 11 : 
-                                cab.id?.includes('ertiga') ? 14 : 
-                                cab.id?.includes('innova') ? 18 : 12;
-              
-              // Calculate base fare depending on journey type
-              const minKm = 300;
-              const effectiveDistance = tripMode === 'one-way' ? Math.max(distance * 2, minKm) : Math.max(distance, minKm);
-              baseFare = Math.round(effectiveDistance * basePrice);
-              
-              // Add driver allowance for outstation
-              const driverAllowance = cab.driverAllowance || 250;
-              baseFare += driverAllowance;
-            }
-            
-            if (baseFare > 0) {
-              storedFares[cab.id] = baseFare;
-              fareFound = true;
-              
-              // Save this calculated fare to localStorage
-              try {
-                const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-                localStorage.setItem(localStorageKey, baseFare.toString());
-              } catch (error) {
-                console.error('Error storing calculated fare in localStorage:', error);
-              }
-            }
-          }
-        });
-        
-        if (fareFound) {
-          setCabFares(storedFares);
-          console.log('CabOptions: Loaded fares', storedFares);
-          
-          // If we have a selected cab, notify about its fare
-          if (selectedCab && selectedCab.id && storedFares[selectedCab.id]) {
-            const fare = storedFares[selectedCab.id];
-            
-            window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-              detail: {
-                cabType: selectedCab.id,
-                cabName: selectedCab.name,
-                fare: fare,
-                tripType: tripType,
-                tripMode: tripMode,
-                timestamp: Date.now()
-              }
-            }));
-          }
-        }
-      } catch (error) {
-        console.error('Error loading fares:', error);
-      }
-      
-      setIsCalculatingFares(false);
-    };
-    
-    // Store current trip type for fare calculations
     if (tripType) {
       try {
         localStorage.setItem('tripType', tripType.toString());
@@ -194,49 +54,167 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         console.error('Error storing trip type:', error);
       }
     }
+  }, [tripType]);
+  
+  // Set up event listeners for fare updates
+  useEffect(() => {
+    if (fareListenerInitialized) return;
     
-    // Load fares
-    loadFares();
-    
-    // Listen for fare cache cleared events
-    const handleFareCacheCleared = () => {
-      console.log('CabOptions: Fare cache cleared, reloading fares');
-      loadFares();
+    const handleFareCalculated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (!customEvent.detail) return;
+      
+      const { cabId, fare } = customEvent.detail;
+      
+      if (cabId && fare && fare > 0) {
+        setCabFares(prevFares => ({
+          ...prevFares,
+          [cabId]: fare
+        }));
+      }
     };
     
+    const handleFareCacheCleared = () => {
+      console.log('CabOptions: Fare cache cleared, recalculating fares');
+      calculateAllFares();
+    };
+    
+    window.addEventListener('fare-calculated', handleFareCalculated);
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
+    window.addEventListener('fare-data-fetched', handleFareCacheCleared);
+    
+    setFareListenerInitialized(true);
     
     return () => {
+      window.removeEventListener('fare-calculated', handleFareCalculated);
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
+      window.removeEventListener('fare-data-fetched', handleFareCacheCleared);
     };
-  }, [cabTypes, tripType, tripMode, distance, hourlyPackage, selectedCab]);
-
+  }, []);
+  
+  // Calculate all fares for the available cab types
+  const calculateAllFares = async () => {
+    if (!cabTypes.length) return;
+    
+    setIsCalculatingFares(true);
+    
+    const newFares: Record<string, number> = {};
+    const calculationPromises: Promise<void>[] = [];
+    
+    for (const cab of cabTypes) {
+      if (!cab.id) continue;
+      
+      const calculateFareForCab = async () => {
+        try {
+          let fare = 0;
+          
+          if (tripType === 'outstation') {
+            fare = await fareStateManager.calculateOutstationFare({
+              vehicleId: cab.id,
+              distance,
+              tripMode: tripMode as 'one-way' | 'round-trip',
+              pickupDate
+            });
+          } else if (tripType === 'local' && hourlyPackage) {
+            fare = await fareStateManager.calculateLocalFare({
+              vehicleId: cab.id,
+              hourlyPackage
+            });
+          } else if (tripType === 'airport') {
+            fare = await fareStateManager.calculateAirportFare({
+              vehicleId: cab.id,
+              distance
+            });
+          }
+          
+          if (fare > 0) {
+            newFares[cab.id] = fare;
+          }
+        } catch (error) {
+          console.error(`Error calculating fare for ${cab.id}:`, error);
+        }
+      };
+      
+      calculationPromises.push(calculateFareForCab());
+    }
+    
+    await Promise.all(calculationPromises);
+    
+    setCabFares(newFares);
+    setIsCalculatingFares(false);
+    
+    // If we have a selected cab, update its fare
+    if (selectedCab && selectedCab.id && newFares[selectedCab.id]) {
+      const fare = newFares[selectedCab.id];
+      
+      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+        detail: {
+          cabType: selectedCab.id,
+          cabName: selectedCab.name,
+          fare: fare,
+          tripType: tripType,
+          tripMode: tripMode,
+          timestamp: Date.now()
+        }
+      }));
+    }
+  };
+  
+  // Load initial fares or update fares when trip details change
+  useEffect(() => {
+    calculateAllFares();
+  }, [cabTypes, tripType, tripMode, distance, hourlyPackage, pickupDate]);
+  
   // Handle cab selection
   const handleSelectCab = (cab: CabType) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
     
-    // Store current trip type in localStorage for consistent fare calculation
-    try {
-      localStorage.setItem('tripType', tripType.toString());
-    } catch (error) {
-      console.error('Error storing trip type:', error);
-    }
-    
     // Get fare for the selected cab
     const fare = cabFares[cab.id] || 0;
     
-    // Dispatch event for fare update
-    window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-      detail: {
-        cabType: cab.id,
-        cabName: cab.name,
-        fare: fare,
-        tripType: tripType,
-        tripMode: tripMode,
-        timestamp: Date.now()
-      }
-    }));
+    if (fare > 0) {
+      // Dispatch event for fare update
+      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+        detail: {
+          cabType: cab.id,
+          cabName: cab.name,
+          fare: fare,
+          tripType: tripType,
+          tripMode: tripMode,
+          timestamp: Date.now()
+        }
+      }));
+    } else {
+      // If we don't have a fare yet, calculate it
+      calculateFare({
+        cabType: cab,
+        distance,
+        tripType,
+        tripMode,
+        hourlyPackage,
+        pickupDate,
+        forceRefresh: true
+      }).then(calculatedFare => {
+        if (calculatedFare > 0) {
+          setCabFares(prevFares => ({
+            ...prevFares,
+            [cab.id]: calculatedFare
+          }));
+          
+          window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+            detail: {
+              cabType: cab.id,
+              cabName: cab.name,
+              fare: calculatedFare,
+              tripType: tripType,
+              tripMode: tripMode,
+              timestamp: Date.now()
+            }
+          }));
+        }
+      });
+    }
   };
 
   // Format fare details for each cab

@@ -1,6 +1,6 @@
 
 <?php
-// Mock PHP file for local-package-fares.php
+// Mock PHP file for airport-transfer-fares.php
 // Note: This file won't actually be executed in the Lovable preview environment,
 // but it helps document the expected API structure and responses.
 
@@ -30,95 +30,87 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Sample fare data based on vehicle type
-$localFares = [];
+$airportFares = [];
 
 // If a specific vehicle ID is provided, return only that vehicle's fare
 if ($vehicleId) {
     switch ($vehicleId) {
         case 'sedan':
-            $localFares[] = [
+            $airportFares[] = [
                 'vehicleId' => 'sedan',
-                'price4hrs40km' => 800,
-                'price8hrs80km' => 1500,
-                'price10hrs100km' => 1800,
-                'priceExtraKm' => 12,
-                'priceExtraHour' => 100,
-                'driverAllowance' => 250
+                'tier1Price' => 800,
+                'tier2Price' => 1200,
+                'tier3Price' => 1600,
+                'tier4Price' => 2000,
+                'extraKmCharge' => 12
             ];
             break;
         case 'ertiga':
-            $localFares[] = [
+            $airportFares[] = [
                 'vehicleId' => 'ertiga',
-                'price4hrs40km' => 1000,
-                'price8hrs80km' => 1800,
-                'price10hrs100km' => 2200,
-                'priceExtraKm' => 15,
-                'priceExtraHour' => 120,
-                'driverAllowance' => 250
+                'tier1Price' => 1000,
+                'tier2Price' => 1500,
+                'tier3Price' => 2000,
+                'tier4Price' => 2500,
+                'extraKmCharge' => 15
             ];
             break;
         case 'innova_crysta':
-            $localFares[] = [
+            $airportFares[] = [
                 'vehicleId' => 'innova_crysta',
-                'price4hrs40km' => 1200,
-                'price8hrs80km' => 2200,
-                'price10hrs100km' => 2600,
-                'priceExtraKm' => 18,
-                'priceExtraHour' => 150,
-                'driverAllowance' => 300
+                'tier1Price' => 1200,
+                'tier2Price' => 1800,
+                'tier3Price' => 2400,
+                'tier4Price' => 3000,
+                'extraKmCharge' => 18
             ];
             break;
         default:
             // For unknown vehicles, return empty fare structure
-            $localFares[] = [
+            $airportFares[] = [
                 'vehicleId' => $vehicleId,
-                'price4hrs40km' => 0,
-                'price8hrs80km' => 0,
-                'price10hrs100km' => 0,
-                'priceExtraKm' => 0,
-                'priceExtraHour' => 0,
-                'driverAllowance' => 250
+                'tier1Price' => 0,
+                'tier2Price' => 0,
+                'tier3Price' => 0,
+                'tier4Price' => 0,
+                'extraKmCharge' => 0
             ];
             break;
     }
 } else {
     // Return fares for all vehicles
-    $localFares = [
+    $airportFares = [
         [
             'vehicleId' => 'sedan',
-            'price4hrs40km' => 800,
-            'price8hrs80km' => 1500,
-            'price10hrs100km' => 1800,
-            'priceExtraKm' => 12,
-            'priceExtraHour' => 100,
-            'driverAllowance' => 250
+            'tier1Price' => 800,
+            'tier2Price' => 1200,
+            'tier3Price' => 1600,
+            'tier4Price' => 2000,
+            'extraKmCharge' => 12
         ],
         [
             'vehicleId' => 'ertiga',
-            'price4hrs40km' => 1000,
-            'price8hrs80km' => 1800,
-            'price10hrs100km' => 2200,
-            'priceExtraKm' => 15,
-            'priceExtraHour' => 120,
-            'driverAllowance' => 250
+            'tier1Price' => 1000,
+            'tier2Price' => 1500,
+            'tier3Price' => 2000,
+            'tier4Price' => 2500,
+            'extraKmCharge' => 15
         ],
         [
             'vehicleId' => 'innova_crysta',
-            'price4hrs40km' => 1200,
-            'price8hrs80km' => 2200,
-            'price10hrs100km' => 2600,
-            'priceExtraKm' => 18,
-            'priceExtraHour' => 150,
-            'driverAllowance' => 300
+            'tier1Price' => 1200,
+            'tier2Price' => 1800,
+            'tier3Price' => 2400,
+            'tier4Price' => 3000,
+            'extraKmCharge' => 18
         ],
         [
             'vehicleId' => 'tempo_traveller',
-            'price4hrs40km' => 2000,
-            'price8hrs80km' => 3500,
-            'price10hrs100km' => 4000,
-            'priceExtraKm' => 25,
-            'priceExtraHour' => 200,
-            'driverAllowance' => 350
+            'tier1Price' => 2000,
+            'tier2Price' => 2500,
+            'tier3Price' => 3000,
+            'tier4Price' => 4000,
+            'extraKmCharge' => 25
         ]
     ];
 }
@@ -126,6 +118,6 @@ if ($vehicleId) {
 // Return JSON response
 echo json_encode([
     'status' => 'success',
-    'message' => 'Local package fares retrieved successfully',
-    'fares' => $localFares
+    'message' => 'Airport transfer fares retrieved successfully',
+    'fares' => $airportFares
 ]);

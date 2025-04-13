@@ -1,6 +1,8 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
+import fareStateManager from '@/services/FareStateManager';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -75,13 +77,7 @@ export function CabList({
         updatedFares[cabId] = fare;
         hasChanges = true;
         
-        try {
-          const tripType = localStorage.getItem('tripType') || 'outstation';
-          const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, fare.toString());
-        } catch (error) {
-          console.error('Error storing fare in localStorage:', error);
-        }
+        // No need to store in localStorage anymore as we're fetching from database
         
         if (cabId === selectedCabId) {
           const cabType = cabTypes.find(cab => cab.id === cabId);
@@ -204,19 +200,42 @@ export function CabList({
       }, 50);
     };
     
-    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
-    window.addEventListener('cab-selected-with-fare', handleDirectFare as EventListener);
-    window.addEventListener('fare-cache-cleared', () => {
+    const handleFareCacheCleared = () => {
       console.log('CabList: Fare cache cleared event received');
       fareCalculatedTimestamps.current = {};
       refreshCountRef.current = 0;
       initializedRef.current = false;
-    });
+      
+      // Refresh fare data from database
+      cabTypes.forEach(cab => {
+        if (cab.id) {
+          const tripType = localStorage.getItem('tripType') || 'outstation';
+          
+          if (tripType === 'outstation') {
+            fareStateManager.getOutstationFareForVehicle(cab.id, true)
+              .then(() => console.log(`Refreshed outstation fare for ${cab.id}`))
+              .catch(err => console.error(`Error refreshing outstation fare for ${cab.id}:`, err));
+          } else if (tripType === 'local') {
+            fareStateManager.getLocalFareForVehicle(cab.id, true)
+              .then(() => console.log(`Refreshed local fare for ${cab.id}`))
+              .catch(err => console.error(`Error refreshing local fare for ${cab.id}:`, err));
+          } else if (tripType === 'airport') {
+            fareStateManager.getAirportFareForVehicle(cab.id, true)
+              .then(() => console.log(`Refreshed airport fare for ${cab.id}`))
+              .catch(err => console.error(`Error refreshing airport fare for ${cab.id}:`, err));
+          }
+        }
+      });
+    };
+    
+    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
+    window.addEventListener('cab-selected-with-fare', handleDirectFare as EventListener);
+    window.addEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
       window.removeEventListener('cab-selected-with-fare', handleDirectFare as EventListener);
-      window.removeEventListener('fare-cache-cleared', () => {});
+      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
       
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
@@ -240,16 +259,17 @@ export function CabList({
           timestamp: Date.now()
         }
       }));
-    }
-    
-    const tripType = localStorage.getItem('tripType') || '';
-    if (tripType === 'airport') {
+    } else {
+      // If no fare is available, request a calculation from the database
+      const tripType = localStorage.getItem('tripType') || 'outstation';
+      console.log(`CabList: Requesting fare calculation for ${cab.id}`);
+      
       setTimeout(() => {
-        console.log(`CabList: Requesting fare recalculation for ${cab.id}`);
         window.dispatchEvent(new CustomEvent('request-fare-calculation', {
           detail: {
             cabId: cab.id,
             cabName: cab.name,
+            tripType,
             timestamp: Date.now()
           }
         }));
