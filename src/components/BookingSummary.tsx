@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -110,8 +109,8 @@ export const BookingSummary = ({
       // Handle different trip types
       if (tripType === 'local') {
         // For local packages, base fare is the total minus driver allowance
-        setBaseFare(fare - driverAllowanceValue);
-        setExtraDistanceKm(0);
+        setBaseFare(fare - driverAllowanceAmount);
+        // Use existing extraDistanceKm value, not trying to set it
         setExtraDistanceFare(0);
       } else if (tripType === 'outstation') {
         // For outstation, calculate base fare and extra distance charges

@@ -1,4 +1,3 @@
-
 import { FareCalculationParams } from '@/types/cab';
 import { getAirportFaresForVehicle, getLocalFaresForVehicle, getOutstationFaresForVehicle } from '@/services/fareService';
 
@@ -257,7 +256,8 @@ export const calculateFare = async (params: FarCalculationParams): Promise<numbe
           
           // If we got a valid fare, add driver allowance
           if (calculatedFare > 0) {
-            const driverAllowance = localFares.driverAllowance || 250;
+            // Get driver allowance from the cab type or use default
+            const driverAllowance = cabType.driverAllowance || 250;
             calculatedFare += driverAllowance;
             
             // Cache the result

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -32,20 +31,17 @@ export function CabList({
   const initializedRef = useRef<boolean>(false);
   const eventDebounceRef = useRef<Record<string, number>>({});
 
-  // Initialize fares from props
   useEffect(() => {
     if (!initializedRef.current && Object.keys(cabFares).length > 0) {
       console.log('CabList: Initial fare setup', cabFares);
       setDisplayedFares({...cabFares});
       initializedRef.current = true;
       
-      // If we have a selected cab, announce its fare
       if (selectedCabId && cabFares[selectedCabId]) {
         const selectedCabFare = cabFares[selectedCabId];
         const cabType = cabTypes.find(cab => cab.id === selectedCabId);
         
         if (cabType && selectedCabFare > 0) {
-          // Small delay to ensure components are mounted
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
               detail: {
@@ -61,7 +57,6 @@ export function CabList({
     }
   }, [cabFares, selectedCabId, cabTypes]);
 
-  // Process fare updates
   const processPendingUpdates = () => {
     if (isProcessingRef.current || Object.keys(pendingUpdatesRef.current).length === 0) {
       return;
@@ -74,14 +69,12 @@ export function CabList({
     const updatedFares: Record<string, number> = {...displayedFares};
     let hasChanges = false;
     
-    // Process all pending updates
     Object.entries(pendingUpdatesRef.current).forEach(([cabId, fare]) => {
       if (fare > 0 && (!updatedFares[cabId] || updatedFares[cabId] !== fare)) {
         newFadeIn[cabId] = true;
         updatedFares[cabId] = fare;
         hasChanges = true;
         
-        // Store the fare in localStorage for persistence
         try {
           const tripType = localStorage.getItem('tripType') || 'outstation';
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
@@ -90,7 +83,6 @@ export function CabList({
           console.error('Error storing fare in localStorage:', error);
         }
         
-        // Notify if this is the selected cab
         if (cabId === selectedCabId) {
           const cabType = cabTypes.find(cab => cab.id === cabId);
           if (cabType) {
@@ -107,7 +99,6 @@ export function CabList({
       }
     });
     
-    // Clear pending updates
     pendingUpdatesRef.current = {};
     
     if (hasChanges) {
@@ -115,11 +106,9 @@ export function CabList({
       setLastUpdateTimestamp(updateTime);
       setFadeIn(newFadeIn);
       
-      // Apply updates with slight delay for animation
       setTimeout(() => {
         setDisplayedFares(updatedFares);
         
-        // Clear fade effect after animation completes
         setTimeout(() => {
           setFadeIn({});
           isProcessingRef.current = false;
@@ -130,19 +119,16 @@ export function CabList({
     }
   };
 
-  // Handle fare updates from parent
   useEffect(() => {
     if (!initializedRef.current || isProcessingRef.current) return;
     
     const currentTime = Date.now();
     const lastUpdate = eventDebounceRef.current['fares'] || 0;
     
-    // Debounce updates to prevent rapid re-rendering
     if (currentTime - lastUpdate < 500) return;
     
     eventDebounceRef.current['fares'] = currentTime;
     
-    // Check for new fares from props
     const newUpdates: Record<string, number> = {};
     let hasChanges = false;
     
@@ -167,7 +153,6 @@ export function CabList({
     }
   }, [cabFares, displayedFares, selectedCabId, cabTypes]);
 
-  // Listen for external fare updates
   useEffect(() => {
     const handleFareCalculated = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -177,7 +162,6 @@ export function CabList({
       
       if (!cabId || !fare || fare <= 0) return;
       
-      // Debounce fare updates
       const lastUpdate = fareCalculatedTimestamps.current[cabId] || 0;
       if (timestamp - lastUpdate < 500) return;
       
@@ -203,7 +187,6 @@ export function CabList({
       
       if (!cabType || !fare || fare <= 0) return;
       
-      // Only process if this is a new update
       const lastUpdate = fareCalculatedTimestamps.current[cabType] || 0;
       if (timestamp - lastUpdate < 500) return;
       
@@ -241,19 +224,14 @@ export function CabList({
     };
   }, [cabFares, displayedFares, selectedCabId, cabTypes]);
 
-  // Enhanced cab selection handler
   const handleCabSelection = (cab: CabType) => {
-    // Call the parent handler first
     handleSelectCab(cab);
     
-    // Get the current fare for this cab
     const fare = displayedFares[cab.id] || cabFares[cab.id] || 0;
     
-    // Only dispatch if we have a valid fare
     if (fare > 0) {
       console.log(`CabList: Dispatching fare update for selected cab ${cab.id}: ${fare}`);
       
-      // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: cab.id,
@@ -264,10 +242,8 @@ export function CabList({
       }));
     }
     
-    // Check if we need to fetch a fresh fare from the server
     const tripType = localStorage.getItem('tripType') || '';
     if (tripType === 'airport') {
-      // For airport transfers, request a fresh fare calculation
       setTimeout(() => {
         console.log(`CabList: Requesting fare recalculation for ${cab.id}`);
         window.dispatchEvent(new CustomEvent('request-fare-calculation', {
@@ -306,7 +282,7 @@ export function CabList({
               fare={displayedFares[cab.id] || cabFares[cab.id] || 0}
               onSelect={() => handleCabSelection(cab)}
               fareDetails={getFareDetails(cab)}
-              isLoading={isCalculatingFares}
+              isCalculating={isCalculatingFares}
             />
           </div>
         ))
