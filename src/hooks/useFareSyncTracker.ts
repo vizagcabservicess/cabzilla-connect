@@ -1,4 +1,6 @@
 
+import React from 'react';
+
 /**
  * Simple hook to track fare updates and prevent duplicates
  */
