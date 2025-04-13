@@ -1,6 +1,8 @@
 
 <?php
-// direct-local-fares.php - Direct access endpoint for local fares
+// Mock PHP file for direct-local-fares.php
+// Note: This file won't actually be executed in the Lovable preview environment,
+// but it helps document the expected API structure and responses.
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -30,95 +32,97 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Sample fare data based on vehicle type
 $localFares = [];
 
-// If a specific vehicle ID is provided, return only that vehicle's fare
-if ($vehicleId) {
-    switch ($vehicleId) {
-        case 'sedan':
-            $localFares[] = [
-                'vehicleId' => 'sedan',
-                'price4hrs40km' => 800,
-                'price8hrs80km' => 1500,
-                'price10hrs100km' => 1800,
-                'priceExtraKm' => 12,
-                'priceExtraHour' => 100,
-                'driverAllowance' => 250
+switch ($vehicleId) {
+    case 'sedan':
+        $localFares[] = [
+            'vehicleId' => 'sedan',
+            'price4hrs40km' => 1500,
+            'price8hrs80km' => 2500,
+            'price10hrs100km' => 3200,
+            'extraKmRate' => 15,
+            'extraHourRate' => 150
+        ];
+        break;
+    case 'ertiga':
+        $localFares[] = [
+            'vehicleId' => 'ertiga',
+            'price4hrs40km' => 1700,
+            'price8hrs80km' => 2700,
+            'price10hrs100km' => 3500,
+            'extraKmRate' => 18,
+            'extraHourRate' => 200
+        ];
+        break;
+    case 'innova_crysta':
+        $localFares[] = [
+            'vehicleId' => 'innova_crysta',
+            'price4hrs40km' => 2000,
+            'price8hrs80km' => 3000,
+            'price10hrs100km' => 3800,
+            'extraKmRate' => 20,
+            'extraHourRate' => 250
+        ];
+        break;
+    case 'tempo_traveller':
+        $localFares[] = [
+            'vehicleId' => 'tempo_traveller',
+            'price4hrs40km' => 2500,
+            'price8hrs80km' => 4000,
+            'price10hrs100km' => 5000,
+            'extraKmRate' => 22,
+            'extraHourRate' => 250
+        ];
+        break;
+    default:
+        // If no specific vehicle ID was provided or it doesn't match any known type,
+        // return all vehicle fares
+        if (!$vehicleId) {
+            $localFares = [
+                [
+                    'vehicleId' => 'sedan',
+                    'price4hrs40km' => 1500,
+                    'price8hrs80km' => 2500,
+                    'price10hrs100km' => 3200,
+                    'extraKmRate' => 15,
+                    'extraHourRate' => 150
+                ],
+                [
+                    'vehicleId' => 'ertiga',
+                    'price4hrs40km' => 1700,
+                    'price8hrs80km' => 2700,
+                    'price10hrs100km' => 3500,
+                    'extraKmRate' => 18,
+                    'extraHourRate' => 200
+                ],
+                [
+                    'vehicleId' => 'innova_crysta',
+                    'price4hrs40km' => 2000,
+                    'price8hrs80km' => 3000,
+                    'price10hrs100km' => 3800,
+                    'extraKmRate' => 20,
+                    'extraHourRate' => 250
+                ],
+                [
+                    'vehicleId' => 'tempo_traveller',
+                    'price4hrs40km' => 2500,
+                    'price8hrs80km' => 4000,
+                    'price10hrs100km' => 5000,
+                    'extraKmRate' => 22,
+                    'extraHourRate' => 250
+                ]
             ];
-            break;
-        case 'ertiga':
-            $localFares[] = [
-                'vehicleId' => 'ertiga',
-                'price4hrs40km' => 1000,
-                'price8hrs80km' => 1800,
-                'price10hrs100km' => 2200,
-                'priceExtraKm' => 15,
-                'priceExtraHour' => 120,
-                'driverAllowance' => 250
-            ];
-            break;
-        case 'innova_crysta':
-            $localFares[] = [
-                'vehicleId' => 'innova_crysta',
-                'price4hrs40km' => 1200,
-                'price8hrs80km' => 2200,
-                'price10hrs100km' => 2600,
-                'priceExtraKm' => 18,
-                'priceExtraHour' => 150,
-                'driverAllowance' => 300
-            ];
-            break;
-        default:
+        } else {
             // For unknown vehicles, return empty fare structure
             $localFares[] = [
                 'vehicleId' => $vehicleId,
                 'price4hrs40km' => 0,
                 'price8hrs80km' => 0,
                 'price10hrs100km' => 0,
-                'priceExtraKm' => 0,
-                'priceExtraHour' => 0,
-                'driverAllowance' => 250
+                'extraKmRate' => 0,
+                'extraHourRate' => 0
             ];
-            break;
-    }
-} else {
-    // Return fares for all vehicles
-    $localFares = [
-        [
-            'vehicleId' => 'sedan',
-            'price4hrs40km' => 800,
-            'price8hrs80km' => 1500,
-            'price10hrs100km' => 1800,
-            'priceExtraKm' => 12,
-            'priceExtraHour' => 100,
-            'driverAllowance' => 250
-        ],
-        [
-            'vehicleId' => 'ertiga',
-            'price4hrs40km' => 1000,
-            'price8hrs80km' => 1800,
-            'price10hrs100km' => 2200,
-            'priceExtraKm' => 15,
-            'priceExtraHour' => 120,
-            'driverAllowance' => 250
-        ],
-        [
-            'vehicleId' => 'innova_crysta',
-            'price4hrs40km' => 1200,
-            'price8hrs80km' => 2200,
-            'price10hrs100km' => 2600,
-            'priceExtraKm' => 18,
-            'priceExtraHour' => 150,
-            'driverAllowance' => 300
-        ],
-        [
-            'vehicleId' => 'tempo_traveller',
-            'price4hrs40km' => 2000,
-            'price8hrs80km' => 3500,
-            'price10hrs100km' => 4000,
-            'priceExtraKm' => 25,
-            'priceExtraHour' => 200,
-            'driverAllowance' => 350
-        ]
-    ];
+        }
+        break;
 }
 
 // Return JSON response

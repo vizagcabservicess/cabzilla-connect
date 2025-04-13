@@ -167,6 +167,99 @@ class FareStateManager {
     }
   }
 
+  // Methods for retrieving fares by vehicle type
+  public async getAirportFareForVehicle(vehicleId: string): Promise<any> {
+    try {
+      const url = getApiUrl(`api/direct-airport-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data && data.status === 'success' && data.fares && data.fares.length > 0) {
+        const fareData = data.fares.find((fare: any) => fare.vehicleId === vehicleId);
+        if (fareData) {
+          return fareData;
+        }
+      }
+      
+      throw new Error('No fare data found for this vehicle');
+    } catch (error) {
+      console.error(`Error fetching airport fare for ${vehicleId}:`, error);
+      return null;
+    }
+  }
+
+  public async getLocalFareForVehicle(vehicleId: string): Promise<any> {
+    try {
+      const url = getApiUrl(`api/direct-local-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data && data.status === 'success' && data.fares && data.fares.length > 0) {
+        const fareData = data.fares.find((fare: any) => fare.vehicleId === vehicleId);
+        if (fareData) {
+          return fareData;
+        }
+      }
+      
+      throw new Error('No fare data found for this vehicle');
+    } catch (error) {
+      console.error(`Error fetching local fare for ${vehicleId}:`, error);
+      return null;
+    }
+  }
+
+  public async getOutstationFareForVehicle(vehicleId: string): Promise<any> {
+    try {
+      const url = getApiUrl(`api/outstation-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data && data.status === 'success' && data.fares) {
+        if (data.fares[vehicleId]) {
+          return data.fares[vehicleId];
+        }
+      }
+      
+      throw new Error('No fare data found for this vehicle');
+    } catch (error) {
+      console.error(`Error fetching outstation fare for ${vehicleId}:`, error);
+      return null;
+    }
+  }
+
   // Private methods for API calls
   private async fetchAirportFare(vehicleId: string, distance: number): Promise<number> {
     try {

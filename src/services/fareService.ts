@@ -2,12 +2,40 @@
 import fareStateManager from './FareStateManager';
 import { toast } from 'sonner';
 
+// Utility headers for API calls
+export const getBypassHeaders = () => ({
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'X-Requested-With': 'XMLHttpRequest'
+});
+
+// Configuration for API requests with force refresh
+export const getForcedRequestConfig = () => ({
+  headers: getBypassHeaders(),
+  cache: 'no-store' as const
+});
+
+// Format multipart data for form submissions
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value));
+    }
+  });
+  
+  return formData;
+};
+
 // Re-export the FareStateManager for direct use
 export const calculateAirportFare = fareStateManager.calculateAirportFare.bind(fareStateManager);
 export const calculateLocalFare = fareStateManager.calculateLocalFare.bind(fareStateManager);
 export const calculateOutstationFare = fareStateManager.calculateOutstationFare.bind(fareStateManager);
 export const syncFareData = fareStateManager.syncFareData.bind(fareStateManager);
-export const clearFareCache = fareStateManager.clearCache.bind(fareStateManager);
+export const clearCache = fareStateManager.clearCache.bind(fareStateManager);
+export const clearFareCache = clearCache; // Alias for consistency
 
 // Function to initialize fare data on app load
 export const initializeFareData = async (): Promise<boolean> => {
@@ -31,7 +59,7 @@ export const initializeFareData = async (): Promise<boolean> => {
 };
 
 // Functions for specific fare operations
-export const directFareUpdate = async (tripType: string, vehicleId: string, fareData: any): Promise<boolean> => {
+export const directFareUpdate = async (tripType: string, vehicleId: string, fareData: any): Promise<{status: string, message?: string}> => {
   try {
     console.log(`Updating ${tripType} fare for ${vehicleId}:`, fareData);
     
@@ -91,15 +119,21 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, fare
         }
       }));
       
-      return true;
+      return { status: 'success' };
     } else {
       toast.error(`Failed to update ${tripType} fare: ${result.message || 'Unknown error'}`);
-      return false;
+      return { 
+        status: 'error',
+        message: result.message || 'Unknown error'
+      };
     }
   } catch (error) {
     console.error(`Error updating ${tripType} fare:`, error);
     toast.error(`Failed to update ${tripType} fare: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return false;
+    return { 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 };
 
@@ -165,15 +199,22 @@ export const getLocalFaresForVehicle = async (vehicleId: string) => getFaresByTr
 export const getOutstationFaresForVehicle = async (vehicleId: string) => getFaresByTripType('outstation', vehicleId);
 
 // Database initialization helpers
-export const initializeDatabase = async (): Promise<boolean> => {
+export const initializeDatabase = async (): Promise<{status: string, message?: string}> => {
   try {
     console.log('Initializing database...');
     
     // Just try syncing fare data for now
-    return await fareStateManager.syncFareData();
+    const success = await fareStateManager.syncFareData();
+    return { 
+      status: success ? 'success' : 'error',
+      message: success ? 'Database initialized successfully' : 'Failed to initialize database'
+    };
   } catch (error) {
     console.error('Error initializing database:', error);
-    return false;
+    return { 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error initializing database'
+    };
   }
 };
 
@@ -269,6 +310,7 @@ export const fareService = {
   calculateLocalFare,
   calculateOutstationFare,
   clearFareCache,
+  clearCache,
   syncFareData,
   initializeFareData,
   directFareUpdate,
@@ -282,7 +324,10 @@ export const fareService = {
   syncOutstationFares,
   forceSyncOutstationFares,
   resetCabOptionsState,
-  initializeDatabase
+  initializeDatabase,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  formatDataForMultipart
 };
 
 export default fareService;
