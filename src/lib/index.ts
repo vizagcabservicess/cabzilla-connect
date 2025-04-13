@@ -99,11 +99,10 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
 
-// Helper function to check if driver allowance should be shown
+// Helper function to check if driver allowance should be shown - CRITICAL FIX
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
   // For airport transfers, NEVER show driver allowance
   if (tripType === 'airport') {
-    console.log("Airport transfer detected: Driver allowance should NOT be shown");
     return false;
   }
   
@@ -117,20 +116,40 @@ export const getFareEventId = (): number => {
   return ++eventCounter;
 };
 
+// Dispatch tracking to prevent recursive events
+const recentEventIds = new Set<number>();
+const MAX_TRACKED_EVENTS = 100;
+
 // Create a helper to deduplicate and dispatch fare events
 export const dispatchFareEvent = (
   eventName: string,
   detail: Record<string, any>,
   preventDuplicates: boolean = true
 ): void => {
+  // Add unique event ID if not present
+  if (!detail.eventId) {
+    detail.eventId = getFareEventId();
+  }
+  
+  // Check for duplicate event
+  if (preventDuplicates && recentEventIds.has(detail.eventId)) {
+    return; // Skip duplicate event
+  }
+  
+  // Track this event ID
+  recentEventIds.add(detail.eventId);
+  
+  // Clean up event tracking if too many events
+  if (recentEventIds.size > MAX_TRACKED_EVENTS) {
+    const oldestEvents = Array.from(recentEventIds).slice(0, 20);
+    oldestEvents.forEach(id => recentEventIds.delete(id));
+  }
+  
   // Force set driver allowance flag for airport transfers to ensure consistency
   if (detail.tripType === 'airport') {
     detail.noDriverAllowance = true;
     detail.showDriverAllowance = false;
   }
-  
-  // Add unique event ID
-  detail.eventId = getFareEventId();
   
   // Add timestamp if not present
   if (!detail.timestamp) {
@@ -140,7 +159,6 @@ export const dispatchFareEvent = (
   // Create and dispatch the event
   try {
     window.dispatchEvent(new CustomEvent(eventName, { detail }));
-    console.log(`Dispatched ${eventName} for ${detail.cabId || detail.cabType || 'unknown'}: ${detail.fare || 'N/A'}`);
   } catch (error) {
     console.error(`Error dispatching ${eventName}:`, error);
   }

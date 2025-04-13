@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { CabType } from '@/types/cab';
 import { useFareSyncTracker } from '@/hooks/useFareSyncTracker';
-import { dispatchFareEvent } from '@/lib';
+import { dispatchFareEvent, shouldShowDriverAllowance } from '@/lib';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -33,6 +33,8 @@ export const CabList: React.FC<CabListProps> = ({
   const hasSyncedRef = useRef<boolean>(false);
   const processingEventRef = useRef<boolean>(false);
   const isProcessingFaresRef = useRef<boolean>(false);
+  const dbSyncCompletedRef = useRef<boolean>(false);
+  const fareUpdateAttemptsRef = useRef<Record<string, number>>({});
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
@@ -45,6 +47,8 @@ export const CabList: React.FC<CabListProps> = ({
       syncAttemptsRef.current = 0;
       fareTracker.resetTracking();
       hasSyncedRef.current = false;
+      dbSyncCompletedRef.current = false;
+      fareUpdateAttemptsRef.current = {};
       setLocalFares({}); // Clear local fares on trip type change
       
       // Request a fresh fare sync with minimal delay
@@ -63,7 +67,6 @@ export const CabList: React.FC<CabListProps> = ({
     );
     
     if (hasChanges) {
-      console.log('CabList: Updating local fares from parent', cabFares);
       setLocalFares(cabFares);
       setLastUpdated(Date.now());
     }
@@ -110,7 +113,6 @@ export const CabList: React.FC<CabListProps> = ({
               storedFares[cab.id] = parsedFare;
               fareTracker.trackFare(cab.id, parsedFare);
               foundAny = true;
-              console.log(`CabList: Loaded ${cab.id} fare from localStorage: ${parsedFare}`);
             }
           }
         } catch (error) {
@@ -142,8 +144,6 @@ export const CabList: React.FC<CabListProps> = ({
     const throttleTime = forceSync ? 300 : 1000;
     
     if (fareTracker.shouldThrottle('sync', throttleTime) && !forceSync) {
-      console.log(`CabList: Throttling fare sync request`);
-      
       // Set a timeout to try again later if we don't already have one
       if (!syncThrottleTimeoutRef.current) {
         syncThrottleTimeoutRef.current = setTimeout(() => {
@@ -163,25 +163,22 @@ export const CabList: React.FC<CabListProps> = ({
   const requestAllFareSync = (forceSync = false) => {
     // Check if we've exceeded max attempts (unless forcing)
     if (syncAttemptsRef.current > 5 && !forceSync) {
-      console.log('CabList: Max sync attempts reached, skipping');
       return;
     }
     
     // Try to acquire the sync lock
     if (!fareTracker.acquireSyncLock(forceSync)) {
-      console.log('CabList: Sync already in progress, skipping');
       return;
     }
     
     syncAttemptsRef.current++;
-    console.log(`CabList: Requesting fare sync for all cabs (attempt ${syncAttemptsRef.current})`);
     
     // Request fare sync at system level
     dispatchFareEvent('request-fare-sync', {
       tripType: tripType,
       forceSync: true,
       instant: true,
-      noDriverAllowance: tripType === 'airport'
+      noDriverAllowance: !shouldShowDriverAllowance(tripType)
     });
     
     // Only dispatch individual requests if we don't have fares yet or we're forcing
@@ -212,8 +209,17 @@ export const CabList: React.FC<CabListProps> = ({
           return;
         }
         
-        // CRITICAL FIX: Add explicit flag for airport transfers
-        const noDriverAllowance = tripType === 'airport';
+        // Increment fare update attempts for this cab
+        fareUpdateAttemptsRef.current[cab.id] = (fareUpdateAttemptsRef.current[cab.id] || 0) + 1;
+        
+        // If we've tried too many times for this cab, skip it
+        if (fareUpdateAttemptsRef.current[cab.id] > 3 && !forceSync) {
+          processCab(index + 1);
+          return;
+        }
+        
+        // CRITICAL FIX: Use proper driver allowance logic
+        const noDriverAllowance = !shouldShowDriverAllowance(tripType);
         
         dispatchFareEvent('request-fare-calculation', {
           cabId: cab.id,
@@ -246,29 +252,32 @@ export const CabList: React.FC<CabListProps> = ({
     // Handler for fare calculation events
     const handleFareCalculated = (event: CustomEvent) => {
       if (processingEventRef.current) return; // Prevent recursion
-      if (!event.detail || !event.detail.cabId || event.detail.fare <= 0) return;
+      if (!event.detail || !event.detail.cabId || !event.detail.fare) return;
       
       processingEventRef.current = true;
       
       try {
-        const { cabId, fare, tripType: eventTripType } = event.detail;
+        const { cabId, fare, tripType: eventTripType, source = 'unknown' } = event.detail;
         
         // Skip if the fare hasn't changed in our local state
         if (!fareTracker.isFareChanged(cabId, fare)) {
-          console.log(`CabList: Fare for ${cabId} is already ${fare}, skipping update`);
+          processingEventRef.current = false;
           return;
         }
         
         // Skip if this event isn't for our trip type
         if (eventTripType && eventTripType !== tripType) {
-          console.log(`CabList: Skipping fare update for ${cabId} as it's for ${eventTripType} (we are ${tripType})`);
+          processingEventRef.current = false;
           return;
+        }
+        
+        // Track if this came from the database
+        if (source === 'database') {
+          dbSyncCompletedRef.current = true;
         }
         
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, fare);
-        
-        console.log(`CabList: Received fare update for ${cabId}: ${fare}`);
         
         // Update our local fares
         setLocalFares(prev => {
@@ -292,8 +301,9 @@ export const CabList: React.FC<CabListProps> = ({
     
     // Handle fare cache cleared events
     const handleFareCacheCleared = () => {
-      console.log('CabList: Fare cache cleared, refreshing fares');
       fareTracker.resetTracking();
+      dbSyncCompletedRef.current = false;
+      fareUpdateAttemptsRef.current = {};
       throttledRequestFareSync(true);
     };
     
@@ -309,11 +319,9 @@ export const CabList: React.FC<CabListProps> = ({
         
         // Skip if the fare hasn't changed
         if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
-          console.log(`CabList: Calculated fare for ${cabId} is already ${calculatedFare}, skipping update`);
+          processingEventRef.current = false;
           return;
         }
-        
-        console.log(`CabList: Received significant fare difference for ${cabId}: ${calculatedFare}`);
         
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, calculatedFare);

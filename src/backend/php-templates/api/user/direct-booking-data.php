@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -21,13 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Log the request
-error_log("Direct booking data request received: " . json_encode($_GET));
-
 // Check if the request is for local package fares
 if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
-    error_log("Local package fares sync check request received");
-    
     $vehicleId = $_GET['vehicle_id'];
     $forceDb = isset($_GET['force_db']) && $_GET['force_db'] === 'true';
     
