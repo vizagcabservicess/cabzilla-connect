@@ -56,7 +56,11 @@ export const useFareSync = ({
   // Initial load of fares from localStorage and immediate sync request
   useEffect(() => {
     if (shouldSync && cabTypes.length > 0) {
-      loadFaresFromStorage();
+      // CRITICAL FIX: Only load from localStorage if we don't already have fares
+      const hasFares = Object.keys(cabFares).length > 0;
+      if (!hasFares) {
+        loadFaresFromStorage();
+      }
       
       // Request immediate sync on mount
       requestFareSync(true);
@@ -79,6 +83,7 @@ export const useFareSync = ({
             storedFares[cab.id] = parsedFare;
             fareTracker.trackFare(cab.id, parsedFare);
             foundAny = true;
+            console.log(`useFareSync: Loaded ${cab.id} fare from localStorage: ${parsedFare}`);
           }
         }
       } catch (error) {
@@ -141,7 +146,8 @@ export const useFareSync = ({
             cabId: cab.id,
             cabName: cab.name,
             tripType: tripType,
-            forceSync: true
+            forceSync: true,
+            noDriverAllowance: tripType === 'airport' // CRITICAL FIX: Add explicit flag for airport transfers
           });
         }, index * 20);
       });
@@ -185,7 +191,7 @@ export const useFareSync = ({
     
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
-        const { cabId, fare, tripType: eventTripType } = event.detail;
+        const { cabId, fare, tripType: eventTripType, noDriverAllowance = false } = event.detail;
         
         // Only process events for our trip type
         if (eventTripType && eventTripType !== tripType) {
@@ -200,7 +206,7 @@ export const useFareSync = ({
         // Track this update to avoid duplicates
         fareTracker.trackFare(cabId, fare);
         
-        console.log(`useFareSync: Received fare update for ${cabId}: ${fare}`);
+        console.log(`useFareSync: Received fare update for ${cabId}: ${fare}, noDriverAllowance: ${noDriverAllowance}`);
         
         // Update our local fares
         setCabFares(prev => {
@@ -223,14 +229,14 @@ export const useFareSync = ({
     // Handle significant fare difference events
     const handleSignificantFareDifference = (event: CustomEvent) => {
       if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
-        const { calculatedFare, cabId } = event.detail;
+        const { calculatedFare, cabId, noDriverAllowance = false } = event.detail;
         
         // Skip if this is the same value we already have
         if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
           return;
         }
         
-        console.log(`useFareSync: Received significant fare difference for ${cabId}: ${calculatedFare}`);
+        console.log(`useFareSync: Received significant fare difference for ${cabId}: ${calculatedFare}, noDriverAllowance: ${noDriverAllowance}`);
         
         // Track this update
         fareTracker.trackFare(cabId, calculatedFare);
@@ -282,13 +288,18 @@ export const useFareSync = ({
         // Track this dispatch to avoid duplicates
         fareTracker.trackFare(selectedCab.id, currentFare);
         
+        // CRITICAL FIX: Add explicit flag for airport transfers
+        const noDriverAllowance = tripType === 'airport';
+        
         // Dispatch the cab selection with fare
         dispatchFareEvent('cab-selected-with-fare', {
           cabType: selectedCab.id,
           cabName: selectedCab.name,
           fare: currentFare,
           tripType: tripType,
-          forceSync: true
+          forceSync: true,
+          noDriverAllowance: noDriverAllowance,
+          showDriverAllowance: !noDriverAllowance
         });
       } else {
         // If no valid fare, request calculation
@@ -296,7 +307,9 @@ export const useFareSync = ({
           cabId: selectedCab.id,
           cabName: selectedCab.name,
           tripType: tripType,
-          forceSync: true
+          forceSync: true,
+          noDriverAllowance: tripType === 'airport', // CRITICAL FIX: Add explicit flag for airport transfers
+          showDriverAllowance: tripType !== 'airport'
         });
       }
     }

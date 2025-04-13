@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -175,8 +174,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       ? calculatedAirportFares[cab.id] 
       : cabFares[cab.id] || 0;
     
-    const now = Date.now();
-    
     try {
       // First emit event without fare to ensure component selection state updates
       dispatchFareEvent('cab-selected', {
@@ -190,6 +187,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       if (fareTracker.isFareChanged(cab.id, cabFare)) {
         fareTracker.trackFare(cab.id, cabFare);
         
+        // CRITICAL FIX: Add explicit flag for driver allowance based on trip type
+        const showDriverAllowance = shouldShowDriverAllowance(tripType.toString(), tripMode.toString());
+        
         // Then emit with fare information
         dispatchFareEvent('cab-selected-with-fare', {
           cabType: cab.id,
@@ -198,10 +198,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           tripType: tripType,
           tripMode: tripMode,
           forceSync: true, // Always force sync on explicit selection
-          showDriverAllowance: shouldShowDriverAllowance(tripType.toString(), tripMode.toString())
+          showDriverAllowance: showDriverAllowance,
+          noDriverAllowance: tripType === 'airport' // Explicit flag for airport transfers
         });
         
-        console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
+        console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}, showDriverAllowance: ${showDriverAllowance}`);
       } else {
         console.log(`CabOptions: Skipped duplicate fare dispatch for ${cab.id}: ${cabFare}`);
       }
@@ -214,6 +215,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           [cab.id]: true
         }));
         
+        // CRITICAL FIX: Add explicit flag for driver allowance based on trip type
+        const showDriverAllowance = shouldShowDriverAllowance(tripType.toString(), tripMode.toString());
+        
         // Use minimal timeout to debounce but still update quickly
         setTimeout(() => {
           dispatchFareEvent('request-fare-calculation', {
@@ -222,7 +226,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             tripType: tripType,
             tripMode: tripMode,
             forceSync: true,
-            showDriverAllowance: shouldShowDriverAllowance(tripType.toString(), tripMode.toString())
+            showDriverAllowance: showDriverAllowance,
+            noDriverAllowance: tripType === 'airport' // Explicit flag for airport transfers
           });
           
           // Delay the booking summary request very slightly
@@ -233,7 +238,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               tripType: tripType,
               tripMode: tripMode,
               forceSync: true,
-              showDriverAllowance: shouldShowDriverAllowance(tripType.toString(), tripMode.toString())
+              showDriverAllowance: showDriverAllowance,
+              noDriverAllowance: tripType === 'airport' // Explicit flag for airport transfers
             });
             
             // Clear the pending state after a short delay
@@ -436,7 +442,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   useEffect(() => {
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
-        const { cabId, fare, tripType: eventTripType, calculated = false } = event.detail;
+        const { cabId, fare, tripType: eventTripType, calculated = false, noDriverAllowance = false } = event.detail;
         
         // Prevent duplicate updates if the fare hasn't changed
         if (!fareTracker.isFareChanged(cabId, fare)) {
@@ -444,7 +450,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           return;
         }
         
-        console.log(`CabOptions: Received fare-calculated event for ${cabId}: ${fare}, calculated=${calculated}`);
+        console.log(`CabOptions: Received fare-calculated event for ${cabId}: ${fare}, calculated=${calculated}, noDriverAllowance=${noDriverAllowance}`);
         
         // Track this fare to prevent future duplicates
         fareTracker.trackFare(cabId, fare);
@@ -468,14 +474,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         
         // Re-emit as cab-selected-with-fare if this is the currently selected cab
         if (selectedCab?.id === cabId) {
+          // CRITICAL FIX: Determine if driver allowance should be shown based on trip type
+          const showDriverAllowance = shouldShowDriverAllowance(
+            eventTripType || tripType.toString(), 
+            tripMode.toString()
+          );
+          
           dispatchFareEvent('cab-selected-with-fare', {
             cabType: cabId,
             cabName: selectedCab.name,
             fare: fare,
-            tripType: tripType,
+            tripType: eventTripType || tripType,
             tripMode: tripMode,
             forceSync: true,
-            showDriverAllowance: shouldShowDriverAllowance(tripType.toString(), tripMode.toString())
+            showDriverAllowance: showDriverAllowance,
+            noDriverAllowance: eventTripType === 'airport' || tripType === 'airport' // Explicit flag
           });
         }
       }
@@ -690,15 +703,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   };
 
   return (
-    <CabList
-      cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id || null}
-      cabFares={cabFares}
-      isCalculatingFares={isCalculatingFares}
-      handleSelectCab={handleCabSelect}
-      getFareDetails={getFareDetails}
-      tripType={tripType.toString()}
-    />
+    <div className="mt-6">
+      <CabList
+        cabTypes={cabTypes}
+        selectedCabId={selectedCab?.id || null}
+        cabFares={cabFares}
+        isCalculatingFares={isCalculatingFares}
+        handleSelectCab={handleCabSelect}
+        getFareDetails={(cab) => (
+          tripType === "local" && hourlyPackage
+            ? hourlyPackage.replace('-', ' hrs, ').replace('km', ' km')
+            : `${distance} km`
+        )}
+        tripType={tripType.toString()}
+      />
+    </div>
   );
 };
 

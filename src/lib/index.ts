@@ -101,8 +101,9 @@ export { Skeleton } from '@/components/ui/skeleton';
 
 // Helper function to check if driver allowance should be shown
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, we don't show driver allowance
+  // For airport transfers, we NEVER show driver allowance
   if (tripType === 'airport') {
+    console.log("Airport transfer detected: Driver allowance should NOT be shown");
     return false;
   }
   

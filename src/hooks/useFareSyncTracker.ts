@@ -1,14 +1,14 @@
 
-import React from 'react';
+import { useRef } from 'react';
 
 /**
  * Simple hook to track fare updates and prevent duplicates
  */
 export const useFareSyncTracker = () => {
   // Use refs to avoid re-renders but maintain state across renders
-  const trackedFares = React.useRef<Record<string, number>>({});
-  const lastDispatchTime = React.useRef<Record<string, number>>({});
-  const syncLock = React.useRef<boolean>(false);
+  const trackedFares = useRef<Record<string, number>>({});
+  const lastDispatchTime = useRef<Record<string, number>>({});
+  const syncLock = useRef<boolean>(false);
   
   // Check if a fare is different from what we've tracked
   const isFareChanged = (cabId: string, fare: number): boolean => {

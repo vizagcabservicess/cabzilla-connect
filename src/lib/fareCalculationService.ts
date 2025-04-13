@@ -175,7 +175,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // CRITICAL: Airport transfers have NO driver allowance
+    // CRITICAL FIX: Airport transfers have NO driver allowance
     // This is intentionally enforced at multiple levels
     
     // Cache the result
@@ -188,7 +188,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
     localStorage.setItem(localStorageKey, fare.toString());
     
-    // Emit event to notify other components
+    // Emit event to notify other components with explicit tripType marker
     try {
       window.dispatchEvent(new CustomEvent('fare-calculated', {
         detail: {
@@ -196,7 +196,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
           fare: fare,
           tripType: 'airport',
           calculated: true,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          noDriverAllowance: true  // Explicit flag to prevent driver allowance
         }
       }));
     } catch (error) {
@@ -296,6 +297,22 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     // Store in localStorage
     const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
     localStorage.setItem(localStorageKey, fare.toString());
+    
+    // CRITICAL FIX: Add the noDriverAllowance flag to the event
+    try {
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          fare: fare || 0,
+          tripType: 'airport',
+          calculated: true,
+          timestamp: Date.now(),
+          noDriverAllowance: true
+        }
+      }));
+    } catch (error) {
+      console.error('Error dispatching fare-calculated event:', error);
+    }
     
     return fare;
   }
@@ -607,7 +624,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
-    // Dispatch fare calculation event to update UI components
+    // Dispatch fare calculation event to update UI components with explicit tripType flag
     window.dispatchEvent(new CustomEvent('fare-calculated', {
       detail: {
         cabId: cabType.id,
@@ -615,7 +632,8 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         tripMode,
         calculated: true,
         fare: calculatedFare,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        noDriverAllowance: tripType === 'airport' // Add explicit flag for airport transfers
       }
     }));
     
@@ -640,7 +658,7 @@ export const calculateTotalFare = (
   tripType: string,
   surcharge?: number
 ): number => {
-  // CRITICAL: For airport transfers, ALWAYS set driver allowance to 0
+  // CRITICAL FIX: For airport transfers, ALWAYS set driver allowance to 0
   if (tripType === 'airport') {
     console.log("Airport transfer detected: Setting driver allowance to 0");
     driverAllowance = 0;
