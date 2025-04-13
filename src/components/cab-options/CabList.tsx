@@ -31,18 +31,22 @@ export const CabList: React.FC<CabListProps> = ({
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSyncTimeRef = useRef<number>(0);
   const syncLockRef = useRef<boolean>(false);
+  const hasSyncedRef = useRef<boolean>(false);
   
-  // Track when trip type changes to trigger re-sync
+  // Track when trip type changes to trigger re-sync and clear old fare cache
   useEffect(() => {
     if (tripTypeRef.current !== tripType) {
       console.log(`CabList: Trip type changed from ${tripTypeRef.current} to ${tripType}`);
       tripTypeRef.current = tripType;
       syncAttemptsRef.current = 0;
       processedUpdatesRef.current = {};
+      hasSyncedRef.current = false;
       setLocalFares({}); // Clear local fares on trip type change
       
       // Request a fresh fare sync with minimal delay
-      throttledRequestFareSync(true);
+      setTimeout(() => {
+        throttledRequestFareSync(true);
+      }, 100);
     }
   }, [tripType]);
   
@@ -98,8 +102,12 @@ export const CabList: React.FC<CabListProps> = ({
         setLocalFares(mergedFares);
       }
       
-      // Request fare sync for all cabs, even if we loaded from localStorage
-      throttledRequestFareSync(true);
+      if (!hasSyncedRef.current) {
+        // Only request fare sync once after initial render
+        throttledRequestFareSync(true);
+        hasSyncedRef.current = true;
+      }
+      
       setIsInitialRender(false);
     }
   }, [isInitialRender, cabTypes, tripType, cabFares]);
@@ -138,6 +146,7 @@ export const CabList: React.FC<CabListProps> = ({
   
   // Request fare sync for all cab types
   const requestAllFareSync = (forceSync = false) => {
+    // Check if we've exceeded max attempts (unless forcing)
     if (syncAttemptsRef.current > 5 && !forceSync) {
       console.log('CabList: Max sync attempts reached, skipping');
       return;
@@ -203,6 +212,11 @@ export const CabList: React.FC<CabListProps> = ({
           return;
         }
         
+        // Skip if the fare hasn't changed in our local state
+        if (localFares[cabId] === fare) {
+          return;
+        }
+        
         // Skip if this event isn't for our trip type
         if (eventTripType && eventTripType !== tripType) {
           return;
@@ -242,6 +256,12 @@ export const CabList: React.FC<CabListProps> = ({
     const handleSignificantFareDifference = (event: CustomEvent) => {
       if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
         const { calculatedFare, cabId } = event.detail;
+        
+        // Skip if the fare hasn't changed
+        if (localFares[cabId] === calculatedFare) {
+          return;
+        }
+        
         console.log(`CabList: Received significant fare difference for ${cabId}: ${calculatedFare}`);
         
         // Update our local fares immediately with the BookingSummary calculation
@@ -276,7 +296,7 @@ export const CabList: React.FC<CabListProps> = ({
         clearTimeout(syncThrottleTimeoutRef.current);
       }
     };
-  }, [tripType]);
+  }, [tripType, localFares]);
   
   return (
     <div className="space-y-4 mt-4">

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -53,6 +52,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [forceSyncAttempted, setForceSyncAttempted] = useState<boolean>(false);
   const [previousTripType, setPreviousTripType] = useState<string>(tripType?.toString() || '');
   const [fareSyncCounter, setFareSyncCounter] = useState<number>(0);
+  const lastDispatchedFares = React.useRef<Record<string, number>>({});
 
   // Store the current trip type in localStorage for better fare syncing
   useEffect(() => {
@@ -196,20 +196,27 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         }
       }));
       
-      // Then emit with fare information
-      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-        detail: {
-          cabType: cab.id,
-          cabName: cab.name,
-          fare: cabFare,
-          tripType: tripType,
-          tripMode: tripMode,
-          forceSync: true, // Always force sync on explicit selection
-          timestamp: now + 1 // Use different timestamp to prevent event merging
-        }
-      }));
-      
-      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
+      // Only dispatch fare update if the fare has changed from last dispatched value
+      if (lastDispatchedFares.current[cab.id] !== cabFare) {
+        lastDispatchedFares.current[cab.id] = cabFare;
+        
+        // Then emit with fare information
+        window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+          detail: {
+            cabType: cab.id,
+            cabName: cab.name,
+            fare: cabFare,
+            tripType: tripType,
+            tripMode: tripMode,
+            forceSync: true, // Always force sync on explicit selection
+            timestamp: now + 1 // Use different timestamp to prevent event merging
+          }
+        }));
+        
+        console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
+      } else {
+        console.log(`CabOptions: Skipped duplicate fare dispatch for ${cab.id}: ${cabFare}`);
+      }
       
       // For ALL trip types, request fare calculation with minimal debouncing
       if (!pendingBookingSummaryFareRequests[cab.id]) {
@@ -472,7 +479,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         setLastFareUpdate(Date.now());
         
         // Re-emit as cab-selected-with-fare if this is the currently selected cab
-        if (selectedCab?.id === cabId) {
+        // Only if the fare is different from the last dispatched one
+        if (selectedCab?.id === cabId && lastDispatchedFares.current[cabId] !== fare) {
+          lastDispatchedFares.current[cabId] = fare;
+          
           try {
             window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
               detail: {
@@ -522,20 +532,25 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           // Update airport fares for dedicated tracking
           setCalculatedAirportFares(prev => ({...prev, [cabType]: fare}));
           
-          // Re-emit as a fare-calculated event to ensure CabList gets updated
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('fare-calculated', {
-              detail: {
-                cabId: cabType,
-                tripType: tripType,
-                tripMode: tripMode,
-                calculated: true,
-                fare: fare,
-                forceSync: true,
-                timestamp: Date.now()
-              }
-            }));
-          }, 20);
+          // Only re-emit if fare is different from last dispatched
+          if (lastDispatchedFares.current[cabType] !== fare) {
+            lastDispatchedFares.current[cabType] = fare;
+            
+            // Re-emit as a fare-calculated event to ensure CabList gets updated
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: cabType,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  calculated: true,
+                  fare: fare,
+                  forceSync: true,
+                  timestamp: Date.now()
+                }
+              }));
+            }, 20);
+          }
         }
       }
     };
