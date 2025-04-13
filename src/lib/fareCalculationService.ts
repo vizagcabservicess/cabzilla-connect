@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -641,7 +640,7 @@ export const calculateTotalFare = (
   tripType: string,
   surcharge?: number
 ): number => {
-  // CRITICAL FIX: For airport transfers, ALWAYS set driver allowance to 0
+  // CRITICAL: For airport transfers, ALWAYS set driver allowance to 0
   if (tripType === 'airport') {
     console.log("Airport transfer detected: Setting driver allowance to 0");
     driverAllowance = 0;

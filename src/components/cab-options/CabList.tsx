@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { CabType } from '@/types/cab';
@@ -27,6 +28,9 @@ export const CabList: React.FC<CabListProps> = ({
   const syncAttemptsRef = useRef<number>(0);
   const processedUpdatesRef = useRef<Record<string, number>>({});
   const tripTypeRef = useRef<string>(tripType);
+  const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSyncTimeRef = useRef<number>(0);
+  const syncLockRef = useRef<boolean>(false);
   
   // Track when trip type changes to trigger re-sync
   useEffect(() => {
@@ -35,11 +39,10 @@ export const CabList: React.FC<CabListProps> = ({
       tripTypeRef.current = tripType;
       syncAttemptsRef.current = 0;
       processedUpdatesRef.current = {};
+      setLocalFares({}); // Clear local fares on trip type change
       
       // Request a fresh fare sync with minimal delay
-      setTimeout(() => {
-        requestAllFareSync();
-      }, 100);
+      throttledRequestFareSync(true);
     }
   }, [tripType]);
   
@@ -56,7 +59,7 @@ export const CabList: React.FC<CabListProps> = ({
     }
   }, [cabFares]);
   
-  // On initial render, load fares from localStorage
+  // On initial render, load fares from localStorage and immediately request sync
   useEffect(() => {
     if (isInitialRender) {
       const storedFares: Record<string, number> = {};
@@ -82,22 +85,71 @@ export const CabList: React.FC<CabListProps> = ({
       });
       
       if (foundAny) {
-        setLocalFares(prev => ({...prev, ...storedFares}));
+        // Only use localStorage fares if we don't already have parent fares
+        const mergedFares = { ...storedFares };
+        
+        // Override with any non-zero parent fares as they are likely more recent
+        Object.keys(cabFares).forEach(cabId => {
+          if (cabFares[cabId] > 0) {
+            mergedFares[cabId] = cabFares[cabId];
+          }
+        });
+        
+        setLocalFares(mergedFares);
       }
       
-      // Request fare sync for all cabs
-      requestAllFareSync();
+      // Request fare sync for all cabs, even if we loaded from localStorage
+      throttledRequestFareSync(true);
       setIsInitialRender(false);
     }
-  }, [isInitialRender, cabTypes, tripType]);
+  }, [isInitialRender, cabTypes, tripType, cabFares]);
+  
+  // Throttled function to request fare sync to avoid spamming the event system
+  const throttledRequestFareSync = (forceSync = false) => {
+    // If we're already sync locked or attempted too many times, skip
+    if (syncLockRef.current && !forceSync) {
+      console.log('CabList: Sync locked, skipping request');
+      return;
+    }
+    
+    const now = Date.now();
+    // Minimum time between syncs (300ms for forced, 2000ms for regular)
+    const throttleTime = forceSync ? 300 : 2000;
+    
+    // Check if we're within throttle window
+    if (now - lastSyncTimeRef.current < throttleTime && !forceSync) {
+      console.log(`CabList: Throttling fare sync request (${now - lastSyncTimeRef.current}ms < ${throttleTime}ms)`);
+      
+      // Set a timeout to try again later if we don't already have one
+      if (!syncThrottleTimeoutRef.current) {
+        syncThrottleTimeoutRef.current = setTimeout(() => {
+          lastSyncTimeRef.current = Date.now();
+          requestAllFareSync(forceSync);
+          syncThrottleTimeoutRef.current = null;
+        }, throttleTime);
+      }
+      return;
+    }
+    
+    // Update last sync time and request sync
+    lastSyncTimeRef.current = now;
+    requestAllFareSync(forceSync);
+  };
   
   // Request fare sync for all cab types
-  const requestAllFareSync = () => {
-    if (syncAttemptsRef.current > 5) {
+  const requestAllFareSync = (forceSync = false) => {
+    if (syncAttemptsRef.current > 5 && !forceSync) {
       console.log('CabList: Max sync attempts reached, skipping');
       return;
     }
     
+    // Set sync lock to prevent multiple simultaneous sync attempts
+    if (syncLockRef.current && !forceSync) {
+      console.log('CabList: Sync already in progress, skipping');
+      return;
+    }
+    
+    syncLockRef.current = true;
     syncAttemptsRef.current++;
     console.log(`CabList: Requesting fare sync for all cabs (attempt ${syncAttemptsRef.current})`);
     
@@ -111,30 +163,48 @@ export const CabList: React.FC<CabListProps> = ({
       }
     }));
     
-    // Request individual fare updates for each cab
-    cabTypes.forEach((cab, index) => {
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-          detail: {
-            cabId: cab.id,
-            cabName: cab.name,
-            tripType: tripType,
-            forceSync: true,
-            timestamp: Date.now() + index
+    // Only dispatch individual requests if we don't have fares yet or we're forcing
+    const needsIndividualRequests = cabTypes.some(cab => !localFares[cab.id] || forceSync);
+    
+    if (needsIndividualRequests) {
+      // Request individual fare updates for each cab
+      cabTypes.forEach((cab, index) => {
+        setTimeout(() => {
+          if (!localFares[cab.id] || forceSync) {
+            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+              detail: {
+                cabId: cab.id,
+                cabName: cab.name,
+                tripType: tripType,
+                forceSync: true,
+                timestamp: Date.now() + index
+              }
+            }));
           }
-        }));
-      }, index * 20);
-    });
+        }, index * 20);
+      });
+    }
+    
+    // Release sync lock after a short delay
+    setTimeout(() => {
+      syncLockRef.current = false;
+    }, cabTypes.length * 20 + 300);
   };
   
-  // Listen for fare calculation events
+  // Listen for fare calculation events and other fare-related events
   useEffect(() => {
+    // Handler for fare calculation events
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
         const { cabId, fare, tripType: eventTripType } = event.detail;
         
         // Skip if this is a duplicate or unchanged update we've already processed
         if (processedUpdatesRef.current[cabId] === fare) {
+          return;
+        }
+        
+        // Skip if this event isn't for our trip type
+        if (eventTripType && eventTripType !== tripType) {
           return;
         }
         
@@ -161,12 +231,50 @@ export const CabList: React.FC<CabListProps> = ({
       }
     };
     
+    // Handle fare cache cleared events
+    const handleFareCacheCleared = () => {
+      console.log('CabList: Fare cache cleared, refreshing fares');
+      processedUpdatesRef.current = {};
+      throttledRequestFareSync(true);
+    };
+    
+    // Handle significant fare difference events
+    const handleSignificantFareDifference = (event: CustomEvent) => {
+      if (event.detail && event.detail.calculatedFare && event.detail.cabId) {
+        const { calculatedFare, cabId } = event.detail;
+        console.log(`CabList: Received significant fare difference for ${cabId}: ${calculatedFare}`);
+        
+        // Update our local fares immediately with the BookingSummary calculation
+        setLocalFares(prev => {
+          const updated = { ...prev, [cabId]: calculatedFare };
+          return updated;
+        });
+        
+        // Store to localStorage
+        try {
+          const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
+          localStorage.setItem(localStorageKey, calculatedFare.toString());
+        } catch (error) {
+          console.error(`Error saving ${cabId} fare to localStorage:`, error);
+        }
+        
+        setLastUpdated(Date.now());
+      }
+    };
+    
     // Listen for fare calculation events
     window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
+    window.addEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
+    window.addEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
     
     // Clean up
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
+      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared as EventListener);
+      window.removeEventListener('significant-fare-difference', handleSignificantFareDifference as EventListener);
+      if (syncThrottleTimeoutRef.current) {
+        clearTimeout(syncThrottleTimeoutRef.current);
+      }
     };
   }, [tripType]);
   
