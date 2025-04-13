@@ -12,22 +12,36 @@ export const useFareSyncTracker = () => {
   const knownFareKeys = useRef<Set<string>>(new Set());
   const syncHistory = useRef<Map<string, number>>(new Map());
   const lastProcessedEventId = useRef<Record<string, number>>({});
+  const processingStack = useRef<Set<string>>(new Set());
+  const preventLogging = useRef<boolean>(false);
   
   // Check if a fare is different from what we've tracked
   const isFareChanged = (cabId: string, fare: number, tolerance: number = 0): boolean => {
+    // If we're already processing this exact fare, prevent re-entry
     const key = `${cabId}_${fare}`;
-    if (knownFareKeys.current.has(key)) {
+    if (processingStack.current.has(key)) {
       return false;
     }
     
-    const previousFare = trackedFares.current[cabId];
-    
-    // If we have no previous fare, it's a change
-    if (previousFare === undefined) return true;
-    
-    // Check for minimum difference to avoid micro-adjustments
-    const diff = Math.abs(previousFare - fare);
-    return diff > tolerance;
+    try {
+      processingStack.current.add(key);
+      
+      if (knownFareKeys.current.has(key)) {
+        return false;
+      }
+      
+      const previousFare = trackedFares.current[cabId];
+      
+      // If we have no previous fare, it's a change
+      if (previousFare === undefined) return true;
+      
+      // Check for minimum difference to avoid micro-adjustments
+      const diff = Math.abs(previousFare - fare);
+      return diff > tolerance;
+    } finally {
+      // Always remove from processing stack
+      processingStack.current.delete(key);
+    }
   };
   
   // Track a fare value to prevent duplicate updates
@@ -35,7 +49,7 @@ export const useFareSyncTracker = () => {
     const previousFare = trackedFares.current[cabId];
     
     // Only log when fare actually changes to reduce console spam
-    if (previousFare !== fare) {
+    if (previousFare !== fare && !preventLogging.current) {
       console.log(`Tracking fare for ${cabId}: ${fare}`);
     }
     
@@ -92,6 +106,11 @@ export const useFareSyncTracker = () => {
     return (now - lastTime) < minInterval;
   };
   
+  // Enable or disable console logging
+  const setLoggingEnabled = (enabled: boolean): void => {
+    preventLogging.current = !enabled;
+  };
+  
   // Acquire or check sync lock
   const acquireSyncLock = (force: boolean = false): boolean => {
     if (syncLock.current && !force) return false;
@@ -132,8 +151,15 @@ export const useFareSyncTracker = () => {
       lastProcessedEventId.current = {};
       knownFareKeys.current.clear();
       syncHistory.current.clear();
+      processingStack.current.clear();
     }
     syncLock.current = false;
+  };
+  
+  // Check if we're already processing a specific fare
+  const isProcessing = (cabId: string, fare: number): boolean => {
+    const key = `${cabId}_${fare}`;
+    return processingStack.current.has(key);
   };
   
   return {
@@ -145,6 +171,8 @@ export const useFareSyncTracker = () => {
     isLockHeld,
     resetTracking,
     hasProcessedEvent,
-    trackProcessedEvent
+    trackProcessedEvent,
+    isProcessing,
+    setLoggingEnabled
   };
 };

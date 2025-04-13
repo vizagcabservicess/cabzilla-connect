@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { useFareSyncTracker } from './useFareSyncTracker';
-import { dispatchFareEvent, shouldShowDriverAllowance } from '@/lib';
+import { dispatchFareEvent, shouldShowDriverAllowance, ensureNoDriverAllowanceForAirport } from '@/lib';
 
 interface UseFareSyncOptions {
   tripType: string;
@@ -23,16 +23,24 @@ export const useFareSync = ({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
   const [syncInProgress, setSyncInProgress] = useState<boolean>(false);
+  
   const syncAttemptsRef = useRef<number>(0);
-  const maxSyncAttemptsRef = useRef<number>(5);
+  const maxSyncAttemptsRef = useRef<number>(3);
   const previousTripTypeRef = useRef<string>(tripType);
   const syncThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const processingEventRef = useRef<boolean>(false);
   const hasLoadedFromDatabaseRef = useRef<Record<string, boolean>>({});
   const initialSyncCompletedRef = useRef<boolean>(false);
+  const syncLockRef = useRef<boolean>(false);
   
   // Use the fare sync tracker to prevent duplicate events
   const fareTracker = useFareSyncTracker();
+  
+  // Disable console logging from the tracker to reduce spam
+  useEffect(() => {
+    fareTracker.setLoggingEnabled(false);
+    return () => fareTracker.setLoggingEnabled(true);
+  }, []);
   
   // Track when trip type changes to force re-sync
   useEffect(() => {
@@ -88,8 +96,16 @@ export const useFareSync = ({
         if (storedFare) {
           const parsedFare = parseInt(storedFare, 10);
           if (!isNaN(parsedFare) && parsedFare > 0) {
-            storedFares[cab.id] = parsedFare;
-            fareTracker.trackFare(cab.id, parsedFare);
+            // For airport transfers, ensure we remove any driver allowance
+            if (tripType === 'airport' && cab.driverAllowance) {
+              storedFares[cab.id] = ensureNoDriverAllowanceForAirport(
+                parsedFare, cab.driverAllowance, tripType
+              );
+            } else {
+              storedFares[cab.id] = parsedFare;
+            }
+            
+            fareTracker.trackFare(cab.id, storedFares[cab.id]);
             foundAny = true;
           }
         }
@@ -110,44 +126,54 @@ export const useFareSync = ({
   const requestFareSync = (forceSync = false) => {
     if (!shouldSync) return;
     
-    if (syncAttemptsRef.current >= maxSyncAttemptsRef.current && !forceSync) {
+    // Prevent multiple simultaneous sync requests
+    if (syncLockRef.current && !forceSync) {
       return;
     }
     
-    if (syncInProgress && !forceSync) {
-      return;
-    }
+    syncLockRef.current = true;
     
-    // Try to acquire the sync lock
-    if (!fareTracker.acquireSyncLock(forceSync)) {
-      return;
-    }
-    
-    syncAttemptsRef.current++;
-    setSyncInProgress(true);
-    
-    // CRITICAL FIX: Add explicit flag for airport transfers
-    const noDriverAllowance = !shouldShowDriverAllowance(tripType);
-    
-    // System-wide fare sync request
-    dispatchFareEvent('request-fare-sync', {
-      tripType: tripType,
-      forceSync: true,
-      instant: true,
-      noDriverAllowance: noDriverAllowance,
-      showDriverAllowance: !noDriverAllowance
-    });
-    
-    // CRITICAL FIX: Always trigger individual requests to ensure fares are updated immediately
-    const processIndividualRequests = () => {
-      // Process requests in sequence to avoid overloading the event system
-      const requestCab = (index: number) => {
+    try {
+      if (syncAttemptsRef.current >= maxSyncAttemptsRef.current && !forceSync) {
+        syncLockRef.current = false;
+        return;
+      }
+      
+      if (syncInProgress && !forceSync) {
+        syncLockRef.current = false;
+        return;
+      }
+      
+      // Try to acquire the sync lock
+      if (!fareTracker.acquireSyncLock(forceSync)) {
+        syncLockRef.current = false;
+        return;
+      }
+      
+      syncAttemptsRef.current++;
+      setSyncInProgress(true);
+      
+      // CRITICAL FIX: Add explicit flag for airport transfers
+      const noDriverAllowance = !shouldShowDriverAllowance(tripType);
+      
+      // System-wide fare sync request
+      dispatchFareEvent('request-fare-sync', {
+        tripType: tripType,
+        forceSync: true,
+        instant: true,
+        noDriverAllowance: noDriverAllowance,
+        showDriverAllowance: !noDriverAllowance
+      });
+      
+      // Process individual requests in sequence to avoid overloading the event system
+      const processCab = (index: number) => {
         if (index >= cabTypes.length) {
           // All cab requests processed
           setTimeout(() => {
             fareTracker.releaseSyncLock();
             setSyncInProgress(false);
             setLastSyncTime(Date.now());
+            syncLockRef.current = false;
           }, 100);
           return;
         }
@@ -167,15 +193,17 @@ export const useFareSync = ({
         });
         
         // Process next cab after a slight delay
-        setTimeout(() => requestCab(index + 1), 20);
+        setTimeout(() => processCab(index + 1), 50);
       };
       
       // Start processing cabs
-      requestCab(0);
-    };
-    
-    // Start processing individual requests
-    processIndividualRequests();
+      processCab(0);
+    } catch (error) {
+      console.error("Error requesting fare sync:", error);
+      fareTracker.releaseSyncLock();
+      setSyncInProgress(false);
+      syncLockRef.current = false;
+    }
   };
   
   // Throttled function to request fare sync
@@ -210,10 +238,16 @@ export const useFareSync = ({
       if (processingEventRef.current) return; // Prevent recursion
       if (!event.detail || !event.detail.cabId || !event.detail.fare) return;
       
+      // Skip if we're already processing this exact fare
+      if (event.detail.cabId && event.detail.fare && 
+          fareTracker.isProcessing(event.detail.cabId, event.detail.fare)) {
+        return;
+      }
+      
       processingEventRef.current = true;
       
       try {
-        const { cabId, fare, tripType: eventTripType, source = 'unknown', noDriverAllowance = false } = event.detail;
+        const { cabId, fare, tripType: eventTripType, source = 'unknown' } = event.detail;
         
         // Only process events for our trip type
         if (eventTripType && eventTripType !== tripType) {
@@ -232,19 +266,28 @@ export const useFareSync = ({
           hasLoadedFromDatabaseRef.current[cabId] = true;
         }
         
+        // Find the cab to get driver allowance value
+        const cab = cabTypes.find(c => c.id === cabId);
+        let finalFare = fare;
+        
+        // For airport transfers, ensure driver allowance is removed
+        if (tripType === 'airport' && cab && cab.driverAllowance) {
+          finalFare = ensureNoDriverAllowanceForAirport(fare, cab.driverAllowance, tripType);
+        }
+        
         // Track this update to avoid duplicates
-        fareTracker.trackFare(cabId, fare);
+        fareTracker.trackFare(cabId, finalFare);
         
         // Update our local fares
         setCabFares(prev => {
-          const updated = { ...prev, [cabId]: fare };
+          const updated = { ...prev, [cabId]: finalFare };
           return updated;
         });
         
         // Store to localStorage
         try {
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, fare.toString());
+          localStorage.setItem(localStorageKey, finalFare.toString());
         } catch (error) {
           console.error(`Error saving ${cabId} fare to localStorage:`, error);
         }
@@ -263,7 +306,7 @@ export const useFareSync = ({
       processingEventRef.current = true;
       
       try {
-        const { calculatedFare, cabId, noDriverAllowance = false } = event.detail;
+        const { calculatedFare, cabId } = event.detail;
         
         // Skip if this is the same value we already have
         if (!fareTracker.isFareChanged(cabId, calculatedFare)) {
@@ -271,19 +314,28 @@ export const useFareSync = ({
           return;
         }
         
+        // Find the cab to get driver allowance value
+        const cab = cabTypes.find(c => c.id === cabId);
+        let finalFare = calculatedFare;
+        
+        // For airport transfers, ensure driver allowance is removed
+        if (tripType === 'airport' && cab && cab.driverAllowance) {
+          finalFare = ensureNoDriverAllowanceForAirport(calculatedFare, cab.driverAllowance, tripType);
+        }
+        
         // Track this update
-        fareTracker.trackFare(cabId, calculatedFare);
+        fareTracker.trackFare(cabId, finalFare);
         
         // Update our local fares
         setCabFares(prev => {
-          const updated = { ...prev, [cabId]: calculatedFare };
+          const updated = { ...prev, [cabId]: finalFare };
           return updated;
         });
         
         // Store to localStorage
         try {
           const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, calculatedFare.toString());
+          localStorage.setItem(localStorageKey, finalFare.toString());
         } catch (error) {
           console.error(`Error saving ${cabId} fare to localStorage:`, error);
         }
@@ -307,7 +359,7 @@ export const useFareSync = ({
         clearTimeout(syncThrottleTimeoutRef.current);
       }
     };
-  }, [cabFares, shouldSync, tripType]);
+  }, [cabFares, shouldSync, tripType, cabTypes]);
   
   // When selected cab changes, ensure its fare is up to date
   useEffect(() => {

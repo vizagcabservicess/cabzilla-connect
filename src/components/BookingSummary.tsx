@@ -1,771 +1,296 @@
-import { useState, useEffect, useRef } from 'react';
-import { Location } from '@/lib/locationData';
+
+import React, { useEffect, useState } from 'react';
+import { Clock, MapPin, Calendar, ArrowRight, ArrowDown, Car, User, PlusCircle, InfoIcon } from 'lucide-react';
+import { formatPrice, shouldShowDriverAllowance } from '@/lib';
 import { CabType } from '@/types/cab';
-import { TripType } from '@/lib/tripTypes';
-import { formatPrice } from '@/lib/cabData';
-import { format } from 'date-fns';
-import { Car, MapPin, Calendar, User, Info } from 'lucide-react';
+import { Location } from '@/lib/locationData';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { getLocalPackagePrice } from '@/lib/packageData';
-import { calculateFare } from '@/lib/fareCalculationService';
-import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { formatTravelTime } from '@/lib/locationData';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
   dropLocation: Location | null;
   pickupDate: Date | undefined;
-  returnDate?: Date | null;
+  returnDate?: Date | undefined;
   selectedCab: CabType | null;
   distance: number;
+  travelTime?: number;
   totalPrice: number;
-  tripType: TripType;
-  tripMode?: 'one-way' | 'round-trip';
+  extraCharges?: Record<string, number>;
+  tripType: string;
+  tripMode?: string;
 }
 
-export const BookingSummary = ({
+export const BookingSummary: React.FC<BookingSummaryProps> = ({
   pickupLocation,
   dropLocation,
   pickupDate,
   returnDate,
   selectedCab,
   distance,
+  travelTime,
   totalPrice,
+  extraCharges = {},
   tripType,
   tripMode = 'one-way'
-}: BookingSummaryProps) => {
-  const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
+}) => {
+  const { isLoaded } = useGoogleMaps();
   const [baseFare, setBaseFare] = useState<number>(0);
-  const [driverAllowance, setDriverAllowance] = useState<number>(250);
-  const [nightCharges, setNightCharges] = useState<number>(0);
-  const [extraDistance, setExtraDistance] = useState<number>(0);
-  const [extraDistanceFare, setExtraDistanceFare] = useState<number>(0);
-  const [perKmRate, setPerKmRate] = useState<number>(0);
-  const [effectiveDistance, setEffectiveDistance] = useState<number>(distance);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
+  const [driverAllowance, setDriverAllowance] = useState<number>(0);
+  const [extraKmCharge, setExtraKmCharge] = useState<number>(0);
+  const [nightHaltCharge, setNightHaltCharge] = useState<number>(0);
+  const [formattedTravelTime, setFormattedTravelTime] = useState<string>('');
   
-  const lastUpdateTimeRef = useRef<number>(0);
-  const calculationInProgressRef = useRef<boolean>(false);
-  const calculationAttemptsRef = useRef<number>(0);
-  const maxCalculationAttempts = 3;
-  const selectedCabIdRef = useRef<string | null>(selectedCab?.id || null);
-  const lastDistanceRef = useRef<number>(distance);
-  const lastTripModeRef = useRef<string>(tripMode);
-  const pendingCalculationRef = useRef<boolean>(false);
-  const totalPriceRef = useRef<number>(totalPrice);
-  const calculationTimeoutRef = useRef<any>(null);
-
+  // CRITICAL FIX: Use the shouldShowDriverAllowance helper directly
+  const showDriverAllowance = shouldShowDriverAllowance(tripType, tripMode);
+  
   useEffect(() => {
-    totalPriceRef.current = totalPrice;
-    
-    if (totalPrice > 0) {
-      console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
-      setCalculatedFare(totalPrice);
-      
-      // Also store the fare in localStorage for CabList to access
-      if (selectedCab) {
-        try {
-          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, totalPrice.toString());
-          console.log(`BookingSummary: Stored fare in localStorage: ${localStorageKey} = ${totalPrice}`);
-          
-          // Dispatch event to notify CabList of updated fare
-          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
-            detail: {
-              cabType: selectedCab.id,
-              fare: totalPrice,
-              tripType: tripType,
-              timestamp: Date.now()
-            }
-          }));
-        } catch (error) {
-          console.error('Error storing fare in localStorage:', error);
-        }
-      }
-      
-      const estimatedBaseFare = totalPrice - driverAllowance - nightCharges - extraDistanceFare;
-      if (estimatedBaseFare > 0) {
-        setBaseFare(estimatedBaseFare);
-      }
+    if (travelTime) {
+      setFormattedTravelTime(formatTravelTime(travelTime));
     }
-  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare, selectedCab, tripType]);
-
+  }, [travelTime]);
+  
   useEffect(() => {
-    if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
-      console.log('BookingSummary: Selected cab changed to', selectedCab.name, '- resetting calculation state');
-      
-      if (calculationTimeoutRef.current) {
-        clearTimeout(calculationTimeoutRef.current);
-      }
-      
-      selectedCabIdRef.current = selectedCab.id;
-      
-      calculationInProgressRef.current = false;
-      calculationAttemptsRef.current = 0;
-      lastUpdateTimeRef.current = 0;
-      pendingCalculationRef.current = true;
-      
-      setShowDetailsLoading(true);
-      
-      if (totalPrice > 0) {
-        setCalculatedFare(totalPrice);
+    let basePrice = 0;
+    let driverAllowanceAmount = 0;
+    
+    // Calculate the base fare without driver allowance for pricing breakdown
+    if (selectedCab) {
+      // AIRPORT TRANSFER SPECIAL CASE - Never include driver allowance
+      if (tripType === 'airport') {
+        // For airport transfers, handle driver allowance separately to ensure it's never included
+        driverAllowanceAmount = 0;
         
-        // Store the fare in localStorage for CabList to access
-        try {
-          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, totalPrice.toString());
-          console.log(`BookingSummary: Stored fare in localStorage: ${localStorageKey} = ${totalPrice}`);
-          
-          // Dispatch event to notify CabList of updated fare
-          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
-            detail: {
-              cabType: selectedCab.id,
-              fare: totalPrice,
-              tripType: tripType,
-              timestamp: Date.now()
-            }
-          }));
-        } catch (error) {
-          console.error('Error storing fare in localStorage:', error);
-        }
-      }
-      
-      calculationTimeoutRef.current = setTimeout(() => {
-        recalculateFareDetails();
-      }, 100);
-
-      const handleDirectFareUpdate = (event: CustomEvent) => {
-        if (event.detail && event.detail.cabType === selectedCab.id && event.detail.fare > 0) {
-          console.log(`BookingSummary: Received direct fare update for ${selectedCab.id}: ${event.detail.fare}`);
-          setCalculatedFare(event.detail.fare);
-          totalPriceRef.current = event.detail.fare;
-          
-          // Store this fare in localStorage for CabList to access
-          try {
-            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-            localStorage.setItem(localStorageKey, event.detail.fare.toString());
-            console.log(`BookingSummary: Stored direct fare in localStorage: ${localStorageKey} = ${event.detail.fare}`);
-          } catch (error) {
-            console.error('Error storing fare in localStorage:', error);
-          }
-          
-          const estimatedBaseFare = event.detail.fare - driverAllowance - nightCharges - extraDistanceFare;
-          if (estimatedBaseFare > 0) {
-            setBaseFare(estimatedBaseFare);
-          }
-          
-          setShowDetailsLoading(false);
-        }
-      };
-
-      window.addEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
-      window.addEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
-      
-      return () => {
-        window.removeEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
-        window.removeEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
-      };
-    }
-  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare, tripType]);
-
-  useEffect(() => {
-    if (
-      lastDistanceRef.current !== distance || 
-      lastTripModeRef.current !== tripMode
-    ) {
-      console.log(`BookingSummary: Distance (${lastDistanceRef.current} → ${distance}) or trip mode (${lastTripModeRef.current} → ${tripMode}) changed`);
-      
-      lastDistanceRef.current = distance;
-      lastTripModeRef.current = tripMode;
-      
-      calculationInProgressRef.current = false;
-      calculationAttemptsRef.current = 0;
-      pendingCalculationRef.current = true;
-      
-      if (calculationTimeoutRef.current) {
-        clearTimeout(calculationTimeoutRef.current);
-      }
-      
-      setShowDetailsLoading(true);
-      
-      if (totalPrice > 0) {
-        setCalculatedFare(totalPrice);
-      }
-      
-      calculationTimeoutRef.current = setTimeout(() => {
-        recalculateFareDetails();
-      }, 100);
-    }
-  }, [distance, tripMode, totalPrice]);
-
-  const recalculateFareDetails = async () => {
-    if (!selectedCab) {
-      console.log('BookingSummary: No cab selected, skipping calculation');
-      setShowDetailsLoading(false);
-      return;
-    }
-    
-    if (calculationInProgressRef.current) {
-      console.log('BookingSummary: Calculation already in progress, marking for retry');
-      pendingCalculationRef.current = true;
-      return;
-    }
-    
-    if (calculationAttemptsRef.current >= maxCalculationAttempts) {
-      console.log(`BookingSummary: Reached max calculation attempts (${maxCalculationAttempts}), using current totalPrice: ${totalPriceRef.current}`);
-      setCalculatedFare(totalPriceRef.current || totalPrice);
-      setShowDetailsLoading(false);
-      pendingCalculationRef.current = false;
-      return;
-    }
-    
-    calculationInProgressRef.current = true;
-    pendingCalculationRef.current = false;
-    calculationAttemptsRef.current += 1;
-    lastUpdateTimeRef.current = Date.now();
-    setIsRefreshing(true);
-    console.log(`BookingSummary: Calculating fare details for ${selectedCab.name} (attempt ${calculationAttemptsRef.current}/${maxCalculationAttempts})`);
-    
-    try {
-      if (totalPrice > 0 && calculationAttemptsRef.current === 1) {
-        setCalculatedFare(totalPrice);
-      }
-      
-      let newBaseFare = 0;
-      let newDriverAllowance = 250;
-      let newNightCharges = 0;
-      let newExtraDistance = 0;
-      let newExtraDistanceFare = 0;
-      let newPerKmRate = 0;
-      let newEffectiveDistance = distance;
-      const minimumKm = 300;
-      
-      if (tripType === 'outstation') {
-        try {
-          const outstationFares = await getOutstationFaresForVehicle(selectedCab.id);
-          console.log('BookingSummary: Retrieved outstation fares:', outstationFares);
-          
-          if (tripMode === 'one-way') {
-            newPerKmRate = outstationFares.pricePerKm || 15;
-            newBaseFare = outstationFares.basePrice || minimumKm * newPerKmRate;
-            
-            newEffectiveDistance = distance * 2;
-            
-            if (newEffectiveDistance > minimumKm) {
-              newExtraDistance = newEffectiveDistance - minimumKm;
-              newExtraDistanceFare = newExtraDistance * newPerKmRate;
-            }
-            
-            newDriverAllowance = outstationFares.driverAllowance || 250;
-            
-            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-              newNightCharges = Math.round(newBaseFare * 0.1);
-            }
-          } else {
-            newPerKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85 || 12;
-            newDriverAllowance = outstationFares.driverAllowance || 250;
-            
-            newEffectiveDistance = distance * 2;
-            
-            newBaseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9 || minimumKm * newPerKmRate;
-            
-            if (newEffectiveDistance > minimumKm) {
-              newExtraDistance = newEffectiveDistance - minimumKm;
-              newExtraDistanceFare = newExtraDistance * newPerKmRate;
-            }
-            
-            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-              newNightCharges = Math.round(newBaseFare * 0.1);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching outstation fares:', error);
-          
-          newPerKmRate = selectedCab.id.includes('sedan') ? 12 : 
-                        selectedCab.id.includes('ertiga') ? 14 : 
-                        selectedCab.id.includes('innova') ? 16 : 15;
-          
-          if (tripMode === 'one-way') {
-            newBaseFare = minimumKm * newPerKmRate;
-            newEffectiveDistance = distance * 2;
-            
-            if (newEffectiveDistance > minimumKm) {
-              newExtraDistance = newEffectiveDistance - minimumKm;
-              newExtraDistanceFare = newExtraDistance * newPerKmRate;
-            }
-          } else {
-            newEffectiveDistance = distance * 2;
-            newPerKmRate = newPerKmRate * 0.85;
-            newBaseFare = minimumKm * newPerKmRate;
-            
-            if (newEffectiveDistance > minimumKm) {
-              newExtraDistance = newEffectiveDistance - minimumKm;
-              newExtraDistanceFare = newExtraDistance * newPerKmRate;
-            }
-          }
-          
-          newDriverAllowance = 250;
-        }
-      } else if (tripType === 'airport') {
-        const airportFares = await getAirportFaresForVehicle(selectedCab.id);
-        console.log('BookingSummary: Retrieved airport fares:', airportFares);
-        
-        if (distance <= 10) {
-          newBaseFare = airportFares.tier1Price || airportFares.basePrice || 1000;
-        } else if (distance <= 20) {
-          newBaseFare = airportFares.tier2Price || airportFares.basePrice || 1200;
-        } else if (distance <= 30) {
-          newBaseFare = airportFares.tier3Price || airportFares.basePrice || 1500;
-        } else {
-          newBaseFare = airportFares.tier4Price || airportFares.basePrice || 2000;
-          
-          newExtraDistance = distance - 30;
-          newExtraDistanceFare = newExtraDistance * (airportFares.extraKmCharge || 14);
-          newPerKmRate = airportFares.extraKmCharge || 14;
-        }
-        
-        newDriverAllowance = 250;
+        // Set base fare to total price since there's no driver allowance
+        basePrice = totalPrice;
       } else if (tripType === 'local') {
-        const localFares = await getLocalFaresForVehicle(selectedCab.id);
-        console.log('BookingSummary: Retrieved local fares:', localFares);
-        
-        if (localFares.price8hrs80km > 0) {
-          newBaseFare = localFares.price8hrs80km;
-        } else if (selectedCab.localPackageFares?.price8hrs80km) {
-          newBaseFare = selectedCab.localPackageFares.price8hrs80km;
-        } else {
-          if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
-          else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 1800;
-          else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 2200;
-          else newBaseFare = 1500;
-        }
-        
-        newDriverAllowance = 0;
-      }
-      
-      console.log('BookingSummary: Calculated fare details:', {
-        baseFare: newBaseFare,
-        driverAllowance: newDriverAllowance,
-        nightCharges: newNightCharges,
-        extraDistance: newExtraDistance,
-        extraDistanceFare: newExtraDistanceFare,
-        perKmRate: newPerKmRate,
-        effectiveDistance: newEffectiveDistance,
-        totalFare: newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare
-      });
-      
-      setBaseFare(newBaseFare);
-      setDriverAllowance(newDriverAllowance);
-      setNightCharges(newNightCharges);
-      setExtraDistance(newExtraDistance);
-      setExtraDistanceFare(newExtraDistanceFare);
-      setPerKmRate(newPerKmRate);
-      setEffectiveDistance(newEffectiveDistance);
-      
-      const newCalculatedFare = newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare;
-      
-      const finalFare = (totalPrice > 0) ? totalPrice : newCalculatedFare;
-      setCalculatedFare(finalFare);
-      totalPriceRef.current = finalFare;
-      
-      // Update localStorage with the calculated fare
-      try {
-        const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-        localStorage.setItem(localStorageKey, finalFare.toString());
-        console.log(`BookingSummary: Stored calculated fare in localStorage: ${localStorageKey} = ${finalFare}`);
-        
-        // For airport transfers, dispatch a fare-calculated event to update cab cards
-        if (tripType === 'airport') {
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: selectedCab.id,
-              tripType: tripType,
-              tripMode: tripMode,
-              calculated: true,
-              fare: finalFare,
-              timestamp: Date.now()
-            }
-          }));
-        }
-      } catch (error) {
-        console.error('Error storing fare in localStorage:', error);
-      }
-      
-      if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
-        console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
-        
-        // CRITICAL FIX: Emit a custom event for significant fare differences
-        // CabList and CabOptions will listen for this event to update their displayed fares
-        window.dispatchEvent(new CustomEvent('significant-fare-difference', {
-          detail: {
-            cabId: selectedCab.id,
-            calculatedFare: newCalculatedFare,
-            parentFare: totalPrice,
-            tripType: tripType,
-            tripMode: tripMode,
-            timestamp: Date.now()
-          }
-        }));
-        
-        // For airport transfers, we need to make sure the calculated fare is used
-        if (tripType === 'airport' && Math.abs(newCalculatedFare - totalPrice) > 50) {
-          console.log(`BookingSummary: Using calculated fare ${newCalculatedFare} for airport transfer instead of ${totalPrice}`);
-          setCalculatedFare(newCalculatedFare);
-          totalPriceRef.current = newCalculatedFare;
-          
-          // Store this calculated fare in localStorage and re-emit
-          const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-          localStorage.setItem(localStorageKey, newCalculatedFare.toString());
-          
-          // Emit an event for the CabList to update with this calculated fare
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: selectedCab.id,
-              tripType: tripType,
-              tripMode: tripMode,
-              calculated: true,
-              fare: newCalculatedFare,
-              timestamp: Date.now()
-            }
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error calculating fare details:', error);
-      setCalculatedFare(totalPrice > 0 ? totalPrice : totalPriceRef.current);
-    } finally {
-      setIsRefreshing(false);
-      setShowDetailsLoading(false);
-      calculationInProgressRef.current = false;
-      
-      if (pendingCalculationRef.current) {
-        console.log('BookingSummary: Another calculation is pending, scheduling retry');
-        calculationTimeoutRef.current = setTimeout(() => {
-          recalculateFareDetails();
-        }, 150);
-      }
-    }
-  };
-
-  const handleCabSelected = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    if (customEvent.detail && customEvent.detail.cabType) {
-      console.log('BookingSummary: Detected cab selection event:', customEvent.detail);
-      
-      if (selectedCabIdRef.current === customEvent.detail.cabType) {
-        console.log('BookingSummary: Same cab selected, using fare from event if available');
-        
-        if (customEvent.detail.fare && customEvent.detail.fare > 0) {
-          setCalculatedFare(customEvent.detail.fare);
-          totalPriceRef.current = customEvent.detail.fare;
-          
-          // Store this fare in localStorage
-          try {
-            const localStorageKey = `fare_${tripType}_${customEvent.detail.cabType.toLowerCase()}`;
-            localStorage.setItem(localStorageKey, customEvent.detail.fare.toString());
-            console.log(`BookingSummary: Stored selected cab fare in localStorage: ${localStorageKey} = ${customEvent.detail.fare}`);
-            
-            // Broadcast the fare calculation back to CabList
-            if (tripType === 'airport') {
-              window.dispatchEvent(new CustomEvent('fare-calculated', {
-                detail: {
-                  cabId: customEvent.detail.cabType,
-                  tripType: tripType,
-                  tripMode: tripMode,
-                  calculated: true,
-                  fare: customEvent.detail.fare,
-                  timestamp: Date.now()
-                }
-              }));
-            }
-          } catch (error) {
-            console.error('Error storing fare in localStorage:', error);
-          }
-          
-          setShowDetailsLoading(false);
-        }
-        return;
-      }
-      
-      calculationInProgressRef.current = false;
-      calculationAttemptsRef.current = 0;
-      lastUpdateTimeRef.current = 0;
-      pendingCalculationRef.current = true;
-      selectedCabIdRef.current = customEvent.detail.cabType;
-      
-      if (customEvent.detail.fare && customEvent.detail.fare > 0) {
-        setCalculatedFare(customEvent.detail.fare);
-        totalPriceRef.current = customEvent.detail.fare;
-        setShowDetailsLoading(false);
+        // For local packages, driver allowance is already included in the total price
+        driverAllowanceAmount = selectedCab.driverAllowance || 250;
+        basePrice = totalPrice - driverAllowanceAmount;
+      } else if (tripType === 'outstation') {
+        // For outstation trips, break down driver allowance if applicable
+        driverAllowanceAmount = selectedCab.driverAllowance || 250;
+        basePrice = totalPrice - driverAllowanceAmount;
       } else {
-        setShowDetailsLoading(true);
-        if (calculationTimeoutRef.current) {
-          clearTimeout(calculationTimeoutRef.current);
-        }
-        calculationTimeoutRef.current = setTimeout(() => {
-          recalculateFareDetails();
-        }, 10);
+        // For all other trip types, assume driver allowance is already included
+        driverAllowanceAmount = selectedCab.driverAllowance || 250;
+        basePrice = totalPrice - driverAllowanceAmount;
       }
     }
-  };
 
-  useEffect(() => {
-    const resetAttemptsTimer = setInterval(() => {
-      calculationAttemptsRef.current = 0;
-    }, 15000);
+    // Ensure we never show negative base fare
+    if (basePrice < 0) basePrice = 0;
     
-    const handleEventsWithThrottling = () => {
-      const now = Date.now();
-      if (now - lastUpdateTimeRef.current < 500) {
-        console.log('BookingSummary: Throttling event handler');
-        pendingCalculationRef.current = true;
-        return;
-      }
-      
-      if (calculationAttemptsRef.current >= maxCalculationAttempts) {
-        console.log('BookingSummary: Skipping event handler, too many attempts');
-        setShowDetailsLoading(false);
-        return;
-      }
-      
-      calculationInProgressRef.current = false;
-      pendingCalculationRef.current = true;
-      setShowDetailsLoading(true);
-      
-      if (calculationTimeoutRef.current) {
-        clearTimeout(calculationTimeoutRef.current);
-      }
-      
-      calculationTimeoutRef.current = setTimeout(() => {
-        recalculateFareDetails();
-      }, 100);
-    };
+    // Update state for the breakdown
+    setBaseFare(basePrice);
+    setDriverAllowance(driverAllowanceAmount);
     
-    const initialLoadTimer = setTimeout(() => {
-      if (totalPrice > 0) {
-        setCalculatedFare(totalPrice);
-        totalPriceRef.current = totalPrice;
-        
-        // Store this fare in localStorage for CabList to access
-        if (selectedCab) {
-          try {
-            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-            localStorage.setItem(localStorageKey, totalPrice.toString());
-            console.log(`BookingSummary: Stored initial fare in localStorage: ${localStorageKey} = ${totalPrice}`);
-            
-            // For airport transfers, dispatch fare event immediately
-            if (tripType === 'airport') {
-              window.dispatchEvent(new CustomEvent('fare-calculated', {
-                detail: {
-                  cabId: selectedCab.id,
-                  tripType: tripType,
-                  tripMode: tripMode,
-                  calculated: true,
-                  fare: totalPrice,
-                  timestamp: Date.now()
-                }
-              }));
-            }
-          } catch (error) {
-            console.error('Error storing fare in localStorage:', error);
-          }
-        }
-        
-        recalculateFareDetails();
-      } else {
-        recalculateFareDetails();
-      }
-    }, 100);
-    
-    window.addEventListener('local-fares-updated', handleEventsWithThrottling);
-    window.addEventListener('cab-selected-for-local', handleEventsWithThrottling);
-    window.addEventListener('trip-fares-updated', handleEventsWithThrottling);
-    window.addEventListener('airport-fares-updated', handleEventsWithThrottling);
-    window.addEventListener('fare-cache-cleared', handleEventsWithThrottling);
-    window.addEventListener('cab-selected', handleCabSelected);
-    
-    return () => {
-      clearTimeout(initialLoadTimer);
-      clearInterval(resetAttemptsTimer);
-      if (calculationTimeoutRef.current) {
-        clearTimeout(calculationTimeoutRef.current);
-      }
-      window.removeEventListener('local-fares-updated', handleEventsWithThrottling);
-      window.removeEventListener('cab-selected-for-local', handleEventsWithThrottling);
-      window.removeEventListener('trip-fares-updated', handleEventsWithThrottling);
-      window.removeEventListener('airport-fares-updated', handleEventsWithThrottling);
-      window.removeEventListener('fare-cache-cleared', handleEventsWithThrottling);
-      window.removeEventListener('cab-selected', handleCabSelected);
-    };
-  }, [totalPrice, selectedCab, tripType, tripMode]);
-
-  useEffect(() => {
-    const checkPendingInterval = setInterval(() => {
-      if (pendingCalculationRef.current && !calculationInProgressRef.current && calculationAttemptsRef.current < maxCalculationAttempts) {
-        console.log('BookingSummary: Processing pending calculation...');
-        
-        if (calculationTimeoutRef.current) {
-          clearTimeout(calculationTimeoutRef.current);
-        }
-        
-        calculationTimeoutRef.current = setTimeout(() => {
-          recalculateFareDetails();
-        }, 10);
-      }
-    }, 1000);
-    
-    return () => clearInterval(checkPendingInterval);
-  }, []);
-
-  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
-    return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
-  }
-
-  let finalTotal = calculatedFare;
-  
-  if (finalTotal <= 0) {
-    if (totalPrice > 0) {
-      finalTotal = totalPrice;
-    } else if (selectedCab.price) {
-      finalTotal = selectedCab.price;
-    } else {
-      finalTotal = tripType === 'airport' ? 500 : tripType === 'local' ? 1500 : 2500;
+    // Set extra charges if provided
+    if (extraCharges.extraKm) {
+      setExtraKmCharge(extraCharges.extraKm);
     }
-  }
+    
+    if (extraCharges.nightHalt) {
+      setNightHaltCharge(extraCharges.nightHalt);
+    }
+  }, [selectedCab, totalPrice, tripType, tripMode, extraCharges]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 relative">
-      <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
-      
-      <div className="space-y-4">
-        <div className="border-b pb-4">
-          <div className="flex items-start gap-2 mb-3">
-            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">PICKUP</p>
-              <p className="font-medium">{pickupLocation.address || pickupLocation.name}</p>
-            </div>
-          </div>
-          
-          {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
-            <div className="flex items-start gap-2 mb-3">
-              <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+    <Card className="shadow-md">
+      <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
+        <CardTitle className="text-xl flex items-center justify-between">
+          <span>Booking Summary</span>
+          {tripType && (
+            <Badge variant="outline" className="uppercase bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              {tripType}
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-5 pb-0">
+        {pickupLocation && (
+          <div className="mb-5">
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">PICKUP</h3>
+            <div className="flex items-start gap-3">
+              <MapPin className="h-5 w-5 mt-0.5 text-blue-500 flex-shrink-0" />
               <div>
-                <p className="text-sm text-gray-500">DROP-OFF</p>
-                <p className="font-medium">{dropLocation.address || dropLocation.name}</p>
+                <p className="font-medium">{pickupLocation.name}</p>
+                {pickupLocation.address && (
+                  <p className="text-sm text-muted-foreground mt-1">{pickupLocation.address}</p>
+                )}
               </div>
             </div>
-          )}
-          
-          <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">PICKUP DATE & TIME</p>
-              <p className="font-medium">
-                {pickupDate ? format(pickupDate, 'EEEE, MMMM d, yyyy') : 'Not specified'}
-                <br/>
-                {pickupDate ? format(pickupDate, 'h:mm a') : ''}
-              </p>
-            </div>
           </div>
-          
-          <div className="flex items-start gap-2">
-            <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        )}
+        
+        {dropLocation && (
+          <>
+            <div className="flex justify-center my-2">
+              {tripMode === 'roundtrip' ? (
+                <ArrowDown className="h-6 w-6 text-gray-400" />
+              ) : (
+                <ArrowRight className="h-6 w-6 text-gray-400" />
+              )}
+            </div>
+            
+            <div className="mb-5">
+              <h3 className="text-sm font-medium text-muted-foreground mb-1">DROP-OFF</h3>
+              <div className="flex items-start gap-3">
+                <MapPin className="h-5 w-5 mt-0.5 text-red-500 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">{dropLocation.name}</p>
+                  {dropLocation.address && (
+                    <p className="text-sm text-muted-foreground mt-1">{dropLocation.address}</p>
+                  )}
+                  
+                  {distance > 0 && (
+                    <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
+                      <span>{Math.round(distance)} km</span>
+                      {formattedTravelTime && (
+                        <>
+                          <span className="mx-1">•</span>
+                          <span>{formattedTravelTime}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        
+        <div className="mb-5">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">PICKUP DATE & TIME</h3>
+          <div className="flex items-start gap-3">
+            <Calendar className="h-5 w-5 mt-0.5 text-blue-500 flex-shrink-0" />
             <div>
-              <p className="text-sm text-gray-500">CAB TYPE</p>
               <p className="font-medium">
-                {selectedCab.name}
-                <span className="text-sm text-gray-500"> • {selectedCab.capacity} persons • {selectedCab.luggageCapacity} bags</span>
+                {pickupDate?.toLocaleDateString('en-US', { 
+                  weekday: 'long',
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {pickupDate?.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: 'numeric',
+                  hour12: true 
+                })}
               </p>
             </div>
           </div>
         </div>
         
-        <div>
-          <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
-            {tripType === 'outstation' && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare (300 km included)</span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+        {tripMode === 'roundtrip' && returnDate && (
+          <div className="mb-5">
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">RETURN DATE & TIME</h3>
+            <div className="flex items-start gap-3">
+              <Calendar className="h-5 w-5 mt-0.5 text-blue-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {returnDate.toLocaleDateString('en-US', { 
+                    weekday: 'long',
+                    month: 'long', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  })}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {returnDate.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: 'numeric',
+                    hour12: true 
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {selectedCab && (
+          <div className="mb-5">
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">CAB TYPE</h3>
+            <div className="flex items-start gap-3">
+              <Car className="h-5 w-5 mt-0.5 text-blue-500 flex-shrink-0" />
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{selectedCab.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    • {selectedCab.capacity} persons • {selectedCab.luggageCapacity} bags
+                  </p>
                 </div>
-                
-                <div className="text-gray-600 text-sm ml-1">
-                  {tripMode === 'one-way' ? (
-                    <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
-                  ) : (
-                    <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
-                  )}
-                </div>
-                
-                {extraDistance > 0 && extraDistanceFare > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
+                {selectedCab.description && (
+                  <p className="text-sm text-muted-foreground mt-1">{selectedCab.description}</p>
                 )}
-                
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Driver allowance</span>
-                  <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                </div>
-                
-                {nightCharges > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Night charges</span>
-                    <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="mt-6 pt-5 border-t">
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Base fare</span>
+              <span>₹{formatPrice(baseFare)}</span>
+            </div>
             
-            {tripType === 'local' && (
+            {/* CRITICAL FIX: Only show driver allowance when appropriate */}
+            {showDriverAllowance && driverAllowance > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-700">08hrs 80KM Package</span>
-                <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                <span className="text-muted-foreground">Driver allowance</span>
+                <span>₹{formatPrice(driverAllowance)}</span>
               </div>
             )}
             
-            {(tripType === 'airport' || tripType === 'tour') && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare</span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-                </div>
-                
-                {extraDistance > 0 && tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
-                )}
-                
-                {tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Driver allowance</span>
-                    <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
+            {extraKmCharge > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Extra km charges</span>
+                <span>₹{formatPrice(extraKmCharge)}</span>
+              </div>
             )}
             
-            <Separator />
+            {nightHaltCharge > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Night halt charges</span>
+                <span>₹{formatPrice(nightHaltCharge)}</span>
+              </div>
+            )}
             
-            <div className="flex justify-between text-lg font-bold pt-2">
-              <span>Total Amount</span>
-              <span>₹{finalTotal.toLocaleString()}</span>
-            </div>
+            {Object.entries(extraCharges).map(([key, value]) => {
+              // Skip any charges that we're already displaying separately
+              if (key === 'extraKm' || key === 'nightHalt') return null;
+              if (value <= 0) return null;
+              
+              return (
+                <div key={key} className="flex justify-between">
+                  <span className="text-muted-foreground capitalize">
+                    {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                  </span>
+                  <span>₹{formatPrice(value)}</span>
+                </div>
+              );
+            })}
           </div>
+          
+          <Separator className="my-4" />
+          
+          <div className="flex justify-between items-center font-semibold text-lg">
+            <span>Total Amount</span>
+            <span>₹{formatPrice(totalPrice)}</span>
+          </div>
+          
+          <p className="text-xs text-muted-foreground text-right mt-1">
+            Includes taxes & fees (Tolls & Permits Extra)
+          </p>
         </div>
-      </div>
-      
-      {(isRefreshing || showDetailsLoading) && (
-        <div className="absolute inset-0 bg-white/5 flex items-center justify-center rounded-lg pointer-events-none">
-          <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-        </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 };
-
-export default BookingSummary;

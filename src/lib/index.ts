@@ -101,7 +101,7 @@ export { Skeleton } from '@/components/ui/skeleton';
 
 // Helper function to check if driver allowance should be shown - CRITICAL FIX
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, NEVER show driver allowance
+  // For airport transfers, ALWAYS return false - no exceptions
   if (tripType === 'airport') {
     return false;
   }
@@ -112,13 +112,12 @@ export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): 
 
 // Improve the fare event system with unique IDs to avoid duplicate events
 let eventCounter = 0;
+const processedEvents = new Set<number>();
+const MAX_PROCESSED_EVENTS = 200;
+
 export const getFareEventId = (): number => {
   return ++eventCounter;
 };
-
-// Dispatch tracking to prevent recursive events
-const recentEventIds = new Set<number>();
-const MAX_TRACKED_EVENTS = 100;
 
 // Create a helper to deduplicate and dispatch fare events
 export const dispatchFareEvent = (
@@ -132,20 +131,20 @@ export const dispatchFareEvent = (
   }
   
   // Check for duplicate event
-  if (preventDuplicates && recentEventIds.has(detail.eventId)) {
+  if (preventDuplicates && processedEvents.has(detail.eventId)) {
     return; // Skip duplicate event
   }
   
   // Track this event ID
-  recentEventIds.add(detail.eventId);
+  processedEvents.add(detail.eventId);
   
   // Clean up event tracking if too many events
-  if (recentEventIds.size > MAX_TRACKED_EVENTS) {
-    const oldestEvents = Array.from(recentEventIds).slice(0, 20);
-    oldestEvents.forEach(id => recentEventIds.delete(id));
+  if (processedEvents.size > MAX_PROCESSED_EVENTS) {
+    const oldestEvents = Array.from(processedEvents).slice(0, 50);
+    oldestEvents.forEach(id => processedEvents.delete(id));
   }
   
-  // Force set driver allowance flag for airport transfers to ensure consistency
+  // CRITICAL: Force set driver allowance flag for airport transfers to ensure consistency
   if (detail.tripType === 'airport') {
     detail.noDriverAllowance = true;
     detail.showDriverAllowance = false;
@@ -162,4 +161,17 @@ export const dispatchFareEvent = (
   } catch (error) {
     console.error(`Error dispatching ${eventName}:`, error);
   }
+};
+
+// Add a helper to remove driver allowance from fare calculations for airport transfers
+export const ensureNoDriverAllowanceForAirport = (
+  fare: number, 
+  driverAllowance: number, 
+  tripType: string
+): number => {
+  if (tripType === 'airport' && fare > driverAllowance) {
+    // If this airport fare already includes driver allowance, remove it
+    return fare - driverAllowance;
+  }
+  return fare;
 };
