@@ -93,7 +93,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   }, [tripType, tripMode, previousTripType]);
   
-  // More aggressive preloading of all fares to ensure immediate display
+  // FIXED: More reliable preloading of all fares to ensure immediate display
   const preloadAllFares = () => {
     if (initialAirportFaresLoaded) return;
     
@@ -121,7 +121,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             tripMode: tripMode,
             calculated: true,
             fare: parsedFare,
-            forceSync: true
+            forceSync: true,
+            // FIXED: Explicitly set driver allowance flag
+            showDriverAllowance: false,
+            noDriverAllowance: tripType === 'airport'
           });
         }
       }
@@ -144,7 +147,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             cabId: cab.id,
             cabName: cab.name,
             tripType: tripType,
-            forceSync: true
+            forceSync: true,
+            // FIXED: Explicitly set driver allowance flag for airport transfers
+            showDriverAllowance: shouldShowDriverAllowance(tripType.toString(), tripMode.toString()),
+            noDriverAllowance: tripType === 'airport'
           });
         }
       }, index * 30);
@@ -187,7 +193,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       if (fareTracker.isFareChanged(cab.id, cabFare)) {
         fareTracker.trackFare(cab.id, cabFare);
         
-        // CRITICAL FIX: Add explicit flag for driver allowance based on trip type
+        // FIXED: Add explicit flag for driver allowance based on trip type
         const showDriverAllowance = shouldShowDriverAllowance(tripType.toString(), tripMode.toString());
         
         // Then emit with fare information
@@ -215,7 +221,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           [cab.id]: true
         }));
         
-        // CRITICAL FIX: Add explicit flag for driver allowance based on trip type
+        // FIXED: Add explicit flag for driver allowance based on trip type
         const showDriverAllowance = shouldShowDriverAllowance(tripType.toString(), tripMode.toString());
         
         // Use minimal timeout to debounce but still update quickly

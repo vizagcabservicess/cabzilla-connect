@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Clock, MapPin, Calendar, ArrowRight, ArrowDown, Car, User, PlusCircle, InfoIcon } from 'lucide-react';
 import { formatPrice, shouldShowDriverAllowance } from '@/lib';
@@ -44,7 +45,8 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [nightHaltCharge, setNightHaltCharge] = useState<number>(0);
   const [formattedTravelTime, setFormattedTravelTime] = useState<string>('');
   
-  const showDriverAllowance = tripType !== 'airport';
+  // FIXED: Use the shouldShowDriverAllowance helper to determine if driver allowance should be shown
+  const showDriverAllowance = shouldShowDriverAllowance(tripType, tripMode);
   
   useEffect(() => {
     if (travelTime) {
@@ -57,10 +59,13 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     let driverAllowanceAmount = 0;
     
     if (selectedCab) {
+      // FIXED: Explicitly check trip type to determine if driver allowance should be included
       if (tripType === 'airport') {
+        // For airport transfers, driver allowance is ALWAYS zero
         driverAllowanceAmount = 0;
         basePrice = totalPrice;
       } else if (tripType === 'local' || tripType === 'outstation') {
+        // For local and outstation trips, include driver allowance
         driverAllowanceAmount = selectedCab.driverAllowance || 250;
         basePrice = totalPrice - driverAllowanceAmount;
       }
@@ -219,27 +224,27 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Base fare</span>
-              <span>₹{formatPrice(baseFare)}</span>
+              <span>{formatPrice(baseFare)}</span>
             </div>
             
             {showDriverAllowance && driverAllowance > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Driver allowance</span>
-                <span>₹{formatPrice(driverAllowance)}</span>
+                <span>{formatPrice(driverAllowance)}</span>
               </div>
             )}
             
             {extraKmCharge > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Extra km charges</span>
-                <span>₹{formatPrice(extraKmCharge)}</span>
+                <span>{formatPrice(extraKmCharge)}</span>
               </div>
             )}
             
             {nightHaltCharge > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Night halt charges</span>
-                <span>₹{formatPrice(nightHaltCharge)}</span>
+                <span>{formatPrice(nightHaltCharge)}</span>
               </div>
             )}
             
@@ -252,7 +257,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
                   <span className="text-muted-foreground capitalize">
                     {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
                   </span>
-                  <span>₹{formatPrice(value)}</span>
+                  <span>{formatPrice(value)}</span>
                 </div>
               );
             })}
@@ -262,7 +267,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           
           <div className="flex justify-between items-center font-semibold text-lg">
             <span>Total Amount</span>
-            <span>₹{formatPrice(totalPrice)}</span>
+            <span>{formatPrice(totalPrice)}</span>
           </div>
           
           <p className="text-xs text-muted-foreground text-right mt-1">

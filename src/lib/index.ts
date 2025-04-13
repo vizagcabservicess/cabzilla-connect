@@ -99,23 +99,27 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
 
-// FIXED: Helper function to check if driver allowance should be shown
-// This is a strict check for airport transfers - must always return false
+// FIXED: Helper function to check if driver allowance should be shown - complete rewrite
 export const shouldShowDriverAllowance = (tripType: string, tripMode?: string): boolean => {
-  // For airport transfers, driver allowance must never be shown under any circumstances
-  return tripType !== 'airport';
+  // For airport transfers, driver allowance must NEVER be shown
+  if (tripType === 'airport') {
+    return false;
+  }
+  
+  // For local and outstation trips, driver allowance should be shown
+  return true;
 };
 
-// Improve the fare event system with unique IDs to avoid duplicate events
-let eventCounter = 0;
-const processedEvents = new Set<number>();
+// Improve the fare event system with better deduplication
+const processedEvents = new Set<string>();
 const MAX_PROCESSED_EVENTS = 100;
+let eventCounter = 0;
 
 export const getFareEventId = (): number => {
   return ++eventCounter;
 };
 
-// FIXED: Create a helper to deduplicate and dispatch fare events
+// FIXED: Create a helper to deduplicate and dispatch fare events with better event key tracking
 export const dispatchFareEvent = (
   eventName: string,
   detail: Record<string, any>,
@@ -126,13 +130,16 @@ export const dispatchFareEvent = (
     detail.eventId = getFareEventId();
   }
   
+  // Create a unique event key based on name, cab, and fare
+  const eventKey = `${eventName}_${detail.cabId || detail.cabType || ''}_${detail.fare || ''}`;
+  
   // Check for duplicate event to prevent processing same event multiple times
-  if (preventDuplicates && processedEvents.has(detail.eventId)) {
+  if (preventDuplicates && processedEvents.has(eventKey)) {
     return; // Skip duplicate event
   }
   
-  // Track this event ID
-  processedEvents.add(detail.eventId);
+  // Track this event
+  processedEvents.add(eventKey);
   
   // Clean up event tracking if too many events
   if (processedEvents.size > MAX_PROCESSED_EVENTS) {

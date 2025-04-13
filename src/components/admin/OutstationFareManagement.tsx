@@ -34,6 +34,7 @@ const OutstationFareManagement: React.FC = () => {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('one-way');
+  const [lastSaveTimestamp, setLastSaveTimestamp] = useState<number>(0);
   const { toast } = useToast();
 
   // Load fare data when vehicle selection changes
@@ -107,6 +108,7 @@ const OutstationFareManagement: React.FC = () => {
     setFareData(prev => prev ? { ...prev, [field]: value } : null);
   };
 
+  // FIXED: Prevent rapid sequential save attempts
   const handleSaveFare = async () => {
     if (!fareData || !selectedVehicleId) {
       toast({
@@ -117,7 +119,19 @@ const OutstationFareManagement: React.FC = () => {
       return;
     }
 
+    // Prevent multiple rapid saves
+    const now = Date.now();
+    if (now - lastSaveTimestamp < 2000) {
+      toast({
+        title: "Please wait",
+        description: "Please wait a moment before saving again.",
+      });
+      return;
+    }
+    
+    setLastSaveTimestamp(now);
     setLoading(true);
+    
     try {
       // Make sure the vehicle ID is correct
       const dataToSave: OutstationFareData = {
@@ -135,8 +149,30 @@ const OutstationFareManagement: React.FC = () => {
           description: "Outstation fare saved successfully.",
         });
         
-        // Refresh data after successful save
+        // Clear any cached fares for this vehicle
+        try {
+          localStorage.removeItem(`fare_outstation_${selectedVehicleId.toLowerCase()}`);
+          console.log(`Cleared cached fare for ${selectedVehicleId}`);
+        } catch (e) {
+          console.error("Error clearing cached fare:", e);
+        }
+        
+        // Force reload fares after a brief delay
         setTimeout(() => {
+          // Trigger a refresh event to update all components
+          try {
+            window.dispatchEvent(new CustomEvent('fares-updated', {
+              detail: {
+                vehicleId: selectedVehicleId,
+                tripType: 'outstation',
+                timestamp: Date.now()
+              }
+            }));
+          } catch (e) {
+            console.error("Error dispatching event:", e);
+          }
+          
+          // Refresh data after successful save
           setRefreshKey(prev => prev + 1);
         }, 1000);
       }
@@ -190,9 +226,24 @@ const OutstationFareManagement: React.FC = () => {
           description: "Outstation fare tables synced successfully.",
         });
         
-        if (selectedVehicleId) {
-          setRefreshKey(prev => prev + 1);
-        }
+        // Force reload fares after a brief delay
+        setTimeout(() => {
+          // Trigger a refresh event to update all components
+          try {
+            window.dispatchEvent(new CustomEvent('fares-updated', {
+              detail: {
+                tripType: 'outstation',
+                timestamp: Date.now()
+              }
+            }));
+          } catch (e) {
+            console.error("Error dispatching event:", e);
+          }
+          
+          if (selectedVehicleId) {
+            setRefreshKey(prev => prev + 1);
+          }
+        }, 1000);
       }
     } catch (error) {
       console.error('Error syncing outstation fare tables:', error);

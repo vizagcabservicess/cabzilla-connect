@@ -15,10 +15,11 @@ export const useFareSyncTracker = () => {
   const processingStack = useRef<Set<string>>(new Set());
   const preventLogging = useRef<boolean>(false);
   const refreshCountRef = useRef<Record<string, number>>({});
+  const fareChangeHistory = useRef<Map<string, number[]>>(new Map());
   
   // Check if a fare is different from what we've tracked
   const isFareChanged = (cabId: string, fare: number, tolerance: number = 0): boolean => {
-    // FIXED: If we're already processing this exact fare, prevent re-entry
+    // If we're already processing this exact fare, prevent re-entry
     const key = `${cabId}_${fare}`;
     if (processingStack.current.has(key)) {
       return false;
@@ -27,7 +28,7 @@ export const useFareSyncTracker = () => {
     try {
       processingStack.current.add(key);
       
-      // FIXED: Known fares should not trigger another update
+      // Known fares should not trigger another update
       if (knownFareKeys.current.has(key)) {
         return false;
       }
@@ -36,6 +37,18 @@ export const useFareSyncTracker = () => {
       
       // If we have no previous fare, it's a change
       if (previousFare === undefined) return true;
+      
+      // FIXED: Track fare change history to detect oscillations
+      if (!fareChangeHistory.current.has(cabId)) {
+        fareChangeHistory.current.set(cabId, []);
+      }
+      
+      const history = fareChangeHistory.current.get(cabId) || [];
+      if (history.length > 5) {
+        history.shift(); // Keep only last 5 changes
+      }
+      history.push(fare);
+      fareChangeHistory.current.set(cabId, history);
       
       // Check for minimum difference to avoid micro-adjustments
       const diff = Math.abs(previousFare - fare);
@@ -88,11 +101,13 @@ export const useFareSyncTracker = () => {
     const now = Date.now();
     const lastTime = lastDispatchTime.current[cabId] || 0;
     
-    // FIXED: Throttle based on refresh count
+    // Throttle based on refresh count
     const refreshCount = refreshCountRef.current[cabId] || 0;
+    let adjustedInterval = minInterval;
+    
     if (refreshCount > 3) {
       // Increase throttle time for cabId with multiple refreshes
-      minInterval = Math.min(minInterval * 2, 2000);
+      adjustedInterval = Math.min(minInterval * Math.max(1, refreshCount / 2), 2000);
       
       // Reset counter after a period of time to avoid permanent throttling
       if (now - lastTime > 10000) {
@@ -103,7 +118,7 @@ export const useFareSyncTracker = () => {
     // Check if we've already processed this sync recently
     if (syncHistory.current.has(cabId)) {
       const lastSync = syncHistory.current.get(cabId) || 0;
-      if (now - lastSync < minInterval) {
+      if (now - lastSync < adjustedInterval) {
         return true;
       }
     }
@@ -118,7 +133,7 @@ export const useFareSyncTracker = () => {
       keysToDelete.forEach(k => syncHistory.current.delete(k));
     }
     
-    return (now - lastTime) < minInterval;
+    return (now - lastTime) < adjustedInterval;
   };
   
   // Enable or disable console logging
@@ -161,6 +176,7 @@ export const useFareSyncTracker = () => {
       
       keysToRemove.forEach(key => knownFareKeys.current.delete(key));
       syncHistory.current.delete(cabId);
+      fareChangeHistory.current.delete(cabId);
     } else {
       trackedFares.current = {};
       lastDispatchTime.current = {};
@@ -169,6 +185,7 @@ export const useFareSyncTracker = () => {
       syncHistory.current.clear();
       processingStack.current.clear();
       refreshCountRef.current = {};
+      fareChangeHistory.current.clear();
     }
     syncLock.current = false;
   };
@@ -177,6 +194,30 @@ export const useFareSyncTracker = () => {
   const isProcessing = (cabId: string, fare: number): boolean => {
     const key = `${cabId}_${fare}`;
     return processingStack.current.has(key);
+  };
+  
+  // FIXED: Get the fare variation for a cab to detect oscillations
+  const getFareVariation = (cabId: string): number => {
+    const history = fareChangeHistory.current.get(cabId);
+    if (!history || history.length < 2) return 0;
+    
+    let maxVariation = 0;
+    for (let i = 1; i < history.length; i++) {
+      const variation = Math.abs(history[i] - history[i-1]);
+      maxVariation = Math.max(maxVariation, variation);
+    }
+    
+    return maxVariation;
+  };
+  
+  // FIXED: Check if fare value is oscillating (changing back and forth)
+  const isOscillating = (cabId: string): boolean => {
+    const history = fareChangeHistory.current.get(cabId);
+    if (!history || history.length < 4) return false;
+    
+    // Check for pattern like A, B, A, B or similar oscillations
+    const variation = getFareVariation(cabId);
+    return variation > 0 && refreshCountRef.current[cabId] > 3;
   };
   
   return {
@@ -190,6 +231,8 @@ export const useFareSyncTracker = () => {
     hasProcessedEvent,
     trackProcessedEvent,
     isProcessing,
-    setLoggingEnabled
+    setLoggingEnabled,
+    getFareVariation,
+    isOscillating
   };
 };

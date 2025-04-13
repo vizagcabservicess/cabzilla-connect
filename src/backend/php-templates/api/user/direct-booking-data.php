@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.59'); // Increment version
+header('X-API-Version: 1.0.60'); // Increment version to avoid caching issues
 header('X-Timestamp: ' . time());
 header('X-Priority-DB: true');
 
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// FIXED: Handle vehicle fare data with improved error handling
+// FIXED: Handle vehicle fare data with improved error handling and reliability
 if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     $vehicleId = $_GET['vehicle_id'];
     $forceDb = isset($_GET['force_db']) && $_GET['force_db'] === 'true';
@@ -39,100 +39,113 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         try {
             // First try the local_package_fares table
             $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
-            $tableExists = ($tableCheckResult->num_rows > 0);
+            $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
-                // Query for the vehicle's fare data
+                // Query for the vehicle's fare data with proper escaping
+                $escapedVehicleId = $conn->real_escape_string($vehicleId);
                 $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $vehicleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
                 
-                if ($result && $result->num_rows > 0) {
-                    $row = $result->fetch_assoc();
+                if ($stmt) {
+                    $stmt->bind_param("s", $vehicleId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
                     
-                    echo json_encode([
-                        'status' => 'success',
-                        'exists' => true,
-                        'source' => 'database',
-                        'data' => [
-                            'vehicleId' => $row['vehicle_id'],
-                            'price4hrs40km' => floatval($row['price_4hrs_40km']),
-                            'price8hrs80km' => floatval($row['price_8hrs_80km']),
-                            'price10hrs100km' => floatval($row['price_10hrs_100km']),
-                            'priceExtraKm' => floatval($row['price_extra_km']),
-                            'priceExtraHour' => floatval($row['price_extra_hour']),
-                        ],
-                        'timestamp' => time()
-                    ]);
-                    exit;
+                    if ($result && $result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        
+                        // Format the response
+                        echo json_encode([
+                            'status' => 'success',
+                            'exists' => true,
+                            'source' => 'database',
+                            'data' => [
+                                'vehicleId' => $row['vehicle_id'],
+                                'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                                'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                                'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                                'priceExtraKm' => (float)$row['price_extra_km'],
+                                'priceExtraHour' => (float)$row['price_extra_hour'],
+                            ],
+                            'timestamp' => time()
+                        ]);
+                        exit;
+                    }
                 }
             }
             
             // If no local package fares, try vehicle_pricing table
             $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-            $tableExists = ($tableCheckResult->num_rows > 0);
+            $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
+                $escapedVehicleId = $conn->real_escape_string($vehicleId);
                 $query = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $vehicleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
                 
-                if ($result && $result->num_rows > 0) {
-                    $row = $result->fetch_assoc();
+                if ($stmt) {
+                    $stmt->bind_param("s", $vehicleId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
                     
-                    echo json_encode([
-                        'status' => 'success',
-                        'exists' => true,
-                        'source' => 'database',
-                        'data' => [
-                            'vehicleId' => $row['vehicle_id'],
-                            'pricePerKm' => floatval($row['price_per_km']),
-                            'basePrice' => floatval($row['base_price']),
-                            'airportPrice' => floatval($row['airport_price']),
-                            'driverAllowance' => floatval($row['driver_allowance']),
-                        ],
-                        'timestamp' => time()
-                    ]);
-                    exit;
+                    if ($result && $result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        
+                        // Format the response
+                        echo json_encode([
+                            'status' => 'success',
+                            'exists' => true,
+                            'source' => 'database',
+                            'data' => [
+                                'vehicleId' => $row['vehicle_id'],
+                                'pricePerKm' => (float)$row['price_per_km'],
+                                'basePrice' => (float)$row['base_price'],
+                                'airportPrice' => (float)$row['airport_price'],
+                                'driverAllowance' => (float)$row['driver_allowance'],
+                            ],
+                            'timestamp' => time()
+                        ]);
+                        exit;
+                    }
                 }
             }
             
             // If no vehicle-specific pricing found, try the vehicles table
             $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
-            $tableExists = ($tableCheckResult->num_rows > 0);
+            $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
-                // FIXED: Improved query to better match vehicle IDs
+                // FIXED: Improved query to better match vehicle IDs with case insensitivity
                 $query = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ? OR LOWER(id) = LOWER(?) OR LOWER(vehicle_id) = LOWER(?)";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ssss", $vehicleId, $vehicleId, $vehicleId, $vehicleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
                 
-                if ($result && $result->num_rows > 0) {
-                    $row = $result->fetch_assoc();
+                if ($stmt) {
+                    $stmt->bind_param("ssss", $vehicleId, $vehicleId, $vehicleId, $vehicleId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
                     
-                    // FIXED: Return consistent field structure
-                    echo json_encode([
-                        'status' => 'success',
-                        'exists' => true,
-                        'source' => 'database',
-                        'data' => [
-                            'vehicleId' => $row['id'] ?? $row['vehicle_id'],
-                            'pricePerKm' => floatval($row['price_per_km'] ?? $row['price']),
-                            'basePrice' => floatval($row['base_price'] ?? $row['price']),
-                            'airportPrice' => floatval($row['airport_price'] ?? $row['price']),
-                            'driverAllowance' => floatval($row['driver_allowance'] ?? 250),
-                            'id' => $row['id'] ?? $row['vehicle_id'],
-                            'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
-                        ],
-                        'timestamp' => time()
-                    ]);
-                    exit;
+                    if ($result && $result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        
+                        // FIXED: Return consistent field structure
+                        echo json_encode([
+                            'status' => 'success',
+                            'exists' => true,
+                            'source' => 'database',
+                            'data' => [
+                                'vehicleId' => $row['id'] ?? $row['vehicle_id'],
+                                'pricePerKm' => (float)($row['price_per_km'] ?? $row['price'] ?? 0),
+                                'basePrice' => (float)($row['base_price'] ?? $row['price'] ?? 0),
+                                'airportPrice' => (float)($row['airport_price'] ?? $row['price'] ?? 0),
+                                'driverAllowance' => (float)($row['driver_allowance'] ?? 250),
+                                'id' => $row['id'] ?? $row['vehicle_id'],
+                                'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
+                            ],
+                            'timestamp' => time()
+                        ]);
+                        exit;
+                    }
                 }
             }
             
@@ -200,7 +213,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.59'
+        'version' => '1.0.60'
     ]);
     exit;
 }
@@ -364,7 +377,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.59'
+        'version' => '1.0.60'
     ]);
     
 } catch (Exception $e) {
@@ -378,6 +391,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.59'
+        'version' => '1.0.60'
     ]);
 }
