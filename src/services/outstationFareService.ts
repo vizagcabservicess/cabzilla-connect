@@ -286,4 +286,4 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
   }
 };
 
-export { OutstationFareData };
+export type { OutstationFareData };

@@ -280,7 +280,7 @@ const AirportFareManagement: React.FC = () => {
     
     setLoading(true);
     try {
-      await updateAirportFares(fareToSave);
+      await updateAirportFare(fareToSave);
       toast({
         title: "Success",
         description: "Airport fares saved successfully.",

@@ -49,3 +49,10 @@ export const getAdminRequestConfig = () => ({
   headers: adminHeaders,
   cache: 'no-store' as const
 });
+
+// Function to get bypass headers for API requests
+export const getBypassHeaders = () => ({
+  ...forceRefreshHeaders,
+  'X-Admin-Mode': 'true',
+  'X-Debug': 'true'
+});
