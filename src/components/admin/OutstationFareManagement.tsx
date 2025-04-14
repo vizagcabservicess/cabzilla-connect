@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,7 +121,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
         vehicleId: fareData.vehicleId,
         basePrice: fareData.oneWayBasePrice || fareData.basePrice,
         pricePerKm: fareData.oneWayPricePerKm || fareData.pricePerKm,
-        roundTripBasePrice: fareData.roundTripBasePrice,
+        roundTripBasePrice: fareData.roundTripBasePrice || 0,
         roundTripPricePerKm: fareData.roundTripPricePerKm,
         driverAllowance: fareData.driverAllowance,
         nightHaltCharge: fareData.nightHaltCharge,

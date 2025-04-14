@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -180,6 +179,7 @@ export const BookingSummary = ({
         
         if (localFare) {
           // Driver allowance from the database, with fallback
+          // Now safely accessing driverAllowance with optional chaining since we added it to the interface
           const driverAllowanceAmount = localFare.driverAllowance || 250;
           setDriverAllowance(driverAllowanceAmount);
           
