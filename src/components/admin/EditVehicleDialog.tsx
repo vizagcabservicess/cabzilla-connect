@@ -39,12 +39,12 @@ export function EditVehicleDialog({
     if (initialVehicle && open) {
       console.log('Initial vehicle data received:', initialVehicle);
       
-      const numCapacity = parseNumericValue(initialVehicle.capacity, 4);
-      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity, 2);
-      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price, 0);
-      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm, 0);
-      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance, 250);
-      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge, 700);
+      const numCapacity = parseNumericValue(initialVehicle.capacity);
+      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity);
+      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price);
+      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm);
+      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance);
+      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge);
       
       const vehicleAmenities = parseAmenities(initialVehicle.amenities);
       
