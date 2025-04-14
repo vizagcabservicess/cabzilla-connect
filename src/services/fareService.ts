@@ -1,4 +1,3 @@
-
 import fareStateManager from './FareStateManager';
 import { toast } from 'sonner';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -70,7 +69,51 @@ export const fareService = {
 
   getBypassHeaders,
   getForcedRequestConfig,
-  formatDataForMultipart
+  formatDataForMultipart,
+  
+  // Add the missing methods needed by components
+  initializeDatabase: async (): Promise<{status: string, message?: string}> => {
+    try {
+      console.log('Initializing database...');
+      
+      // Sync fare data for all types
+      const success = await syncFareData();
+      
+      if (success) {
+        console.log('Database initialized successfully');
+        
+        // Dispatch event to notify components
+        window.dispatchEvent(new CustomEvent('database-initialized', {
+          detail: { timestamp: Date.now() }
+        }));
+        
+        return { 
+          status: 'success',
+          message: 'Database initialized successfully'
+        };
+      } else {
+        console.error('Failed to initialize database');
+        return { 
+          status: 'error',
+          message: 'Failed to initialize database'
+        };
+      }
+    } catch (error) {
+      console.error('Error initializing database:', error);
+      return { 
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error initializing database'
+      };
+    }
+  },
+  
+  directFareUpdate: async (tripType: string, vehicleId: string, fareData: any): Promise<{status: string, message?: string}> => {
+    return directFareUpdate(tripType, vehicleId, fareData);
+  },
+  
+  getLocalFaresForVehicle: async (vehicleId: string) => getLocalFaresForVehicle(vehicleId),
+  getOutstationFaresForVehicle: async (vehicleId: string) => getOutstationFaresForVehicle(vehicleId),
+  getAirportFaresForVehicle: async (vehicleId: string) => getAirportFaresForVehicle(vehicleId)
 };
 
 // Re-export all functions independently
