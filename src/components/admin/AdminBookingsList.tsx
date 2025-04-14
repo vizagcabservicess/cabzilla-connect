@@ -166,12 +166,12 @@ export function AdminBookingsList() {
           try {
             setApiAttempt(3);
             // Fallback to using the bookingAPI service
-            console.log('Attempting to fetch via bookingAPI.getAllBookings()');
-            data = await bookingAPI.getAllBookings();
+            console.log('Attempting to fetch via bookingAPI.getBookings()');
+            data = await bookingAPI.getBookings();
             console.log('Admin: Bookings received from admin API:', data);
             responseSource = 'booking_api';
           } catch (adminError) {
-            console.warn('getAllBookings admin API failed:', adminError);
+            console.warn('getBookings admin API failed:', adminError);
             
             try {
               setApiAttempt(4);

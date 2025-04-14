@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,7 @@ import { UserManagement } from "@/components/admin/UserManagement";
 import { DriverManagement } from "@/components/admin/DriverManagement";
 import { AdminNotifications } from "@/components/admin/AdminNotifications";
 import { Database, CreditCard, Car, CalendarDays, Users, Map, Settings } from 'lucide-react';
+import { ReportingAnalytics } from "@/components/admin/ReportingAnalytics";
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');

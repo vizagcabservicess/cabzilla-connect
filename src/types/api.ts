@@ -1,10 +1,12 @@
-
 // API response types for the application
 
 export interface ApiResponse {
   status: 'success' | 'error';
   message?: string;
   timestamp?: number;
+  token?: string;
+  user?: User;
+  updatedAt?: string;
 }
 
 export interface LocalPackageFare {
@@ -110,6 +112,8 @@ export interface Booking {
   paymentMethod?: string;
   amountPaid?: number;
   transactionId?: string;
+  tourId?: string; // Added for tour bookings
+  userId?: string | number; // Added for user association
 }
 
 // Dashboard metrics interface
@@ -163,7 +167,7 @@ export interface FareUpdateRequest {
 
 // User interface - make ID accept both string and number
 export interface User {
-  id: string | number; // Allow both string and number types
+  id?: string | number; // Allow both string and number types, make optional for creation
   name: string;
   email: string;
   phone: string;

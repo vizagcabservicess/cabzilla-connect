@@ -118,12 +118,18 @@ export default function BookingEditPage() {
       
       const response = await bookingAPI.updateBookingStatus(bookingIdNumber, newStatus);
       
-      if (response) {
-        setBooking({
+      if (response && response.status === 'success') {
+        const updatedBooking: Booking = {
           ...booking,
-          status: newStatus,
-          updatedAt: response.updatedAt || booking.updatedAt
-        });
+          status: newStatus
+        };
+        
+        if (response.updatedAt) {
+          updatedBooking.updatedAt = response.updatedAt;
+        }
+        
+        setBooking(updatedBooking);
+        
         toast({
           title: "Status Updated",
           description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,

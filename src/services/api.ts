@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { 
   ApiResponse, 
@@ -116,6 +115,16 @@ export const bookingAPI = {
     }
   },
 
+  getAllBookings: async (): Promise<Booking[]> => {
+    try {
+      const response = await axiosInstance.get('/api/admin/bookings.php');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch all bookings:', error);
+      throw error;
+    }
+  },
+
   createBooking: async (bookingData: BookingRequest) => {
     // bookingRequest may or may not include userId, so we don't need to check for it
     console.log('Creating booking:', bookingData);
@@ -169,12 +178,13 @@ export const bookingAPI = {
     }
   },
   
-  getUserBookings: async (userId: number, options = {}) => {
+  getUserBookings: async (userId?: number, options = {}) => {
     try {
-      const response = await axiosInstance.get(`/api/user-bookings.php?userId=${userId}`, { params: options });
+      const params = userId ? { userId, ...options } : options;
+      const response = await axiosInstance.get(`/api/user-bookings.php`, { params });
       return response.data;
     } catch (error) {
-      console.error(`Failed to fetch bookings for user ${userId}:`, error);
+      console.error(`Failed to fetch user bookings:`, error);
       throw error;
     }
   },
@@ -229,6 +239,16 @@ export const userAPI = {
       return response.data;
     } catch (error) {
       console.error('Failed to delete user:', error);
+      throw error;
+    }
+  },
+  
+  updateUserRole: async (userId: string | number, role: 'admin' | 'user' | 'driver'): Promise<ApiResponse> => {
+    try {
+      const response = await axiosInstance.put(`/api/users.php?id=${userId}`, { role });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update user role:', error);
       throw error;
     }
   }
@@ -295,15 +315,6 @@ export const fareAPI = {
       console.error('Failed to delete tour fare:', error);
       throw error;
     }
-  }
-};
-
-// Utility function to set auth token
-export const setAuthToken = (token: string | null) => {
-  if (token) {
-    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  } else {
-    delete axiosInstance.defaults.headers.common['Authorization'];
   }
 };
 

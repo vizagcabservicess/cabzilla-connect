@@ -506,6 +506,7 @@ export default function UserManagement() {
   const [error, setError] = useState<Error | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -540,6 +541,52 @@ export default function UserManagement() {
 
   const handleCancelEdit = () => {
     setEditingUser(null);
+  };
+
+  const handleAddUser = async (data: { name: string; email: string; phone: string; role: 'admin' | 'user' | 'driver' }) => {
+    setIsCreating(true);
+    setError(null);
+    
+    try {
+      const userData: User = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        role: data.role
+      };
+      
+      const response = await userAPI.createUser(userData);
+      
+      if (response.status === 'success') {
+        toast.success('User created successfully!');
+        fetchUsers();
+        setIsAddDialogOpen(false);
+      } else {
+        toast.error(`Failed to add user: ${response.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error adding user:', error);
+      setError(error as Error);
+      toast.error('Failed to add user');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string | number, newRole: 'admin' | 'user' | 'driver') => {
+    try {
+      const response = await userAPI.updateUserRole(userId, newRole);
+      
+      if (response.status === 'success') {
+        toast.success(`User role updated to ${newRole}`);
+        fetchUsers();
+      } else {
+        toast.error(`Failed to update role: ${response.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast.error('Failed to update user role');
+    }
   };
 
   if (isLoading) {
