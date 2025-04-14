@@ -1,3 +1,4 @@
+
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -150,10 +151,7 @@ export const updateAirportFare = async (fareData: AirportFareData): Promise<bool
         });
       }, 1000);
       
-      toast({
-        description: "Airport fare updated successfully.",
-        duration: 3000
-      });
+      toast("Airport fare updated successfully.");
       
       return true;
     } else {
@@ -162,11 +160,7 @@ export const updateAirportFare = async (fareData: AirportFareData): Promise<bool
   } catch (error) {
     console.error('Error updating airport fare:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to update airport fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to update airport fare: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -200,20 +194,13 @@ export const initializeAirportFareTables = async (): Promise<boolean> => {
       });
     }, 1000);
     
-    toast({
-      description: "Airport fare tables initialized successfully.",
-      duration: 3000
-    });
+    toast("Airport fare tables initialized successfully.");
     
     return true;
   } catch (error) {
     console.error('Error initializing airport fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to initialize airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to initialize airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -247,20 +234,13 @@ export const syncAirportFareTables = async (): Promise<boolean> => {
       });
     }, 1000);
     
-    toast({
-      description: "Airport fare tables synced successfully.",
-      duration: 3000
-    });
+    toast("Airport fare tables synced successfully.");
     
     return true;
   } catch (error) {
     console.error('Error syncing airport fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to sync airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to sync airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }

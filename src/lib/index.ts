@@ -34,8 +34,7 @@ export {
 export { 
   directFareUpdate,  
   initializeDatabase,
-  syncOutstationFares, // Changed from forceSyncOutstationFares to syncOutstationFares
-  syncOutstationFares,
+  syncOutstationFares, // Fixed: removed duplicate export
   getOutstationFares,
   getLocalFares,
   getAirportFares,

@@ -1,3 +1,4 @@
+
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -158,10 +159,7 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
         });
       }, 1000);
       
-      toast({
-        description: "Outstation fare updated successfully.",
-        duration: 3000
-      });
+      toast("Outstation fare updated successfully.");
       
       return true;
     } else {
@@ -170,11 +168,7 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
   } catch (error) {
     console.error('Error updating outstation fare:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to update outstation fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to update outstation fare: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -209,10 +203,7 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
         });
       }, 1000);
       
-      toast({
-        description: "Outstation fare tables initialized successfully.",
-        duration: 3000
-      });
+      toast("Outstation fare tables initialized successfully.");
       
       return true;
     } else {
@@ -221,11 +212,7 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error initializing outstation fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to initialize outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to initialize outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -260,10 +247,7 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
         });
       }, 1000);
       
-      toast({
-        description: "Outstation fare tables synced successfully.",
-        duration: 3000
-      });
+      toast("Outstation fare tables synced successfully.");
       
       return true;
     } else {
@@ -272,11 +256,7 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error syncing outstation fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to sync outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to sync outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }

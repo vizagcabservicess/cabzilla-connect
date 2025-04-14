@@ -1,3 +1,4 @@
+
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -155,10 +156,7 @@ export const updateLocalFare = async (fareData: LocalFareData): Promise<boolean>
         });
       }, 1000);
       
-      toast({
-        description: "Local fare updated successfully.",
-        duration: 3000
-      });
+      toast("Local fare updated successfully.");
       
       return true;
     } else {
@@ -167,11 +165,7 @@ export const updateLocalFare = async (fareData: LocalFareData): Promise<boolean>
   } catch (error) {
     console.error('Error updating local fare:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to update local fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to update local fare: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -205,20 +199,13 @@ export const initializeLocalFareTables = async (): Promise<boolean> => {
       });
     }, 1000);
     
-    toast({
-      description: "Local fare tables initialized successfully.",
-      duration: 3000
-    });
+    toast("Local fare tables initialized successfully.");
     
     return true;
   } catch (error) {
     console.error('Error initializing local fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to initialize local fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to initialize local fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
@@ -252,20 +239,13 @@ export const syncLocalFareTables = async (): Promise<boolean> => {
       });
     }, 1000);
     
-    toast({
-      description: "Local fare tables synced successfully.",
-      duration: 3000
-    });
+    toast("Local fare tables synced successfully.");
     
     return true;
   } catch (error) {
     console.error('Error syncing local fare tables:', error);
     
-    toast({
-      variant: "destructive",
-      description: `Failed to sync local fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      duration: 3000
-    });
+    toast(`Failed to sync local fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
     return false;
   }
