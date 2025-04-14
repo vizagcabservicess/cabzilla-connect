@@ -198,4 +198,3 @@ export interface OutstationFareData extends FareData {
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
 }
-

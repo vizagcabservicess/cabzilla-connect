@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,11 +64,10 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             roundTripPricePerKm: data.roundTripPricePerKm || 0,
             minDistance: data.minDistance || 300,
             driverAllowance: data.driverAllowance || 300,
-            nightHaltCharges: data.nightHaltCharge || data.nightHaltCharges || 700,
+            nightHaltCharge: data.nightHaltCharge || data.nightHaltCharge || 700,
             // Additional properties for the component's interface
             oneWayBasePrice: data.basePrice || 0,
-            oneWayPricePerKm: data.pricePerKm || 0,
-            nightHaltCharge: data.nightHaltCharge || data.nightHaltCharges || 700
+            oneWayPricePerKm: data.pricePerKm || 0
           });
         } else {
           setFareData({
@@ -80,11 +78,10 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             roundTripPricePerKm: 0,
             minDistance: 300,
             driverAllowance: 300,
-            nightHaltCharges: 700,
+            nightHaltCharge: 700,
             // Additional properties
             oneWayBasePrice: 0,
-            oneWayPricePerKm: 0,
-            nightHaltCharge: 700
+            oneWayPricePerKm: 0
           });
         }
       } catch (err) {
@@ -127,7 +124,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
         roundTripBasePrice: fareData.roundTripBasePrice,
         roundTripPricePerKm: fareData.roundTripPricePerKm,
         driverAllowance: fareData.driverAllowance,
-        nightHaltCharge: fareData.nightHaltCharge || fareData.nightHaltCharges
+        nightHaltCharge: fareData.nightHaltCharge
       };
       
       await updateOutstationFare(serviceData);
