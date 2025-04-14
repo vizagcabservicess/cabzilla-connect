@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType, LocalFare } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -14,6 +15,36 @@ interface BookingSummaryProps {
   tripType: string;
   tripMode?: 'one-way' | 'round-trip';
 }
+
+// Helper function to normalize vehicle IDs
+const normalizeVehicleId = (vehicleId: string): string => {
+  if (!vehicleId) return '';
+  
+  // Handle special cases of common vehicle IDs for better matching
+  const id = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Map common variants to standardized IDs
+  const idMappings: Record<string, string> = {
+    'sedan': 'sedan',
+    'dzire': 'sedan',
+    'swift_dzire': 'sedan',
+    'etios': 'sedan',
+    'amaze': 'sedan',
+    'ertiga': 'ertiga',
+    'marazzo': 'ertiga',
+    'suv': 'ertiga',
+    'innova': 'innova_crysta',
+    'innova_crysta': 'innova_crysta',
+    'crysta': 'innova_crysta',
+    'hycross': 'innova_crysta',
+    'mpv': 'innova_crysta',
+    'tempo': 'tempo_traveller',
+    'tempo_traveller': 'tempo_traveller',
+    'traveller': 'tempo_traveller'
+  };
+  
+  return idMappings[id] || id;
+};
 
 export const BookingSummary = ({
   pickupLocation,
@@ -41,10 +72,14 @@ export const BookingSummary = ({
     const handleFareUpdate = (event: CustomEvent) => {
       if (!selectedCab) return;
       
-      const { cabType, cabId, fare, timestamp = Date.now() } = event.detail || {};
+      const { cabType, cabId, normalizedCabId, fare, timestamp = Date.now() } = event.detail || {};
       const relevantCabId = cabType || cabId;
       
-      if (relevantCabId === selectedCab.id && fare && fare > 0) {
+      // Check if this update is for our selected cab (using both original and normalized IDs)
+      const isForCurrentCab = relevantCabId === selectedCab.id || 
+                             normalizeVehicleId(relevantCabId) === normalizeVehicleId(selectedCab.id);
+      
+      if (isForCurrentCab && fare && fare > 0) {
         const now = Date.now();
         if (now - lastUpdateRef.current < 500) return;
         
@@ -82,10 +117,14 @@ export const BookingSummary = ({
         try {
           let fare = initialPrice;
           
+          // If initial price is 0 or invalid, try to calculate a fresh fare
           if (fare <= 0) {
+            const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
+            console.log(`BookingSummary: Calculating fresh fare for ${selectedCab.id} (normalized to ${normalizedVehicleId})`);
+            
             if (tripType === 'outstation') {
               fare = await fareStateManager.calculateOutstationFare({
-                vehicleId: selectedCab.id,
+                vehicleId: normalizedVehicleId,
                 distance,
                 tripMode,
                 pickupDate
@@ -93,21 +132,24 @@ export const BookingSummary = ({
             } else if (tripType === 'local') {
               const hourlyPackage = localStorage.getItem('hourlyPackage') || '8hrs-80km';
               fare = await fareStateManager.calculateLocalFare({
-                vehicleId: selectedCab.id,
+                vehicleId: normalizedVehicleId,
                 hourlyPackage
               });
             } else if (tripType === 'airport') {
               fare = await fareStateManager.calculateAirportFare({
-                vehicleId: selectedCab.id,
+                vehicleId: normalizedVehicleId,
                 distance
               });
             }
           }
           
+          console.log(`BookingSummary: Loaded fare for ${selectedCab.id}: ${fare}`);
+          
           if (fare > 0) {
             setTotalPrice(fare);
             updateFareDetails(fare, tripType, distance, selectedCab);
           } else {
+            console.warn(`BookingSummary: Invalid fare (${fare}), using initial price of ${initialPrice}`);
             setTotalPrice(initialPrice > 0 ? initialPrice : 0);
             updateFareDetails(initialPrice > 0 ? initialPrice : 0, tripType, distance, selectedCab);
           }
@@ -129,71 +171,110 @@ export const BookingSummary = ({
     
     try {
       const isAirportTransfer = tripType === 'airport';
+      const normalizedVehicleId = normalizeVehicleId(cab.id);
       
-      const effectiveDist = tripType === 'outstation' && tripMode === 'one-way' 
+      console.log(`BookingSummary: Updating fare details for ${cab.id} (normalized to ${normalizedVehicleId}), trip type ${tripType}`);
+      
+      // Calculate effective distance based on trip type and mode
+      const effectiveDist = tripType === 'outstation' && tripMode === 'round-trip' 
         ? distance * 2 
         : distance;
       
       setEffectiveDistance(effectiveDist);
       
-      if (tripType === 'outstation' && cab.id) {
-        const outstationFare = await fareStateManager.getOutstationFareForVehicle(cab.id);
-        
-        if (outstationFare) {
-          const driverAllowanceAmount = !isAirportTransfer ? (outstationFare.driverAllowance || 300) : 0;
-          setDriverAllowance(driverAllowanceAmount);
-          
-          const minimumKm = 300;
-          
-          const hasNightSurcharge = pickupDate && 
-            (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
-          
-          const nightChargeAmount = hasNightSurcharge && !isAirportTransfer ? 
-            Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
-          setNightCharges(nightChargeAmount);
-          
-          if (effectiveDist > minimumKm) {
-            const extraKm = effectiveDist - minimumKm;
-            const perKmRate = tripMode === 'one-way' ? 
-              outstationFare.pricePerKm : 
-              outstationFare.roundTripPricePerKm;
-            
-            const extraFare = extraKm * perKmRate;
-            setExtraDistanceFare(extraFare);
-            setBaseFare(fare - extraFare - driverAllowanceAmount - nightChargeAmount);
-          } else {
-            setExtraDistanceFare(0);
-            setBaseFare(fare - driverAllowanceAmount - nightChargeAmount);
-          }
-          
-          setIsLoading(false);
-          return;
-        }
-      } else if (tripType === 'local' && cab.id) {
-        const localFare: LocalFare | null = await fareStateManager.getLocalFareForVehicle(cab.id);
-        
-        if (localFare) {
-          const driverAllowanceAmount = !isAirportTransfer ? (localFare?.driverAllowance ?? 250) : 0;
-          setDriverAllowance(driverAllowanceAmount);
-          
-          setBaseFare(fare - driverAllowanceAmount);
-          setExtraDistanceFare(0);
-          setNightCharges(0);
-          
-          setIsLoading(false);
-          return;
-        }
-      } else if (tripType === 'airport') {
+      // For airport transfers, no driver allowance or night charges
+      if (isAirportTransfer) {
+        console.log(`BookingSummary: Airport transfer - no driver allowance or night charges`);
         setBaseFare(fare);
         setExtraDistanceFare(0);
-        setNightCharges(0);
         setDriverAllowance(0);
-        
+        setNightCharges(0);
         setIsLoading(false);
         return;
       }
       
-      const driverAllowanceAmount = isAirportTransfer ? 0 : (cab.driverAllowance || 250);
+      if (tripType === 'outstation' && cab.id) {
+        try {
+          const outstationFare = await fareStateManager.getOutstationFareForVehicle(normalizedVehicleId);
+          
+          if (outstationFare) {
+            console.log(`BookingSummary: Using outstation fare data for ${normalizedVehicleId}:`, outstationFare);
+            
+            // For outstation, include driver allowance
+            const driverAllowanceAmount = outstationFare.driverAllowance || 300;
+            setDriverAllowance(driverAllowanceAmount);
+            
+            const minimumKm = tripMode === 'one-way' ? 250 : 300;
+            
+            const hasNightSurcharge = pickupDate && 
+              (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
+            
+            const nightChargeAmount = hasNightSurcharge ? 
+              Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
+            setNightCharges(nightChargeAmount);
+            
+            if (effectiveDist > minimumKm) {
+              const extraKm = effectiveDist - minimumKm;
+              const perKmRate = tripMode === 'one-way' ? 
+                outstationFare.pricePerKm : 
+                (outstationFare.roundTripPricePerKm || outstationFare.pricePerKm * 0.9);
+              
+              const extraFare = extraKm * perKmRate;
+              setExtraDistanceFare(extraFare);
+              setBaseFare(fare - extraFare - driverAllowanceAmount - nightChargeAmount);
+            } else {
+              setExtraDistanceFare(0);
+              setBaseFare(fare - driverAllowanceAmount - nightChargeAmount);
+            }
+            
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error(`Error getting outstation fare data for ${normalizedVehicleId}:`, err);
+        }
+      } else if (tripType === 'local' && cab.id) {
+        try {
+          const localFare: LocalFare | null = await fareStateManager.getLocalFareForVehicle(normalizedVehicleId);
+          
+          if (localFare) {
+            console.log(`BookingSummary: Using local fare data for ${normalizedVehicleId}:`, localFare);
+            
+            const driverAllowanceAmount = localFare?.driverAllowance ?? 250;
+            setDriverAllowance(driverAllowanceAmount);
+            
+            setBaseFare(fare - driverAllowanceAmount);
+            setExtraDistanceFare(0);
+            setNightCharges(0);
+            
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error(`Error getting local fare data for ${normalizedVehicleId}:`, err);
+        }
+      }
+      
+      // Fallback calculations if we couldn't get specific fare data
+      console.log(`BookingSummary: Using fallback calculations for ${normalizedVehicleId}`);
+      
+      // Set driver allowance based on vehicle type
+      let driverAllowanceAmount = 0;
+      
+      if (isAirportTransfer) {
+        driverAllowanceAmount = 0; // No driver allowance for airport transfers
+      } else if (normalizedVehicleId === 'sedan') {
+        driverAllowanceAmount = 250;
+      } else if (normalizedVehicleId === 'ertiga') {
+        driverAllowanceAmount = 300;
+      } else if (normalizedVehicleId === 'innova_crysta') {
+        driverAllowanceAmount = 350;
+      } else if (normalizedVehicleId === 'tempo_traveller') {
+        driverAllowanceAmount = 400;
+      } else {
+        driverAllowanceAmount = cab.driverAllowance || 250;
+      }
+      
       setDriverAllowance(driverAllowanceAmount);
       
       if (tripType === 'local') {
@@ -201,16 +282,31 @@ export const BookingSummary = ({
         setExtraDistanceFare(0);
         setNightCharges(0);
       } else if (tripType === 'outstation') {
-        const minimumKm = 300;
-        const perKmRate = cab.outstationFares?.pricePerKm || 
-                         (cab.id?.includes('sedan') ? 15 : 
-                          cab.id?.includes('ertiga') ? 18 : 
-                          cab.id?.includes('innova') ? 22 : 18);
+        const minimumKm = tripMode === 'one-way' ? 250 : 300;
+        
+        // Set per km rate based on vehicle type
+        let perKmRate = 0;
+        if (normalizedVehicleId === 'sedan') {
+          perKmRate = 12;
+        } else if (normalizedVehicleId === 'ertiga') {
+          perKmRate = 15;
+        } else if (normalizedVehicleId === 'innova_crysta') {
+          perKmRate = 18;
+        } else if (normalizedVehicleId === 'tempo_traveller') {
+          perKmRate = 25;
+        } else {
+          perKmRate = cab.outstationFares?.pricePerKm || 15;
+        }
+        
+        // Adjust for round trip
+        if (tripMode === 'round-trip') {
+          perKmRate = perKmRate * 0.9; // 10% discount for round trip
+        }
         
         const hasNightSurcharge = pickupDate && 
           (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
         
-        const nightChargeAmount = hasNightSurcharge && !isAirportTransfer ? 
+        const nightChargeAmount = hasNightSurcharge ? 
           Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
         setNightCharges(nightChargeAmount);
         
@@ -223,10 +319,6 @@ export const BookingSummary = ({
           setExtraDistanceFare(0);
           setBaseFare(fare - driverAllowanceAmount - nightChargeAmount);
         }
-      } else if (isAirportTransfer) {
-        setBaseFare(fare);
-        setExtraDistanceFare(0);
-        setNightCharges(0);
       } else {
         setBaseFare(fare);
         setExtraDistanceFare(0);
@@ -235,6 +327,7 @@ export const BookingSummary = ({
     } catch (error) {
       console.error('Error calculating fare details:', error);
       
+      // Simple fallback if everything fails
       setBaseFare(fare);
       setExtraDistanceFare(0);
       setDriverAllowance(0);
@@ -273,10 +366,12 @@ export const BookingSummary = ({
       : `Local Package (${distance}km)`;
   
   const driverAllowanceValue = driverAllowance || 0;
-  const extraDistanceKm = effectiveDistance > 300 ? effectiveDistance - 300 : 0;
+  const extraDistanceKm = effectiveDistance > (tripType === 'outstation' && tripMode === 'one-way' ? 250 : 300) ? 
+    effectiveDistance - (tripType === 'outstation' && tripMode === 'one-way' ? 250 : 300) : 0;
   const nightChargesValue = nightCharges || 0;
   const baseFareValue = baseFare || (totalPrice - driverAllowanceValue - extraDistanceFare - nightChargesValue);
   
+  // Only show driver allowance for non-airport trips
   const showDriverAllowance = tripType !== 'airport' && driverAllowanceValue > 0;
   const showExtraDistance = extraDistanceKm > 0 && extraDistanceFare > 0;
   const showNightCharges = nightChargesValue > 0;

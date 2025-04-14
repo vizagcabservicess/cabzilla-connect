@@ -21,7 +21,32 @@ export interface AirportFareData {
  * Normalize a vehicle ID to ensure consistent lookup
  */
 const normalizeVehicleId = (vehicleId: string): string => {
-  return vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  if (!vehicleId) return '';
+  
+  // Handle special cases of common vehicle IDs for better matching
+  const id = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Map common variants to standardized IDs
+  const idMappings: Record<string, string> = {
+    'sedan': 'sedan',
+    'dzire': 'sedan',
+    'swift_dzire': 'sedan',
+    'etios': 'sedan',
+    'amaze': 'sedan',
+    'ertiga': 'ertiga',
+    'marazzo': 'ertiga',
+    'suv': 'ertiga',
+    'innova': 'innova_crysta',
+    'innova_crysta': 'innova_crysta',
+    'crysta': 'innova_crysta',
+    'hycross': 'innova_crysta',
+    'mpv': 'innova_crysta',
+    'tempo': 'tempo_traveller',
+    'tempo_traveller': 'tempo_traveller',
+    'traveller': 'tempo_traveller'
+  };
+  
+  return idMappings[id] || id;
 };
 
 /**
@@ -34,19 +59,23 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
   }
   
   try {
-    console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
+    // Store original ID for logging
+    const originalVehicleId = vehicleId;
+    
+    // First, normalize the vehicle ID to ensure consistent casing
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    
+    console.log(`Fetching airport fares for vehicle ID: ${originalVehicleId} (normalized to ${normalizedVehicleId})`);
     
     // Try to get from FareStateManager first
-    const fareFromCache = await fareStateManager.getAirportFareForVehicle(vehicleId);
+    const fareFromCache = await fareStateManager.getAirportFareForVehicle(normalizedVehicleId);
     
     if (fareFromCache) {
-      console.log(`Airport fare found in cache for ${vehicleId}:`, fareFromCache);
+      console.log(`Airport fare found in cache for ${normalizedVehicleId}:`, fareFromCache);
       return fareFromCache as AirportFareData;
     }
     
     // If not in cache, fetch directly from API with a normalized vehicle ID
-    // First, normalize the vehicle ID to ensure consistent casing
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
     const timestamp = Date.now();
     const response = await fetch(`/api/admin/direct-airport-fares.php?vehicle_id=${encodeURIComponent(normalizedVehicleId)}&_t=${timestamp}`, {
       headers: getBypassHeaders()
@@ -60,7 +89,7 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     console.log('Airport fare API response:', data);
     
     if (data.status !== 'success') {
-      console.warn(`No airport fare found for vehicle ${vehicleId}`);
+      console.warn(`No airport fare found for vehicle ${normalizedVehicleId}`);
       return null;
     }
     
@@ -76,61 +105,94 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
           normalizeVehicleId(fare.vehicle_id || '') === normalizedVehicleId
         );
         
-        // If no exact match, try case-insensitive match
-        if (!fareData) {
-          fareData = data.fares.find((fare: any) => 
-            normalizeVehicleId(fare.vehicleId || '') === normalizedVehicleId ||
-            normalizeVehicleId(fare.vehicle_id || '') === normalizedVehicleId
-          );
-        }
-        
-        // If still no match, use the first one (fallback)
+        // If no exact match, use the first one (fallback)
         if (!fareData && data.fares.length > 0) {
-          console.warn(`No match for ${vehicleId}, using first fare in array as fallback`);
+          console.warn(`No match for ${normalizedVehicleId}, using first fare in array as fallback`);
           fareData = data.fares[0];
         }
       } else if (typeof data.fares === 'object') {
-        // Try to get by exact vehicle ID
-        fareData = data.fares[vehicleId] || null;
+        // Try to get by normalized vehicle ID
+        const keys = Object.keys(data.fares);
+        const matchingKey = keys.find(key => normalizeVehicleId(key) === normalizedVehicleId);
         
-        // If no match, try normalized version
-        if (!fareData) {
-          const keys = Object.keys(data.fares);
-          const matchingKey = keys.find(key => normalizeVehicleId(key) === normalizedVehicleId);
-          
-          if (matchingKey) {
-            fareData = data.fares[matchingKey];
-          } else if (keys.length > 0) {
-            // Fallback to first entry
-            console.warn(`No match for ${vehicleId}, using first fare object as fallback`);
-            fareData = data.fares[keys[0]];
-          }
+        if (matchingKey) {
+          fareData = data.fares[matchingKey];
+        } else if (keys.length > 0) {
+          // Fallback to first entry
+          console.warn(`No match for ${normalizedVehicleId}, using first fare object as fallback`);
+          fareData = data.fares[keys[0]];
         }
       }
     }
     
+    // Create appropriate fallback fare data based on vehicle type
     if (!fareData) {
-      console.warn(`No airport fare data found for ${vehicleId}, creating default`);
-      // Create default fare data as fallback
+      console.warn(`No airport fare data found for ${normalizedVehicleId}, creating default`);
+      
+      // Default values based on vehicle type
+      let basePrice = 1500;
+      let pricePerKm = 15;
+      let pickupPrice = 600;
+      let dropPrice = 600;
+      let tier1Price = 700;
+      let tier2Price = 1000;
+      let tier3Price = 1500;
+      let tier4Price = 1800;
+      let extraKmCharge = 15;
+      
+      // Adjust values based on vehicle type
+      if (normalizedVehicleId === 'sedan') {
+        // Default values for sedan are already set
+      } else if (normalizedVehicleId === 'ertiga') {
+        basePrice = 1800;
+        pricePerKm = 18;
+        tier1Price = 900;
+        tier2Price = 1300;
+        tier3Price = 1800;
+        tier4Price = 2100;
+        extraKmCharge = 18;
+      } else if (normalizedVehicleId === 'innova_crysta') {
+        basePrice = 2200;
+        pricePerKm = 22;
+        pickupPrice = 700;
+        dropPrice = 700;
+        tier1Price = 1100;
+        tier2Price = 1600;
+        tier3Price = 2200;
+        tier4Price = 2600;
+        extraKmCharge = 22;
+      } else if (normalizedVehicleId === 'tempo_traveller') {
+        basePrice = 3500;
+        pricePerKm = 35;
+        pickupPrice = 800;
+        dropPrice = 800;
+        tier1Price = 1800;
+        tier2Price = 2500;
+        tier3Price = 3500;
+        tier4Price = 4000;
+        extraKmCharge = 35;
+      }
+      
+      // Create fallback data
       fareData = {
-        vehicleId: vehicleId,
-        vehicle_id: vehicleId,
-        basePrice: 1500, // Increased default base price
-        pricePerKm: 15,   // Increased default per km price
-        pickupPrice: 600, // Increased default pickup price
-        dropPrice: 600,   // Increased default drop price
-        tier1Price: 700,  // Adjusted default tier prices
-        tier2Price: 1000,
-        tier3Price: 1500,
-        tier4Price: 1800,
-        extraKmCharge: 15
+        vehicleId: normalizedVehicleId,
+        vehicle_id: normalizedVehicleId,
+        basePrice,
+        pricePerKm,
+        pickupPrice,
+        dropPrice,
+        tier1Price,
+        tier2Price,
+        tier3Price,
+        tier4Price,
+        extraKmCharge
       };
     }
     
     // Normalize field names and ensure all values are numbers
     const normalizedFare: AirportFareData = {
-      vehicleId: vehicleId,
-      vehicle_id: vehicleId,
+      vehicleId: normalizedVehicleId,
+      vehicle_id: normalizedVehicleId,
       basePrice: parseFloat(String(fareData.basePrice ?? fareData.base_price ?? 1500)),
       pricePerKm: parseFloat(String(fareData.pricePerKm ?? fareData.price_per_km ?? 15)),
       pickupPrice: parseFloat(String(fareData.pickupPrice ?? fareData.pickup_price ?? 600)),
@@ -148,16 +210,22 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     if (normalizedFare.pickupPrice <= 0) normalizedFare.pickupPrice = 600;
     if (normalizedFare.dropPrice <= 0) normalizedFare.dropPrice = 600;
     
-    console.log(`Normalized airport fare for ${vehicleId}:`, normalizedFare);
+    console.log(`Normalized airport fare for ${normalizedVehicleId}:`, normalizedFare);
     
     // Store in FareStateManager for future use
-    await fareStateManager.storeAirportFare(vehicleId, normalizedFare);
+    await fareStateManager.storeAirportFare(normalizedVehicleId, normalizedFare);
+    
+    // Also store with original vehicle ID if different
+    if (originalVehicleId !== normalizedVehicleId) {
+      await fareStateManager.storeAirportFare(originalVehicleId, normalizedFare);
+    }
     
     // Broadcast that we have calculated a fare
     window.dispatchEvent(new CustomEvent('fare-calculated', {
       detail: {
         source: 'database',
-        cabId: vehicleId,
+        cabId: originalVehicleId,
+        normalizedCabId: normalizedVehicleId,
         fareType: 'airport',
         timestamp: Date.now()
       }
@@ -166,25 +234,77 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     return normalizedFare;
   } catch (error) {
     console.error(`Error fetching airport fare for ${vehicleId}:`, error);
-    // Return fallback data instead of null
+    
+    // Normalize the vehicle ID for consistent fallback creation
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    
+    // Create appropriate fallback fare data based on vehicle type
+    let basePrice = 1500;
+    let pricePerKm = 15;
+    let pickupPrice = 600;
+    let dropPrice = 600;
+    let tier1Price = 700;
+    let tier2Price = 1000;
+    let tier3Price = 1500;
+    let tier4Price = 1800;
+    let extraKmCharge = 15;
+    
+    // Adjust values based on vehicle type
+    if (normalizedVehicleId === 'sedan') {
+      // Default values for sedan are already set
+    } else if (normalizedVehicleId === 'ertiga') {
+      basePrice = 1800;
+      pricePerKm = 18;
+      tier1Price = 900;
+      tier2Price = 1300;
+      tier3Price = 1800;
+      tier4Price = 2100;
+      extraKmCharge = 18;
+    } else if (normalizedVehicleId === 'innova_crysta') {
+      basePrice = 2200;
+      pricePerKm = 22;
+      pickupPrice = 700;
+      dropPrice = 700;
+      tier1Price = 1100;
+      tier2Price = 1600;
+      tier3Price = 2200;
+      tier4Price = 2600;
+      extraKmCharge = 22;
+    } else if (normalizedVehicleId === 'tempo_traveller') {
+      basePrice = 3500;
+      pricePerKm = 35;
+      pickupPrice = 800;
+      dropPrice = 800;
+      tier1Price = 1800;
+      tier2Price = 2500;
+      tier3Price = 3500;
+      tier4Price = 4000;
+      extraKmCharge = 35;
+    }
+    
     const fallbackFare: AirportFareData = {
-      vehicleId: vehicleId,
-      vehicle_id: vehicleId,
-      basePrice: 1500,
-      pricePerKm: 15,
-      pickupPrice: 600,
-      dropPrice: 600,
-      tier1Price: 700,
-      tier2Price: 1000,
-      tier3Price: 1500,
-      tier4Price: 1800,
-      extraKmCharge: 15
+      vehicleId: normalizedVehicleId,
+      vehicle_id: normalizedVehicleId,
+      basePrice,
+      pricePerKm,
+      pickupPrice,
+      dropPrice,
+      tier1Price,
+      tier2Price,
+      tier3Price,
+      tier4Price,
+      extraKmCharge
     };
     
-    console.log(`Using fallback airport fare for ${vehicleId} due to error:`, fallbackFare);
+    console.log(`Using fallback airport fare for ${normalizedVehicleId} due to error:`, fallbackFare);
     
     // Store fallback in FareStateManager for consistency
-    await fareStateManager.storeAirportFare(vehicleId, fallbackFare);
+    await fareStateManager.storeAirportFare(normalizedVehicleId, fallbackFare);
+    
+    // Also store with original vehicle ID if different
+    if (vehicleId !== normalizedVehicleId) {
+      await fareStateManager.storeAirportFare(vehicleId, fallbackFare);
+    }
     
     return fallbackFare;
   }

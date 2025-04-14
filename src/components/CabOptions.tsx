@@ -29,6 +29,36 @@ interface CabOptionsProps {
   returnDate?: Date | null;
 }
 
+// Helper function to normalize vehicle IDs
+const normalizeVehicleId = (vehicleId: string): string => {
+  if (!vehicleId) return '';
+  
+  // Handle special cases of common vehicle IDs for better matching
+  const id = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Map common variants to standardized IDs
+  const idMappings: Record<string, string> = {
+    'sedan': 'sedan',
+    'dzire': 'sedan',
+    'swift_dzire': 'sedan',
+    'etios': 'sedan',
+    'amaze': 'sedan',
+    'ertiga': 'ertiga',
+    'marazzo': 'ertiga',
+    'suv': 'ertiga',
+    'innova': 'innova_crysta',
+    'innova_crysta': 'innova_crysta',
+    'crysta': 'innova_crysta',
+    'hycross': 'innova_crysta',
+    'mpv': 'innova_crysta',
+    'tempo': 'tempo_traveller',
+    'tempo_traveller': 'tempo_traveller',
+    'traveller': 'tempo_traveller'
+  };
+  
+  return idMappings[id] || id;
+};
+
 export const CabOptions: React.FC<CabOptionsProps> = ({
   cabTypes,
   selectedCab,
@@ -81,13 +111,23 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       const customEvent = event as CustomEvent;
       if (!customEvent.detail) return;
       
-      const { cabId, fare } = customEvent.detail;
+      const { cabId, normalizedCabId, fare } = customEvent.detail;
       
-      if (cabId && fare && fare > 0) {
-        setCabFares(prevFares => ({
-          ...prevFares,
-          [cabId]: fare
-        }));
+      if ((cabId || normalizedCabId) && fare && fare > 0) {
+        // Update fare for both original and normalized ID
+        setCabFares(prevFares => {
+          const updatedFares = { ...prevFares };
+          
+          if (cabId) {
+            updatedFares[cabId] = fare;
+          }
+          
+          if (normalizedCabId && normalizedCabId !== cabId) {
+            updatedFares[normalizedCabId] = fare;
+          }
+          
+          return updatedFares;
+        });
       }
     };
     
@@ -130,60 +170,88 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       const calculateFareForCab = async () => {
         try {
+          const normalizedVehicleId = normalizeVehicleId(cab.id);
+          console.log(`CabOptions: Calculating fare for ${cab.id} (normalized to ${normalizedVehicleId})`);
+          
           let fare = 0;
           
           if (tripType === 'outstation') {
             fare = await fareStateManager.calculateOutstationFare({
-              vehicleId: cab.id,
+              vehicleId: normalizedVehicleId,
               distance,
               tripMode: tripMode as 'one-way' | 'round-trip',
               pickupDate
             });
           } else if (tripType === 'local' && hourlyPackage) {
             fare = await fareStateManager.calculateLocalFare({
-              vehicleId: cab.id,
+              vehicleId: normalizedVehicleId,
               hourlyPackage
             });
           } else if (tripType === 'airport') {
             fare = await fareStateManager.calculateAirportFare({
-              vehicleId: cab.id,
+              vehicleId: normalizedVehicleId,
               distance
             });
           }
           
-          // Ensure we have a valid fare (use fallback if needed)
+          // Ensure we have a valid fare
           if (fare <= 0) {
             console.warn(`Zero or invalid fare calculated for ${cab.id} (${tripType}), using fallback`);
             
-            // Use fallbacks based on trip type and vehicle
-            let fallbackFare = 1000; // Default fallback
+            // Use fallbacks based on vehicle type and trip type
             if (tripType === 'airport') {
-              fallbackFare = 1500; // Fallback for airport transfers
+              if (normalizedVehicleId === 'sedan') {
+                fare = 1500;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fare = 1800;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fare = 2200;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fare = 3500;
+              } else {
+                fare = 1800; // Default airport fallback
+              }
             } else if (tripType === 'local') {
-              fallbackFare = 1200; // Fallback for local trips
+              if (normalizedVehicleId === 'sedan') {
+                fare = 1600;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fare = 1900;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fare = 2300;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fare = 3800;
+              } else {
+                fare = 1600; // Default local fallback
+              }
             } else if (tripType === 'outstation') {
-              fallbackFare = 2000; // Fallback for outstation trips
+              if (normalizedVehicleId === 'sedan') {
+                fare = 2500;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fare = 3000;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fare = 3600;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fare = 4500;
+              } else {
+                fare = 2500; // Default outstation fallback
+              }
             }
-            
-            // Adjust based on vehicle type for more realistic values
-            if (cab.id.includes('sedan')) {
-              // No adjustment for sedan (base price)
-            } else if (cab.id.includes('ertiga') || cab.id.includes('suv')) {
-              fallbackFare = Math.round(fallbackFare * 1.2); // 20% higher for SUVs
-            } else if (cab.id.includes('innova') || cab.id.includes('crysta')) {
-              fallbackFare = Math.round(fallbackFare * 1.4); // 40% higher for premium vehicles
-            }
-            
-            fare = fallbackFare;
           }
           
           newFares[cab.id] = fare;
+          
+          // Also store fare with normalized ID for consistent lookup
+          if (normalizedVehicleId !== cab.id) {
+            newFares[normalizedVehicleId] = fare;
+          }
+          
           console.log(`Calculated fare for ${cab.id}: ${fare} (${tripType})`);
           
           // Dispatch event for hooks that listen for fare calculations
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
               cabId: cab.id,
+              normalizedCabId: normalizedVehicleId,
               fare: fare,
               tripType: tripType,
               timestamp: Date.now()
@@ -192,32 +260,62 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         } catch (error) {
           console.error(`Error calculating fare for ${cab.id}:`, error);
           
-          // Use fallbacks based on trip type and vehicle
-          let fallbackFare = 1000; // Default fallback
-          if (tripType === 'airport') {
-            fallbackFare = 1500; // Fallback for airport transfers
-          } else if (tripType === 'local') {
-            fallbackFare = 1200; // Fallback for local trips
-          } else if (tripType === 'outstation') {
-            fallbackFare = 2000; // Fallback for outstation trips
-          }
+          // Use fallbacks based on vehicle type and trip type
+          const normalizedVehicleId = normalizeVehicleId(cab.id);
+          let fallbackFare = 0;
           
-          // Adjust based on vehicle type for more realistic values
-          if (cab.id.includes('sedan')) {
-            // No adjustment for sedan (base price)
-          } else if (cab.id.includes('ertiga') || cab.id.includes('suv')) {
-            fallbackFare = Math.round(fallbackFare * 1.2); // 20% higher for SUVs
-          } else if (cab.id.includes('innova') || cab.id.includes('crysta')) {
-            fallbackFare = Math.round(fallbackFare * 1.4); // 40% higher for premium vehicles
+          if (tripType === 'airport') {
+            if (normalizedVehicleId === 'sedan') {
+              fallbackFare = 1500;
+            } else if (normalizedVehicleId === 'ertiga') {
+              fallbackFare = 1800;
+            } else if (normalizedVehicleId === 'innova_crysta') {
+              fallbackFare = 2200;
+            } else if (normalizedVehicleId === 'tempo_traveller') {
+              fallbackFare = 3500;
+            } else {
+              fallbackFare = 1800; // Default airport fallback
+            }
+          } else if (tripType === 'local') {
+            if (normalizedVehicleId === 'sedan') {
+              fallbackFare = 1600;
+            } else if (normalizedVehicleId === 'ertiga') {
+              fallbackFare = 1900;
+            } else if (normalizedVehicleId === 'innova_crysta') {
+              fallbackFare = 2300;
+            } else if (normalizedVehicleId === 'tempo_traveller') {
+              fallbackFare = 3800;
+            } else {
+              fallbackFare = 1600; // Default local fallback
+            }
+          } else if (tripType === 'outstation') {
+            if (normalizedVehicleId === 'sedan') {
+              fallbackFare = 2500;
+            } else if (normalizedVehicleId === 'ertiga') {
+              fallbackFare = 3000;
+            } else if (normalizedVehicleId === 'innova_crysta') {
+              fallbackFare = 3600;
+            } else if (normalizedVehicleId === 'tempo_traveller') {
+              fallbackFare = 4500;
+            } else {
+              fallbackFare = 2500; // Default outstation fallback
+            }
           }
           
           newFares[cab.id] = fallbackFare;
+          
+          // Also store fare with normalized ID for consistent lookup
+          if (normalizedVehicleId !== cab.id) {
+            newFares[normalizedVehicleId] = fallbackFare;
+          }
+          
           console.log(`Using fallback fare for ${cab.id}: ${fallbackFare} (${tripType})`);
           
           // Dispatch event with fallback fare
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
               cabId: cab.id,
+              normalizedCabId: normalizedVehicleId,
               fare: fallbackFare,
               tripType: tripType,
               timestamp: Date.now()
@@ -237,11 +335,13 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     // If we have a selected cab, update its fare
     if (selectedCab && selectedCab.id && newFares[selectedCab.id]) {
       const fare = newFares[selectedCab.id];
+      const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
       
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: selectedCab.id,
           cabName: selectedCab.name,
+          normalizedCabId: normalizedVehicleId,
           fare: fare,
           tripType: tripType,
           tripMode: tripMode,
@@ -263,8 +363,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     onSelectCab(cab);
     setHasSelectedCab(true);
     
+    // Normalize vehicle ID for consistent lookup
+    const normalizedVehicleId = normalizeVehicleId(cab.id);
+    
     // Get fare for the selected cab
-    const fare = cabFares[cab.id] || 0;
+    const fare = cabFares[cab.id] || cabFares[normalizedVehicleId] || 0;
     
     if (fare > 0) {
       // Dispatch event for fare update
@@ -272,6 +375,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         detail: {
           cabType: cab.id,
           cabName: cab.name,
+          normalizedCabId: normalizedVehicleId,
           fare: fare,
           tripType: tripType,
           tripMode: tripMode,
@@ -292,13 +396,15 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         if (calculatedFare > 0) {
           setCabFares(prevFares => ({
             ...prevFares,
-            [cab.id]: calculatedFare
+            [cab.id]: calculatedFare,
+            [normalizedVehicleId]: calculatedFare,
           }));
           
           window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
             detail: {
               cabType: cab.id,
               cabName: cab.name,
+              normalizedCabId: normalizedVehicleId,
               fare: calculatedFare,
               tripType: tripType,
               tripMode: tripMode,
@@ -308,19 +414,59 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         }
       }).catch(error => {
         console.error(`Error calculating fare for selected cab ${cab.id}:`, error);
-        // Use a fallback fare
-        const fallbackFare = tripType === 'airport' ? 1500 : 
-                           tripType === 'local' ? 1200 : 2000;
+        
+        // Use fallbacks based on vehicle type and trip type
+        let fallbackFare = 0;
+        
+        if (tripType === 'airport') {
+          if (normalizedVehicleId === 'sedan') {
+            fallbackFare = 1500;
+          } else if (normalizedVehicleId === 'ertiga') {
+            fallbackFare = 1800;
+          } else if (normalizedVehicleId === 'innova_crysta') {
+            fallbackFare = 2200;
+          } else if (normalizedVehicleId === 'tempo_traveller') {
+            fallbackFare = 3500;
+          } else {
+            fallbackFare = 1800; // Default airport fallback
+          }
+        } else if (tripType === 'local') {
+          if (normalizedVehicleId === 'sedan') {
+            fallbackFare = 1600;
+          } else if (normalizedVehicleId === 'ertiga') {
+            fallbackFare = 1900;
+          } else if (normalizedVehicleId === 'innova_crysta') {
+            fallbackFare = 2300;
+          } else if (normalizedVehicleId === 'tempo_traveller') {
+            fallbackFare = 3800;
+          } else {
+            fallbackFare = 1600; // Default local fallback
+          }
+        } else if (tripType === 'outstation') {
+          if (normalizedVehicleId === 'sedan') {
+            fallbackFare = 2500;
+          } else if (normalizedVehicleId === 'ertiga') {
+            fallbackFare = 3000;
+          } else if (normalizedVehicleId === 'innova_crysta') {
+            fallbackFare = 3600;
+          } else if (normalizedVehicleId === 'tempo_traveller') {
+            fallbackFare = 4500;
+          } else {
+            fallbackFare = 2500; // Default outstation fallback
+          }
+        }
         
         setCabFares(prevFares => ({
           ...prevFares,
-          [cab.id]: fallbackFare
+          [cab.id]: fallbackFare,
+          [normalizedVehicleId]: fallbackFare,
         }));
         
         window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
           detail: {
             cabType: cab.id,
             cabName: cab.name,
+            normalizedCabId: normalizedVehicleId,
             fare: fallbackFare,
             tripType: tripType,
             tripMode: tripMode,

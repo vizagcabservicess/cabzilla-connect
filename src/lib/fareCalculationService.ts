@@ -14,7 +14,32 @@ const CACHE_EXPIRY = 60 * 1000; // 1 minute
  * Normalize a vehicle ID to ensure consistent lookup
  */
 const normalizeVehicleId = (vehicleId: string): string => {
-  return vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  if (!vehicleId) return '';
+  
+  // Handle special cases of common vehicle IDs for better matching
+  const id = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Map common variants to standardized IDs
+  const idMappings: Record<string, string> = {
+    'sedan': 'sedan',
+    'dzire': 'sedan',
+    'swift_dzire': 'sedan',
+    'etios': 'sedan',
+    'amaze': 'sedan',
+    'ertiga': 'ertiga',
+    'marazzo': 'ertiga',
+    'suv': 'ertiga',
+    'innova': 'innova_crysta',
+    'innova_crysta': 'innova_crysta',
+    'crysta': 'innova_crysta',
+    'hycross': 'innova_crysta',
+    'mpv': 'innova_crysta',
+    'tempo': 'tempo_traveller',
+    'tempo_traveller': 'tempo_traveller',
+    'traveller': 'tempo_traveller'
+  };
+  
+  return idMappings[id] || id;
 };
 
 // Function to clear the fare cache
@@ -51,32 +76,65 @@ const getCacheKey = (params: FareCalculationParams): string => {
   `;
 };
 
-// Helper to ensure we have a valid fare
+// Helper to ensure we have a valid fare based on vehicle and trip type
 const validateFare = (fare: number, cabId: string, tripType: string): number => {
   if (fare <= 0) {
     console.warn(`Zero or invalid fare calculated for ${cabId} with trip type ${tripType}`);
     
+    // Normalize vehicle ID for consistent lookup
+    const normalizedCabId = normalizeVehicleId(cabId);
+    
     // Provide better fallback values based on trip type and vehicle category
-    let fallbackFare = 1500; // Increased default fallback
+    let fallbackFare = 0;
     
     if (tripType === 'airport') {
-      fallbackFare = 1800; // Higher fallback for airport transfers
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 1500;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 1800;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 2200;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 3500;
+      } else {
+        fallbackFare = 1800; // Default airport fallback
+      }
     } else if (tripType === 'local') {
-      fallbackFare = 1600; // Higher fallback for local trips
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 1600;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 1900;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 2300;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 3800;
+      } else {
+        fallbackFare = 1600; // Default local fallback
+      }
     } else if (tripType === 'outstation') {
-      fallbackFare = 2500; // Higher fallback for outstation trips
-    }
-    
-    // Adjust based on vehicle category
-    const normalizedCabId = normalizeVehicleId(cabId);
-    if (normalizedCabId.includes('sedan') || normalizedCabId.includes('dzire') || normalizedCabId.includes('amaze')) {
-      // Sedan category - use base fallback
-    } else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) {
-      fallbackFare = Math.round(fallbackFare * 1.3); // 30% higher for SUVs
-    } else if (normalizedCabId.includes('innova') || normalizedCabId.includes('crysta') || normalizedCabId.includes('hycross') || normalizedCabId.includes('mpv')) {
-      fallbackFare = Math.round(fallbackFare * 1.6); // 60% higher for premium vehicles
-    } else if (normalizedCabId.includes('tempo') || normalizedCabId.includes('traveller')) {
-      fallbackFare = Math.round(fallbackFare * 2.0); // 100% higher for large vehicles
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 2500;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 3000;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 3600;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 4500;
+      } else {
+        fallbackFare = 2500; // Default outstation fallback
+      }
+    } else { // tour or other types
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 2500;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 3000;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 3600;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 4500;
+      } else {
+        fallbackFare = 2500; // Default fallback for other trip types
+      }
     }
     
     console.log(`Using fallback fare of ₹${fallbackFare} for ${cabId} (${tripType})`);
@@ -123,8 +181,15 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   // Normalize vehicle ID for consistent lookup
   const normalizedVehicleId = normalizeVehicleId(cabType.id);
   
+  // Store original vehicle ID for logging and debugging
+  const originalVehicleId = cabType.id;
+  
+  console.log(`Calculating fare for ${originalVehicleId} (normalized to ${normalizedVehicleId})`);
+  
+  // Generate cache key for lookup
   const cacheKey = getCacheKey(params);
   
+  // Check if we have a cached result that's still valid
   if (!forceRefresh && fareCache.has(cacheKey)) {
     const cachedData = fareCache.get(cacheKey);
     if (cachedData && Date.now() - cachedData.timestamp < CACHE_EXPIRY) {
@@ -152,7 +217,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         });
         
         // Validate and use fallback if needed
-        totalFare = validateFare(totalFare, cabType.id, tripType);
+        totalFare = validateFare(totalFare, originalVehicleId, tripType);
       } else {
         throw new Error('Hourly package is required for local trips');
       }
@@ -165,7 +230,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       });
       
       // Validate and use fallback if needed
-      totalFare = validateFare(totalFare, cabType.id, tripType);
+      totalFare = validateFare(totalFare, originalVehicleId, tripType);
     } else if (tripType === 'airport') {
       totalFare = await fareStateManager.calculateAirportFare({
         vehicleId: normalizedVehicleId,
@@ -173,7 +238,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       });
       
       // Validate and use fallback if needed
-      totalFare = validateFare(totalFare, cabType.id, tripType);
+      totalFare = validateFare(totalFare, originalVehicleId, tripType);
     } else if (tripType === 'tour') {
       // For tour type, use outstation calculation as base
       totalFare = await fareStateManager.calculateOutstationFare({
@@ -184,7 +249,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       });
       
       // Validate and use fallback if needed
-      totalFare = validateFare(totalFare, cabType.id, 'tour');
+      totalFare = validateFare(totalFare, originalVehicleId, 'tour');
     } else {
       throw new Error(`Unsupported trip type: ${tripType}`);
     }
@@ -208,7 +273,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         }
       }));
       
-      console.log(`Calculated fare for ${cacheKey}:`, totalFare);
+      console.log(`Calculated fare for ${cabType.id} (${tripType}):`, totalFare);
       return totalFare;
     } else {
       throw new Error(`Zero or invalid fare calculated for ${cabType.id} with trip type ${tripType}`);
@@ -216,27 +281,47 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   } catch (error) {
     console.error('Error calculating fare:', error);
     
-    // Use fallbacks based on trip type and vehicle category
+    // Use normalized vehicle ID for consistent fallback calculation
     const normalizedCabId = normalizeVehicleId(cabType.id);
-    let fallbackFare = 1500; // Increased default fallback
+    let fallbackFare = 0;
     
+    // Set appropriate fallbacks based on vehicle type and trip type
     if (tripType === 'airport') {
-      fallbackFare = 1800; // Higher fallback for airport transfers
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 1500;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 1800;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 2200;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 3500;
+      } else {
+        fallbackFare = 1800; // Default airport fallback
+      }
     } else if (tripType === 'local') {
-      fallbackFare = 1600; // Higher fallback for local trips
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 1600;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 1900;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 2300;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 3800;
+      } else {
+        fallbackFare = 1600; // Default local fallback
+      }
     } else if (tripType === 'outstation' || tripType === 'tour') {
-      fallbackFare = 2500; // Higher fallback for outstation/tour trips
-    }
-    
-    // Adjust based on vehicle category
-    if (normalizedCabId.includes('sedan') || normalizedCabId.includes('dzire') || normalizedCabId.includes('amaze')) {
-      // Sedan category - use base fallback
-    } else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) {
-      fallbackFare = Math.round(fallbackFare * 1.3); // 30% higher for SUVs
-    } else if (normalizedCabId.includes('innova') || normalizedCabId.includes('crysta') || normalizedCabId.includes('hycross') || normalizedCabId.includes('mpv')) {
-      fallbackFare = Math.round(fallbackFare * 1.6); // 60% higher for premium vehicles
-    } else if (normalizedCabId.includes('tempo') || normalizedCabId.includes('traveller')) {
-      fallbackFare = Math.round(fallbackFare * 2.0); // 100% higher for large vehicles
+      if (normalizedCabId === 'sedan') {
+        fallbackFare = 2500;
+      } else if (normalizedCabId === 'ertiga') {
+        fallbackFare = 3000;
+      } else if (normalizedCabId === 'innova_crysta') {
+        fallbackFare = 3600;
+      } else if (normalizedCabId === 'tempo_traveller') {
+        fallbackFare = 4500;
+      } else {
+        fallbackFare = 2500; // Default outstation fallback
+      }
     }
     
     console.log(`Using fallback fare due to error: ₹${fallbackFare} for ${cabType.id} (${tripType})`);
