@@ -460,17 +460,17 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     // Set the price for the specific package
     if (packageId === '4hrs-40km' || packageId === '04hrs-40km') {
       packageData.price4hrs40km = price;
-      packageData.price_4hrs_40km = price;
+      packageData.price_4hr_40km = price;
       packageData.local_package_4hr = price;
       packageData.package4hr40km = price;
     } else if (packageId === '8hrs-80km') {
       packageData.price8hrs80km = price;
-      packageData.price_8hrs_80km = price;
+      packageData.price_8hr_80km = price;
       packageData.local_package_8hr = price;
       packageData.package8hr80km = price;
     } else if (packageId === '10hrs-100km') {
       packageData.price10hrs100km = price;
-      packageData.price_10hrs_100km = price;
+      packageData.price_10hr_100km = price;
       packageData.local_package_10hr = price;
       packageData.package10hr100km = price;
     }
@@ -629,3 +629,141 @@ export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
 (function initializePackageData() {
   tryLoadFromLocalStorage();
 })();
+
+/**
+ * Fetch all local package fares from API and store in memory cache
+ * This replaces local storage with direct API calls
+ */
+export async function fetchAndCacheLocalFares(): Promise<LocalPackageFaresResponse> {
+  const now = Date.now();
+  
+  // Use cached data if it's fresh
+  if (localFaresCache && now - localFaresCacheTimestamp < CACHE_EXPIRY_MS) {
+    console.log('Using cached local fares data, age:', (now - localFaresCacheTimestamp) / 1000, 'seconds');
+    return localFaresCache;
+  }
+  
+  console.log('Fetching fresh local package fares from API');
+  
+  try {
+    const response = await fetchLocalPackageFares();
+    
+    if (response && response.status === 'success' && response.fares) {
+      localFaresCache = response;
+      localFaresCacheTimestamp = now;
+      
+      // Process the response to update our in-memory matrix
+      const updatedMatrix: LocalPackagePriceMatrix = { ...defaultPackageMatrix };
+      
+      // Process each fare in the response
+      Object.entries(response.fares).forEach(([vehicleId, fare]) => {
+        const lowerVehicleId = vehicleId.toLowerCase();
+        
+        // Update 4hrs-40km package prices
+        if (fare.price4hrs40km > 0 || fare.price_4hr_40km) {
+          const price4hr = fare.price4hrs40km || fare.price_4hr_40km || 0;
+          if (!updatedMatrix['4hrs-40km']) updatedMatrix['4hrs-40km'] = {};
+          updatedMatrix['4hrs-40km'][lowerVehicleId] = price4hr;
+          
+          // Also update alternative package ID
+          if (!updatedMatrix['04hrs-40km']) updatedMatrix['04hrs-40km'] = {};
+          updatedMatrix['04hrs-40km'][lowerVehicleId] = price4hr;
+        }
+        
+        // Update 8hrs-80km package prices
+        if (fare.price8hrs80km > 0 || fare.price_8hr_80km) {
+          const price8hr = fare.price8hrs80km || fare.price_8hr_80km || 0;
+          if (!updatedMatrix['8hrs-80km']) updatedMatrix['8hrs-80km'] = {};
+          updatedMatrix['8hrs-80km'][lowerVehicleId] = price8hr;
+        }
+        
+        // Update 10hrs-100km package prices
+        if (fare.price10hrs100km > 0 || fare.price_10hr_100km) {
+          const price10hr = fare.price10hrs100km || fare.price_10hr_100km || 0;
+          if (!updatedMatrix['10hrs-100km']) updatedMatrix['10hrs-100km'] = {};
+          updatedMatrix['10hrs-100km'][lowerVehicleId] = price10hr;
+        }
+      });
+      
+      // Update our in-memory matrix with the new data
+      localPackagePriceMatrix = updatedMatrix;
+      updateNormalizedMatrix();
+      
+      return response;
+    } else {
+      throw new Error('Invalid response format from API');
+    }
+  } catch (error) {
+    console.error('Error fetching local package fares:', error);
+    // Return cached data as fallback if we have any
+    if (localFaresCache) {
+      return localFaresCache;
+    }
+    
+    // Return empty response as last resort
+    return {
+      status: 'error',
+      fares: {},
+      timestamp: Date.now(),
+      source: 'error',
+      count: 0
+    };
+  }
+}
+
+/**
+ * Get local package price directly from API for a specific package and cab type
+ * This is the main function components should use
+ */
+export async function getLocalPackagePriceFromApi(packageId: string, cabType: string): Promise<number> {
+  console.log(`Getting local package price from API: package=${packageId}, cab=${cabType}`);
+  
+  if (!packageId || !cabType) {
+    console.warn('Missing packageId or cabType in getLocalPackagePriceFromApi');
+    return 0;
+  }
+  
+  // Normalize inputs
+  const normalizedPackageId = normalizePackageId(packageId);
+  const lowerCabType = cabType.toLowerCase();
+  
+  try {
+    // First try to get from cached API response
+    const response = await fetchAndCacheLocalFares();
+    
+    if (response && response.status === 'success' && response.fares) {
+      // Find the fare for this cab type
+      const fare = Object.values(response.fares).find(fare => 
+        fare.vehicleId.toLowerCase() === lowerCabType || 
+        fare.id.toLowerCase() === lowerCabType
+      );
+      
+      if (fare) {
+        // Return the appropriate package price
+        if (normalizedPackageId === '4hrs-40km' || normalizedPackageId === '04hrs-40km') {
+          const price = fare.price4hrs40km || fare.price_4hr_40km || 0;
+          console.log(`Found API price for ${normalizedPackageId} and ${lowerCabType}: ${price}`);
+          return price > 0 ? price : getLocalPackagePrice(normalizedPackageId, lowerCabType);
+        } 
+        else if (normalizedPackageId === '8hrs-80km') {
+          const price = fare.price8hrs80km || fare.price_8hr_80km || 0;
+          console.log(`Found API price for ${normalizedPackageId} and ${lowerCabType}: ${price}`);
+          return price > 0 ? price : getLocalPackagePrice(normalizedPackageId, lowerCabType);
+        } 
+        else if (normalizedPackageId === '10hrs-100km') {
+          const price = fare.price10hrs100km || fare.price_10hr_100km || 0;
+          console.log(`Found API price for ${normalizedPackageId} and ${lowerCabType}: ${price}`);
+          return price > 0 ? price : getLocalPackagePrice(normalizedPackageId, lowerCabType);
+        }
+      }
+    }
+    
+    // Fallback to the existing method if API fails
+    console.log(`API lookup failed, falling back to local calculation for ${normalizedPackageId} and ${lowerCabType}`);
+    return getLocalPackagePrice(normalizedPackageId, lowerCabType);
+  } catch (error) {
+    console.error('Error getting local package price from API:', error);
+    // Fallback to existing method
+    return getLocalPackagePrice(normalizedPackageId, lowerCabType);
+  }
+}
