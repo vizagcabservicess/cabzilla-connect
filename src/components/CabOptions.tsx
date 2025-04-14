@@ -104,6 +104,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     window.addEventListener('fare-calculated', handleFareCalculated);
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
     window.addEventListener('fare-data-fetched', handleFareDataFetched);
+    window.addEventListener('fare-data-updated', handleFareDataFetched);
     
     setFareListenerInitialized(true);
     
@@ -111,6 +112,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.removeEventListener('fare-calculated', handleFareCalculated);
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('fare-data-fetched', handleFareDataFetched);
+      window.removeEventListener('fare-data-updated', handleFareDataFetched);
     };
   }, []);
   
@@ -152,6 +154,16 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           if (fare > 0) {
             newFares[cab.id] = fare;
             console.log(`Calculated fare for ${cab.id}: ${fare} (${tripType})`);
+            
+            // Dispatch event for hooks that listen for fare calculations
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: cab.id,
+                fare: fare,
+                tripType: tripType,
+                timestamp: Date.now()
+              }
+            }));
           } else {
             console.warn(`Zero or invalid fare calculated for ${cab.id} (${tripType})`);
           }
@@ -187,7 +199,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   
   // Load initial fares or update fares when trip details change
   useEffect(() => {
-    if (initialFareSync || cabTypes.length > 0) {
+    if (initialFareSync && cabTypes.length > 0) {
       calculateAllFares();
     }
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, pickupDate, initialFareSync]);
