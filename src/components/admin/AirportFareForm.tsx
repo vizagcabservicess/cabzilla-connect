@@ -22,10 +22,10 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
     // Create a new object with the updated field
     const updatedFareData = {
       ...fareData,
-      [field]: numericValue
+      [String(field)]: numericValue // Fixed by converting field to string explicitly
     };
     
-    console.log(`Field ${field} changed to ${numericValue}`, updatedFareData);
+    console.log(`Field ${String(field)} changed to ${numericValue}`, updatedFareData);
     onChange(updatedFareData);
   };
 
@@ -66,7 +66,6 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
           onChange={(e) => handleInputChange('pricePerKm', e.target.value)}
           placeholder="0"
           min="0"
-          step="0.5"
         />
       </div>
 
@@ -95,7 +94,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="tier1Price" className="font-medium">Tier 1 Price (₹)</Label>
+        <Label htmlFor="tier1Price" className="font-medium">Tier 1 Price (0-10 KM) (₹)</Label>
         <Input
           id="tier1Price"
           type="number"
@@ -107,7 +106,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="tier2Price" className="font-medium">Tier 2 Price (₹)</Label>
+        <Label htmlFor="tier2Price" className="font-medium">Tier 2 Price (11-20 KM) (₹)</Label>
         <Input
           id="tier2Price"
           type="number"
@@ -119,7 +118,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="tier3Price" className="font-medium">Tier 3 Price (₹)</Label>
+        <Label htmlFor="tier3Price" className="font-medium">Tier 3 Price (21-30 KM) (₹)</Label>
         <Input
           id="tier3Price"
           type="number"
@@ -131,7 +130,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="tier4Price" className="font-medium">Tier 4 Price (₹)</Label>
+        <Label htmlFor="tier4Price" className="font-medium">Tier 4 Price (>30 KM) (₹)</Label>
         <Input
           id="tier4Price"
           type="number"
@@ -142,7 +141,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         />
       </div>
 
-      <div className="space-y-2 md:col-span-2">
+      <div className="space-y-2">
         <Label htmlFor="extraKmCharge" className="font-medium">Extra KM Charge (₹)</Label>
         <Input
           id="extraKmCharge"
@@ -151,7 +150,6 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
           onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
           placeholder="0"
           min="0"
-          step="0.5"
         />
       </div>
     </div>

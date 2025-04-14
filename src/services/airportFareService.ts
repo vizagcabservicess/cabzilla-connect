@@ -1,4 +1,3 @@
-
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -18,6 +17,23 @@ export interface AirportFareData {
 // Cache airport fare data in memory
 const airportFareCache = new Map<string, { data: AirportFareData, timestamp: number }>();
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache duration (reduced from 5 minutes)
+
+// Add missing method if not present in FareStateManager
+if (!fareStateManager.storeAirportFare) {
+  fareStateManager.storeAirportFare = async (vehicleId: string, fareData: AirportFareData) => {
+    console.log('FareStateManager.storeAirportFare polyfill called', vehicleId, fareData);
+    // Try to update internal cache if possible
+    try {
+      if (typeof fareStateManager.updateInternalCache === 'function') {
+        fareStateManager.updateInternalCache('airport', vehicleId, fareData);
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to update internal cache:', e);
+      return false;
+    }
+  };
+}
 
 /**
  * Fetch airport fare for a specific vehicle
@@ -176,6 +192,14 @@ export const updateAirportFare = async (fareData: AirportFareData): Promise<bool
       // Clear caches to ensure fresh data is fetched
       airportFareCache.delete(fareData.vehicleId);
       fareStateManager.clearCache();
+      
+      // Update FareStateManager with the new data
+      try {
+        await fareStateManager.storeAirportFare(fareData.vehicleId, fareData);
+      } catch (e) {
+        console.warn('Failed to update FareStateManager:', e);
+        // Continue execution even if storage fails
+      }
       
       // Sync fare data with the database
       setTimeout(() => {

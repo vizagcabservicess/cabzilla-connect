@@ -45,7 +45,7 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  syncAirportFareTables,
+  syncAirportFares, // Fixed the name to match the actual export
   fareService
 } from '@/services/fareService';
 
@@ -66,7 +66,11 @@ export {
   syncLocalFares,
   syncAirportFares,
   initializeLocalFareTables,
-  initializeAirportFareTables
+  initializeAirportFareTables,
+  initializeAllFareTables,  // Add the missing export
+  // Add missing function exports for components
+  fareManagementService,
+  type FareData  // Export FareData as a type
 } from '@/services/fareManagementService';
 
 // Export outstation fare service functions

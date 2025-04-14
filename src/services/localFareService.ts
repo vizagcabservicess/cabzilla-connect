@@ -1,17 +1,22 @@
-import { getApiUrl } from '@/config/api';
-import { getBypassHeaders } from '@/config/requestConfig';
-import { toast } from 'sonner';
+
+// Add required imports at the top
 import fareStateManager from './FareStateManager';
 
-export interface LocalFareData {
-  vehicleId: string;
-  vehicle_id?: string;
-  price4hrs40km: number;
-  price8hrs80km: number;
-  price10hrs100km: number;
-  priceExtraKm: number;
-  priceExtraHour: number;
-  [key: string]: any;
+// Add missing method if not present in FareStateManager
+if (!fareStateManager.storeLocalFare) {
+  fareStateManager.storeLocalFare = async (vehicleId: string, fareData: any) => {
+    console.log('FareStateManager.storeLocalFare polyfill called', vehicleId, fareData);
+    // Try to update internal cache if possible
+    try {
+      if (typeof fareStateManager.updateInternalCache === 'function') {
+        fareStateManager.updateInternalCache('local', vehicleId, fareData);
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to update internal cache:', e);
+      return false;
+    }
+  };
 }
 
 // Cache local fare data in memory

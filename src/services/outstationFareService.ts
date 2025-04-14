@@ -1,19 +1,22 @@
 
-import { getApiUrl } from '@/config/api';
-import { getBypassHeaders } from '@/config/requestConfig';
-import { toast } from 'sonner';
+// Add required imports at the top of the file
 import fareStateManager from './FareStateManager';
 
-export interface OutstationFareData {
-  vehicleId: string;
-  vehicle_id?: string;
-  oneWayBasePrice: number;
-  oneWayPricePerKm: number;
-  roundTripBasePrice: number;
-  roundTripPricePerKm: number;
-  driverAllowance: number;
-  nightHaltCharge: number;
-  [key: string]: any;
+// Add missing method if not present in FareStateManager
+if (!fareStateManager.storeOutstationFare) {
+  fareStateManager.storeOutstationFare = async (vehicleId: string, fareData: any) => {
+    console.log('FareStateManager.storeOutstationFare polyfill called', vehicleId, fareData);
+    // Try to update internal cache if possible
+    try {
+      if (typeof fareStateManager.updateInternalCache === 'function') {
+        fareStateManager.updateInternalCache('outstation', vehicleId, fareData);
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to update internal cache:', e);
+      return false;
+    }
+  };
 }
 
 // Cache outstation fare data in memory
