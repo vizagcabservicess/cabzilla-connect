@@ -35,7 +35,7 @@ export function LocationInput({
   readOnly
 }: LocationInputProps) {
   // Use value prop if location is not provided
-  const locationData = location || value || { address: '', id: '', name: '' };
+  const locationData = location || value || { id: '', name: '', address: '' } as Location;
   const handleLocationChange = onLocationChange || onChange;
   
   // Ensure address is always a string to prevent type errors
@@ -104,7 +104,7 @@ export function LocationInput({
         id: `loc_${Date.now()}`,
         name: '',
         address: '',
-        isInVizag: false
+        isInVizag: false,
       };
       locationChangedRef.current = true;
       if (handleLocationChange) {
@@ -148,9 +148,9 @@ export function LocationInput({
         id: locationData.id || `loc_${Date.now()}`,
         name: address,
         address: address,
-        // Don't include lat/lng if they're not numbers to avoid type errors
-        ...(typeof locationData.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
-        ...(typeof locationData.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
+        // Include lat/lng if they exist
+        ...(locationData.lat !== undefined ? { lat: locationData.lat } : {}),
+        ...(locationData.lng !== undefined ? { lng: locationData.lng } : {}),
         // Always set isInVizag to a boolean value
         isInVizag: locationData.isInVizag === true
       };
@@ -171,7 +171,7 @@ export function LocationInput({
       id: `loc_${Date.now()}`,
       name: '',
       address: '',
-      isInVizag: false
+      isInVizag: false,
     };
     
     if (handleLocationChange) {

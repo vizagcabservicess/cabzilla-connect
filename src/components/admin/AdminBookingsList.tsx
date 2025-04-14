@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -260,7 +259,7 @@ export function AdminBookingsList() {
       if (bookings.length === 0) {
         const sampleBookings: Booking[] = [
           {
-            id: 1,
+            id: "1",
             bookingNumber: 'DEMO1234',
             pickupLocation: 'Demo Airport',
             dropLocation: 'Demo Hotel',
@@ -278,7 +277,7 @@ export function AdminBookingsList() {
             updatedAt: new Date().toISOString()
           },
           {
-            id: 2,
+            id: "2",
             bookingNumber: 'DEMO1235',
             pickupLocation: 'Demo Hotel',
             dropLocation: 'Demo Beach',
@@ -384,14 +383,14 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleAssignDriver = (bookingId: number) => {
+  const handleAssignDriver = (bookingId: string | number) => {
     uiToast({
       title: "Feature Coming Soon",
       description: "Driver assignment functionality will be available soon.",
     });
   };
 
-  const handleCancelBooking = (bookingId: number) => {
+  const handleCancelBooking = (bookingId: string | number) => {
     uiToast({
       title: "Feature Coming Soon",
       description: "Booking cancellation functionality will be available soon.",
@@ -558,7 +557,7 @@ export function AdminBookingsList() {
               </TableHeader>
               <TableBody>
                 {filteredBookings.map((booking) => (
-                  <TableRow key={booking.id}>
+                  <TableRow key={String(booking.id)}>
                     <TableCell className="font-medium">{booking.bookingNumber}</TableCell>
                     <TableCell>
                       <div className="font-medium">{booking.passengerName}</div>

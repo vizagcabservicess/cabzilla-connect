@@ -47,13 +47,13 @@ export type BookingStatus =
   | 'continued'
   | 'cancelled';
 
-// Location interface
+// Location interface - making lat/lng optional to fix type errors
 export interface Location {
   id: string;
   name: string;
   address: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   isInVizag?: boolean;
   type?: string;
   city?: string;
@@ -78,10 +78,11 @@ export interface BookingRequest {
   notes?: string;
 }
 
-// Booking interface
+// Booking interface - adding bookingNumber field
 export interface Booking {
-  id: string;
+  id: string | number; // Allow both string and number types
   bookingId?: string;
+  bookingNumber?: string; // Added to fix errors
   pickupLocation: string;
   dropLocation?: string;
   pickupDate: string;
@@ -121,16 +122,24 @@ export interface DashboardMetrics {
   availableStatuses?: BookingStatus[] | Record<string, BookingStatus> | string;
 }
 
-// Tour fare interface
+// Extended Tour fare interface with additional properties used in components
 export interface TourFare {
-  id: string;
+  id: string | number; // Support both string and number types
+  tourId?: string | number; // Added to fix errors
   name: string;
+  tourName?: string; // Added to fix errors
   description?: string;
   price: number;
   cabType: string;
   duration: number;
   distance: number;
   isActive: boolean;
+  // Vehicle-specific prices
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 // Fare update request interface
@@ -143,9 +152,9 @@ export interface FareUpdateRequest {
   packageId?: string;
 }
 
-// User interface
+// User interface - make ID accept both string and number
 export interface User {
-  id: string;
+  id: string | number; // Allow both string and number types
   name: string;
   email: string;
   phone: string;
@@ -157,10 +166,11 @@ export interface User {
   avatar?: string;
 }
 
-// Vehicle pricing interface
+// Extended Vehicle pricing interface with additional properties
 export interface VehiclePricing {
-  id: string;
+  id: string | number; // Allow both string and number types
   vehicleId: string;
+  vehicleType?: string; // Added to fix errors
   name?: string;
   basePrice: number;
   pricePerKm: number;
@@ -170,11 +180,14 @@ export interface VehiclePricing {
   minHours?: number;
   minKm?: number;
   isActive: boolean;
+  nightHaltCharge?: number; // Added to fix errors
+  driverAllowance?: number; // Added to fix errors
 }
 
 // Vehicle pricing update request
 export interface VehiclePricingUpdateRequest {
   vehicleId: string;
+  vehicleType?: string; // Added to match field in VehiclePricing
   basePrice?: number;
   pricePerKm?: number;
   pricePerHour?: number;
@@ -183,6 +196,8 @@ export interface VehiclePricingUpdateRequest {
   minHours?: number;
   minKm?: number;
   isActive?: boolean;
+  nightHaltCharge?: number; // Added to match field in VehiclePricing
+  driverAllowance?: number; // Added to match field in VehiclePricing
 }
 
 // Login request interface
