@@ -1,3 +1,4 @@
+
 // Define all cab-related types and interfaces
 
 export interface CabType {
@@ -189,7 +190,7 @@ export interface OutstationFareData {
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
-  minDistance: number;  // Added this property
+  minDistance: number;  // Added this missing property
   driverAllowance: number;
   nightHaltCharge: number;
   // Additional properties for the component
