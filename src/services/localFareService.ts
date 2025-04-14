@@ -1,4 +1,3 @@
-
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -17,7 +16,28 @@ export interface LocalFareData {
 
 // Cache local fare data in memory
 const localFareCache = new Map<string, { data: LocalFareData, timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache duration (reduced from 5 minutes)
+
+// Helper function to normalize hourly package format
+export const normalizeHourlyPackage = (packageStr: string): string => {
+  // Convert various package formats to a standardized format
+  if (!packageStr) return '';
+  
+  // Strip spaces and convert to lowercase
+  const normalized = packageStr.toLowerCase().replace(/\s+/g, '');
+  
+  // Map common variations to standardized formats
+  if (normalized.includes('4hr') || normalized.includes('4hrs') || normalized.includes('4h40') || normalized.includes('4hr40km')) {
+    return '4hr40km';
+  } else if (normalized.includes('8hr') || normalized.includes('8hrs') || normalized.includes('8h80') || normalized.includes('8hr80km')) {
+    return '8hr80km';
+  } else if (normalized.includes('10hr') || normalized.includes('10hrs') || normalized.includes('10h100') || normalized.includes('10hr100km')) {
+    return '10hr100km';
+  }
+  
+  // Return as-is if not matching any patterns
+  return packageStr;
+};
 
 /**
  * Fetch local fare for a specific vehicle
@@ -25,6 +45,11 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
 export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData | null> => {
   try {
     console.log(`Fetching local fare for vehicle ${vehicleId}`);
+    
+    if (!vehicleId) {
+      console.error('Vehicle ID is required for fetchLocalFare');
+      return null;
+    }
     
     // Check cache first
     const cachedFare = localFareCache.get(vehicleId);
@@ -39,27 +64,34 @@ export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData |
     if (fareData) {
       console.log(`Retrieved local fare from FareStateManager for ${vehicleId}`, fareData);
       
-      // Convert to standard format
+      // Convert to standard format with all possible field mappings
       const standardizedData: LocalFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        price4hrs40km: parseFloat(fareData.price4hrs40km || fareData.price_4hrs_40km || 0),
-        price8hrs80km: parseFloat(fareData.price8hrs80km || fareData.price_8hrs_80km || 0),
-        price10hrs100km: parseFloat(fareData.price10hrs100km || fareData.price_10hrs_100km || 0),
-        priceExtraKm: parseFloat(fareData.priceExtraKm || fareData.extraKmRate || fareData.price_extra_km || 0),
-        priceExtraHour: parseFloat(fareData.priceExtraHour || fareData.extraHourRate || fareData.price_extra_hour || 0)
+        price4hrs40km: parseFloat(fareData.price4hrs40km || fareData.price_4hrs_40km || fareData.local_package_4hr || 0),
+        price8hrs80km: parseFloat(fareData.price8hrs80km || fareData.price_8hrs_80km || fareData.local_package_8hr || 0),
+        price10hrs100km: parseFloat(fareData.price10hrs100km || fareData.price_10hrs_100km || fareData.local_package_10hr || 0),
+        priceExtraKm: parseFloat(fareData.priceExtraKm || fareData.extraKmRate || fareData.price_extra_km || fareData.extra_km_charge || 0),
+        priceExtraHour: parseFloat(fareData.priceExtraHour || fareData.extraHourRate || fareData.price_extra_hour || fareData.extra_hour_charge || 0)
       };
       
-      // Cache the result
-      localFareCache.set(vehicleId, {
-        data: standardizedData,
-        timestamp: Date.now()
-      });
-      
-      return standardizedData;
+      // Validate the fare data
+      if (standardizedData.price4hrs40km <= 0 || 
+          standardizedData.price8hrs80km <= 0 || 
+          standardizedData.price10hrs100km <= 0) {
+        console.warn(`Retrieved local fare has invalid values for vehicle ${vehicleId}`, standardizedData);
+      } else {
+        // Cache the valid result
+        localFareCache.set(vehicleId, {
+          data: standardizedData,
+          timestamp: Date.now()
+        });
+        
+        return standardizedData;
+      }
     }
     
-    // If FareStateManager doesn't have the data, try direct API endpoint
+    // If FareStateManager doesn't have valid data, try direct API endpoint
     const response = await fetch(
       getApiUrl(`api/direct-local-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`),
       { headers: getBypassHeaders() }
@@ -72,24 +104,44 @@ export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData |
     const data = await response.json();
     
     if (data.status === 'success' && data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-      // Get the first fare in the array
-      const fare = data.fares[0];
+      // Find the fare for our specific vehicle id
+      const fareItem = data.fares.find((fare: any) => 
+        fare.vehicleId === vehicleId || 
+        fare.vehicle_id === vehicleId
+      );
       
+      if (!fareItem) {
+        console.error(`No fare found for vehicle ${vehicleId} in API response`);
+        return null;
+      }
+      
+      // Map from all possible field names
       const fareData: LocalFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        price4hrs40km: parseFloat(fare.price4hrs40km || fare.price_4hrs_40km || 0),
-        price8hrs80km: parseFloat(fare.price8hrs80km || fare.price_8hrs_80km || 0),
-        price10hrs100km: parseFloat(fare.price10hrs100km || fare.price_10hrs_100km || 0),
-        priceExtraKm: parseFloat(fare.priceExtraKm || fare.extraKmRate || fare.price_extra_km || 0),
-        priceExtraHour: parseFloat(fare.priceExtraHour || fare.extraHourRate || fare.price_extra_hour || 0)
+        price4hrs40km: parseFloat(fareItem.price4hrs40km || fareItem.price_4hrs_40km || fareItem.local_package_4hr || fareItem.package4hr40km || 0),
+        price8hrs80km: parseFloat(fareItem.price8hrs80km || fareItem.price_8hrs_80km || fareItem.local_package_8hr || fareItem.package8hr80km || 0),
+        price10hrs100km: parseFloat(fareItem.price10hrs100km || fareItem.price_10hrs_100km || fareItem.local_package_10hr || fareItem.package10hr100km || 0),
+        priceExtraKm: parseFloat(fareItem.priceExtraKm || fareItem.extraKmRate || fareItem.price_extra_km || fareItem.extra_km_charge || 0),
+        priceExtraHour: parseFloat(fareItem.priceExtraHour || fareItem.extraHourRate || fareItem.price_extra_hour || fareItem.extra_hour_charge || 0)
       };
       
-      // Cache the result
+      // Validate the fare data before caching
+      if (fareData.price4hrs40km <= 0 || 
+          fareData.price8hrs80km <= 0 || 
+          fareData.price10hrs100km <= 0) {
+        console.warn(`Direct API returned invalid local fare for vehicle ${vehicleId}`, fareData);
+        return null;
+      }
+      
+      // Cache the valid result
       localFareCache.set(vehicleId, {
         data: fareData,
         timestamp: Date.now()
       });
+      
+      // Initialize FareStateManager data with the fetched fare
+      fareStateManager.storeLocalFare(vehicleId, fareData);
       
       return fareData;
     }
@@ -98,6 +150,36 @@ export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData |
   } catch (error) {
     console.error(`Error fetching local fare for ${vehicleId}:`, error);
     return null;
+  }
+};
+
+// Helper function to map hourly package to the corresponding price
+export const getLocalPackagePrice = (fareData: LocalFareData, hourlyPackage: string): number => {
+  const normalizedPackage = normalizeHourlyPackage(hourlyPackage);
+  
+  console.log(`Getting local price for package ${hourlyPackage} (normalized: ${normalizedPackage})`);
+  
+  switch (normalizedPackage) {
+    case '4hr40km':
+    case '4hrs40km':
+      return fareData.price4hrs40km;
+    case '8hr80km':
+    case '8hrs80km':
+      return fareData.price8hrs80km;
+    case '10hr100km':
+    case '10hrs100km':
+      return fareData.price10hrs100km;
+    default:
+      console.error(`Unsupported package type: ${hourlyPackage}`);
+      // Try to find a match based on the package string
+      if (hourlyPackage.includes('4') && (hourlyPackage.includes('hr') || hourlyPackage.includes('h'))) {
+        return fareData.price4hrs40km;
+      } else if (hourlyPackage.includes('8') && (hourlyPackage.includes('hr') || hourlyPackage.includes('h'))) {
+        return fareData.price8hrs80km;
+      } else if (hourlyPackage.includes('10') && (hourlyPackage.includes('hr') || hourlyPackage.includes('h'))) {
+        return fareData.price10hrs100km;
+      }
+      return 0;
   }
 };
 

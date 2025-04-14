@@ -34,7 +34,7 @@ export {
 export { 
   directFareUpdate,  
   initializeDatabase,
-  syncOutstationFares, // Fixed: removed duplicate export
+  syncOutstationFares,
   getOutstationFares,
   getLocalFares,
   getAirportFares,
@@ -45,10 +45,11 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
+  syncAirportFareTables,
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions (use only what's available)
+// Export vehicle service functions
 export { 
   addVehicle as createVehicle,
   updateVehicle,
@@ -60,11 +61,21 @@ export {
 
 // Export fare update service functions
 export {
-  updateLocalFares,
-  updateAirportFares,
+  updateLocalFare,
+  updateAirportFare,
   syncLocalFares,
-  syncAirportFares
+  syncAirportFares,
+  initializeLocalFareTables,
+  initializeAirportFareTables
 } from '@/services/fareManagementService';
+
+// Export outstation fare service functions
+export {
+  updateOutstationFare,
+  syncOutstationFareTables,
+  initializeOutstationFareTables,
+  fetchOutstationFare
+} from '@/services/outstationFareService';
 
 // Export getData function from vehicleDataService
 export { 

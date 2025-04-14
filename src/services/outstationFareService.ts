@@ -18,7 +18,7 @@ export interface OutstationFareData {
 
 // Cache outstation fare data in memory
 const outstationFareCache = new Map<string, { data: OutstationFareData, timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache duration (reduced from 5 minutes)
 
 /**
  * Fetch outstation fare for a specific vehicle
@@ -26,6 +26,11 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
 export const fetchOutstationFare = async (vehicleId: string): Promise<OutstationFareData | null> => {
   try {
     console.log(`Fetching outstation fare for vehicle ${vehicleId}`);
+    
+    if (!vehicleId) {
+      console.error('Vehicle ID is required for fetchOutstationFare');
+      return null;
+    }
     
     // Check cache first
     const cachedFare = outstationFareCache.get(vehicleId);
@@ -40,28 +45,36 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
     if (fareData) {
       console.log(`Retrieved outstation fare from FareStateManager for ${vehicleId}`, fareData);
       
-      // Convert to standard format
+      // Convert to standard format with all possible field mappings
       const standardizedData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        oneWayBasePrice: parseFloat(fareData.basePrice || fareData.oneWayBasePrice || 0),
-        oneWayPricePerKm: parseFloat(fareData.pricePerKm || fareData.oneWayPricePerKm || 0),
-        roundTripBasePrice: parseFloat(fareData.roundTripBasePrice || 0),
-        roundTripPricePerKm: parseFloat(fareData.roundTripPricePerKm || 0),
-        driverAllowance: parseFloat(fareData.driverAllowance || 250),
-        nightHaltCharge: parseFloat(fareData.nightHaltCharge || 700)
+        oneWayBasePrice: parseFloat(fareData.basePrice || fareData.oneWayBasePrice || fareData.one_way_base_price || 0),
+        oneWayPricePerKm: parseFloat(fareData.pricePerKm || fareData.oneWayPricePerKm || fareData.one_way_price_per_km || 0),
+        roundTripBasePrice: parseFloat(fareData.roundTripBasePrice || fareData.round_trip_base_price || 0),
+        roundTripPricePerKm: parseFloat(fareData.roundTripPricePerKm || fareData.round_trip_price_per_km || 0),
+        driverAllowance: parseFloat(fareData.driverAllowance || fareData.driver_allowance || 250),
+        nightHaltCharge: parseFloat(fareData.nightHaltCharge || fareData.night_halt_charge || 700)
       };
       
-      // Cache the result
-      outstationFareCache.set(vehicleId, {
-        data: standardizedData,
-        timestamp: Date.now()
-      });
-      
-      return standardizedData;
+      // Validate the fare data
+      if (standardizedData.oneWayBasePrice <= 0 || 
+          standardizedData.oneWayPricePerKm <= 0 || 
+          standardizedData.roundTripBasePrice <= 0 || 
+          standardizedData.roundTripPricePerKm <= 0) {
+        console.warn(`Retrieved outstation fare has invalid values for vehicle ${vehicleId}`, standardizedData);
+      } else {
+        // Cache the valid result
+        outstationFareCache.set(vehicleId, {
+          data: standardizedData,
+          timestamp: Date.now()
+        });
+        
+        return standardizedData;
+      }
     }
     
-    // If FareStateManager doesn't have the data, try direct API endpoint
+    // If FareStateManager doesn't have valid data, try direct API endpoint
     const response = await fetch(
       getApiUrl(`api/admin/direct-outstation-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`),
       { headers: getBypassHeaders() }
@@ -73,26 +86,69 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
     
     const data = await response.json();
     
-    if (data.status === 'success' && data.fares && (data.fares[vehicleId] || Object.values(data.fares).length > 0)) {
-      // Either get specific vehicle fare or the first one in the response
-      const fare = data.fares[vehicleId] || Object.values(data.fares)[0];
+    if (data.status === 'success' && data.fares) {
+      // Extract fare - API returns either an object with vehicle IDs as keys or a direct fare object
+      let fareItem;
       
+      if (data.fares[vehicleId]) {
+        // Vehicle ID is a key in the fares object
+        fareItem = data.fares[vehicleId];
+      } else if (Array.isArray(data.fares) && data.fares.length > 0) {
+        // Find the fare for our specific vehicle id in an array
+        fareItem = data.fares.find((fare: any) => 
+          fare.vehicleId === vehicleId || 
+          fare.vehicle_id === vehicleId
+        );
+      } else if (Object.keys(data.fares).length > 0) {
+        // If array check fails but we have data, use the first item (last resort)
+        const keys = Object.keys(data.fares);
+        fareItem = data.fares[keys[0]];
+        console.warn(`Could not find exact fare match for ${vehicleId}, using ${keys[0]} as fallback`);
+      }
+      
+      if (!fareItem) {
+        console.error(`No fare found for vehicle ${vehicleId} in API response`);
+        return null;
+      }
+      
+      // Map from all possible field names
       const fareData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        oneWayBasePrice: parseFloat(fare.basePrice || fare.oneWayBasePrice || 0),
-        oneWayPricePerKm: parseFloat(fare.pricePerKm || fare.oneWayPricePerKm || 0),
-        roundTripBasePrice: parseFloat(fare.roundTripBasePrice || 0),
-        roundTripPricePerKm: parseFloat(fare.roundTripPricePerKm || 0),
-        driverAllowance: parseFloat(fare.driverAllowance || 250),
-        nightHaltCharge: parseFloat(fare.nightHaltCharge || 700)
+        oneWayBasePrice: parseFloat(fareItem.basePrice || fareItem.oneWayBasePrice || fareItem.one_way_base_price || 0),
+        oneWayPricePerKm: parseFloat(fareItem.pricePerKm || fareItem.oneWayPricePerKm || fareItem.one_way_price_per_km || 0),
+        roundTripBasePrice: parseFloat(fareItem.roundTripBasePrice || fareItem.round_trip_base_price || 0),
+        roundTripPricePerKm: parseFloat(fareItem.roundTripPricePerKm || fareItem.round_trip_price_per_km || 0),
+        driverAllowance: parseFloat(fareItem.driverAllowance || fareItem.driver_allowance || 250),
+        nightHaltCharge: parseFloat(fareItem.nightHaltCharge || fareItem.night_halt_charge || 700)
       };
       
-      // Cache the result
+      // If round trip values are missing but one way values exist, calculate them (as a fallback only)
+      if (fareData.roundTripBasePrice <= 0 && fareData.oneWayBasePrice > 0) {
+        fareData.roundTripBasePrice = fareData.oneWayBasePrice * 0.95; // 5% discount
+      }
+      
+      if (fareData.roundTripPricePerKm <= 0 && fareData.oneWayPricePerKm > 0) {
+        fareData.roundTripPricePerKm = fareData.oneWayPricePerKm * 0.85; // 15% discount
+      }
+      
+      // Validate the fare data before caching
+      if (fareData.oneWayBasePrice <= 0 || 
+          fareData.oneWayPricePerKm <= 0 || 
+          fareData.roundTripBasePrice <= 0 || 
+          fareData.roundTripPricePerKm <= 0) {
+        console.warn(`Direct API returned invalid outstation fare for vehicle ${vehicleId}`, fareData);
+        return null;
+      }
+      
+      // Cache the valid result
       outstationFareCache.set(vehicleId, {
         data: fareData,
         timestamp: Date.now()
       });
+      
+      // Initialize FareStateManager data with the fetched fare
+      fareStateManager.storeOutstationFare(vehicleId, fareData);
       
       return fareData;
     }

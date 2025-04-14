@@ -17,7 +17,7 @@ export interface AirportFareData {
 
 // Cache airport fare data in memory
 const airportFareCache = new Map<string, { data: AirportFareData, timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache duration (reduced from 5 minutes)
 
 /**
  * Fetch airport fare for a specific vehicle
@@ -25,6 +25,11 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
 export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareData | null> => {
   try {
     console.log(`Fetching airport fare for vehicle ${vehicleId}`);
+    
+    if (!vehicleId) {
+      console.error('Vehicle ID is required for fetchAirportFare');
+      return null;
+    }
     
     // Check cache first
     const cachedFare = airportFareCache.get(vehicleId);
@@ -36,10 +41,10 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     // Try to get from FareStateManager first (which connects to the database)
     const fareData = await fareStateManager.getAirportFareForVehicle(vehicleId);
     
-    if (fareData) {
+    if (fareData && fareData.tier1Price && parseFloat(fareData.tier1Price) > 0) {
       console.log(`Retrieved airport fare from FareStateManager for ${vehicleId}`, fareData);
       
-      // Convert to standard format
+      // Convert to standard format with validation
       const standardizedData: AirportFareData = {
         vehicleId,
         vehicle_id: vehicleId,
@@ -50,16 +55,24 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
         extraKmCharge: parseFloat(fareData.extraKmCharge || 0)
       };
       
-      // Cache the result
-      airportFareCache.set(vehicleId, {
-        data: standardizedData,
-        timestamp: Date.now()
-      });
-      
-      return standardizedData;
+      // Verify we have valid numeric values
+      if (standardizedData.tier1Price <= 0 || 
+          standardizedData.tier2Price <= 0 || 
+          standardizedData.tier3Price <= 0 || 
+          standardizedData.tier4Price <= 0) {
+        console.warn(`Retrieved airport fare has invalid values for vehicle ${vehicleId}`, standardizedData);
+      } else {
+        // Cache the result only if it has valid values
+        airportFareCache.set(vehicleId, {
+          data: standardizedData,
+          timestamp: Date.now()
+        });
+        
+        return standardizedData;
+      }
     }
     
-    // If FareStateManager doesn't have the data, try direct API endpoint
+    // If FareStateManager doesn't have valid data, try direct API endpoint
     const response = await fetch(
       getApiUrl(`api/direct-airport-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`),
       { headers: getBypassHeaders() }
@@ -72,24 +85,44 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     const data = await response.json();
     
     if (data.status === 'success' && data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-      // Get the first fare in the array
-      const fare = data.fares[0];
+      // Find the fare for our specific vehicle id
+      const fareItem = data.fares.find((fare: any) => 
+        fare.vehicleId === vehicleId || 
+        fare.vehicle_id === vehicleId
+      );
+      
+      if (!fareItem) {
+        console.error(`No fare found for vehicle ${vehicleId} in API response`);
+        return null;
+      }
       
       const fareData: AirportFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        tier1Price: parseFloat(fare.tier1Price || 0),
-        tier2Price: parseFloat(fare.tier2Price || 0),
-        tier3Price: parseFloat(fare.tier3Price || 0),
-        tier4Price: parseFloat(fare.tier4Price || 0),
-        extraKmCharge: parseFloat(fare.extraKmCharge || 0)
+        tier1Price: parseFloat(fareItem.tier1Price || 0),
+        tier2Price: parseFloat(fareItem.tier2Price || 0),
+        tier3Price: parseFloat(fareItem.tier3Price || 0),
+        tier4Price: parseFloat(fareItem.tier4Price || 0),
+        extraKmCharge: parseFloat(fareItem.extraKmCharge || 0)
       };
       
-      // Cache the result
+      // Validate the fare data before caching
+      if (fareData.tier1Price <= 0 || 
+          fareData.tier2Price <= 0 || 
+          fareData.tier3Price <= 0 || 
+          fareData.tier4Price <= 0) {
+        console.warn(`Direct API returned invalid airport fare for vehicle ${vehicleId}`, fareData);
+        return null;
+      }
+      
+      // Cache the valid result
       airportFareCache.set(vehicleId, {
         data: fareData,
         timestamp: Date.now()
       });
+      
+      // Initialize FareStateManager data with the fetched fare
+      fareStateManager.storeAirportFare(vehicleId, fareData);
       
       return fareData;
     }
