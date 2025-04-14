@@ -1,6 +1,11 @@
 
 // Request configuration helpers
 
+// Extended RequestInit with timeout property
+interface ExtendedRequestInit extends RequestInit {
+  timeout?: number;
+}
+
 // Headers to bypass cache for API requests
 export const getBypassHeaders = () => ({
   'X-Force-Refresh': 'true',
@@ -41,7 +46,7 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
 };
 
 // Safe fetch utility with error handling and timeout
-export const safeFetch = async (url: string, options: RequestInit = {}) => {
+export const safeFetch = async (url: string, options: ExtendedRequestInit = {}) => {
   const timeout = options.timeout || 30000; // Default 30 second timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);

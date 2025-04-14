@@ -1,6 +1,6 @@
 import { CabType } from '@/types/cab';
 import { getApiUrl } from '@/config/api';
-import { defaultHeaders, getBypassHeaders } from '@/config/requestConfig';
+import { defaultHeaders, getBypassHeaders, getForcedRequestConfig } from '@/config/requestConfig';
 import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
 
@@ -173,7 +173,7 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
         const response = await fetch(getApiUrl(endpoint), {
           method: 'GET',
           headers: {
-            ...forceRefreshHeaders,
+            ...getBypassHeaders(),
             'X-Admin-Mode': includeInactive ? 'true' : 'false',
             'X-Bypass-Cache': 'true',
             'X-Database-First': 'true'
@@ -453,7 +453,7 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
         const response = await fetch(getApiUrl(endpoint), {
           method: 'GET',
           headers: {
-            ...forceRefreshHeaders,
+            ...getBypassHeaders(),
             'X-Admin-Mode': 'true',
             'X-Bypass-Cache': 'true',
             'X-Database-First': 'true'
