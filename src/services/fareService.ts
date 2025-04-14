@@ -6,7 +6,74 @@ import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from
 // Re-export the utility functions from config/requestConfig
 export { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart };
 
-// Re-export the FareStateManager's methods for direct use in a safe way
+// Create a service object to export all the functions grouped together
+export const fareService = {
+  // Re-export all functions as methods of the fareService object
+  calculateAirportFare: async (params: any) => {
+    if (typeof fareStateManager.calculateAirportFare === 'function') {
+      const fare = await fareStateManager.calculateAirportFare(params);
+      if (fare <= 0) {
+        console.error(`Airport fare calculation failed for vehicle ${params.vehicleId}`);
+        throw new Error(`Airport fare calculation failed for vehicle ${params.vehicleId}`);
+      }
+      return fare;
+    }
+    throw new Error('FareStateManager calculateAirportFare method not available');
+  },
+
+  calculateLocalFare: async (params: any) => {
+    if (typeof fareStateManager.calculateLocalFare === 'function') {
+      const fare = await fareStateManager.calculateLocalFare(params);
+      if (fare <= 0) {
+        console.error(`Local fare calculation failed for vehicle ${params.vehicleId} with package ${params.hourlyPackage}`);
+        throw new Error(`Local fare calculation failed for vehicle ${params.vehicleId} with package ${params.hourlyPackage}`);
+      }
+      return fare;
+    }
+    throw new Error('FareStateManager calculateLocalFare method not available');
+  },
+
+  calculateOutstationFare: async (params: any) => {
+    if (typeof fareStateManager.calculateOutstationFare === 'function') {
+      const fare = await fareStateManager.calculateOutstationFare(params);
+      if (fare <= 0) {
+        console.error(`Outstation fare calculation failed for vehicle ${params.vehicleId}`);
+        throw new Error(`Outstation fare calculation failed for vehicle ${params.vehicleId}`);
+      }
+      return fare;
+    }
+    throw new Error('FareStateManager calculateOutstationFare method not available');
+  },
+
+  syncFareData: async () => {
+    if (typeof fareStateManager.syncFareData === 'function') {
+      const result = await fareStateManager.syncFareData();
+      if (!result) {
+        console.error('Fare data sync failed');
+        toast.error('Failed to sync fare data. Please try again.');
+      }
+      return result;
+    }
+    throw new Error('FareStateManager syncFareData method not available');
+  },
+
+  clearCache: () => {
+    if (typeof fareStateManager.clearCache === 'function') {
+      fareStateManager.clearCache();
+      console.log('Fare cache cleared successfully');
+      toast.success('Fare cache cleared successfully');
+    } else {
+      console.error('FareStateManager clearCache method not available');
+      toast.error('Failed to clear fare cache');
+    }
+  },
+
+  getBypassHeaders,
+  getForcedRequestConfig,
+  formatDataForMultipart
+};
+
+// Re-export all functions independently
 export const calculateAirportFare = async (params: any) => {
   if (typeof fareStateManager.calculateAirportFare === 'function') {
     const fare = await fareStateManager.calculateAirportFare(params);

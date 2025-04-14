@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -138,7 +137,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       
       // Force refresh the fare data after saving
       setTimeout(async () => {
-        const refreshedData = await fetchOutstationFare(selectedVehicle, true);
+        const refreshedData = await fetchOutstationFare(selectedVehicle);
         console.log('Refreshed outstation fare data after save:', refreshedData);
       }, 1000);
     } catch (err) {
@@ -159,7 +158,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       
       // After sync, reload the data for the currently selected vehicle
       if (selectedVehicle) {
-        const refreshedData = await fetchOutstationFare(selectedVehicle, true);
+        const refreshedData = await fetchOutstationFare(selectedVehicle);
         if (refreshedData) {
           setFareData({
             vehicleId: selectedVehicle,
