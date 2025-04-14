@@ -1,595 +1,598 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  ArrowDownUp, 
-  AlertCircle,
-  Database,
-  RefreshCw, 
-  Search, 
-  Shield, 
-  ShieldAlert, 
-  UserCheck, 
-  Users 
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { authAPI } from '@/services/api/authAPI';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { toast } from "sonner";
+import { MoreVertical, Edit, Trash2, ArrowDown, ArrowUp, User as UserIcon, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { userAPI } from '@/services/api';
 import { User } from '@/types/api';
-import { format } from 'date-fns';
-import { getApiUrl, forceRefreshHeaders } from '@/config/api';
-import axios from 'axios';
 
-export function UserManagement() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
-  const [sortField, setSortField] = useState<'name' | 'email' | 'createdAt'>('createdAt');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const { toast: uiToast } = useToast();
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const [dataSource, setDataSource] = useState<'database' | 'sample' | 'cache'>('sample');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [showEditForm, setShowEditForm] = useState(false);
+interface DataTableProps {
+  data: User[]
+}
 
-  const sampleUsers: User[] = [
-    {
-      id: 101,
-      name: 'Admin User',
-      email: 'admin@example.com',
-      phone: '9876543210',
-      role: 'admin',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 102,
-      name: 'Test User',
-      email: 'user@example.com',
-      phone: '8765432109',
-      role: 'user',
-      createdAt: new Date().toISOString()
-    }
-  ];
+function DataTable({ data }: DataTableProps) {
+  const [search, setSearch] = useState("")
+  const [sortBy, setSortBy] = useState<keyof User>("name")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [users, setUsers] = useState<User[]>(data);
+  const [isDeleting, setIsDeleting] = useState<string | number | null>(null);
 
   useEffect(() => {
-    const getCurrentUser = async () => {
+    setUsers(data);
+  }, [data]);
+
+  const sortedUsers = React.useMemo(() => {
+    const collator = new Intl.Collator(undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
+
+    return [...users].sort((a, b) => {
+      const aValue = a[sortBy]
+      const bValue = b[sortBy]
+
+      if (aValue === undefined || bValue === undefined) {
+        return 0
+      }
+
+      // Ensure both values are of the same type for comparison
+      const aString = String(aValue);
+      const bString = String(bValue);
+
+      return sortOrder === "asc"
+        ? collator.compare(aString, bString)
+        : collator.compare(bString, aString)
+    })
+  }, [users, sortBy, sortOrder])
+
+  const filteredUsers = React.useMemo(() => {
+    const lowerCaseSearch = search.toLowerCase();
+    return sortedUsers.filter(user =>
+      user.name.toLowerCase().includes(lowerCaseSearch) ||
+      user.email.toLowerCase().includes(lowerCaseSearch) ||
+      user.phone.toLowerCase().includes(lowerCaseSearch) ||
+      user.role.toLowerCase().includes(lowerCaseSearch)
+    );
+  }, [sortedUsers, search]);
+
+  const handleSort = (column: keyof User) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      setSortBy(column)
+      setSortOrder("asc")
+    }
+  }
+
+  const handleDeleteUser = async (userId: string | number) => {
+    if (window.confirm(`Are you sure you want to delete user ${userId}?`)) {
       try {
-        const userData = await authAPI.getCurrentUser();
-        if (userData) {
-          setCurrentUserId(userData.id);
-        }
+        setIsDeleting(userId);
+        await userAPI.deleteUser(userId);
+
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        toast.success(`User ${userId} deleted successfully.`);
       } catch (error) {
-        console.error('Error getting current user:', error);
+        console.error("Delete user error:", error);
+        toast.error(`Failed to delete user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setIsDeleting(null);
       }
-    };
-
-    getCurrentUser();
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async (forceRefresh = false) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      if (!forceRefresh) {
-        try {
-          const cachedUsers = localStorage.getItem('cachedUsers');
-          if (cachedUsers) {
-            const parsedUsers = JSON.parse(cachedUsers);
-            console.log('Using cached users from localStorage:', parsedUsers);
-            setUsers(parsedUsers);
-            setDataSource('cache');
-            setIsLoading(false);
-
-            setTimeout(() => {
-              fetchFreshUsers();
-            }, 500);
-
-            return;
-          }
-        } catch (cacheError) {
-          console.error('Error using cached users:', cacheError);
-        }
-      }
-
-      fetchFreshUsers();
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      handleFetchError(error);
     }
   };
 
-  const fetchFreshUsers = async () => {
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Users</CardTitle>
+        <CardDescription>
+          Manage users and their roles.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-4 py-2">
+          <Input
+            type="search"
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+          <div className="relative">
+            <Label htmlFor="sort">Sort by</Label>
+            <Select onValueChange={(value) => handleSort(value as keyof User)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="phone">Phone</SelectItem>
+                <SelectItem value="role">Role</SelectItem>
+              </SelectContent>
+            </Select>
+            {sortBy && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-7 rounded-full"
+                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              >
+                {sortOrder === "asc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                <span className="sr-only">Toggle sort order</span>
+              </Button>
+            )}
+          </div>
+        </div>
+        <ScrollArea>
+          <Table>
+            <TableCaption>List of all registered users.</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>{user.name}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.phone}</TableCell>
+                  <TableCell>{user.role}</TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Open menu</span>
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() => alert("Edit")}
+                        >
+                          <Edit className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled={isDeleting === user.id} >
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" className="w-full justify-start">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete
+                                  the user from our servers.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  disabled={isDeleting === user.id}
+                                >
+                                  {isDeleting === user.id ? (
+                                    <>
+                                      Deleting...
+                                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                                    </>
+                                  ) : (
+                                    "Delete"
+                                  )}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={5}>
+                  {filteredUsers.length} users found.
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  )
+}
+
+interface AddUserFormProps {
+  onUserAdded: (newUser: User) => void;
+}
+
+function AddUserForm({ onUserAdded }: AddUserFormProps) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<"admin" | "user">("user");
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!name || !email || !phone) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    setIsCreating(true);
     try {
-      console.log('Fetching fresh users via authAPI.getAllUsers...');
-      const userData = await authAPI.getAllUsers();
+      const newUser = {
+        name,
+        email,
+        phone,
+        role,
+      };
+      const response = await userAPI.createUser(newUser);
 
-      if (userData && userData.length > 0) {
-        console.log('Users fetched successfully via authAPI:', userData);
-        setUsers(userData);
-        setDataSource(userData === sampleUsers ? 'sample' : 'database');
-
-        localStorage.setItem('cachedUsers', JSON.stringify(userData));
-
-        setIsLoading(false);
-        return;
+      if (response.status === 'success') {
+        toast.success("User created successfully!");
+        onUserAdded({
+          id: response.timestamp || Date.now(),
+          name,
+          email,
+          phone,
+          role,
+        });
+        setName("");
+        setEmail("");
+        setPhone("");
+        setRole("user");
+      } else {
+        toast.error(`Failed to create user: ${response.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error fetching fresh users:', error);
-      handleFetchError(error);
+      console.error("Create user error:", error);
+      toast.error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Add User</CardTitle>
+        <CardDescription>
+          Create a new user account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              type="text"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              type="tel"
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="role">Role</Label>
+            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={isCreating}>
+            {isCreating ? (
+              <>
+                Creating...
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              </>
+            ) : (
+              "Create User"
+            )}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface EditUserFormProps {
+  user: User;
+  onUserUpdated: (updatedUser: User) => void;
+  onCancel: () => void;
+}
+
+function EditUserForm({ user, onUserUpdated, onCancel }: EditUserFormProps) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone);
+  const [role, setRole] = useState<"admin" | "user">(user.role);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!name || !email || !phone) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const updatedUser = {
+        ...user,
+        name,
+        email,
+        phone,
+        role,
+      };
+      const response = await userAPI.updateUser(user.id, updatedUser);
+
+      if (response.status === 'success') {
+        toast.success("User updated successfully!");
+        onUserUpdated(updatedUser);
+        onCancel();
+      } else {
+        toast.error(`Failed to update user: ${response.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Update user error:", error);
+      toast.error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Edit User</CardTitle>
+        <CardDescription>
+          Modify user details.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              type="text"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              type="tel"
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="role">Role</Label>
+            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isUpdating}>
+              {isUpdating ? (
+                <>
+                  Updating...
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                </>
+              ) : (
+                "Update User"
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await userAPI.getUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error("Fetch users error:", error);
+      setError(error instanceof Error ? error : new Error('Failed to fetch users'));
+      toast.error(`Failed to fetch users: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const handleUserAdded = (newUser: User) => {
+    setUsers(prevUsers => [...prevUsers, newUser]);
+    setShowAddForm(false);
   };
 
-  const handleFetchError = (error: any) => {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to load users';
-    setError(errorMessage);
-
-    uiToast({
-      title: "Error",
-      description: errorMessage,
-      variant: "destructive",
-    });
-
-    try {
-      const cachedUsers = localStorage.getItem('cachedUsers');
-      if (cachedUsers) {
-        const parsedUsers = JSON.parse(cachedUsers);
-        setUsers(parsedUsers);
-        setDataSource('cache');
-        toast.info('Using cached user data due to connection error');
-        return;
-      }
-    } catch (cacheError) {
-      console.error('Error using cached users:', cacheError);
-    }
-
-    const sampleUsers: User[] = [
-      {
-        id: 101,
-        name: 'Admin User',
-        email: 'admin@example.com',
-        phone: '9876543210',
-        role: 'admin',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 102,
-        name: 'Test User',
-        email: 'user@example.com',
-        phone: '8765432109',
-        role: 'user',
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    setUsers(sampleUsers);
-    setDataSource('sample');
-    toast.warning('Using sample data due to connection error');
+  const handleUserUpdated = (updatedUser: User) => {
+    setUsers(prevUsers =>
+      prevUsers.map(user => (user.id === updatedUser.id ? updatedUser : user))
+    );
+    setEditingUser(null);
   };
 
-  const handlePromoteToAdmin = async (userId: number) => {
-    if (userId === currentUserId) {
-      toast.error("You cannot modify your own admin status");
-      return;
-    }
-
-    try {
-      const user = users.find(u => u.id === userId);
-      if (!user) return;
-
-      const isCurrentlyAdmin = user.role === 'admin';
-      const newRole = isCurrentlyAdmin ? 'user' : 'admin' as 'admin' | 'user';
-      const actionText = isCurrentlyAdmin ? 'Remove admin' : 'Make admin';
-
-      if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} for ${user.name}?`)) {
-        return;
-      }
-
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, role: newRole } : u
-      ));
-
-      try {
-        await authAPI.updateUserRole(userId, newRole);
-
-        toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
-
-        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
-          u.id === userId ? { ...u, role: newRole } : u
-        )));
-      } catch (updateError) {
-        console.error('Error updating user role on server:', updateError);
-
-        toast.warning(`Role updated in UI only. Server update failed: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
-
-        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
-          u.id === userId ? { ...u, role: newRole } : u
-        )));
-      }
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update user role');
-    }
+  const handleCancelEdit = () => {
+    setEditingUser(null);
   };
 
-  const handleEdit = (userId: string | number) => {
-    const userToEdit = users.find(user => user.id === userId || user.id.toString() === userId.toString());
-    if (userToEdit) {
-      setCurrentUser(userToEdit);
-      setShowEditForm(true);
-    }
-  };
-
-  const handleDeleteUser = async (userId: string | number) => {
-    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-      return;
-    }
-
-    try {
-      const userIdStr = userId.toString();
-      if (currentUser && currentUser.id.toString() === userIdStr) {
-        setShowEditForm(false);
-      }
-
-      try {
-        await authAPI.deleteUser(userId);
-        toast.success('User deleted successfully');
-
-        const updatedUsers = users.filter(user => user.id !== userId);
-        setUsers(updatedUsers);
-
-        localStorage.setItem('cachedUsers', JSON.stringify(updatedUsers));
-      } catch (deleteError) {
-        console.error('Error deleting user:', deleteError);
-        toast.error('Failed to delete user');
-      }
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to delete user');
-    }
-  };
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = searchTerm === '' || 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.phone && user.phone.includes(searchTerm));
-
-    const matchesRole = roleFilter === 'all' || 
-      (roleFilter === 'admin' && user.role === 'admin') ||
-      (roleFilter === 'user' && user.role === 'user');
-
-    return matchesSearch && matchesRole;
-  });
-
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    let comparison = 0;
-
-    switch (sortField) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'email':
-        comparison = a.email.localeCompare(b.email);
-        break;
-      case 'createdAt':
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        break;
-    }
-
-    return sortDirection === 'asc' ? comparison : -comparison;
-  });
-
-  const toggleSort = (field: 'name' | 'email' | 'createdAt') => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getDataSourceBadge = () => {
-    switch(dataSource) {
-      case 'database':
-        return <span className="bg-green-100 text-green-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <Database className="h-3 w-3" /> Live Data
-        </span>;
-      case 'cache':
-        return <span className="bg-blue-100 text-blue-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <UserCheck className="h-3 w-3" /> Cached Data
-        </span>;
-      case 'sample':
-        return <span className="bg-amber-100 text-amber-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" /> Sample Data
-        </span>;
-    }
-  };
-
-  if (error && !users.length) {
+  if (isLoading) {
     return (
-      <ApiErrorFallback 
-        error={error} 
-        onRetry={() => fetchUsers(true)} 
-        title="User Management Error" 
-        description="Unable to load user data. This may be due to a network issue or server problem."
-      />
+      <div className="container mx-auto py-10 px-4">
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+          <p className="text-gray-500">Loading users...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <div className="rounded-md border bg-muted p-4">
+          <div className="flex items-center space-x-2">
+            <UserIcon className="h-4 w-4" />
+            <h4 className="text-sm font-semibold leading-none">
+              Error
+            </h4>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {error.message}
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" /> User Management
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {getDataSourceBadge()}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => fetchUsers(true)} 
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert className="mb-4">
-            <AlertDescription>
-              {error} - Showing {dataSource === 'database' ? 'live' : dataSource === 'cache' ? 'cached' : 'sample'} data.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <Tabs defaultValue="list">
-          <TabsList className="mb-4">
-            <TabsTrigger value="list" className="flex items-center gap-1">
-              <Users className="h-4 w-4" /> User List
-            </TabsTrigger>
-            <TabsTrigger value="admins" className="flex items-center gap-1">
-              <ShieldAlert className="h-4 w-4" /> Admins
-            </TabsTrigger>
-          </TabsList>
-          
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            
-            <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as 'all' | 'admin' | 'user')}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="admin">Admins</SelectItem>
-                <SelectItem value="user">Users</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <TabsContent value="list">
-            {isLoading ? (
-              <div className="flex justify-center p-8">
-                <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-              </div>
-            ) : sortedUsers.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('name')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Name
-                          {sortField === 'name' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('email')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Email
-                          {sortField === 'email' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('createdAt')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Created
-                          {sortField === 'createdAt' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone || '-'}</TableCell>
-                        <TableCell>
-                          {user.role === 'admin' ? (
-                            <div className="flex items-center gap-1 text-purple-600">
-                              <Shield className="h-4 w-4" />
-                              Admin
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-gray-600">
-                              <UserCheck className="h-4 w-4" />
-                              User
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {user.createdAt ? format(new Date(user.createdAt), 'MMM d, yyyy') : 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant={user.role === 'admin' ? "destructive" : "default"}
-                            size="sm"
-                            onClick={() => handlePromoteToAdmin(user.id)}
-                            disabled={user.id === currentUserId}
-                            title={user.id === currentUserId ? "You cannot modify your own admin status" : ""}
-                          >
-                            {user.role === 'admin' ? (
-                              <>
-                                <Shield className="h-4 w-4 mr-1" />
-                                Remove Admin
-                              </>
-                            ) : (
-                              <>
-                                <ShieldAlert className="h-4 w-4 mr-1" />
-                                Make Admin
-                              </>
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="py-2 px-4 text-sm text-gray-500 border-t">
-                  Showing {sortedUsers.length} of {users.length} users
-                </div>
-              </div>
-            ) : (
-              <Alert>
-                <AlertDescription>
-                  {searchTerm || roleFilter !== 'all' 
-                    ? "No users matching your filters" 
-                    : "No users found in the system"}
-                </AlertDescription>
-              </Alert>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="admins">
-            {isLoading ? (
-              <div className="flex justify-center p-8">
-                <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Alert>
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-5 w-5" />
-                    <AlertDescription>
-                      <strong>Admin users</strong> have full access to all dashboard features including user management, fare control, and booking operations.
-                    </AlertDescription>
-                  </div>
-                </Alert>
-                
-                {sortedUsers.filter(user => user.role === 'admin').length > 0 ? (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sortedUsers
-                          .filter(user => user.role === 'admin')
-                          .map((admin) => (
-                            <TableRow key={admin.id}>
-                              <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-purple-600" />
-                                  {admin.name}
-                                  {admin.id === currentUserId && (
-                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                                      You
-                                    </span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>{admin.email}</TableCell>
-                              <TableCell>{admin.phone || '-'}</TableCell>
-                              <TableCell>
-                                {admin.createdAt ? format(new Date(admin.createdAt), 'MMM d, yyyy') : 'N/A'}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handlePromoteToAdmin(admin.id)}
-                                  disabled={admin.id === currentUserId}
-                                  title={admin.id === currentUserId ? "You cannot remove your own admin status" : ""}
-                                >
-                                  <Shield className="h-4 w-4 mr-1" />
-                                  Remove Admin
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No admin users found
-                  </div>
-                )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="container mx-auto py-10 px-4">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-3xl font-bold">User Management</h1>
+        <Button onClick={() => setShowAddForm(!showAddForm)}>
+          {showAddForm ? "Hide Form" : "Add User"}
+        </Button>
+      </div>
+
+      {showAddForm && (
+        <AddUserForm onUserAdded={handleUserAdded} />
+      )}
+
+      {editingUser ? (
+        <EditUserForm
+          user={editingUser}
+          onUserUpdated={handleUserUpdated}
+          onCancel={handleCancelEdit}
+        />
+      ) : (
+        <DataTable data={users} />
+      )}
+    </div>
   );
 }

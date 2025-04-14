@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { 
   ApiResponse, 
@@ -8,7 +9,8 @@ import {
   TourFare, 
   User, 
   VehiclePricing,
-  VehiclePricingUpdateRequest
+  VehiclePricingUpdateRequest,
+  Booking
 } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -30,7 +32,8 @@ const setAuthToken = (token: string | null) => {
   }
 };
 
-const api = {
+// Authentication API
+export const authAPI = {
   // Authentication
   login: async (credentials: LoginRequest): Promise<ApiResponse> => {
     try {
@@ -51,7 +54,144 @@ const api = {
       throw error;
     }
   },
+  
+  isAuthenticated: () => {
+    return !!localStorage.getItem('authToken');
+  },
+  
+  isAdmin: () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        return parsed.role === 'admin';
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
+  },
+  
+  getCurrentUser: async () => {
+    try {
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        return JSON.parse(userData);
+      }
+      const response = await axiosInstance.get('/api/me.php');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
+  },
+  
+  logout: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    setAuthToken(null);
+  },
+  
+  updateUserRole: async (userId: number, role: 'admin' | 'user') => {
+    try {
+      const response = await axiosInstance.put(`/api/users.php?id=${userId}`, { role });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update user role:', error);
+      throw error;
+    }
+  }
+};
 
+// Booking API
+export const bookingAPI = {
+  getBookings: async (): Promise<Booking[]> => {
+    try {
+      const response = await axiosInstance.get('/api/bookings.php');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch bookings:', error);
+      throw error;
+    }
+  },
+
+  createBooking: async (bookingData: BookingRequest) => {
+    // bookingRequest may or may not include userId, so we don't need to check for it
+    console.log('Creating booking:', bookingData);
+
+    try {
+      const response = await axiosInstance.post('/api/create-booking.php', bookingData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      throw error;
+    }
+  },
+  
+  getBookingById: async (bookingId: number) => {
+    try {
+      const response = await axiosInstance.get(`/api/bookings.php?id=${bookingId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to fetch booking ${bookingId}:`, error);
+      throw error;
+    }
+  },
+
+  updateBooking: async (bookingId: number, bookingData: Partial<BookingRequest>): Promise<ApiResponse> => {
+    try {
+      const response = await axiosInstance.put(`/api/bookings.php?id=${bookingId}`, bookingData);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update booking:', error);
+      throw error;
+    }
+  },
+
+  updateBookingStatus: async (bookingId: number, newStatus: string): Promise<ApiResponse> => {
+    try {
+      const response = await axiosInstance.put(`/api/bookings.php?id=${bookingId}`, { status: newStatus });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update booking status:', error);
+      throw error;
+    }
+  },
+
+  deleteBooking: async (bookingId: number): Promise<ApiResponse> => {
+    try {
+      const response = await axiosInstance.delete(`/api/bookings.php?id=${bookingId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to delete booking:', error);
+      throw error;
+    }
+  },
+  
+  getUserBookings: async (userId: number, options = {}) => {
+    try {
+      const response = await axiosInstance.get(`/api/user-bookings.php?userId=${userId}`, { params: options });
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to fetch bookings for user ${userId}:`, error);
+      throw error;
+    }
+  },
+  
+  getAdminDashboardMetrics: async (period = 'week', options = {}) => {
+    try {
+      const response = await axiosInstance.get(`/api/admin/dashboard-metrics.php?period=${period}`, { params: options });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch admin dashboard metrics:', error);
+      throw error;
+    }
+  }
+};
+
+// User API
+export const userAPI = {
   // User Management
   getUsers: async (): Promise<User[]> => {
     try {
@@ -91,52 +231,11 @@ const api = {
       console.error('Failed to delete user:', error);
       throw error;
     }
-  },
+  }
+};
 
-  // Bookings
-  getBookings: async (): Promise<any[]> => {
-    try {
-      const response = await axiosInstance.get('/api/bookings.php');
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch bookings:', error);
-      throw error;
-    }
-  },
-
-  createBooking: async (bookingData: BookingRequest) => {
-    // bookingRequest may or may not include userId, so we don't need to check for it
-    console.log('Creating booking:', bookingData);
-
-    try {
-      const response = await axiosInstance.post('/api/create-booking.php', bookingData);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      throw error;
-    }
-  },
-
-  updateBooking: async (bookingId: string, bookingData: BookingRequest): Promise<ApiResponse> => {
-    try {
-      const response = await axiosInstance.put(`/api/bookings.php?id=${bookingId}`, bookingData);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to update booking:', error);
-      throw error;
-    }
-  },
-
-  deleteBooking: async (bookingId: string): Promise<ApiResponse> => {
-    try {
-      const response = await axiosInstance.delete(`/api/bookings.php?id=${bookingId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to delete booking:', error);
-      throw error;
-    }
-  },
-
+// Fare API
+export const fareAPI = {
   // Fare Management
   getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
@@ -196,10 +295,25 @@ const api = {
       console.error('Failed to delete tour fare:', error);
       throw error;
     }
-  },
+  }
+};
 
-  // Utility function to set auth token
-  setAuthToken,
+// Utility function to set auth token
+export const setAuthToken = (token: string | null) => {
+  if (token) {
+    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete axiosInstance.defaults.headers.common['Authorization'];
+  }
+};
+
+// For backward compatibility, also export the entire API object
+const api = {
+  ...authAPI,
+  ...bookingAPI,
+  ...userAPI,
+  ...fareAPI,
+  setAuthToken
 };
 
 export default api;

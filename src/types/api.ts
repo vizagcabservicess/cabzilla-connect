@@ -179,7 +179,7 @@ export interface User {
 export interface VehiclePricing {
   id: string | number; // Allow both string and number types
   vehicleId: string;
-  vehicleType: string; // Added to fix errors
+  vehicleType?: string; // Added to fix errors
   name?: string;
   basePrice: number;
   pricePerKm: number;
