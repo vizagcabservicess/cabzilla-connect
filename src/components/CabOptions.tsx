@@ -53,7 +53,12 @@ const normalizeVehicleId = (vehicleId: string): string => {
     'mpv': 'innova_crysta',
     'tempo': 'tempo_traveller',
     'tempo_traveller': 'tempo_traveller',
-    'traveller': 'tempo_traveller'
+    'traveller': 'tempo_traveller',
+    // Add additional mappings for other vehicles in your fleet
+    'toyota': 'sedan',
+    'dzire cng': 'sedan',
+    'honda amze': 'sedan',
+    'MPV': 'innova_crysta'
   };
   
   return idMappings[id] || id;
@@ -111,9 +116,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       const customEvent = event as CustomEvent;
       if (!customEvent.detail) return;
       
-      const { cabId, normalizedCabId, fare } = customEvent.detail;
+      const { cabId, originalCabId, normalizedCabId, fare } = customEvent.detail;
       
-      if ((cabId || normalizedCabId) && fare && fare > 0) {
+      if ((cabId || originalCabId || normalizedCabId) && fare && fare > 0) {
         // Update fare for both original and normalized ID
         setCabFares(prevFares => {
           const updatedFares = { ...prevFares };
@@ -122,7 +127,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             updatedFares[cabId] = fare;
           }
           
-          if (normalizedCabId && normalizedCabId !== cabId) {
+          if (originalCabId && originalCabId !== cabId) {
+            updatedFares[originalCabId] = fare;
+          }
+          
+          if (normalizedCabId && normalizedCabId !== cabId && normalizedCabId !== originalCabId) {
             updatedFares[normalizedCabId] = fare;
           }
           
@@ -221,7 +230,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               } else if (normalizedVehicleId === 'tempo_traveller') {
                 fare = 3800;
               } else {
-                fare = 1600; // Default local fallback
+                fare = 1800; // Default local fallback
               }
             } else if (tripType === 'outstation') {
               if (normalizedVehicleId === 'sedan') {
@@ -233,7 +242,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               } else if (normalizedVehicleId === 'tempo_traveller') {
                 fare = 4500;
               } else {
-                fare = 2500; // Default outstation fallback
+                fare = 3000; // Default outstation fallback
               }
             }
           }
@@ -251,6 +260,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
               cabId: cab.id,
+              originalCabId: cab.id,
               normalizedCabId: normalizedVehicleId,
               fare: fare,
               tripType: tripType,
@@ -286,7 +296,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             } else if (normalizedVehicleId === 'tempo_traveller') {
               fallbackFare = 3800;
             } else {
-              fallbackFare = 1600; // Default local fallback
+              fallbackFare = 1800; // Default local fallback
             }
           } else if (tripType === 'outstation') {
             if (normalizedVehicleId === 'sedan') {
@@ -298,7 +308,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             } else if (normalizedVehicleId === 'tempo_traveller') {
               fallbackFare = 4500;
             } else {
-              fallbackFare = 2500; // Default outstation fallback
+              fallbackFare = 3000; // Default outstation fallback
             }
           }
           
@@ -315,6 +325,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
               cabId: cab.id,
+              originalCabId: cab.id,
               normalizedCabId: normalizedVehicleId,
               fare: fallbackFare,
               tripType: tripType,
@@ -340,6 +351,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: selectedCab.id,
+          cabId: selectedCab.id,
+          originalCabId: selectedCab.id,
           cabName: selectedCab.name,
           normalizedCabId: normalizedVehicleId,
           fare: fare,
@@ -374,6 +387,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: cab.id,
+          cabId: cab.id,
+          originalCabId: cab.id,
           cabName: cab.name,
           normalizedCabId: normalizedVehicleId,
           fare: fare,
@@ -403,6 +418,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
             detail: {
               cabType: cab.id,
+              cabId: cab.id,
+              originalCabId: cab.id,
               cabName: cab.name,
               normalizedCabId: normalizedVehicleId,
               fare: calculatedFare,
@@ -440,7 +457,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           } else if (normalizedVehicleId === 'tempo_traveller') {
             fallbackFare = 3800;
           } else {
-            fallbackFare = 1600; // Default local fallback
+            fallbackFare = 1800; // Default local fallback
           }
         } else if (tripType === 'outstation') {
           if (normalizedVehicleId === 'sedan') {
@@ -452,7 +469,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           } else if (normalizedVehicleId === 'tempo_traveller') {
             fallbackFare = 4500;
           } else {
-            fallbackFare = 2500; // Default outstation fallback
+            fallbackFare = 3000; // Default outstation fallback
           }
         }
         
@@ -465,6 +482,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
           detail: {
             cabType: cab.id,
+            cabId: cab.id,
+            originalCabId: cab.id,
             cabName: cab.name,
             normalizedCabId: normalizedVehicleId,
             fare: fallbackFare,

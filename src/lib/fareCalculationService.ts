@@ -36,7 +36,12 @@ const normalizeVehicleId = (vehicleId: string): string => {
     'mpv': 'innova_crysta',
     'tempo': 'tempo_traveller',
     'tempo_traveller': 'tempo_traveller',
-    'traveller': 'tempo_traveller'
+    'traveller': 'tempo_traveller',
+    // Add additional mappings for other vehicles in your fleet
+    'toyota': 'sedan',
+    'dzire cng': 'sedan',
+    'honda amze': 'sedan',
+    'MPV': 'innova_crysta'
   };
   
   return idMappings[id] || id;
@@ -109,7 +114,7 @@ const validateFare = (fare: number, cabId: string, tripType: string): number => 
       } else if (normalizedCabId === 'tempo_traveller') {
         fallbackFare = 3800;
       } else {
-        fallbackFare = 1600; // Default local fallback
+        fallbackFare = 1800; // Default local fallback
       }
     } else if (tripType === 'outstation') {
       if (normalizedCabId === 'sedan') {
@@ -121,7 +126,7 @@ const validateFare = (fare: number, cabId: string, tripType: string): number => 
       } else if (normalizedCabId === 'tempo_traveller') {
         fallbackFare = 4500;
       } else {
-        fallbackFare = 2500; // Default outstation fallback
+        fallbackFare = 3000; // Default outstation fallback
       }
     } else { // tour or other types
       if (normalizedCabId === 'sedan') {
@@ -133,11 +138,25 @@ const validateFare = (fare: number, cabId: string, tripType: string): number => 
       } else if (normalizedCabId === 'tempo_traveller') {
         fallbackFare = 4500;
       } else {
-        fallbackFare = 2500; // Default fallback for other trip types
+        fallbackFare = 3000; // Default fallback for other trip types
       }
     }
     
     console.log(`Using fallback fare of ₹${fallbackFare} for ${cabId} (${tripType})`);
+    
+    // Broadcast the fallback fare
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        source: 'fallback',
+        cabId: cabId,
+        originalCabId: cabId,
+        normalizedCabId: normalizedCabId,
+        fare: fallbackFare,
+        tripType: tripType,
+        timestamp: Date.now()
+      }
+    }));
+    
     return fallbackFare;
   }
   
@@ -194,6 +213,20 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     const cachedData = fareCache.get(cacheKey);
     if (cachedData && Date.now() - cachedData.timestamp < CACHE_EXPIRY) {
       console.log(`Returning cached fare for ${cacheKey}`);
+      
+      // Ensure we emit the fare-calculated event for UI components to receive the fare
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          source: 'cache',
+          cabId: originalVehicleId,
+          originalCabId: originalVehicleId, 
+          normalizedCabId: normalizedVehicleId,
+          fare: cachedData.fares.totalFare,
+          tripType: tripType,
+          timestamp: Date.now()
+        }
+      }));
+      
       return cachedData.fares.totalFare;
     } else {
       console.log(`Cache expired for ${cacheKey}, recalculating.`);
@@ -267,6 +300,8 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         detail: {
           source: 'calculation',
           cabId: cabType.id,
+          originalCabId: originalVehicleId,
+          normalizedCabId: normalizedVehicleId,
           fare: totalFare,
           tripType: tripType,
           timestamp: Date.now()
@@ -308,7 +343,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       } else if (normalizedCabId === 'tempo_traveller') {
         fallbackFare = 3800;
       } else {
-        fallbackFare = 1600; // Default local fallback
+        fallbackFare = 1800; // Default local fallback
       }
     } else if (tripType === 'outstation' || tripType === 'tour') {
       if (normalizedCabId === 'sedan') {
@@ -320,7 +355,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       } else if (normalizedCabId === 'tempo_traveller') {
         fallbackFare = 4500;
       } else {
-        fallbackFare = 2500; // Default outstation fallback
+        fallbackFare = 3000; // Default outstation fallback
       }
     }
     
@@ -337,6 +372,8 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       detail: {
         source: 'fallback',
         cabId: cabType.id,
+        originalCabId: originalVehicleId,
+        normalizedCabId: normalizedCabId,
         fare: fallbackFare,
         tripType: tripType,
         timestamp: Date.now()

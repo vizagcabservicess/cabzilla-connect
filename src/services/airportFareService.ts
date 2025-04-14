@@ -43,7 +43,12 @@ const normalizeVehicleId = (vehicleId: string): string => {
     'mpv': 'innova_crysta',
     'tempo': 'tempo_traveller',
     'tempo_traveller': 'tempo_traveller',
-    'traveller': 'tempo_traveller'
+    'traveller': 'tempo_traveller',
+    // Add additional mappings for other vehicles in your fleet
+    'toyota': 'sedan',
+    'dzire cng': 'sedan',
+    'honda amze': 'sedan',
+    'MPV': 'innova_crysta'
   };
   
   return idMappings[id] || id;
@@ -72,6 +77,17 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     
     if (fareFromCache) {
       console.log(`Airport fare found in cache for ${normalizedVehicleId}:`, fareFromCache);
+      
+      // Dispatch an event to notify components
+      window.dispatchEvent(new CustomEvent('fare-data-fetched', {
+        detail: {
+          vehicleId: originalVehicleId,
+          normalizedVehicleId: normalizedVehicleId,
+          fareType: 'airport',
+          timestamp: Date.now()
+        }
+      }));
+      
       return fareFromCache as AirportFareData;
     }
     
@@ -90,7 +106,86 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     
     if (data.status !== 'success') {
       console.warn(`No airport fare found for vehicle ${normalizedVehicleId}`);
-      return null;
+      
+      // Create appropriate fallback fare data based on vehicle type
+      let basePrice = 1500;
+      let pricePerKm = 15;
+      let pickupPrice = 600;
+      let dropPrice = 600;
+      let tier1Price = 700;
+      let tier2Price = 1000;
+      let tier3Price = 1500;
+      let tier4Price = 1800;
+      let extraKmCharge = 15;
+      
+      // Adjust values based on vehicle type
+      if (normalizedVehicleId === 'sedan') {
+        // Default values for sedan are already set
+      } else if (normalizedVehicleId === 'ertiga') {
+        basePrice = 1800;
+        pricePerKm = 18;
+        tier1Price = 900;
+        tier2Price = 1300;
+        tier3Price = 1800;
+        tier4Price = 2100;
+        extraKmCharge = 18;
+      } else if (normalizedVehicleId === 'innova_crysta') {
+        basePrice = 2200;
+        pricePerKm = 22;
+        pickupPrice = 700;
+        dropPrice = 700;
+        tier1Price = 1100;
+        tier2Price = 1600;
+        tier3Price = 2200;
+        tier4Price = 2600;
+        extraKmCharge = 22;
+      } else if (normalizedVehicleId === 'tempo_traveller') {
+        basePrice = 3500;
+        pricePerKm = 35;
+        pickupPrice = 800;
+        dropPrice = 800;
+        tier1Price = 1800;
+        tier2Price = 2500;
+        tier3Price = 3500;
+        tier4Price = 4000;
+        extraKmCharge = 35;
+      }
+      
+      // Create fallback data
+      const fallbackFare: AirportFareData = {
+        vehicleId: normalizedVehicleId,
+        vehicle_id: normalizedVehicleId,
+        basePrice,
+        pricePerKm,
+        pickupPrice,
+        dropPrice,
+        tier1Price,
+        tier2Price,
+        tier3Price,
+        tier4Price,
+        extraKmCharge
+      };
+      
+      // Store in FareStateManager for consistency
+      await fareStateManager.storeAirportFare(normalizedVehicleId, fallbackFare);
+      
+      // Also store with original vehicle ID if different
+      if (originalVehicleId !== normalizedVehicleId) {
+        await fareStateManager.storeAirportFare(originalVehicleId, fallbackFare);
+      }
+      
+      // Notify about the fallback fare
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          source: 'fallback',
+          cabId: originalVehicleId,
+          normalizedCabId: normalizedVehicleId,
+          fareType: 'airport',
+          timestamp: Date.now()
+        }
+      }));
+      
+      return fallbackFare;
     }
     
     // Extract fare data from response with better handling for different response formats
@@ -231,6 +326,16 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
       }
     }));
     
+    // Dispatch event to notify components
+    window.dispatchEvent(new CustomEvent('fare-data-fetched', {
+      detail: {
+        vehicleId: originalVehicleId,
+        normalizedVehicleId: normalizedVehicleId,
+        fareType: 'airport',
+        timestamp: Date.now()
+      }
+    }));
+    
     return normalizedFare;
   } catch (error) {
     console.error(`Error fetching airport fare for ${vehicleId}:`, error);
@@ -305,6 +410,17 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     if (vehicleId !== normalizedVehicleId) {
       await fareStateManager.storeAirportFare(vehicleId, fallbackFare);
     }
+    
+    // Broadcast about the fallback fare
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        source: 'fallback',
+        cabId: vehicleId,
+        normalizedCabId: normalizedVehicleId,
+        fareType: 'airport',
+        timestamp: Date.now()
+      }
+    }));
     
     return fallbackFare;
   }

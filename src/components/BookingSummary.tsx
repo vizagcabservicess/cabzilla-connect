@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType, LocalFare } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -40,7 +39,12 @@ const normalizeVehicleId = (vehicleId: string): string => {
     'mpv': 'innova_crysta',
     'tempo': 'tempo_traveller',
     'tempo_traveller': 'tempo_traveller',
-    'traveller': 'tempo_traveller'
+    'traveller': 'tempo_traveller',
+    // Add additional mappings for other vehicles in your fleet
+    'toyota': 'sedan',
+    'dzire cng': 'sedan',
+    'honda amze': 'sedan',
+    'MPV': 'innova_crysta'
   };
   
   return idMappings[id] || id;
@@ -72,12 +76,13 @@ export const BookingSummary = ({
     const handleFareUpdate = (event: CustomEvent) => {
       if (!selectedCab) return;
       
-      const { cabType, cabId, normalizedCabId, fare, timestamp = Date.now() } = event.detail || {};
-      const relevantCabId = cabType || cabId;
+      const { cabType, cabId, originalCabId, normalizedCabId, fare, timestamp = Date.now() } = event.detail || {};
+      const relevantCabId = cabType || cabId || originalCabId;
       
       // Check if this update is for our selected cab (using both original and normalized IDs)
-      const isForCurrentCab = relevantCabId === selectedCab.id || 
-                             normalizeVehicleId(relevantCabId) === normalizeVehicleId(selectedCab.id);
+      const isForCurrentCab = 
+        relevantCabId === selectedCab.id || 
+        normalizeVehicleId(relevantCabId) === normalizeVehicleId(selectedCab.id);
       
       if (isForCurrentCab && fare && fare > 0) {
         const now = Date.now();
@@ -150,13 +155,103 @@ export const BookingSummary = ({
             updateFareDetails(fare, tripType, distance, selectedCab);
           } else {
             console.warn(`BookingSummary: Invalid fare (${fare}), using initial price of ${initialPrice}`);
-            setTotalPrice(initialPrice > 0 ? initialPrice : 0);
-            updateFareDetails(initialPrice > 0 ? initialPrice : 0, tripType, distance, selectedCab);
+            
+            // Create fallback based on vehicle type and trip type
+            const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
+            let fallbackFare = initialPrice > 0 ? initialPrice : 0;
+            
+            if (fallbackFare <= 0) {
+              if (tripType === 'airport') {
+                if (normalizedVehicleId === 'sedan') {
+                  fallbackFare = 1500;
+                } else if (normalizedVehicleId === 'ertiga') {
+                  fallbackFare = 1800;
+                } else if (normalizedVehicleId === 'innova_crysta') {
+                  fallbackFare = 2200;
+                } else if (normalizedVehicleId === 'tempo_traveller') {
+                  fallbackFare = 3500;
+                } else {
+                  fallbackFare = 1800; // Default airport fallback
+                }
+              } else if (tripType === 'local') {
+                if (normalizedVehicleId === 'sedan') {
+                  fallbackFare = 1600;
+                } else if (normalizedVehicleId === 'ertiga') {
+                  fallbackFare = 1900;
+                } else if (normalizedVehicleId === 'innova_crysta') {
+                  fallbackFare = 2300;
+                } else if (normalizedVehicleId === 'tempo_traveller') {
+                  fallbackFare = 3800;
+                } else {
+                  fallbackFare = 1800; // Default local fallback
+                }
+              } else if (tripType === 'outstation') {
+                if (normalizedVehicleId === 'sedan') {
+                  fallbackFare = 2500;
+                } else if (normalizedVehicleId === 'ertiga') {
+                  fallbackFare = 3000;
+                } else if (normalizedVehicleId === 'innova_crysta') {
+                  fallbackFare = 3600;
+                } else if (normalizedVehicleId === 'tempo_traveller') {
+                  fallbackFare = 4500;
+                } else {
+                  fallbackFare = 3000; // Default outstation fallback
+                }
+              }
+            }
+            
+            setTotalPrice(fallbackFare);
+            updateFareDetails(fallbackFare, tripType, distance, selectedCab);
           }
         } catch (error) {
           console.error('Error loading fare for selected cab:', error);
-          setTotalPrice(initialPrice > 0 ? initialPrice : 0);
-          updateFareDetails(initialPrice > 0 ? initialPrice : 0, tripType, distance, selectedCab);
+          
+          // Create fallback based on vehicle type and trip type
+          const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
+          let fallbackFare = initialPrice > 0 ? initialPrice : 0;
+          
+          if (fallbackFare <= 0) {
+            if (tripType === 'airport') {
+              if (normalizedVehicleId === 'sedan') {
+                fallbackFare = 1500;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fallbackFare = 1800;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fallbackFare = 2200;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fallbackFare = 3500;
+              } else {
+                fallbackFare = 1800; // Default airport fallback
+              }
+            } else if (tripType === 'local') {
+              if (normalizedVehicleId === 'sedan') {
+                fallbackFare = 1600;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fallbackFare = 1900;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fallbackFare = 2300;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fallbackFare = 3800;
+              } else {
+                fallbackFare = 1800; // Default local fallback
+              }
+            } else if (tripType === 'outstation') {
+              if (normalizedVehicleId === 'sedan') {
+                fallbackFare = 2500;
+              } else if (normalizedVehicleId === 'ertiga') {
+                fallbackFare = 3000;
+              } else if (normalizedVehicleId === 'innova_crysta') {
+                fallbackFare = 3600;
+              } else if (normalizedVehicleId === 'tempo_traveller') {
+                fallbackFare = 4500;
+              } else {
+                fallbackFare = 3000; // Default outstation fallback
+              }
+            }
+          }
+          
+          setTotalPrice(fallbackFare);
+          updateFareDetails(fallbackFare, tripType, distance, selectedCab);
         } finally {
           setIsLoading(false);
         }
@@ -320,6 +415,7 @@ export const BookingSummary = ({
           setBaseFare(fare - driverAllowanceAmount - nightChargeAmount);
         }
       } else {
+        // For airport transfers (which should never reach here) or any other trip type
         setBaseFare(fare);
         setExtraDistanceFare(0);
         setNightCharges(0);
@@ -328,10 +424,34 @@ export const BookingSummary = ({
       console.error('Error calculating fare details:', error);
       
       // Simple fallback if everything fails
-      setBaseFare(fare);
-      setExtraDistanceFare(0);
-      setDriverAllowance(0);
-      setNightCharges(0);
+      if (tripType === 'airport') {
+        // For airport transfers, no driver allowance or extra charges
+        setBaseFare(fare);
+        setExtraDistanceFare(0);
+        setDriverAllowance(0);
+        setNightCharges(0);
+      } else {
+        // For other trip types, use a simplified breakdown
+        const normalizedVehicleId = normalizeVehicleId(cab.id);
+        let driverAllowanceAmount = 0;
+        
+        if (normalizedVehicleId === 'sedan') {
+          driverAllowanceAmount = 250;
+        } else if (normalizedVehicleId === 'ertiga') {
+          driverAllowanceAmount = 300;
+        } else if (normalizedVehicleId === 'innova_crysta') {
+          driverAllowanceAmount = 350;
+        } else if (normalizedVehicleId === 'tempo_traveller') {
+          driverAllowanceAmount = 400;
+        } else {
+          driverAllowanceAmount = 300;
+        }
+        
+        setDriverAllowance(tripType === 'airport' ? 0 : driverAllowanceAmount);
+        setBaseFare(fare - (tripType === 'airport' ? 0 : driverAllowanceAmount));
+        setExtraDistanceFare(0);
+        setNightCharges(0);
+      }
     }
     
     setIsLoading(false);
