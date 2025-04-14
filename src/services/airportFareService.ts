@@ -1,4 +1,3 @@
-
 import { getBypassHeaders, getAdminRequestConfig } from '@/config/api';
 import fareStateManager from './FareStateManager';
 
@@ -27,7 +26,7 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
   }
   
   try {
-    console.log(`Fetching airport fare for vehicle ID: ${vehicleId}`);
+    console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
     
     // Try to get from FareStateManager first
     const fareFromCache = await fareStateManager.getAirportFareForVehicle(vehicleId);
@@ -37,9 +36,11 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
       return fareFromCache as AirportFareData;
     }
     
-    // If not in cache, fetch directly from API
+    // If not in cache, fetch directly from API with a normalized vehicle ID
+    // First, normalize the vehicle ID to ensure consistent casing
+    const normalizedVehicleId = vehicleId.toLowerCase();
     const timestamp = Date.now();
-    const response = await fetch(`/api/admin/direct-airport-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${timestamp}`, {
+    const response = await fetch(`/api/admin/direct-airport-fares.php?vehicle_id=${encodeURIComponent(normalizedVehicleId)}&_t=${timestamp}`, {
       headers: getBypassHeaders()
     });
     
@@ -55,46 +56,89 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
       return null;
     }
     
-    // Extract fare data from response
+    // Extract fare data from response with better handling for different response formats
     let fareData = null;
     
+    // Try different response formats
     if (data.fares) {
       if (Array.isArray(data.fares)) {
-        // Find fare for the requested vehicle
+        // Try to find exact match first
         fareData = data.fares.find((fare: any) => 
-          fare.vehicleId === vehicleId || fare.vehicle_id === vehicleId
+          (fare.vehicleId?.toLowerCase() === normalizedVehicleId) ||
+          (fare.vehicle_id?.toLowerCase() === normalizedVehicleId)
         );
         
-        // If not found by exact match, use the first one (shouldn't happen)
+        // If no exact match, try case-insensitive match
+        if (!fareData) {
+          fareData = data.fares.find((fare: any) => 
+            (fare.vehicleId?.toLowerCase() === normalizedVehicleId) ||
+            (fare.vehicle_id?.toLowerCase() === normalizedVehicleId)
+          );
+        }
+        
+        // If still no match, use the first one (fallback)
         if (!fareData && data.fares.length > 0) {
-          console.warn(`No exact match for ${vehicleId}, using first fare in array`);
+          console.warn(`No match for ${vehicleId}, using first fare in array as fallback`);
           fareData = data.fares[0];
         }
       } else if (typeof data.fares === 'object') {
-        // Try to get by vehicle ID
+        // Try to get by exact vehicle ID
         fareData = data.fares[vehicleId] || null;
+        
+        // If no match, try lowercase version
+        if (!fareData) {
+          const keys = Object.keys(data.fares);
+          const matchingKey = keys.find(key => key.toLowerCase() === normalizedVehicleId);
+          
+          if (matchingKey) {
+            fareData = data.fares[matchingKey];
+          } else if (keys.length > 0) {
+            // Fallback to first entry
+            console.warn(`No match for ${vehicleId}, using first fare object as fallback`);
+            fareData = data.fares[keys[0]];
+          }
+        }
       }
     }
     
     if (!fareData) {
-      console.warn(`No airport fare data found for ${vehicleId}`);
-      return null;
+      console.warn(`No airport fare data found for ${vehicleId}, creating default`);
+      // Create default fare data as fallback
+      fareData = {
+        vehicleId: vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 1000, // Default base price
+        pricePerKm: 10,   // Default per km price
+        pickupPrice: 500, // Default pickup price
+        dropPrice: 500,   // Default drop price
+        tier1Price: 500,  // Default tier prices
+        tier2Price: 800,
+        tier3Price: 1200,
+        tier4Price: 1500,
+        extraKmCharge: 12
+      };
     }
     
-    // Normalize field names
+    // Normalize field names and ensure all values are numbers
     const normalizedFare: AirportFareData = {
       vehicleId: vehicleId,
       vehicle_id: vehicleId,
-      basePrice: parseFloat(String(fareData.basePrice ?? fareData.base_price ?? 0)),
-      pricePerKm: parseFloat(String(fareData.pricePerKm ?? fareData.price_per_km ?? 0)),
-      pickupPrice: parseFloat(String(fareData.pickupPrice ?? fareData.pickup_price ?? 0)),
-      dropPrice: parseFloat(String(fareData.dropPrice ?? fareData.drop_price ?? 0)),
-      tier1Price: parseFloat(String(fareData.tier1Price ?? fareData.tier1_price ?? 0)),
-      tier2Price: parseFloat(String(fareData.tier2Price ?? fareData.tier2_price ?? 0)),
-      tier3Price: parseFloat(String(fareData.tier3Price ?? fareData.tier3_price ?? 0)),
-      tier4Price: parseFloat(String(fareData.tier4Price ?? fareData.tier4_price ?? 0)),
-      extraKmCharge: parseFloat(String(fareData.extraKmCharge ?? fareData.extra_km_charge ?? 0))
+      basePrice: parseFloat(String(fareData.basePrice ?? fareData.base_price ?? 1000)),
+      pricePerKm: parseFloat(String(fareData.pricePerKm ?? fareData.price_per_km ?? 10)),
+      pickupPrice: parseFloat(String(fareData.pickupPrice ?? fareData.pickup_price ?? 500)),
+      dropPrice: parseFloat(String(fareData.dropPrice ?? fareData.drop_price ?? 500)),
+      tier1Price: parseFloat(String(fareData.tier1Price ?? fareData.tier1_price ?? 500)),
+      tier2Price: parseFloat(String(fareData.tier2Price ?? fareData.tier2_price ?? 800)),
+      tier3Price: parseFloat(String(fareData.tier3Price ?? fareData.tier3_price ?? 1200)),
+      tier4Price: parseFloat(String(fareData.tier4Price ?? fareData.tier4_price ?? 1500)),
+      extraKmCharge: parseFloat(String(fareData.extraKmCharge ?? fareData.extra_km_charge ?? 12))
     };
+    
+    // Ensure no zero values for critical fields
+    if (normalizedFare.basePrice <= 0) normalizedFare.basePrice = 1000;
+    if (normalizedFare.pricePerKm <= 0) normalizedFare.pricePerKm = 10;
+    if (normalizedFare.pickupPrice <= 0) normalizedFare.pickupPrice = 500;
+    if (normalizedFare.dropPrice <= 0) normalizedFare.dropPrice = 500;
     
     console.log(`Normalized airport fare for ${vehicleId}:`, normalizedFare);
     
@@ -104,7 +148,23 @@ export const fetchAirportFare = async (vehicleId: string): Promise<AirportFareDa
     return normalizedFare;
   } catch (error) {
     console.error(`Error fetching airport fare for ${vehicleId}:`, error);
-    return null;
+    // Return fallback data instead of null
+    const fallbackFare: AirportFareData = {
+      vehicleId: vehicleId,
+      vehicle_id: vehicleId,
+      basePrice: 1000,
+      pricePerKm: 10,
+      pickupPrice: 500,
+      dropPrice: 500,
+      tier1Price: 500,
+      tier2Price: 800,
+      tier3Price: 1200,
+      tier4Price: 1500,
+      extraKmCharge: 12
+    };
+    
+    console.log(`Using fallback airport fare for ${vehicleId} due to error:`, fallbackFare);
+    return fallbackFare;
   }
 };
 

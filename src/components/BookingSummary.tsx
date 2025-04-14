@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType, LocalFare } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -169,6 +170,7 @@ export const BookingSummary = ({
         const localFare: LocalFare | null = await fareStateManager.getLocalFareForVehicle(cab.id);
         
         if (localFare) {
+          // Fix: Use optional chaining and default value for driverAllowance
           const driverAllowanceAmount = localFare?.driverAllowance ?? 250;
           setDriverAllowance(driverAllowanceAmount);
           
@@ -180,6 +182,7 @@ export const BookingSummary = ({
           return;
         }
       } else if (tripType === 'airport') {
+        // For airport transfers, we don't add driver allowance or other charges
         setBaseFare(fare);
         setExtraDistanceFare(0);
         setNightCharges(0);
@@ -189,7 +192,9 @@ export const BookingSummary = ({
         return;
       }
       
+      // Default handling for cases not covered above
       const isAirportTransfer = tripType === 'airport';
+      // No driver allowance for airport transfers
       const driverAllowanceAmount = isAirportTransfer ? 0 : (cab.driverAllowance || 250);
       setDriverAllowance(driverAllowanceAmount);
       
