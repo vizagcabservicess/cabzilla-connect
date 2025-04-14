@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -186,6 +185,7 @@ export function VehicleFareManagement() {
       
       // Ensure values match the required interface
       const updateData: VehiclePricingUpdateRequest = {
+        vehicleId: values.vehicleType, // Use vehicleType as vehicleId
         vehicleType: values.vehicleType,
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
@@ -501,7 +501,10 @@ export function VehicleFareManagement() {
                         </FormControl>
                         <SelectContent>
                           {tourFares.map((fare) => (
-                            <SelectItem key={fare.tourId} value={fare.tourId}>
+                            <SelectItem 
+                              key={fare.tourId ? fare.tourId.toString() : ''}
+                              value={fare.tourId ? fare.tourId.toString() : ''}
+                            >
                               {fare.tourName}
                             </SelectItem>
                           ))}

@@ -121,13 +121,19 @@ export function FareManagement() {
       
       const newTourData: TourFare = {
         id: 0,
+        name: values.tourName,
         tourId: values.tourId,
         tourName: values.tourName,
         sedan: values.sedan,
         ertiga: values.ertiga,
         innova: values.innova,
         tempo: values.tempo,
-        luxury: values.luxury
+        luxury: values.luxury,
+        price: values.sedan,
+        cabType: 'sedan',
+        duration: 0,
+        distance: 0,
+        isActive: true
       };
       
       localStorage.removeItem('cabFares');
@@ -220,12 +226,12 @@ export function FareManagement() {
   };
   
   const handleTourSelect = (tourId: string) => {
-    const selectedTour = tourFares.find(fare => fare.tourId === tourId);
+    const selectedTour = tourFares.find(fare => fare.tourId && fare.tourId.toString() === tourId);
     if (selectedTour) {
-      form.setValue("tourId", selectedTour.tourId);
-      form.setValue("sedan", selectedTour.sedan);
-      form.setValue("ertiga", selectedTour.ertiga);
-      form.setValue("innova", selectedTour.innova);
+      form.setValue("tourId", tourId);
+      form.setValue("sedan", selectedTour.sedan || 0);
+      form.setValue("ertiga", selectedTour.ertiga || 0);
+      form.setValue("innova", selectedTour.innova || 0);
       form.setValue("tempo", selectedTour.tempo || 0);
       form.setValue("luxury", selectedTour.luxury || 0);
     }
@@ -293,7 +299,10 @@ export function FareManagement() {
                         </FormControl>
                         <SelectContent>
                           {tourFares.map((fare) => (
-                            <SelectItem key={fare.tourId} value={fare.tourId}>
+                            <SelectItem 
+                              key={fare.tourId ? fare.tourId.toString() : ''}
+                              value={fare.tourId ? fare.tourId.toString() : ''}
+                            >
                               {fare.tourName}
                             </SelectItem>
                           ))}
@@ -595,7 +604,7 @@ export function FareManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleTourSelect(fare.tourId)}
+                            onClick={() => handleTourSelect(fare.tourId ? fare.tourId.toString() : '')}
                             className="text-blue-600 hover:text-blue-800"
                           >
                             <Edit className="h-4 w-4" />
@@ -603,7 +612,7 @@ export function FareManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleDeleteTour(fare.tourId)}
+                            onClick={() => handleDeleteTour(fare.tourId ? fare.tourId.toString() : '')}
                             className="text-red-600 hover:text-red-800"
                           >
                             <Trash2 className="h-4 w-4" />

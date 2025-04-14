@@ -76,6 +76,8 @@ export interface BookingRequest {
   passengerEmail?: string;
   hourlyPackage?: string | null;
   notes?: string;
+  tourId?: string; // Added for tour bookings
+  userId?: string | number; // Added for user association
 }
 
 // Booking interface - adding bookingNumber field
@@ -125,9 +127,9 @@ export interface DashboardMetrics {
 // Extended Tour fare interface with additional properties used in components
 export interface TourFare {
   id: string | number; // Support both string and number types
-  tourId?: string | number; // Added to fix errors
+  tourId?: string; // Required in some components
+  tourName?: string; // Required in some components
   name: string;
-  tourName?: string; // Added to fix errors
   description?: string;
   price: number;
   cabType: string;
@@ -144,12 +146,19 @@ export interface TourFare {
 
 // Fare update request interface
 export interface FareUpdateRequest {
-  cabType: string;
-  price: number;
+  cabType?: string;
+  price?: number;
   tripType?: string;
   fromLocation?: string;
   toLocation?: string;
   packageId?: string;
+  // Add properties needed for tour fares
+  tourId?: string;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 // User interface - make ID accept both string and number
@@ -170,7 +179,7 @@ export interface User {
 export interface VehiclePricing {
   id: string | number; // Allow both string and number types
   vehicleId: string;
-  vehicleType?: string; // Added to fix errors
+  vehicleType: string; // Added to fix errors
   name?: string;
   basePrice: number;
   pricePerKm: number;

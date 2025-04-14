@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,8 +50,9 @@ export function UserManagement() {
   const { toast: uiToast } = useToast();
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [dataSource, setDataSource] = useState<'database' | 'sample' | 'cache'>('sample');
-  
-  // Define sampleUsers within the component to fix the reference error
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
+
   const sampleUsers: User[] = [
     {
       id: 101,
@@ -71,9 +71,8 @@ export function UserManagement() {
       createdAt: new Date().toISOString()
     }
   ];
-  
+
   useEffect(() => {
-    // Get current user ID from auth API
     const getCurrentUser = async () => {
       try {
         const userData = await authAPI.getCurrentUser();
@@ -84,17 +83,16 @@ export function UserManagement() {
         console.error('Error getting current user:', error);
       }
     };
-    
+
     getCurrentUser();
     fetchUsers();
   }, []);
-  
+
   const fetchUsers = async (forceRefresh = false) => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      // Try to get cached users first if not forcing refresh
+
       if (!forceRefresh) {
         try {
           const cachedUsers = localStorage.getItem('cachedUsers');
@@ -104,41 +102,37 @@ export function UserManagement() {
             setUsers(parsedUsers);
             setDataSource('cache');
             setIsLoading(false);
-            
-            // Fetch fresh data in the background
+
             setTimeout(() => {
               fetchFreshUsers();
             }, 500);
-            
+
             return;
           }
         } catch (cacheError) {
           console.error('Error using cached users:', cacheError);
         }
       }
-      
-      // Fetch fresh users
+
       fetchFreshUsers();
-      
     } catch (error) {
       console.error('Error fetching users:', error);
       handleFetchError(error);
     }
   };
-  
+
   const fetchFreshUsers = async () => {
     try {
       console.log('Fetching fresh users via authAPI.getAllUsers...');
       const userData = await authAPI.getAllUsers();
-      
+
       if (userData && userData.length > 0) {
         console.log('Users fetched successfully via authAPI:', userData);
         setUsers(userData);
         setDataSource(userData === sampleUsers ? 'sample' : 'database');
-        
-        // Cache the users for offline access
+
         localStorage.setItem('cachedUsers', JSON.stringify(userData));
-        
+
         setIsLoading(false);
         return;
       }
@@ -149,18 +143,17 @@ export function UserManagement() {
       setIsLoading(false);
     }
   };
-  
+
   const handleFetchError = (error: any) => {
     const errorMessage = error instanceof Error ? error.message : 'Failed to load users';
     setError(errorMessage);
-    
+
     uiToast({
       title: "Error",
       description: errorMessage,
       variant: "destructive",
     });
-    
-    // Try to get users from cache as fallback
+
     try {
       const cachedUsers = localStorage.getItem('cachedUsers');
       if (cachedUsers) {
@@ -173,8 +166,7 @@ export function UserManagement() {
     } catch (cacheError) {
       console.error('Error using cached users:', cacheError);
     }
-    
-    // Use sample data as last resort
+
     const sampleUsers: User[] = [
       {
         id: 101,
@@ -193,55 +185,47 @@ export function UserManagement() {
         createdAt: new Date().toISOString()
       }
     ];
-    
+
     setUsers(sampleUsers);
     setDataSource('sample');
     toast.warning('Using sample data due to connection error');
   };
-  
+
   const handlePromoteToAdmin = async (userId: number) => {
-    // Prevent admins from removing their own admin status
     if (userId === currentUserId) {
       toast.error("You cannot modify your own admin status");
       return;
     }
-    
+
     try {
       const user = users.find(u => u.id === userId);
       if (!user) return;
-      
+
       const isCurrentlyAdmin = user.role === 'admin';
       const newRole = isCurrentlyAdmin ? 'user' : 'admin' as 'admin' | 'user';
       const actionText = isCurrentlyAdmin ? 'Remove admin' : 'Make admin';
-      
-      // Confirm before changing role
+
       if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} for ${user.name}?`)) {
         return;
       }
-      
-      // Update the local state to provide immediate feedback
+
       setUsers(users.map(u => 
         u.id === userId ? { ...u, role: newRole } : u
       ));
-      
+
       try {
-        // Attempt to update on server
         await authAPI.updateUserRole(userId, newRole);
-        
-        // Success notification
+
         toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
-        
-        // Update the cache
+
         localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
           u.id === userId ? { ...u, role: newRole } : u
         )));
       } catch (updateError) {
         console.error('Error updating user role on server:', updateError);
-        
-        // Show warning but keep the UI updated
+
         toast.warning(`Role updated in UI only. Server update failed: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
-        
-        // Still update the cache for consistency
+
         localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
           u.id === userId ? { ...u, role: newRole } : u
         )));
@@ -251,25 +235,60 @@ export function UserManagement() {
       toast.error(error instanceof Error ? error.message : 'Failed to update user role');
     }
   };
-  
-  // Filter and sort users
+
+  const handleEdit = (userId: string | number) => {
+    const userToEdit = users.find(user => user.id === userId || user.id.toString() === userId.toString());
+    if (userToEdit) {
+      setCurrentUser(userToEdit);
+      setShowEditForm(true);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string | number) => {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const userIdStr = userId.toString();
+      if (currentUser && currentUser.id.toString() === userIdStr) {
+        setShowEditForm(false);
+      }
+
+      try {
+        await authAPI.deleteUser(userId);
+        toast.success('User deleted successfully');
+
+        const updatedUsers = users.filter(user => user.id !== userId);
+        setUsers(updatedUsers);
+
+        localStorage.setItem('cachedUsers', JSON.stringify(updatedUsers));
+      } catch (deleteError) {
+        console.error('Error deleting user:', deleteError);
+        toast.error('Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete user');
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = searchTerm === '' || 
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (user.phone && user.phone.includes(searchTerm));
-      
+
     const matchesRole = roleFilter === 'all' || 
       (roleFilter === 'admin' && user.role === 'admin') ||
       (roleFilter === 'user' && user.role === 'user');
-      
+
     return matchesSearch && matchesRole;
   });
-  
-  // Sort users
+
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     let comparison = 0;
-    
+
     switch (sortField) {
       case 'name':
         comparison = a.name.localeCompare(b.name);
@@ -281,10 +300,10 @@ export function UserManagement() {
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         break;
     }
-    
+
     return sortDirection === 'asc' ? comparison : -comparison;
   });
-  
+
   const toggleSort = (field: 'name' | 'email' | 'createdAt') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -294,7 +313,6 @@ export function UserManagement() {
     }
   };
 
-  // Helper to get data source badge
   const getDataSourceBadge = () => {
     switch(dataSource) {
       case 'database':
@@ -311,7 +329,7 @@ export function UserManagement() {
         </span>;
     }
   };
-  
+
   if (error && !users.length) {
     return (
       <ApiErrorFallback 
@@ -322,7 +340,7 @@ export function UserManagement() {
       />
     );
   }
-  
+
   return (
     <Card>
       <CardHeader>
