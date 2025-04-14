@@ -4,6 +4,12 @@
 // Get base API URL from environment or fallback to empty string (relative URLs)
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
+// Default headers for all API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
 // Function to generate full API URL
 export const getApiUrl = (path: string): string => {
   // If the path already starts with http(s), return it as is

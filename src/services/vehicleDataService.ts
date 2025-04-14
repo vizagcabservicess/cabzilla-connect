@@ -1,5 +1,6 @@
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { getApiUrl } from '@/config/api';
+import { defaultHeaders, getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
 

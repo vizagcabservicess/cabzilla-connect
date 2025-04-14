@@ -1,41 +1,17 @@
-
 import fareStateManager from './FareStateManager';
 import { toast } from 'sonner';
+import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
 
-// Utility headers for API calls
-export const getBypassHeaders = () => ({
-  'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'X-Requested-With': 'XMLHttpRequest'
-});
+// Re-export the utility functions from config/requestConfig
+export { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart };
 
-// Configuration for API requests with force refresh
-export const getForcedRequestConfig = () => ({
-  headers: getBypassHeaders(),
-  cache: 'no-store' as const
-});
-
-// Format multipart data for form submissions
-export const formatDataForMultipart = (data: Record<string, any>): FormData => {
-  const formData = new FormData();
-  
-  Object.entries(data).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      formData.append(key, String(value));
-    }
-  });
-  
-  return formData;
-};
-
-// Re-export the FareStateManager for direct use
+// Re-export the FareStateManager's methods for direct use
 export const calculateAirportFare = fareStateManager.calculateAirportFare.bind(fareStateManager);
 export const calculateLocalFare = fareStateManager.calculateLocalFare.bind(fareStateManager);
 export const calculateOutstationFare = fareStateManager.calculateOutstationFare.bind(fareStateManager);
 export const syncFareData = fareStateManager.syncFareData.bind(fareStateManager);
 export const clearCache = fareStateManager.clearCache.bind(fareStateManager);
-export const clearFareCache = clearCache; // Alias for consistency
+export const clearFareCache = clearCache; // Alias for compatibility with existing code
 
 // Function to initialize fare data on app load
 export const initializeFareData = async (): Promise<boolean> => {

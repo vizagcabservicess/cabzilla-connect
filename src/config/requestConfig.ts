@@ -9,6 +9,12 @@ export const getBypassHeaders = () => ({
   'X-Requested-With': 'XMLHttpRequest'
 });
 
+// Default headers for all API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
 // Configuration for forced requests
 export const getForcedRequestConfig = () => ({
   headers: getBypassHeaders(),
@@ -32,4 +38,33 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
   });
   
   return formData;
+};
+
+// Safe fetch utility with error handling and timeout
+export const safeFetch = async (url: string, options: RequestInit = {}) => {
+  const timeout = options.timeout || 30000; // Default 30 second timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...getBypassHeaders(),
+        ...(options.headers || {})
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`Network error: ${response.status} ${response.statusText}`);
+    }
+    
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 };

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -212,15 +211,15 @@ export function CabList({
           const tripType = localStorage.getItem('tripType') || 'outstation';
           
           if (tripType === 'outstation') {
-            fareStateManager.getOutstationFareForVehicle(cab.id, true)
+            fareStateManager.getOutstationFareForVehicle(cab.id)
               .then(() => console.log(`Refreshed outstation fare for ${cab.id}`))
               .catch(err => console.error(`Error refreshing outstation fare for ${cab.id}:`, err));
           } else if (tripType === 'local') {
-            fareStateManager.getLocalFareForVehicle(cab.id, true)
+            fareStateManager.getLocalFareForVehicle(cab.id)
               .then(() => console.log(`Refreshed local fare for ${cab.id}`))
               .catch(err => console.error(`Error refreshing local fare for ${cab.id}:`, err));
           } else if (tripType === 'airport') {
-            fareStateManager.getAirportFareForVehicle(cab.id, true)
+            fareStateManager.getAirportFareForVehicle(cab.id)
               .then(() => console.log(`Refreshed airport fare for ${cab.id}`))
               .catch(err => console.error(`Error refreshing airport fare for ${cab.id}:`, err));
           }
