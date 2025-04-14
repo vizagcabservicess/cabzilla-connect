@@ -1,4 +1,3 @@
-
 import { getBypassHeaders, getAdminRequestConfig } from '@/config/api';
 import fareStateManager from './FareStateManager';
 
@@ -12,7 +11,7 @@ export interface OutstationFareData {
   driverAllowance: number;
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
-  // Add these fields to match the type in OutstationFareManagement.tsx
+  minDistance: number;
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
 }
@@ -90,7 +89,8 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
       nightHaltCharge: parseFloat(String(fareData.nightHaltCharge ?? fareData.night_halt_charge ?? 0)),
       driverAllowance: parseFloat(String(fareData.driverAllowance ?? fareData.driver_allowance ?? 0)),
       roundTripBasePrice: parseFloat(String(fareData.roundTripBasePrice ?? fareData.roundtrip_base_price ?? 0)),
-      roundTripPricePerKm: parseFloat(String(fareData.roundTripPricePerKm ?? fareData.roundtrip_price_per_km ?? 0))
+      roundTripPricePerKm: parseFloat(String(fareData.roundTripPricePerKm ?? fareData.roundtrip_price_per_km ?? 0)),
+      minDistance: parseFloat(String(fareData.minDistance ?? fareData.min_distance ?? 0))
     };
     
     console.log(`Normalized outstation fare for ${vehicleId}:`, normalizedFare);
@@ -135,6 +135,7 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
     formData.append('driver_allowance', String(fareData.driverAllowance));
     formData.append('roundtrip_base_price', String(fareData.roundTripBasePrice));
     formData.append('roundtrip_price_per_km', String(fareData.roundTripPricePerKm));
+    formData.append('min_distance', String(fareData.minDistance));
     
     // Send request
     const response = await fetch('/api/admin/direct-outstation-fares.php', {
