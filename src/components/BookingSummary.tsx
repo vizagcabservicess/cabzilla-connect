@@ -179,7 +179,7 @@ export const BookingSummary = ({
         const localFare = await fareStateManager.getLocalFareForVehicle(cab.id);
         
         if (localFare) {
-          // Driver allowance from the database
+          // Driver allowance from the database, with fallback
           const driverAllowanceAmount = localFare.driverAllowance || 250;
           setDriverAllowance(driverAllowanceAmount);
           

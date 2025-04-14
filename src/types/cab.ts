@@ -187,7 +187,7 @@ export interface OutstationFareData {
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
-  minDistance: number; // Added this property as it's being used in OutstationFareManagement.tsx
+  minDistance: number; // Required property for OutstationFareData
   driverAllowance: number;
   nightHaltCharge: number;
   roundTripBasePrice?: number;
