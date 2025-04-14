@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType, LocalFare } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -42,14 +41,15 @@ export const BookingSummary = ({
     const handleFareUpdate = (event: CustomEvent) => {
       if (!selectedCab) return;
       
-      const { cabType, fare, timestamp = Date.now() } = event.detail || {};
+      const { cabType, cabId, fare, timestamp = Date.now() } = event.detail || {};
+      const relevantCabId = cabType || cabId;
       
-      if (cabType === selectedCab.id && fare && fare > 0) {
+      if (relevantCabId === selectedCab.id && fare && fare > 0) {
         const now = Date.now();
         if (now - lastUpdateRef.current < 500) return;
         
         lastUpdateRef.current = now;
-        console.log(`BookingSummary: Received fare update for ${cabType}: ${fare}`);
+        console.log(`BookingSummary: Received fare update for ${relevantCabId}: ${fare}`);
         
         if (fareUpdateTimeoutRef.current) {
           clearTimeout(fareUpdateTimeoutRef.current);
@@ -128,6 +128,8 @@ export const BookingSummary = ({
     setIsLoading(true);
     
     try {
+      const isAirportTransfer = tripType === 'airport';
+      
       const effectiveDist = tripType === 'outstation' && tripMode === 'one-way' 
         ? distance * 2 
         : distance;
@@ -138,7 +140,7 @@ export const BookingSummary = ({
         const outstationFare = await fareStateManager.getOutstationFareForVehicle(cab.id);
         
         if (outstationFare) {
-          const driverAllowanceAmount = outstationFare.driverAllowance || 300;
+          const driverAllowanceAmount = !isAirportTransfer ? (outstationFare.driverAllowance || 300) : 0;
           setDriverAllowance(driverAllowanceAmount);
           
           const minimumKm = 300;
@@ -146,7 +148,8 @@ export const BookingSummary = ({
           const hasNightSurcharge = pickupDate && 
             (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
           
-          const nightChargeAmount = hasNightSurcharge ? Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
+          const nightChargeAmount = hasNightSurcharge && !isAirportTransfer ? 
+            Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
           setNightCharges(nightChargeAmount);
           
           if (effectiveDist > minimumKm) {
@@ -170,8 +173,7 @@ export const BookingSummary = ({
         const localFare: LocalFare | null = await fareStateManager.getLocalFareForVehicle(cab.id);
         
         if (localFare) {
-          // Fix: Use optional chaining and default value for driverAllowance
-          const driverAllowanceAmount = localFare?.driverAllowance ?? 250;
+          const driverAllowanceAmount = !isAirportTransfer ? (localFare?.driverAllowance ?? 250) : 0;
           setDriverAllowance(driverAllowanceAmount);
           
           setBaseFare(fare - driverAllowanceAmount);
@@ -182,7 +184,6 @@ export const BookingSummary = ({
           return;
         }
       } else if (tripType === 'airport') {
-        // For airport transfers, we don't add driver allowance or other charges
         setBaseFare(fare);
         setExtraDistanceFare(0);
         setNightCharges(0);
@@ -192,9 +193,6 @@ export const BookingSummary = ({
         return;
       }
       
-      // Default handling for cases not covered above
-      const isAirportTransfer = tripType === 'airport';
-      // No driver allowance for airport transfers
       const driverAllowanceAmount = isAirportTransfer ? 0 : (cab.driverAllowance || 250);
       setDriverAllowance(driverAllowanceAmount);
       
@@ -205,14 +203,15 @@ export const BookingSummary = ({
       } else if (tripType === 'outstation') {
         const minimumKm = 300;
         const perKmRate = cab.outstationFares?.pricePerKm || 
-                         (cab.id?.includes('sedan') ? 11 : 
-                          cab.id?.includes('ertiga') ? 14 : 
-                          cab.id?.includes('innova') ? 18 : 15);
+                         (cab.id?.includes('sedan') ? 15 : 
+                          cab.id?.includes('ertiga') ? 18 : 
+                          cab.id?.includes('innova') ? 22 : 18);
         
         const hasNightSurcharge = pickupDate && 
           (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5);
         
-        const nightChargeAmount = hasNightSurcharge ? Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
+        const nightChargeAmount = hasNightSurcharge && !isAirportTransfer ? 
+          Math.round((fare - driverAllowanceAmount) * 0.1) : 0;
         setNightCharges(nightChargeAmount);
         
         if (effectiveDist > minimumKm) {
