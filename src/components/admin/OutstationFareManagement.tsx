@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,31 +56,38 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       try {
         const data = await fetchOutstationFare(selectedVehicle);
         if (data) {
+          // Use actual data from the database with no fallbacks
           setFareData({
             vehicleId: selectedVehicle,
             basePrice: data.basePrice || 0,
             pricePerKm: data.pricePerKm || 0,
-            roundTripBasePrice: data.roundTripBasePrice || 0,
             roundTripPricePerKm: data.roundTripPricePerKm || 0,
-            minDistance: data.minDistance || 300,
-            driverAllowance: data.driverAllowance || 300,
-            nightHaltCharge: data.nightHaltCharge || 700,
+            minDistance: data.minDistance || 0,
+            driverAllowance: data.driverAllowance || 0,
+            nightHaltCharge: data.nightHaltCharge || 0,
             oneWayBasePrice: data.basePrice || 0,
             oneWayPricePerKm: data.pricePerKm || 0
           });
+          
+          // Log the retrieved data for debugging
+          console.log(`Retrieved outstation fare data for ${selectedVehicle}:`, data);
         } else {
+          // If no data is found, set all values to 0 (no defaults)
           setFareData({
             vehicleId: selectedVehicle,
             basePrice: 0,
             pricePerKm: 0,
-            roundTripBasePrice: 0,
             roundTripPricePerKm: 0,
-            minDistance: 300,
-            driverAllowance: 300,
-            nightHaltCharge: 700,
+            minDistance: 0,
+            driverAllowance: 0,
+            nightHaltCharge: 0,
             oneWayBasePrice: 0,
             oneWayPricePerKm: 0
           });
+          
+          // Log the error for debugging
+          console.error(`No outstation fare data found for ${selectedVehicle}`);
+          setError(`No outstation fare data found for ${selectedVehicle}. Please enter values and save.`);
         }
       } catch (err) {
         setError('Failed to load fare data.');
@@ -101,7 +109,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     setFareData(prev => ({
-      ...prev,
+      ...prev!,
       [name]: Number(value),
     }));
   };
@@ -113,6 +121,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
     setError(null);
 
     try {
+      // Ensure we send all required fields to the service
       const serviceData: ServiceOutstationFareData = {
         vehicleId: fareData.vehicleId,
         basePrice: fareData.oneWayBasePrice || fareData.basePrice,
@@ -120,11 +129,18 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
         roundTripBasePrice: fareData.roundTripBasePrice,
         roundTripPricePerKm: fareData.roundTripPricePerKm,
         driverAllowance: fareData.driverAllowance,
-        nightHaltCharge: fareData.nightHaltCharge
+        nightHaltCharge: fareData.nightHaltCharge,
+        minDistance: fareData.minDistance
       };
       
       await updateOutstationFare(serviceData);
       toast.success('Outstation fares updated successfully!');
+      
+      // Force refresh the fare data after saving
+      setTimeout(async () => {
+        const refreshedData = await fetchOutstationFare(selectedVehicle, true);
+        console.log('Refreshed outstation fare data after save:', refreshedData);
+      }, 1000);
     } catch (err) {
       setError('Failed to update outstation fares.');
       console.error(err);
@@ -140,6 +156,24 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
     try {
       await syncOutstationFareTables();
       toast.success('Outstation fare tables synced successfully!');
+      
+      // After sync, reload the data for the currently selected vehicle
+      if (selectedVehicle) {
+        const refreshedData = await fetchOutstationFare(selectedVehicle, true);
+        if (refreshedData) {
+          setFareData({
+            vehicleId: selectedVehicle,
+            basePrice: refreshedData.basePrice || 0,
+            pricePerKm: refreshedData.pricePerKm || 0,
+            roundTripPricePerKm: refreshedData.roundTripPricePerKm || 0,
+            minDistance: refreshedData.minDistance || 0,
+            driverAllowance: refreshedData.driverAllowance || 0,
+            nightHaltCharge: refreshedData.nightHaltCharge || 0,
+            oneWayBasePrice: refreshedData.basePrice || 0,
+            oneWayPricePerKm: refreshedData.pricePerKm || 0
+          });
+        }
+      }
     } catch (err) {
       setError('Failed to sync outstation fare tables.');
       console.error(err);
@@ -238,6 +272,19 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
                   id="roundTripPricePerKm"
                   name="roundTripPricePerKm"
                   value={fareData.roundTripPricePerKm || ''}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium leading-none peer-disabled:cursor-not-allowed" htmlFor="minDistance">
+                  Minimum Distance (km)
+                </label>
+                <input
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:text-muted-foreground file:h-10 file:px-4 file:py-2 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  type="number"
+                  id="minDistance"
+                  name="minDistance"
+                  value={fareData.minDistance || ''}
                   onChange={handleInputChange}
                 />
               </div>

@@ -9,35 +9,60 @@ export { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart };
 // Re-export the FareStateManager's methods for direct use in a safe way
 export const calculateAirportFare = async (params: any) => {
   if (typeof fareStateManager.calculateAirportFare === 'function') {
-    return await fareStateManager.calculateAirportFare(params);
+    const fare = await fareStateManager.calculateAirportFare(params);
+    if (fare <= 0) {
+      console.error(`Airport fare calculation failed for vehicle ${params.vehicleId}`);
+      throw new Error(`Airport fare calculation failed for vehicle ${params.vehicleId}`);
+    }
+    return fare;
   }
-  return 0;
+  throw new Error('FareStateManager calculateAirportFare method not available');
 };
 
 export const calculateLocalFare = async (params: any) => {
   if (typeof fareStateManager.calculateLocalFare === 'function') {
-    return await fareStateManager.calculateLocalFare(params);
+    const fare = await fareStateManager.calculateLocalFare(params);
+    if (fare <= 0) {
+      console.error(`Local fare calculation failed for vehicle ${params.vehicleId} with package ${params.hourlyPackage}`);
+      throw new Error(`Local fare calculation failed for vehicle ${params.vehicleId} with package ${params.hourlyPackage}`);
+    }
+    return fare;
   }
-  return 0;
+  throw new Error('FareStateManager calculateLocalFare method not available');
 };
 
 export const calculateOutstationFare = async (params: any) => {
   if (typeof fareStateManager.calculateOutstationFare === 'function') {
-    return await fareStateManager.calculateOutstationFare(params);
+    const fare = await fareStateManager.calculateOutstationFare(params);
+    if (fare <= 0) {
+      console.error(`Outstation fare calculation failed for vehicle ${params.vehicleId}`);
+      throw new Error(`Outstation fare calculation failed for vehicle ${params.vehicleId}`);
+    }
+    return fare;
   }
-  return 0;
+  throw new Error('FareStateManager calculateOutstationFare method not available');
 };
 
 export const syncFareData = async () => {
   if (typeof fareStateManager.syncFareData === 'function') {
-    return await fareStateManager.syncFareData();
+    const result = await fareStateManager.syncFareData();
+    if (!result) {
+      console.error('Fare data sync failed');
+      toast.error('Failed to sync fare data. Please try again.');
+    }
+    return result;
   }
-  return false;
+  throw new Error('FareStateManager syncFareData method not available');
 };
 
 export const clearCache = () => {
   if (typeof fareStateManager.clearCache === 'function') {
     fareStateManager.clearCache();
+    console.log('Fare cache cleared successfully');
+    toast.success('Fare cache cleared successfully');
+  } else {
+    console.error('FareStateManager clearCache method not available');
+    toast.error('Failed to clear fare cache');
   }
 };
 
@@ -61,11 +86,13 @@ export const initializeFareData = async (): Promise<boolean> => {
       
       return true;
     } else {
-      console.warn('Failed to initialize fare data');
+      console.error('Failed to initialize fare data');
+      toast.error('Failed to initialize fare data. Please reload the page.');
       return false;
     }
   } catch (error) {
     console.error('Error initializing fare data:', error);
+    toast.error('Error initializing fare data. Please reload the page.');
     return false;
   }
 };
@@ -193,7 +220,7 @@ export const getFaresByTripType = async (tripType: string, vehicleId?: string): 
     
     const data = await response.json();
     
-    if (data.status === 'success' || data.fares) {
+    if (data.status === 'success' && data.fares) {
       console.log(`Retrieved ${tripType} fares:`, data.fares);
       return data.fares;
     } else {
@@ -202,23 +229,8 @@ export const getFaresByTripType = async (tripType: string, vehicleId?: string): 
   } catch (error) {
     console.error(`Error retrieving ${tripType} fares:`, error);
     
-    // Try getting from FareStateManager as fallback
-    if (vehicleId) {
-      try {
-        switch (tripType) {
-          case 'airport':
-            return await fareStateManager.getAirportFareForVehicle(vehicleId);
-          case 'local':
-            return await fareStateManager.getLocalFareForVehicle(vehicleId);
-          case 'outstation':
-            return await fareStateManager.getOutstationFareForVehicle(vehicleId);
-        }
-      } catch (fallbackError) {
-        console.error(`Error in fallback for ${tripType} fares:`, fallbackError);
-      }
-    }
-    
-    return null;
+    // We no longer use fallbacks - propagate the error
+    throw error;
   }
 };
 
@@ -253,7 +265,7 @@ export const initializeDatabase = async (): Promise<{status: string, message?: s
         message: 'Database initialized successfully'
       };
     } else {
-      console.warn('Failed to initialize database');
+      console.error('Failed to initialize database');
       return { 
         status: 'error',
         message: 'Failed to initialize database'
@@ -296,6 +308,7 @@ export const syncLocalFareTables = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error syncing local fare tables:', error);
+    toast.error('Error syncing local fare tables');
     return false;
   }
 };
@@ -327,6 +340,7 @@ export const syncOutstationFares = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error syncing outstation fare tables:', error);
+    toast.error('Error syncing outstation fare tables');
     return false;
   }
 };
@@ -358,6 +372,7 @@ export const syncAirportFares = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error syncing airport fare tables:', error);
+    toast.error('Error syncing airport fare tables');
     return false;
   }
 };
@@ -383,64 +398,6 @@ export const resetCabOptionsState = (): void => {
     }, 1000);
   } catch (error) {
     console.error('Error resetting CabOptions state:', error);
+    toast.error('Error resetting fare options');
   }
 };
-
-// Force sync all fare data
-export const forceSyncAllFares = async (): Promise<boolean> => {
-  try {
-    console.log('Forcing sync of all fare data...');
-    
-    // Clear all caches first
-    clearCache();
-    
-    // Sync fare data
-    const success = await syncFareData();
-    
-    if (success) {
-      console.log('All fare data synced successfully');
-      
-      // Dispatch event to notify components
-      window.dispatchEvent(new CustomEvent('all-fares-synced', {
-        detail: { timestamp: Date.now() }
-      }));
-      
-      return true;
-    } else {
-      console.warn('Failed to sync all fare data');
-      return false;
-    }
-  } catch (error) {
-    console.error('Error syncing all fare data:', error);
-    return false;
-  }
-};
-
-// Export the complete service
-export const fareService = {
-  calculateAirportFare,
-  calculateLocalFare,
-  calculateOutstationFare,
-  clearFareCache,
-  clearCache,
-  syncFareData,
-  initializeFareData,
-  directFareUpdate,
-  getAirportFares,
-  getLocalFares,
-  getOutstationFares,
-  getAirportFaresForVehicle,
-  getLocalFaresForVehicle,
-  getOutstationFaresForVehicle,
-  syncLocalFareTables,
-  syncOutstationFares,
-  syncAirportFares,
-  resetCabOptionsState,
-  initializeDatabase,
-  forceSyncAllFares,
-  getBypassHeaders,
-  getForcedRequestConfig,
-  formatDataForMultipart
-};
-
-export default fareService;

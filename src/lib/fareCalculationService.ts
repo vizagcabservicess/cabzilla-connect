@@ -45,31 +45,31 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   // Check if cabType is valid
   if (!cabType || typeof cabType !== 'object') {
     console.error('Invalid cabType provided:', cabType);
-    return 0;
+    throw new Error(`Invalid cabType provided: ${JSON.stringify(cabType)}`);
   }
   
   // Check if distance is a valid number
   if (typeof distance !== 'number' || isNaN(distance)) {
     console.error('Invalid distance provided:', distance);
-    return 0;
+    throw new Error(`Invalid distance provided: ${distance}`);
   }
   
   // Check if tripType is a valid string
   if (typeof tripType !== 'string' || !['local', 'outstation', 'airport'].includes(tripType.toLowerCase())) {
     console.error('Invalid tripType provided:', tripType);
-    return 0;
+    throw new Error(`Invalid tripType provided: ${tripType}`);
   }
   
   // Check if tripMode is valid for outstation trips
   if (tripType === 'outstation' && (typeof tripMode !== 'string' || !['one-way', 'round-trip'].includes(tripMode.toLowerCase()))) {
     console.error('Invalid tripMode provided for outstation trip:', tripMode);
-    return 0;
+    throw new Error(`Invalid tripMode provided for outstation trip: ${tripMode}`);
   }
   
   // Check if hourlyPackage is valid for local trips
   if (tripType === 'local' && hourlyPackage && typeof hourlyPackage !== 'string') {
     console.error('Invalid hourlyPackage provided for local trip:', hourlyPackage);
-    return 0;
+    throw new Error(`Invalid hourlyPackage provided for local trip: ${hourlyPackage}`);
   }
   
   const cacheKey = getCacheKey(params);
@@ -99,6 +99,12 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
           vehicleId: cabType.id,
           hourlyPackage
         });
+        
+        if (totalFare <= 0) {
+          throw new Error(`No local fare found for vehicle ${cabType.id} with package ${hourlyPackage}`);
+        }
+      } else {
+        throw new Error('Hourly package is required for local trips');
       }
     } else if (tripType === 'outstation') {
       totalFare = await fareStateManager.calculateOutstationFare({
@@ -107,36 +113,48 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         tripMode: tripMode as 'one-way' | 'round-trip',
         pickupDate: params.pickupDate
       });
+      
+      if (totalFare <= 0) {
+        throw new Error(`No outstation fare found for vehicle ${cabType.id}`);
+      }
     } else if (tripType === 'airport') {
       totalFare = await fareStateManager.calculateAirportFare({
         vehicleId: cabType.id,
         distance
       });
+      
+      if (totalFare <= 0) {
+        throw new Error(`No airport fare found for vehicle ${cabType.id}`);
+      }
     } else {
-      console.error('Unsupported trip type:', tripType);
-      return 0;
+      throw new Error(`Unsupported trip type: ${tripType}`);
     }
     
-    // Store the calculated fare in the cache
-    fareCache.set(cacheKey, {
-      timestamp: Date.now(),
-      fares: { totalFare }
-    });
-    
-    // Dispatch event for hooks that listen for fare calculations
-    window.dispatchEvent(new CustomEvent('fare-calculated', {
-      detail: {
-        cabId: cabType.id,
-        fare: totalFare,
-        tripType: tripType,
-        timestamp: Date.now()
-      }
-    }));
-    
-    console.log(`Calculated fare for ${cacheKey}:`, totalFare);
-    return totalFare;
+    // Only store valid fares in the cache
+    if (totalFare > 0) {
+      // Store the calculated fare in the cache
+      fareCache.set(cacheKey, {
+        timestamp: Date.now(),
+        fares: { totalFare }
+      });
+      
+      // Dispatch event for hooks that listen for fare calculations
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          fare: totalFare,
+          tripType: tripType,
+          timestamp: Date.now()
+        }
+      }));
+      
+      console.log(`Calculated fare for ${cacheKey}:`, totalFare);
+      return totalFare;
+    } else {
+      throw new Error(`Zero or invalid fare calculated for ${cabType.id} with trip type ${tripType}`);
+    }
   } catch (error) {
     console.error('Error calculating fare:', error);
-    return 0;
+    throw error; // Propagate error instead of returning 0
   }
 };
