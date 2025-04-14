@@ -1,3 +1,4 @@
+
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
 
@@ -88,7 +89,7 @@ export {
   getVehicleTypes
 } from '@/services/vehicleDataService';
 
-// Re-export CabType from the types directly
+// Export types from cab.ts directly
 export type { 
   CabType, 
   HourlyPackage, 
