@@ -1,6 +1,9 @@
 
 // Add required imports at the top
+import { toast } from 'sonner';
 import fareStateManager from './FareStateManager';
+import { getApiUrl, getBypassHeaders } from '@/config/requestConfig';
+import { LocalFareData } from '@/types/cab';
 
 // Add missing method if not present in FareStateManager
 if (!fareStateManager.storeLocalFare) {
@@ -73,11 +76,11 @@ export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData |
       const standardizedData: LocalFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        price4hrs40km: parseFloat(fareData.price4hrs40km || fareData.price_4hrs_40km || fareData.local_package_4hr || 0),
-        price8hrs80km: parseFloat(fareData.price8hrs80km || fareData.price_8hrs_80km || fareData.local_package_8hr || 0),
-        price10hrs100km: parseFloat(fareData.price10hrs100km || fareData.price_10hrs_100km || fareData.local_package_10hr || 0),
-        priceExtraKm: parseFloat(fareData.priceExtraKm || fareData.extraKmRate || fareData.price_extra_km || fareData.extra_km_charge || 0),
-        priceExtraHour: parseFloat(fareData.priceExtraHour || fareData.extraHourRate || fareData.price_extra_hour || fareData.extra_hour_charge || 0)
+        price4hrs40km: parseFloat(String(fareData.price4hrs40km || fareData.price_4hrs_40km || fareData.local_package_4hr || 0)),
+        price8hrs80km: parseFloat(String(fareData.price8hrs80km || fareData.price_8hrs_80km || fareData.local_package_8hr || 0)),
+        price10hrs100km: parseFloat(String(fareData.price10hrs100km || fareData.price_10hrs_100km || fareData.local_package_10hr || 0)),
+        priceExtraKm: parseFloat(String(fareData.priceExtraKm || fareData.extraKmRate || fareData.price_extra_km || fareData.extra_km_charge || 0)),
+        priceExtraHour: parseFloat(String(fareData.priceExtraHour || fareData.extraHourRate || fareData.price_extra_hour || fareData.extra_hour_charge || 0))
       };
       
       // Validate the fare data
@@ -124,11 +127,11 @@ export const fetchLocalFare = async (vehicleId: string): Promise<LocalFareData |
       const fareData: LocalFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        price4hrs40km: parseFloat(fareItem.price4hrs40km || fareItem.price_4hrs_40km || fareItem.local_package_4hr || fareItem.package4hr40km || 0),
-        price8hrs80km: parseFloat(fareItem.price8hrs80km || fareItem.price_8hrs_80km || fareItem.local_package_8hr || fareItem.package8hr80km || 0),
-        price10hrs100km: parseFloat(fareItem.price10hrs100km || fareItem.price_10hrs_100km || fareItem.local_package_10hr || fareItem.package10hr100km || 0),
-        priceExtraKm: parseFloat(fareItem.priceExtraKm || fareItem.extraKmRate || fareItem.price_extra_km || fareItem.extra_km_charge || 0),
-        priceExtraHour: parseFloat(fareItem.priceExtraHour || fareItem.extraHourRate || fareItem.price_extra_hour || fareItem.extra_hour_charge || 0)
+        price4hrs40km: parseFloat(String(fareItem.price4hrs40km || fareItem.price_4hrs_40km || fareItem.local_package_4hr || fareItem.package4hr40km || 0)),
+        price8hrs80km: parseFloat(String(fareItem.price8hrs80km || fareItem.price_8hrs_80km || fareItem.local_package_8hr || fareItem.package8hr80km || 0)),
+        price10hrs100km: parseFloat(String(fareItem.price10hrs100km || fareItem.price_10hrs_100km || fareItem.local_package_10hr || fareItem.package10hr100km || 0)),
+        priceExtraKm: parseFloat(String(fareItem.priceExtraKm || fareItem.extraKmRate || fareItem.price_extra_km || fareItem.extra_km_charge || 0)),
+        priceExtraHour: parseFloat(String(fareItem.priceExtraHour || fareItem.extraHourRate || fareItem.price_extra_hour || fareItem.extra_hour_charge || 0))
       };
       
       // Validate the fare data before caching
@@ -203,16 +206,16 @@ export const updateLocalFare = async (fareData: LocalFareData): Promise<boolean>
     // Create FormData for the request
     const formData = new FormData();
     formData.append('vehicle_id', fareData.vehicleId);
-    formData.append('price4hrs40km', fareData.price4hrs40km.toString());
-    formData.append('price_4hrs_40km', fareData.price4hrs40km.toString());
-    formData.append('price8hrs80km', fareData.price8hrs80km.toString());
-    formData.append('price_8hrs_80km', fareData.price8hrs80km.toString());
-    formData.append('price10hrs100km', fareData.price10hrs100km.toString());
-    formData.append('price_10hrs_100km', fareData.price10hrs100km.toString());
-    formData.append('priceExtraKm', fareData.priceExtraKm.toString());
-    formData.append('price_extra_km', fareData.priceExtraKm.toString());
-    formData.append('priceExtraHour', fareData.priceExtraHour.toString());
-    formData.append('price_extra_hour', fareData.priceExtraHour.toString());
+    formData.append('price4hrs40km', String(fareData.price4hrs40km));
+    formData.append('price_4hrs_40km', String(fareData.price4hrs40km));
+    formData.append('price8hrs80km', String(fareData.price8hrs80km));
+    formData.append('price_8hrs_80km', String(fareData.price8hrs80km));
+    formData.append('price10hrs100km', String(fareData.price10hrs100km));
+    formData.append('price_10hrs_100km', String(fareData.price10hrs100km));
+    formData.append('priceExtraKm', String(fareData.priceExtraKm));
+    formData.append('price_extra_km', String(fareData.priceExtraKm));
+    formData.append('priceExtraHour', String(fareData.priceExtraHour));
+    formData.append('price_extra_hour', String(fareData.priceExtraHour));
     
     const response = await fetch(getApiUrl('api/admin/direct-local-fares.php'), {
       method: 'POST',

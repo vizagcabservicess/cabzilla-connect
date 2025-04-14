@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FareData } from '@/types/cab'; // Changed import to use cab types
+import { FareData } from '@/types/cab'; // Use the FareData from types/cab
 import { parseNumericValue } from '@/utils/safeStringUtils';
 
 interface AirportFareFormProps {

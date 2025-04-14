@@ -45,7 +45,7 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  syncAirportFares, // Fixed the name to match the actual export
+  syncAirportFares,
   fareService
 } from '@/services/fareService';
 
@@ -64,13 +64,15 @@ export {
   updateLocalFare,
   updateAirportFare,
   syncLocalFares,
-  syncAirportFares,
   initializeLocalFareTables,
   initializeAirportFareTables,
-  initializeAllFareTables,  // Add the missing export
-  // Add missing function exports for components
+  initializeAllFareTables,
   fareManagementService,
-  type FareData  // Export FareData as a type
+  fetchLocalFares,
+  fetchAirportFares,
+  updateLocalFares,
+  updateAirportFares,
+  initializeDatabaseTables
 } from '@/services/fareManagementService';
 
 // Export outstation fare service functions
@@ -101,7 +103,11 @@ export type {
   VehiclePricing,
   OutstationFare,
   LocalFare,
-  AirportFare
+  AirportFare,
+  FareData,
+  LocalFareData,
+  AirportFareData,
+  OutstationFareData
 } from '@/types/cab';
 
 // Add formatPrice export from cabData

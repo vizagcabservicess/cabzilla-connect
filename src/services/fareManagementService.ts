@@ -1,9 +1,9 @@
+
 import { 
   fetchLocalFare, 
   updateLocalFare as updateLocalFareData,
   syncLocalFareTables as syncLocalFareTablesData,
   initializeLocalFareTables as initializeLocalFareTablesData,
-  LocalFareData,
   normalizeHourlyPackage
 } from './localFareService';
 
@@ -11,40 +11,19 @@ import {
   fetchAirportFare,
   updateAirportFare as updateAirportFareData,
   syncAirportFareTables as syncAirportFareTablesData,
-  initializeAirportFareTables as initializeAirportFareTablesData,
-  AirportFareData
+  initializeAirportFareTables as initializeAirportFareTablesData
 } from './airportFareService';
 
 import {
   fetchOutstationFare,
   updateOutstationFare as updateOutstationFareData,
   syncOutstationFareTables as syncOutstationFareTablesData,
-  initializeOutstationFareTables as initializeOutstationFareTablesData,
-  OutstationFareData
+  initializeOutstationFareTables as initializeOutstationFareTablesData
 } from './outstationFareService';
 
 import fareStateManager from './FareStateManager';
 import { clearFareCache } from '@/lib/fareCalculationService';
-
-export interface FareData {
-  vehicleId: string;
-  vehicle_id?: string;
-  price4hrs40km?: number;
-  price8hrs80km?: number;
-  price10hrs100km?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  basePrice?: number;
-  pricePerKm?: number;
-  pickupPrice?: number;
-  dropPrice?: number;
-  tier1Price?: number;
-  tier2Price?: number;
-  tier3Price?: number;
-  tier4Price?: number;
-  extraKmCharge?: number;
-  [key: string]: any;
-}
+import { LocalFareData, AirportFareData, OutstationFareData, FareData } from '@/types/cab';
 
 /**
  * Update local fare data
@@ -165,12 +144,14 @@ export const initializeAllFareTables = async (): Promise<boolean> => {
   const airportSuccess = await initializeAirportFareTablesData();
   const outstationSuccess = await initializeOutstationFareTablesData();
   
-  if (localSuccess || airportSuccess || outstationSuccess) {
+  const result = (localSuccess || airportSuccess || outstationSuccess);
+  
+  if (result) {
     await fareStateManager.syncFareData();
     clearFareCache();
   }
   
-  return localSuccess && airportSuccess && outstationSuccess;
+  return result;
 };
 
 /**
@@ -210,6 +191,9 @@ export const getLocalPackagePrice = async (vehicleId: string, hourlyPackage: str
   }
 };
 
+/**
+ * Fetch local fares for a vehicle
+ */
 export const fetchLocalFares = async (vehicleId: string): Promise<FareData[]> => {
   try {
     const fareData = await fetchLocalFare(vehicleId);
@@ -230,6 +214,9 @@ export const fetchLocalFares = async (vehicleId: string): Promise<FareData[]> =>
   }
 };
 
+/**
+ * Fetch airport fares for a vehicle
+ */
 export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> => {
   try {
     const fareData = await fetchAirportFare(vehicleId);
@@ -254,6 +241,7 @@ export const fetchAirportFares = async (vehicleId: string): Promise<FareData[]> 
   }
 };
 
+// For compatibility with existing code
 export const updateLocalFares = updateLocalFare;
 export const updateAirportFares = updateAirportFare;
 export const initializeDatabaseTables = initializeAllFareTables;

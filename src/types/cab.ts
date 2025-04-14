@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -162,4 +163,76 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
+}
+
+// Add the FareData interface for use in fare management
+export interface FareData {
+  vehicleId: string;
+  vehicle_id?: string;
+  // Local fare fields
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  // Airport fare fields
+  basePrice?: number;
+  pricePerKm?: number;
+  pickupPrice?: number;
+  dropPrice?: number;
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
+  extraKmCharge?: number;
+  // Outstation fare fields
+  oneWayBasePrice?: number;
+  oneWayPricePerKm?: number;
+  roundTripBasePrice?: number;
+  roundTripPricePerKm?: number;
+  driverAllowance?: number;
+  nightHaltCharge?: number;
+  [key: string]: any;
+}
+
+// Add specific data types for the different fare services
+export interface LocalFareData {
+  vehicleId: string;
+  vehicle_id?: string;
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+  driverAllowance?: number;
+  [key: string]: any;
+}
+
+export interface AirportFareData {
+  vehicleId: string;
+  vehicle_id?: string;
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+  [key: string]: any;
+}
+
+export interface OutstationFareData {
+  vehicleId: string;
+  vehicle_id?: string;
+  oneWayBasePrice: number;
+  oneWayPricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  driverAllowance: number;
+  nightHaltCharge: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  [key: string]: any;
 }

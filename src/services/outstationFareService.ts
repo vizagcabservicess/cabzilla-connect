@@ -1,6 +1,9 @@
 
 // Add required imports at the top of the file
+import { toast } from 'sonner';
 import fareStateManager from './FareStateManager';
+import { getApiUrl, getBypassHeaders } from '@/config/requestConfig';
+import { OutstationFareData } from '@/types/cab';
 
 // Add missing method if not present in FareStateManager
 if (!fareStateManager.storeOutstationFare) {
@@ -52,12 +55,12 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
       const standardizedData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        oneWayBasePrice: parseFloat(fareData.basePrice || fareData.oneWayBasePrice || fareData.one_way_base_price || 0),
-        oneWayPricePerKm: parseFloat(fareData.pricePerKm || fareData.oneWayPricePerKm || fareData.one_way_price_per_km || 0),
-        roundTripBasePrice: parseFloat(fareData.roundTripBasePrice || fareData.round_trip_base_price || 0),
-        roundTripPricePerKm: parseFloat(fareData.roundTripPricePerKm || fareData.round_trip_price_per_km || 0),
-        driverAllowance: parseFloat(fareData.driverAllowance || fareData.driver_allowance || 250),
-        nightHaltCharge: parseFloat(fareData.nightHaltCharge || fareData.night_halt_charge || 700)
+        oneWayBasePrice: parseFloat(String(fareData.basePrice || fareData.oneWayBasePrice || fareData.one_way_base_price || 0)),
+        oneWayPricePerKm: parseFloat(String(fareData.pricePerKm || fareData.oneWayPricePerKm || fareData.one_way_price_per_km || 0)),
+        roundTripBasePrice: parseFloat(String(fareData.roundTripBasePrice || fareData.round_trip_base_price || 0)),
+        roundTripPricePerKm: parseFloat(String(fareData.roundTripPricePerKm || fareData.round_trip_price_per_km || 0)),
+        driverAllowance: parseFloat(String(fareData.driverAllowance || fareData.driver_allowance || 250)),
+        nightHaltCharge: parseFloat(String(fareData.nightHaltCharge || fareData.night_halt_charge || 700))
       };
       
       // Validate the fare data
@@ -118,12 +121,12 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
       const fareData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
-        oneWayBasePrice: parseFloat(fareItem.basePrice || fareItem.oneWayBasePrice || fareItem.one_way_base_price || 0),
-        oneWayPricePerKm: parseFloat(fareItem.pricePerKm || fareItem.oneWayPricePerKm || fareItem.one_way_price_per_km || 0),
-        roundTripBasePrice: parseFloat(fareItem.roundTripBasePrice || fareItem.round_trip_base_price || 0),
-        roundTripPricePerKm: parseFloat(fareItem.roundTripPricePerKm || fareItem.round_trip_price_per_km || 0),
-        driverAllowance: parseFloat(fareItem.driverAllowance || fareItem.driver_allowance || 250),
-        nightHaltCharge: parseFloat(fareItem.nightHaltCharge || fareItem.night_halt_charge || 700)
+        oneWayBasePrice: parseFloat(String(fareItem.basePrice || fareItem.oneWayBasePrice || fareItem.one_way_base_price || 0)),
+        oneWayPricePerKm: parseFloat(String(fareItem.pricePerKm || fareItem.oneWayPricePerKm || fareItem.one_way_price_per_km || 0)),
+        roundTripBasePrice: parseFloat(String(fareItem.roundTripBasePrice || fareItem.round_trip_base_price || 0)),
+        roundTripPricePerKm: parseFloat(String(fareItem.roundTripPricePerKm || fareItem.round_trip_price_per_km || 0)),
+        driverAllowance: parseFloat(String(fareItem.driverAllowance || fareItem.driver_allowance || 250)),
+        nightHaltCharge: parseFloat(String(fareItem.nightHaltCharge || fareItem.night_halt_charge || 700))
       };
       
       // If round trip values are missing but one way values exist, calculate them (as a fallback only)
@@ -178,16 +181,16 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
     // Create FormData for the request
     const formData = new FormData();
     formData.append('vehicle_id', fareData.vehicleId);
-    formData.append('basePrice', fareData.oneWayBasePrice.toString());
-    formData.append('pricePerKm', fareData.oneWayPricePerKm.toString());
-    formData.append('roundTripBasePrice', fareData.roundTripBasePrice.toString());
-    formData.append('roundTripPricePerKm', fareData.roundTripPricePerKm.toString());
-    formData.append('driverAllowance', fareData.driverAllowance.toString());
-    formData.append('nightHaltCharge', fareData.nightHaltCharge.toString());
+    formData.append('basePrice', String(fareData.oneWayBasePrice));
+    formData.append('pricePerKm', String(fareData.oneWayPricePerKm));
+    formData.append('roundTripBasePrice', String(fareData.roundTripBasePrice));
+    formData.append('roundTripPricePerKm', String(fareData.roundTripPricePerKm));
+    formData.append('driverAllowance', String(fareData.driverAllowance));
+    formData.append('nightHaltCharge', String(fareData.nightHaltCharge));
     
     // Add duplicate fields for compatibility with different backend formats
-    formData.append('oneWayBasePrice', fareData.oneWayBasePrice.toString());
-    formData.append('oneWayPricePerKm', fareData.oneWayPricePerKm.toString());
+    formData.append('oneWayBasePrice', String(fareData.oneWayBasePrice));
+    formData.append('oneWayPricePerKm', String(fareData.oneWayPricePerKm));
     
     const response = await fetch(getApiUrl('api/admin/direct-outstation-fares.php'), {
       method: 'POST',

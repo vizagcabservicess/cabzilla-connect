@@ -6,12 +6,41 @@ import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from
 // Re-export the utility functions from config/requestConfig
 export { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart };
 
-// Re-export the FareStateManager's methods for direct use
-export const calculateAirportFare = fareStateManager.calculateAirportFare.bind(fareStateManager);
-export const calculateLocalFare = fareStateManager.calculateLocalFare.bind(fareStateManager);
-export const calculateOutstationFare = fareStateManager.calculateOutstationFare.bind(fareStateManager);
-export const syncFareData = fareStateManager.syncFareData.bind(fareStateManager);
-export const clearCache = fareStateManager.clearCache.bind(fareStateManager);
+// Re-export the FareStateManager's methods for direct use in a safe way
+export const calculateAirportFare = async (params: any) => {
+  if (typeof fareStateManager.calculateAirportFare === 'function') {
+    return await fareStateManager.calculateAirportFare(params);
+  }
+  return 0;
+};
+
+export const calculateLocalFare = async (params: any) => {
+  if (typeof fareStateManager.calculateLocalFare === 'function') {
+    return await fareStateManager.calculateLocalFare(params);
+  }
+  return 0;
+};
+
+export const calculateOutstationFare = async (params: any) => {
+  if (typeof fareStateManager.calculateOutstationFare === 'function') {
+    return await fareStateManager.calculateOutstationFare(params);
+  }
+  return 0;
+};
+
+export const syncFareData = async () => {
+  if (typeof fareStateManager.syncFareData === 'function') {
+    return await fareStateManager.syncFareData();
+  }
+  return false;
+};
+
+export const clearCache = () => {
+  if (typeof fareStateManager.clearCache === 'function') {
+    fareStateManager.clearCache();
+  }
+};
+
 export const clearFareCache = clearCache; // Alias for compatibility with existing code
 
 // Function to initialize fare data on app load
@@ -20,7 +49,7 @@ export const initializeFareData = async (): Promise<boolean> => {
     console.log('Initializing fare data...');
     
     // Attempt to sync fare data
-    const success = await fareStateManager.syncFareData();
+    const success = await syncFareData();
     
     if (success) {
       console.log('Fare data initialized successfully');
@@ -91,11 +120,11 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, fare
       toast.success(`${tripType} fare updated successfully for ${vehicleId}`);
       
       // Clear cache and notify components
-      fareStateManager.clearCache();
+      clearCache();
       
       // Sync fare data with the database
       setTimeout(() => {
-        fareStateManager.syncFareData().then(() => {
+        syncFareData().then(() => {
           console.log('Fare data synced after direct fare update');
         });
       }, 1000);
@@ -209,7 +238,7 @@ export const initializeDatabase = async (): Promise<{status: string, message?: s
     console.log('Initializing database...');
     
     // Sync fare data for all types
-    const success = await fareStateManager.syncFareData();
+    const success = await syncFareData();
     
     if (success) {
       console.log('Database initialized successfully');
@@ -255,11 +284,11 @@ export const syncLocalFareTables = async (): Promise<boolean> => {
     console.log('Synced local fare tables:', data);
     
     // Clear cache and notify components
-    fareStateManager.clearCache();
+    clearCache();
     
     // Sync fare data with the database
     setTimeout(() => {
-      fareStateManager.syncFareData().then(() => {
+      syncFareData().then(() => {
         console.log('Fare data synced after local fare table sync');
       });
     }, 1000);
@@ -286,11 +315,11 @@ export const syncOutstationFares = async (): Promise<boolean> => {
     console.log('Synced outstation fare tables:', data);
     
     // Clear cache and notify components
-    fareStateManager.clearCache();
+    clearCache();
     
     // Sync fare data with the database
     setTimeout(() => {
-      fareStateManager.syncFareData().then(() => {
+      syncFareData().then(() => {
         console.log('Fare data synced after outstation fare table sync');
       });
     }, 1000);
@@ -317,11 +346,11 @@ export const syncAirportFares = async (): Promise<boolean> => {
     console.log('Synced airport fare tables:', data);
     
     // Clear cache and notify components
-    fareStateManager.clearCache();
+    clearCache();
     
     // Sync fare data with the database
     setTimeout(() => {
-      fareStateManager.syncFareData().then(() => {
+      syncFareData().then(() => {
         console.log('Fare data synced after airport fare table sync');
       });
     }, 1000);
@@ -337,7 +366,7 @@ export const syncAirportFares = async (): Promise<boolean> => {
 export const resetCabOptionsState = (): void => {
   try {
     // Clear fare cache first
-    fareStateManager.clearCache();
+    clearCache();
     
     // Dispatch event to notify components
     window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
@@ -348,7 +377,7 @@ export const resetCabOptionsState = (): void => {
     
     // Sync fare data with the database
     setTimeout(() => {
-      fareStateManager.syncFareData().then(() => {
+      syncFareData().then(() => {
         console.log('Fare data synced after state reset');
       });
     }, 1000);
@@ -363,10 +392,10 @@ export const forceSyncAllFares = async (): Promise<boolean> => {
     console.log('Forcing sync of all fare data...');
     
     // Clear all caches first
-    fareStateManager.clearCache();
+    clearCache();
     
     // Sync fare data
-    const success = await fareStateManager.syncFareData();
+    const success = await syncFareData();
     
     if (success) {
       console.log('All fare data synced successfully');

@@ -1,13 +1,15 @@
+
+// Import the required types
 import { 
   CabType, 
   HourlyPackage, 
   OutstationFare, 
   LocalFare, 
   AirportFare,
-  FareCalculationParams
+  FareCalculationParams,
+  LocalFareData
 } from '@/types/cab';
 import { getLocalPackagePrice } from '@/services/fareManagementService';
-import { LocalFareData } from '@/services/localFareService';
 
 // Define a cache to store fare data
 const fareCache = new Map<string, { timestamp: number; fares: any }>();
@@ -198,17 +200,8 @@ interface FareDataFormat {
   extraHourRate?: number;
 }
 
-const getPackagePrice = (hourlyPackage: string, fareData: any): number => {
-  const localFareData: LocalFareData = {
-    vehicleId: fareData.vehicleId || fareData.vehicle_id || 'unknown',
-    price4hrs40km: parseFloat(fareData.price4hrs40km || fareData.package4hr40km || 0),
-    price8hrs80km: parseFloat(fareData.price8hrs80km || fareData.package8hr80km || 0),
-    price10hrs100km: parseFloat(fareData.price10hrs100km || fareData.package10hr100km || 0),
-    priceExtraKm: parseFloat(fareData.priceExtraKm || fareData.extraKmRate || 0),
-    priceExtraHour: parseFloat(fareData.priceExtraHour || fareData.extraHourRate || 0)
-  };
-  
-  if (!localFareData) {
+const getPackagePrice = (hourlyPackage: string, fareData: LocalFareData): number => {
+  if (!fareData) {
     console.error('Local fare data not available');
     return 0;
   }
@@ -218,13 +211,13 @@ const getPackagePrice = (hourlyPackage: string, fareData: any): number => {
   switch (normalizedPackage) {
     case '4hr40km':
     case '4hrs40km':
-      return localFareData.price4hrs40km || 0;
+      return fareData.price4hrs40km || 0;
     case '8hr80km':
     case '8hrs80km':
-      return localFareData.price8hrs80km || 0;
+      return fareData.price8hrs80km || 0;
     case '10hr100km':
     case '10hrs100km':
-      return localFareData.price10hrs100km || 0;
+      return fareData.price10hrs100km || 0;
     default:
       console.warn(`Unsupported hourly package: ${hourlyPackage}`);
       return 0;
