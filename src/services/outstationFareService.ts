@@ -12,6 +12,9 @@ export interface OutstationFareData {
   driverAllowance: number;
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
+  // Add these fields to match the type in OutstationFareManagement.tsx
+  oneWayBasePrice?: number;
+  oneWayPricePerKm?: number;
 }
 
 /**

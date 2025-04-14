@@ -1,4 +1,3 @@
-
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
 
@@ -9,7 +8,6 @@ export * from './tourData';
 // Export fare calculation functions
 export { 
   calculateFare, 
-  calculateAirportFare,
   clearFareCache
 } from './fareCalculationService';
 

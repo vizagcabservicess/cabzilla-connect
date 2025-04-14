@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { fetchOutstationFare, updateOutstationFare, syncOutstationFareTables } from '@/services/outstationFareService';
+import { fetchOutstationFare, updateOutstationFare, syncOutstationFareTables, OutstationFareData as ServiceOutstationFareData } from '@/services/outstationFareService';
 import { getVehicleData } from '@/services/vehicleDataService';
-import { OutstationFareData } from '@/types/cab'; // Import from types/cab instead
+import { OutstationFareData } from '@/types/cab';
 import { AlertCircle, RefreshCw, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -55,7 +56,16 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       try {
         const data = await fetchOutstationFare(selectedVehicle);
         if (data) {
-          setFareData(data);
+          // Map the service data to the component's expected format
+          setFareData({
+            vehicleId: data.vehicleId,
+            oneWayBasePrice: data.basePrice,
+            oneWayPricePerKm: data.pricePerKm,
+            roundTripBasePrice: data.roundTripBasePrice,
+            roundTripPricePerKm: data.roundTripPricePerKm,
+            driverAllowance: data.driverAllowance,
+            nightHaltCharge: data.nightHaltCharge,
+          });
         } else {
           setFareData({
             vehicleId: selectedVehicle,
@@ -99,7 +109,18 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
     setError(null);
 
     try {
-      await updateOutstationFare(fareData);
+      // Map component data format to service format
+      const serviceData: ServiceOutstationFareData = {
+        vehicleId: fareData.vehicleId,
+        basePrice: fareData.oneWayBasePrice,
+        pricePerKm: fareData.oneWayPricePerKm,
+        roundTripBasePrice: fareData.roundTripBasePrice,
+        roundTripPricePerKm: fareData.roundTripPricePerKm,
+        driverAllowance: fareData.driverAllowance,
+        nightHaltCharge: fareData.nightHaltCharge
+      };
+      
+      await updateOutstationFare(serviceData);
       toast.success('Outstation fares updated successfully!');
     } catch (err) {
       setError('Failed to update outstation fares.');
