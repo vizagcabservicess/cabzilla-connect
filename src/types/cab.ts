@@ -22,6 +22,8 @@ export interface CabType {
   airportFares?: AirportFare;
   maxHours?: number;
   maxDistance?: number;
+  // Add missing properties
+  localPackageFares?: any;
 }
 
 export interface HourlyPackage {
@@ -31,6 +33,8 @@ export interface HourlyPackage {
   kilometers: number;
   basePrice?: number;
   description?: string;
+  // Add missing property
+  multiplier?: number;
 }
 
 export interface LocalPackagePriceMatrix {
@@ -58,6 +62,8 @@ export interface TourInfo {
   excludes?: string[];
   attractions?: string[];
   basePrice?: number;
+  // Add missing property
+  days?: number;
 }
 
 export interface TourFares {
@@ -158,7 +164,9 @@ export interface FareData {
   [key: string]: any;
 }
 
+// Change optional to required for vehicleId to match service expectations
 export interface LocalFareData extends FareData {
+  vehicleId: string;
   price4hrs40km: number;
   price8hrs80km: number;
   price10hrs100km: number;
@@ -166,7 +174,9 @@ export interface LocalFareData extends FareData {
   priceExtraHour: number;
 }
 
+// Change optional to required for vehicleId to match service expectations
 export interface AirportFareData extends FareData {
+  vehicleId: string;
   basePrice: number;
   pricePerKm: number;
   pickupPrice: number;
@@ -179,10 +189,16 @@ export interface AirportFareData extends FareData {
 }
 
 export interface OutstationFareData extends FareData {
+  vehicleId: string;
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
   minDistance: number;
   driverAllowance: number;
   nightHaltCharges: number;
+  // Add additional properties for the component
+  roundTripBasePrice?: number;
+  oneWayBasePrice?: number;
+  oneWayPricePerKm?: number;
+  nightHaltCharge?: number;
 }

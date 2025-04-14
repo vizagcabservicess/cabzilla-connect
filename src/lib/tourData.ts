@@ -7,7 +7,7 @@ export const availableTours: TourInfo[] = [
     id: 'araku_valley',
     name: 'Araku Valley Tour',
     distance: 120,
-    days: 1,
+    days: 1, // This is now added to the interface
     image: '/tours/araku_valley.jpg'
   },
   {

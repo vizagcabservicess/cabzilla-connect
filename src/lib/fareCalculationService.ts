@@ -28,7 +28,7 @@ export const clearFareCache = () => {
 const getCacheKey = (params: FareCalculationParams): string => {
   const { cabType, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate } = params;
   return `
-    cabType:${cabType.id},
+    cabType:${typeof cabType === 'object' ? cabType.id : cabType},
     distance:${distance},
     tripType:${tripType},
     tripMode:${tripMode || 'NA'},

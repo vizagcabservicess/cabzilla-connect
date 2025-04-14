@@ -58,23 +58,33 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
         if (data) {
           // Map the service data to the component's expected format
           setFareData({
-            vehicleId: data.vehicleId,
-            oneWayBasePrice: data.basePrice,
-            oneWayPricePerKm: data.pricePerKm,
-            roundTripBasePrice: data.roundTripBasePrice,
-            roundTripPricePerKm: data.roundTripPricePerKm,
-            driverAllowance: data.driverAllowance,
-            nightHaltCharge: data.nightHaltCharge,
+            vehicleId: selectedVehicle,
+            basePrice: data.basePrice || 0,
+            pricePerKm: data.pricePerKm || 0,
+            roundTripBasePrice: data.roundTripBasePrice || 0,
+            roundTripPricePerKm: data.roundTripPricePerKm || 0,
+            minDistance: data.minDistance || 300,
+            driverAllowance: data.driverAllowance || 300,
+            nightHaltCharges: data.nightHaltCharge || data.nightHaltCharges || 700,
+            // Additional properties for the component's interface
+            oneWayBasePrice: data.basePrice || 0,
+            oneWayPricePerKm: data.pricePerKm || 0,
+            nightHaltCharge: data.nightHaltCharge || data.nightHaltCharges || 700
           });
         } else {
           setFareData({
             vehicleId: selectedVehicle,
-            oneWayBasePrice: 0,
-            oneWayPricePerKm: 0,
+            basePrice: 0,
+            pricePerKm: 0,
             roundTripBasePrice: 0,
             roundTripPricePerKm: 0,
+            minDistance: 300,
             driverAllowance: 300,
-            nightHaltCharge: 700,
+            nightHaltCharges: 700,
+            // Additional properties
+            oneWayBasePrice: 0,
+            oneWayPricePerKm: 0,
+            nightHaltCharge: 700
           });
         }
       } catch (err) {
@@ -112,12 +122,12 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       // Map component data format to service format
       const serviceData: ServiceOutstationFareData = {
         vehicleId: fareData.vehicleId,
-        basePrice: fareData.oneWayBasePrice,
-        pricePerKm: fareData.oneWayPricePerKm,
+        basePrice: fareData.oneWayBasePrice || fareData.basePrice,
+        pricePerKm: fareData.oneWayPricePerKm || fareData.pricePerKm,
         roundTripBasePrice: fareData.roundTripBasePrice,
         roundTripPricePerKm: fareData.roundTripPricePerKm,
         driverAllowance: fareData.driverAllowance,
-        nightHaltCharge: fareData.nightHaltCharge
+        nightHaltCharge: fareData.nightHaltCharge || fareData.nightHaltCharges
       };
       
       await updateOutstationFare(serviceData);
