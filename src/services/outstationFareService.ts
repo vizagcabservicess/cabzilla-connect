@@ -1,4 +1,3 @@
-
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -160,7 +159,6 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
       }, 1000);
       
       toast({
-        title: "Success",
         description: "Outstation fare updated successfully.",
         duration: 3000
       });
@@ -173,9 +171,8 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
     console.error('Error updating outstation fare:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to update outstation fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to update outstation fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     
@@ -213,7 +210,6 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
       }, 1000);
       
       toast({
-        title: "Success",
         description: "Outstation fare tables initialized successfully.",
         duration: 3000
       });
@@ -226,9 +222,8 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
     console.error('Error initializing outstation fare tables:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to initialize outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to initialize outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     
@@ -266,7 +261,6 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
       }, 1000);
       
       toast({
-        title: "Success",
         description: "Outstation fare tables synced successfully.",
         duration: 3000
       });
@@ -279,9 +273,8 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
     console.error('Error syncing outstation fare tables:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to sync outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to sync outstation fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     

@@ -1,4 +1,3 @@
-
 import { getApiUrl } from '@/config/api';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { toast } from 'sonner';
@@ -152,7 +151,6 @@ export const updateAirportFare = async (fareData: AirportFareData): Promise<bool
       }, 1000);
       
       toast({
-        title: "Success",
         description: "Airport fare updated successfully.",
         duration: 3000
       });
@@ -165,9 +163,8 @@ export const updateAirportFare = async (fareData: AirportFareData): Promise<bool
     console.error('Error updating airport fare:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to update airport fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to update airport fare: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     
@@ -204,7 +201,6 @@ export const initializeAirportFareTables = async (): Promise<boolean> => {
     }, 1000);
     
     toast({
-      title: "Success",
       description: "Airport fare tables initialized successfully.",
       duration: 3000
     });
@@ -214,9 +210,8 @@ export const initializeAirportFareTables = async (): Promise<boolean> => {
     console.error('Error initializing airport fare tables:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to initialize airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to initialize airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     
@@ -253,7 +248,6 @@ export const syncAirportFareTables = async (): Promise<boolean> => {
     }, 1000);
     
     toast({
-      title: "Success",
       description: "Airport fare tables synced successfully.",
       duration: 3000
     });
@@ -263,9 +257,8 @@ export const syncAirportFareTables = async (): Promise<boolean> => {
     console.error('Error syncing airport fare tables:', error);
     
     toast({
-      title: "Error",
-      description: `Failed to sync airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       variant: "destructive",
+      description: `Failed to sync airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: 3000
     });
     

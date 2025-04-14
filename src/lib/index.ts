@@ -34,7 +34,7 @@ export {
 export { 
   directFareUpdate,  
   initializeDatabase,
-  forceSyncOutstationFares,
+  syncOutstationFares, // Changed from forceSyncOutstationFares to syncOutstationFares
   syncOutstationFares,
   getOutstationFares,
   getLocalFares,
