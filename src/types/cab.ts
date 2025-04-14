@@ -107,7 +107,7 @@ export interface LocalFare {
   price10hrs100km: number; 
   priceExtraKm: number;
   priceExtraHour: number;
-  driverAllowance: number;  // Explicitly added this property
+  driverAllowance: number;  // Added this missing property
   // Alias properties for compatibility with different component usages
   package4hr40km?: number;  // Alias for price4hrs40km
   package8hr80km?: number;  // Alias for price8hrs80km
