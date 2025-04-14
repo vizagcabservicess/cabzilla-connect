@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -75,8 +76,6 @@ export function CabList({
         newFadeIn[cabId] = true;
         updatedFares[cabId] = fare;
         hasChanges = true;
-        
-        // No need to store in localStorage anymore as we're fetching from database
         
         if (cabId === selectedCabId) {
           const cabType = cabTypes.find(cab => cab.id === cabId);
@@ -206,10 +205,10 @@ export function CabList({
       initializedRef.current = false;
       
       // Refresh fare data from database
+      const tripType = localStorage.getItem('tripType') || 'outstation';
+      
       cabTypes.forEach(cab => {
         if (cab.id) {
-          const tripType = localStorage.getItem('tripType') || 'outstation';
-          
           if (tripType === 'outstation') {
             fareStateManager.getOutstationFareForVehicle(cab.id)
               .then(() => console.log(`Refreshed outstation fare for ${cab.id}`))
@@ -240,7 +239,7 @@ export function CabList({
         clearTimeout(updateTimeoutRef.current);
       }
     };
-  }, [cabFares, displayedFares, selectedCabId, cabTypes]);
+  }, [cabTypes]);
 
   const handleCabSelection = (cab: CabType) => {
     handleSelectCab(cab);

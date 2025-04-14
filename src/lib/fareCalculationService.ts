@@ -7,6 +7,7 @@ const fareCache = new Map<string, { price: number, timestamp: number }>();
 let lastCacheClearTime = Date.now();
 let eventThrottleCount = 0;
 const MAX_EVENTS_PER_MINUTE = 5;
+const CACHE_DURATION = 60 * 1000; // 1 minute
 
 // Clear the fare cache and notify the UI components
 export const clearFareCache = () => {
@@ -18,6 +19,8 @@ export const clearFareCache = () => {
   
   lastCacheClearTime = now;
   fareCache.clear();
+  
+  // Also clear the FareStateManager cache
   fareStateManager.clearCache();
   
   // Throttle event dispatching to prevent loops
@@ -72,8 +75,8 @@ export const calculateAirportFare = async (cabType: any, distance: number): Prom
   const cacheKey = `airport_${cabType.id}_${distance}`;
   const cachedFare = fareCache.get(cacheKey);
   
-  // Use cached value if available and recent (less than 5 minutes old)
-  if (cachedFare && Date.now() - cachedFare.timestamp < 300000) {
+  // Use cached value if available and recent
+  if (cachedFare && Date.now() - cachedFare.timestamp < CACHE_DURATION) {
     console.log(`FareCalculationService: Using cached airport fare for ${cabType.id}: ${cachedFare.price}`);
     return cachedFare.price;
   }
@@ -89,40 +92,57 @@ export const calculateAirportFare = async (cabType: any, distance: number): Prom
       // Cache the result
       fareCache.set(cacheKey, { price: fare, timestamp: Date.now() });
       
-      // Store in localStorage for other components
-      try {
-        const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
-        localStorage.setItem(localStorageKey, fare.toString());
-      } catch (error) {
-        console.error('Error storing airport fare in localStorage:', error);
-      }
+      // Dispatch event for UI update
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          fare: fare,
+          tripType: 'airport',
+          timestamp: Date.now()
+        }
+      }));
       
       return fare;
     }
+    
+    console.error(`Invalid airport fare calculated for ${cabType.id}: ${fare}`);
   } catch (error) {
     console.error(`FareCalculationService: Error calculating airport fare for ${cabType.id}:`, error);
   }
   
-  // If FareStateManager failed, try to get from localStorage as a fallback
+  // If all else fails, try to get the fare directly from FareStateManager's cache
   try {
-    const localStorageKey = `fare_airport_${cabType.id.toLowerCase()}`;
-    const storedFare = localStorage.getItem(localStorageKey);
-    if (storedFare && !isNaN(Number(storedFare))) {
-      const fareValue = parseInt(storedFare, 10);
-      if (fareValue > 0) {
-        console.log(`FareCalculationService: Using localStorage fare for ${cabType.id}: ${fareValue}`);
-        return fareValue;
+    const fareData = await fareStateManager.getAirportFareForVehicle(cabType.id);
+    if (fareData) {
+      // Based on distance, determine which tier to use
+      let fare = 0;
+      if (distance <= 15) {
+        fare = parseFloat(fareData.tier1Price || 0);
+      } else if (distance <= 25) {
+        fare = parseFloat(fareData.tier2Price || 0);
+      } else if (distance <= 35) {
+        fare = parseFloat(fareData.tier3Price || 0);
+      } else {
+        fare = parseFloat(fareData.tier4Price || 0);
+        // Add extra charges for additional distance
+        const extraDistance = distance - 35;
+        if (extraDistance > 0) {
+          fare += extraDistance * parseFloat(fareData.extraKmCharge || 0);
+        }
+      }
+      
+      if (fare > 0) {
+        console.log(`Retrieved airport fare for ${cabType.id} from FareStateManager: ${fare}`);
+        fareCache.set(cacheKey, { price: fare, timestamp: Date.now() });
+        return fare;
       }
     }
-  } catch (error) {
-    console.error('Error getting airport fare from localStorage:', error);
+  } catch (e) {
+    console.error(`Error getting airport fare from FareStateManager for ${cabType.id}:`, e);
   }
   
-  // As a last resort, let the FareStateManager handle the fallback
-  return await fareStateManager.calculateAirportFare({
-    vehicleId: cabType.id,
-    distance
-  });
+  // If everything fails, return 0
+  return 0;
 };
 
 // Main fare calculation function using FareStateManager
@@ -147,11 +167,13 @@ export const calculateFare = async (params: FarCalculationParams): Promise<numbe
       const cacheKey = generateCacheKey(params);
       const cachedFare = fareCache.get(cacheKey);
       
-      if (cachedFare && Date.now() - cachedFare.timestamp < 300000) {
+      if (cachedFare && Date.now() - cachedFare.timestamp < CACHE_DURATION) {
         console.log(`FareCalculationService: Using cached fare: ${cachedFare.price} for ${cacheKey}`);
         return cachedFare.price;
       }
     }
+    
+    console.log(`Calculating fare for ${cabType.id} (${tripType})`);
     
     // Calculate fare based on trip type using FareStateManager
     let calculatedFare = 0;
@@ -186,17 +208,11 @@ export const calculateFare = async (params: FarCalculationParams): Promise<numbe
     }
     
     if (calculatedFare > 0) {
+      console.log(`Successfully calculated fare for ${cabType.id} (${tripType}): ${calculatedFare}`);
+      
       // Cache the result
       const cacheKey = generateCacheKey(params);
       fareCache.set(cacheKey, { price: calculatedFare, timestamp: Date.now() });
-      
-      // Store in localStorage for other components
-      try {
-        const localStorageKey = `fare_${tripType}_${cabType.id.toLowerCase()}`;
-        localStorage.setItem(localStorageKey, calculatedFare.toString());
-      } catch (error) {
-        console.error('Error storing fare in localStorage:', error);
-      }
       
       // Dispatch event with calculated fare
       try {
@@ -215,8 +231,83 @@ export const calculateFare = async (params: FarCalculationParams): Promise<numbe
       return calculatedFare;
     }
     
-    // If no fare was calculated, return 0
-    console.warn(`No fare calculated for ${cabType.id} ${tripType}`);
+    // If no fare was calculated, log warning and try a direct fetch
+    console.warn(`No fare calculated for ${cabType.id} ${tripType}, attempting direct fetch`);
+    
+    // Try direct fare fetch as last resort
+    let directFare = 0;
+    
+    if (tripType === 'airport') {
+      const fareData = await fareStateManager.getAirportFareForVehicle(cabType.id);
+      if (fareData) {
+        // Based on distance, determine which tier to use
+        if (distance <= 15) {
+          directFare = parseFloat(fareData.tier1Price || 0);
+        } else if (distance <= 25) {
+          directFare = parseFloat(fareData.tier2Price || 0);
+        } else if (distance <= 35) {
+          directFare = parseFloat(fareData.tier3Price || 0);
+        } else {
+          directFare = parseFloat(fareData.tier4Price || 0);
+          // Add extra charges for additional distance
+          const extraDistance = distance - 35;
+          if (extraDistance > 0) {
+            directFare += extraDistance * parseFloat(fareData.extraKmCharge || 0);
+          }
+        }
+      }
+    } else if (tripType === 'local' && hourlyPackage) {
+      const fareData = await fareStateManager.getLocalFareForVehicle(cabType.id);
+      if (fareData) {
+        switch (hourlyPackage) {
+          case '4hr40km':
+            directFare = parseFloat(fareData.price4hrs40km || fareData.price_4hrs_40km || 0);
+            break;
+          case '8hr80km':
+            directFare = parseFloat(fareData.price8hrs80km || fareData.price_8hrs_80km || 0);
+            break;
+          case '10hr100km':
+            directFare = parseFloat(fareData.price10hrs100km || fareData.price_10hrs_100km || 0);
+            break;
+        }
+      }
+    } else if (tripType === 'outstation') {
+      const fareData = await fareStateManager.getOutstationFareForVehicle(cabType.id);
+      if (fareData) {
+        if (tripMode === 'one-way') {
+          const basePrice = parseFloat(fareData.basePrice || fareData.oneWayBasePrice || 0);
+          const pricePerKm = parseFloat(fareData.pricePerKm || fareData.oneWayPricePerKm || 0);
+          directFare = basePrice + (distance * pricePerKm);
+        } else {
+          const basePrice = parseFloat(fareData.roundTripBasePrice || 0);
+          const pricePerKm = parseFloat(fareData.roundTripPricePerKm || 0);
+          directFare = basePrice + (distance * pricePerKm);
+        }
+      }
+    }
+    
+    if (directFare > 0) {
+      console.log(`Retrieved direct fare for ${cabType.id} (${tripType}): ${directFare}`);
+      
+      // Cache this fare too
+      const cacheKey = generateCacheKey(params);
+      fareCache.set(cacheKey, { price: directFare, timestamp: Date.now() });
+      
+      // Dispatch event
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          fare: directFare,
+          tripType: tripType,
+          timestamp: Date.now()
+        }
+      }));
+      
+      return directFare;
+    }
+    
+    // If still no fare, return 0
+    console.warn(`No fare available for ${cabType.id} ${tripType}`);
     return 0;
   } catch (error) {
     console.error('Error calculating fare:', error);

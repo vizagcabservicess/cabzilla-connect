@@ -44,6 +44,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [fareListenerInitialized, setFareListenerInitialized] = useState(false);
+  const [initialFareSync, setInitialFareSync] = useState(false);
   
   // Store current trip type for fare calculations
   useEffect(() => {
@@ -55,6 +56,22 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       }
     }
   }, [tripType]);
+  
+  // Initialize fare data by syncing with the server on component mount
+  useEffect(() => {
+    if (!initialFareSync) {
+      console.log('CabOptions: Performing initial fare data sync');
+      fareStateManager.syncFareData().then(() => {
+        console.log('Initial fare data sync completed');
+        setInitialFareSync(true);
+        calculateAllFares();
+      }).catch(error => {
+        console.error('Error during initial fare sync:', error);
+        setInitialFareSync(true); // Mark as completed even on error
+        calculateAllFares(); // Still try to calculate with whatever data we have
+      });
+    }
+  }, []);
   
   // Set up event listeners for fare updates
   useEffect(() => {
@@ -79,16 +96,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       calculateAllFares();
     };
     
+    const handleFareDataFetched = () => {
+      console.log('CabOptions: Fare data fetched, recalculating fares');
+      calculateAllFares();
+    };
+    
     window.addEventListener('fare-calculated', handleFareCalculated);
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
-    window.addEventListener('fare-data-fetched', handleFareCacheCleared);
+    window.addEventListener('fare-data-fetched', handleFareDataFetched);
     
     setFareListenerInitialized(true);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated);
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
-      window.removeEventListener('fare-data-fetched', handleFareCacheCleared);
+      window.removeEventListener('fare-data-fetched', handleFareDataFetched);
     };
   }, []);
   
@@ -129,6 +151,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           
           if (fare > 0) {
             newFares[cab.id] = fare;
+            console.log(`Calculated fare for ${cab.id}: ${fare} (${tripType})`);
+          } else {
+            console.warn(`Zero or invalid fare calculated for ${cab.id} (${tripType})`);
           }
         } catch (error) {
           console.error(`Error calculating fare for ${cab.id}:`, error);
@@ -162,8 +187,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   
   // Load initial fares or update fares when trip details change
   useEffect(() => {
-    calculateAllFares();
-  }, [cabTypes, tripType, tripMode, distance, hourlyPackage, pickupDate]);
+    if (initialFareSync || cabTypes.length > 0) {
+      calculateAllFares();
+    }
+  }, [cabTypes, tripType, tripMode, distance, hourlyPackage, pickupDate, initialFareSync]);
   
   // Handle cab selection
   const handleSelectCab = (cab: CabType) => {

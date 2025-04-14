@@ -1,3 +1,4 @@
+
 import fareStateManager from './FareStateManager';
 import { toast } from 'sonner';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -23,6 +24,12 @@ export const initializeFareData = async (): Promise<boolean> => {
     
     if (success) {
       console.log('Fare data initialized successfully');
+      
+      // Dispatch event to notify components
+      window.dispatchEvent(new CustomEvent('fare-data-initialized', {
+        detail: { timestamp: Date.now() }
+      }));
+      
       return true;
     } else {
       console.warn('Failed to initialize fare data');
@@ -86,6 +93,13 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, fare
       // Clear cache and notify components
       fareStateManager.clearCache();
       
+      // Sync fare data with the database
+      setTimeout(() => {
+        fareStateManager.syncFareData().then(() => {
+          console.log('Fare data synced after direct fare update');
+        });
+      }, 1000);
+      
       // Dispatch custom event for fare data update
       window.dispatchEvent(new CustomEvent('fare-data-updated', {
         detail: {
@@ -141,10 +155,7 @@ export const getFaresByTripType = async (tripType: string, vehicleId?: string): 
     endpoint += vehicleId ? `&_t=${Date.now()}` : `?_t=${Date.now()}`;
     
     const response = await fetch(endpoint, {
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
+      headers: getBypassHeaders()
     });
     
     if (!response.ok) {
@@ -153,13 +164,31 @@ export const getFaresByTripType = async (tripType: string, vehicleId?: string): 
     
     const data = await response.json();
     
-    if (data.status === 'success') {
+    if (data.status === 'success' || data.fares) {
+      console.log(`Retrieved ${tripType} fares:`, data.fares);
       return data.fares;
     } else {
       throw new Error(data.message || 'Failed to retrieve fare data');
     }
   } catch (error) {
     console.error(`Error retrieving ${tripType} fares:`, error);
+    
+    // Try getting from FareStateManager as fallback
+    if (vehicleId) {
+      try {
+        switch (tripType) {
+          case 'airport':
+            return await fareStateManager.getAirportFareForVehicle(vehicleId);
+          case 'local':
+            return await fareStateManager.getLocalFareForVehicle(vehicleId);
+          case 'outstation':
+            return await fareStateManager.getOutstationFareForVehicle(vehicleId);
+        }
+      } catch (fallbackError) {
+        console.error(`Error in fallback for ${tripType} fares:`, fallbackError);
+      }
+    }
+    
     return null;
   }
 };
@@ -179,12 +208,28 @@ export const initializeDatabase = async (): Promise<{status: string, message?: s
   try {
     console.log('Initializing database...');
     
-    // Just try syncing fare data for now
+    // Sync fare data for all types
     const success = await fareStateManager.syncFareData();
-    return { 
-      status: success ? 'success' : 'error',
-      message: success ? 'Database initialized successfully' : 'Failed to initialize database'
-    };
+    
+    if (success) {
+      console.log('Database initialized successfully');
+      
+      // Dispatch event to notify components
+      window.dispatchEvent(new CustomEvent('database-initialized', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      return { 
+        status: 'success',
+        message: 'Database initialized successfully'
+      };
+    } else {
+      console.warn('Failed to initialize database');
+      return { 
+        status: 'error',
+        message: 'Failed to initialize database'
+      };
+    }
   } catch (error) {
     console.error('Error initializing database:', error);
     return { 
@@ -199,7 +244,7 @@ export const syncLocalFareTables = async (): Promise<boolean> => {
   try {
     const endpoint = 'api/local-fares.php?sync=true&_t=' + Date.now();
     const response = await fetch(endpoint, {
-      headers: { 'X-Force-Refresh': 'true' }
+      headers: getBypassHeaders()
     });
     
     if (!response.ok) {
@@ -212,6 +257,13 @@ export const syncLocalFareTables = async (): Promise<boolean> => {
     // Clear cache and notify components
     fareStateManager.clearCache();
     
+    // Sync fare data with the database
+    setTimeout(() => {
+      fareStateManager.syncFareData().then(() => {
+        console.log('Fare data synced after local fare table sync');
+      });
+    }, 1000);
+    
     return true;
   } catch (error) {
     console.error('Error syncing local fare tables:', error);
@@ -223,7 +275,7 @@ export const syncOutstationFares = async (): Promise<boolean> => {
   try {
     const endpoint = 'api/outstation-fares.php?sync=true&_t=' + Date.now();
     const response = await fetch(endpoint, {
-      headers: { 'X-Force-Refresh': 'true' }
+      headers: getBypassHeaders()
     });
     
     if (!response.ok) {
@@ -236,6 +288,13 @@ export const syncOutstationFares = async (): Promise<boolean> => {
     // Clear cache and notify components
     fareStateManager.clearCache();
     
+    // Sync fare data with the database
+    setTimeout(() => {
+      fareStateManager.syncFareData().then(() => {
+        console.log('Fare data synced after outstation fare table sync');
+      });
+    }, 1000);
+    
     return true;
   } catch (error) {
     console.error('Error syncing outstation fare tables:', error);
@@ -243,11 +302,11 @@ export const syncOutstationFares = async (): Promise<boolean> => {
   }
 };
 
-export const forceSyncOutstationFares = async (): Promise<boolean> => {
+export const syncAirportFares = async (): Promise<boolean> => {
   try {
-    const endpoint = 'api/outstation-fares.php?force_sync=true&_t=' + Date.now();
+    const endpoint = 'api/direct-airport-fares.php?sync=true&_t=' + Date.now();
     const response = await fetch(endpoint, {
-      headers: { 'X-Force-Refresh': 'true' }
+      headers: getBypassHeaders()
     });
     
     if (!response.ok) {
@@ -255,14 +314,21 @@ export const forceSyncOutstationFares = async (): Promise<boolean> => {
     }
     
     const data = await response.json();
-    console.log('Force synced outstation fare tables:', data);
+    console.log('Synced airport fare tables:', data);
     
     // Clear cache and notify components
     fareStateManager.clearCache();
     
+    // Sync fare data with the database
+    setTimeout(() => {
+      fareStateManager.syncFareData().then(() => {
+        console.log('Fare data synced after airport fare table sync');
+      });
+    }, 1000);
+    
     return true;
   } catch (error) {
-    console.error('Error force syncing outstation fare tables:', error);
+    console.error('Error syncing airport fare tables:', error);
     return false;
   }
 };
@@ -270,13 +336,54 @@ export const forceSyncOutstationFares = async (): Promise<boolean> => {
 // Reset CabOptions state
 export const resetCabOptionsState = (): void => {
   try {
+    // Clear fare cache first
+    fareStateManager.clearCache();
+    
+    // Dispatch event to notify components
     window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
       detail: { timestamp: Date.now(), forceRefresh: true }
     }));
     
     console.log('CabOptions state reset triggered');
+    
+    // Sync fare data with the database
+    setTimeout(() => {
+      fareStateManager.syncFareData().then(() => {
+        console.log('Fare data synced after state reset');
+      });
+    }, 1000);
   } catch (error) {
     console.error('Error resetting CabOptions state:', error);
+  }
+};
+
+// Force sync all fare data
+export const forceSyncAllFares = async (): Promise<boolean> => {
+  try {
+    console.log('Forcing sync of all fare data...');
+    
+    // Clear all caches first
+    fareStateManager.clearCache();
+    
+    // Sync fare data
+    const success = await fareStateManager.syncFareData();
+    
+    if (success) {
+      console.log('All fare data synced successfully');
+      
+      // Dispatch event to notify components
+      window.dispatchEvent(new CustomEvent('all-fares-synced', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      return true;
+    } else {
+      console.warn('Failed to sync all fare data');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error syncing all fare data:', error);
+    return false;
   }
 };
 
@@ -298,9 +405,10 @@ export const fareService = {
   getOutstationFaresForVehicle,
   syncLocalFareTables,
   syncOutstationFares,
-  forceSyncOutstationFares,
+  syncAirportFares,
   resetCabOptionsState,
   initializeDatabase,
+  forceSyncAllFares,
   getBypassHeaders,
   getForcedRequestConfig,
   formatDataForMultipart
