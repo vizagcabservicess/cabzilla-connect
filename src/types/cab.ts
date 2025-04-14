@@ -189,9 +189,9 @@ export interface OutstationFareData extends FareData {
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
-  minDistance: number; // Added explicitly to fix the error
+  minDistance: number;  // Added this property
   driverAllowance: number;
-  nightHaltCharge: number; // Renamed from nightHaltCharges for consistency
+  nightHaltCharge: number;
   // Additional properties for the component
   roundTripBasePrice?: number;
   oneWayBasePrice?: number;
