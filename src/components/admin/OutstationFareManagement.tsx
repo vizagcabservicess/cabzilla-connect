@@ -55,7 +55,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       try {
         const data = await fetchOutstationFare(selectedVehicle);
         if (data) {
-          // Map the service data to the component's expected format
           setFareData({
             vehicleId: selectedVehicle,
             basePrice: data.basePrice || 0,
@@ -64,8 +63,7 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             roundTripPricePerKm: data.roundTripPricePerKm || 0,
             minDistance: data.minDistance || 300,
             driverAllowance: data.driverAllowance || 300,
-            nightHaltCharge: data.nightHaltCharge || data.nightHaltCharge || 700,
-            // Additional properties for the component's interface
+            nightHaltCharge: data.nightHaltCharge || 700,
             oneWayBasePrice: data.basePrice || 0,
             oneWayPricePerKm: data.pricePerKm || 0
           });
@@ -79,7 +77,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             minDistance: 300,
             driverAllowance: 300,
             nightHaltCharge: 700,
-            // Additional properties
             oneWayBasePrice: 0,
             oneWayPricePerKm: 0
           });
@@ -116,7 +113,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
     setError(null);
 
     try {
-      // Map component data format to service format
       const serviceData: ServiceOutstationFareData = {
         vehicleId: fareData.vehicleId,
         basePrice: fareData.oneWayBasePrice || fareData.basePrice,
