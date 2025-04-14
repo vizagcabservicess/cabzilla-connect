@@ -280,7 +280,34 @@ const CabsPage = () => {
             pickupDate,
             returnDate
           });
+          
+          // CRITICAL FIX: Store the fare in localStorage for persistence between components
+          try {
+            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
+            localStorage.setItem(localStorageKey, fare.toString());
+            console.log(`CabsPage: Stored fare for ${selectedCab.id} in localStorage: ${fare}`);
+          } catch (error) {
+            console.error('Error storing fare in localStorage:', error);
+          }
+          
           setTotalPrice(fare);
+          
+          // CRITICAL FIX: Dispatch event to synchronize fare across components
+          try {
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: selectedCab.id,
+                tripType,
+                tripMode,
+                calculated: true,
+                fare: fare,
+                timestamp: Date.now()
+              }
+            }));
+            console.log(`CabsPage: Dispatched fare-calculated event for ${selectedCab.id}: ${fare}`);
+          } catch (error) {
+            console.error('Error dispatching fare event:', error);
+          }
         } catch (error) {
           console.error("Error calculating fare:", error);
           setTotalPrice(0);

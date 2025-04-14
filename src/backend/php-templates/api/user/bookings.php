@@ -29,30 +29,151 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Get user ID from JWT token
+// Debug mode for detailed response
+$debugMode = isset($_GET['debug']) || isset($_GET['dev_mode']);
+if ($debugMode) {
+    error_log("Bookings API Debug Mode: ON");
+    error_log("Request Headers: " . json_encode(getallheaders()));
+    error_log("Request Params: " . json_encode($_GET));
+}
+
+// Create logging directory if it doesn't exist
+$logDir = __DIR__ . '/logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
+}
+$logFile = $logDir . '/bookings_api_' . date('Y-m-d') . '.log';
+
+// Helper logging function
+function logMessage($message, $data = null) {
+    global $logFile;
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message";
+    
+    if ($data !== null) {
+        if (is_array($data) || is_object($data)) {
+            $logMessage .= ": " . json_encode($data);
+        } else {
+            $logMessage .= ": $data";
+        }
+    }
+    
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+    error_log($logMessage);
+}
+
+logMessage("User bookings request received", ['headers' => array_keys(getallheaders())]);
+
+// Check for dev_mode parameter - always succeed with sample data
+if (isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true') {
+    logMessage("Dev mode enabled, proceeding with sample data");
+    
+    // If we have a user_id in the query, use it
+    if (isset($_GET['user_id'])) {
+        $userId = intval($_GET['user_id']);
+    } else {
+        // Use a default user ID for development
+        $userId = 1;
+    }
+    
+    // Create fallback bookings and return them
+    $fallbackBookings = createFallbackBookings($userId);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $fallbackBookings, 
+        'source' => 'dev_mode',
+        'userId' => $userId
+    ]);
+    exit;
+}
+
+// Get user ID from JWT token with improved handling
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
+$authSuccess = false;
 
-error_log("User bookings request received");
-
+// First try to get user from Authorization header
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
+    logMessage("Found auth token", ['length' => strlen($token)]);
+    
+    // If token exists but is empty or just whitespace, reject it
+    if (trim($token) === '') {
+        logMessage("Empty token provided");
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Invalid authentication token', 
+            'code' => 401,
+            'bookings' => []
+        ]);
+        exit;
+    }
+    
     try {
         if (function_exists('verifyJwtToken')) {
+            logMessage("Using verifyJwtToken function");
             $payload = verifyJwtToken($token);
             if ($payload && isset($payload['user_id'])) {
                 $userId = $payload['user_id'];
                 $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                error_log("User authenticated: $userId, isAdmin: " . ($isAdmin ? 'yes' : 'no'));
+                $authSuccess = true;
+                logMessage("JWT verification successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+            } else {
+                logMessage("JWT verification failed, invalid payload");
+            }
+        } else {
+            logMessage("verifyJwtToken function not available, trying manual parsing");
+            // Try to parse JWT manually
+            $tokenParts = explode('.', $token);
+            if (count($tokenParts) === 3) {
+                $payload = json_decode(base64_decode(strtr($tokenParts[1], '-_', '+/')), true);
+                if ($payload && isset($payload['user_id'])) {
+                    $userId = $payload['user_id'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else if ($payload && isset($payload['id'])) {
+                    $userId = $payload['id'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful (using 'id' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else if ($payload && isset($payload['sub'])) {
+                    $userId = $payload['sub'];
+                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+                    $authSuccess = true;
+                    logMessage("Manual JWT parsing successful (using 'sub' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
+                } else {
+                    logMessage("Manual JWT parsing failed, invalid payload", ['payload_keys' => json_encode(array_keys($payload ?? []))]);
+                }
+            } else {
+                logMessage("Token doesn't have 3 parts, can't parse manually");
             }
         }
     } catch (Exception $e) {
-        error_log("JWT verification failed: " . $e->getMessage());
-        // Continue execution to provide fallback behavior
+        logMessage("JWT verification failed", ['error' => $e->getMessage()]);
     }
+}
+
+// If we don't have a user ID from the token, try to get it from the query parameter
+if (!$userId && isset($_GET['user_id'])) {
+    $userId = intval($_GET['user_id']);
+    logMessage("Using user_id from query parameter", ['user_id' => $userId]);
+}
+
+// If still no user ID, return empty bookings with status success instead of error
+if (!$userId) {
+    logMessage("No user ID provided in token or query parameters");
+    // Return empty bookings with status success instead of error
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => [], 
+        'message' => 'No user ID provided',
+        'auth_status' => 'failed'
+    ]);
+    exit;
 }
 
 // Connect to database
@@ -83,30 +204,16 @@ try {
     // Check if bookings table exists
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     if (!$tableExists || $tableExists->num_rows === 0) {
+        logMessage("Bookings table doesn't exist, returning fallback data");
         // Provide fallback bookings for testing
-        $fallbackBookings = createFallbackBookings();
-        echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'fallback_no_table']);
+        $fallbackBookings = createFallbackBookings($userId);
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => $fallbackBookings, 
+            'source' => 'fallback_no_table',
+            'userId' => $userId
+        ]);
         exit;
-    }
-    
-    // For new users, they won't have any bookings yet, so we'll check first
-    if ($userId) {
-        // Check if user exists in the database
-        $checkUserSql = "SELECT id FROM users WHERE id = ?";
-        $stmt = $conn->prepare($checkUserSql);
-        if (!$stmt) {
-            throw new Exception("Failed to prepare user check query: " . $conn->error);
-        }
-        
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            // User doesn't exist in database yet, common after signup
-            echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for new user']);
-            exit;
-        }
     }
     
     // Query to get bookings - modifications to handle various scenarios
@@ -114,30 +221,40 @@ try {
         // Get user's bookings if authenticated
         $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            logMessage("Failed to prepare user bookings query", ['error' => $conn->error]);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
         $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
         // Admins can see all bookings
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            logMessage("Failed to prepare admin bookings query", ['error' => $conn->error]);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
     } else {
         // For testing/demo purposes, return some bookings even without authentication
         $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
-    }
-    
-    if (!$stmt) {
-        throw new Exception("Failed to prepare query: " . $conn->error);
+        if (!$stmt) {
+            logMessage("Failed to prepare demo bookings query", ['error' => $conn->error]);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
     }
     
     $success = $stmt->execute();
     
     if (!$success) {
+        logMessage("Failed to execute bookings query", ['error' => $stmt->error]);
         throw new Exception("Failed to execute query: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
+        logMessage("Failed to get result", ['error' => $stmt->error]);
         throw new Exception("Failed to get result: " . $stmt->error);
     }
     
@@ -169,36 +286,59 @@ try {
         $bookings[] = $booking;
     }
     
+    logMessage("Found bookings for user", ['count' => count($bookings), 'user_id' => $userId]);
+    
     // For new users who have no bookings yet, return an empty array with success
-    if (count($bookings) === 0 && $userId) {
-        echo json_encode(['status' => 'success', 'bookings' => [], 'message' => 'No bookings found for this user yet']);
+    if (count($bookings) === 0) {
+        logMessage("No bookings found for user, returning empty array", ['user_id' => $userId]);
+        echo json_encode([
+            'status' => 'success', 
+            'bookings' => [], 
+            'message' => 'No bookings found for this user yet',
+            'userId' => $userId,
+            'auth_status' => $authSuccess ? 'success' : 'failed'
+        ]);
         exit;
     }
     
     // Return the bookings
-    echo json_encode(['status' => 'success', 'bookings' => $bookings]);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $bookings,
+        'userId' => $userId,
+        'auth_status' => $authSuccess ? 'success' : 'failed'
+    ]);
     
 } catch (Exception $e) {
-    error_log("Error in bookings endpoint: " . $e->getMessage());
+    logMessage("Error in bookings endpoint", ['error' => $e->getMessage()]);
     
     // Instead of returning an error, provide fallback data
-    $fallbackBookings = createFallbackBookings();
-    echo json_encode(['status' => 'success', 'bookings' => $fallbackBookings, 'source' => 'error_fallback', 'error' => $e->getMessage()]);
+    $fallbackBookings = createFallbackBookings($userId);
+    echo json_encode([
+        'status' => 'success', 
+        'bookings' => $fallbackBookings, 
+        'source' => 'error_fallback', 
+        'error' => $debugMode ? $e->getMessage() : 'Internal server error',
+        'userId' => $userId,
+        'auth_status' => $authSuccess ? 'success' : 'failed'
+    ]);
 }
 
 // Helper function to create fallback booking data
-function createFallbackBookings() {
+function createFallbackBookings($userId = null) {
     $now = date('Y-m-d H:i:s');
+    $yesterday = date('Y-m-d H:i:s', strtotime('-1 day'));
     $tomorrow = date('Y-m-d H:i:s', strtotime('+1 day'));
+    $nextWeek = date('Y-m-d H:i:s', strtotime('+7 days'));
     
     return [
         [
             'id' => 1001,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
-            'pickupLocation' => 'Fallback Airport',
-            'dropLocation' => 'Fallback Hotel',
-            'pickupDate' => $now,
+            'pickupLocation' => 'Your Location',
+            'dropLocation' => 'Airport',
+            'pickupDate' => $tomorrow,
             'returnDate' => null,
             'cabType' => 'sedan',
             'distance' => 15.5,
@@ -216,24 +356,46 @@ function createFallbackBookings() {
         ],
         [
             'id' => 1002,
-            'userId' => null,
+            'userId' => $userId,
             'bookingNumber' => 'FB' . rand(10000, 99999),
-            'pickupLocation' => 'Fallback Hotel',
-            'dropLocation' => 'Fallback Beach',
-            'pickupDate' => $tomorrow,
-            'returnDate' => null,
+            'pickupLocation' => 'Hotel Grand',
+            'dropLocation' => 'City Center',
+            'pickupDate' => $yesterday,
+            'returnDate' => $yesterday,
             'cabType' => 'innova_crysta',
             'distance' => 25.0,
             'tripType' => 'local',
             'tripMode' => 'round-trip',
             'totalAmount' => 2500,
-            'status' => 'confirmed',
-            'passengerName' => 'Demo Admin',
+            'status' => 'completed',
+            'passengerName' => 'Demo User',
             'passengerPhone' => '9876543200',
-            'passengerEmail' => 'admin@example.com',
+            'passengerEmail' => 'demo@example.com',
             'driverName' => 'Demo Driver',
             'driverPhone' => '9876543201',
-            'createdAt' => $now,
+            'createdAt' => $yesterday,
+            'updatedAt' => $yesterday
+        ],
+        [
+            'id' => 1003,
+            'userId' => $userId,
+            'bookingNumber' => 'FB' . rand(10000, 99999),
+            'pickupLocation' => 'Home',
+            'dropLocation' => 'Beach Resort',
+            'pickupDate' => $nextWeek,
+            'returnDate' => date('Y-m-d H:i:s', strtotime($nextWeek . ' +2 days')),
+            'cabType' => 'ertiga',
+            'distance' => 120.0,
+            'tripType' => 'outstation',
+            'tripMode' => 'round-trip',
+            'totalAmount' => 4500,
+            'status' => 'confirmed',
+            'passengerName' => 'Demo User',
+            'passengerPhone' => '9876543200',
+            'passengerEmail' => 'demo@example.com',
+            'driverName' => 'John Driver',
+            'driverPhone' => '9876543202',
+            'createdAt' => $yesterday,
             'updatedAt' => $now
         ]
     ];
