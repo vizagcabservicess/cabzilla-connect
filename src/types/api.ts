@@ -35,3 +35,166 @@ export interface LocalPackageFaresResponse extends ApiResponse {
   source?: string;
   count?: number;
 }
+
+// Booking status type
+export type BookingStatus = 
+  | 'pending'
+  | 'confirmed'
+  | 'assigned'
+  | 'payment_received'
+  | 'payment_pending'
+  | 'completed'
+  | 'continued'
+  | 'cancelled';
+
+// Location interface
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  isInVizag?: boolean;
+  type?: string;
+  city?: string;
+  state?: string;
+}
+
+// Booking request interface
+export interface BookingRequest {
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  returnDate?: string | null;
+  cabType: string;
+  distance: number;
+  tripType: string;
+  tripMode: string;
+  totalAmount: number;
+  passengerName: string;
+  passengerPhone: string;
+  passengerEmail?: string;
+  hourlyPackage?: string | null;
+  notes?: string;
+}
+
+// Booking interface
+export interface Booking {
+  id: string;
+  bookingId?: string;
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  returnDate?: string | null;
+  cabType: string;
+  distance: number;
+  tripType: string;
+  tripMode: string;
+  totalAmount: number;
+  passengerName: string;
+  passengerPhone: string;
+  passengerEmail?: string;
+  status: BookingStatus;
+  hourlyPackage?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+  notes?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  amountPaid?: number;
+  transactionId?: string;
+}
+
+// Dashboard metrics interface
+export interface DashboardMetrics {
+  totalBookings: number;
+  activeRides: number;
+  totalRevenue: number;
+  upcomingRides: number;
+  availableDrivers: number;
+  busyDrivers: number;
+  avgRating: number;
+  availableStatuses?: BookingStatus[] | Record<string, BookingStatus> | string;
+}
+
+// Tour fare interface
+export interface TourFare {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  cabType: string;
+  duration: number;
+  distance: number;
+  isActive: boolean;
+}
+
+// Fare update request interface
+export interface FareUpdateRequest {
+  cabType: string;
+  price: number;
+  tripType?: string;
+  fromLocation?: string;
+  toLocation?: string;
+  packageId?: string;
+}
+
+// User interface
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'admin' | 'user' | 'driver';
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLogin?: string;
+  avatar?: string;
+}
+
+// Vehicle pricing interface
+export interface VehiclePricing {
+  id: string;
+  vehicleId: string;
+  name?: string;
+  basePrice: number;
+  pricePerKm: number;
+  pricePerHour?: number;
+  airportPickupPrice?: number;
+  airportDropPrice?: number;
+  minHours?: number;
+  minKm?: number;
+  isActive: boolean;
+}
+
+// Vehicle pricing update request
+export interface VehiclePricingUpdateRequest {
+  vehicleId: string;
+  basePrice?: number;
+  pricePerKm?: number;
+  pricePerHour?: number;
+  airportPickupPrice?: number;
+  airportDropPrice?: number;
+  minHours?: number;
+  minKm?: number;
+  isActive?: boolean;
+}
+
+// Login request interface
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+// Signup request interface
+export interface SignupRequest {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}

@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 import { LocalPackageFare, LocalPackageFaresResponse } from '@/types/api';
 import { getBypassHeaders, getForcedRequestConfig, safeFetch } from '@/config/requestConfig';
@@ -149,15 +148,14 @@ async function fetchLocalPackageFares(): Promise<LocalPackageFaresResponse> {
     
     console.log(`Fetching local package fares from ${url}`);
     
-    const response = await safeFetch(url, getForcedRequestConfig({
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...getBypassHeaders(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
       }
-    }));
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
