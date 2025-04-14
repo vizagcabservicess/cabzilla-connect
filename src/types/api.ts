@@ -1,3 +1,4 @@
+
 // API response types for the application
 
 export interface ApiResponse {
@@ -47,7 +48,9 @@ export type BookingStatus =
   | 'payment_pending'
   | 'completed'
   | 'continued'
-  | 'cancelled';
+  | 'cancelled'
+  | 'success' // Added for API compatibility
+  | 'error';  // Added for API compatibility
 
 // Location interface - making lat/lng optional to fix type errors
 export interface Location {

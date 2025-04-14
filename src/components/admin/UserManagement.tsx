@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
@@ -267,7 +268,7 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<"admin" | "user" | "driver">("user");
   const [isCreating, setIsCreating] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -280,7 +281,7 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
 
     setIsCreating(true);
     try {
-      const newUser = {
+      const newUser: User = {
         name,
         email,
         phone,
@@ -354,13 +355,14 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
+            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user" | "driver")}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">User</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="driver">Driver</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -390,7 +392,7 @@ function EditUserForm({ user, onUserUpdated, onCancel }: EditUserFormProps) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
-  const [role, setRole] = useState<"admin" | "user">(user.role);
+  const [role, setRole] = useState<"admin" | "user" | "driver">(user.role);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -469,13 +471,14 @@ function EditUserForm({ user, onUserUpdated, onCancel }: EditUserFormProps) {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user")}>
+            <Select value={role} onValueChange={(value) => setRole(value as "admin" | "user" | "driver")}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">User</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="driver">Driver</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -500,13 +503,14 @@ function EditUserForm({ user, onUserUpdated, onCancel }: EditUserFormProps) {
   );
 }
 
-export default function UserManagement() {
+function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -643,3 +647,5 @@ export default function UserManagement() {
     </div>
   );
 }
+
+export default UserManagement;

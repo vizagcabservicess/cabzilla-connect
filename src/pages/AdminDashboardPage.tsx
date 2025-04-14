@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { DashboardMetrics } from "@/components/admin/DashboardMetrics";
 import { AdminBookingsList } from "@/components/admin/AdminBookingsList";
 import VehicleManagement from "@/components/admin/VehicleManagement";
 import { VehiclePricingManagement } from "@/components/admin/VehiclePricingManagement";
-import { UserManagement } from "@/components/admin/UserManagement";
+import UserManagement from "@/components/admin/UserManagement";
 import { DriverManagement } from "@/components/admin/DriverManagement";
 import { AdminNotifications } from "@/components/admin/AdminNotifications";
 import { Database, CreditCard, Car, CalendarDays, Users, Map, Settings } from 'lucide-react';

@@ -92,7 +92,7 @@ export const authAPI = {
     setAuthToken(null);
   },
   
-  updateUserRole: async (userId: number, role: 'admin' | 'user') => {
+  updateUserRole: async (userId: string | number, role: 'admin' | 'user' | 'driver') => {
     try {
       const response = await axiosInstance.put(`/api/users.php?id=${userId}`, { role });
       return response.data;
@@ -318,13 +318,11 @@ export const fareAPI = {
   }
 };
 
-// For backward compatibility, also export the entire API object
-const api = {
+// Export the full API object for backward compatibility
+export default {
   ...authAPI,
   ...bookingAPI,
   ...userAPI,
   ...fareAPI,
   setAuthToken
 };
-
-export default api;
