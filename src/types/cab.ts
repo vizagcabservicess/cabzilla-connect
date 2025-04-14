@@ -71,7 +71,6 @@ export interface AirportFare {
   extraKmCharge: number;
 }
 
-// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
@@ -165,7 +164,6 @@ export interface VehiclePricing {
   airportExtraKmCharge?: number;
 }
 
-// Add the FareData interface for use in fare management
 export interface FareData {
   vehicleId: string;
   vehicle_id?: string;
@@ -195,7 +193,6 @@ export interface FareData {
   [key: string]: any;
 }
 
-// Add specific data types for the different fare services
 export interface LocalFareData {
   vehicleId: string;
   vehicle_id?: string;
