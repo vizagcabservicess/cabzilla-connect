@@ -22,7 +22,6 @@ export interface CabType {
   airportFares?: AirportFare;
   maxHours?: number;
   maxDistance?: number;
-  // Add missing properties
   localPackageFares?: any;
 }
 
@@ -33,7 +32,6 @@ export interface HourlyPackage {
   kilometers: number;
   basePrice?: number;
   description?: string;
-  // Add missing property
   multiplier?: number;
 }
 
@@ -62,7 +60,6 @@ export interface TourInfo {
   excludes?: string[];
   attractions?: string[];
   basePrice?: number;
-  // Add missing property
   days?: number;
 }
 
@@ -111,7 +108,7 @@ export interface LocalFare {
   price10hrs100km: number; 
   priceExtraKm: number;
   priceExtraHour: number;
-  driverAllowance: number;  // Added this property
+  driverAllowance: number;  // Added this property explicitly as required
   // Alias properties for compatibility with different component usages
   package4hr40km?: number;  // Alias for price4hrs40km
   package8hr80km?: number;  // Alias for price8hrs80km
@@ -164,7 +161,7 @@ export interface FareData {
   [key: string]: any;
 }
 
-// Change optional to required for vehicleId to match service expectations
+// Making vehicleId required to match service expectations
 export interface LocalFareData extends FareData {
   vehicleId: string;
   price4hrs40km: number;
@@ -174,7 +171,7 @@ export interface LocalFareData extends FareData {
   priceExtraHour: number;
 }
 
-// Change optional to required for vehicleId to match service expectations
+// Making vehicleId required to match service expectations
 export interface AirportFareData extends FareData {
   vehicleId: string;
   basePrice: number;
@@ -193,12 +190,12 @@ export interface OutstationFareData extends FareData {
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
-  minDistance: number;
+  minDistance: number; // Added explicitly to fix the error
   driverAllowance: number;
-  nightHaltCharges: number;
-  // Add additional properties for the component
+  nightHaltCharge: number; // Renamed from nightHaltCharges for consistency
+  // Additional properties for the component
   roundTripBasePrice?: number;
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
-  nightHaltCharge?: number;
 }
+
