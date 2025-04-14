@@ -1,15 +1,11 @@
-
-// Add required imports at the top of the file
 import { toast } from 'sonner';
 import fareStateManager from './FareStateManager';
-import { getApiUrl, getBypassHeaders } from '@/config/requestConfig';
+import { getApiUrl, getBypassHeaders } from '@/config/api';
 import { OutstationFareData } from '@/types/cab';
 
-// Add missing method if not present in FareStateManager
 if (!fareStateManager.storeOutstationFare) {
   fareStateManager.storeOutstationFare = async (vehicleId: string, fareData: any) => {
     console.log('FareStateManager.storeOutstationFare polyfill called', vehicleId, fareData);
-    // Try to update internal cache if possible
     try {
       if (typeof fareStateManager.updateInternalCache === 'function') {
         fareStateManager.updateInternalCache('outstation', vehicleId, fareData);
@@ -22,9 +18,8 @@ if (!fareStateManager.storeOutstationFare) {
   };
 }
 
-// Cache outstation fare data in memory
 const outstationFareCache = new Map<string, { data: OutstationFareData, timestamp: number }>();
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache duration (reduced from 5 minutes)
+const CACHE_DURATION = 2 * 60 * 1000;
 
 /**
  * Fetch outstation fare for a specific vehicle
@@ -38,20 +33,17 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
       return null;
     }
     
-    // Check cache first
     const cachedFare = outstationFareCache.get(vehicleId);
     if (cachedFare && Date.now() - cachedFare.timestamp < CACHE_DURATION) {
       console.log(`Using cached outstation fare for ${vehicleId}`);
       return cachedFare.data;
     }
     
-    // Try to get from FareStateManager first (which connects to the database)
     const fareData = await fareStateManager.getOutstationFareForVehicle(vehicleId);
     
     if (fareData) {
       console.log(`Retrieved outstation fare from FareStateManager for ${vehicleId}`, fareData);
       
-      // Convert to standard format with all possible field mappings
       const standardizedData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
@@ -63,14 +55,12 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
         nightHaltCharge: parseFloat(String(fareData.nightHaltCharge || fareData.night_halt_charge || 700))
       };
       
-      // Validate the fare data
       if (standardizedData.oneWayBasePrice <= 0 || 
           standardizedData.oneWayPricePerKm <= 0 || 
           standardizedData.roundTripBasePrice <= 0 || 
           standardizedData.roundTripPricePerKm <= 0) {
         console.warn(`Retrieved outstation fare has invalid values for vehicle ${vehicleId}`, standardizedData);
       } else {
-        // Cache the valid result
         outstationFareCache.set(vehicleId, {
           data: standardizedData,
           timestamp: Date.now()
@@ -80,7 +70,6 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
       }
     }
     
-    // If FareStateManager doesn't have valid data, try direct API endpoint
     const response = await fetch(
       getApiUrl(`api/admin/direct-outstation-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`),
       { headers: getBypassHeaders() }
@@ -93,20 +82,16 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
     const data = await response.json();
     
     if (data.status === 'success' && data.fares) {
-      // Extract fare - API returns either an object with vehicle IDs as keys or a direct fare object
       let fareItem;
       
       if (data.fares[vehicleId]) {
-        // Vehicle ID is a key in the fares object
         fareItem = data.fares[vehicleId];
       } else if (Array.isArray(data.fares) && data.fares.length > 0) {
-        // Find the fare for our specific vehicle id in an array
         fareItem = data.fares.find((fare: any) => 
           fare.vehicleId === vehicleId || 
           fare.vehicle_id === vehicleId
         );
       } else if (Object.keys(data.fares).length > 0) {
-        // If array check fails but we have data, use the first item (last resort)
         const keys = Object.keys(data.fares);
         fareItem = data.fares[keys[0]];
         console.warn(`Could not find exact fare match for ${vehicleId}, using ${keys[0]} as fallback`);
@@ -117,7 +102,6 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
         return null;
       }
       
-      // Map from all possible field names
       const fareData: OutstationFareData = {
         vehicleId,
         vehicle_id: vehicleId,
@@ -129,16 +113,14 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
         nightHaltCharge: parseFloat(String(fareItem.nightHaltCharge || fareItem.night_halt_charge || 700))
       };
       
-      // If round trip values are missing but one way values exist, calculate them (as a fallback only)
       if (fareData.roundTripBasePrice <= 0 && fareData.oneWayBasePrice > 0) {
-        fareData.roundTripBasePrice = fareData.oneWayBasePrice * 0.95; // 5% discount
+        fareData.roundTripBasePrice = fareData.oneWayBasePrice * 0.95;
       }
       
       if (fareData.roundTripPricePerKm <= 0 && fareData.oneWayPricePerKm > 0) {
-        fareData.roundTripPricePerKm = fareData.oneWayPricePerKm * 0.85; // 15% discount
+        fareData.roundTripPricePerKm = fareData.oneWayPricePerKm * 0.85;
       }
       
-      // Validate the fare data before caching
       if (fareData.oneWayBasePrice <= 0 || 
           fareData.oneWayPricePerKm <= 0 || 
           fareData.roundTripBasePrice <= 0 || 
@@ -147,13 +129,11 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
         return null;
       }
       
-      // Cache the valid result
       outstationFareCache.set(vehicleId, {
         data: fareData,
         timestamp: Date.now()
       });
       
-      // Initialize FareStateManager data with the fetched fare
       fareStateManager.storeOutstationFare(vehicleId, fareData);
       
       return fareData;
@@ -166,19 +146,14 @@ export const fetchOutstationFare = async (vehicleId: string): Promise<Outstation
   }
 };
 
-/**
- * Update outstation fare for a vehicle
- */
 export const updateOutstationFare = async (fareData: OutstationFareData): Promise<boolean> => {
   try {
     console.log(`Updating outstation fare for vehicle ${fareData.vehicleId}`, fareData);
     
-    // Ensure vehicle ID is properly set
     if (!fareData.vehicleId) {
       throw new Error('Vehicle ID is required');
     }
     
-    // Create FormData for the request
     const formData = new FormData();
     formData.append('vehicle_id', fareData.vehicleId);
     formData.append('basePrice', String(fareData.oneWayBasePrice));
@@ -188,7 +163,6 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
     formData.append('driverAllowance', String(fareData.driverAllowance));
     formData.append('nightHaltCharge', String(fareData.nightHaltCharge));
     
-    // Add duplicate fields for compatibility with different backend formats
     formData.append('oneWayBasePrice', String(fareData.oneWayBasePrice));
     formData.append('oneWayPricePerKm', String(fareData.oneWayPricePerKm));
     
@@ -210,11 +184,9 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
     if (result.status === 'success') {
       console.log('Outstation fare update successful:', result);
       
-      // Clear caches to ensure fresh data is fetched
       outstationFareCache.delete(fareData.vehicleId);
       fareStateManager.clearCache();
       
-      // Sync fare data with the database
       setTimeout(() => {
         fareStateManager.syncFareData().then(() => {
           console.log('Fare data synced after outstation fare update');
@@ -236,9 +208,6 @@ export const updateOutstationFare = async (fareData: OutstationFareData): Promis
   }
 };
 
-/**
- * Initialize outstation fare tables in the database
- */
 export const initializeOutstationFareTables = async (): Promise<boolean> => {
   try {
     const response = await fetch(getApiUrl('api/admin/outstation-fares.php?init=true&_t=' + Date.now()), {
@@ -254,11 +223,9 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
     if (result.status === 'success') {
       console.log('Outstation fare tables initialized:', result);
       
-      // Clear caches to ensure fresh data is fetched
       outstationFareCache.clear();
       fareStateManager.clearCache();
       
-      // Sync fare data with the database
       setTimeout(() => {
         fareStateManager.syncFareData().then(() => {
           console.log('Fare data synced after table initialization');
@@ -280,9 +247,6 @@ export const initializeOutstationFareTables = async (): Promise<boolean> => {
   }
 };
 
-/**
- * Sync outstation fare tables from the database
- */
 export const syncOutstationFareTables = async (): Promise<boolean> => {
   try {
     const response = await fetch(getApiUrl('api/admin/outstation-fares.php?sync=true&_t=' + Date.now()), {
@@ -298,11 +262,9 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
     if (result.status === 'success') {
       console.log('Outstation fare tables synced:', result);
       
-      // Clear caches to ensure fresh data is fetched
       outstationFareCache.clear();
       fareStateManager.clearCache();
       
-      // Sync fare data with the database
       setTimeout(() => {
         fareStateManager.syncFareData().then(() => {
           console.log('Fare data synced after table sync');
@@ -323,3 +285,5 @@ export const syncOutstationFareTables = async (): Promise<boolean> => {
     return false;
   }
 };
+
+export { OutstationFareData };

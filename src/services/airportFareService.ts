@@ -1,7 +1,7 @@
 
 import { toast } from 'sonner';
 import fareStateManager from './FareStateManager';
-import { getApiUrl, getBypassHeaders } from '@/config/requestConfig';
+import { getApiUrl, getBypassHeaders } from '@/config/api'; // Update import from api instead of requestConfig
 import { AirportFareData } from '@/types/cab';
 
 // Cache airport fare data in memory

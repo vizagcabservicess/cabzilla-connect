@@ -1,4 +1,3 @@
-
 import { 
   fetchLocalFare, 
   updateLocalFare as updateLocalFareData,
@@ -18,12 +17,16 @@ import {
   fetchOutstationFare,
   updateOutstationFare as updateOutstationFareData,
   syncOutstationFareTables as syncOutstationFareTablesData,
-  initializeOutstationFareTables as initializeOutstationFareTablesData
+  initializeOutstationFareTables as initializeOutstationFareTablesData,
+  OutstationFareData
 } from './outstationFareService';
 
 import fareStateManager from './FareStateManager';
 import { clearFareCache } from '@/lib/fareCalculationService';
-import { LocalFareData, AirportFareData, OutstationFareData, FareData } from '@/types/cab';
+import { LocalFareData, AirportFareData, FareData } from '@/types/cab';
+
+// Export types for use in components
+export type { LocalFareData, AirportFareData, OutstationFareData, FareData };
 
 /**
  * Update local fare data

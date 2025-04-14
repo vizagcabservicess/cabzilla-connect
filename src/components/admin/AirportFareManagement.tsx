@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
-import { FareData, updateAirportFares, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
+import { updateAirportFare, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
+import { FareData, AirportFareData } from '@/types/cab';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
