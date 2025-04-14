@@ -1,3 +1,4 @@
+
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 import { LocalPackageFare, LocalPackageFaresResponse } from '@/types/api';
 import { getBypassHeaders, getForcedRequestConfig, safeFetch } from '@/config/requestConfig';
@@ -123,6 +124,11 @@ let lastMatrixUpdateTime = Date.now();
 let matrixUpdateCount = 0;
 const MAX_UPDATES_PER_MINUTE = 3;
 
+// In-memory cache for API responses
+let localFaresCache: LocalPackageFaresResponse | null = null;
+let localFaresCacheTimestamp = 0;
+const CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
 // Dictionary of similar cab types to aid in matching
 const cabTypeSynonyms: Record<string, string[]> = {
   'sedan': ['sedan', 'dzire', 'etios', 'amaze', 'swift', 'dzire cng', 'swift_02'],
@@ -134,6 +140,49 @@ const cabTypeSynonyms: Record<string, string[]> = {
 
 // Normalized and lowercased version of the matrix for faster lookups
 let normalizedMatrix: Record<string, Record<string, number>> = {};
+
+// Fetch local package fares from the API
+async function fetchLocalPackageFares(): Promise<LocalPackageFaresResponse> {
+  try {
+    const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+    const url = `${domain}/api/local-package-fares.php?_t=${Date.now()}`;
+    
+    console.log(`Fetching local package fares from ${url}`);
+    
+    const response = await safeFetch(url, getForcedRequestConfig({
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    }));
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Fetched local package fares:', data);
+    
+    if (!data || data.status !== 'success') {
+      throw new Error('Invalid response data from local package fares API');
+    }
+    
+    return data as LocalPackageFaresResponse;
+  } catch (error) {
+    console.error('Error fetching local package fares:', error);
+    // Return a default empty response on error
+    return {
+      status: 'error',
+      fares: {},
+      timestamp: Date.now(),
+      source: 'error',
+      count: 0
+    };
+  }
+}
 
 /**
  * Find the best matching cab type from our pricing matrix
@@ -658,10 +707,11 @@ export async function fetchAndCacheLocalFares(): Promise<LocalPackageFaresRespon
       // Process each fare in the response
       Object.entries(response.fares).forEach(([vehicleId, fare]) => {
         const lowerVehicleId = vehicleId.toLowerCase();
+        const typedFare = fare as LocalPackageFare;
         
         // Update 4hrs-40km package prices
-        if (fare.price4hrs40km > 0 || fare.price_4hr_40km) {
-          const price4hr = fare.price4hrs40km || fare.price_4hr_40km || 0;
+        if (typedFare.price4hrs40km > 0 || typedFare.price_4hr_40km) {
+          const price4hr = typedFare.price4hrs40km || typedFare.price_4hr_40km || 0;
           if (!updatedMatrix['4hrs-40km']) updatedMatrix['4hrs-40km'] = {};
           updatedMatrix['4hrs-40km'][lowerVehicleId] = price4hr;
           
@@ -671,15 +721,15 @@ export async function fetchAndCacheLocalFares(): Promise<LocalPackageFaresRespon
         }
         
         // Update 8hrs-80km package prices
-        if (fare.price8hrs80km > 0 || fare.price_8hr_80km) {
-          const price8hr = fare.price8hrs80km || fare.price_8hr_80km || 0;
+        if (typedFare.price8hrs80km > 0 || typedFare.price_8hr_80km) {
+          const price8hr = typedFare.price8hrs80km || typedFare.price_8hr_80km || 0;
           if (!updatedMatrix['8hrs-80km']) updatedMatrix['8hrs-80km'] = {};
           updatedMatrix['8hrs-80km'][lowerVehicleId] = price8hr;
         }
         
         // Update 10hrs-100km package prices
-        if (fare.price10hrs100km > 0 || fare.price_10hr_100km) {
-          const price10hr = fare.price10hrs100km || fare.price_10hr_100km || 0;
+        if (typedFare.price10hrs100km > 0 || typedFare.price_10hr_100km) {
+          const price10hr = typedFare.price10hrs100km || typedFare.price_10hr_100km || 0;
           if (!updatedMatrix['10hrs-100km']) updatedMatrix['10hrs-100km'] = {};
           updatedMatrix['10hrs-100km'][lowerVehicleId] = price10hr;
         }
@@ -733,12 +783,13 @@ export async function getLocalPackagePriceFromApi(packageId: string, cabType: st
     
     if (response && response.status === 'success' && response.fares) {
       // Find the fare for this cab type
-      const fare = Object.values(response.fares).find(fare => 
-        fare.vehicleId.toLowerCase() === lowerCabType || 
-        fare.id.toLowerCase() === lowerCabType
+      const fareEntry = Object.entries(response.fares).find(([id, _]) => 
+        id.toLowerCase() === lowerCabType
       );
       
-      if (fare) {
+      if (fareEntry && fareEntry[1]) {
+        const fare = fareEntry[1] as LocalPackageFare;
+        
         // Return the appropriate package price
         if (normalizedPackageId === '4hrs-40km' || normalizedPackageId === '04hrs-40km') {
           const price = fare.price4hrs40km || fare.price_4hr_40km || 0;
