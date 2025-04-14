@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/index';
@@ -178,9 +179,8 @@ export const BookingSummary = ({
         const localFare = await fareStateManager.getLocalFareForVehicle(cab.id);
         
         if (localFare) {
-          // Driver allowance from the database, with fallback
-          // Now safely accessing driverAllowance with optional chaining since we added it to the interface
-          const driverAllowanceAmount = localFare.driverAllowance || 250;
+          // Using optional chaining to safely access the driverAllowance property
+          const driverAllowanceAmount = localFare?.driverAllowance || 250;
           setDriverAllowance(driverAllowanceAmount);
           
           // For local packages, base fare is the total minus driver allowance

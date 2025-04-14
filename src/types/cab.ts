@@ -108,7 +108,7 @@ export interface LocalFare {
   price10hrs100km: number; 
   priceExtraKm: number;
   priceExtraHour: number;
-  driverAllowance?: number;
+  driverAllowance?: number;  // This property is now explicitly defined here
   package4hr40km?: number;
   package8hr80km?: number;
   package10hr100km?: number;
@@ -194,3 +194,4 @@ export interface OutstationFareData {
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
 }
+
