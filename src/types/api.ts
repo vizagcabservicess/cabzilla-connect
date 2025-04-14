@@ -278,3 +278,41 @@ export interface BookingUpdateRequest {
   pickupDate?: string;
   status?: BookingStatus;
 }
+
+/**
+ * Response from local-package-fares.php endpoint
+ */
+export interface LocalPackageFaresResponse {
+  status: string;
+  fares: Record<string, LocalPackageFare>;
+  timestamp: number;
+  source: string;
+  vehicle_id?: string;
+  count: number;
+}
+
+/**
+ * Individual vehicle fare data for local packages
+ */
+export interface LocalPackageFare {
+  id: string;
+  vehicleId: string;
+  name: string;
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+  // Also include original column names for compatibility
+  price_4hr_40km?: number;
+  price_8hr_80km?: number;
+  price_10hr_100km?: number;
+  price_extra_km?: number;
+  price_extra_hour?: number;
+  // Package aliases
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+}

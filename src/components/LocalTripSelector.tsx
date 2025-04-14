@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import { HourlyPackage } from '@/types/cab';
-import { hourlyPackages } from '@/lib/packageData';
+import { hourlyPackages, fetchAndCacheLocalFares } from '@/lib/packageData';
 import { toast } from 'sonner';
 
 interface LocalTripSelectorProps {
@@ -109,53 +109,51 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       }));
     }
     
-    // Function to refresh packages and force UI update
-    const refreshPackages = () => {
-      console.log('LocalTripSelector: Refreshing package data');
-      const timestamp = Date.now();
-      setLastUpdateTime(timestamp);
-      
-      // Force a rerender to ensure we show fresh data
-      setPackages([...sortedPackages]);
-      
-      // If there's a selected package, re-announce it to trigger fare recalculation
-      if (selectedPackage) {
-        console.log('Re-announcing selected package:', selectedPackage);
-        window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-          detail: { packageId: selectedPackage, timestamp }
-        }));
+    // Function to refresh packages from the API
+    const refreshPackagesFromApi = async () => {
+      console.log('LocalTripSelector: Refreshing package data from API');
+      try {
+        // Fetch up-to-date fare data from the API
+        await fetchAndCacheLocalFares();
+        
+        const timestamp = Date.now();
+        setLastUpdateTime(timestamp);
+        
+        // Dispatch an event to trigger fare recalculation
+        if (selectedPackage) {
+          console.log('Re-announcing selected package:', selectedPackage);
+          window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+            detail: { packageId: selectedPackage, timestamp }
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to refresh package data from API:', error);
       }
     };
     
-    // Listen for local fare updates event and refresh packages
+    // Initial fetch from API
+    refreshPackagesFromApi();
+    
+    // Setup event listeners for fare updates
     const handleLocalFaresUpdated = () => {
       console.log('LocalTripSelector detected local fares updated event, refreshing packages');
-      refreshPackages();
+      refreshPackagesFromApi();
     };
     
-    // Listen for fare cache cleared event
-    const handleFareCacheCleared = () => {
-      console.log('LocalTripSelector detected fare cache cleared event, refreshing packages');
-      refreshPackages();
-    };
-    
-    // Listen for force recalculation event
     const handleForceRecalculation = () => {
       console.log('LocalTripSelector detected force recalculation event, refreshing packages');
-      refreshPackages();
+      refreshPackagesFromApi();
     };
     
-    // Setup all event listeners
+    // Set up all event listeners
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
-    window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
     window.addEventListener('force-fare-recalculation', handleForceRecalculation);
     
     // Set up periodic refresh (every 60 seconds)
-    const refreshInterval = setInterval(refreshPackages, 60000);
+    const refreshInterval = setInterval(refreshPackagesFromApi, 60000);
     
     return () => {
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
-      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
       clearInterval(refreshInterval);
     };

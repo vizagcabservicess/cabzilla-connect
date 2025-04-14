@@ -146,3 +146,36 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   // If we got here, all attempts failed
   throw lastError || new Error('Failed to fetch after multiple attempts');
 };
+
+/**
+ * Fetch local package fares directly from the API
+ */
+export const fetchLocalPackageFares = async (vehicleId?: string): Promise<any> => {
+  try {
+    const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+    const endpoint = `${domain}/api/local-package-fares.php`;
+    
+    // Add vehicleId parameter if provided
+    const url = vehicleId 
+      ? `${endpoint}?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}` 
+      : `${endpoint}?_t=${Date.now()}`;
+    
+    const response = await safeFetch(url, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders(),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching local package fares:', error);
+    throw error;
+  }
+};
