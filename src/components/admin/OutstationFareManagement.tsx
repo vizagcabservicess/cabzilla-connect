@@ -55,7 +55,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       try {
         const data = await fetchOutstationFare(selectedVehicle);
         if (data) {
-          // Use actual data from the database with no fallbacks
           setFareData({
             vehicleId: selectedVehicle,
             basePrice: data.basePrice || 0,
@@ -68,10 +67,8 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             oneWayPricePerKm: data.pricePerKm || 0
           });
           
-          // Log the retrieved data for debugging
           console.log(`Retrieved outstation fare data for ${selectedVehicle}:`, data);
         } else {
-          // If no data is found, set all values to 0 (no defaults)
           setFareData({
             vehicleId: selectedVehicle,
             basePrice: 0,
@@ -84,7 +81,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
             oneWayPricePerKm: 0
           });
           
-          // Log the error for debugging
           console.error(`No outstation fare data found for ${selectedVehicle}`);
           setError(`No outstation fare data found for ${selectedVehicle}. Please enter values and save.`);
         }
@@ -120,7 +116,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
     setError(null);
 
     try {
-      // Ensure we send all required fields to the service
       const serviceData: ServiceOutstationFareData = {
         vehicleId: fareData.vehicleId,
         basePrice: fareData.oneWayBasePrice || fareData.basePrice,
@@ -135,7 +130,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       await updateOutstationFare(serviceData);
       toast.success('Outstation fares updated successfully!');
       
-      // Force refresh the fare data after saving
       setTimeout(async () => {
         const refreshedData = await fetchOutstationFare(selectedVehicle);
         console.log('Refreshed outstation fare data after save:', refreshedData);
@@ -156,7 +150,6 @@ const OutstationFareManagement: React.FC<OutstationFareManagementProps> = ({ veh
       await syncOutstationFareTables();
       toast.success('Outstation fare tables synced successfully!');
       
-      // After sync, reload the data for the currently selected vehicle
       if (selectedVehicle) {
         const refreshedData = await fetchOutstationFare(selectedVehicle);
         if (refreshedData) {
