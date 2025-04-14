@@ -107,25 +107,22 @@ export interface LocalFare {
   price10hrs100km: number; 
   priceExtraKm: number;
   priceExtraHour: number;
-  driverAllowance: number;  // Added this missing property
-  // Alias properties for compatibility with different component usages
-  package4hr40km?: number;  // Alias for price4hrs40km
-  package8hr80km?: number;  // Alias for price8hrs80km
-  package10hr100km?: number;  // Alias for price10hrs100km
-  extraKmRate?: number;  // Alias for priceExtraKm
-  extraHourRate?: number;  // Alias for priceExtraHour
-  // Additional aliases for database column name variations
-  local_package_4hr?: number;  // For vehicle_pricing table
-  local_package_8hr?: number;  // For vehicle_pricing table
-  local_package_10hr?: number; // For vehicle_pricing table
-  extra_km_charge?: number;    // For vehicle_pricing table
-  extra_hour_charge?: number;  // For vehicle_pricing table
-  // Raw database column names from local_package_fares
-  price_4hrs_40km?: number;    // From local_package_fares table
-  price_8hrs_80km?: number;    // From local_package_fares table
-  price_10hrs_100km?: number;  // From local_package_fares table
-  price_extra_km?: number;     // From local_package_fares table
-  price_extra_hour?: number;   // From local_package_fares table
+  driverAllowance: number;
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  local_package_4hr?: number;
+  local_package_8hr?: number;
+  local_package_10hr?: number;
+  extra_km_charge?: number;
+  extra_hour_charge?: number;
+  price_4hrs_40km?: number;
+  price_8hrs_80km?: number;
+  price_10hrs_100km?: number;
+  price_extra_km?: number;
+  price_extra_hour?: number;
 }
 
 export interface AirportFare {
@@ -135,10 +132,10 @@ export interface AirportFare {
   pricePerKm?: number;
   pickupPrice?: number;
   dropPrice?: number;
-  tier1Price?: number;  // <= 10km
-  tier2Price?: number;  // 11-20km
-  tier3Price?: number;  // 21-30km
-  tier4Price?: number;  // > 30km
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
   extraKmCharge?: number;
   nightCharges?: number;
   extraWaitingCharges?: number;
@@ -189,10 +186,9 @@ export interface OutstationFareData {
   basePrice: number;
   pricePerKm: number;
   roundTripPricePerKm: number;
-  minDistance: number;  // Added this missing property
+  minDistance: number;
   driverAllowance: number;
   nightHaltCharge: number;
-  // Additional properties for the component
   roundTripBasePrice?: number;
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
