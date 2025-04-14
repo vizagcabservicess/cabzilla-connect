@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
 import { updateAirportFare, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
-import { AirportFareData } from '@/types/cab'; // Import AirportFareData directly
+import { FareData, AirportFareData } from '@/types/cab';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
@@ -261,7 +260,6 @@ const AirportFareManagement: React.FC = () => {
       return;
     }
 
-    // Create a proper AirportFareData object with all required fields
     const fareToSave: AirportFareData = {
       vehicleId: selectedVehicleId,
       vehicle_id: selectedVehicleId,
