@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
 import { updateAirportFare, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
-import { FareData, AirportFareData } from '@/types/cab';
+import { AirportFareData } from '@/types/cab'; // Import AirportFareData directly
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
@@ -261,8 +261,8 @@ const AirportFareManagement: React.FC = () => {
       return;
     }
 
-    const fareToSave: FareData = {
-      ...fares,
+    // Create a proper AirportFareData object with all required fields
+    const fareToSave: AirportFareData = {
       vehicleId: selectedVehicleId,
       vehicle_id: selectedVehicleId,
       basePrice: parseFloat(String(fares.basePrice ?? 0)),
