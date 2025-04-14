@@ -1,6 +1,6 @@
 
 <?php
-// direct-airport-fares.php - Direct access endpoint for airport fares
+// direct-airport-fares.php - Redirect to the admin endpoint for backward compatibility
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -16,109 +16,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Get vehicle ID from query string
-$vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
-
-// If vehicle ID is not in query string, check for it in JSON body for POST requests
-if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : (isset($data['vehicle_id']) ? $data['vehicle_id'] : null);
+// Create log directory
+$logDir = __DIR__ . '/logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0777, true);
 }
 
-// If vehicle ID is not in JSON body, check POST data
-if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
-}
+$logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
 
-// Sample fare data based on vehicle type
-$airportFares = [];
+// Log the redirect for debugging
+file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
 
-// If a specific vehicle ID is provided, return only that vehicle's fare
-if ($vehicleId) {
-    switch ($vehicleId) {
-        case 'sedan':
-            $airportFares[] = [
-                'vehicleId' => 'sedan',
-                'tier1Price' => 800,
-                'tier2Price' => 1200,
-                'tier3Price' => 1600,
-                'tier4Price' => 2000,
-                'extraKmCharge' => 12
-            ];
-            break;
-        case 'ertiga':
-            $airportFares[] = [
-                'vehicleId' => 'ertiga',
-                'tier1Price' => 1000,
-                'tier2Price' => 1500,
-                'tier3Price' => 2000,
-                'tier4Price' => 2500,
-                'extraKmCharge' => 15
-            ];
-            break;
-        case 'innova_crysta':
-            $airportFares[] = [
-                'vehicleId' => 'innova_crysta',
-                'tier1Price' => 1200,
-                'tier2Price' => 1800,
-                'tier3Price' => 2400,
-                'tier4Price' => 3000,
-                'extraKmCharge' => 18
-            ];
-            break;
-        default:
-            // For unknown vehicles, return empty fare structure
-            $airportFares[] = [
-                'vehicleId' => $vehicleId,
-                'tier1Price' => 0,
-                'tier2Price' => 0,
-                'tier3Price' => 0,
-                'tier4Price' => 0,
-                'extraKmCharge' => 0
-            ];
-            break;
+// Capture URL parameters
+file_put_contents($logFile, "[$timestamp] URL parameters: " . json_encode($_GET) . "\n", FILE_APPEND);
+
+// Make sure we have a vehicle ID from any possible source before forwarding
+$vehicleId = null;
+$possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type', 'id'];
+
+// First check URL parameters (highest priority)
+foreach ($possibleKeys as $key) {
+    if (isset($_GET[$key]) && !empty($_GET[$key])) {
+        $vehicleId = $_GET[$key];
+        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter $key: $vehicleId\n", FILE_APPEND);
+        break;
     }
-} else {
-    // Return fares for all vehicles
-    $airportFares = [
-        [
-            'vehicleId' => 'sedan',
-            'tier1Price' => 800,
-            'tier2Price' => 1200,
-            'tier3Price' => 1600,
-            'tier4Price' => 2000,
-            'extraKmCharge' => 12
-        ],
-        [
-            'vehicleId' => 'ertiga',
-            'tier1Price' => 1000,
-            'tier2Price' => 1500,
-            'tier3Price' => 2000,
-            'tier4Price' => 2500,
-            'extraKmCharge' => 15
-        ],
-        [
-            'vehicleId' => 'innova_crysta',
-            'tier1Price' => 1200,
-            'tier2Price' => 1800,
-            'tier3Price' => 2400,
-            'tier4Price' => 3000,
-            'extraKmCharge' => 18
-        ],
-        [
-            'vehicleId' => 'tempo_traveller',
-            'tier1Price' => 2000,
-            'tier2Price' => 2500,
-            'tier3Price' => 3000,
-            'tier4Price' => 4000,
-            'extraKmCharge' => 25
-        ]
-    ];
 }
 
-// Return JSON response
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Airport transfer fares retrieved successfully',
-    'fares' => $airportFares
-]);
+// Clean up vehicle ID if it has a prefix like 'item-'
+if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+    file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
+}
+
+// If we found a vehicle ID, add it to $_GET for the forwarded request
+if ($vehicleId) {
+    $_GET['vehicleId'] = $vehicleId;
+    $_GET['vehicle_id'] = $vehicleId;
+    file_put_contents($logFile, "[$timestamp] Using vehicleId: " . $vehicleId . "\n", FILE_APPEND);
+    
+    // If this is a GET request, append vehicle_id to the query string
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && strpos($_SERVER['REQUEST_URI'], 'vehicle_id=') === false) {
+        $_SERVER['QUERY_STRING'] = ($_SERVER['QUERY_STRING'] ? $_SERVER['QUERY_STRING'] . '&' : '') . 'vehicle_id=' . urlencode($vehicleId);
+        $_SERVER['REQUEST_URI'] = strtok($_SERVER['REQUEST_URI'], '?') . '?' . $_SERVER['QUERY_STRING'];
+        file_put_contents($logFile, "[$timestamp] Updated query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
+    }
+}
+
+// Set the X-Force-Refresh header to ensure we get fresh data
+$_SERVER['HTTP_X_FORCE_REFRESH'] = 'true';
+// Set admin mode for direct access to tables
+$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+// Set debug mode for extra output
+$_SERVER['HTTP_X_DEBUG'] = 'true';
+
+// Force cache-busting 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Forward the request to the admin endpoint
+require_once __DIR__ . '/admin/direct-airport-fares.php';

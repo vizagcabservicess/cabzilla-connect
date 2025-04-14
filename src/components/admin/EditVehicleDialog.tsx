@@ -39,12 +39,12 @@ export function EditVehicleDialog({
     if (initialVehicle && open) {
       console.log('Initial vehicle data received:', initialVehicle);
       
-      const numCapacity = parseNumericValue(initialVehicle.capacity);
-      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity);
-      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price);
-      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm);
-      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance);
-      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge);
+      const numCapacity = parseNumericValue(initialVehicle.capacity, 4);
+      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity, 2);
+      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price, 0);
+      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm, 0);
+      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance, 250);
+      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge, 700);
       
       const vehicleAmenities = parseAmenities(initialVehicle.amenities);
       
@@ -79,6 +79,7 @@ export function EditVehicleDialog({
       setIsLoading(true);
       toast.loading("Attempting direct update via form submission...");
       
+      // Create FormData for more reliable PHP handling
       const formData = formatDataForMultipart({
         ...vehicle,
         id: vehicle.id || vehicle.vehicleId,
@@ -119,6 +120,7 @@ export function EditVehicleDialog({
       console.error("Direct update failed:", error);
       toast.error(`Direct update failed: ${error.message}`);
       
+      // Continue with regular update as fallback
       handleSubmit(new Event('submit') as any);
     } finally {
       setIsLoading(false);
@@ -237,17 +239,6 @@ export function EditVehicleDialog({
   const handleRetry = () => {
     setServerError(null);
     handleSubmit(new Event('submit') as any);
-  };
-
-  const handleSave = async () => {
-    // Function implementation that should properly call the relevant functions
-    // with the correct number of arguments
-
-    // Example of corrected function calls:
-    // From:
-    // updateLocalFare(vehicleId, localFareData);
-    // To:
-    // updateLocalFare(localFareData);
   };
 
   return (
