@@ -78,14 +78,14 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // Try all available API endpoints in sequence until one works
-    // First try directly with the vizagup.com domain
+    // IMPORTANT FIX: Use proper URL construction without /api duplication
     const apiEndpoints = [
-      `${getApiUrl('api')}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `${getApiUrl('api')}/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `${getApiUrl('api')}/api/admin/local-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
+      `${getApiUrl('')}/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
+      `${getApiUrl('')}/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
+      `${getApiUrl('')}/admin/local-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
     ];
     
-    // Also try absolute URLs as fallbacks
+    // Also try absolute URLs with vizagup.com domain as fallbacks
     if (process.env.NODE_ENV === 'production') {
       apiEndpoints.push(
         `https://vizagup.com/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
@@ -368,10 +368,11 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
     for (const vehicleId of vehicleIds) {
       try {
         // Try multiple API endpoints for each vehicle
+        // IMPORTANT FIX: Use proper URL construction without /api duplication
         const apiEndpoints = [
-          `${getApiUrl('api')}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${vehicleId}`,
-          `${getApiUrl('api')}/api/local-package-fares.php?vehicle_id=${vehicleId}`,
-          `${getApiUrl('api')}/api/admin/local-fares.php?vehicle_id=${vehicleId}`
+          `${getApiUrl('')}/user/direct-booking-data.php?check_sync=true&vehicle_id=${vehicleId}`,
+          `${getApiUrl('')}/local-package-fares.php?vehicle_id=${vehicleId}`,
+          `${getApiUrl('')}/admin/local-fares.php?vehicle_id=${vehicleId}`
         ];
         
         let success = false;
