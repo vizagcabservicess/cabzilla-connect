@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +55,19 @@ export const CabList: React.FC<CabListProps> = ({
         const price = Number(response.data.price);
         if (price > 0) {
           console.log(`CabList: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          
+          // Broadcast the source of this fare for debugging and consistency tracking
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-booking-data',
+              apiUrl: apiUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
           return price;
         }
       } else if (response.data && response.data.data) {
@@ -71,11 +85,58 @@ export const CabList: React.FC<CabListProps> = ({
         
         if (price > 0) {
           console.log(`CabList: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-booking-data-alternate',
+              apiUrl: apiUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
           return price;
         }
       }
       
-      // If primary API fails, try fallback API
+      // If primary API fails, try local-package-fares.php
+      const localFaresUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${packageId}`);
+      
+      console.log(`CabList: Trying local-package-fares API for ${normalizedCabId} - ${packageId}`);
+      const localFaresResponse = await axios.get(localFaresUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (localFaresResponse.data && localFaresResponse.data.status === 'success' && localFaresResponse.data.price) {
+        const price = Number(localFaresResponse.data.price);
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from local-package-fares API: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'local-package-fares',
+              apiUrl: localFaresUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
+          return price;
+        }
+      }
+      
+      // If that fails too, try fallback API
       const fallbackApiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
       
       console.log(`CabList: Trying fallback API for ${normalizedCabId}`);
@@ -102,6 +163,19 @@ export const CabList: React.FC<CabListProps> = ({
         
         if (price > 0) {
           console.log(`CabList: Retrieved fare from fallback API: ₹${price} for ${normalizedCabId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-local-fares',
+              apiUrl: fallbackApiUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
           return price;
         }
       }

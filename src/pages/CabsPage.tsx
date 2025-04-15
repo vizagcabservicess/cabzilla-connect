@@ -272,18 +272,12 @@ const CabsPage = () => {
 
   // Handle fare updates from global events
   useEffect(() => {
-    const handleGlobalFareUpdate = (event: Event) => {
+    const handleFareUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
-      if (customEvent.detail && 
-          selectedCab && 
-          customEvent.detail.cabId && 
-          selectedCab.id.toLowerCase().replace(/\s+/g, '_') === customEvent.detail.cabId.toLowerCase() && 
-          customEvent.detail.fare > 0) {
-        
-        console.log(`CabsPage: Received global fare update: ${customEvent.detail.fare} for ${customEvent.detail.cabId}`);
-        
-        // Only update if the fare is significantly different
-        if (Math.abs(totalPrice - customEvent.detail.fare) > 10) {
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare !== undefined) {
+        if (selectedCab && customEvent.detail.cabId === selectedCab.id.toLowerCase().replace(/\s+/g, '_')) {
+          console.log(`CabsPage: Received fare update for selected cab: ${customEvent.detail.fare} from ${customEvent.detail.source || 'unknown'}`);
+          
           setTotalPrice(customEvent.detail.fare);
           
           // Show a notification to make the price change more visible
@@ -297,35 +291,31 @@ const CabsPage = () => {
       }
     };
     
-    const handleBookingSummaryUpdate = (event: Event) => {
+    const handleDatabaseFareUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
-      if (customEvent.detail && 
-          selectedCab && 
-          customEvent.detail.cabId && 
-          selectedCab.id.toLowerCase().replace(/\s+/g, '_') === customEvent.detail.cabId.toLowerCase() && 
-          customEvent.detail.fare > 0) {
-        
-        console.log(`CabsPage: Received booking summary update: ${customEvent.detail.fare} for ${customEvent.detail.cabId}`);
-        
-        // Force price update regardless of how different it is from the current price
-        setTotalPrice(customEvent.detail.fare);
-        
-        // Show a notification for significant price changes
-        if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
-          sonnerToast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
-            id: `price-update-${customEvent.detail.cabId}`,
-            duration: 3000
-          });
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare !== undefined) {
+        if (selectedCab && customEvent.detail.cabId === selectedCab.id.toLowerCase().replace(/\s+/g, '_')) {
+          console.log(`CabsPage: Received database fare update for selected cab: ${customEvent.detail.fare} from ${customEvent.detail.source || 'unknown'}`);
+          
+          setTotalPrice(customEvent.detail.fare);
+          
+          // Show a notification for significant price changes
+          if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
+            sonnerToast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
+              id: `price-update-${customEvent.detail.cabId}`,
+              duration: 3000
+            });
+          }
         }
       }
     };
     
-    window.addEventListener('global-fare-update', handleGlobalFareUpdate);
-    window.addEventListener('booking-summary-update', handleBookingSummaryUpdate);
+    window.addEventListener('global-fare-update', handleFareUpdate);
+    window.addEventListener('booking-summary-update', handleDatabaseFareUpdate);
     
     return () => {
-      window.removeEventListener('global-fare-update', handleGlobalFareUpdate);
-      window.removeEventListener('booking-summary-update', handleBookingSummaryUpdate);
+      window.removeEventListener('global-fare-update', handleFareUpdate);
+      window.removeEventListener('booking-summary-update', handleDatabaseFareUpdate);
     };
   }, [selectedCab, totalPrice]);
 

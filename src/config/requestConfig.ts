@@ -150,15 +150,29 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
 /**
  * Fetch local package fares directly from the API
  */
-export const fetchLocalPackageFares = async (vehicleId?: string): Promise<any> => {
+export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: string): Promise<any> => {
   try {
     const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-    const endpoint = `${domain}/api/local-package-fares.php`;
     
-    // Add vehicleId parameter if provided
-    const url = vehicleId 
-      ? `${endpoint}?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}` 
-      : `${endpoint}?_t=${Date.now()}`;
+    // Properly construct the URL with query parameters
+    let endpoint = `${domain}/api/local-package-fares.php`;
+    let queryParams = [];
+    
+    if (vehicleId) {
+      queryParams.push(`vehicle_id=${encodeURIComponent(vehicleId)}`);
+    }
+    
+    if (packageId) {
+      queryParams.push(`package_id=${encodeURIComponent(packageId)}`);
+    }
+    
+    // Add timestamp to bust cache
+    queryParams.push(`_t=${Date.now()}`);
+    
+    // Construct the final URL
+    const url = `${endpoint}?${queryParams.join('&')}`;
+    
+    console.log(`Fetching local package fares from: ${url}`);
     
     const response = await safeFetch(url, {
       method: 'GET',
@@ -169,6 +183,8 @@ export const fetchLocalPackageFares = async (vehicleId?: string): Promise<any> =
     });
     
     if (!response.ok) {
+      console.error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
+      console.log('Response text:', await response.text());
       throw new Error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
     }
     
@@ -179,3 +195,119 @@ export const fetchLocalPackageFares = async (vehicleId?: string): Promise<any> =
     throw error;
   }
 };
+
+// Safe version of local package fares fetch that never throws
+export const safeLocalPackageFares = async (vehicleId?: string, packageId?: string): Promise<any> => {
+  try {
+    return await fetchLocalPackageFares(vehicleId, packageId);
+  } catch (error) {
+    console.warn('Error in safeLocalPackageFares:', error);
+    
+    // Return a fallback structure with dynamically calculated prices
+    const packagePrices = calculateDynamicPrices(vehicleId || 'sedan');
+    
+    if (packageId) {
+      // If a specific package was requested, return only that
+      let selectedPackage = null;
+      if (packageId.includes('4hrs-40km')) {
+        selectedPackage = { price: packagePrices['4hrs-40km'], name: '4 Hours Package (40km)' };
+      } else if (packageId.includes('8hrs-80km')) {
+        selectedPackage = { price: packagePrices['8hrs-80km'], name: '8 Hours Package (80km)' };
+      } else if (packageId.includes('10hrs-100km')) {
+        selectedPackage = { price: packagePrices['10hrs-100km'], name: '10 Hours Package (100km)' };
+      }
+      
+      if (selectedPackage) {
+        return {
+          status: 'success',
+          vehicleId: vehicleId,
+          packageId: packageId,
+          packageName: selectedPackage.name,
+          baseFare: selectedPackage.price,
+          price: selectedPackage.price,
+          source: 'dynamic-fallback',
+          timestamp: Date.now()
+        };
+      }
+    }
+    
+    // Return all fares for this vehicle
+    return {
+      status: 'success',
+      fares: {
+        [vehicleId || 'sedan']: {
+          id: vehicleId || 'sedan',
+          vehicleId: vehicleId || 'sedan',
+          name: vehicleId ? vehicleId.charAt(0).toUpperCase() + vehicleId.slice(1).replace(/_/g, ' ') : 'Sedan',
+          price4hrs40km: packagePrices['4hrs-40km'],
+          price8hrs80km: packagePrices['8hrs-80km'],
+          price10hrs100km: packagePrices['10hrs-100km'],
+          priceExtraKm: packagePrices.extraKm,
+          priceExtraHour: packagePrices.extraHour,
+        }
+      },
+      count: 1,
+      timestamp: Date.now(),
+      source: 'dynamic-fallback'
+    };
+  }
+};
+
+// Dynamic price calculation (matches the one in local-package-fares.php)
+function calculateDynamicPrices(vehicleId: string): Record<string, number> {
+  const basePrices: Record<string, Record<string, number>> = {
+    'sedan': {
+      '4hrs-40km': 2400,
+      '8hrs-80km': 3000,
+      '10hrs-100km': 3500,
+      'extraKm': 14,
+      'extraHour': 300
+    },
+    'ertiga': {
+      '4hrs-40km': 2800,
+      '8hrs-80km': 3500,
+      '10hrs-100km': 4000,
+      'extraKm': 18,
+      'extraHour': 350
+    },
+    'innova_crysta': {
+      '4hrs-40km': 3200,
+      '8hrs-80km': 4000,
+      '10hrs-100km': 4500,
+      'extraKm': 20,
+      'extraHour': 400
+    },
+    'innova_hycross': {
+      '4hrs-40km': 3600,
+      '8hrs-80km': 4500,
+      '10hrs-100km': 5000,
+      'extraKm': 22,
+      'extraHour': 450
+    },
+    'mpv': {
+      '4hrs-40km': 3600,
+      '8hrs-80km': 4500,
+      '10hrs-100km': 5000,
+      'extraKm': 22,
+      'extraHour': 450
+    }
+  };
+  
+  // Normalize vehicle ID 
+  const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+  
+  // Try direct match
+  if (basePrices[normalizedVehicleId]) {
+    return basePrices[normalizedVehicleId];
+  }
+  
+  // Try partial match
+  for (const [key, prices] of Object.entries(basePrices)) {
+    if (normalizedVehicleId.includes(key)) {
+      return prices;
+    }
+  }
+  
+  // Default to sedan
+  return basePrices['sedan'];
+}
