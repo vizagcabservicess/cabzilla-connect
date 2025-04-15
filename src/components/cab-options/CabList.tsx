@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
+import { toast } from 'sonner';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -35,12 +37,12 @@ export const CabList: React.FC<CabListProps> = ({
     if (!tripType || tripType !== 'local' || !packageId) return null;
     
     try {
+      // First try with direct-booking-data.php
       const normalizedCabId = cabId.toLowerCase().replace(/\s+/g, '_');
-      const apiUrl = getApiUrl() || '';
-      const endpoint = `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`;
+      const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${packageId}`);
       
-      console.log(`CabList: Directly fetching fare from database for ${normalizedCabId}`);
-      const response = await axios.get(endpoint, {
+      console.log(`CabList: Fetching fare from primary API for ${normalizedCabId} - ${packageId}`);
+      const response = await axios.get(apiUrl, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
@@ -49,8 +51,46 @@ export const CabList: React.FC<CabListProps> = ({
         timeout: 5000
       });
       
-      if (response.data && response.data.fares && Array.isArray(response.data.fares) && response.data.fares.length > 0) {
-        const fareData = response.data.fares[0];
+      if (response.data && response.data.status === 'success' && response.data.price) {
+        const price = Number(response.data.price);
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          return price;
+        }
+      } else if (response.data && response.data.data) {
+        // Handle alternative response format
+        const data = response.data.data;
+        let price = 0;
+        
+        if (packageId.includes('4hrs-40km') && data.price4hrs40km) {
+          price = Number(data.price4hrs40km);
+        } else if (packageId.includes('8hrs-80km') && data.price8hrs80km) {
+          price = Number(data.price8hrs80km);
+        } else if (packageId.includes('10hrs-100km') && data.price10hrs100km) {
+          price = Number(data.price10hrs100km);
+        }
+        
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          return price;
+        }
+      }
+      
+      // If primary API fails, try fallback API
+      const fallbackApiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+      
+      console.log(`CabList: Trying fallback API for ${normalizedCabId}`);
+      const fallbackResponse = await axios.get(fallbackApiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (fallbackResponse.data && fallbackResponse.data.fares && Array.isArray(fallbackResponse.data.fares) && fallbackResponse.data.fares.length > 0) {
+        const fareData = fallbackResponse.data.fares[0];
         
         let price = 0;
         if (packageId.includes('4hrs-40km')) {
@@ -62,10 +102,11 @@ export const CabList: React.FC<CabListProps> = ({
         }
         
         if (price > 0) {
-          console.log(`CabList: Retrieved fare directly from database API for ${normalizedCabId}: ₹${price}`);
+          console.log(`CabList: Retrieved fare from fallback API: ₹${price} for ${normalizedCabId}`);
           return price;
         }
       }
+      
       return null;
     } catch (error) {
       console.error(`CabList: Error fetching fare for ${cabId}:`, error);
@@ -83,6 +124,7 @@ export const CabList: React.FC<CabListProps> = ({
               [selectedCabId.toLowerCase().replace(/\s+/g, '_')]: price
             }));
             
+            // Broadcast to ensure other components use the same price
             window.dispatchEvent(new CustomEvent('fare-calculated', {
               detail: {
                 cabId: selectedCabId.toLowerCase().replace(/\s+/g, '_'),
@@ -90,6 +132,18 @@ export const CabList: React.FC<CabListProps> = ({
                 calculated: true,
                 fare: price,
                 packageId: hourlyPackage,
+                source: 'database-direct-cablist',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Also send a global fare update for all components
+            window.dispatchEvent(new CustomEvent('global-fare-update', {
+              detail: {
+                cabId: selectedCabId.toLowerCase().replace(/\s+/g, '_'),
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: price,
                 source: 'database-direct-cablist',
                 timestamp: Date.now()
               }
@@ -107,6 +161,24 @@ export const CabList: React.FC<CabListProps> = ({
         
         if (customEvent.detail.tripType === tripType) {
           console.log(`CabList: Updating fare for ${cabId} to ${fare} from event (source: ${source || 'unknown'})`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: fare
+          }));
+          
+          setLastFareUpdate(Date.now());
+        }
+      }
+    };
+    
+    const handleGlobalFareUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, source } = customEvent.detail;
+        
+        if (!customEvent.detail.tripType || customEvent.detail.tripType === tripType) {
+          console.log(`CabList: Received global fare update: ${fare} for ${cabId} (source: ${source || 'unknown'})`);
           
           setLocalFares(prev => ({
             ...prev,
@@ -138,32 +210,48 @@ export const CabList: React.FC<CabListProps> = ({
     
     const handleBookingSummaryFareUpdated = (event: Event) => {
       const customEvent = event as CustomEvent;
-      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.updatedFare) {
-        const { cabId, updatedFare, tripType: eventTripType } = customEvent.detail;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, tripType: eventTripType } = customEvent.detail;
         
         if (eventTripType === tripType) {
-          console.log(`CabList: Updating fare from booking summary for ${cabId}: ${updatedFare}`);
+          console.log(`CabList: Updating fare from booking summary for ${cabId}: ${fare}`);
           
           setLocalFares(prev => ({
             ...prev,
-            [cabId]: updatedFare
+            [cabId]: fare
           }));
           
           setLastFareUpdate(Date.now());
+          
+          // If we're getting frequent price updates for a cab that's different from what we had,
+          // inform the user
+          if (cabId === selectedCabId?.toLowerCase().replace(/\s+/g, '_')) {
+            const selectedCabFare = cabFares[cabId];
+            if (Math.abs(selectedCabFare - fare) > 100) {
+              toast.info(`Price updated: ₹${fare}`, {
+                id: `price-update-${cabId}`,
+                duration: 3000
+              });
+            }
+          }
         }
       }
     };
     
-    window.addEventListener('fare-calculated', handleFareCalculated);
-    window.addEventListener('fare-sync-required', handleFareSyncRequired);
-    window.addEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated);
+    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
+    window.addEventListener('global-fare-update', handleGlobalFareUpdate as EventListener);
+    window.addEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
+    window.addEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
+    window.addEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
     
     return () => {
-      window.removeEventListener('fare-calculated', handleFareCalculated);
-      window.removeEventListener('fare-sync-required', handleFareSyncRequired);
-      window.removeEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated);
+      window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
+      window.removeEventListener('global-fare-update', handleGlobalFareUpdate as EventListener);
+      window.removeEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
+      window.removeEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
+      window.removeEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
     };
-  }, [tripType]);
+  }, [tripType, selectedCabId, cabFares]);
   
   useEffect(() => {
     setLocalFares(cabFares);
@@ -181,6 +269,18 @@ export const CabList: React.FC<CabListProps> = ({
               setLocalFares(prev => ({
                 ...prev,
                 [cab.id.toLowerCase().replace(/\s+/g, '_')]: price
+              }));
+              
+              // Broadcast the prices to ensure consistency across components
+              window.dispatchEvent(new CustomEvent('global-fare-update', {
+                detail: {
+                  cabId: cab.id.toLowerCase().replace(/\s+/g, '_'),
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  source: 'database-direct-cablist-prefetch',
+                  timestamp: Date.now()
+                }
               }));
             }
           } catch (error) {
@@ -212,7 +312,7 @@ export const CabList: React.FC<CabListProps> = ({
       {cabTypes.map((cab) => {
         const isSelected = selectedCabId === cab.id;
         const cabId = cab.id.toLowerCase().replace(/\s+/g, '_');
-        const cabFare = localFares[cabId] || cabFares[cab.id] || 0;
+        const cabFare = localFares[cabId] || localFares[cab.id] || cabFares[cabId] || cabFares[cab.id] || 0;
         const hasError = cabErrors[cab.id];
         
         return (

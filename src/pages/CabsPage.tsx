@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -34,6 +33,7 @@ import { Check, MapPin } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { getApiUrl } from "@/config/api";
+import { toast } from "sonner";
 
 const CabsPage = () => {
   const navigate = useNavigate();
@@ -281,18 +281,53 @@ const CabsPage = () => {
           customEvent.detail.fare > 0) {
         
         console.log(`CabsPage: Received global fare update: ${customEvent.detail.fare} for ${customEvent.detail.cabId}`);
+        
+        // Only update if the fare is significantly different
+        if (Math.abs(totalPrice - customEvent.detail.fare) > 10) {
+          setTotalPrice(customEvent.detail.fare);
+          
+          // Show a notification to make the price change more visible
+          if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
+            toast.info(`Price updated: ₹${customEvent.detail.fare}`, {
+              id: `price-update-${customEvent.detail.cabId}`,
+              duration: 3000
+            });
+          }
+        }
+      }
+    };
+    
+    const handleBookingSummaryUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && 
+          selectedCab && 
+          customEvent.detail.cabId && 
+          selectedCab.id.toLowerCase().replace(/\s+/g, '_') === customEvent.detail.cabId.toLowerCase() && 
+          customEvent.detail.fare > 0) {
+        
+        console.log(`CabsPage: Received booking summary update: ${customEvent.detail.fare} for ${customEvent.detail.cabId}`);
+        
+        // Force price update regardless of how different it is from the current price
         setTotalPrice(customEvent.detail.fare);
+        
+        // Show a notification for significant price changes
+        if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
+          toast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
+            id: `price-update-${customEvent.detail.cabId}`,
+            duration: 3000
+          });
+        }
       }
     };
     
     window.addEventListener('global-fare-update', handleGlobalFareUpdate);
-    window.addEventListener('booking-summary-update', handleGlobalFareUpdate);
+    window.addEventListener('booking-summary-update', handleBookingSummaryUpdate);
     
     return () => {
       window.removeEventListener('global-fare-update', handleGlobalFareUpdate);
-      window.removeEventListener('booking-summary-update', handleGlobalFareUpdate);
+      window.removeEventListener('booking-summary-update', handleBookingSummaryUpdate);
     };
-  }, [selectedCab]);
+  }, [selectedCab, totalPrice]);
 
   useEffect(() => {
     if (selectedCab && distance > 0) {
@@ -321,18 +356,8 @@ const CabsPage = () => {
                   console.log(`CabsPage: Retrieved fare directly from database API: ₹${price}`);
                   setTotalPrice(price);
                   
-                  // Dispatch a global fare update event
-                  window.dispatchEvent(new CustomEvent('global-fare-update', {
-                    detail: {
-                      cabId: normalizedCabId,
-                      tripType,
-                      calculated: true,
-                      fare: price,
-                      packageId: hourlyPackage,
-                      source: 'database-direct-cabspage',
-                      timestamp: Date.now()
-                    }
-                  }));
+                  // Dispatch both events to maximize price consistency
+                  dispatchFareUpdateEvents(normalizedCabId, 'local', price, hourlyPackage);
                   
                   return; // Skip the regular fare calculation
                 } else if (data.data) {
@@ -351,17 +376,7 @@ const CabsPage = () => {
                     console.log(`CabsPage: Retrieved fare from alternative response format: ₹${price}`);
                     setTotalPrice(price);
                     
-                    window.dispatchEvent(new CustomEvent('global-fare-update', {
-                      detail: {
-                        cabId: normalizedCabId,
-                        tripType,
-                        calculated: true,
-                        fare: price,
-                        packageId: hourlyPackage,
-                        source: 'database-alt-cabspage',
-                        timestamp: Date.now()
-                      }
-                    }));
+                    dispatchFareUpdateEvents(normalizedCabId, 'local', price, hourlyPackage);
                     
                     return; // Skip the regular fare calculation
                   }
@@ -369,7 +384,8 @@ const CabsPage = () => {
               }
             } catch (error) {
               console.error('Error fetching local fare from database:', error);
-              // Continue with regular fare calculation as fallback
+              // Try fallback endpoint
+              await fetchFromFallbackEndpoint(selectedCab.id, hourlyPackage);
             }
           }
           
@@ -386,24 +402,11 @@ const CabsPage = () => {
           
           setTotalPrice(fare);
           
-          // Dispatch event to synchronize fare across components
-          try {
-            const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-            window.dispatchEvent(new CustomEvent('global-fare-update', {
-              detail: {
-                cabId: normalizedCabId,
-                tripType,
-                tripMode,
-                calculated: true,
-                fare: fare,
-                packageId: tripType === "local" ? hourlyPackage : undefined,
-                source: 'cabspage-calculation',
-                timestamp: Date.now()
-              }
-            }));
-            console.log(`CabsPage: Dispatched fare-calculated event for ${selectedCab.id}: ${fare}`);
-          } catch (error) {
-            console.error('Error dispatching fare event:', error);
+          // Dispatch both events to maximize price consistency
+          if (tripType === 'local' && hourlyPackage) {
+            dispatchFareUpdateEvents(selectedCab.id.toLowerCase().replace(/\s+/g, '_'), tripType, fare, hourlyPackage);
+          } else {
+            dispatchFareUpdateEvents(selectedCab.id.toLowerCase().replace(/\s+/g, '_'), tripType, fare);
           }
         } catch (error) {
           console.error("Error calculating fare:", error);
@@ -416,6 +419,90 @@ const CabsPage = () => {
       setTotalPrice(0);
     }
   }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+
+  const dispatchFareUpdateEvents = (cabId: string, tripType: string, fare: number, packageId?: string) => {
+    try {
+      // Dispatch global fare update first
+      window.dispatchEvent(new CustomEvent('global-fare-update', {
+        detail: {
+          cabId: cabId.toLowerCase(),
+          tripType,
+          tripMode,
+          calculated: true,
+          fare: fare,
+          packageId: packageId,
+          source: 'cabspage-calculation',
+          timestamp: Date.now()
+        }
+      }));
+      
+      // Also dispatch fare-calculated event for other components
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabId.toLowerCase(),
+          tripType,
+          tripMode,
+          calculated: true,
+          fare: fare,
+          packageId: packageId,
+          source: 'cabspage-calculation',
+          timestamp: Date.now() + 1
+        }
+      }));
+      
+      console.log(`CabsPage: Dispatched fare update events for ${cabId}: ${fare}`);
+    } catch (error) {
+      console.error('Error dispatching fare events:', error);
+    }
+  };
+  
+  const fetchFromFallbackEndpoint = async (vehicleId: string, packageId: string) => {
+    try {
+      console.log(`CabsPage: Trying fallback endpoint for ${vehicleId} - ${packageId}`);
+      
+      const normalizedCabId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
+          const fareData = data.fares[0];
+          
+          // Extract the right price for the selected package
+          let price = 0;
+          if (packageId.includes('4hrs-40km')) {
+            price = Number(fareData.price4hrs40km || 0);
+          } else if (packageId.includes('8hrs-80km')) {
+            price = Number(fareData.price8hrs80km || 0);
+          } else if (packageId.includes('10hrs-100km')) {
+            price = Number(fareData.price10hrs100km || 0);
+          }
+          
+          if (price > 0) {
+            console.log(`CabsPage: Retrieved fare from fallback endpoint: ₹${price}`);
+            setTotalPrice(price);
+            
+            dispatchFareUpdateEvents(normalizedCabId, 'local', price, packageId);
+            
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Error fetching from fallback endpoint:', error);
+      return false;
+    }
+  };
 
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
