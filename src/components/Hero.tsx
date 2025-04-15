@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { formatPrice } from '@/lib/cabData';
+import { Search } from 'lucide-react';
 
 export const Hero = () => {
   const [mainFare, setMainFare] = useState<number | null>(null);
@@ -33,15 +34,14 @@ export const Hero = () => {
   }, []);
 
   return (
-    <section className="relative bg-white py-16 md:py-24">
-      <div className="container mx-auto px-4">
+    <section className="relative pt-24 pb-16 md:pb-24 bg-gradient-to-r from-cabBlue-50 to-cabGray-50">
+      <div className="container mx-auto px-4 pt-12">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            Your Trusted Cab Service in Visakhapatnam
+          <h1 className="text-4xl md:text-5xl font-bold text-cabGray-900 mb-3">
+            Your Journey, Our Priority
           </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            Book reliable and comfortable cab services for all your travel needs.
-            Available 24/7 with transparent pricing and professional drivers.
+          <p className="text-cabBlue-600 text-lg font-medium uppercase tracking-wider mb-8">
+            BOOK A CAB IN MINUTES
           </p>
           
           {loading ? (
@@ -59,6 +59,7 @@ export const Hero = () => {
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link to="/cabs/local">
               <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-md text-lg">
+                <Search className="mr-2 h-5 w-5" />
                 Book a Local Ride
               </Button>
             </Link>
@@ -108,3 +109,5 @@ export const Hero = () => {
     </section>
   );
 };
+
+export default Hero;

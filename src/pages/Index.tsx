@@ -1,40 +1,169 @@
 
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
-import { Hero } from "@/components/Hero";
+import { Button } from "@/components/ui/button";
+import { Link, useNavigate } from "react-router-dom";
+import { TabTripSelector } from "@/components/TabTripSelector";
+import { LocationInput } from "@/components/LocationInput";
+import { DateTimePicker } from "@/components/DateTimePicker";
+import { Calendar, MapPin, Search } from "lucide-react";
+import { TripType, TripMode } from "@/lib/tripTypes";
+import { Location } from "@/lib/locationData";
+import { useToast } from "@/components/ui/use-toast";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { HeroFeatureSection } from "@/components/HeroFeatureSection";
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isLoaded } = useGoogleMaps();
+
+  const [tripType, setTripType] = useState<TripType>("outstation");
+  const [tripMode, setTripMode] = useState<TripMode>("one-way");
+  const [pickup, setPickup] = useState<Location | null>(null);
+  const [dropoff, setDropoff] = useState<Location | null>(null);
+  const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
+  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
+
+  // Handle trip type change
+  const handleTripTypeChange = (type: TripType) => {
+    setTripType(type);
+    
+    // Reset form when changing trip type
+    setPickup(null);
+    setDropoff(null);
+    
+    if (type === "local") {
+      setTripMode("one-way"); // Local trips are always one-way
+    }
+  };
+
+  // Handle form submission
+  const handleSearch = () => {
+    if (!pickup || !dropoff) {
+      toast({
+        title: "Missing locations",
+        description: "Please select both pickup and drop-off locations",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!pickupDate) {
+      toast({
+        title: "Missing date",
+        description: "Please select pickup date and time",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (tripMode === "round-trip" && !returnDate) {
+      toast({
+        title: "Missing return date",
+        description: "Please select return date and time for round trip",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Store search parameters in session storage
+    sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
+    sessionStorage.setItem('dropLocation', JSON.stringify(dropoff));
+    sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
+    sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
+    sessionStorage.setItem('tripMode', tripMode);
+    sessionStorage.setItem('tripType', tripType);
+
+    // Navigate to cabs page with the selected trip type
+    navigate(`/cabs/${tripType}`);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero />
       
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h5 className="text-cabBlue-600 font-medium text-sm uppercase tracking-wider mb-2">
-              Why Choose Us
-            </h5>
-            <h2 className="text-3xl font-bold text-cabGray-800">
-              The Premier Cab Service Experience
-            </h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featureItems.map((item, index) => (
-              <div 
-                key={index}
-                className="p-6 bg-white rounded-xl border border-cabGray-100 shadow-card hover:shadow-elevated transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-full bg-cabBlue-100 flex items-center justify-center text-cabBlue-600 mb-4">
-                  {item.icon}
-                </div>
-                <h3 className="text-xl font-semibold text-cabGray-800 mb-2">{item.title}</h3>
-                <p className="text-cabGray-600">{item.description}</p>
+      <div className="relative">
+        {/* Hero Section */}
+        <section className="relative pt-24 pb-16 md:pb-24 bg-gradient-to-r from-cabBlue-50 to-cabGray-50">
+          <div className="container mx-auto px-4 pt-12">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <h1 className="text-4xl md:text-5xl font-bold text-cabGray-900 mb-3">
+                  Your Journey, Our Priority
+                </h1>
+                <p className="text-cabBlue-600 text-lg font-medium uppercase tracking-wider">
+                  BOOK A CAB IN MINUTES
+                </p>
               </div>
-            ))}
+
+              {/* Trip Search Card */}
+              <div className="bg-white rounded-xl shadow-xl p-6 mb-8">
+                {/* Trip Type Selector */}
+                <TabTripSelector 
+                  selectedTab={tripType}
+                  tripMode={tripMode}
+                  onTabChange={handleTripTypeChange}
+                  onTripModeChange={setTripMode}
+                />
+                
+                <div className="mt-6 space-y-4">
+                  {/* Location Inputs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <LocationInput 
+                      label="PICKUP LOCATION" 
+                      placeholder="Enter pickup location"
+                      value={pickup}
+                      onLocationChange={setPickup}
+                      isPickupLocation={true}
+                    />
+                    
+                    <LocationInput 
+                      label="DROP LOCATION" 
+                      placeholder="Enter destination location"
+                      value={dropoff}
+                      onLocationChange={setDropoff}
+                      isPickupLocation={false}
+                    />
+                  </div>
+                  
+                  {/* Date Time Pickers */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <DateTimePicker 
+                      label="PICKUP DATE & TIME" 
+                      date={pickupDate} 
+                      onDateChange={setPickupDate} 
+                      minDate={new Date()} 
+                    />
+                    
+                    {tripMode === "round-trip" && (
+                      <DateTimePicker 
+                        label="RETURN DATE & TIME" 
+                        date={returnDate} 
+                        onDateChange={setReturnDate} 
+                        minDate={pickupDate} 
+                      />
+                    )}
+                  </div>
+                  
+                  {/* Search Button */}
+                  <Button 
+                    onClick={handleSearch}
+                    className="w-full md:w-auto mt-4 bg-cabBlue-600 hover:bg-cabBlue-700"
+                    size="lg"
+                  >
+                    <Search className="mr-2 h-5 w-5" />
+                    Search Cabs
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
+
+      {/* Features Section */}
+      <HeroFeatureSection />
       
       <footer className="bg-cabGray-100 py-12">
         <div className="container mx-auto px-4">
@@ -94,24 +223,5 @@ const Index = () => {
     </div>
   );
 };
-
-// Feature items
-const featureItems = [
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>,
-    title: "Transparent Pricing",
-    description: "No hidden charges or surprises. Our pricing is transparent with all charges clearly mentioned before booking."
-  },
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path></svg>,
-    title: "Safety First",
-    description: "All our cabs undergo regular safety checks and our drivers are trained professionals with verified backgrounds."
-  },
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>,
-    title: "24/7 Availability",
-    description: "Our cabs are available round the clock. Book a ride anytime, anywhere with just a few clicks."
-  }
-];
 
 export default Index;
