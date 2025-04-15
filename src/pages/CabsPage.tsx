@@ -446,6 +446,20 @@ const CabsPage = () => {
     setShowGuestDetailsForm(false);
   };
 
+  const handleCabSelect = (cab: CabType) => {
+    setSelectedCab(cab);
+    
+    // If we need to pass the cab ID (as string) somewhere, extract it:
+    const cabId = cab.id;
+    
+    // Use cabId where a string is expected
+  };
+
+  const getPackagePrice = (pkg: HourlyPackage) => {
+    // Return the basePrice if it exists, otherwise a default value
+    return pkg.basePrice ?? 0;
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -532,7 +546,7 @@ const CabsPage = () => {
                         >
                           <div className="font-medium">{pkg.name}</div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Base price: {pkg.basePrice ? formatPrice(pkg.basePrice) : "Price unavailable"}
+                            Base price: {getPackagePrice(pkg)}
                           </div>
                         </button>
                       ))}

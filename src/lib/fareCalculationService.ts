@@ -20,7 +20,7 @@ export async function calculateFare(params: FareCalculationParams): Promise<numb
           packageId, hourlyPackage, pickupDate, returnDate, forceRefresh } = params;
   
   // For cab types that might be passed as strings (compatibility with older components)
-  const cabTypeId = typeof cabType === 'object' ? cabType.id : cabType;
+  const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   // Generate cache key
   const cacheKey = `${tripType}_${cabTypeId}_${distance}_${tripMode}_${packageId || ''}_${hourlyPackage || ''}`;
@@ -101,7 +101,7 @@ async function calculateLocalFare(params: FareCalculationParams): Promise<number
   
   try {
     // Using the getLocalPackagePrice function from packageData.ts
-    const cabTypeId = typeof cabType === 'object' ? cabType.id : cabType;
+    const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
     const fare = await getLocalPackagePrice(packageId, cabTypeId);
     
     if (fare <= 0) {
@@ -118,7 +118,7 @@ async function calculateLocalFare(params: FareCalculationParams): Promise<number
 // Function to calculate outstation fare
 async function calculateOutstationFare(params: FareCalculationParams): Promise<number> {
   const { cabType, distance, tripMode = 'one-way' } = params;
-  const cabTypeId = typeof cabType === 'object' ? cabType.id : cabType;
+  const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
     // Get outstation fare data from the service
@@ -157,7 +157,7 @@ async function calculateOutstationFare(params: FareCalculationParams): Promise<n
 // Function to calculate airport transfer fare
 export async function calculateAirportFare(params: FareCalculationParams): Promise<number> {
   const { cabType, distance } = params;
-  const cabTypeId = typeof cabType === 'object' ? cabType.id : cabType;
+  const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
     // Get airport fare data from the service
@@ -201,7 +201,7 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
     throw new Error('Tour ID is required for tour fare calculation');
   }
   
-  const cabTypeId = typeof cabType === 'object' ? cabType.id : cabType;
+  const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
     // Use direct API to get tour fare

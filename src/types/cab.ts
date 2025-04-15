@@ -59,7 +59,7 @@ export interface HourlyPackage {
 export interface FareCalculationParams {
   tripType: string;
   distance: number;
-  cabType: string;
+  cabType: string | CabType;
   tripMode?: 'one-way' | 'round-trip';
   packageId?: string;
   hourlyPackage?: string;
