@@ -37,7 +37,7 @@ export const CabList: React.FC<CabListProps> = ({
     if (!tripType || tripType !== 'local' || !packageId) return null;
     
     try {
-      // First try with direct-booking-data.php
+      // First try with direct-booking-data.php - MUST match requestConfig.fetchLocalPackageFares order
       const normalizedCabId = cabId.toLowerCase().replace(/\s+/g, '_');
       const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${packageId}`);
       
@@ -70,6 +70,7 @@ export const CabList: React.FC<CabListProps> = ({
           
           // Save the selected fare in localStorage for consistency
           localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
           
           return price;
         }
@@ -103,6 +104,7 @@ export const CabList: React.FC<CabListProps> = ({
           
           // Save the selected fare in localStorage for consistency
           localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
           
           return price;
         }
@@ -140,6 +142,7 @@ export const CabList: React.FC<CabListProps> = ({
           
           // Save the selected fare in localStorage for consistency
           localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
           
           return price;
         }
@@ -158,8 +161,8 @@ export const CabList: React.FC<CabListProps> = ({
         timeout: 5000
       });
       
-      if (fallbackResponse.data && fallbackResponse.data.fares && Array.isArray(fallbackResponse.data.fares) && fallbackResponse.data.fares.length > 0) {
-        const fareData = fallbackResponse.data.fares[0];
+      if (fallbackResponse.data && fallbackResponse.data.fares && fallbackResponse.data.fares[normalizedCabId]) {
+        const fareData = fallbackResponse.data.fares[normalizedCabId];
         
         let price = 0;
         if (packageId.includes('4hrs-40km')) {
@@ -187,9 +190,105 @@ export const CabList: React.FC<CabListProps> = ({
           
           // Save the selected fare in localStorage for consistency
           localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
           
           return price;
         }
+      }
+      
+      // If all API attempts fail, use dynamic calculation
+      // Base prices for different vehicle types (IDENTICAL to BookingSummaryHelper's fallback)
+      const basePrices: Record<string, Record<string, number>> = {
+        'sedan': {
+          '4hrs-40km': 2400,
+          '8hrs-80km': 3000,
+          '10hrs-100km': 3500
+        },
+        'ertiga': {
+          '4hrs-40km': 2800,
+          '8hrs-80km': 3500,
+          '10hrs-100km': 4000
+        },
+        'innova_crysta': {
+          '4hrs-40km': 3200,
+          '8hrs-80km': 4000,
+          '10hrs-100km': 4500
+        },
+        'innova_hycross': {
+          '4hrs-40km': 3600,
+          '8hrs-80km': 4500,
+          '10hrs-100km': 5000
+        },
+        'mpv': {
+          '4hrs-40km': 3600,
+          '8hrs-80km': 4500,
+          '10hrs-100km': 5000
+        },
+        'dzire_cng': {
+          '4hrs-40km': 2400,
+          '8hrs-80km': 3000,
+          '10hrs-100km': 3500
+        },
+        'tempo_traveller': {
+          '4hrs-40km': 4000,
+          '8hrs-80km': 5500,
+          '10hrs-100km': 7000
+        }
+      };
+      
+      // Find appropriate category
+      let vehicleCategory = normalizedCabId;
+      
+      if (!basePrices[vehicleCategory]) {
+        if (vehicleCategory.includes('ertiga')) {
+          vehicleCategory = 'ertiga';
+        } else if (vehicleCategory.includes('innova')) {
+          if (vehicleCategory.includes('hycross') || vehicleCategory.includes('mpv')) {
+            vehicleCategory = 'innova_hycross';
+          } else {
+            vehicleCategory = 'innova_crysta';
+          }
+        } else if (vehicleCategory.includes('cng') || vehicleCategory.includes('dzire')) {
+          vehicleCategory = 'dzire_cng';
+        } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
+          vehicleCategory = 'tempo_traveller';
+        } else if (vehicleCategory.includes('mpv')) {
+          vehicleCategory = 'mpv';
+        } else {
+          vehicleCategory = 'sedan'; // default
+        }
+      }
+      
+      // Get price for the package
+      let packageKey = '';
+      if (packageId.includes('4hrs-40km')) {
+        packageKey = '4hrs-40km';
+      } else if (packageId.includes('8hrs-80km')) {
+        packageKey = '8hrs-80km';
+      } else if (packageId.includes('10hrs-100km')) {
+        packageKey = '10hrs-100km';
+      }
+      
+      if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
+        const price = basePrices[vehicleCategory][packageKey];
+        console.log(`CabList: Using dynamic calculation: ₹${price} for ${normalizedCabId}`);
+        
+        // Broadcast the source of this fare
+        window.dispatchEvent(new CustomEvent('fare-source-update', {
+          detail: {
+            cabId: normalizedCabId,
+            packageId: packageId,
+            fare: price,
+            source: 'dynamic-calculation',
+            timestamp: Date.now()
+          }
+        }));
+        
+        // Save the selected fare in localStorage for consistency
+        localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+        localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+        
+        return price;
       }
       
       return null;
@@ -201,6 +300,51 @@ export const CabList: React.FC<CabListProps> = ({
   
   useEffect(() => {
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
+      // First check if there's a cached fare in localStorage
+      const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+      const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+      const cachedFare = localStorage.getItem(selectedFareKey);
+      
+      if (cachedFare) {
+        const parsedFare = parseFloat(cachedFare);
+        if (!isNaN(parsedFare) && parsedFare > 0) {
+          console.log(`CabList: Using cached fare from localStorage: ${parsedFare} for ${normalizedCabId}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [normalizedCabId]: parsedFare
+          }));
+          
+          // Broadcast the price to ensure consistency
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: 'local',
+              calculated: true,
+              fare: parsedFare,
+              packageId: hourlyPackage,
+              source: 'localstorage-cached',
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Also send a global fare update
+          window.dispatchEvent(new CustomEvent('global-fare-update', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: parsedFare,
+              source: 'localstorage-cached',
+              timestamp: Date.now()
+            }
+          }));
+          
+          return;
+        }
+      }
+      
+      // If no valid cached fare, fetch from database
       fetchFareFromDatabase(selectedCabId, hourlyPackage)
         .then(price => {
           if (price && price > 0) {
@@ -213,6 +357,7 @@ export const CabList: React.FC<CabListProps> = ({
             
             // Save to localStorage for the BookingSummary to use
             localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
             
             // Broadcast to ensure other components use the same price
             window.dispatchEvent(new CustomEvent('fare-calculated', {
@@ -260,6 +405,7 @@ export const CabList: React.FC<CabListProps> = ({
           // Save to localStorage for the BookingSummary to use
           if (packageId) {
             localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
           }
           
           setLastFareUpdate(Date.now());
@@ -283,6 +429,7 @@ export const CabList: React.FC<CabListProps> = ({
           // Save to localStorage for the BookingSummary to use
           if (packageId) {
             localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
           }
           
           setLastFareUpdate(Date.now());
@@ -306,6 +453,7 @@ export const CabList: React.FC<CabListProps> = ({
           // Save to localStorage for the BookingSummary to use
           if (packageId) {
             localStorage.setItem(`selected_fare_${cabId}_${packageId}`, databaseFare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, databaseFare.toString());
           }
           
           setLastFareUpdate(Date.now());
@@ -329,6 +477,7 @@ export const CabList: React.FC<CabListProps> = ({
           // Save to localStorage for consistency across components
           if (packageId) {
             localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
           }
           
           setLastFareUpdate(Date.now());
@@ -358,6 +507,7 @@ export const CabList: React.FC<CabListProps> = ({
           
           // Save the selected fare in localStorage
           localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+          localStorage.setItem(`fare_local_${cabId}`, fare.toString());
         }
       }
     };
@@ -390,6 +540,38 @@ export const CabList: React.FC<CabListProps> = ({
         
         for (const cab of cabTypes) {
           try {
+            // First check if there's a cached fare in localStorage
+            const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+            const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+            const cachedFare = localStorage.getItem(selectedFareKey);
+            
+            if (cachedFare) {
+              const parsedFare = parseFloat(cachedFare);
+              if (!isNaN(parsedFare) && parsedFare > 0) {
+                console.log(`CabList: Using cached fare for ${normalizedCabId}: ${parsedFare}`);
+                
+                setLocalFares(prev => ({
+                  ...prev,
+                  [normalizedCabId]: parsedFare
+                }));
+                
+                // Broadcast the price to ensure consistency
+                window.dispatchEvent(new CustomEvent('global-fare-update', {
+                  detail: {
+                    cabId: normalizedCabId,
+                    tripType: 'local',
+                    packageId: hourlyPackage,
+                    fare: parsedFare,
+                    source: 'localstorage-prefetch',
+                    timestamp: Date.now()
+                  }
+                }));
+                
+                continue; // Skip API fetch
+              }
+            }
+            
+            // If no valid cached fare, fetch from database
             const price = await fetchFareFromDatabase(cab.id, hourlyPackage);
             if (price && price > 0) {
               const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
@@ -401,6 +583,7 @@ export const CabList: React.FC<CabListProps> = ({
               
               // Save the selected fare in localStorage
               localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
               
               // Broadcast the prices to ensure consistency across components
               window.dispatchEvent(new CustomEvent('global-fare-update', {
@@ -499,14 +682,14 @@ export const CabList: React.FC<CabListProps> = ({
               <div
                 onClick={() => {
                   if (!isCalculatingFares) {
-                    handleSelectCab(cab);
-                    
-                    // When a cab is selected, store its price in localStorage for BookingSummary
+                    // Store the fare before selection
+                    const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
                     if (tripType === 'local' && hourlyPackage && cabFare > 0) {
-                      const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
                       console.log(`CabList: Saving selected fare for ${normalizedCabId}: ₹${cabFare}`);
                       
+                      // Save in both formats for maximum compatibility
                       localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, cabFare.toString());
+                      localStorage.setItem(`fare_local_${normalizedCabId}`, cabFare.toString());
                       
                       // Dispatch an event to notify other components of the selection
                       window.dispatchEvent(new CustomEvent('cab-selected', {
@@ -519,7 +702,22 @@ export const CabList: React.FC<CabListProps> = ({
                           timestamp: Date.now()
                         }
                       }));
+                      
+                      // Also send a global update
+                      window.dispatchEvent(new CustomEvent('global-fare-update', {
+                        detail: {
+                          cabId: normalizedCabId,
+                          tripType: tripType,
+                          packageId: hourlyPackage,
+                          fare: cabFare,
+                          source: 'cab-selection',
+                          timestamp: Date.now()
+                        }
+                      }));
                     }
+                    
+                    // Then call the parent handler
+                    handleSelectCab(cab);
                   }
                 }}
                 className={`flex items-center justify-between p-3 mt-auto w-full rounded-md cursor-pointer transition-colors font-medium ${
