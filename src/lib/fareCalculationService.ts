@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -83,73 +84,8 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${shouldForceRefresh}_${cacheClearTime}_${priceMatrixTime}_${globalRefreshToken}`;
 };
 
-// Helper to safely convert a value to lowercase
-const safeToLowerCase = (value: any): string => {
-  if (typeof value === 'string') {
-    return value.toLowerCase();
-  }
-  return String(value).toLowerCase();
-};
-
-// Get default pricing for a cab type
-const getDefaultCabPricing = (cabName: string = 'sedan') => {
-  const cabNameLower = safeToLowerCase(cabName);
-  
-  let pricing = {
-    basePrice: 4200,
-    pricePerKm: 14,
-    nightHaltCharge: 700,
-    driverAllowance: 250
-  };
-  
-  if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
-      cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
-      cabNameLower.includes('swift')) {
-    // Default pricing for sedan class
-  } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
-    pricing = {
-      basePrice: 5400,
-      pricePerKm: 18,
-      nightHaltCharge: 1000,
-      driverAllowance: 250
-    };
-  } else if (cabNameLower.includes('innova')) {
-    pricing = {
-      basePrice: 6000,
-      pricePerKm: 20,
-      nightHaltCharge: 1000,
-      driverAllowance: 250
-    };
-  } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
-    pricing = {
-      basePrice: 9000,
-      pricePerKm: 22,
-      nightHaltCharge: 1500,
-      driverAllowance: 300
-    };
-  } else if (cabNameLower.includes('luxury')) {
-    pricing = {
-      basePrice: 5000,
-      pricePerKm: 16,
-      nightHaltCharge: 1000,
-      driverAllowance: 300
-    };
-  }
-  
-  return pricing;
-};
-
 // Calculate airport transfer fares
 export const calculateAirportFare = async (cabType: CabType, distance: number): Promise<number> => {
-  const cacheKey = `airport_${cabType.id}_${distance}_${lastCacheClearTime}`;
-  const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
-  
-  const cachedFare = fareCache.get(cacheKey);
-  if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
-    console.log(`Using cached airport fare for ${cabType.name}: ₹${cachedFare.price}`);
-    return cachedFare.price;
-  }
-  
   try {
     // Always fetch the latest airport fares from vehicle_pricing table
     const airportFares = await getAirportFaresForVehicle(cabType.id);
@@ -175,102 +111,14 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // IMPORTANT: Airport transfers have NO driver allowance
-    // This comment is preserved to explicitly document this requirement
-    
-    // Cache the result
-    fareCache.set(cacheKey, {
-      expire: Date.now() + 15 * 60 * 1000,
-      price: fare
-    });
+    if (!fare || fare <= 0) {
+      throw new Error(`Invalid airport fare retrieved for ${cabType.id}: ${fare}`);
+    }
     
     return fare;
   } catch (error) {
     console.error(`Error calculating airport fare for ${cabType.name}:`, error);
-    
-    // If API fails, fallback to values from cab type
-    if (cabType.airportFares) {
-      console.log(`Using fallback airport fares for ${cabType.name} from cabType:`, cabType.airportFares);
-      
-      let fare = cabType.airportFares.basePrice;
-      
-      // Determine tier based on distance
-      if (distance <= 10) {
-        fare = cabType.airportFares.tier1Price;
-      } else if (distance <= 20) {
-        fare = cabType.airportFares.tier2Price;
-      } else if (distance <= 30) {
-        fare = cabType.airportFares.tier3Price;
-      } else {
-        fare = cabType.airportFares.tier4Price;
-      }
-      
-      // Add extra km costs if distance exceeds tiers
-      if (distance > 30) {
-        const extraKm = distance - 30;
-        const extraKmCost = extraKm * cabType.airportFares.extraKmCharge;
-        fare += extraKmCost;
-      }
-      
-      // Airport transfers have NO driver allowance
-      // This is intentionally blank - we've removed all driver allowance code for airport transfers
-      
-      // Cache the result
-      fareCache.set(cacheKey, {
-        expire: Date.now() + 15 * 60 * 1000,
-        price: fare
-      });
-      
-      return fare;
-    }
-    
-    // Default airport fare values for fallback
-    const defaultFare = {
-      basePrice: 1000,
-      pricePerKm: 14,
-      airportFee: 150,
-      dropPrice: 1200,
-      pickupPrice: 1500,
-      tier1Price: 800,    // 0-10 KM
-      tier2Price: 1200,   // 11-20 KM
-      tier3Price: 1800,   // 21-30 KM
-      tier4Price: 2500,   // 31+ KM
-      extraKmCharge: 14
-    };
-    
-    let fare = defaultFare.basePrice;
-    
-    // Determine tier based on distance
-    if (distance <= 10) {
-      fare = defaultFare.tier1Price;
-    } else if (distance <= 20) {
-      fare = defaultFare.tier2Price;
-    } else if (distance <= 30) {
-      fare = defaultFare.tier3Price;
-    } else {
-      fare = defaultFare.tier4Price;
-    }
-    
-    // Add extra km costs if distance exceeds tiers
-    if (distance > 30) {
-      const extraKm = distance - 30;
-      const extraKmCost = extraKm * defaultFare.extraKmCharge;
-      fare += extraKmCost;
-    }
-    
-    // Airport transfers have NO driver allowance
-    // This is intentionally blank - we've removed all driver allowance code for airport transfers
-    
-    // Add airport fee
-    fare += defaultFare.airportFee;
-    
-    // Cache the result
-    fareCache.set(cacheKey, {
-      expire: Date.now() + 15 * 60 * 1000,
-      price: fare
-    });
-    
-    return fare;
+    throw new Error(`Could not calculate airport fare for ${cabType.name}`);
   }
 };
 
@@ -278,21 +126,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
 export const calculateFare = async (params: FareCalculationParams): Promise<number> => {
   try {
     const { cabType, distance, tripType, tripMode = 'one-way', hourlyPackage, pickupDate, returnDate, forceRefresh } = params;
-    
-    // Generate a cache key
-    const cacheKey = generateCacheKey(params);
-    
-    // Check if we should force refresh
-    const shouldForceRefresh = forceRefresh || localStorage.getItem('forceCacheRefresh') === 'true';
-    
-    // Only use cache if not forcing refresh
-    if (!shouldForceRefresh) {
-      const cachedFare = fareCache.get(cacheKey);
-      if (cachedFare && cachedFare.expire > Date.now()) {
-        console.log(`Using cached fare for ${cacheKey}: ₹${cachedFare.price}`);
-        return cachedFare.price;
-      }
-    }
     
     // Log the calculation parameters
     console.log('Calculating fare with params:', {
@@ -304,108 +137,59 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       hourlyPackage,
       pickupDate: pickupDate?.toISOString(),
       returnDate: returnDate?.toISOString(),
-      shouldForceRefresh,
-      cacheClear: lastCacheClearTime
+      forceRefresh
     });
     
     // Calculate fare based on trip type
-    let calculatedFare = 0;
-    
     if (tripType === 'airport') {
       // For airport transfers
-      calculatedFare = await calculateAirportFare(cabType, distance);
-      console.log(`Calculated airport fare: ₹${calculatedFare}`);
+      const airportFare = await calculateAirportFare(cabType, distance);
+      console.log(`Calculated airport fare: ₹${airportFare}`);
+      
+      // Dispatch fare calculation event to update UI components
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: cabType.id,
+          tripType,
+          calculated: true,
+          fare: airportFare,
+          timestamp: Date.now()
+        }
+      }));
+      
+      return airportFare;
     }
     else if (tripType === 'local') {
       try {
-        // Always fetch the latest local fares from vehicle_pricing table
-        const localFares = await getLocalFaresForVehicle(cabType.id);
-        console.log(`Retrieved local fares for ${cabType.name} from vehicle_pricing:`, localFares);
-        
-        // For local hourly packages
+        // For local hourly packages - get from API only
         const packageId = hourlyPackage || '8hrs-80km';
         
-        if (packageId === '4hrs-40km') {
-          calculatedFare = localFares.price4hrs40km || localFares.package4hr40km || 0;
-        } else if (packageId === '8hrs-80km') {
-          calculatedFare = localFares.price8hrs80km || localFares.package8hr80km || 0;
-        } else if (packageId === '10hrs-100km') {
-          calculatedFare = localFares.price10hrs100km || localFares.package10hr100km || 0;
+        // Direct API call to get package price
+        const packagePrice = await getLocalPackagePrice(packageId, cabType.id, forceRefresh);
+        
+        if (!packagePrice || packagePrice <= 0) {
+          throw new Error(`Invalid package price retrieved for ${cabType.id}, package ${packageId}: ${packagePrice}`);
         }
         
-        // If we couldn't get from API, try to get from package price matrix
-        if (calculatedFare <= 0) {
-          try {
-            // Await the promise here to resolve the Type 'Promise<number>' error
-            const packagePrice = await getLocalPackagePrice(packageId, cabType.id);
-            calculatedFare = packagePrice;
-            console.log(`Retrieved local package price from matrix: ₹${calculatedFare}`);
-          } catch (error) {
-            console.error('Error getting local package price:', error);
-          }
-        }
+        console.log(`Retrieved local package price from API: ₹${packagePrice}`);
         
-        // If still not available, use default prices
-        if (calculatedFare <= 0) {
-          const cabNameLower = safeToLowerCase(cabType.name);
-          
-          if (packageId === '4hrs-40km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 800;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 1000;
-            else if (cabNameLower.includes('innova')) calculatedFare = 1200;
-            else calculatedFare = 800;
-          } else if (packageId === '8hrs-80km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 1500;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 1800;
-            else if (cabNameLower.includes('innova')) calculatedFare = 2200;
-            else calculatedFare = 1500;
-          } else if (packageId === '10hrs-100km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 1800;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 2200;
-            else if (cabNameLower.includes('innova')) calculatedFare = 2600;
-            else calculatedFare = 1800;
+        // Dispatch fare calculation event to update UI components
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: cabType.id,
+            tripType,
+            tripMode,
+            calculated: true,
+            fare: packagePrice,
+            timestamp: Date.now()
           }
-        }
+        }));
+        
+        return packagePrice;
       } catch (error) {
-        console.error(`Error fetching local fares for ${cabType.name}:`, error);
-        
-        // Fallback to cab type local package fares
-        if (cabType.localPackageFares) {
-          const packageId = hourlyPackage || '8hrs-80km';
-          
-          if (packageId === '4hrs-40km') {
-            calculatedFare = cabType.localPackageFares.price4hrs40km || cabType.localPackageFares.package4hr40km || 0;
-          } else if (packageId === '8hrs-80km') {
-            calculatedFare = cabType.localPackageFares.price8hrs80km || cabType.localPackageFares.package8hr80km || 0;
-          } else if (packageId === '10hrs-100km') {
-            calculatedFare = cabType.localPackageFares.price10hrs100km || cabType.localPackageFares.package10hr100km || 0;
-          }
-        }
-        
-        // If still no fare, use default
-        if (calculatedFare <= 0) {
-          const cabNameLower = safeToLowerCase(cabType.name);
-          
-          if (hourlyPackage === '4hrs-40km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 800;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 1000;
-            else if (cabNameLower.includes('innova')) calculatedFare = 1200;
-            else calculatedFare = 800;
-          } else if (hourlyPackage === '8hrs-80km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 1500;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 1800;
-            else if (cabNameLower.includes('innova')) calculatedFare = 2200;
-            else calculatedFare = 1500;
-          } else if (hourlyPackage === '10hrs-100km') {
-            if (cabNameLower.includes('sedan')) calculatedFare = 1800;
-            else if (cabNameLower.includes('ertiga')) calculatedFare = 2200;
-            else if (cabNameLower.includes('innova')) calculatedFare = 2600;
-            else calculatedFare = 1800;
-          }
-        }
+        console.error(`Error calculating local fare for ${cabType.name}:`, error);
+        throw new Error(`Could not calculate local fare for ${cabType.name}`);
       }
-      
-      console.log(`Calculated local package fare for ${hourlyPackage || '8hrs-80km'}: ₹${calculatedFare}`);
     }
     else if (tripType === 'outstation') {
       try {
@@ -418,43 +202,36 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         let perKmRate = 0;
         let baseFare = 0;
         let driverAllowance = outstationFares.driverAllowance || 250;
+        let calculatedFare = 0;
         
         if (tripMode === 'one-way') {
           perKmRate = outstationFares.pricePerKm;
           baseFare = outstationFares.basePrice;
           
-          // FIXED: For one-way trips, we need to consider the driver has to return
-          // so we should calculate extra distance considering round trip for driver
-          // Calculate total effective distance (one-way for customer, round trip for driver)
-          const effectiveDistance = distance * 2; // Double the distance to account for return journey
+          // For one-way trips, double the distance for driver return journey
+          const effectiveDistance = distance * 2;
           
           if (effectiveDistance > minimumKm) {
-            // If total effective distance is greater than minimum
             const extraDistance = effectiveDistance - minimumKm;
             const extraDistanceFare = extraDistance * perKmRate;
             calculatedFare = baseFare + extraDistanceFare + driverAllowance;
           } else {
-            // If total effective distance is less than minimum, just use base fare
             calculatedFare = baseFare + driverAllowance;
           }
           
-          console.log(`One-way outstation fare (with return kilometers): Base=${baseFare}, Driver=${driverAllowance}, Effective distance=${effectiveDistance}km, Total=${calculatedFare}, Rate=${perKmRate}/km`);
+          console.log(`One-way outstation fare: Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}, Rate=${perKmRate}/km`);
         }
         // For round trip
         else {
           perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
-          
-          // For round trips, use the roundTripBasePrice
           baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
           
           // For round trips, the effective distance is doubled
           const effectiveDistance = distance * 2;
           
           if (effectiveDistance < minimumKm) {
-            // If total round trip distance is less than minimum, use base fare
             calculatedFare = baseFare + driverAllowance;
           } else {
-            // Calculate extra distance if actual round trip distance > minimum
             const extraDistance = effectiveDistance - minimumKm;
             const extraDistanceFare = extraDistance * perKmRate;
             calculatedFare = baseFare + extraDistanceFare + driverAllowance;
@@ -469,141 +246,69 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
           calculatedFare += nightCharges;
           console.log(`Added night charges: ${nightCharges}`);
         }
-      } catch (error) {
-        console.error(`Error fetching outstation fares for ${cabType.name}:`, error);
         
-        // Fallback to cab type outstation fares
-        if (cabType.outstationFares) {
-          const outstationFares = cabType.outstationFares;
-          const minimumKm = 300;
-          let perKmRate = 0;
-          let baseFare = 0;
-          let driverAllowance = outstationFares.driverAllowance || 250;
-          
-          if (tripMode === 'one-way') {
-            perKmRate = outstationFares.pricePerKm;
-            baseFare = outstationFares.basePrice;
-            
-            // For one-way trips, double the distance for driver return journey
-            const effectiveDistance = distance * 2;
-            
-            if (effectiveDistance > minimumKm) {
-              const extraDistance = effectiveDistance - minimumKm;
-              const extraDistanceFare = extraDistance * perKmRate;
-              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
-            } else {
-              calculatedFare = baseFare + driverAllowance;
-            }
-          } else {
-            perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
-            baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
-            
-            const effectiveDistance = distance * 2;
-            
-            if (effectiveDistance < minimumKm) {
-              calculatedFare = baseFare + driverAllowance;
-            } else {
-              const extraDistance = effectiveDistance - minimumKm;
-              const extraDistanceFare = extraDistance * perKmRate;
-              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
-            }
-          }
-          
-          // Add night charges if pickup is during night hours (10 PM to 5 AM)
-          if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-            const nightCharges = Math.round(baseFare * 0.1);
-            calculatedFare += nightCharges;
-          }
-        } else {
-          // Fallback to default pricing if no outstation fares defined
-          const defaultPricing = getDefaultCabPricing(cabType.name);
-          const minimumKm = 300;
-          
-          if (tripMode === 'one-way') {
-            const perKmRate = defaultPricing.pricePerKm;
-            const baseFare = defaultPricing.basePrice;
-            const driverAllowance = defaultPricing.driverAllowance;
-            
-            // For one-way trips, double the distance for driver return journey
-            const effectiveDistance = distance * 2;
-            
-            if (effectiveDistance > minimumKm) {
-              const extraDistance = effectiveDistance - minimumKm;
-              const extraDistanceFare = extraDistance * perKmRate;
-              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
-            } else {
-              calculatedFare = baseFare + driverAllowance;
-            }
-            
-            // Add night charges if pickup is during night hours
-            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-              const nightCharges = Math.round(baseFare * 0.1);
-              calculatedFare += nightCharges;
-            }
-          } else {
-            const perKmRate = defaultPricing.pricePerKm * 0.85;
-            const baseFare = defaultPricing.basePrice * 0.9;
-            const driverAllowance = defaultPricing.driverAllowance;
-            
-            const effectiveDistance = distance * 2;
-            
-            if (effectiveDistance < minimumKm) {
-              calculatedFare = baseFare + driverAllowance;
-            } else {
-              const extraDistance = effectiveDistance - minimumKm;
-              const extraDistanceFare = extraDistance * perKmRate;
-              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
-            }
-            
-            // Add night charges if pickup is during night hours
-            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-              const nightCharges = Math.round(baseFare * 0.1);
-              calculatedFare += nightCharges;
-            }
-          }
+        if (!calculatedFare || calculatedFare <= 0) {
+          throw new Error(`Invalid outstation fare calculated for ${cabType.id}: ${calculatedFare}`);
         }
+        
+        // Dispatch fare calculation event to update UI components
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: cabType.id,
+            tripType,
+            tripMode,
+            calculated: true,
+            fare: calculatedFare,
+            timestamp: Date.now()
+          }
+        }));
+        
+        return calculatedFare;
+      } catch (error) {
+        console.error(`Error calculating outstation fare for ${cabType.name}:`, error);
+        throw new Error(`Could not calculate outstation fare for ${cabType.name}`);
       }
     }
     else if (tripType === 'tour') {
       // For tour packages - check if we have tour fares defined
-      let tourId = 'araku'; // Default tour ID
-      
-      // Try to extract tour ID from the trip details
-      if (cabType.id && tourFares[tourId] && tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]]) {
-        calculatedFare = tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]] as number;
-      } else {
-        // Use default tour pricing if tour fare not found
-        if (safeToLowerCase(cabType.name).includes('sedan')) calculatedFare = 3500;
-        else if (safeToLowerCase(cabType.name).includes('ertiga')) calculatedFare = 4500;
-        else if (safeToLowerCase(cabType.name).includes('innova')) calculatedFare = 5500;
-        else calculatedFare = 4000;
+      try {
+        let tourId = 'araku'; // Default tour ID
+        
+        // Get from tour fares
+        if (cabType.id && tourFares[tourId] && tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]]) {
+          const tourFare = tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]] as number;
+          
+          if (!tourFare || tourFare <= 0) {
+            throw new Error(`Invalid tour fare for ${cabType.id}, tour ${tourId}: ${tourFare}`);
+          }
+          
+          console.log(`Retrieved tour fare: ₹${tourFare}`);
+          
+          // Dispatch fare calculation event to update UI components
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: cabType.id,
+              tripType,
+              calculated: true,
+              fare: tourFare,
+              timestamp: Date.now()
+            }
+          }));
+          
+          return tourFare;
+        } else {
+          throw new Error(`Tour fare not found for ${cabType.id}, tour ${tourId}`);
+        }
+      } catch (error) {
+        console.error(`Error calculating tour fare for ${cabType.name}:`, error);
+        throw new Error(`Could not calculate tour fare for ${cabType.name}`);
       }
-      
-      console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
-    // Dispatch fare calculation event to update UI components
-    window.dispatchEvent(new CustomEvent('fare-calculated', {
-      detail: {
-        cabId: cabType.id,
-        tripType,
-        tripMode,
-        calculated: true,
-        fare: calculatedFare,
-        timestamp: Date.now()
-      }
-    }));
-    
-    // Cache the calculated fare
-    fareCache.set(generateCacheKey(params), {
-      expire: Date.now() + 15 * 60 * 1000, // Cache for 15 minutes
-      price: calculatedFare
-    });
-    
-    return calculatedFare;
+    throw new Error(`Unsupported trip type: ${tripType}`);
   } catch (error) {
     console.error('Error calculating fare:', error);
-    return 0;
+    throw error; // Propagate error to caller
   }
 };
 

@@ -112,8 +112,10 @@ export const CabList: React.FC<CabListProps> = ({
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : hasError ? (
                     <span className="text-xs text-destructive">{hasError}</span>
+                  ) : cabFare > 0 ? (
+                    formatPrice(cabFare)
                   ) : (
-                    formatPrice(cabFare || cab.price)
+                    <span className="text-xs">Getting price...</span>
                   )}
                 </span>
               </div>

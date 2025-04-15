@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, AlertTriangle } from "lucide-react";
+import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
 import { toast } from 'sonner';
 
@@ -43,38 +42,36 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
   };
   
-  // Load packages with DB prices
+  // Load packages with API prices
   const loadPackages = async () => {
     setIsLoading(true);
     setLoadError(null);
     
     try {
-      console.log('LocalTripSelector: Loading package data with DB prices');
+      console.log('LocalTripSelector: Loading package data from API');
       
       // Create package objects with template data first
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
-      // These are the reference vehicles we'll use for pricing
-      const referenceVehicles = ['sedan', 'ertiga', 'innova_crysta'];
+      // Reference vehicle for pricing
+      const referenceVehicle = 'sedan';
       
       // Update all package prices in parallel
       await Promise.all(updatedPackages.map(async (pkg) => {
         try {
-          // Try to get prices from multiple vehicle types to ensure we have reliable data
-          for (const vehicleId of referenceVehicles) {
-            const price = await getLocalPackagePrice(pkg.id, vehicleId, true);
-            if (price > 0) {
-              // Only update if we got a valid price and it's for the reference sedan
-              if (vehicleId === 'sedan') {
-                pkg.basePrice = price;
-                console.log(`Updated ${pkg.id} price to ${price} from ${vehicleId}`);
-                break;
-              }
-            }
+          // Get prices directly from API - no fallbacks
+          const price = await getLocalPackagePrice(pkg.id, referenceVehicle, true);
+          if (price > 0) {
+            pkg.basePrice = price;
+            console.log(`Updated ${pkg.id} price to ${price} from API`);
+          } else {
+            console.warn(`API returned zero or invalid price for ${pkg.id}`);
+            throw new Error(`Invalid price (${price}) for ${pkg.id}`);
           }
         } catch (error) {
-          console.warn(`Could not fetch reference price for package ${pkg.id}:`, error);
-          // Keep the default template price if API fails
+          console.error(`Could not fetch price for package ${pkg.id}:`, error);
+          setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
+          // Don't set fallback prices - keep it as 0
         }
       }));
       
@@ -111,10 +108,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       
     } catch (error) {
       console.error('Failed to load package data:', error);
-      setLoadError(`Unable to load package pricing. Please try again later. (${error instanceof Error ? error.message : 'Unknown error'})`);
-      
-      // Fallback to template packages
-      setPackages(hourlyPackages);
+      setLoadError(`Unable to load package pricing. Please try again.`);
     } finally {
       setIsLoading(false);
     }
@@ -220,8 +214,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         <CardContent className="pt-4">
           <CardTitle className="mb-4">Select Hourly Package</CardTitle>
           <div className="flex items-center justify-center p-4">
-            <div className="animate-pulse text-center">
-              <p>Loading package options...</p>
+            <div className="animate-pulse text-center flex flex-col items-center">
+              <Loader2 className="h-6 w-6 animate-spin mb-2" />
+              <p>Loading package options from server...</p>
             </div>
           </div>
         </CardContent>
@@ -277,9 +272,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
               </div>
               
               <div className="text-right">
-                <span className="font-medium text-sm">
-                  {formatPrice(pkg.basePrice)}
-                </span>
+                {pkg.basePrice > 0 ? (
+                  <span className="font-medium text-sm">
+                    {formatPrice(pkg.basePrice)}
+                  </span>
+                ) : (
+                  <span className="text-sm text-destructive">
+                    <Loader2 className="h-4 w-4 inline-block animate-spin mr-1" />
+                    Loading...
+                  </span>
+                )}
                 <span className="block text-xs text-muted-foreground">
                   Base price
                 </span>
