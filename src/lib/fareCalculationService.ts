@@ -40,7 +40,7 @@ export async function calculateFare(params: FareCalculationParams): Promise<numb
         fare = await calculateLocalFare({
           tripType, 
           distance, 
-          cabType: cabTypeId, 
+          cabType, 
           packageId: hourlyPackage || packageId
         });
         break;
@@ -49,7 +49,7 @@ export async function calculateFare(params: FareCalculationParams): Promise<numb
         fare = await calculateOutstationFare({
           tripType, 
           distance, 
-          cabType: cabTypeId, 
+          cabType, 
           tripMode
         });
         break;
@@ -58,7 +58,7 @@ export async function calculateFare(params: FareCalculationParams): Promise<numb
         fare = await calculateAirportFare({
           tripType, 
           distance, 
-          cabType: cabTypeId
+          cabType
         });
         break;
         
@@ -67,7 +67,7 @@ export async function calculateFare(params: FareCalculationParams): Promise<numb
         fare = await calculateTourFare({
           tripType, 
           distance, 
-          cabType: cabTypeId, 
+          cabType, 
           packageId
         });
         break;
@@ -102,7 +102,10 @@ async function calculateLocalFare(params: FareCalculationParams): Promise<number
   try {
     // Extract the cab ID string regardless of whether cabType is an object or string
     const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
-    const fare = await getLocalPackagePrice(packageId, cabTypeId);
+    
+    // Ensure we're passing a string to getLocalPackagePrice
+    const fareId = String(cabTypeId);
+    const fare = await getLocalPackagePrice(packageId, fareId);
     
     if (fare <= 0) {
       throw new Error(`No valid fare found for package ${packageId} and cab ${cabTypeId}`);
@@ -123,7 +126,9 @@ async function calculateOutstationFare(params: FareCalculationParams): Promise<n
   
   try {
     // Get outstation fare data from the service
-    const fareData = await fareService.getOutstationFaresForVehicle(cabTypeId);
+    // Ensure we're passing a string to getOutstationFaresForVehicle
+    const fareId = String(cabTypeId);
+    const fareData = await fareService.getOutstationFaresForVehicle(fareId);
     
     if (!fareData) {
       throw new Error(`No outstation fare data available for ${cabTypeId}`);
@@ -163,7 +168,9 @@ export async function calculateAirportFare(params: FareCalculationParams): Promi
   
   try {
     // Get airport fare data from the service
-    const fareData = await fareService.getAirportFaresForVehicle(cabTypeId);
+    // Ensure we're passing a string to getAirportFaresForVehicle
+    const fareId = String(cabTypeId);
+    const fareData = await fareService.getAirportFaresForVehicle(fareId);
     
     if (!fareData) {
       throw new Error(`No airport fare data available for ${cabTypeId}`);
@@ -236,8 +243,10 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
       const tourFare = tourFares[packageId];
       
       if (typeof tourFare === 'object') {
+        // Ensure cabTypeId is a string before using toLowerCase
+        const vehicleType = String(cabTypeId).toLowerCase();
         // Map the cabTypeId to the appropriate key in the tourFare object
-        const mappedCabType = cabTypeMappings[cabTypeId.toLowerCase()] || 'sedan';
+        const mappedCabType = cabTypeMappings[vehicleType] || 'sedan';
         
         // Return the price for this cab type, or default to sedan if not found
         return tourFare[mappedCabType as keyof typeof tourFare] || tourFare.sedan || 0;
@@ -258,6 +267,8 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
       'tempo_traveller': 6000
     };
     
-    return defaultFares[cabTypeId.toLowerCase()] || 2500;
+    // Ensure cabTypeId is a string before using toLowerCase
+    const vehicleType = String(cabTypeId).toLowerCase();
+    return defaultFares[vehicleType] || 2500;
   }
 }
