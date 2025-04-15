@@ -68,6 +68,9 @@ export const CabList: React.FC<CabListProps> = ({
             }
           }));
           
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          
           return price;
         }
       } else if (response.data && response.data.data) {
@@ -97,6 +100,9 @@ export const CabList: React.FC<CabListProps> = ({
               timestamp: Date.now()
             }
           }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
           
           return price;
         }
@@ -131,6 +137,9 @@ export const CabList: React.FC<CabListProps> = ({
               timestamp: Date.now()
             }
           }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
           
           return price;
         }
@@ -176,6 +185,9 @@ export const CabList: React.FC<CabListProps> = ({
             }
           }));
           
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          
           return price;
         }
       }
@@ -192,15 +204,20 @@ export const CabList: React.FC<CabListProps> = ({
       fetchFareFromDatabase(selectedCabId, hourlyPackage)
         .then(price => {
           if (price && price > 0) {
+            const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+            
             setLocalFares(prev => ({
               ...prev,
-              [selectedCabId.toLowerCase().replace(/\s+/g, '_')]: price
+              [normalizedCabId]: price
             }));
+            
+            // Save to localStorage for the BookingSummary to use
+            localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
             
             // Broadcast to ensure other components use the same price
             window.dispatchEvent(new CustomEvent('fare-calculated', {
               detail: {
-                cabId: selectedCabId.toLowerCase().replace(/\s+/g, '_'),
+                cabId: normalizedCabId,
                 tripType: 'local',
                 calculated: true,
                 fare: price,
@@ -213,7 +230,7 @@ export const CabList: React.FC<CabListProps> = ({
             // Also send a global fare update for all components
             window.dispatchEvent(new CustomEvent('global-fare-update', {
               detail: {
-                cabId: selectedCabId.toLowerCase().replace(/\s+/g, '_'),
+                cabId: normalizedCabId,
                 tripType: 'local',
                 packageId: hourlyPackage,
                 fare: price,
@@ -230,7 +247,7 @@ export const CabList: React.FC<CabListProps> = ({
     const handleFareCalculated = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare, source } = customEvent.detail;
+        const { cabId, fare, source, packageId } = customEvent.detail;
         
         if (customEvent.detail.tripType === tripType) {
           console.log(`CabList: Updating fare for ${cabId} to ${fare} from event (source: ${source || 'unknown'})`);
@@ -240,6 +257,11 @@ export const CabList: React.FC<CabListProps> = ({
             [cabId]: fare
           }));
           
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+          }
+          
           setLastFareUpdate(Date.now());
         }
       }
@@ -248,7 +270,7 @@ export const CabList: React.FC<CabListProps> = ({
     const handleGlobalFareUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare, source } = customEvent.detail;
+        const { cabId, fare, source, packageId } = customEvent.detail;
         
         if (!customEvent.detail.tripType || customEvent.detail.tripType === tripType) {
           console.log(`CabList: Received global fare update: ${fare} for ${cabId} (source: ${source || 'unknown'})`);
@@ -258,6 +280,11 @@ export const CabList: React.FC<CabListProps> = ({
             [cabId]: fare
           }));
           
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+          }
+          
           setLastFareUpdate(Date.now());
         }
       }
@@ -266,7 +293,7 @@ export const CabList: React.FC<CabListProps> = ({
     const handleFareSyncRequired = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.databaseFare) {
-        const { cabId, databaseFare, tripType: eventTripType } = customEvent.detail;
+        const { cabId, databaseFare, tripType: eventTripType, packageId } = customEvent.detail;
         
         if (eventTripType === tripType) {
           console.log(`CabList: Synchronizing fare for ${cabId} to database value: ${databaseFare}`);
@@ -276,6 +303,11 @@ export const CabList: React.FC<CabListProps> = ({
             [cabId]: databaseFare
           }));
           
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, databaseFare.toString());
+          }
+          
           setLastFareUpdate(Date.now());
         }
       }
@@ -284,7 +316,7 @@ export const CabList: React.FC<CabListProps> = ({
     const handleBookingSummaryFareUpdated = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare, tripType: eventTripType } = customEvent.detail;
+        const { cabId, fare, tripType: eventTripType, packageId } = customEvent.detail;
         
         if (eventTripType === tripType) {
           console.log(`CabList: Updating fare from booking summary for ${cabId}: ${fare}`);
@@ -293,6 +325,11 @@ export const CabList: React.FC<CabListProps> = ({
             ...prev,
             [cabId]: fare
           }));
+          
+          // Save to localStorage for consistency across components
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+          }
           
           setLastFareUpdate(Date.now());
           
@@ -311,11 +348,26 @@ export const CabList: React.FC<CabListProps> = ({
       }
     };
     
+    const handleCabSelection = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, packageId } = customEvent.detail;
+        
+        if (tripType === 'local' && packageId) {
+          console.log(`CabList: Saving selected fare for ${cabId} with package ${packageId}: ₹${fare}`);
+          
+          // Save the selected fare in localStorage
+          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+        }
+      }
+    };
+    
     window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
     window.addEventListener('global-fare-update', handleGlobalFareUpdate as EventListener);
     window.addEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
     window.addEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
     window.addEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
+    window.addEventListener('cab-selected', handleCabSelection as EventListener);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
@@ -323,6 +375,7 @@ export const CabList: React.FC<CabListProps> = ({
       window.removeEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
       window.removeEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
       window.removeEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
+      window.removeEventListener('cab-selected', handleCabSelection as EventListener);
     };
   }, [tripType, selectedCabId, cabFares]);
   
@@ -339,15 +392,20 @@ export const CabList: React.FC<CabListProps> = ({
           try {
             const price = await fetchFareFromDatabase(cab.id, hourlyPackage);
             if (price && price > 0) {
+              const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+              
               setLocalFares(prev => ({
                 ...prev,
-                [cab.id.toLowerCase().replace(/\s+/g, '_')]: price
+                [normalizedCabId]: price
               }));
+              
+              // Save the selected fare in localStorage
+              localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
               
               // Broadcast the prices to ensure consistency across components
               window.dispatchEvent(new CustomEvent('global-fare-update', {
                 detail: {
-                  cabId: cab.id.toLowerCase().replace(/\s+/g, '_'),
+                  cabId: normalizedCabId,
                   tripType: 'local',
                   packageId: hourlyPackage,
                   fare: price,
@@ -439,7 +497,31 @@ export const CabList: React.FC<CabListProps> = ({
               </div>
 
               <div
-                onClick={() => !isCalculatingFares && handleSelectCab(cab)}
+                onClick={() => {
+                  if (!isCalculatingFares) {
+                    handleSelectCab(cab);
+                    
+                    // When a cab is selected, store its price in localStorage for BookingSummary
+                    if (tripType === 'local' && hourlyPackage && cabFare > 0) {
+                      const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+                      console.log(`CabList: Saving selected fare for ${normalizedCabId}: ₹${cabFare}`);
+                      
+                      localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, cabFare.toString());
+                      
+                      // Dispatch an event to notify other components of the selection
+                      window.dispatchEvent(new CustomEvent('cab-selected', {
+                        detail: {
+                          cabId: normalizedCabId,
+                          cabName: cab.name,
+                          tripType: tripType,
+                          packageId: hourlyPackage,
+                          fare: cabFare,
+                          timestamp: Date.now()
+                        }
+                      }));
+                    }
+                  }
+                }}
                 className={`flex items-center justify-between p-3 mt-auto w-full rounded-md cursor-pointer transition-colors font-medium ${
                   isSelected
                     ? "bg-primary text-primary-foreground"

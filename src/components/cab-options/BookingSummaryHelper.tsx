@@ -51,9 +51,40 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     // Don't do anything if we don't have a selected cab
     if (!selectedCabId) return;
     
-    // For local trips, fetch the fare directly from the database
+    // For local trips, first check if there's a selected fare in localStorage
     if (tripType === 'local' && hourlyPackage) {
       const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+      
+      // Check if there's a selected fare from CabList
+      const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+      const selectedFare = localStorage.getItem(selectedFareKey);
+      
+      if (selectedFare) {
+        const parsedFare = parseFloat(selectedFare);
+        if (!isNaN(parsedFare) && parsedFare > 0) {
+          console.log(`BookingSummaryHelper: Using selected fare from CabList: ₹${parsedFare} for ${normalizedCabId}`);
+          setFetchedFare(parsedFare);
+          setFareSource('cab-list-selection');
+          
+          // If current total price is significantly different from selected fare, dispatch an update
+          if (Math.abs(parsedFare - totalPrice) > 10) {
+            console.log(`BookingSummaryHelper: CabList selected price (${parsedFare}) differs from current price (${totalPrice}), updating`);
+            
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: parsedFare,
+                source: 'cab-list-selected',
+                timestamp: Date.now()
+              }
+            }));
+          }
+          
+          return; // Skip API fetching if we have a valid selected fare
+        }
+      }
       
       // Set a timestamp for this fetch attempt
       const currentTime = Date.now();
@@ -82,6 +113,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 const price = Number(response.data.price);
                 if (price > 0) {
                   console.log(`BookingSummaryHelper: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+                  
+                  // Store this as the selected fare for consistency
+                  localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+                  
                   return { price, source: 'direct-booking-data' };
                 }
               } else if (response.data && response.data.data) {
@@ -99,6 +134,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 
                 if (price > 0) {
                   console.log(`BookingSummaryHelper: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+                  
+                  // Store this as the selected fare for consistency
+                  localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+                  
                   return { price, source: 'direct-booking-data-alternate' };
                 }
               }
@@ -129,6 +168,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 const price = Number(response.data.price);
                 if (price > 0) {
                   console.log(`BookingSummaryHelper: Retrieved fare from local-package-fares API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+                  
+                  // Store this as the selected fare for consistency
+                  localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+                  
                   return { price, source: 'local-package-fares' };
                 }
               }
@@ -170,6 +213,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 
                 if (price > 0) {
                   console.log(`BookingSummaryHelper: Retrieved fare from fallback endpoint: ₹${price}`);
+                  
+                  // Store this as the selected fare for consistency
+                  localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+                  
                   return { price, source: 'direct-local-fares' };
                 }
               }
@@ -246,15 +293,30 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 vehicleCategory = 'dzire_cng';
               } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
                 vehicleCategory = 'tempo_traveller';
+              } else if (vehicleCategory.includes('mpv')) {
+                vehicleCategory = 'innova_hycross'; // Treat MPV as Innova Hycross
               } else {
                 vehicleCategory = 'sedan'; // default
               }
             }
             
             // Get price for the package
-            if (basePrices[vehicleCategory] && basePrices[vehicleCategory][hourlyPackage]) {
-              const price = basePrices[vehicleCategory][hourlyPackage];
+            let packageKey = '';
+            if (hourlyPackage.includes('4hrs-40km')) {
+              packageKey = '4hrs-40km';
+            } else if (hourlyPackage.includes('8hrs-80km')) {
+              packageKey = '8hrs-80km';
+            } else if (hourlyPackage.includes('10hrs-100km')) {
+              packageKey = '10hrs-100km';
+            }
+            
+            if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
+              const price = basePrices[vehicleCategory][packageKey];
               console.log(`BookingSummaryHelper: Calculated fare using fallback method: ₹${price}`);
+              
+              // Store this as the selected fare for consistency
+              localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+              
               return { price, source: 'direct-calculation' };
             }
             
@@ -293,7 +355,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
           
           // Store in localStorage for persistence
           try {
+            // Regular booking fare cache
             localStorage.setItem(`fare_${tripType}_${normalizedCabId}`, result.price.toString());
+            
+            // Also store as selected fare for that specific package
+            localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, result.price.toString());
           } catch (error) {
             console.error('Error storing fare in localStorage:', error);
           }
@@ -324,7 +390,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         }
       });
     }
-  }, [tripType, selectedCabId, hourlyPackage, retryCount]);
+  }, [tripType, selectedCabId, hourlyPackage, retryCount, totalPrice]);
   
   // Listen for changes to the total price and retrigger fare check if needed
   useEffect(() => {

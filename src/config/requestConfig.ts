@@ -152,6 +152,27 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
  */
 export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: string): Promise<any> => {
   try {
+    // Check if there's a cached fare from the CabList component first
+    if (vehicleId && packageId) {
+      const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+      const selectedFareFromLocalStorage = localStorage.getItem(`selected_fare_${normalizedVehicleId}_${packageId}`);
+      
+      if (selectedFareFromLocalStorage) {
+        const parsedFare = parseFloat(selectedFareFromLocalStorage);
+        if (!isNaN(parsedFare) && parsedFare > 0) {
+          console.log(`Using selected fare from localStorage: ${parsedFare} for ${normalizedVehicleId}`);
+          return {
+            status: 'success',
+            vehicleId: normalizedVehicleId,
+            packageId: packageId,
+            price: parsedFare,
+            source: 'selected-fare-localstorage',
+            timestamp: Date.now()
+          };
+        }
+      }
+    }
+
     const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     
     // Properly construct the URL with query parameters
@@ -199,6 +220,28 @@ export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: str
 // Safe version of local package fares fetch that never throws
 export const safeLocalPackageFares = async (vehicleId?: string, packageId?: string): Promise<any> => {
   try {
+    // First, check if there's a cached fare from the CabList component
+    if (vehicleId && packageId) {
+      const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+      const cabListFareKey = `selected_fare_${normalizedVehicleId}_${packageId}`;
+      const selectedFareFromLocalStorage = localStorage.getItem(cabListFareKey);
+      
+      if (selectedFareFromLocalStorage) {
+        const parsedFare = parseFloat(selectedFareFromLocalStorage);
+        if (!isNaN(parsedFare) && parsedFare > 0) {
+          console.log(`Using selected fare from localStorage: ${parsedFare} for ${normalizedVehicleId}`);
+          return {
+            status: 'success',
+            vehicleId: normalizedVehicleId,
+            packageId: packageId,
+            price: parsedFare,
+            source: 'selected-fare-localstorage',
+            timestamp: Date.now()
+          };
+        }
+      }
+    }
+    
     return await fetchLocalPackageFares(vehicleId, packageId);
   } catch (error) {
     console.warn('Error in safeLocalPackageFares:', error);
