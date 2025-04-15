@@ -271,6 +271,65 @@ const CabsPage = () => {
     if (selectedCab && distance > 0) {
       const fetchFare = async () => {
         try {
+          // For local trips, try to fetch directly from database first
+          if (tripType === "local" && hourlyPackage) {
+            try {
+              const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
+              const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+              
+              console.log(`CabsPage: Fetching local fare directly from database for ${normalizedCabId}`);
+              const response = await fetch(apiUrl, {
+                headers: {
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache',
+                  'X-Force-Refresh': 'true'
+                }
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                
+                if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
+                  const fareData = data.fares[0];
+                  
+                  // Extract the right price for the selected package
+                  let price = 0;
+                  if (hourlyPackage.includes('4hrs-40km')) {
+                    price = Number(fareData.price4hrs40km || 0);
+                  } else if (hourlyPackage.includes('8hrs-80km')) {
+                    price = Number(fareData.price8hrs80km || 0);
+                  } else if (hourlyPackage.includes('10hrs-100km')) {
+                    price = Number(fareData.price10hrs100km || 0);
+                  }
+                  
+                  if (price > 0) {
+                    console.log(`CabsPage: Retrieved fare directly from database API: ₹${price}`);
+                    setTotalPrice(price);
+                    
+                    // Dispatch an event to notify other components
+                    window.dispatchEvent(new CustomEvent('fare-calculated', {
+                      detail: {
+                        cabId: normalizedCabId,
+                        tripType,
+                        calculated: true,
+                        fare: price,
+                        packageId: hourlyPackage,
+                        source: 'database-direct-cabspage',
+                        timestamp: Date.now()
+                      }
+                    }));
+                    
+                    return; // Skip the regular fare calculation
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching local fare from database:', error);
+              // Continue with regular fare calculation as fallback
+            }
+          }
+          
+          // Regular fare calculation as fallback
           const fare = await calculateFare({
             cabType: selectedCab, 
             distance, 
@@ -281,26 +340,20 @@ const CabsPage = () => {
             returnDate
           });
           
-          // CRITICAL FIX: Store the fare in localStorage for persistence between components
-          try {
-            const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
-            localStorage.setItem(localStorageKey, fare.toString());
-            console.log(`CabsPage: Stored fare for ${selectedCab.id} in localStorage: ${fare}`);
-          } catch (error) {
-            console.error('Error storing fare in localStorage:', error);
-          }
-          
           setTotalPrice(fare);
           
-          // CRITICAL FIX: Dispatch event to synchronize fare across components
+          // Dispatch event to synchronize fare across components
           try {
+            const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
             window.dispatchEvent(new CustomEvent('fare-calculated', {
               detail: {
-                cabId: selectedCab.id,
+                cabId: normalizedCabId,
                 tripType,
                 tripMode,
                 calculated: true,
                 fare: fare,
+                packageId: tripType === "local" ? hourlyPackage : undefined,
+                source: 'cabspage-calculation',
                 timestamp: Date.now()
               }
             }));

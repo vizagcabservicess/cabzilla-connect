@@ -48,7 +48,6 @@ function normalizeVehicleId($vehicleId) {
     $mappings = [
         'innovahycross' => 'innova_hycross',
         'innovacrystal' => 'innova_crysta',
-        'innovacrystal' => 'innova_crysta',
         'innovacrista' => 'innova_crysta',
         'innova_crista' => 'innova_crysta',
         'innovahicross' => 'innova_hycross',
@@ -61,13 +60,24 @@ function normalizeVehicleId($vehicleId) {
         'swift' => 'sedan',
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
-        'innovaold' => 'innova_crysta'
+        'innovaold' => 'innova_crysta',
+        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
     ];
     
     foreach ($mappings as $search => $replace) {
         if ($result === $search) {
             return $replace;
         }
+    }
+    
+    // Special handling for "innova hycross" which might come as "mpv"
+    if (strpos($result, 'innova') !== false && strpos($result, 'hycross') !== false) {
+        return 'innova_hycross';
+    }
+    
+    // Many systems use "MPV" to refer to Innova Hycross
+    if ($result === 'mpv') {
+        return 'innova_hycross';
     }
     
     return $result;
@@ -94,7 +104,11 @@ try {
             str_replace('dzire_cng', 'cng', $normalizedVehicleId),
             str_replace('innova_hycross', 'innova', $normalizedVehicleId),
             str_replace('innova_crysta', 'innova', $normalizedVehicleId),
-            str_replace('tempo_traveller', 'tempo', $normalizedVehicleId)
+            str_replace('tempo_traveller', 'tempo', $normalizedVehicleId),
+            // Special handling for MPV which is often Innova Hycross
+            ($normalizedVehicleId === 'mpv' ? 'innova_hycross' : $normalizedVehicleId),
+            // Also try with the original format for max compatibility
+            $vehicleId
         ];
         
         // Try to find an exact match first
@@ -111,7 +125,9 @@ try {
             if ($result && $row = $result->fetch_assoc()) {
                 // Successfully found data in database
                 $localFares[] = [
-                    'vehicleId' => $row['vehicle_id'],
+                    'vehicleId' => $possibleId, // Keep the matched vehicle ID
+                    'matchedWith' => $normalizedVehicleId, // Store what was matched
+                    'originalRequest' => $vehicleId, // Store the original request
                     'price4hrs40km' => (float)$row['price_4hrs_40km'],
                     'price8hrs80km' => (float)$row['price_8hrs_80km'],
                     'price10hrs100km' => (float)$row['price_10hrs_100km'],
@@ -157,8 +173,8 @@ try {
                 }
             }
             
-            // Now try to query with the first vehicle ID and use the column map
-            $possibleId = $possibleVehicleIds[0];
+            // Now try to query with the normalized vehicle ID and use the column map
+            $possibleId = $normalizedVehicleId;
             $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
             $likeParam = "%$possibleId%";
             $stmt = $conn->prepare($query);
@@ -212,6 +228,8 @@ try {
                 
                 $localFares[] = [
                     'vehicleId' => $row['vehicle_id'],
+                    'matchedWith' => $normalizedVehicleId,
+                    'originalRequest' => $vehicleId,
                     'price4hrs40km' => $price4hrs40km,
                     'price8hrs80km' => $price8hrs80km,
                     'price10hrs100km' => $price10hrs100km,
@@ -237,6 +255,8 @@ try {
                 // Successfully found data with LIKE query
                 $localFares[] = [
                     'vehicleId' => $row['vehicle_id'],
+                    'matchedWith' => $normalizedVehicleId,
+                    'originalRequest' => $vehicleId,
                     'price4hrs40km' => (float)$row['price_4hrs_40km'],
                     'price8hrs80km' => (float)$row['price_8hrs_80km'],
                     'price10hrs100km' => (float)$row['price_10hrs_100km'],
@@ -246,6 +266,38 @@ try {
                     'timestamp' => time()
                 ];
                 $dbSuccess = true;
+            }
+        }
+        
+        // Special vehicle-specific handling - always look for MPV as Innova Hycross
+        if (!$dbSuccess && ($normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false)) {
+            $possibleIds = ['innova_hycross', 'innovahycross', 'mpv', 'hycross'];
+            
+            foreach ($possibleIds as $possibleId) {
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
+                $likeParam = "%$possibleId%";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ss", $possibleId, $likeParam);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result && $row = $result->fetch_assoc()) {
+                    // Successfully found data
+                    $localFares[] = [
+                        'vehicleId' => $row['vehicle_id'],
+                        'matchedWith' => 'mpv/innova_hycross',
+                        'originalRequest' => $vehicleId,
+                        'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                        'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                        'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                        'priceExtraKm' => (float)$row['price_extra_km'],
+                        'priceExtraHour' => (float)$row['price_extra_hour'],
+                        'source' => 'database',
+                        'timestamp' => time()
+                    ];
+                    $dbSuccess = true;
+                    break;
+                }
             }
         }
         
@@ -292,7 +344,8 @@ if (!$dbSuccess) {
         strpos($normalizedVehicleId, 'suv') !== false) {
         $vehicleCategory = 'suv';
         $multiplier = 1.25;
-    } else if (strpos($normalizedVehicleId, 'innova') !== false) {
+    } else if (strpos($normalizedVehicleId, 'innova') !== false || 
+        strpos($normalizedVehicleId, 'mpv') !== false) {
         $vehicleCategory = 'mpv';
         if (strpos($normalizedVehicleId, 'hycross') !== false) {
             $multiplier = 1.6;
@@ -306,6 +359,9 @@ if (!$dbSuccess) {
     } else if (strpos($normalizedVehicleId, 'cng') !== false) {
         $vehicleCategory = 'cng';
         $multiplier = 1.0; // Same as sedan
+    } else if ($normalizedVehicleId === 'mpv') {
+        $vehicleCategory = 'innova_hycross';
+        $multiplier = 1.6; // Same as Innova Hycross
     } else {
         // Default - use standard sedan pricing
         $vehicleCategory = 'other';
@@ -319,6 +375,8 @@ if (!$dbSuccess) {
     $localFares[] = [
         'vehicleId' => $vehicleId,
         'vehicleCategory' => $vehicleCategory,
+        'matchedWith' => 'none',
+        'originalRequest' => $vehicleId,
         'price4hrs40km' => $prices['price4hrs40km'],
         'price8hrs80km' => $prices['price8hrs80km'],
         'price10hrs100km' => $prices['price10hrs100km'],

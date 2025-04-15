@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import axios from 'axios';
+import { getApiUrl } from '@/config/api';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -12,6 +14,7 @@ interface CabListProps {
   handleSelectCab: (cab: CabType) => void;
   getFareDetails: (cab: CabType) => string;
   tripType?: string;
+  hourlyPackage?: string;
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -22,50 +25,179 @@ export const CabList: React.FC<CabListProps> = ({
   cabErrors = {},
   handleSelectCab,
   getFareDetails,
-  tripType
+  tripType,
+  hourlyPackage
 }) => {
   const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
+  const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   
-  // Listen for fare update events to keep the displayed prices in sync
+  const fetchFareFromDatabase = useCallback(async (cabId: string, packageId?: string) => {
+    if (!tripType || tripType !== 'local' || !packageId) return null;
+    
+    try {
+      const normalizedCabId = cabId.toLowerCase().replace(/\s+/g, '_');
+      const apiUrl = getApiUrl() || '';
+      const endpoint = `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`;
+      
+      console.log(`CabList: Directly fetching fare from database for ${normalizedCabId}`);
+      const response = await axios.get(endpoint, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (response.data && response.data.fares && Array.isArray(response.data.fares) && response.data.fares.length > 0) {
+        const fareData = response.data.fares[0];
+        
+        let price = 0;
+        if (packageId.includes('4hrs-40km')) {
+          price = Number(fareData.price4hrs40km || 0);
+        } else if (packageId.includes('8hrs-80km')) {
+          price = Number(fareData.price8hrs80km || 0);
+        } else if (packageId.includes('10hrs-100km')) {
+          price = Number(fareData.price10hrs100km || 0);
+        }
+        
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare directly from database API for ${normalizedCabId}: ₹${price}`);
+          return price;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error(`CabList: Error fetching fare for ${cabId}:`, error);
+      return null;
+    }
+  }, [tripType]);
+  
+  useEffect(() => {
+    if (selectedCabId && tripType === 'local' && hourlyPackage) {
+      fetchFareFromDatabase(selectedCabId, hourlyPackage)
+        .then(price => {
+          if (price && price > 0) {
+            setLocalFares(prev => ({
+              ...prev,
+              [selectedCabId.toLowerCase().replace(/\s+/g, '_')]: price
+            }));
+            
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: selectedCabId.toLowerCase().replace(/\s+/g, '_'),
+                tripType: 'local',
+                calculated: true,
+                fare: price,
+                packageId: hourlyPackage,
+                source: 'database-direct-cablist',
+                timestamp: Date.now()
+              }
+            }));
+          }
+        });
+    }
+  }, [selectedCabId, tripType, hourlyPackage, fetchFareFromDatabase]);
+  
   useEffect(() => {
     const handleFareCalculated = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare } = customEvent.detail;
+        const { cabId, fare, source } = customEvent.detail;
         
-        // Only update if this is for the current trip type
         if (customEvent.detail.tripType === tripType) {
+          console.log(`CabList: Updating fare for ${cabId} to ${fare} from event (source: ${source || 'unknown'})`);
+          
           setLocalFares(prev => ({
             ...prev,
             [cabId]: fare
           }));
           
-          console.log(`CabList: Updated fare for ${cabId} to ${fare} from event`);
+          setLastFareUpdate(Date.now());
         }
       }
     };
     
-    // Listen for fare calculation events
-    window.addEventListener('fare-calculated', handleFareCalculated);
+    const handleFareSyncRequired = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.databaseFare) {
+        const { cabId, databaseFare, tripType: eventTripType } = customEvent.detail;
+        
+        if (eventTripType === tripType) {
+          console.log(`CabList: Synchronizing fare for ${cabId} to database value: ${databaseFare}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: databaseFare
+          }));
+          
+          setLastFareUpdate(Date.now());
+        }
+      }
+    };
     
-    // Clean up
+    const handleBookingSummaryFareUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.updatedFare) {
+        const { cabId, updatedFare, tripType: eventTripType } = customEvent.detail;
+        
+        if (eventTripType === tripType) {
+          console.log(`CabList: Updating fare from booking summary for ${cabId}: ${updatedFare}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: updatedFare
+          }));
+          
+          setLastFareUpdate(Date.now());
+        }
+      }
+    };
+    
+    window.addEventListener('fare-calculated', handleFareCalculated);
+    window.addEventListener('fare-sync-required', handleFareSyncRequired);
+    window.addEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated);
+    
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated);
+      window.removeEventListener('fare-sync-required', handleFareSyncRequired);
+      window.removeEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated);
     };
   }, [tripType]);
   
-  // Update local fares when props change
   useEffect(() => {
     setLocalFares(cabFares);
   }, [cabFares]);
   
-  // Format price with Indian Rupee symbol
+  useEffect(() => {
+    if (tripType === 'local' && hourlyPackage) {
+      const fetchAllFares = async () => {
+        console.log(`CabList: Pre-fetching fares for all cabs with package ${hourlyPackage}`);
+        
+        for (const cab of cabTypes) {
+          try {
+            const price = await fetchFareFromDatabase(cab.id, hourlyPackage);
+            if (price && price > 0) {
+              setLocalFares(prev => ({
+                ...prev,
+                [cab.id.toLowerCase().replace(/\s+/g, '_')]: price
+              }));
+            }
+          } catch (error) {
+            console.error(`Error pre-fetching fare for ${cab.id}:`, error);
+          }
+        }
+      };
+      
+      fetchAllFares();
+    }
+  }, [tripType, hourlyPackage, cabTypes, fetchFareFromDatabase]);
+  
   const formatPrice = (price?: number) => {
     if (!price && price !== 0) return "Price unavailable";
     return `₹${price.toLocaleString('en-IN')}`;
   };
 
-  // If no vehicles are available
   if (cabTypes.length === 0) {
     return (
       <div className="text-center p-4">
