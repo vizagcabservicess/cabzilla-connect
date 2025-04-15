@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -66,7 +67,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       }));
       console.log(`CabOptions: Dispatched trip-type-changed event for ${tripType}`);
       
-      if (tripType === 'airport') {
+      if (tripType === "airport") {
         setInitialAirportFaresLoaded(false);
         
         if (!initialAirportFaresLoaded) {
@@ -101,9 +102,14 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       await Promise.all(cabTypes.map(async (cab) => {
         try {
-          const price = await getLocalPackagePrice(hourlyPackage, cab.id);
+          // Force refresh to get the latest pricing
+          const price = await getLocalPackagePrice(hourlyPackage, cab.id, true);
           if (price > 0) {
             updatedFares[cab.id] = price;
+            
+            // Store in localStorage for consistency
+            const localStorageKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}`;
+            localStorage.setItem(localStorageKey, price.toString());
             
             window.dispatchEvent(new CustomEvent('fare-calculated', {
               detail: {
@@ -181,13 +187,17 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       if (tripType === 'local' && hourlyPackage) {
         setIsCalculatingFares(true);
-        getLocalPackagePrice(hourlyPackage, cab.id)
+        getLocalPackagePrice(hourlyPackage, cab.id, true)
           .then(price => {
             if (price > 0) {
               setCabFares(prev => ({
                 ...prev,
                 [cab.id]: price
               }));
+              
+              // Store in localStorage for consistency
+              const localStorageKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}`;
+              localStorage.setItem(localStorageKey, price.toString());
               
               window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
                 detail: {

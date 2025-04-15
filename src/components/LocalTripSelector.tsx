@@ -5,22 +5,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle } from "lucide-react";
-import { HourlyPackage, hourlyPackages, fetchAndCacheLocalFares } from '@/lib/packageData';
+import { HourlyPackage, hourlyPackages, fetchAndCacheLocalFares, getLocalPackagePrice } from '@/lib/packageData';
 import { toast } from 'sonner';
 
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
   onPackageSelect: (packageId: string) => void;
-}
-
-interface FareData {
-  price4hrs40km?: number;
-  price_4hr_40km?: number;
-  price8hrs80km?: number;
-  price_8hr_80km?: number;
-  price10hrs100km?: number;
-  price_10hr_100km?: number;
-  [key: string]: any;
 }
 
 export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTripSelectorProps) {
@@ -61,60 +51,47 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     try {
       console.log('LocalTripSelector: Loading package data from API');
       // Fetch up-to-date fare data from the API
-      const fares = await fetchAndCacheLocalFares();
+      const fares = await fetchAndCacheLocalFares(true);
       
       if (!fares || Object.keys(fares).length === 0) {
         throw new Error('No fare data available from API');
       }
       
-      // Create default packages structure - these will be populated with API data
-      const packageTemplates: HourlyPackage[] = [
+      // Use first vehicle (e.g., sedan) to get package prices for display
+      const firstVehicleKey = Object.keys(fares)[0];
+      const firstVehicle = fares[firstVehicleKey];
+      
+      // Create package objects with up-to-date pricing
+      const updatedPackages: HourlyPackage[] = [
         {
           id: '4hrs-40km',
           name: '4 Hours Package',
           hours: 4,
           kilometers: 40,
-          basePrice: 0
+          basePrice: firstVehicle.price4hrs40km || firstVehicle.price_4hr_40km || 1500
         },
         {
           id: '8hrs-80km',
           name: '8 Hours Package',
           hours: 8,
           kilometers: 80,
-          basePrice: 0
+          basePrice: firstVehicle.price8hrs80km || firstVehicle.price_8hr_80km || 2000
         },
         {
           id: '10hrs-100km',
           name: '10 Hours Package',
           hours: 10,
           kilometers: 100,
-          basePrice: 0
+          basePrice: firstVehicle.price10hrs100km || firstVehicle.price_10hr_100km || 2500
         }
       ];
       
-      // Populate package prices using the first vehicle's fares
-      // (UI will display package options, actual vehicle-specific pricing is handled elsewhere)
-      const firstVehicle = Object.values(fares)[0] as FareData;
-      
-      if (firstVehicle) {
-        packageTemplates[0].basePrice = firstVehicle.price4hrs40km || firstVehicle.price_4hr_40km || 0;
-        packageTemplates[1].basePrice = firstVehicle.price8hrs80km || firstVehicle.price_8hr_80km || 0;
-        packageTemplates[2].basePrice = firstVehicle.price10hrs100km || firstVehicle.price_10hr_100km || 0;
-      }
-
-      // Filter out packages with no pricing
-      const validPackages = packageTemplates.filter(pkg => pkg.basePrice > 0);
-      
-      if (validPackages.length === 0) {
-        throw new Error('No valid package pricing received from API');
-      }
-      
-      console.log('Available hourly packages:', validPackages);
-      setPackages(validPackages);
+      console.log('Available hourly packages:', updatedPackages);
+      setPackages(updatedPackages);
       
       // Select default package if none is selected
-      if (!selectedPackage && validPackages.length > 0) {
-        const defaultPackage = validPackages[0].id;
+      if (!selectedPackage && updatedPackages.length > 0) {
+        const defaultPackage = updatedPackages[1].id; // 8hrs-80km is usually the default
         console.log('Setting default package:', defaultPackage);
         onPackageSelect(defaultPackage);
         
@@ -138,7 +115,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       console.error('Failed to load package data from API:', error);
       setLoadError(`Unable to load package pricing. Please try again later. (${error instanceof Error ? error.message : 'Unknown error'})`);
       
-      // Fallback to template packages with no prices (UI only)
+      // Fallback to template packages
       setPackages(hourlyPackages);
     } finally {
       setIsLoading(false);
@@ -161,13 +138,31 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       loadPackagesFromApi();
     };
     
+    const handleLocalFareUpdated = (event: CustomEvent) => {
+      if (event.detail && event.detail.packageId && event.detail.price) {
+        console.log(`LocalTripSelector detected local fare update for ${event.detail.packageId}: ${event.detail.price}`);
+        
+        // Update just the specific package price if it exists in our packages array
+        setPackages(prevPackages => {
+          return prevPackages.map(pkg => {
+            if (pkg.id === event.detail.packageId) {
+              return { ...pkg, basePrice: event.detail.price };
+            }
+            return pkg;
+          });
+        });
+      }
+    };
+    
     // Set up all event listeners
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
     window.addEventListener('force-fare-recalculation', handleForceRecalculation);
+    window.addEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
     
     return () => {
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
       window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
+      window.removeEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
     };
   }, [selectedPackage, onPackageSelect]);
   
