@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -183,7 +182,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     onPackageSelect(normalizedPackageId);
     
     // Force a refresh of all cached local package prices
-    window.localPackagePriceCache = {};
+    if (typeof window !== 'undefined') {
+      window.localPackagePriceCache = {};
+    }
     
     // Dispatch an event to notify other components about the package selection
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {

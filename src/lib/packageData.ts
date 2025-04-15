@@ -39,8 +39,10 @@ export const hourlyPackageOptions = hourlyPackages.map(pkg => ({
   label: `${pkg.hours} Hours / ${pkg.kilometers} KM`
 }));
 
-// Global cache for local package prices to ensure consistency
-const localPackagePriceCache: Record<string, any> = {};
+// Initialize the global cache if it doesn't exist
+if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
+  window.localPackagePriceCache = {};
+}
 
 // API endpoints for local package fares
 const API_ENDPOINTS = {
@@ -60,9 +62,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
     
     // 1. Check cache first unless force refresh requested
-    if (!forceRefresh && localPackagePriceCache[cacheKey] && localPackagePriceCache[cacheKey].price > 0) {
-      console.log(`Using cached price for ${cacheKey}: ${localPackagePriceCache[cacheKey].price}`);
-      return localPackagePriceCache[cacheKey].price;
+    if (!forceRefresh && window.localPackagePriceCache[cacheKey] && window.localPackagePriceCache[cacheKey].price > 0) {
+      console.log(`Using cached price for ${cacheKey}: ${window.localPackagePriceCache[cacheKey].price}`);
+      return window.localPackagePriceCache[cacheKey].price;
     }
     
     // Database prices based on real data from console logs and screenshots
@@ -155,7 +157,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       console.log(`Using database price for ${normalizedVehicleType} (mapped to ${mappedVehicleType}), ${normalizedPackageId}: ${price}`);
       
       // Update cache with db price
-      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'database' };
+      window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'database' };
       const localStorageKey = `fare_local_${normalizedVehicleType}`;
       localStorage.setItem(localStorageKey, price.toString());
       
@@ -175,7 +177,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       if (price > 0) {
         console.log(`Using stored local package price for ${normalizedVehicleType}: ${price}`);
         // Update cache with stored price
-        localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'localStorage' };
+        window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'localStorage' };
         return price;
       }
     }
@@ -203,7 +205,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
         console.log(`API returned price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price}`);
         
         // Update cache and localStorage
-        localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'api' };
+        window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'api' };
         localStorage.setItem(`fare_local_${normalizedVehicleType}`, price.toString());
         
         // Dispatch event for consistency
@@ -240,7 +242,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
         console.log(`Backup API returned price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price}`);
         
         // Update cache and localStorage
-        localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'backup-api' };
+        window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'backup-api' };
         localStorage.setItem(`fare_local_${normalizedVehicleType}`, price.toString());
         
         // Dispatch event for consistency
@@ -286,7 +288,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
           console.log(`Admin API returned price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price}`);
           
           // Update cache and localStorage
-          localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'admin-api' };
+          window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'admin-api' };
           localStorage.setItem(`fare_local_${normalizedVehicleType}`, price.toString());
           
           // Dispatch event for consistency
@@ -309,7 +311,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
                          normalizedPackageId === '8hrs-80km' ? 2500 : 3000;
     
     // Cache the default price
-    localPackagePriceCache[cacheKey] = { price: defaultPrice, timestamp: Date.now(), source: 'default' };
+    window.localPackagePriceCache[cacheKey] = { price: defaultPrice, timestamp: Date.now(), source: 'default' };
     localStorage.setItem(`fare_local_${normalizedVehicleType}`, defaultPrice.toString());
     
     // Dispatch event for consistency
@@ -330,15 +332,17 @@ export const getLocalPackagePriceFromApi = getLocalPackagePrice;
 
 // Function to clear the local package price cache
 export function clearLocalPackagePriceCache() {
-  for (const key in localPackagePriceCache) {
-    delete localPackagePriceCache[key];
+  if (typeof window !== 'undefined' && window.localPackagePriceCache) {
+    for (const key in window.localPackagePriceCache) {
+      delete window.localPackagePriceCache[key];
+    }
+    console.log('Local package price cache cleared');
+    
+    // Trigger refresh event
+    window.dispatchEvent(new CustomEvent('local-fares-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
   }
-  console.log('Local package price cache cleared');
-  
-  // Trigger refresh event
-  window.dispatchEvent(new CustomEvent('local-fares-cache-cleared', {
-    detail: { timestamp: Date.now() }
-  }));
 }
 
 // Function to get the price for a specific package and vehicle from localStorage
