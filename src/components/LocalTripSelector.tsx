@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -43,18 +42,33 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
   };
   
-  // Load packages with default pricing
-  const loadPackages = () => {
+  // Load packages with API pricing
+  const loadPackages = async () => {
     setIsLoading(true);
     setLoadError(null);
     
     try {
-      console.log('LocalTripSelector: Loading package data with default pricing');
+      console.log('LocalTripSelector: Loading package data with API pricing');
       
-      // Create package objects with default pricing
+      // Create package objects with template data first
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
-      console.log('Available hourly packages:', updatedPackages);
+      // Update all package prices in parallel using actual API calls
+      await Promise.all(updatedPackages.map(async (pkg) => {
+        try {
+          // Use the sedan as a reference vehicle first just to get a price estimate
+          const referenceVehicleId = 'sedan';
+          const price = await getLocalPackagePrice(pkg.id, referenceVehicleId, true);
+          if (price > 0) {
+            pkg.basePrice = price;
+          }
+        } catch (error) {
+          console.warn(`Could not fetch reference price for package ${pkg.id}:`, error);
+          // Keep the default template price if API fails
+        }
+      }));
+      
+      console.log('Available hourly packages with updated prices:', updatedPackages);
       setPackages(updatedPackages);
       
       // Select default package if none is selected
@@ -79,6 +93,12 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           detail: { packageId: selectedPackage, timestamp }
         }));
       }
+      
+      // Fetch full fares in the background
+      fetchAndCacheLocalFares(true).catch(error => {
+        console.error('Error fetching local fares in background:', error);
+      });
+      
     } catch (error) {
       console.error('Failed to load package data:', error);
       setLoadError(`Unable to load package pricing. Please try again later. (${error instanceof Error ? error.message : 'Unknown error'})`);
@@ -94,11 +114,6 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   useEffect(() => {
     // Initial fetch
     loadPackages();
-    
-    // Get default fares in the background to be cached
-    fetchAndCacheLocalFares(true).catch(error => {
-      console.error('Error fetching fares in background:', error);
-    });
     
     // Setup event listeners for fare updates
     const handleLocalFaresUpdated = () => {
