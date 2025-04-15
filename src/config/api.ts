@@ -7,7 +7,12 @@ export const apiBaseUrl = process.env.NODE_ENV === 'production'
   : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
 
 // Helper function to get full API URL
-export const getApiUrl = (path: string): string => {
+export const getApiUrl = (path: string = ''): string => {
+  // If no path is provided, return the base URL
+  if (!path) {
+    return apiBaseUrl;
+  }
+  
   // Ensure path starts with a slash if it doesn't already
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   // Remove any duplicate slashes that might occur when joining
