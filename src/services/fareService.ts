@@ -14,7 +14,7 @@ function clearFareCache() {
   localStorage.removeItem('outstation_fares_timestamp');
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
-  localStorage.setItem('globalFareRefreshToken', Date.now().toString());
+  localStorage.setItem('globalFareRefreshToken', Date.now());
   
   // Clear all fare-related cache items from localStorage and sessionStorage
   const keysToRemove = [
@@ -679,7 +679,9 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
       price8hrs80km: 0,
       price10hrs100km: 0,
       priceExtraKm: 0,
-      priceExtraHour: 0
+      priceExtraHour: 0,
+      extraKmRate: 0,
+      extraHourRate: 0
     };
   } catch (error) {
     console.error(`Error fetching local fares for vehicle ${vehicleId}:`, error);
@@ -699,7 +701,9 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
       price8hrs80km: 0,
       price10hrs100km: 0,
       priceExtraKm: 0,
-      priceExtraHour: 0
+      priceExtraHour: 0,
+      extraKmRate: 0,
+      extraHourRate: 0
     };
   }
 }

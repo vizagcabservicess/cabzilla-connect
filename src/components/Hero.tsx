@@ -268,7 +268,7 @@ export function Hero() {
     let totalPrice = 0;
     
     if (tripType === 'airport') {
-      totalPrice = calculateAirportFare(selectedCab.name, distance);
+      totalPrice = await calculateAirportFare(selectedCab.name, distance);
     } else if (tripType === 'local') {
       // Get the local package kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;

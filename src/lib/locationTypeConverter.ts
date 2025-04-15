@@ -13,7 +13,10 @@ export function convertApiLocationToInternalLocation(location: ApiLocationType):
     // Cast the type to ensure compatibility - use a valid fallback if type is invalid
     type: (location.type as "airport" | "train_station" | "bus_station" | "hotel" | "landmark" | "other") || 'other',
     lat: location.lat || 0,
-    lng: location.lng || 0
+    lng: location.lng || 0,
+    // Ensure required properties exist
+    city: location.city || '',
+    state: location.state || ''
   };
 }
 
