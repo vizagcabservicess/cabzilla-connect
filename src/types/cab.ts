@@ -62,6 +62,10 @@ export interface FareCalculationParams {
   cabType: string;
   tripMode?: 'one-way' | 'round-trip';
   packageId?: string;
+  hourlyPackage?: string;
+  pickupDate?: Date;
+  returnDate?: Date | null;
+  forceRefresh?: boolean;
 }
 
 export interface LocalFare {
@@ -71,6 +75,15 @@ export interface LocalFare {
   price_4hr_40km?: number;
   price_8hr_80km?: number;
   price_10hr_100km?: number;
+  
+  // Additional properties for compatibility
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
 }
 
 export interface OutstationFare {
@@ -89,6 +102,11 @@ export interface AirportFare {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
+  
+  // Additional properties for compatibility
+  pickupPrice?: number;
+  dropPrice?: number;
+  pricePerKm?: number;
 }
 
 export interface VehiclePricing {
@@ -112,10 +130,16 @@ export interface TourInfo {
   description?: string;
   duration?: string;
   distance?: number;
+  days?: number;
+  image?: string;
 }
 
 export interface TourFares {
-  [vehicleId: string]: number;
+  [vehicleId: string]: {
+    sedan: number;
+    ertiga: number;
+    innova: number;
+  } | number;
 }
 
 export interface ExtraCharges {

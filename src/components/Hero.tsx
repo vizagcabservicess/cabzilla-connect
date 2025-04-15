@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
-import { getLocalPackagePrice } from '@/services/fareService';
+import { getLocalPackagePrice } from '@/lib/packageData';
 import { formatPrice } from '@/lib/cabData';
 
 export const Hero = () => {
@@ -15,7 +15,7 @@ export const Hero = () => {
       setLoading(true);
       try {
         // Example values - replace with actual default values as needed
-        const packageId = '8hrs80km';
+        const packageId = '8hrs-80km';
         const vehicleId = 'sedan';
         
         // Properly await the Promise before setting the state
@@ -31,32 +31,6 @@ export const Hero = () => {
 
     fetchInitialFare();
   }, []);
-
-  // Function to handle booking price calculation
-  const calculateBookingPrice = async (packageId: string, vehicleId: string) => {
-    try {
-      // Properly handle the Promise by awaiting it
-      return await getLocalPackagePrice(packageId, vehicleId);
-    } catch (error) {
-      console.error('Error calculating booking price:', error);
-      return 0; // Fallback value
-    }
-  };
-
-  // Example of a handler function that would use calculateBookingPrice
-  const handleBooking = async () => {
-    const packageId = '8hrs80km';
-    const vehicleId = 'sedan';
-    
-    // This is the correct way to handle a Promise<number> when you need a number
-    const fare = await calculateBookingPrice(packageId, vehicleId);
-    
-    // Now fare is a number, not a Promise<number>
-    console.log('Calculated fare:', fare);
-    
-    // You can use it directly in calculations or state updates
-    setMainFare(fare);
-  };
 
   return (
     <section className="relative bg-white py-16 md:py-24">

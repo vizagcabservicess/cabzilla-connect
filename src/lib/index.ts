@@ -78,7 +78,6 @@ export {
 export type { 
   CabType, 
   HourlyPackage,
-  // Include these types only if they are defined in @/types/cab
   FareCache,
   TourInfo,
   TourFares,
