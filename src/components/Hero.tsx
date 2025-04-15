@@ -10,7 +10,7 @@ import {
 } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { cabTypes, formatPrice } from '@/lib/cabData';
-import { hourlyPackages, getLocalPackagePrice, getLocalPackagePriceFromStorage } from '@/lib/packageData';
+import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
@@ -230,11 +230,11 @@ export function Hero() {
     const loadLocalPackagePrice = async () => {
       if (tripType === 'local' && selectedCab) {
         try {
-          // First check if we have a cached price
-          const storedPrice = getLocalPackagePriceFromStorage(hourlyPackage, selectedCab.name);
-          if (storedPrice > 0) {
-            console.log(`Using stored local package price for ${selectedCab.name}: ${storedPrice}`);
-            setLocalPackagePrice(storedPrice);
+          // Check if we have a cached price in the window cache
+          const cacheKey = `${selectedCab.name.toLowerCase().replace(/\s+/g, '_')}_${hourlyPackage}`;
+          if (window.localPackagePriceCache && window.localPackagePriceCache[cacheKey] && window.localPackagePriceCache[cacheKey].price > 0) {
+            console.log(`Using cached local package price for ${selectedCab.name}: ${window.localPackagePriceCache[cacheKey].price}`);
+            setLocalPackagePrice(window.localPackagePriceCache[cacheKey].price);
             return;
           }
           

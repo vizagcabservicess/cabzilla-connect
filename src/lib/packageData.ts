@@ -90,6 +90,45 @@ const calculateDynamicPrice = (vehicleType: string, packageId: string): number =
   return Math.round(baseValue * multiplier);
 };
 
+// Function to get a cached price from localStorage (new function to fix Hero.tsx import)
+export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: string): number {
+  try {
+    // Normalize parameters
+    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    
+    // Fix: Make sure we format "8hr-80km" as "8hrs-80km"
+    let normalizedPackageId = packageId;
+    if (packageId.includes('hr-')) {
+      normalizedPackageId = packageId.replace('hr-', 'hrs-');
+    }
+    
+    // Create unique cache key
+    const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
+    
+    // Try to get price from window cache first
+    if (typeof window !== 'undefined' && window.localPackagePriceCache && window.localPackagePriceCache[cacheKey]) {
+      return window.localPackagePriceCache[cacheKey].price;
+    }
+    
+    // Then try localStorage
+    const fareKey = `fare_local_${normalizedVehicleType}`;
+    const storedPrice = localStorage.getItem(fareKey);
+    
+    if (storedPrice) {
+      const price = Number(storedPrice);
+      if (price > 0) {
+        return price;
+      }
+    }
+    
+    // Return 0 if no price found
+    return 0;
+  } catch (error) {
+    console.error('Error getting local package price from storage:', error);
+    return 0;
+  }
+}
+
 // Function to fetch local package prices from all possible API endpoints
 export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
   try {
