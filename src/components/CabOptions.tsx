@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -92,7 +91,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const loadLocalPackageFares = async () => {
     if (tripType !== 'local' || !hourlyPackage) return;
     
-    console.log('CabOptions: Loading local package fares from API');
+    console.log('CabOptions: Loading local package fares');
     setIsCalculatingFares(true);
     setFareErrors({});
     
@@ -102,8 +101,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       await Promise.all(cabTypes.map(async (cab) => {
         try {
-          // Force refresh to get the latest pricing
-          const price = await getLocalPackagePrice(hourlyPackage, cab.id, true);
+          // Get price from our cached/default system
+          const price = await getLocalPackagePrice(hourlyPackage, cab.id, false);
           if (price > 0) {
             updatedFares[cab.id] = price;
             
@@ -187,7 +186,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       if (tripType === 'local' && hourlyPackage) {
         setIsCalculatingFares(true);
-        getLocalPackagePrice(hourlyPackage, cab.id, true)
+        getLocalPackagePrice(hourlyPackage, cab.id, false)
           .then(price => {
             if (price > 0) {
               setCabFares(prev => ({
