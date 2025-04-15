@@ -334,7 +334,7 @@ export function Hero() {
     return Math.ceil(totalPrice / 10) * 10;
   };
 
-  function handleGuestDetailsSubmit(guestDetails: any) {
+  async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);
