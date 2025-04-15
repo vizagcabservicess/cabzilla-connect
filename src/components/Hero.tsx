@@ -197,22 +197,6 @@ export function Hero() {
   }, [hourlyPackage]);
 
   useEffect(() => {
-    if (tripType === 'local' && pickupLocation && pickupDate) {
-      setIsFormValid(true);
-    } else if (tripType === 'outstation' && pickupLocation && dropLocation && pickupDate) {
-      if (tripMode === "round-trip" && !returnDate) {
-        setIsFormValid(false);
-      } else {
-        setIsFormValid(true);
-      }
-    } else if (tripType === 'airport' && pickupLocation && dropLocation && pickupDate) {
-      setIsFormValid(true);
-    } else {
-      setIsFormValid(false);
-    }
-  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
-
-  useEffect(() => {
     if (tripType === 'local') {
       // For local trips, reset the distance to match the selected package
       const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;

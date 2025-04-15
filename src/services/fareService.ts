@@ -14,7 +14,7 @@ function clearFareCache() {
   localStorage.removeItem('outstation_fares_timestamp');
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
-  localStorage.setItem('globalFareRefreshToken', Date.now());
+  localStorage.setItem('globalFareRefreshToken', Date.now().toString());
   
   // Clear all fare-related cache items from localStorage and sessionStorage
   const keysToRemove = [
