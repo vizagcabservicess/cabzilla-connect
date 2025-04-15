@@ -40,45 +40,56 @@ export const hourlyPackageOptions = hourlyPackages.map(pkg => ({
   label: `${pkg.hours} Hours / ${pkg.kilometers} KM`
 }));
 
-interface LocalPackagePrices {
-  [key: string]: {
-    '4hrs-40km': number;
-    '8hrs-80km': number;
-    '10hrs-100km': number;
-    extraKmRate: number;
-    extraHourRate: number;
-  };
-}
-
-// Default pricing if API fails
-const defaultLocalPackagePrices: LocalPackagePrices = {
+// Default pricing by vehicle type and package
+const defaultLocalPackagePrices = {
   'sedan': {
-    '4hrs-40km': 1200,
-    '8hrs-80km': 2000,
-    '10hrs-100km': 2500,
-    extraKmRate: 12,
-    extraHourRate: 100,
+    '4hrs-40km': 1400,
+    '8hrs-80km': 2400,
+    '10hrs-100km': 3000,
+    extraKmRate: 14,
+    extraHourRate: 300,
   },
   'ertiga': {
-    '4hrs-40km': 1500,
-    '8hrs-80km': 2500,
-    '10hrs-100km': 3000,
-    extraKmRate: 15,
-    extraHourRate: 120,
-  },
-  'innova_crysta': {
     '4hrs-40km': 1800,
     '8hrs-80km': 3000,
-    '10hrs-100km': 3500,
+    '10hrs-100km': 3600,
     extraKmRate: 18,
-    extraHourRate: 150,
+    extraHourRate: 350,
+  },
+  'innova_crysta': {
+    '4hrs-40km': 2200,
+    '8hrs-80km': 3600,
+    '10hrs-100km': 4500,
+    extraKmRate: 22,
+    extraHourRate: 400,
   },
   'tempo': {
+    '4hrs-40km': 3000,
+    '8hrs-80km': 4500,
+    '10hrs-100km': 5600,
+    extraKmRate: 30,
+    extraHourRate: 500,
+  },
+  'etios': {
+    '4hrs-40km': 1400,
+    '8hrs-80km': 2400,
+    '10hrs-100km': 3000,
+    extraKmRate: 14,
+    extraHourRate: 300,
+  },
+  'dzire_cng': {
+    '4hrs-40km': 1400,
+    '8hrs-80km': 2400,
+    '10hrs-100km': 3000,
+    extraKmRate: 14,
+    extraHourRate: 300,
+  },
+  'innova_hycross': {
     '4hrs-40km': 2500,
     '8hrs-80km': 4000,
     '10hrs-100km': 5000,
     extraKmRate: 25,
-    extraHourRate: 200,
+    extraHourRate: 450,
   }
 };
 
@@ -116,29 +127,52 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     
     // Map vehicle types to standard types for default pricing
     let mappedVehicleType = normalizedVehicleType;
-    if (normalizedVehicleType.includes('innova') || normalizedVehicleType === 'hycross') {
+    if (normalizedVehicleType.includes('innova') && normalizedVehicleType.includes('hycross')) {
+      mappedVehicleType = 'innova_hycross';
+    } else if (normalizedVehicleType.includes('innova') || normalizedVehicleType === 'hycross') {
       mappedVehicleType = 'innova_crysta';
-    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios')) {
+    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios') || 
+               normalizedVehicleType.includes('swift') || normalizedVehicleType.includes('amaze')) {
       mappedVehicleType = 'sedan';
     } else if (normalizedVehicleType.includes('tempo') || normalizedVehicleType.includes('traveller')) {
       mappedVehicleType = 'tempo';
+    } else if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('xl6')) {
+      mappedVehicleType = 'ertiga';
     }
     
-    // Use default pricing - direct access to default values to prevent API call failures
-    const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType] || defaultLocalPackagePrices['sedan'];
-    const defaultPrice = defaultVehicleData[normalizedPackageId as keyof typeof defaultVehicleData] || 0;
+    // Determine the default price based on mappedVehicleType and package
+    const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType as keyof typeof defaultLocalPackagePrices] || 
+                               defaultLocalPackagePrices['sedan'];
     
-    // Store default price in cache and localStorage for consistency
-    const price = defaultPrice;
+    let price = 0;
+    
+    // Get the price from the default data
+    if (normalizedPackageId === '4hrs-40km') {
+      price = defaultVehicleData['4hrs-40km'];
+    } else if (normalizedPackageId === '8hrs-80km') {
+      price = defaultVehicleData['8hrs-80km'];
+    } else if (normalizedPackageId === '10hrs-100km') {
+      price = defaultVehicleData['10hrs-100km'];
+    } else {
+      price = defaultVehicleData['8hrs-80km']; // Default to 8hrs if package is unknown
+    }
+    
+    // Log the mapping and price
+    console.log(`Local package price for ${vehicleType} (mapped to ${mappedVehicleType}) - ${normalizedPackageId}: ${price}`);
+    
+    // Store price in cache and localStorage for consistency
     localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'default' };
     localStorage.setItem(localStorageKey, price.toString());
     
     // Dispatch event for consistency
-    window.dispatchEvent(new CustomEvent('local-fare-updated', {
-      detail: { vehicleType: normalizedVehicleType, packageId: normalizedPackageId, price, source: 'default' }
-    }));
+    try {
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: { vehicleType: normalizedVehicleType, packageId: normalizedPackageId, price, source: 'default' }
+      }));
+    } catch (e) {
+      console.error('Error dispatching fare update event:', e);
+    }
     
-    console.log(`Using default price for ${cacheKey}: ${price}`);
     return price;
   } catch (error) {
     console.error('Error fetching local package price:', error);
@@ -148,16 +182,34 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const normalizedPackageId = packageId.replace('0', '').replace('hr-', 'hrs-');
     let mappedVehicleType = normalizedVehicleType;
     
-    if (normalizedVehicleType.includes('innova') || normalizedVehicleType === 'hycross') {
+    if (normalizedVehicleType.includes('innova') && normalizedVehicleType.includes('hycross')) {
+      mappedVehicleType = 'innova_hycross';
+    } else if (normalizedVehicleType.includes('innova') || normalizedVehicleType === 'hycross') {
       mappedVehicleType = 'innova_crysta';
-    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios')) {
+    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios') || 
+               normalizedVehicleType.includes('swift') || normalizedVehicleType.includes('amaze')) {
       mappedVehicleType = 'sedan';
     } else if (normalizedVehicleType.includes('tempo') || normalizedVehicleType.includes('traveller')) {
       mappedVehicleType = 'tempo';
+    } else if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('xl6')) {
+      mappedVehicleType = 'ertiga';
     }
     
-    const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType] || defaultLocalPackagePrices['sedan'];
-    const price = defaultVehicleData[normalizedPackageId as keyof typeof defaultVehicleData] || 0;
+    const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType as keyof typeof defaultLocalPackagePrices] || 
+                               defaultLocalPackagePrices['sedan'];
+    
+    let price = 0;
+    
+    // Get the price from the default data
+    if (normalizedPackageId === '4hrs-40km') {
+      price = defaultVehicleData['4hrs-40km'];
+    } else if (normalizedPackageId === '8hrs-80km') {
+      price = defaultVehicleData['8hrs-80km'];
+    } else if (normalizedPackageId === '10hrs-100km') {
+      price = defaultVehicleData['10hrs-100km'];
+    } else {
+      price = defaultVehicleData['8hrs-80km']; // Default to 8hrs if package is unknown
+    }
     
     // Store the price in cache and localStorage
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
@@ -188,7 +240,7 @@ export function clearLocalPackagePriceCache() {
 
 // Function to get the price for a specific package and vehicle from localStorage
 export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: string): number {
-  const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '');
+  const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
   const fareKey = `fare_local_${normalizedVehicleType}`;
   const storedPrice = localStorage.getItem(fareKey);
   
@@ -197,16 +249,36 @@ export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: 
   }
   
   // If no stored price is found, use default values
-  const mappedVehicleType = normalizedVehicleType.includes('innova') ? 'innova_crysta' : 
-                           normalizedVehicleType.includes('dzire') ? 'sedan' :
-                           normalizedVehicleType.includes('tempo') ? 'tempo' : 
-                           normalizedVehicleType;
+  let mappedVehicleType = normalizedVehicleType;
   
-  if (mappedVehicleType in defaultLocalPackagePrices) {
-    return defaultLocalPackagePrices[mappedVehicleType][packageId as keyof typeof defaultLocalPackagePrices[typeof mappedVehicleType]];
+  if (normalizedVehicleType.includes('innova') && normalizedVehicleType.includes('hycross')) {
+    mappedVehicleType = 'innova_hycross';
+  } else if (normalizedVehicleType.includes('innova')) {
+    mappedVehicleType = 'innova_crysta';
+  } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios') || 
+             normalizedVehicleType.includes('swift') || normalizedVehicleType.includes('amaze')) {
+    mappedVehicleType = 'sedan';
+  } else if (normalizedVehicleType.includes('tempo')) {
+    mappedVehicleType = 'tempo';
+  } else if (normalizedVehicleType.includes('ertiga')) {
+    mappedVehicleType = 'ertiga';
   }
   
-  return defaultLocalPackagePrices['sedan'][packageId as keyof typeof defaultLocalPackagePrices['sedan']];
+  // Get the default price from our mapping
+  const defaultData = defaultLocalPackagePrices[mappedVehicleType as keyof typeof defaultLocalPackagePrices] || 
+                      defaultLocalPackagePrices['sedan'];
+  
+  const normalizedPackageId = packageId.replace('0', '').replace('hr-', 'hrs-');
+  
+  if (normalizedPackageId === '4hrs-40km') {
+    return defaultData['4hrs-40km'];
+  } else if (normalizedPackageId === '8hrs-80km') {
+    return defaultData['8hrs-80km'];
+  } else if (normalizedPackageId === '10hrs-100km') {
+    return defaultData['10hrs-100km'];
+  }
+  
+  return defaultData['8hrs-80km']; // Default to 8hrs if package is unknown
 }
 
 // Simulated function to match the API call pattern but use default values directly
@@ -215,7 +287,7 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
   const defaultFares: Record<string, any> = {};
   
   for (const vehicleType in defaultLocalPackagePrices) {
-    const data = defaultLocalPackagePrices[vehicleType];
+    const data = defaultLocalPackagePrices[vehicleType as keyof typeof defaultLocalPackagePrices];
     defaultFares[vehicleType] = {
       price4hrs40km: data['4hrs-40km'],
       price8hrs80km: data['8hrs-80km'],
