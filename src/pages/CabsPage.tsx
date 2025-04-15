@@ -31,6 +31,7 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { Check, MapPin } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
+import { getApiUrl } from "@/config/api";
 
 const CabsPage = () => {
   const navigate = useNavigate();
