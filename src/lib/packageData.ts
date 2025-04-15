@@ -45,6 +45,46 @@ if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
   window.localPackagePriceCache = {};
 }
 
+// IMPORTANT: These are the master fallback prices that will be used when API calls fail
+// Make sure these values are CONSISTENT across the entire application
+const MASTER_FALLBACK_PRICES = {
+  'sedan': {
+    '4hrs-40km': 1200,
+    '8hrs-80km': 2000,
+    '10hrs-100km': 2500,
+    'priceExtraKm': 12,
+    'priceExtraHour': 100
+  },
+  'ertiga': {
+    '4hrs-40km': 1500,
+    '8hrs-80km': 2500,
+    '10hrs-100km': 3000,
+    'priceExtraKm': 15,
+    'priceExtraHour': 120
+  },
+  'innova_crysta': {
+    '4hrs-40km': 1800,
+    '8hrs-80km': 3000,
+    '10hrs-100km': 3500,
+    'priceExtraKm': 18,
+    'priceExtraHour': 150
+  },
+  'innova_hycross': {
+    '4hrs-40km': 2000,
+    '8hrs-80km': 3200,
+    '10hrs-100km': 3800,
+    'priceExtraKm': 20,
+    'priceExtraHour': 160
+  },
+  'tempo': {
+    '4hrs-40km': 2500,
+    '8hrs-80km': 4000,
+    '10hrs-100km': 5000,
+    'priceExtraKm': 25,
+    'priceExtraHour': 200
+  }
+};
+
 // Function to get price for a local package (main function used throughout the app)
 export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
   try {
@@ -164,96 +204,33 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       throw lastError;
     }
     
-    // If no API price is available, use hardcoded fallback prices
-    const fallbackPrices: Record<string, Record<string, number>> = {
-      'sedan': {
-        '4hrs-40km': 1200,
-        '8hrs-80km': 2000,
-        '10hrs-100km': 2500
-      },
-      'ertiga': {
-        '4hrs-40km': 1500,
-        '8hrs-80km': 2500,
-        '10hrs-100km': 3000
-      },
-      'innova_crysta': {
-        '4hrs-40km': 1800,
-        '8hrs-80km': 3000,
-        '10hrs-100km': 3500
-      },
-      'innova_hycross': {
-        '4hrs-40km': 2000,
-        '8hrs-80km': 3200,
-        '10hrs-100km': 3800
-      },
-      'tempo': {
-        '4hrs-40km': 2500,
-        '8hrs-80km': 4000,
-        '10hrs-100km': 5000
-      }
+    // If no API price is available, use CONSISTENT master fallback prices
+    const fallbackPrice = getFallbackPrice(normalizedVehicleType, normalizedPackageId);
+    
+    console.log(`Using fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fallbackPrice}`);
+    
+    // Update cache with hardcoded price
+    window.localPackagePriceCache[cacheKey] = { 
+      price: fallbackPrice, 
+      timestamp: Date.now(), 
+      source: 'hardcoded-fallback' 
     };
     
-    // Get fallback price for this vehicle type and package
-    const vehicleFallbackPrices = fallbackPrices[normalizedVehicleType] || fallbackPrices['sedan'];
-    if (vehicleFallbackPrices && vehicleFallbackPrices[normalizedPackageId]) {
-      const hardcodedPrice = vehicleFallbackPrices[normalizedPackageId];
-      
-      console.log(`Using hardcoded fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${hardcodedPrice}`);
-      
-      // Update cache with hardcoded price
-      window.localPackagePriceCache[cacheKey] = { 
-        price: hardcodedPrice, 
-        timestamp: Date.now(), 
+    // Dispatch event for consistency
+    window.dispatchEvent(new CustomEvent('local-fare-updated', {
+      detail: { 
+        vehicleType: normalizedVehicleType, 
+        packageId: normalizedPackageId, 
+        price: fallbackPrice, 
         source: 'hardcoded-fallback' 
-      };
-      
-      // Dispatch event for consistency
-      window.dispatchEvent(new CustomEvent('local-fare-updated', {
-        detail: { 
-          vehicleType: normalizedVehicleType, 
-          packageId: normalizedPackageId, 
-          price: hardcodedPrice, 
-          source: 'hardcoded-fallback' 
-        }
-      }));
-      
-      return hardcodedPrice;
-    }
+      }
+    }));
     
-    throw new Error(`Failed to get valid price from API for ${vehicleType}, ${packageId}`);
+    return fallbackPrice;
   } catch (error) {
     console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
     
-    // Try to use hardcoded fallback prices
-    const fallbackPrices: Record<string, Record<string, number>> = {
-      'sedan': {
-        '4hrs-40km': 1200,
-        '8hrs-80km': 2000,
-        '10hrs-100km': 2500
-      },
-      'ertiga': {
-        '4hrs-40km': 1500,
-        '8hrs-80km': 2500,
-        '10hrs-100km': 3000
-      },
-      'innova_crysta': {
-        '4hrs-40km': 1800,
-        '8hrs-80km': 3000,
-        '10hrs-100km': 3500
-      },
-      'innova_hycross': {
-        '4hrs-40km': 2000,
-        '8hrs-80km': 3200,
-        '10hrs-100km': 3800
-      },
-      'tempo': {
-        '4hrs-40km': 2500,
-        '8hrs-80km': 4000,
-        '10hrs-100km': 5000
-      }
-    };
-    
-    // Normalize parameters
+    // Use CONSISTENT master fallback prices
     const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
     let normalizedPackageId = packageId;
     if (packageId.includes('hr-')) {
@@ -269,49 +246,65 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       normalizedPackageId = '4hrs-40km';
     }
     
+    // Get fallback price
+    const fallbackPrice = getFallbackPrice(normalizedVehicleType, normalizedPackageId);
+    
     // Create unique cache key
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
     
-    // Get fallback price for this vehicle type and package
-    const vehicleFallbackPrices = fallbackPrices[normalizedVehicleType] || fallbackPrices['sedan'];
-    if (vehicleFallbackPrices && vehicleFallbackPrices[normalizedPackageId]) {
-      const hardcodedPrice = vehicleFallbackPrices[normalizedPackageId];
-      
-      console.log(`Using hardcoded fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${hardcodedPrice}`);
-      
-      // Update cache with hardcoded price
-      window.localPackagePriceCache[cacheKey] = { 
-        price: hardcodedPrice, 
-        timestamp: Date.now(), 
-        source: 'hardcoded-fallback' 
-      };
-      
-      window.dispatchEvent(new CustomEvent('local-fare-updated', {
-        detail: { 
-          vehicleType: normalizedVehicleType, 
-          packageId: normalizedPackageId, 
-          price: hardcodedPrice, 
-          source: 'hardcoded-fallback' 
-        }
-      }));
-      
-      return hardcodedPrice;
-    }
+    console.log(`Using fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fallbackPrice}`);
     
-    // If all else fails, return a default price based on vehicle type
-    const defaultPrice = normalizedVehicleType.includes('innova') ? 3000 : 
-                        normalizedVehicleType.includes('ertiga') ? 2500 : 
-                        normalizedVehicleType.includes('tempo') ? 4000 : 2000;
-    
-    console.log(`Using default fallback price for ${normalizedVehicleType}: ${defaultPrice}`);
+    // Update cache with hardcoded price
     window.localPackagePriceCache[cacheKey] = { 
-      price: defaultPrice, 
+      price: fallbackPrice, 
       timestamp: Date.now(), 
-      source: 'default-fallback' 
+      source: 'hardcoded-fallback' 
     };
     
-    return defaultPrice;
+    window.dispatchEvent(new CustomEvent('local-fare-updated', {
+      detail: { 
+        vehicleType: normalizedVehicleType, 
+        packageId: normalizedPackageId, 
+        price: fallbackPrice, 
+        source: 'hardcoded-fallback' 
+      }
+    }));
+    
+    return fallbackPrice;
   }
+}
+
+// Helper function to get consistent fallback prices
+function getFallbackPrice(vehicleType: string, packageId: string): number {
+  // First, try to get from master fallback prices
+  if (MASTER_FALLBACK_PRICES[vehicleType] && MASTER_FALLBACK_PRICES[vehicleType][packageId]) {
+    return MASTER_FALLBACK_PRICES[vehicleType][packageId];
+  }
+  
+  // If vehicle type not found directly, try to match based on name
+  let matchedVehicleType = vehicleType;
+  if (vehicleType.includes('innova') && vehicleType.includes('hycross')) {
+    matchedVehicleType = 'innova_hycross';
+  } else if (vehicleType.includes('innova')) {
+    matchedVehicleType = 'innova_crysta';
+  } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
+    matchedVehicleType = 'tempo';
+  } else if (vehicleType.includes('ertiga') || vehicleType.includes('suv')) {
+    matchedVehicleType = 'ertiga';
+  } else {
+    matchedVehicleType = 'sedan'; // Default fallback
+  }
+  
+  // Now try with the matched vehicle type
+  if (MASTER_FALLBACK_PRICES[matchedVehicleType] && MASTER_FALLBACK_PRICES[matchedVehicleType][packageId]) {
+    return MASTER_FALLBACK_PRICES[matchedVehicleType][packageId];
+  }
+  
+  // Last resort: return a default price based on vehicle type
+  return matchedVehicleType.includes('innova_hycross') ? 3200 : 
+         matchedVehicleType.includes('innova') ? 3000 : 
+         matchedVehicleType.includes('ertiga') ? 2500 : 
+         matchedVehicleType.includes('tempo') ? 4000 : 2000;
 }
 
 // Function to get local package price from localStorage (for backward compatibility)
@@ -426,95 +419,31 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
           }
         }
         
-        // If none of the API endpoints worked, use hardcoded values
+        // If none of the API endpoints worked, use MASTER_FALLBACK_PRICES
         if (!success) {
-          // Use hardcoded fallback prices
-          const fallbackPrices: Record<string, any> = {
-            'sedan': {
-              price4hrs40km: 1200,
-              price8hrs80km: 2000,
-              price10hrs100km: 2500,
-              priceExtraKm: 12,
-              priceExtraHour: 100
-            },
-            'ertiga': {
-              price4hrs40km: 1500,
-              price8hrs80km: 2500,
-              price10hrs100km: 3000,
-              priceExtraKm: 15,
-              priceExtraHour: 120
-            },
-            'innova_crysta': {
-              price4hrs40km: 1800,
-              price8hrs80km: 3000,
-              price10hrs100km: 3500,
-              priceExtraKm: 18,
-              priceExtraHour: 150
-            },
-            'innova_hycross': {
-              price4hrs40km: 2000,
-              price8hrs80km: 3200,
-              price10hrs100km: 3800,
-              priceExtraKm: 20,
-              priceExtraHour: 160
-            },
-            'tempo': {
-              price4hrs40km: 2500,
-              price8hrs80km: 4000,
-              price10hrs100km: 5000,
-              priceExtraKm: 25,
-              priceExtraHour: 200
-            }
+          // Use hardcoded fallback prices - ENSURE CONSISTENCY with MASTER_FALLBACK_PRICES
+          fares[vehicleId] = {
+            price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]?.['4hrs-40km'] || 0,
+            price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]?.['8hrs-80km'] || 0, 
+            price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]?.['10hrs-100km'] || 0,
+            priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraKm'] || 0,
+            priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraHour'] || 0
           };
           
-          // Use fallback price for this vehicle
-          fares[vehicleId] = fallbackPrices[vehicleId] || fallbackPrices['sedan'];
           console.log(`Using hardcoded fallback prices for ${vehicleId}`);
         }
       } catch (vehicleError) {
         console.error(`Error fetching fares for ${vehicleId}:`, vehicleError);
         
-        // Use hardcoded fallback prices
-        const fallbackPrices: Record<string, any> = {
-          'sedan': {
-            price4hrs40km: 1200,
-            price8hrs80km: 2000,
-            price10hrs100km: 2500,
-            priceExtraKm: 12,
-            priceExtraHour: 100
-          },
-          'ertiga': {
-            price4hrs40km: 1500,
-            price8hrs80km: 2500,
-            price10hrs100km: 3000,
-            priceExtraKm: 15,
-            priceExtraHour: 120
-          },
-          'innova_crysta': {
-            price4hrs40km: 1800,
-            price8hrs80km: 3000,
-            price10hrs100km: 3500,
-            priceExtraKm: 18,
-            priceExtraHour: 150
-          },
-          'innova_hycross': {
-            price4hrs40km: 2000,
-            price8hrs80km: 3200,
-            price10hrs100km: 3800,
-            priceExtraKm: 20,
-            priceExtraHour: 160
-          },
-          'tempo': {
-            price4hrs40km: 2500,
-            price8hrs80km: 4000,
-            price10hrs100km: 5000,
-            priceExtraKm: 25,
-            priceExtraHour: 200
-          }
+        // Use hardcoded fallback prices - ENSURE CONSISTENCY with MASTER_FALLBACK_PRICES
+        fares[vehicleId] = {
+          price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]?.['4hrs-40km'] || 0,
+          price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]?.['8hrs-80km'] || 0, 
+          price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]?.['10hrs-100km'] || 0,
+          priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraKm'] || 0,
+          priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraHour'] || 0
         };
         
-        // Use fallback price for this vehicle
-        fares[vehicleId] = fallbackPrices[vehicleId] || fallbackPrices['sedan'];
         console.log(`Using hardcoded fallback prices for ${vehicleId}`);
       }
     }
@@ -528,44 +457,18 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
   } catch (error) {
     console.error('Error fetching all local fares:', error);
     
-    // Use hardcoded fallback prices for all vehicles
-    const fallbackFares: Record<string, any> = {
-      'sedan': {
-        price4hrs40km: 1200,
-        price8hrs80km: 2000,
-        price10hrs100km: 2500,
-        priceExtraKm: 12,
-        priceExtraHour: 100
-      },
-      'ertiga': {
-        price4hrs40km: 1500,
-        price8hrs80km: 2500,
-        price10hrs100km: 3000,
-        priceExtraKm: 15,
-        priceExtraHour: 120
-      },
-      'innova_crysta': {
-        price4hrs40km: 1800,
-        price8hrs80km: 3000,
-        price10hrs100km: 3500,
-        priceExtraKm: 18,
-        priceExtraHour: 150
-      },
-      'innova_hycross': {
-        price4hrs40km: 2000,
-        price8hrs80km: 3200,
-        price10hrs100km: 3800,
-        priceExtraKm: 20,
-        priceExtraHour: 160
-      },
-      'tempo': {
-        price4hrs40km: 2500,
-        price8hrs80km: 4000,
-        price10hrs100km: 5000,
-        priceExtraKm: 25,
-        priceExtraHour: 200
-      }
-    };
+    // Create fallback fares from MASTER_FALLBACK_PRICES for consistency
+    const fallbackFares: Record<string, any> = {};
+    
+    for (const vehicleId in MASTER_FALLBACK_PRICES) {
+      fallbackFares[vehicleId] = {
+        price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]['4hrs-40km'],
+        price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]['8hrs-80km'],
+        price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]['10hrs-100km'],
+        priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]['priceExtraKm'],
+        priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]['priceExtraHour']
+      };
+    }
     
     // Dispatch event to notify components about fallback fares
     window.dispatchEvent(new CustomEvent('local-fares-updated', {
