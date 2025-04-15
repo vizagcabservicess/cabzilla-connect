@@ -60,13 +60,7 @@ try {
     
     // Check if the connection was successful
     if (!$conn) {
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => "Database connection failed",
-            'timestamp' => time()
-        ]);
-        exit;
+        throw new Exception("Database connection failed");
     }
     
     // Get vehicle_id parameter if present
@@ -77,9 +71,6 @@ try {
         error_log("[$timestamp] Mapped numeric ID $vehicleId to " . $numericIdMapExtended[$vehicleId], 3, $logDir . '/local-package-fares.log');
         $vehicleId = $numericIdMapExtended[$vehicleId];
     }
-    
-    // Check if package_id parameter is present
-    $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : null;
     
     // First check if local_package_fares table exists
     $localFaresTableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
@@ -153,13 +144,7 @@ try {
                     (isset($input['id']) ? $input['id'] : null));
                     
         if (!$vehicleId) {
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => "Vehicle ID is required",
-                'timestamp' => time()
-            ]);
-            exit;
+            throw new Exception("Vehicle ID is required");
         }
         
         // Clean vehicleId - remove "item-" prefix if exists
@@ -175,11 +160,9 @@ try {
                 error_log("[$timestamp] Mapped numeric ID $originalId to $vehicleId", 3, $logDir . '/local-package-fares.log');
             } else {
                 error_log("[$timestamp] REJECTED: Unmapped numeric ID $vehicleId not allowed", 3, $logDir . '/local-package-fares.log');
-                http_response_code(400);
                 echo json_encode([
                     'status' => 'error',
-                    'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', etc.",
-                    'timestamp' => time()
+                    'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', etc."
                 ]);
                 exit;
             }
@@ -188,11 +171,9 @@ try {
         // If vehicleId is still numeric at this point, reject it
         if (is_numeric($vehicleId)) {
             error_log("[$timestamp] CRITICAL: ID is still numeric after processing: $vehicleId", 3, $logDir . '/local-package-fares.log');
-            http_response_code(400);
             echo json_encode([
                 'status' => 'error',
-                'message' => "Cannot use numeric ID '$vehicleId'. Only string-based vehicle IDs are allowed.",
-                'timestamp' => time()
+                'message' => "Cannot use numeric ID '$vehicleId'. Only string-based vehicle IDs are allowed."
             ]);
             exit;
         }
@@ -357,94 +338,29 @@ try {
             exit;
         } catch (Exception $e) {
             error_log("[$timestamp] Error updating local package fares: " . $e->getMessage(), 3, $logDir . '/local-package-fares.log');
-            http_response_code(500);
-            echo json_encode([
-                'status' => 'error',
-                'message' => "Database error: " . $e->getMessage(),
-                'timestamp' => time()
-            ]);
-            exit;
+            throw new Exception("Database error: " . $e->getMessage());
         }
     }
     
-    // If specific packageId is requested, only return that single package's price for a vehicle
-    if ($packageId && $vehicleId) {
-        // Get the specific package price for the vehicle
-        $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            
-            // Determine which price to return based on package ID
-            $price = 0;
-            $packageName = '';
-            
-            if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-                $price = floatval($row['price_4hr_40km']);
-                $packageName = '4 Hours Package (40km)';
-            } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-                $price = floatval($row['price_8hr_80km']);
-                $packageName = '8 Hours Package (80km)';
-            } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-                $price = floatval($row['price_10hr_100km']);
-                $packageName = '10 Hours Package (100km)';
-            }
-            
-            if ($price <= 0) {
-                http_response_code(404);
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => "Price not available for package $packageId and vehicle $vehicleId",
-                    'timestamp' => time()
-                ]);
-                exit;
-            }
-            
-            echo json_encode([
-                'status' => 'success',
-                'vehicleId' => $vehicleId,
-                'packageId' => $packageId,
-                'packageName' => $packageName,
-                'baseFare' => $price,
-                'price' => $price,
-                'timestamp' => time()
-            ]);
-            exit;
-        } else {
-            http_response_code(404);
-            echo json_encode([
-                'status' => 'error',
-                'message' => "No fare found for vehicle $vehicleId",
-                'timestamp' => time()
-            ]);
-            exit;
-        }
-    }
-    
-    // Handle GET request to retrieve all fares
-    // If here, we're getting all vehicles with their local package fares
+    // Handle GET request to retrieve fares
+    // Get all vehicles with their local package fares - IMPROVED to show all vehicles
     $query = "
-        SELECT v.vehicle_id, v.name, lpf.* 
+        SELECT v.id, v.vehicle_id, v.name, lpf.* 
         FROM vehicles v
         LEFT JOIN local_package_fares lpf ON v.vehicle_id = lpf.vehicle_id
-        WHERE v.is_active = 1 OR ?
+        WHERE v.is_active = 1 OR :includeInactive = 'true'
         ORDER BY v.name
     ";
     
-    $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
+    $includeInactive = isset($_GET['includeInactive']) ? $_GET['includeInactive'] : 'false';
     $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $includeInactive);
+    $stmt->bindParam(':includeInactive', $includeInactive);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     $fares = [];
-    
-    while ($row = $result->fetch_assoc()) {
-        $id = $row['vehicle_id'];
+    foreach ($results as $row) {
+        $id = $row['vehicle_id'] ?? $row['id'];
         
         // Filter by vehicle_id if provided
         if ($vehicleId && $id != $vehicleId) {
@@ -468,27 +384,67 @@ try {
             'price_8hr_80km' => floatval($row['price_8hr_80km'] ?? 0),
             'price_10hr_100km' => floatval($row['price_10hr_100km'] ?? 0),
             'price_extra_km' => floatval($row['extra_km_rate'] ?? 0),
-            'price_extra_hour' => floatval($row['extra_hour_rate'] ?? 0)
+            'price_extra_hour' => floatval($row['extra_hour_rate'] ?? 0),
+            
+            // Include alias properties for compatibility
+            'package4hr40km' => floatval($row['price_4hr_40km'] ?? 0),
+            'package8hr80km' => floatval($row['price_8hr_80km'] ?? 0),
+            'package10hr100km' => floatval($row['price_10hr_100km'] ?? 0),
+            'extraKmRate' => floatval($row['extra_km_rate'] ?? 0),
+            'extraHourRate' => floatval($row['extra_hour_rate'] ?? 0)
         ];
     }
     
-    // If no fares found and a specific vehicle was requested, return 404
+    // If no fares found and we have a specific vehicle ID, provide default values
     if (empty($fares) && $vehicleId) {
-        http_response_code(404);
-        echo json_encode([
-            'status' => 'error',
-            'message' => "No fare found for vehicle $vehicleId",
-            'timestamp' => time()
-        ]);
-        exit;
+        $sampleFares = [
+            'sedan' => [
+                'price4hrs40km' => 1200,
+                'price8hrs80km' => 2500,
+                'price10hrs100km' => 3000,
+                'priceExtraKm' => 14,
+                'priceExtraHour' => 250
+            ],
+            'ertiga' => [
+                'price4hrs40km' => 1800,
+                'price8hrs80km' => 3000,
+                'price10hrs100km' => 3600,
+                'priceExtraKm' => 18,
+                'priceExtraHour' => 300
+            ],
+            'innova' => [
+                'price4hrs40km' => 2300,
+                'price8hrs80km' => 3800,
+                'price10hrs100km' => 4500,
+                'priceExtraKm' => 20,
+                'priceExtraHour' => 350
+            ],
+            'innova_crysta' => [
+                'price4hrs40km' => 2300,
+                'price8hrs80km' => 3800,
+                'price10hrs100km' => 4500,
+                'priceExtraKm' => 20,
+                'priceExtraHour' => 350
+            ]
+        ];
+        
+        // If vehicle ID is provided, return only that vehicle's fares
+        if (isset($sampleFares[$vehicleId])) {
+            $fares[$vehicleId] = array_merge(
+                ['id' => $vehicleId, 'vehicleId' => $vehicleId, 'name' => ucfirst(str_replace('_', ' ', $vehicleId))],
+                $sampleFares[$vehicleId]
+            );
+        }
     }
     
-    // Return all fares
+    // Return response
     echo json_encode([
         'status' => 'success',
         'fares' => $fares,
-        'count' => count($fares),
-        'timestamp' => time()
+        'timestamp' => time(),
+        'source' => empty($fares) ? 'sample' : 'database',
+        'vehicle_id' => $vehicleId,
+        'count' => count($fares)
     ]);
     
 } catch (Exception $e) {
@@ -496,7 +452,7 @@ try {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => "Server error: " . $e->getMessage(),
+        'message' => $e->getMessage(),
         'timestamp' => time()
     ]);
 }

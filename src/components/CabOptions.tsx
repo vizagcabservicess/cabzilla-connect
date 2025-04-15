@@ -4,10 +4,7 @@ import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getLocalPackagePriceFromApi } from '@/lib/packageData';
-import { toast } from 'sonner';
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { getLocalPackagePriceFromApi, fetchAndCacheLocalFares } from '@/lib/packageData';
 
 export interface CabListProps {
   cabTypes: CabType[];
@@ -49,7 +46,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [isCalculatingFares, setIsCalculatingFares] = useState<boolean>(true);
-  const [fareErrors, setFareErrors] = useState<Record<string, string>>({});
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [pendingBookingSummaryFareRequests, setPendingBookingSummaryFareRequests] = useState<Record<string, boolean>>({});
   const [fareUpdateTriggered, setFareUpdateTriggered] = useState<boolean>(false);
@@ -103,14 +99,14 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     
     console.log('CabOptions: Loading local package fares from API');
     setIsCalculatingFares(true);
-    setFareErrors({});
     
     try {
+      // Fetch all local fares from the API
+      const allFares = await fetchAndCacheLocalFares();
       const updatedFares: Record<string, number> = {};
-      const updatedErrors: Record<string, string> = {};
       
-      // For each cab, get the price for the selected package from the API
-      await Promise.all(cabTypes.map(async (cab) => {
+      // For each cab, get the price for the selected package
+      cabTypes.forEach(async (cab) => {
         try {
           const price = await getLocalPackagePriceFromApi(hourlyPackage, cab.id);
           if (price > 0) {
@@ -129,24 +125,27 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
               }
             }));
           } else {
-            updatedErrors[cab.id] = `Price not available for ${cab.name}`;
+            // If no price, use a fallback
+            updatedFares[cab.id] = cab.price || 2000;
           }
         } catch (error) {
           console.error(`Error getting fare for ${cab.id}:`, error);
-          updatedErrors[cab.id] = error instanceof Error ? error.message : 'Price unavailable';
+          updatedFares[cab.id] = cab.price || 2000;
         }
-      }));
+      });
       
-      // Update state with all fares and errors
+      // Update state with all fares
       setCabFares(updatedFares);
-      setFareErrors(updatedErrors);
       setLastFareUpdate(Date.now());
     } catch (error) {
       console.error('Error loading local package fares:', error);
-      setFareErrors({ global: 'Failed to load fares. Please try again.' });
       
-      // Show error toast
-      toast.error('Failed to load package fares. Please try again.');
+      // Fallback: Use existing cab prices
+      const fallbackFares: Record<string, number> = {};
+      cabTypes.forEach(cab => {
+        fallbackFares[cab.id] = cab.price || 2000;
+      });
+      setCabFares(fallbackFares);
     } finally {
       setIsCalculatingFares(false);
     }
@@ -201,55 +200,30 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       // For local trips, fetch the exact fare from the API before emitting with fare
       if (tripType === 'local' && hourlyPackage) {
-        setIsCalculatingFares(true);
         getLocalPackagePriceFromApi(hourlyPackage, cab.id)
           .then(price => {
-            if (price > 0) {
-              // Update our cab fares state
-              setCabFares(prev => ({
-                ...prev,
-                [cab.id]: price
-              }));
-              
-              // Then emit with fare information
-              window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-                detail: {
-                  cabType: cab.id,
-                  cabName: cab.name,
-                  fare: price,
-                  tripType: tripType,
-                  tripMode: tripMode,
-                  hourlyPackage,
-                  timestamp: now + 1 // Use different timestamp to prevent event merging
-                }
-              }));
-              console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${price}`);
-            } else {
-              // Handle case when fare is zero or negative
-              setFareErrors(prev => ({
-                ...prev,
-                [cab.id]: 'Price not available'
-              }));
-              toast.error(`Could not retrieve price for ${cab.name}`);
-            }
-            setIsCalculatingFares(false);
-          })
-          .catch(error => {
-            console.error(`Error getting fare for ${cab.id}:`, error);
-            // Update error state
-            setFareErrors(prev => ({
-              ...prev,
-              [cab.id]: error instanceof Error ? error.message : 'Price unavailable'
-            }));
-            toast.error(`Could not retrieve price for ${cab.name}`);
-            setIsCalculatingFares(false);
-            
-            // Emit with error
-            window.dispatchEvent(new CustomEvent('cab-selected-with-error', {
+            // Then emit with fare information
+            window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
               detail: {
                 cabType: cab.id,
                 cabName: cab.name,
-                error: error instanceof Error ? error.message : 'Price unavailable',
+                fare: price,
+                tripType: tripType,
+                tripMode: tripMode,
+                hourlyPackage,
+                timestamp: now + 1 // Use different timestamp to prevent event merging
+              }
+            }));
+            console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${price}`);
+          })
+          .catch(error => {
+            console.error(`Error getting fare for ${cab.id}:`, error);
+            // Emit with existing fare as fallback
+            window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+              detail: {
+                cabType: cab.id,
+                cabName: cab.name,
+                fare: cabFare,
                 tripType: tripType,
                 tripMode: tripMode,
                 hourlyPackage,
@@ -316,7 +290,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       }
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
-      toast.error('Error selecting cab. Please try again.');
     }
   };
 
@@ -383,16 +356,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         setIsCalculatingFares(false);
       }
       
-      // If we already have a selected cab, fetch its fare
+      // CRITICAL FIX: If we already have a selected cab, emit an event with its fare
       if (selectedCab && tripType === 'local' && hourlyPackage) {
         getLocalPackagePriceFromApi(hourlyPackage, selectedCab.id)
           .then(price => {
             if (price > 0) {
-              setCabFares(prev => ({
-                ...prev,
-                [selectedCab.id]: price
-              }));
-              
               window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
                 detail: {
                   cabType: selectedCab.id,
@@ -405,24 +373,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 }
               }));
               console.log(`CabOptions: Dispatched fare update event for existing selected cab ${selectedCab.id}: ${price}`);
-            } else {
-              setFareErrors(prev => ({
-                ...prev,
-                [selectedCab.id]: 'Price not available'
-              }));
             }
           })
           .catch(error => {
             console.error(`Error getting fare for ${selectedCab.id}:`, error);
-            setFareErrors(prev => ({
-              ...prev,
-              [selectedCab.id]: error instanceof Error ? error.message : 'Price unavailable'
-            }));
           });
       }
     } catch (error) {
       console.error('Error loading fares:', error);
-      setFareErrors({ global: 'Failed to load fares. Please try again.' });
+      // Fallback to simple calculation
+      const fallbackFares: Record<string, number> = {};
+      cabTypes.forEach(cab => {
+        fallbackFares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+      });
+      setCabFares(fallbackFares);
+      setIsCalculatingFares(false);
     }
   }, [cabTypes, distance, tripType, hourlyPackage, selectedCab, tripMode, fareUpdateTriggered]);
 
@@ -435,13 +400,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         
         setCabFares(prev => {
           const updated = { ...prev, [cabId]: fare };
-          return updated;
-        });
-        
-        // Clear any errors for this cab
-        setFareErrors(prev => {
-          const updated = { ...prev };
-          delete updated[cabId];
           return updated;
         });
         
@@ -481,28 +439,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           return updated;
         });
         
-        // Clear any errors for this cab
-        setFareErrors(prev => {
-          const updated = { ...prev };
-          delete updated[cabType];
-          return updated;
-        });
-        
         // Update timestamp to force re-renders
         setLastFareUpdate(Date.now());
-      }
-    };
-    
-    // Handle error events
-    const handleFareError = (event: CustomEvent) => {
-      if (event.detail && event.detail.cabId && event.detail.error) {
-        const { cabId, error } = event.detail;
-        console.log(`CabOptions: Received fare error for ${cabId}: ${error}`);
-        
-        setFareErrors(prev => ({
-          ...prev,
-          [cabId]: error
-        }));
       }
     };
     
@@ -511,45 +449,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       if (event.detail && event.detail.cabId && selectedCab?.id === event.detail.cabId) {
         console.log(`CabOptions: Received fare recalculation request for ${event.detail.cabId}`);
         
-        // If local trip type, refetch from API
-        if (tripType === 'local' && hourlyPackage) {
-          getLocalPackagePriceFromApi(hourlyPackage, event.detail.cabId)
-            .then(price => {
-              if (price > 0) {
-                setCabFares(prev => ({
-                  ...prev,
-                  [event.detail.cabId]: price
-                }));
-                
-                // Emit event with updated fare
-                window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-                  detail: {
-                    cabType: event.detail.cabId,
-                    cabName: event.detail.cabName || selectedCab.name,
-                    fare: price,
-                    tripType: tripType,
-                    tripMode: tripMode,
-                    hourlyPackage,
-                    timestamp: Date.now()
-                  }
-                }));
-              } else {
-                setFareErrors(prev => ({
-                  ...prev,
-                  [event.detail.cabId]: 'Price not available'
-                }));
-              }
-            })
-            .catch(error => {
-              console.error(`Error getting fare for ${event.detail.cabId}:`, error);
-              setFareErrors(prev => ({
-                ...prev,
-                [event.detail.cabId]: error instanceof Error ? error.message : 'Price unavailable'
-              }));
-            });
-        }
-        // For other trip types, use existing fare if available
-        else if (cabFares[event.detail.cabId] > 0) {
+        // If this is the currently selected cab, trigger fare event with latest fare
+        if (cabFares[event.detail.cabId] > 0) {
           window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
             detail: {
               cabType: event.detail.cabId,
@@ -578,7 +479,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     window.addEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
     window.addEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated as EventListener);
-    window.addEventListener('fare-error', handleFareError as EventListener);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
@@ -586,7 +486,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.removeEventListener('booking-summary-fare-updated', handleDirectFareUpdate as EventListener);
       window.removeEventListener('request-fare-calculation', handleRequestFareCalculation as EventListener);
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated as EventListener);
-      window.removeEventListener('fare-error', handleFareError as EventListener);
     };
   }, [cabFares, selectedCab, tripType, tripMode, hourlyPackage]);
 
@@ -601,35 +500,12 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   };
 
-  // If there's a global error, show it
-  if (fareErrors.global) {
-    return (
-      <>
-        <Alert variant="destructive" className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            {fareErrors.global}
-          </AlertDescription>
-        </Alert>
-        <CabList
-          cabTypes={cabTypes}
-          selectedCabId={selectedCab?.id || null}
-          cabFares={{}}
-          isCalculatingFares={isCalculatingFares}
-          handleSelectCab={handleCabSelect}
-          getFareDetails={getFareDetails}
-        />
-      </>
-    );
-  }
-
   return (
     <CabList
       cabTypes={cabTypes}
       selectedCabId={selectedCab?.id || null}
       cabFares={cabFares}
       isCalculatingFares={isCalculatingFares}
-      cabErrors={fareErrors}
       handleSelectCab={handleCabSelect}
       getFareDetails={getFareDetails}
     />

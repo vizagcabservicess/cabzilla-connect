@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -27,7 +28,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     error_log("Local package fares sync check request received");
     
     $vehicleId = $_GET['vehicle_id'];
-    $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : null;
     
     // Try to connect to database
     $conn = null;
@@ -35,13 +35,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         $conn = getDbConnection();
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => "Database connection failed: " . $e->getMessage(),
-            'timestamp' => time()
-        ]);
-        exit;
     }
     
     if ($conn) {
@@ -61,71 +54,23 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                 if ($result && $result->num_rows > 0) {
                     $row = $result->fetch_assoc();
                     
-                    // If a specific package was requested, return only that package's price
-                    if ($packageId) {
-                        $packagePrice = 0;
-                        $packageName = '';
-                        
-                        // Normalize package ID to match database field names
-                        if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-                            $packagePrice = floatval($row['price_4hr_40km']);
-                            $packageName = '4 Hours Package (40km)';
-                        } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-                            $packagePrice = floatval($row['price_8hr_80km']);
-                            $packageName = '8 Hours Package (80km)';
-                        } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-                            $packagePrice = floatval($row['price_10hr_100km']);
-                            $packageName = '10 Hours Package (100km)';
-                        }
-                        
-                        if ($packagePrice <= 0) {
-                            http_response_code(404);
-                            echo json_encode([
-                                'status' => 'error',
-                                'message' => "Price not available for package $packageId and vehicle $vehicleId",
-                                'timestamp' => time()
-                            ]);
-                            exit;
-                        }
-                        
-                        echo json_encode([
-                            'status' => 'success',
-                            'exists' => true,
-                            'vehicleId' => $vehicleId,
-                            'packageId' => $packageId,
-                            'packageName' => $packageName,
-                            'baseFare' => $packagePrice,
-                            'price' => $packagePrice,
-                            'data' => [
-                                'vehicleId' => $vehicleId,
-                                'packageId' => $packageId,
-                                'price' => $packagePrice,
-                                'baseFare' => $packagePrice
-                            ],
-                            'timestamp' => time()
-                        ]);
-                        exit;
-                    }
-                    
-                    // If no specific package requested, return all package prices
                     echo json_encode([
                         'status' => 'success',
                         'exists' => true,
                         'data' => [
                             'vehicleId' => $row['vehicle_id'],
-                            'price4hrs40km' => floatval($row['price_4hr_40km']),
-                            'price8hrs80km' => floatval($row['price_8hr_80km']),
-                            'price10hrs100km' => floatval($row['price_10hr_100km']),
-                            'priceExtraKm' => floatval($row['extra_km_rate']),
-                            'priceExtraHour' => floatval($row['extra_hour_rate']),
+                            'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                            'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                            'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                            'priceExtraKm' => floatval($row['price_extra_km']),
+                            'priceExtraHour' => floatval($row['price_extra_hour']),
                         ],
                         'timestamp' => time()
                     ]);
                     exit;
                 } else {
-                    http_response_code(404);
                     echo json_encode([
-                        'status' => 'error',
+                        'status' => 'success',
                         'exists' => false,
                         'message' => "No fares found for vehicle ID $vehicleId",
                         'timestamp' => time()
@@ -133,7 +78,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     exit;
                 }
             } else {
-                http_response_code(404);
                 echo json_encode([
                     'status' => 'error',
                     'message' => "Table local_package_fares does not exist",
@@ -143,7 +87,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             }
         } catch (Exception $e) {
             error_log("Error checking local package fares: " . $e->getMessage());
-            http_response_code(500);
             echo json_encode([
                 'status' => 'error',
                 'message' => "Database error: " . $e->getMessage(),
@@ -152,7 +95,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             exit;
         }
     } else {
-        http_response_code(500);
         echo json_encode([
             'status' => 'error',
             'message' => "Database connection failed",
