@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 
@@ -89,45 +90,6 @@ const calculateDynamicPrice = (vehicleType: string, packageId: string): number =
   return Math.round(baseValue * multiplier);
 };
 
-// Function to get a cached price from localStorage (new function to fix Hero.tsx import)
-export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: string): number {
-  try {
-    // Normalize parameters
-    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
-    
-    // Fix: Make sure we format "8hr-80km" as "8hrs-80km"
-    let normalizedPackageId = packageId;
-    if (packageId.includes('hr-')) {
-      normalizedPackageId = packageId.replace('hr-', 'hrs-');
-    }
-    
-    // Create unique cache key
-    const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
-    
-    // Try to get price from window cache first
-    if (typeof window !== 'undefined' && window.localPackagePriceCache && window.localPackagePriceCache[cacheKey]) {
-      return window.localPackagePriceCache[cacheKey].price;
-    }
-    
-    // Then try localStorage
-    const fareKey = `fare_local_${normalizedVehicleType}`;
-    const storedPrice = localStorage.getItem(fareKey);
-    
-    if (storedPrice) {
-      const price = Number(storedPrice);
-      if (price > 0) {
-        return price;
-      }
-    }
-    
-    // Return 0 if no price found
-    return 0;
-  } catch (error) {
-    console.error('Error getting local package price from storage:', error);
-    return 0;
-  }
-}
-
 // Utility function to normalize and validate API URLs
 const validateApiUrl = (url: string): boolean => {
   // Basic validation - check if the URL has a valid structure
@@ -140,7 +102,7 @@ const validateApiUrl = (url: string): boolean => {
   }
 };
 
-// Function to fetch local package prices from all possible API endpoints
+// Function to fetch local package prices directly from database via API
 export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
   try {
     console.log(`Getting local package price for ${vehicleType}, package: ${packageId}, forceRefresh: ${forceRefresh}`);
@@ -177,12 +139,15 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Get API URL safely - FIX: Handle undefined API URL
     const apiUrl = getApiUrl() || '';
     
+    // IMPORTANT CHANGE: Focus on direct database API endpoint for local fares
+    const primaryEndpoint = `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`;
+    
     // Array of API endpoints to try - validate them first
     const apiEndpoints = [
+      primaryEndpoint,
       `${apiUrl}/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `${apiUrl}/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
-      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`
+      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
     ].filter(url => validateApiUrl(url));
     
     if (apiEndpoints.length === 0) {
@@ -243,11 +208,11 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
               
               // Check different price formats based on package
               if (normalizedPackageId.includes('4hrs-40km')) {
-                price = Number(data.price4hrs40km || data.price_4hr_40km || data.price4hr40km || 0);
+                price = Number(data.price4hrs40km || data.price_4hr_40km || data.price4hr40km || data.price_4hrs_40km || 0);
               } else if (normalizedPackageId.includes('8hrs-80km')) {
-                price = Number(data.price8hrs80km || data.price_8hr_80km || data.price8hr80km || 0);
+                price = Number(data.price8hrs80km || data.price_8hr_80km || data.price8hr80km || data.price_8hrs_80km || 0);
               } else if (normalizedPackageId.includes('10hrs-100km')) {
-                price = Number(data.price10hrs100km || data.price_10hr_100km || data.price10hr100km || 0);
+                price = Number(data.price10hrs100km || data.price_10hr_100km || data.price10hr100km || data.price_10hrs_100km || 0);
               }
               
               if (price > 0) {
@@ -342,5 +307,52 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
     console.log('Background caching of local fares initiated');
   } catch (error) {
     console.error('Error in fetchAndCacheLocalFares:', error);
+  }
+}
+
+// New function: Force sync with database via admin API
+export async function syncLocalFaresWithDatabase(): Promise<boolean> {
+  try {
+    console.log('Forcing sync of local package fares with database...');
+    
+    const apiUrl = getApiUrl() || '';
+    const syncEndpoint = `${apiUrl}/api/admin/sync-local-fares.php`;
+    
+    const response = await axios.get(syncEndpoint, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'X-Force-Refresh': 'true',
+        'X-Admin-Mode': 'true'
+      },
+      timeout: 10000 // 10 second timeout for sync operation
+    });
+    
+    if (response.data && response.data.status === 'success') {
+      console.log('Local fares successfully synced with database:', response.data);
+      
+      // After successful sync, trigger a refresh of all cached prices
+      window.localPackagePriceCache = {};
+      
+      // Dispatch event to notify components about updated fares
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: {
+          timestamp: Date.now(),
+          vehicles: response.data.vehicles || [],
+          source: 'database-sync'
+        }
+      }));
+      
+      // Refresh all fares in the background
+      fetchAndCacheLocalFares(true);
+      
+      return true;
+    } else {
+      console.error('Local fares sync failed:', response.data);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error syncing local fares with database:', error);
+    return false;
   }
 }
