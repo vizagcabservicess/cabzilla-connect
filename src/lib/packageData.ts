@@ -174,8 +174,10 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       return window.localPackagePriceCache[cacheKey].price;
     }
     
-    // Array of API endpoints to try - validate them first
+    // Get API URL safely - FIX: Handle undefined API URL
     const apiUrl = getApiUrl() || '';
+    
+    // Array of API endpoints to try - validate them first
     const apiEndpoints = [
       `${apiUrl}/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
       `${apiUrl}/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
