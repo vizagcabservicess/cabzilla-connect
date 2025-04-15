@@ -94,9 +94,22 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
   const cacheKey = `${vehicleType}_${packageId}`;
   
   // Try to get from cache first
-  if (localPackagePriceCache[cacheKey]) {
-    console.log(`Using cached price for ${cacheKey}: ${localPackagePriceCache[cacheKey]}`);
+  if (localPackagePriceCache[cacheKey] && localPackagePriceCache[cacheKey].price) {
+    console.log(`Using cached price for ${cacheKey}: ${localPackagePriceCache[cacheKey].price}`);
     return localPackagePriceCache[cacheKey].price || 0;
+  }
+  
+  // Try to get from localStorage
+  const localStorageKey = `fare_local_${vehicleType.toLowerCase().replace(/\s+/g, '')}`;
+  const storedPrice = localStorage.getItem(localStorageKey);
+  if (storedPrice) {
+    const price = parseInt(storedPrice, 10);
+    if (price > 0) {
+      console.log(`Using stored local package price for ${vehicleType}: ${price}`);
+      // Update cache
+      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+      return price;
+    }
   }
   
   // Normalize vehicle type for lookup
@@ -117,77 +130,112 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
   }
   
   try {
-    // First try to fetch from the direct local package fare API endpoint
-    const apiUrl = `/api/direct-local-fares.php?vehicle_id=${mappedVehicleType}&package_id=${packageId}`;
-    console.log(`Fetching price for ${packageId} package for vehicle ${mappedVehicleType}`);
-    
+    // First try local-package-fares.php as the primary endpoint
     let price = 0;
+    let apiResponse = null;
     
     try {
-      const response = await axios.get(apiUrl);
-      if (response.data && response.data.status === 'success') {
-        price = response.data.price || 0;
-        console.log(`API returned price for ${packageId} (${mappedVehicleType}): ${price}`);
+      console.log(`Fetching local fares for vehicle ${mappedVehicleType} with timestamp: ${Date.now()}`);
+      const response = await axios.get(`/api/local-package-fares.php?vehicle_id=${mappedVehicleType}`);
+      
+      if (response.data && response.data.status === 'success' && response.data.fares) {
+        const fareData = response.data.fares[mappedVehicleType];
+        
+        if (fareData) {
+          console.log(`Local fares for vehicle ${mappedVehicleType}:`, fareData);
+          
+          if (packageId === '4hrs-40km') {
+            price = fareData.price4hrs40km || fareData.price_4hr_40km || 0;
+          } else if (packageId === '8hrs-80km') {
+            price = fareData.price8hrs80km || fareData.price_8hr_80km || 0;
+          } else if (packageId === '10hrs-100km') {
+            price = fareData.price10hrs100km || fareData.price_10hr_100km || 0;
+          }
+          
+          // If we have a valid price, store it and return
+          if (price > 0) {
+            apiResponse = {
+              source: 'primary-api',
+              price: price,
+              fareData: fareData
+            };
+          }
+        }
       }
-    } catch (apiError) {
-      console.warn('Could not fetch from direct API, trying fallback:', apiError);
+    } catch (primaryApiError) {
+      console.warn('Could not fetch from primary API, trying direct API:', primaryApiError);
     }
     
-    // If price is still 0, try the alternative API endpoint
-    if (price === 0) {
+    // If no price yet, try the direct-local-fares.php endpoint
+    if (!apiResponse) {
+      try {
+        const directApiUrl = `/api/direct-local-fares.php?vehicle_id=${mappedVehicleType}&package_id=${packageId}`;
+        const directResponse = await axios.get(directApiUrl);
+        
+        if (directResponse.data && directResponse.data.status === 'success') {
+          price = directResponse.data.price || 0;
+          
+          if (price > 0) {
+            apiResponse = {
+              source: 'direct-api',
+              price: price,
+              response: directResponse.data
+            };
+          }
+        }
+      } catch (directApiError) {
+        console.warn('Could not fetch from direct API, trying alternative endpoints:', directApiError);
+      }
+    }
+    
+    // If still no price, try direct-booking-data.php
+    if (!apiResponse) {
       try {
         const altApiUrl = `/api/user/direct-booking-data.php?check_sync=1&vehicle_id=${mappedVehicleType}&package_id=${packageId}`;
         const altResponse = await axios.get(altApiUrl);
         
         if (altResponse.data && altResponse.data.status === 'success') {
           price = altResponse.data.price || altResponse.data.baseFare || 0;
-          console.log(`Alternative API returned price for ${packageId} (${mappedVehicleType}): ${price}`);
-        }
-      } catch (altApiError) {
-        console.warn('Could not fetch from alternative API, trying local-package-fares.php:', altApiError);
-      }
-    }
-    
-    // If price is still 0, try the local-package-fares.php endpoint
-    if (price === 0) {
-      try {
-        const packageFaresUrl = `/api/local-package-fares.php?vehicle_id=${mappedVehicleType}`;
-        const packageFaresResponse = await axios.get(packageFaresUrl);
-        
-        if (packageFaresResponse.data && packageFaresResponse.data.status === 'success') {
-          const fares = packageFaresResponse.data.fares && packageFaresResponse.data.fares[mappedVehicleType];
           
-          if (fares) {
-            if (packageId === '4hrs-40km') {
-              price = fares.price4hrs40km || fares.price_4hr_40km || 0;
-            } else if (packageId === '8hrs-80km') {
-              price = fares.price8hrs80km || fares.price_8hr_80km || 0;
-            } else if (packageId === '10hrs-100km') {
-              price = fares.price10hrs100km || fares.price_10hr_100km || 0;
-            }
-            console.log(`Package fares API returned price for ${packageId} (${mappedVehicleType}): ${price}`);
+          if (price > 0) {
+            apiResponse = {
+              source: 'alternative-api',
+              price: price,
+              response: altResponse.data
+            };
+            console.log(`Alternative API returned price for ${packageId} (${mappedVehicleType}): ${price}`);
           }
         }
-      } catch (packageFaresError) {
-        console.warn('Could not fetch from package fares API, using fallback prices:', packageFaresError);
+      } catch (altApiError) {
+        console.warn('Could not fetch from alternative API:', altApiError);
       }
     }
     
-    // If we still don't have a price, use default values
-    if (price === 0) {
-      const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType] || defaultLocalPackagePrices['sedan'];
-      price = defaultVehicleData[packageId] || 0;
-      console.log(`Using default price for ${packageId} (${mappedVehicleType}): ${price}`);
+    // If we now have a valid price from any API, use it
+    if (apiResponse && apiResponse.price > 0) {
+      price = apiResponse.price;
+      console.log(`Retrieved package price from API (${apiResponse.source}): ${price}`);
+      
+      // Store the price in cache and localStorage for future use
+      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: apiResponse.source };
+      localStorage.setItem(localStorageKey, price.toString());
+      
+      return price;
     }
     
-    // Store the price in cache and localStorage for future use
-    localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+    // If still no valid price, use default prices
+    if (!price || price <= 0) {
+      // Use default values based on vehicle type if API call fails
+      const defaultVehicleData = defaultLocalPackagePrices[mappedVehicleType] || defaultLocalPackagePrices['sedan'];
+      price = defaultVehicleData[packageId as keyof typeof defaultVehicleData] || 0;
+      
+      console.log(`Using default price for ${packageId} (${mappedVehicleType}): ${price}`);
+      
+      // Store the default price in cache and localStorage
+      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'default' };
+      localStorage.setItem(localStorageKey, price.toString());
+    }
     
-    // Store in localStorage for persistence
-    const fareKey = `fare_local_${normalizedVehicleType.replace('_', '')}`;
-    localStorage.setItem(fareKey, price.toString());
-    
-    console.log(`Retrieved package price from mock server API: ${price}`);
     return price;
   } catch (error) {
     console.error('Error fetching local package price:', error);
@@ -196,20 +244,17 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     let fallbackPrice = 0;
     
     if (mappedVehicleType in defaultLocalPackagePrices) {
-      fallbackPrice = defaultLocalPackagePrices[mappedVehicleType][packageId];
+      fallbackPrice = defaultLocalPackagePrices[mappedVehicleType][packageId as keyof typeof defaultLocalPackagePrices[typeof mappedVehicleType]];
     } else {
       // Default sedan prices if vehicle type not found
-      fallbackPrice = defaultLocalPackagePrices['sedan'][packageId];
+      fallbackPrice = defaultLocalPackagePrices['sedan'][packageId as keyof typeof defaultLocalPackagePrices['sedan']];
     }
     
     console.log(`Using fallback price for ${packageId} (${mappedVehicleType}): ${fallbackPrice}`);
     
-    // Store the fallback price in cache
-    localPackagePriceCache[cacheKey] = { price: fallbackPrice, timestamp: Date.now() };
-    
-    // Store in localStorage for persistence
-    const fareKey = `fare_local_${normalizedVehicleType.replace('_', '')}`;
-    localStorage.setItem(fareKey, fallbackPrice.toString());
+    // Store the fallback price in cache and localStorage
+    localPackagePriceCache[cacheKey] = { price: fallbackPrice, timestamp: Date.now(), source: 'fallback' };
+    localStorage.setItem(localStorageKey, fallbackPrice.toString());
     
     return fallbackPrice;
   }
@@ -238,19 +283,18 @@ export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: 
                            normalizedVehicleType;
   
   if (mappedVehicleType in defaultLocalPackagePrices) {
-    return defaultLocalPackagePrices[mappedVehicleType][packageId];
+    return defaultLocalPackagePrices[mappedVehicleType][packageId as keyof typeof defaultLocalPackagePrices[typeof mappedVehicleType]];
   }
   
-  return defaultLocalPackagePrices['sedan'][packageId];
+  return defaultLocalPackagePrices['sedan'][packageId as keyof typeof defaultLocalPackagePrices['sedan']];
 }
 
 // Function to fetch and cache local fares
 export async function fetchAndCacheLocalFares() {
   try {
-    const response = await axios.get('/api/admin/direct-local-fares.php');
+    const response = await axios.get('/api/local-package-fares.php');
     if (response.data && response.data.status === 'success' && response.data.fares) {
-      const fares = response.data.fares;
-      return fares;
+      return response.data.fares;
     }
     return null;
   } catch (error) {
