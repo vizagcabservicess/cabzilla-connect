@@ -220,6 +220,22 @@ export function Hero() {
     updatePrice();
   }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
+  useEffect(() => {
+    if (tripType === 'local' && pickupLocation && pickupDate) {
+      setIsFormValid(true);
+    } else if (tripType === 'outstation' && pickupLocation && dropLocation && pickupDate) {
+      if (tripMode === "round-trip" && !returnDate) {
+        setIsFormValid(false);
+      } else {
+        setIsFormValid(true);
+      }
+    } else if (tripType === 'airport' && pickupLocation && dropLocation && pickupDate) {
+      setIsFormValid(true);
+    } else {
+      setIsFormValid(false);
+    }
+  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
+
   function handleContinue() {
     if (!isFormValid) {
       toast({
@@ -514,7 +530,7 @@ export function Hero() {
                     disabled={!isFormValid || isCalculatingDistance}
                     className={`px-10 py-6 rounded-md ${
                       isFormValid && !isCalculatingDistance
-                        ? "bg-blue-500 text-white"
+                        ? "bg-blue-500 text-white hover:bg-blue-600"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                   >
