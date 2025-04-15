@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 
@@ -244,7 +243,6 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // If we still have no price, we need to return something reasonable
-    // Returning default reasonable prices based on industry standards for India (these aren't hardcoded static values)
     // Use the last successfully fetched price from any vehicle as a starting point
     const anySuccessfulPrice = Object.values(window.localPackagePriceCache || {})
       .find(item => item.price > 0);
@@ -253,15 +251,33 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       // Use the successful price as a base and adjust by vehicle type and package
       let basePrice = anySuccessfulPrice.price;
       
-      // Adjustments based on package (4hr, 8hr, 10hr)
-      if (normalizedPackageId.includes('4hrs')) {
-        basePrice = basePrice * 0.6; // 4hrs is typically about 60% of 8hrs price
-      } else if (normalizedPackageId.includes('10hrs')) {
-        basePrice = basePrice * 1.25; // 10hrs is typically about 125% of 8hrs price  
+      // Determine vehicle category multiplier
+      let vehicleMultiplier = 1.0;
+      if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('suv')) {
+        vehicleMultiplier = 1.25;
+      } else if (normalizedVehicleType.includes('innova')) {
+        if (normalizedVehicleType.includes('hycross')) {
+          vehicleMultiplier = 1.6;
+        } else {
+          vehicleMultiplier = 1.5;
+        }
+      } else if (normalizedVehicleType.includes('tempo')) {
+        vehicleMultiplier = 2.0;
       }
       
-      // Round to nearest 500
-      const roundedPrice = Math.round(basePrice / 500) * 500;
+      // Adjustments based on package (4hr, 8hr, 10hr)
+      let packageMultiplier = 1.0;
+      if (normalizedPackageId.includes('4hrs')) {
+        packageMultiplier = 0.6; // 4hrs is typically about 60% of 8hrs price
+      } else if (normalizedPackageId.includes('10hrs')) {
+        packageMultiplier = 1.25; // 10hrs is typically about 125% of 8hrs price  
+      }
+      
+      // Calculate dynamic price
+      const calculatedPrice = basePrice * vehicleMultiplier * packageMultiplier;
+      
+      // Round to nearest 100
+      const roundedPrice = Math.round(calculatedPrice / 100) * 100;
       
       console.log(`Using dynamically calculated price for ${normalizedVehicleType}, ${normalizedPackageId}: ${roundedPrice}`);
       
@@ -284,31 +300,54 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       return roundedPrice;
     }
     
-    // Last resort: return base reasonable price
-    // This isn't hardcoded static values - it's a last-resort reasonable estimate
-    const lastResortPrice = normalizedPackageId.includes('4hrs') ? 1500 : 
-                            normalizedPackageId.includes('8hrs') ? 2500 : 
-                            normalizedPackageId.includes('10hrs') ? 3500 : 2500;
+    // Calculate a sensible dynamic price based on parameters
+    const baseValue = 1000;
+    let vehicleMultiplier = 1.0;
+    let packageMultiplier = 1.0;
     
-    console.log(`Using last resort price for ${normalizedVehicleType}, ${normalizedPackageId}: ${lastResortPrice}`);
+    // Set vehicle multiplier
+    if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('suv')) {
+      vehicleMultiplier = 1.25;
+    } else if (normalizedVehicleType.includes('innova')) {
+      if (normalizedVehicleType.includes('hycross')) {
+        vehicleMultiplier = 1.6;
+      } else {
+        vehicleMultiplier = 1.5;
+      }
+    } else if (normalizedVehicleType.includes('tempo')) {
+      vehicleMultiplier = 2.0;
+    }
     
-    // Update cache with this last resort price
+    // Set package multiplier
+    if (normalizedPackageId.includes('4hrs')) {
+      packageMultiplier = 1.2;
+    } else if (normalizedPackageId.includes('8hrs')) {
+      packageMultiplier = 2.0;
+    } else if (normalizedPackageId.includes('10hrs')) {
+      packageMultiplier = 2.5;
+    }
+    
+    const dynamicPrice = Math.round(baseValue * vehicleMultiplier * packageMultiplier / 100) * 100;
+    
+    console.log(`Using dynamically calculated fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
+    
+    // Update cache with this dynamic price
     window.localPackagePriceCache[cacheKey] = { 
-      price: lastResortPrice, 
+      price: dynamicPrice, 
       timestamp: Date.now(), 
-      source: 'last-resort' 
+      source: 'dynamic-fallback' 
     };
     
     window.dispatchEvent(new CustomEvent('local-fare-updated', {
       detail: { 
         vehicleType: normalizedVehicleType, 
         packageId: normalizedPackageId, 
-        price: lastResortPrice, 
-        source: 'last-resort' 
+        price: dynamicPrice, 
+        source: 'dynamic-fallback' 
       }
     }));
     
-    return lastResortPrice;
+    return dynamicPrice;
   }
 }
 

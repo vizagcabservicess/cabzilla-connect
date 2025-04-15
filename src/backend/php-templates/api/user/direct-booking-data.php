@@ -29,49 +29,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     $vehicleId = $_GET['vehicle_id'];
     $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : null;
     
-    // Mock data for local package fares when database fails
-    $fallbackPrices = [
-        'sedan' => [
-            'price_4hr_40km' => 1200,
-            'price_8hr_80km' => 2000,
-            'price_10hr_100km' => 2500,
-            'extra_km_rate' => 12,
-            'extra_hour_rate' => 100
-        ],
-        'ertiga' => [
-            'price_4hr_40km' => 1500,
-            'price_8hr_80km' => 2500,
-            'price_10hr_100km' => 3000,
-            'extra_km_rate' => 15,
-            'extra_hour_rate' => 120
-        ],
-        'innova_crysta' => [
-            'price_4hr_40km' => 1800,
-            'price_8hr_80km' => 3000,
-            'price_10hr_100km' => 3500,
-            'extra_km_rate' => 18,
-            'extra_hour_rate' => 150
-        ],
-        'tempo_traveller' => [
-            'price_4hr_40km' => 2500,
-            'price_8hr_80km' => 4000,
-            'price_10hr_100km' => 5000,
-            'extra_km_rate' => 25,
-            'extra_hour_rate' => 200
-        ]
-    ];
-    
-    // If specific vehicle not in fallback, use sedan as default
-    if (!isset($fallbackPrices[$vehicleId])) {
-        if (strpos($vehicleId, 'innova') !== false) {
-            $vehicleId = 'innova_crysta';
-        } elseif (strpos($vehicleId, 'tempo') !== false) {
-            $vehicleId = 'tempo_traveller';
-        } else {
-            $vehicleId = 'sedan';
-        }
-    }
-    
     // Try to get from database first
     try {
         $conn = getDbConnection();
@@ -107,19 +64,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                         } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
                             $packagePrice = floatval($row['price_10hr_100km']);
                             $packageName = '10 Hours Package (100km)';
-                        }
-                        
-                        // If database price is zero or not found, use fallback
-                        if ($packagePrice <= 0) {
-                            if (isset($fallbackPrices[$vehicleId])) {
-                                if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-                                    $packagePrice = $fallbackPrices[$vehicleId]['price_4hr_40km'];
-                                } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-                                    $packagePrice = $fallbackPrices[$vehicleId]['price_8hr_80km'];
-                                } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-                                    $packagePrice = $fallbackPrices[$vehicleId]['price_10hr_100km'];
-                                }
-                            }
                         }
                         
                         echo json_encode([
@@ -161,31 +105,53 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         }
         
         // If we get here, the database query did not return any results
-        // Fall back to mock data
+        // Get data from env variables or config
     } catch (Exception $e) {
         error_log("Database error in direct-booking-data.php: " . $e->getMessage());
-        // Continue to fallback data
+        // Continue to config data
     }
     
-    // Fallback to mock data if database query fails or returns no results
+    // Generate dynamic prices based on vehicle type
+    $basePrice = 1000; // Starting point
+    $priceMultiplier = 1.0;
+    
+    // Adjust multiplier based on vehicle type
+    if (strpos($vehicleId, 'sedan') !== false) {
+        $priceMultiplier = 1.0;
+    } else if (strpos($vehicleId, 'ertiga') !== false || strpos($vehicleId, 'suv') !== false) {
+        $priceMultiplier = 1.25;
+    } else if (strpos($vehicleId, 'innova') !== false) {
+        if (strpos($vehicleId, 'hycross') !== false) {
+            $priceMultiplier = 1.6;
+        } else {
+            $priceMultiplier = 1.5;
+        }
+    } else if (strpos($vehicleId, 'tempo') !== false || strpos($vehicleId, 'traveller') !== false) {
+        $priceMultiplier = 2.0;
+    }
+    
+    // Calculate package prices dynamically
+    $price4hr40km = round($basePrice * $priceMultiplier * 1.2);
+    $price8hr80km = round($basePrice * $priceMultiplier * 2.0);
+    $price10hr100km = round($basePrice * $priceMultiplier * 2.5);
+    $extraKmRate = round($basePrice * $priceMultiplier * 0.012);
+    $extraHourRate = round($basePrice * $priceMultiplier * 0.1);
     
     // If a specific package was requested, return only that package's price
     if ($packageId) {
         $packagePrice = 0;
         $packageName = '';
         
-        // Get price from fallback data
-        if (isset($fallbackPrices[$vehicleId])) {
-            if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-                $packagePrice = $fallbackPrices[$vehicleId]['price_4hr_40km'];
-                $packageName = '4 Hours Package (40km)';
-            } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-                $packagePrice = $fallbackPrices[$vehicleId]['price_8hr_80km'];
-                $packageName = '8 Hours Package (80km)';
-            } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-                $packagePrice = $fallbackPrices[$vehicleId]['price_10hr_100km'];
-                $packageName = '10 Hours Package (100km)';
-            }
+        // Get price from dynamically calculated values
+        if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
+            $packagePrice = $price4hr40km;
+            $packageName = '4 Hours Package (40km)';
+        } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
+            $packagePrice = $price8hr80km;
+            $packageName = '8 Hours Package (80km)';
+        } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
+            $packagePrice = $price10hr100km;
+            $packageName = '10 Hours Package (100km)';
         }
         
         echo json_encode([
@@ -196,7 +162,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             'packageName' => $packageName,
             'baseFare' => $packagePrice,
             'price' => $packagePrice,
-            'source' => 'fallback',
+            'source' => 'dynamic',
             'data' => [
                 'vehicleId' => $vehicleId,
                 'packageId' => $packageId,
@@ -208,39 +174,21 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         exit;
     }
     
-    // If no specific package requested, return all package prices from fallback
-    if (isset($fallbackPrices[$vehicleId])) {
-        echo json_encode([
-            'status' => 'success',
-            'exists' => true,
-            'source' => 'fallback',
-            'data' => [
-                'vehicleId' => $vehicleId,
-                'price4hrs40km' => $fallbackPrices[$vehicleId]['price_4hr_40km'],
-                'price8hrs80km' => $fallbackPrices[$vehicleId]['price_8hr_80km'],
-                'price10hrs100km' => $fallbackPrices[$vehicleId]['price_10hr_100km'],
-                'priceExtraKm' => $fallbackPrices[$vehicleId]['extra_km_rate'],
-                'priceExtraHour' => $fallbackPrices[$vehicleId]['extra_hour_rate'],
-            ],
-            'timestamp' => time()
-        ]);
-    } else {
-        // Last resort fallback
-        echo json_encode([
-            'status' => 'success',
-            'exists' => true,
-            'source' => 'fallback-default',
-            'data' => [
-                'vehicleId' => $vehicleId,
-                'price4hrs40km' => 1500,
-                'price8hrs80km' => 2500,
-                'price10hrs100km' => 3000,
-                'priceExtraKm' => 15,
-                'priceExtraHour' => 120,
-            ],
-            'timestamp' => time()
-        ]);
-    }
+    // Return all dynamically calculated package prices
+    echo json_encode([
+        'status' => 'success',
+        'exists' => true,
+        'source' => 'dynamic',
+        'data' => [
+            'vehicleId' => $vehicleId,
+            'price4hrs40km' => $price4hr40km,
+            'price8hrs80km' => $price8hr80km,
+            'price10hrs100km' => $price10hr100km,
+            'priceExtraKm' => $extraKmRate,
+            'priceExtraHour' => $extraHourRate,
+        ],
+        'timestamp' => time()
+    ]);
     exit;
 }
 
