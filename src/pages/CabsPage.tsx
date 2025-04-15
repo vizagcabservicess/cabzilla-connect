@@ -22,7 +22,7 @@ import {
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
-import { CabType, HourlyPackage } from "@/types/cab";
+import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -446,20 +446,6 @@ const CabsPage = () => {
     setShowGuestDetailsForm(false);
   };
 
-  const handleCabSelect = (cab: CabType) => {
-    setSelectedCab(cab);
-    
-    // If we need to pass the cab ID (as string) somewhere, extract it:
-    const cabId = cab.id;
-    
-    // Use cabId where a string is expected
-  };
-
-  const getPackagePrice = (pkg: HourlyPackage) => {
-    // Return the basePrice if it exists, otherwise a default value
-    return pkg.basePrice ?? 0;
-  };
-
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -546,7 +532,7 @@ const CabsPage = () => {
                         >
                           <div className="font-medium">{pkg.name}</div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Base price: {getPackagePrice(pkg)}
+                            Base price: ₹{pkg.basePrice}
                           </div>
                         </button>
                       ))}

@@ -1,7 +1,6 @@
 
 import axios from 'axios';
 import { LocalPackageFare, LocalPackageFaresResponse } from '@/types/api';
-import { HourlyPackage } from '@/types/cab';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -116,29 +115,26 @@ export async function getLocalPackagePriceFromApi(
 }
 
 // Default hourly package definitions - ONLY used as fallback UI when API fails completely
-export const hourlyPackages: HourlyPackage[] = [
+export const hourlyPackages = [
   {
     id: '4hrs-40km',
     name: '4 Hours Package',
     hours: 4,
     kilometers: 40,
-    description: 'Up to 4 hours and 40 kilometers',
-    basePrice: 0
+    description: 'Up to 4 hours and 40 kilometers'
   },
   {
     id: '8hrs-80km',
     name: '8 Hours Package',
     hours: 8,
     kilometers: 80,
-    description: 'Up to 8 hours and 80 kilometers',
-    basePrice: 0
+    description: 'Up to 8 hours and 80 kilometers'
   },
   {
     id: '10hrs-100km',
     name: '10 Hours Package',
     hours: 10,
     kilometers: 100,
-    description: 'Up to 10 hours and 100 kilometers',
-    basePrice: 0
+    description: 'Up to 10 hours and 100 kilometers'
   }
 ];
