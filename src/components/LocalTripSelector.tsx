@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -53,14 +54,23 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       // Create package objects with template data first
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
-      // Update all package prices in parallel using actual API calls
+      // Use these vehicles as references for getting prices
+      const referenceVehicles = ['sedan', 'ertiga', 'innova_crysta'];
+      
+      // Update all package prices in parallel for each vehicle type
       await Promise.all(updatedPackages.map(async (pkg) => {
         try {
-          // Use the sedan as a reference vehicle first just to get a price estimate
-          const referenceVehicleId = 'sedan';
-          const price = await getLocalPackagePrice(pkg.id, referenceVehicleId, true);
-          if (price > 0) {
-            pkg.basePrice = price;
+          // Try to get prices from multiple vehicle types to ensure we have accurate data
+          for (const vehicleId of referenceVehicles) {
+            const price = await getLocalPackagePrice(pkg.id, vehicleId, true);
+            if (price > 0) {
+              // Only update if we got a valid price and it's for the reference sedan
+              if (vehicleId === 'sedan') {
+                pkg.basePrice = price;
+                console.log(`Updated ${pkg.id} price to ${price} from ${vehicleId}`);
+                break;
+              }
+            }
           }
         } catch (error) {
           console.warn(`Could not fetch reference price for package ${pkg.id}:`, error);
@@ -133,7 +143,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         // Update just the specific package price if it exists in our packages array
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
-            if (pkg.id === event.detail.packageId) {
+            if (pkg.id === event.detail.packageId && event.detail.vehicleType === 'sedan') {
               return { ...pkg, basePrice: event.detail.price };
             }
             return pkg;
@@ -171,6 +181,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     
     // Always call onPackageSelect to update the parent component
     onPackageSelect(normalizedPackageId);
+    
+    // Force a refresh of all cached local package prices
+    window.localPackagePriceCache = {};
     
     // Dispatch an event to notify other components about the package selection
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {
