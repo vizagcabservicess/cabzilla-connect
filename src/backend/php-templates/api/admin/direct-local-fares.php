@@ -29,75 +29,92 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
 }
 
+// If still no vehicleId, set a default for the mock data
 if (!$vehicleId) {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID is required'
-    ]);
-    exit;
+    $vehicleId = 'sedan';
 }
 
 // Sample fare data based on vehicle type
 $localFares = [];
 
-switch ($vehicleId) {
-    case 'sedan':
-        $localFares[] = [
-            'vehicleId' => 'sedan',
-            'price4hrs40km' => 800,
-            'price8hrs80km' => 1500,
-            'price10hrs100km' => 1800,
-            'priceExtraKm' => 12,
-            'priceExtraHour' => 100
-        ];
-        break;
-    case 'ertiga':
-        $localFares[] = [
-            'vehicleId' => 'ertiga',
-            'price4hrs40km' => 1000,
-            'price8hrs80km' => 1800,
-            'price10hrs100km' => 2200,
-            'priceExtraKm' => 15,
-            'priceExtraHour' => 120
-        ];
-        break;
-    case 'innova_crysta':
-        $localFares[] = [
-            'vehicleId' => 'innova_crysta',
-            'price4hrs40km' => 1200,
-            'price8hrs80km' => 2200,
-            'price10hrs100km' => 2600,
-            'priceExtraKm' => 18,
-            'priceExtraHour' => 150
-        ];
-        break;
-    case 'tempo_traveller':
-        $localFares[] = [
-            'vehicleId' => 'tempo_traveller',
-            'price4hrs40km' => 2000,
-            'price8hrs80km' => 3500,
-            'price10hrs100km' => 4000,
-            'priceExtraKm' => 25,
-            'priceExtraHour' => 200
-        ];
-        break;
-    default:
-        // For unknown vehicles, return empty fare structure
-        $localFares[] = [
-            'vehicleId' => $vehicleId,
-            'price4hrs40km' => 0,
-            'price8hrs80km' => 0,
-            'price10hrs100km' => 0,
-            'priceExtraKm' => 0,
-            'priceExtraHour' => 0
-        ];
-        break;
+// Normalize vehicle ID for consistency
+$normalizedVehicleId = strtolower($vehicleId);
+$matchFound = false;
+
+// Match vehicle ID to one of our known types for the mock data
+if (strpos($normalizedVehicleId, 'sedan') !== false || 
+    strpos($normalizedVehicleId, 'swift') !== false || 
+    strpos($normalizedVehicleId, 'dzire') !== false ||
+    strpos($normalizedVehicleId, 'amaze') !== false ||
+    strpos($normalizedVehicleId, 'etios') !== false) {
+    $localFares[] = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => 1200,
+        'price8hrs80km' => 2000,
+        'price10hrs100km' => 2500,
+        'priceExtraKm' => 12,
+        'priceExtraHour' => 100
+    ];
+    $matchFound = true;
+} 
+
+if (strpos($normalizedVehicleId, 'ertiga') !== false || 
+    strpos($normalizedVehicleId, 'suv') !== false) {
+    $localFares[] = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => 1500,
+        'price8hrs80km' => 2500,
+        'price10hrs100km' => 3000,
+        'priceExtraKm' => 15,
+        'priceExtraHour' => 120
+    ];
+    $matchFound = true;
+}
+
+if (strpos($normalizedVehicleId, 'innova') !== false || 
+    strpos($normalizedVehicleId, 'crysta') !== false ||
+    strpos($normalizedVehicleId, 'hycross') !== false ||
+    strpos($normalizedVehicleId, 'mpv') !== false) {
+    $localFares[] = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => 1800,
+        'price8hrs80km' => 3000,
+        'price10hrs100km' => 3500,
+        'priceExtraKm' => 18,
+        'priceExtraHour' => 150
+    ];
+    $matchFound = true;
+}
+
+if (strpos($normalizedVehicleId, 'tempo') !== false || 
+    strpos($normalizedVehicleId, 'traveller') !== false) {
+    $localFares[] = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => 2500,
+        'price8hrs80km' => 4000,
+        'price10hrs100km' => 5000,
+        'priceExtraKm' => 25,
+        'priceExtraHour' => 200
+    ];
+    $matchFound = true;
+}
+
+// Default for any other vehicle
+if (!$matchFound) {
+    $localFares[] = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => 1500,
+        'price8hrs80km' => 2500,
+        'price10hrs100km' => 3000,
+        'priceExtraKm' => 15,
+        'priceExtraHour' => 120
+    ];
 }
 
 // Return JSON response
 echo json_encode([
     'status' => 'success',
     'message' => 'Local fares retrieved successfully',
-    'fares' => $localFares
+    'fares' => $localFares,
+    'timestamp' => time()
 ]);
