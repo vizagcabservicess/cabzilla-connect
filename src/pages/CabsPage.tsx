@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -7,6 +8,7 @@ import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary"; 
+import { BookingSummaryHelper } from "@/components/cab-options/BookingSummaryHelper";
 import { 
   Location, 
   vizagLocations, 
@@ -268,6 +270,30 @@ const CabsPage = () => {
     }
   }, [tripType, hourlyPackage]);
 
+  // Handle fare updates from global events
+  useEffect(() => {
+    const handleGlobalFareUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && 
+          selectedCab && 
+          customEvent.detail.cabId && 
+          selectedCab.id.toLowerCase().replace(/\s+/g, '_') === customEvent.detail.cabId.toLowerCase() && 
+          customEvent.detail.fare > 0) {
+        
+        console.log(`CabsPage: Received global fare update: ${customEvent.detail.fare} for ${customEvent.detail.cabId}`);
+        setTotalPrice(customEvent.detail.fare);
+      }
+    };
+    
+    window.addEventListener('global-fare-update', handleGlobalFareUpdate);
+    window.addEventListener('booking-summary-update', handleGlobalFareUpdate);
+    
+    return () => {
+      window.removeEventListener('global-fare-update', handleGlobalFareUpdate);
+      window.removeEventListener('booking-summary-update', handleGlobalFareUpdate);
+    };
+  }, [selectedCab]);
+
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fetchFare = async () => {
@@ -276,9 +302,9 @@ const CabsPage = () => {
           if (tripType === "local" && hourlyPackage) {
             try {
               const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-              const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+              const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
               
-              console.log(`CabsPage: Fetching local fare directly from database for ${normalizedCabId}`);
+              console.log(`CabsPage: Fetching local fare directly from database for ${normalizedCabId} - ${hourlyPackage}`);
               const response = await fetch(apiUrl, {
                 headers: {
                   'Cache-Control': 'no-cache',
@@ -290,32 +316,49 @@ const CabsPage = () => {
               if (response.ok) {
                 const data = await response.json();
                 
-                if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-                  const fareData = data.fares[0];
+                if (data.status === 'success' && data.price && Number(data.price) > 0) {
+                  const price = Number(data.price);
+                  console.log(`CabsPage: Retrieved fare directly from database API: ₹${price}`);
+                  setTotalPrice(price);
                   
-                  // Extract the right price for the selected package
+                  // Dispatch a global fare update event
+                  window.dispatchEvent(new CustomEvent('global-fare-update', {
+                    detail: {
+                      cabId: normalizedCabId,
+                      tripType,
+                      calculated: true,
+                      fare: price,
+                      packageId: hourlyPackage,
+                      source: 'database-direct-cabspage',
+                      timestamp: Date.now()
+                    }
+                  }));
+                  
+                  return; // Skip the regular fare calculation
+                } else if (data.data) {
+                  // Try alternative response format
                   let price = 0;
-                  if (hourlyPackage.includes('4hrs-40km')) {
-                    price = Number(fareData.price4hrs40km || 0);
-                  } else if (hourlyPackage.includes('8hrs-80km')) {
-                    price = Number(fareData.price8hrs80km || 0);
-                  } else if (hourlyPackage.includes('10hrs-100km')) {
-                    price = Number(fareData.price10hrs100km || 0);
+                  
+                  if (hourlyPackage.includes('4hrs-40km') && data.data.price4hrs40km) {
+                    price = Number(data.data.price4hrs40km);
+                  } else if (hourlyPackage.includes('8hrs-80km') && data.data.price8hrs80km) {
+                    price = Number(data.data.price8hrs80km);
+                  } else if (hourlyPackage.includes('10hrs-100km') && data.data.price10hrs100km) {
+                    price = Number(data.data.price10hrs100km);
                   }
                   
                   if (price > 0) {
-                    console.log(`CabsPage: Retrieved fare directly from database API: ₹${price}`);
+                    console.log(`CabsPage: Retrieved fare from alternative response format: ₹${price}`);
                     setTotalPrice(price);
                     
-                    // Dispatch an event to notify other components
-                    window.dispatchEvent(new CustomEvent('fare-calculated', {
+                    window.dispatchEvent(new CustomEvent('global-fare-update', {
                       detail: {
                         cabId: normalizedCabId,
                         tripType,
                         calculated: true,
                         fare: price,
                         packageId: hourlyPackage,
-                        source: 'database-direct-cabspage',
+                        source: 'database-alt-cabspage',
                         timestamp: Date.now()
                       }
                     }));
@@ -346,7 +389,7 @@ const CabsPage = () => {
           // Dispatch event to synchronize fare across components
           try {
             const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-            window.dispatchEvent(new CustomEvent('fare-calculated', {
+            window.dispatchEvent(new CustomEvent('global-fare-update', {
               detail: {
                 cabId: normalizedCabId,
                 tripType,
@@ -664,6 +707,16 @@ const CabsPage = () => {
                   tripType={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
                 />
+                
+                {/* Add the BookingSummaryHelper to ensure price consistency */}
+                {selectedCab && tripType === "local" && (
+                  <BookingSummaryHelper
+                    tripType={tripType}
+                    selectedCabId={selectedCab.id}
+                    totalPrice={totalPrice}
+                    hourlyPackage={hourlyPackage}
+                  />
+                )}
               </div>
             </div>
           )}
