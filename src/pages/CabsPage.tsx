@@ -22,7 +22,7 @@ import {
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
-import { CabType } from "@/types/cab";
+import { CabType, HourlyPackage } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";

@@ -100,7 +100,7 @@ async function calculateLocalFare(params: FareCalculationParams): Promise<number
   }
   
   try {
-    // Using the getLocalPackagePrice function from packageData.ts
+    // Extract the cab ID string regardless of whether cabType is an object or string
     const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
     const fare = await getLocalPackagePrice(packageId, cabTypeId);
     
@@ -118,6 +118,7 @@ async function calculateLocalFare(params: FareCalculationParams): Promise<number
 // Function to calculate outstation fare
 async function calculateOutstationFare(params: FareCalculationParams): Promise<number> {
   const { cabType, distance, tripMode = 'one-way' } = params;
+  // Extract the cab ID string regardless of whether cabType is an object or string
   const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
@@ -157,6 +158,7 @@ async function calculateOutstationFare(params: FareCalculationParams): Promise<n
 // Function to calculate airport transfer fare
 export async function calculateAirportFare(params: FareCalculationParams): Promise<number> {
   const { cabType, distance } = params;
+  // Extract the cab ID string regardless of whether cabType is an object or string
   const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
@@ -201,6 +203,7 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
     throw new Error('Tour ID is required for tour fare calculation');
   }
   
+  // Extract the cab ID string regardless of whether cabType is an object or string
   const cabTypeId = typeof cabType === 'object' && cabType !== null ? cabType.id : cabType;
   
   try {
@@ -216,9 +219,35 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
       return Number(data.fare);
     }
     
-    // Fallback to static data in tourData.ts if API fails
-    // This would need to be imported from tourData.ts
-    return 0; // Return 0 for now as a placeholder
+    // Fallback to static data if API fails
+    // Create a mapping of cab types to their corresponding prices
+    const cabTypeMappings: Record<string, string> = {
+      'sedan': 'sedan',
+      'ertiga': 'ertiga',
+      'innova': 'innova',
+      'tempo_traveller': 'innova' // Fallback to innova pricing if tempo_traveller not available
+    };
+    
+    // Import the tour fares from the tourData
+    const { tourFares } = await import('./tourData');
+    
+    // Get the corresponding price for this cab type and tour
+    if (packageId in tourFares) {
+      const tourFare = tourFares[packageId];
+      
+      if (typeof tourFare === 'object') {
+        // Map the cabTypeId to the appropriate key in the tourFare object
+        const mappedCabType = cabTypeMappings[cabTypeId.toLowerCase()] || 'sedan';
+        
+        // Return the price for this cab type, or default to sedan if not found
+        return tourFare[mappedCabType as keyof typeof tourFare] || tourFare.sedan || 0;
+      } else {
+        // If tourFare is a direct number, return it
+        return tourFare;
+      }
+    }
+    
+    return 0;
   } catch (error) {
     console.error('Error calculating tour fare:', error);
     // Return a default fallback fare based on cab type
@@ -229,6 +258,6 @@ async function calculateTourFare(params: FareCalculationParams): Promise<number>
       'tempo_traveller': 6000
     };
     
-    return defaultFares[cabTypeId] || 2500;
+    return defaultFares[cabTypeId.toLowerCase()] || 2500;
   }
 }

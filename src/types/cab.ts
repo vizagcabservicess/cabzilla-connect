@@ -52,7 +52,7 @@ export interface HourlyPackage {
   hours: number;
   kilometers: number;
   description?: string;
-  basePrice?: number; // Optional price field
+  basePrice?: number; // Price field
 }
 
 // Additional fare-related types needed in the application
