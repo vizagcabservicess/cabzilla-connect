@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
@@ -12,6 +11,7 @@ interface CabListProps {
   cabErrors?: Record<string, string>;
   handleSelectCab: (cab: CabType) => void;
   getFareDetails: (cab: CabType) => string;
+  tripType?: string;
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -22,7 +22,43 @@ export const CabList: React.FC<CabListProps> = ({
   cabErrors = {},
   handleSelectCab,
   getFareDetails,
+  tripType
 }) => {
+  const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
+  
+  // Listen for fare update events to keep the displayed prices in sync
+  useEffect(() => {
+    const handleFareCalculated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare } = customEvent.detail;
+        
+        // Only update if this is for the current trip type
+        if (customEvent.detail.tripType === tripType) {
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: fare
+          }));
+          
+          console.log(`CabList: Updated fare for ${cabId} to ${fare} from event`);
+        }
+      }
+    };
+    
+    // Listen for fare calculation events
+    window.addEventListener('fare-calculated', handleFareCalculated);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('fare-calculated', handleFareCalculated);
+    };
+  }, [tripType]);
+  
+  // Update local fares when props change
+  useEffect(() => {
+    setLocalFares(cabFares);
+  }, [cabFares]);
+  
   // Format price with Indian Rupee symbol
   const formatPrice = (price?: number) => {
     if (!price && price !== 0) return "Price unavailable";
@@ -43,7 +79,8 @@ export const CabList: React.FC<CabListProps> = ({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {cabTypes.map((cab) => {
         const isSelected = selectedCabId === cab.id;
-        const cabFare = cabFares[cab.id];
+        const cabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+        const cabFare = localFares[cabId] || cabFares[cab.id] || 0;
         const hasError = cabErrors[cab.id];
         
         return (

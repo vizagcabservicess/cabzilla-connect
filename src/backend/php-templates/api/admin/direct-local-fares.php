@@ -37,12 +37,44 @@ if (!$vehicleId) {
     $vehicleId = 'sedan';
 }
 
-// Normalize vehicle ID for consistency
-$normalizedVehicleId = strtolower($vehicleId);
+// IMPORTANT: Additional normalization for common vehicle name variations
+// This ensures we catch all possible vehicle name formats
+function normalizeVehicleId($vehicleId) {
+    // Convert to lowercase and replace spaces with underscores
+    $result = strtolower(trim($vehicleId));
+    $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
+    
+    // Handle common variations
+    $mappings = [
+        'innovahycross' => 'innova_hycross',
+        'innovacrystal' => 'innova_crysta',
+        'innovacrystal' => 'innova_crysta',
+        'innovacrista' => 'innova_crysta',
+        'innova_crista' => 'innova_crysta',
+        'innovahicross' => 'innova_hycross',
+        'innova_hicross' => 'innova_hycross',
+        'tempotraveller' => 'tempo_traveller',
+        'tempo_traveler' => 'tempo_traveller',
+        'cng' => 'dzire_cng',
+        'dzirecng' => 'dzire_cng',
+        'sedancng' => 'dzire_cng',
+        'swift' => 'sedan',
+        'swiftdzire' => 'dzire',
+        'swift_dzire' => 'dzire',
+        'innovaold' => 'innova_crysta'
+    ];
+    
+    foreach ($mappings as $search => $replace) {
+        if ($result === $search) {
+            return $replace;
+        }
+    }
+    
+    return $result;
+}
 
-// Clean up vehicle ID to match database naming conventions
-// Convert spaces to underscores and remove special characters
-$normalizedVehicleId = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $normalizedVehicleId));
+// Normalize vehicle ID for consistency
+$normalizedVehicleId = normalizeVehicleId($vehicleId);
 
 // First attempt to get data directly from database
 $localFares = [];
@@ -65,6 +97,8 @@ try {
             str_replace('tempo_traveller', 'tempo', $normalizedVehicleId)
         ];
         
+        // Try to find an exact match first
+        $exactMatch = false;
         foreach ($possibleVehicleIds as $possibleId) {
             if (empty($possibleId)) continue;
             
@@ -87,7 +121,106 @@ try {
                     'timestamp' => time()
                 ];
                 $dbSuccess = true;
+                $exactMatch = true;
                 break; // Found a match, exit the loop
+            }
+        }
+        
+        // If still not found, try checking for column name variations
+        if (!$exactMatch) {
+            // Try a more flexible query with alternate column names
+            $query = "SHOW COLUMNS FROM local_package_fares";
+            $stmt = $conn->prepare($query);
+            $stmt->execute();
+            $columnsResult = $stmt->get_result();
+            
+            $columnMap = [];
+            $possiblePriceColumns = [
+                'price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour',
+                'price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour',
+                'price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour',
+                'price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km',
+                'price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'
+            ];
+            
+            while ($column = $columnsResult->fetch_assoc()) {
+                $columnName = $column['Field'];
+                $normalizedName = strtolower(str_replace('_', '', $columnName));
+                
+                // Map each column to a standardized name
+                foreach ($possiblePriceColumns as $standardColumn) {
+                    $normalizedStandard = strtolower(str_replace('_', '', $standardColumn));
+                    if ($normalizedName === $normalizedStandard) {
+                        $columnMap[$standardColumn] = $columnName;
+                        break;
+                    }
+                }
+            }
+            
+            // Now try to query with the first vehicle ID and use the column map
+            $possibleId = $possibleVehicleIds[0];
+            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
+            $likeParam = "%$possibleId%";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("ss", $possibleId, $likeParam);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result && $row = $result->fetch_assoc()) {
+                // Find the appropriate column names using our map
+                $price4hrs40km = 0;
+                $price8hrs80km = 0;
+                $price10hrs100km = 0;
+                $priceExtraKm = 0;
+                $priceExtraHour = 0;
+                
+                // Try to find the values using the column mapping
+                foreach (['price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour'] as $colName) {
+                    if (isset($row[$colName]) && $row[$colName] > 0) {
+                        $price4hrs40km = (float)$row[$colName];
+                        break;
+                    }
+                }
+                
+                foreach (['price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour'] as $colName) {
+                    if (isset($row[$colName]) && $row[$colName] > 0) {
+                        $price8hrs80km = (float)$row[$colName];
+                        break;
+                    }
+                }
+                
+                foreach (['price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour'] as $colName) {
+                    if (isset($row[$colName]) && $row[$colName] > 0) {
+                        $price10hrs100km = (float)$row[$colName];
+                        break;
+                    }
+                }
+                
+                foreach (['price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km'] as $colName) {
+                    if (isset($row[$colName]) && $row[$colName] > 0) {
+                        $priceExtraKm = (float)$row[$colName];
+                        break;
+                    }
+                }
+                
+                foreach (['price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'] as $colName) {
+                    if (isset($row[$colName]) && $row[$colName] > 0) {
+                        $priceExtraHour = (float)$row[$colName];
+                        break;
+                    }
+                }
+                
+                $localFares[] = [
+                    'vehicleId' => $row['vehicle_id'],
+                    'price4hrs40km' => $price4hrs40km,
+                    'price8hrs80km' => $price8hrs80km,
+                    'price10hrs100km' => $price10hrs100km,
+                    'priceExtraKm' => $priceExtraKm,
+                    'priceExtraHour' => $priceExtraHour,
+                    'source' => 'database',
+                    'timestamp' => time()
+                ];
+                $dbSuccess = true;
             }
         }
         

@@ -137,6 +137,18 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
         window.localPackagePriceCache[cacheKey].price > 0 &&
         Date.now() - window.localPackagePriceCache[cacheKey].timestamp < 60000) { // Only use cache if less than 1 minute old
       console.log(`Using cached price for ${cacheKey}: ${window.localPackagePriceCache[cacheKey].price}`);
+      
+      // Always broadcast the price for consistency even when using cache
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: {
+          packageId: normalizedPackageId,
+          vehicleType: normalizedVehicleType,
+          price: window.localPackagePriceCache[cacheKey].price,
+          source: 'cache',
+          timestamp: Date.now()
+        }
+      }));
+      
       return window.localPackagePriceCache[cacheKey].price;
     }
     
@@ -159,6 +171,18 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       // Proceed with fallback calculation if no valid endpoints
       const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
       window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
+      
+      // Broadcast the dynamic price
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: {
+          packageId: normalizedPackageId,
+          vehicleType: normalizedVehicleType,
+          price: dynamicPrice,
+          source: 'dynamic',
+          timestamp: Date.now()
+        }
+      }));
+      
       return dynamicPrice;
     }
     
@@ -199,6 +223,11 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
               // Cache the price
               window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
               
+              // Store in localStorage for better cross-component consistency
+              const fareKey = `fare_local_${normalizedVehicleType}`;
+              localStorage.setItem(fareKey, price.toString());
+              console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+              
               // Dispatch an event to notify other components about the updated price
               window.dispatchEvent(new CustomEvent('local-fare-updated', {
                 detail: {
@@ -206,6 +235,18 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
                   vehicleType: normalizedVehicleType,
                   price: price,
                   source: 'database',
+                  timestamp: Date.now()
+                }
+              }));
+              
+              // Dispatch a more general fare-calculated event for broader component updates
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: normalizedVehicleType,
+                  tripType: 'local',
+                  calculated: true,
+                  fare: price,
+                  packageId: normalizedPackageId,
                   timestamp: Date.now()
                 }
               }));
@@ -223,12 +264,29 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
               // Cache the price
               window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
               
+              // Store in localStorage for better cross-component consistency
+              const fareKey = `fare_local_${normalizedVehicleType}`;
+              localStorage.setItem(fareKey, price.toString());
+              console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+              
               // Dispatch an event to notify other components about the updated price
               window.dispatchEvent(new CustomEvent('local-fare-updated', {
                 detail: {
                   packageId: normalizedPackageId,
                   vehicleType: normalizedVehicleType,
                   price: price,
+                  timestamp: Date.now()
+                }
+              }));
+              
+              // Dispatch a more general fare-calculated event for broader component updates
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: normalizedVehicleType,
+                  tripType: 'local',
+                  calculated: true,
+                  fare: price,
+                  packageId: normalizedPackageId,
                   timestamp: Date.now()
                 }
               }));
@@ -259,12 +317,29 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
                 // Cache the price
                 window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
                 
+                // Store in localStorage for better cross-component consistency
+                const fareKey = `fare_local_${normalizedVehicleType}`;
+                localStorage.setItem(fareKey, price.toString());
+                console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+                
                 // Dispatch an event to notify other components about the updated price
                 window.dispatchEvent(new CustomEvent('local-fare-updated', {
                   detail: {
                     packageId: normalizedPackageId,
                     vehicleType: normalizedVehicleType,
                     price: price,
+                    timestamp: Date.now()
+                  }
+                }));
+                
+                // Dispatch a more general fare-calculated event for broader component updates
+                window.dispatchEvent(new CustomEvent('fare-calculated', {
+                  detail: {
+                    cabId: normalizedVehicleType,
+                    tripType: 'local',
+                    calculated: true,
+                    fare: price,
+                    packageId: normalizedPackageId,
                     timestamp: Date.now()
                   }
                 }));
@@ -296,6 +371,11 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Cache the dynamically calculated price
     window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
     
+    // Store in localStorage for better cross-component consistency
+    const fareKey = `fare_local_${normalizedVehicleType}`;
+    localStorage.setItem(fareKey, dynamicPrice.toString());
+    console.log(`Stored fare in localStorage: ${fareKey} = ${dynamicPrice}`);
+    
     // Dispatch an event to notify other components about the updated price
     window.dispatchEvent(new CustomEvent('local-fare-updated', {
       detail: {
@@ -307,6 +387,18 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       }
     }));
     
+    // Dispatch a more general fare-calculated event for broader component updates
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        cabId: normalizedVehicleType,
+        tripType: 'local',
+        calculated: true,
+        fare: dynamicPrice,
+        packageId: normalizedPackageId,
+        timestamp: Date.now()
+      }
+    }));
+    
     return dynamicPrice;
   } catch (error) {
     console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
@@ -314,6 +406,12 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Last resort: calculate a dynamic price
     const dynamicPrice = calculateDynamicPrice(vehicleType, packageId);
     console.log(`Using dynamically calculated fallback price for ${vehicleType}, ${packageId}: ${dynamicPrice}`);
+    
+    // Store in localStorage for better cross-component consistency
+    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const fareKey = `fare_local_${normalizedVehicleType}`;
+    localStorage.setItem(fareKey, dynamicPrice.toString());
+    console.log(`Stored fallback fare in localStorage: ${fareKey} = ${dynamicPrice}`);
     
     return dynamicPrice;
   }
