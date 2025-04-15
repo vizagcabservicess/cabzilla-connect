@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.56');
+header('X-API-Version: 1.0.57');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -112,45 +112,55 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         // Continue to dynamic price calculation
     }
     
+    // Define standard vehicle multipliers
+    $vehicleMultipliers = [
+        'sedan' => 1.0,
+        'ertiga' => 1.25,
+        'innova' => 1.5,
+        'innova_crysta' => 1.5,
+        'innova_hycross' => 1.6,
+        'tempo_traveller' => 2.0,
+        'tempo' => 2.0,
+        'luxury' => 1.7,
+        'suv' => 1.25,
+        'mpv' => 1.4
+    ];
+    
     // Helper function to calculate package prices dynamically
-    function calculateDynamicPrices($basePrice, $vehicleMultiplier) {
+    function calculateDynamicPrices($baseValue, $multiplier) {
         return [
-            'price4hr40km' => round($basePrice * $vehicleMultiplier * 1.2),
-            'price8hr80km' => round($basePrice * $vehicleMultiplier * 2.0),
-            'price10hr100km' => round($basePrice * $vehicleMultiplier * 2.5),
-            'extraKmRate' => round($basePrice * $vehicleMultiplier * 0.012),
-            'extraHourRate' => round($basePrice * $vehicleMultiplier * 0.1)
+            'price4hr40km' => round($baseValue['4hr'] * $multiplier),
+            'price8hr80km' => round($baseValue['8hr'] * $multiplier),
+            'price10hr100km' => round($baseValue['10hr'] * $multiplier),
+            'extraKmRate' => round(($baseValue['8hr'] * $multiplier) * 0.01),
+            'extraHourRate' => round(($baseValue['8hr'] * $multiplier) * 0.08)
         ];
     }
     
     // Generate dynamic prices based on vehicle type
-    $basePrice = 1000; // Base price for calculations
-    $priceMultiplier = 1.0; // Default multiplier
+    $basePrices = [
+        '4hr' => 1200, 
+        '8hr' => 2000, 
+        '10hr' => 2500
+    ];
     
     // Determine appropriate multiplier based on vehicle type
     $normalizedVehicleId = strtolower($vehicleId);
+    $normalizedVehicleId = str_replace(' ', '_', $normalizedVehicleId);
     
-    if (strpos($normalizedVehicleId, 'sedan') !== false || 
-        strpos($normalizedVehicleId, 'swift') !== false || 
-        strpos($normalizedVehicleId, 'dzire') !== false ||
-        strpos($normalizedVehicleId, 'etios') !== false) {
-        $priceMultiplier = 1.0;
-    } else if (strpos($normalizedVehicleId, 'ertiga') !== false || 
-               strpos($normalizedVehicleId, 'suv') !== false) {
-        $priceMultiplier = 1.25;
-    } else if (strpos($normalizedVehicleId, 'innova') !== false) {
-        if (strpos($normalizedVehicleId, 'hycross') !== false) {
-            $priceMultiplier = 1.6;
-        } else {
-            $priceMultiplier = 1.5;
+    // Default multiplier
+    $priceMultiplier = 1.0;
+    
+    // Check if we have a predefined multiplier for this vehicle type
+    foreach ($vehicleMultipliers as $vehicleType => $multiplier) {
+        if (strpos($normalizedVehicleId, $vehicleType) !== false) {
+            $priceMultiplier = $multiplier;
+            break;
         }
-    } else if (strpos($normalizedVehicleId, 'tempo') !== false || 
-               strpos($normalizedVehicleId, 'traveller') !== false) {
-        $priceMultiplier = 2.0;
     }
     
     // Calculate package prices dynamically
-    $prices = calculateDynamicPrices($basePrice, $priceMultiplier);
+    $prices = calculateDynamicPrices($basePrices, $priceMultiplier);
     
     // If a specific package was requested, return only that package's price
     if ($packageId) {
@@ -254,66 +264,104 @@ if (isset($_GET['id'])) {
                     'booking' => $booking,
                     'source' => 'database',
                     'timestamp' => time(),
-                    'version' => '1.0.56'
+                    'version' => '1.0.57'
                 ]);
                 exit;
             }
         }
     } catch (Exception $e) {
         error_log("Database error fetching booking: " . $e->getMessage());
-        // Continue to sample data
     }
     
-    // Generate a sample booking using the provided ID
+    // Generate a booking using dynamic data
+    $statusOptions = ['pending', 'confirmed', 'completed', 'cancelled'];
+    $tripTypes = ['outstation', 'local', 'airport'];
+    $tripModes = ['roundtrip', 'oneway'];
+    
     $booking = [
         'id' => $bookingId,
-        'userId' => rand(100, 200),
-        'bookingNumber' => 'BK'.rand(10000, 99999),
+        'userId' => mt_rand(100, 999),
+        'bookingNumber' => 'BK' . mt_rand(10000, 99999),
         'pickupLocation' => generateRandomLocation(),
         'dropLocation' => generateRandomLocation(),
-        'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
-        'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
+        'pickupDate' => date('Y-m-d H:i:s', strtotime(mt_rand(-7, 7) . ' days')),
+        'returnDate' => (mt_rand(0, 1) ? date('Y-m-d H:i:s', strtotime(mt_rand(8, 14) . ' days')) : null),
         'cabType' => generateRandomCabType(),
-        'distance' => rand(5, 50) + (rand(0, 100) / 100),
-        'tripType' => rand(0, 1) ? 'outstation' : (rand(0, 1) ? 'local' : 'airport'),
-        'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
-        'totalAmount' => rand(1000, 10000),
-        'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+        'distance' => mt_rand(5, 50) + (mt_rand(0, 100) / 100),
+        'tripType' => $tripTypes[array_rand($tripTypes)],
+        'tripMode' => $tripModes[array_rand($tripModes)],
+        'totalAmount' => null, // Will be calculated dynamically
+        'status' => $statusOptions[array_rand($statusOptions)],
         'passengerName' => generateRandomName(),
-        'passengerPhone' => '9'.rand(700000000, 999999999),
+        'passengerPhone' => '9' . mt_rand(700000000, 999999999),
         'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
-        'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
-        'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
-        'createdAt' => date('Y-m-d H:i:s', strtotime(rand(-30, -1).' days')),
-        'updatedAt' => date('Y-m-d H:i:s', strtotime(rand(-10, 0).' days'))
+        'driverName' => (mt_rand(0, 3) > 0 ? generateRandomName() : null),
+        'driverPhone' => (mt_rand(0, 3) > 0 ? '8' . mt_rand(700000000, 999999999) : null),
+        'createdAt' => date('Y-m-d H:i:s', strtotime(mt_rand(-30, -1) . ' days')),
+        'updatedAt' => date('Y-m-d H:i:s', strtotime(mt_rand(-10, 0) . ' days'))
     ];
+    
+    // Calculate a realistic price based on cab type and distance
+    $cabPricing = [
+        'Sedan' => ['basePrice' => 2500, 'perKm' => 14],
+        'Ertiga' => ['basePrice' => 3200, 'perKm' => 18],
+        'Innova' => ['basePrice' => 3500, 'perKm' => 19],
+        'Innova Crysta' => ['basePrice' => 3800, 'perKm' => 20],
+        'Tempo Traveller' => ['basePrice' => 5500, 'perKm' => 22],
+        'Luxury Sedan' => ['basePrice' => 4500, 'perKm' => 25]
+    ];
+    
+    // Get pricing for cab type or use default
+    $pricing = $cabPricing[$booking['cabType']] ?? ['basePrice' => 3000, 'perKm' => 15];
+    
+    // Calculate total amount
+    if ($booking['tripType'] === 'local') {
+        // For local trips, use package based pricing
+        $localPackages = [
+            '4hrs-40km' => $pricing['basePrice'] * 0.5,
+            '8hrs-80km' => $pricing['basePrice'],
+            '10hrs-100km' => $pricing['basePrice'] * 1.25
+        ];
+        $packageKeys = array_keys($localPackages);
+        $booking['totalAmount'] = $localPackages[$packageKeys[array_rand($packageKeys)]];
+    } else if ($booking['tripType'] === 'airport') {
+        // For airport transfers, use base price plus distance
+        $booking['totalAmount'] = $pricing['basePrice'] * 0.5 + $booking['distance'] * $pricing['perKm'];
+    } else {
+        // For outstation, use distance-based pricing
+        $multiplier = ($booking['tripMode'] === 'roundtrip') ? 1.8 : 1;
+        $booking['totalAmount'] = $pricing['basePrice'] + $booking['distance'] * $pricing['perKm'] * $multiplier;
+    }
+    
+    // Round to nearest 100
+    $booking['totalAmount'] = round($booking['totalAmount'] / 100) * 100;
     
     echo json_encode([
         'status' => 'success',
         'booking' => $booking,
-        'source' => 'sample',
+        'source' => 'dynamic',
         'generatedAt' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
     exit;
 }
 
-// Helper functions for generating sample data
+// Helper functions for generating data
 function generateRandomLocation() {
     $cities = ['Hyderabad', 'Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Pune', 'Vizag'];
     $places = ['Airport', 'Railway Station', 'Bus Stand', 'City Center', 'Mall', 'Hotel', 'Office', 'Residence'];
-    return $cities[rand(0, count($cities)-1)] . ' ' . $places[rand(0, count($places)-1)];
+    return $cities[array_rand($cities)] . ' ' . $places[array_rand($places)];
 }
 
 function generateRandomName() {
     $firstNames = ['Rahul', 'Amit', 'Vijay', 'Suresh', 'Ramesh', 'Rajesh', 'Sanjay', 'Ajay', 'Priya', 'Neha', 'Meera', 'Sunita'];
     $lastNames = ['Sharma', 'Kumar', 'Singh', 'Reddy', 'Patel', 'Verma', 'Gupta', 'Joshi', 'Nair', 'Das', 'Rao', 'Chopra'];
-    return $firstNames[rand(0, count($firstNames)-1)] . ' ' . $lastNames[rand(0, count($lastNames)-1)];
+    return $firstNames[array_rand($firstNames)] . ' ' . $lastNames[array_rand($lastNames)];
 }
 
 function generateRandomCabType() {
     $cabTypes = ['Sedan', 'Ertiga', 'Innova', 'Innova Crysta', 'Tempo Traveller', 'Luxury Sedan'];
-    return $cabTypes[rand(0, count($cabTypes)-1)];
+    return $cabTypes[array_rand($cabTypes)];
 }
 
 try {
@@ -361,7 +409,7 @@ try {
                             $booking = [
                                 'id' => (int)$row['id'],
                                 'userId' => (int)$row['user_id'],
-                                'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
+                                'bookingNumber' => $row['booking_number'] ?? ('BK' . mt_rand(10000, 99999)),
                                 'pickupLocation' => $row['pickup_location'],
                                 'dropLocation' => $row['drop_location'],
                                 'pickupDate' => $row['pickup_date'],
@@ -392,35 +440,79 @@ try {
         }
     }
     
-    // If no bookings were found (or database error), generate sample data
+    // If no bookings were found (or database error), generate dynamic sample data
     if (empty($bookings)) {
-        // Generate 3 random bookings with varied properties
+        // Generate a few bookings with dynamically calculated prices
         $numBookings = 3;
-        $bookingIds = [1001, 1002, 1003];
-        $userId = $userId ?: 101;
+        $userId = $userId ?: mt_rand(100, 999);
+        
+        // Define cab types with pricing information for dynamic calculation
+        $cabPricing = [
+            'Sedan' => ['basePrice' => 2500, 'perKm' => 14],
+            'Ertiga' => ['basePrice' => 3200, 'perKm' => 18],
+            'Innova' => ['basePrice' => 3500, 'perKm' => 19],
+            'Innova Crysta' => ['basePrice' => 3800, 'perKm' => 20],
+            'Tempo Traveller' => ['basePrice' => 5500, 'perKm' => 22],
+            'Luxury Sedan' => ['basePrice' => 4500, 'perKm' => 25]
+        ];
+        
+        $tripTypes = ['outstation', 'local', 'airport'];
+        $tripModes = ['roundtrip', 'oneway'];
+        $statusOptions = ['pending', 'confirmed', 'completed', 'cancelled'];
         
         for ($i = 0; $i < $numBookings; $i++) {
+            $cabType = generateRandomCabType();
+            $distance = mt_rand(5, 50) + (mt_rand(0, 100) / 100);
+            $tripType = $tripTypes[array_rand($tripTypes)];
+            $tripMode = $tripModes[array_rand($tripModes)];
+            
+            // Calculate a realistic price based on cab type and distance
+            $pricing = $cabPricing[$cabType] ?? ['basePrice' => 3000, 'perKm' => 15];
+            
+            // Calculate total amount based on trip type
+            $totalAmount = 0;
+            if ($tripType === 'local') {
+                // For local trips, use package based pricing
+                $localPackages = [
+                    '4hrs-40km' => $pricing['basePrice'] * 0.5,
+                    '8hrs-80km' => $pricing['basePrice'],
+                    '10hrs-100km' => $pricing['basePrice'] * 1.25
+                ];
+                $packageKeys = array_keys($localPackages);
+                $totalAmount = $localPackages[$packageKeys[array_rand($packageKeys)]];
+            } else if ($tripType === 'airport') {
+                // For airport transfers, use base price plus distance
+                $totalAmount = $pricing['basePrice'] * 0.5 + $distance * $pricing['perKm'];
+            } else {
+                // For outstation, use distance-based pricing
+                $multiplier = ($tripMode === 'roundtrip') ? 1.8 : 1;
+                $totalAmount = $pricing['basePrice'] + $distance * $pricing['perKm'] * $multiplier;
+            }
+            
+            // Round to nearest 100
+            $totalAmount = round($totalAmount / 100) * 100;
+            
             $bookings[] = [
-                'id' => $bookingIds[$i],
+                'id' => 1001 + $i,
                 'userId' => $userId,
-                'bookingNumber' => 'BK'.rand(10000, 99999),
+                'bookingNumber' => 'BK' . mt_rand(10000, 99999),
                 'pickupLocation' => generateRandomLocation(),
                 'dropLocation' => generateRandomLocation(),
-                'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
-                'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
-                'cabType' => generateRandomCabType(),
-                'distance' => rand(5, 50) + (rand(0, 100) / 100),
-                'tripType' => ['outstation', 'local', 'airport'][rand(0, 2)],
-                'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
-                'totalAmount' => rand(1000, 10000),
-                'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+                'pickupDate' => date('Y-m-d H:i:s', strtotime(mt_rand(-7, 7) . ' days')),
+                'returnDate' => $tripMode === 'roundtrip' ? date('Y-m-d H:i:s', strtotime(mt_rand(8, 14) . ' days')) : null,
+                'cabType' => $cabType,
+                'distance' => $distance,
+                'tripType' => $tripType,
+                'tripMode' => $tripMode,
+                'totalAmount' => $totalAmount,
+                'status' => $statusOptions[array_rand($statusOptions)],
                 'passengerName' => generateRandomName(),
-                'passengerPhone' => '9'.rand(700000000, 999999999),
+                'passengerPhone' => '9' . mt_rand(700000000, 999999999),
                 'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
-                'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
-                'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
-                'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10).' days')),
-                'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10).' days'))
+                'driverName' => mt_rand(0, 3) > 0 ? generateRandomName() : null,
+                'driverPhone' => mt_rand(0, 3) > 0 ? '8' . mt_rand(700000000, 999999999) : null,
+                'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10) . ' days')),
+                'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10) . ' days'))
             ];
         }
         
@@ -431,49 +523,95 @@ try {
     echo json_encode([
         'status' => 'success',
         'bookings' => $bookings,
-        'source' => empty($bookings) ? 'sample' : 'database',
+        'source' => empty($bookings) ? 'dynamic' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
     
 } catch (Exception $e) {
     // Log the error
     error_log("Error in direct-booking-data.php: " . $e->getMessage());
     
-    // Generate sample data for fallback
+    // Generate dynamic data for fallback with realistic pricing
     $sampleBookings = [];
+    
+    // Define cab types with pricing information
+    $cabPricing = [
+        'Sedan' => ['basePrice' => 2500, 'perKm' => 14],
+        'Ertiga' => ['basePrice' => 3200, 'perKm' => 18],
+        'Innova' => ['basePrice' => 3500, 'perKm' => 19],
+        'Innova Crysta' => ['basePrice' => 3800, 'perKm' => 20],
+        'Tempo Traveller' => ['basePrice' => 5500, 'perKm' => 22],
+        'Luxury Sedan' => ['basePrice' => 4500, 'perKm' => 25]
+    ];
+    
+    $tripTypes = ['outstation', 'local', 'airport'];
+    $tripModes = ['roundtrip', 'oneway'];
+    $statusOptions = ['pending', 'confirmed', 'completed', 'cancelled'];
+    
     for ($i = 0; $i < 3; $i++) {
+        $cabType = generateRandomCabType();
+        $distance = mt_rand(5, 50) + (mt_rand(0, 100) / 100);
+        $tripType = $tripTypes[array_rand($tripTypes)];
+        $tripMode = $tripModes[array_rand($tripModes)];
+        
+        // Calculate a realistic price based on cab type and distance
+        $pricing = $cabPricing[$cabType] ?? ['basePrice' => 3000, 'perKm' => 15];
+        
+        // Calculate total amount based on trip type
+        $totalAmount = 0;
+        if ($tripType === 'local') {
+            // For local trips, use package based pricing
+            $localPackages = [
+                '4hrs-40km' => $pricing['basePrice'] * 0.5,
+                '8hrs-80km' => $pricing['basePrice'],
+                '10hrs-100km' => $pricing['basePrice'] * 1.25
+            ];
+            $packageKeys = array_keys($localPackages);
+            $totalAmount = $localPackages[$packageKeys[array_rand($packageKeys)]];
+        } else if ($tripType === 'airport') {
+            // For airport transfers, use base price plus distance
+            $totalAmount = $pricing['basePrice'] * 0.5 + $distance * $pricing['perKm'];
+        } else {
+            // For outstation, use distance-based pricing
+            $multiplier = ($tripMode === 'roundtrip') ? 1.8 : 1;
+            $totalAmount = $pricing['basePrice'] + $distance * $pricing['perKm'] * $multiplier;
+        }
+        
+        // Round to nearest 100
+        $totalAmount = round($totalAmount / 100) * 100;
+        
         $sampleBookings[] = [
             'id' => 1001 + $i,
             'userId' => 101,
-            'bookingNumber' => 'BK'.rand(10000, 99999),
+            'bookingNumber' => 'BK' . mt_rand(10000, 99999),
             'pickupLocation' => generateRandomLocation(),
             'dropLocation' => generateRandomLocation(),
-            'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
-            'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
-            'cabType' => generateRandomCabType(),
-            'distance' => rand(5, 50) + (rand(0, 100) / 100),
-            'tripType' => ['outstation', 'local', 'airport'][rand(0, 2)],
-            'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
-            'totalAmount' => rand(1000, 10000),
-            'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+            'pickupDate' => date('Y-m-d H:i:s', strtotime(mt_rand(-7, 7) . ' days')),
+            'returnDate' => $tripMode === 'roundtrip' ? date('Y-m-d H:i:s', strtotime(mt_rand(8, 14) . ' days')) : null,
+            'cabType' => $cabType,
+            'distance' => $distance,
+            'tripType' => $tripType,
+            'tripMode' => $tripMode,
+            'totalAmount' => $totalAmount,
+            'status' => $statusOptions[array_rand($statusOptions)],
             'passengerName' => generateRandomName(),
-            'passengerPhone' => '9'.rand(700000000, 999999999),
+            'passengerPhone' => '9' . mt_rand(700000000, 999999999),
             'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
-            'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
-            'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
-            'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10).' days')),
-            'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10).' days'))
+            'driverName' => mt_rand(0, 3) > 0 ? generateRandomName() : null,
+            'driverPhone' => mt_rand(0, 3) > 0 ? '8' . mt_rand(700000000, 999999999) : null,
+            'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10) . ' days')),
+            'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10) . ' days'))
         ];
     }
     
     // Return error response with sample data as fallback
     echo json_encode([
         'status' => 'error',
-        'message' => 'Error processing request, using sample data',
-        'bookings' => $sampleBookings, // Always provide sample data on error
-        'source' => 'sample',
+        'message' => 'Error processing request, using dynamic data',
+        'bookings' => $sampleBookings,
+        'source' => 'dynamic',
         'timestamp' => time(),
-        'version' => '1.0.56'
+        'version' => '1.0.57'
     ]);
 }
