@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -227,12 +226,11 @@ export function Hero() {
     }
   }, [tripType, hourlyPackage]);
 
-  // Load cab pricing for local packages when the cab or package changes
   useEffect(() => {
     const loadLocalPackagePrice = async () => {
       if (tripType === 'local' && selectedCab) {
         try {
-          // First check if we have a cached price in localStorage
+          // First check if we have a cached price
           const storedPrice = getLocalPackagePriceFromStorage(hourlyPackage, selectedCab.name);
           if (storedPrice > 0) {
             console.log(`Using stored local package price for ${selectedCab.name}: ${storedPrice}`);
@@ -240,7 +238,7 @@ export function Hero() {
             return;
           }
           
-          // If not in localStorage, fetch from API
+          // If not in cache, fetch from API
           const price = await getLocalPackagePrice(hourlyPackage, selectedCab.name);
           console.log(`Fetched local package price for ${selectedCab.name}: ${price}`);
           setLocalPackagePrice(price);

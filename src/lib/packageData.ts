@@ -112,11 +112,36 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
   }
 }
 
+// Function to get local package price from localStorage (for backward compatibility)
+export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: string): number {
+  try {
+    // Normalize types
+    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const normalizedPackageId = packageId.replace('0', '').replace('hr-', 'hrs-');
+    
+    // Create cache key
+    const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
+    
+    // Check in window cache first
+    if (window.localPackagePriceCache && 
+        window.localPackagePriceCache[cacheKey] && 
+        window.localPackagePriceCache[cacheKey].price > 0) {
+      return window.localPackagePriceCache[cacheKey].price;
+    }
+    
+    // No price in cache
+    return 0;
+  } catch (error) {
+    console.error("Error getting price from localStorage:", error);
+    return 0;
+  }
+}
+
 // Alias for backward compatibility
 export const getLocalPackagePriceFromApi = getLocalPackagePrice;
 
 // Function to clear the local package price cache
-export function clearLocalPackagePriceCache() {
+export function clearLocalPackagePriceCache(): void {
   if (typeof window !== 'undefined' && window.localPackagePriceCache) {
     window.localPackagePriceCache = {};
     console.log('Local package price cache cleared');
