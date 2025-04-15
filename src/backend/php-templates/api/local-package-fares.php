@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -110,15 +111,46 @@ try {
             $row = $checkEmpty->fetch_assoc();
             
             if ($row['count'] == 0) {
-                // Insert default values for common cab types
-                $defaultVehicles = [
-                    ['sedan', 1200, 2500, 3000, 14, 250],
-                    ['ertiga', 1800, 3000, 3600, 18, 300],
-                    ['innova', 2300, 3800, 4500, 20, 350],
-                    ['innova_crysta', 2300, 3800, 4500, 20, 350],
-                    ['tempo', 3000, 4500, 5500, 25, 400],
-                    ['luxury', 3500, 5500, 6500, 30, 450]
+                // Calculate dynamic prices for different vehicle categories
+                $dynamicPrices = [];
+                
+                // Dynamically calculate prices based on vehicle category and multiplier
+                function calculateDynamicPrices($baseValue, $multiplier) {
+                    return [
+                        'price_4hr_40km' => round($baseValue * $multiplier * 1.2),
+                        'price_8hr_80km' => round($baseValue * $multiplier * 2.0),
+                        'price_10hr_100km' => round($baseValue * $multiplier * 2.5),
+                        'extra_km_rate' => round($baseValue * $multiplier * 0.012),
+                        'extra_hour_rate' => round($baseValue * $multiplier * 0.1)
+                    ];
+                }
+                
+                // Base value for calculations
+                $baseValue = 1000;
+                
+                // Define vehicle categories and their multipliers
+                $vehicleCategories = [
+                    'sedan' => 1.0,
+                    'ertiga' => 1.25,
+                    'innova' => 1.5,
+                    'innova_crysta' => 1.5,
+                    'tempo' => 2.0,
+                    'luxury' => 3.5
                 ];
+                
+                // Create the dynamic prices array
+                $defaultVehicles = [];
+                foreach ($vehicleCategories as $vehicleType => $multiplier) {
+                    $prices = calculateDynamicPrices($baseValue, $multiplier);
+                    $defaultVehicles[] = [
+                        $vehicleType,
+                        $prices['price_4hr_40km'],
+                        $prices['price_8hr_80km'],
+                        $prices['price_10hr_100km'],
+                        $prices['extra_km_rate'],
+                        $prices['extra_hour_rate']
+                    ];
+                }
                 
                 $insertStmt = $conn->prepare("INSERT INTO local_package_fares 
                     (vehicle_id, price_4hr_40km, price_8hr_80km, price_10hr_100km, extra_km_rate, extra_hour_rate) 
@@ -131,7 +163,7 @@ try {
                     $insertStmt->execute();
                 }
                 
-                error_log("[$timestamp] Initialized local_package_fares with default data", 3, $logDir . '/local-package-fares.log');
+                error_log("[$timestamp] Initialized local_package_fares with dynamically calculated data", 3, $logDir . '/local-package-fares.log');
             }
         }
     }

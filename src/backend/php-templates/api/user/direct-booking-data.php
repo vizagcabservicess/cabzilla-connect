@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -105,37 +106,51 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         }
         
         // If we get here, the database query did not return any results
-        // Get data from env variables or config
+        // Generate prices dynamically based on vehicle type
     } catch (Exception $e) {
         error_log("Database error in direct-booking-data.php: " . $e->getMessage());
-        // Continue to config data
+        // Continue to dynamic price calculation
+    }
+    
+    // Helper function to calculate package prices dynamically
+    function calculateDynamicPrices($basePrice, $vehicleMultiplier) {
+        return [
+            'price4hr40km' => round($basePrice * $vehicleMultiplier * 1.2),
+            'price8hr80km' => round($basePrice * $vehicleMultiplier * 2.0),
+            'price10hr100km' => round($basePrice * $vehicleMultiplier * 2.5),
+            'extraKmRate' => round($basePrice * $vehicleMultiplier * 0.012),
+            'extraHourRate' => round($basePrice * $vehicleMultiplier * 0.1)
+        ];
     }
     
     // Generate dynamic prices based on vehicle type
-    $basePrice = 1000; // Starting point
-    $priceMultiplier = 1.0;
+    $basePrice = 1000; // Base price for calculations
+    $priceMultiplier = 1.0; // Default multiplier
     
-    // Adjust multiplier based on vehicle type
-    if (strpos($vehicleId, 'sedan') !== false) {
+    // Determine appropriate multiplier based on vehicle type
+    $normalizedVehicleId = strtolower($vehicleId);
+    
+    if (strpos($normalizedVehicleId, 'sedan') !== false || 
+        strpos($normalizedVehicleId, 'swift') !== false || 
+        strpos($normalizedVehicleId, 'dzire') !== false ||
+        strpos($normalizedVehicleId, 'etios') !== false) {
         $priceMultiplier = 1.0;
-    } else if (strpos($vehicleId, 'ertiga') !== false || strpos($vehicleId, 'suv') !== false) {
+    } else if (strpos($normalizedVehicleId, 'ertiga') !== false || 
+               strpos($normalizedVehicleId, 'suv') !== false) {
         $priceMultiplier = 1.25;
-    } else if (strpos($vehicleId, 'innova') !== false) {
-        if (strpos($vehicleId, 'hycross') !== false) {
+    } else if (strpos($normalizedVehicleId, 'innova') !== false) {
+        if (strpos($normalizedVehicleId, 'hycross') !== false) {
             $priceMultiplier = 1.6;
         } else {
             $priceMultiplier = 1.5;
         }
-    } else if (strpos($vehicleId, 'tempo') !== false || strpos($vehicleId, 'traveller') !== false) {
+    } else if (strpos($normalizedVehicleId, 'tempo') !== false || 
+               strpos($normalizedVehicleId, 'traveller') !== false) {
         $priceMultiplier = 2.0;
     }
     
     // Calculate package prices dynamically
-    $price4hr40km = round($basePrice * $priceMultiplier * 1.2);
-    $price8hr80km = round($basePrice * $priceMultiplier * 2.0);
-    $price10hr100km = round($basePrice * $priceMultiplier * 2.5);
-    $extraKmRate = round($basePrice * $priceMultiplier * 0.012);
-    $extraHourRate = round($basePrice * $priceMultiplier * 0.1);
+    $prices = calculateDynamicPrices($basePrice, $priceMultiplier);
     
     // If a specific package was requested, return only that package's price
     if ($packageId) {
@@ -144,13 +159,13 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         
         // Get price from dynamically calculated values
         if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-            $packagePrice = $price4hr40km;
+            $packagePrice = $prices['price4hr40km'];
             $packageName = '4 Hours Package (40km)';
         } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-            $packagePrice = $price8hr80km;
+            $packagePrice = $prices['price8hr80km'];
             $packageName = '8 Hours Package (80km)';
         } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-            $packagePrice = $price10hr100km;
+            $packagePrice = $prices['price10hr100km'];
             $packageName = '10 Hours Package (100km)';
         }
         
@@ -181,11 +196,11 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         'source' => 'dynamic',
         'data' => [
             'vehicleId' => $vehicleId,
-            'price4hrs40km' => $price4hr40km,
-            'price8hrs80km' => $price8hr80km,
-            'price10hrs100km' => $price10hr100km,
-            'priceExtraKm' => $extraKmRate,
-            'priceExtraHour' => $extraHourRate,
+            'price4hrs40km' => $prices['price4hr40km'],
+            'price8hrs80km' => $prices['price8hr80km'],
+            'price10hrs100km' => $prices['price10hr100km'],
+            'priceExtraKm' => $prices['extraKmRate'],
+            'priceExtraHour' => $prices['extraHourRate'],
         ],
         'timestamp' => time()
     ]);
@@ -197,109 +212,109 @@ if (isset($_GET['id'])) {
     $bookingId = intval($_GET['id']);
     error_log("Fetching booking data for ID: $bookingId");
     
-    // Sample booking data for the requested ID
+    // Try to get booking from database
+    try {
+        $conn = getDbConnection();
+        
+        if ($conn) {
+            $query = "SELECT * FROM bookings WHERE id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("i", $bookingId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                
+                $booking = [
+                    'id' => intval($row['id']),
+                    'userId' => intval($row['user_id']),
+                    'bookingNumber' => $row['booking_number'],
+                    'pickupLocation' => $row['pickup_location'],
+                    'dropLocation' => $row['drop_location'],
+                    'pickupDate' => $row['pickup_date'],
+                    'returnDate' => $row['return_date'],
+                    'cabType' => $row['cab_type'],
+                    'distance' => floatval($row['distance']),
+                    'tripType' => $row['trip_type'],
+                    'tripMode' => $row['trip_mode'],
+                    'totalAmount' => floatval($row['total_amount']),
+                    'status' => $row['status'],
+                    'passengerName' => $row['passenger_name'],
+                    'passengerPhone' => $row['passenger_phone'],
+                    'passengerEmail' => $row['passenger_email'],
+                    'driverName' => $row['driver_name'],
+                    'driverPhone' => $row['driver_phone'],
+                    'createdAt' => $row['created_at'],
+                    'updatedAt' => $row['updated_at']
+                ];
+                
+                echo json_encode([
+                    'status' => 'success',
+                    'booking' => $booking,
+                    'source' => 'database',
+                    'timestamp' => time(),
+                    'version' => '1.0.56'
+                ]);
+                exit;
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Database error fetching booking: " . $e->getMessage());
+        // Continue to sample data
+    }
+    
+    // Generate a sample booking using the provided ID
     $booking = [
         'id' => $bookingId,
-        'userId' => 101,
+        'userId' => rand(100, 200),
         'bookingNumber' => 'BK'.rand(10000, 99999),
-        'pickupLocation' => 'Hyderabad Airport',
-        'dropLocation' => 'Banjara Hills, Hyderabad',
-        'pickupDate' => date('Y-m-d H:i:s', strtotime('-2 days')),
-        'returnDate' => date('Y-m-d H:i:s', strtotime('+5 days')),
-        'cabType' => 'Sedan',
-        'distance' => 25.5,
-        'tripType' => 'outstation',
-        'tripMode' => 'roundtrip',
-        'totalAmount' => 3500,
-        'status' => 'confirmed',
-        'passengerName' => 'Rahul Sharma',
-        'passengerPhone' => '9876543210',
-        'passengerEmail' => 'rahul@example.com',
-        'driverName' => 'Suresh Kumar',
-        'driverPhone' => '8765432109',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
-        'updatedAt' => date('Y-m-d H:i:s', strtotime('-1 day'))
+        'pickupLocation' => generateRandomLocation(),
+        'dropLocation' => generateRandomLocation(),
+        'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
+        'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
+        'cabType' => generateRandomCabType(),
+        'distance' => rand(5, 50) + (rand(0, 100) / 100),
+        'tripType' => rand(0, 1) ? 'outstation' : (rand(0, 1) ? 'local' : 'airport'),
+        'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
+        'totalAmount' => rand(1000, 10000),
+        'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+        'passengerName' => generateRandomName(),
+        'passengerPhone' => '9'.rand(700000000, 999999999),
+        'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
+        'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
+        'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
+        'createdAt' => date('Y-m-d H:i:s', strtotime(rand(-30, -1).' days')),
+        'updatedAt' => date('Y-m-d H:i:s', strtotime(rand(-10, 0).' days'))
     ];
     
     echo json_encode([
         'status' => 'success',
         'booking' => $booking,
         'source' => 'sample',
-        'timestamp' => time(),
+        'generatedAt' => time(),
         'version' => '1.0.56'
     ]);
     exit;
 }
 
-// Sample bookings data for fallback
-$sampleBookings = [
-    [
-        'id' => 1001,
-        'userId' => 101,
-        'bookingNumber' => 'BK'.rand(10000, 99999),
-        'pickupLocation' => 'Hyderabad Airport',
-        'dropLocation' => 'Banjara Hills, Hyderabad',
-        'pickupDate' => date('Y-m-d H:i:s', strtotime('-2 days')),
-        'returnDate' => date('Y-m-d H:i:s', strtotime('+5 days')),
-        'cabType' => 'Sedan',
-        'distance' => 25.5,
-        'tripType' => 'outstation',
-        'tripMode' => 'roundtrip',
-        'totalAmount' => 3500,
-        'status' => 'confirmed',
-        'passengerName' => 'Rahul Sharma',
-        'passengerPhone' => '9876543210',
-        'passengerEmail' => 'rahul@example.com',
-        'driverName' => 'Suresh Kumar',
-        'driverPhone' => '8765432109',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
-        'updatedAt' => date('Y-m-d H:i:s', strtotime('-1 day'))
-    ],
-    [
-        'id' => 1002,
-        'userId' => 101,
-        'bookingNumber' => 'BK'.rand(10000, 99999),
-        'pickupLocation' => 'Madhapur, Hyderabad',
-        'dropLocation' => 'Secunderabad Railway Station',
-        'pickupDate' => date('Y-m-d H:i:s', strtotime('-1 week')),
-        'returnDate' => null,
-        'cabType' => 'Innova',
-        'distance' => 15.2,
-        'tripType' => 'local',
-        'tripMode' => 'oneway',
-        'totalAmount' => 1200,
-        'status' => 'completed',
-        'passengerName' => 'Rahul Sharma',
-        'passengerPhone' => '9876543210',
-        'passengerEmail' => 'rahul@example.com',
-        'driverName' => 'Venkat Reddy',
-        'driverPhone' => '7654321098',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-1 week')),
-        'updatedAt' => date('Y-m-d H:i:s', strtotime('-6 days'))
-    ],
-    [
-        'id' => 1003,
-        'userId' => 101,
-        'bookingNumber' => 'BK'.rand(10000, 99999),
-        'pickupLocation' => 'Gachibowli, Hyderabad',
-        'dropLocation' => 'Charminar',
-        'pickupDate' => date('Y-m-d H:i:s', strtotime('+1 day')),
-        'returnDate' => null,
-        'cabType' => 'Ertiga',
-        'distance' => 18.7,
-        'tripType' => 'local',
-        'tripMode' => 'oneway',
-        'totalAmount' => 950,
-        'status' => 'pending',
-        'passengerName' => 'Rahul Sharma',
-        'passengerPhone' => '9876543210',
-        'passengerEmail' => 'rahul@example.com',
-        'driverName' => null,
-        'driverPhone' => null,
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-1 day')),
-        'updatedAt' => date('Y-m-d H:i:s', strtotime('-1 day'))
-    ]
-];
+// Helper functions for generating sample data
+function generateRandomLocation() {
+    $cities = ['Hyderabad', 'Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Pune', 'Vizag'];
+    $places = ['Airport', 'Railway Station', 'Bus Stand', 'City Center', 'Mall', 'Hotel', 'Office', 'Residence'];
+    return $cities[rand(0, count($cities)-1)] . ' ' . $places[rand(0, count($places)-1)];
+}
+
+function generateRandomName() {
+    $firstNames = ['Rahul', 'Amit', 'Vijay', 'Suresh', 'Ramesh', 'Rajesh', 'Sanjay', 'Ajay', 'Priya', 'Neha', 'Meera', 'Sunita'];
+    $lastNames = ['Sharma', 'Kumar', 'Singh', 'Reddy', 'Patel', 'Verma', 'Gupta', 'Joshi', 'Nair', 'Das', 'Rao', 'Chopra'];
+    return $firstNames[rand(0, count($firstNames)-1)] . ' ' . $lastNames[rand(0, count($lastNames)-1)];
+}
+
+function generateRandomCabType() {
+    $cabTypes = ['Sedan', 'Ertiga', 'Innova', 'Innova Crysta', 'Tempo Traveller', 'Luxury Sedan'];
+    return $cabTypes[rand(0, count($cabTypes)-1)];
+}
 
 try {
     // Try to connect to database (wrapped in try-catch to prevent failures)
@@ -377,10 +392,39 @@ try {
         }
     }
     
-    // If no bookings were found (or database error), use sample data
+    // If no bookings were found (or database error), generate sample data
     if (empty($bookings)) {
-        $bookings = $sampleBookings;
-        error_log("Using sample booking data");
+        // Generate 3 random bookings with varied properties
+        $numBookings = 3;
+        $bookingIds = [1001, 1002, 1003];
+        $userId = $userId ?: 101;
+        
+        for ($i = 0; $i < $numBookings; $i++) {
+            $bookings[] = [
+                'id' => $bookingIds[$i],
+                'userId' => $userId,
+                'bookingNumber' => 'BK'.rand(10000, 99999),
+                'pickupLocation' => generateRandomLocation(),
+                'dropLocation' => generateRandomLocation(),
+                'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
+                'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
+                'cabType' => generateRandomCabType(),
+                'distance' => rand(5, 50) + (rand(0, 100) / 100),
+                'tripType' => ['outstation', 'local', 'airport'][rand(0, 2)],
+                'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
+                'totalAmount' => rand(1000, 10000),
+                'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+                'passengerName' => generateRandomName(),
+                'passengerPhone' => '9'.rand(700000000, 999999999),
+                'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
+                'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
+                'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
+                'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10).' days')),
+                'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10).' days'))
+            ];
+        }
+        
+        error_log("Using dynamically generated sample booking data");
     }
     
     // Return success response with bookings
@@ -395,6 +439,33 @@ try {
 } catch (Exception $e) {
     // Log the error
     error_log("Error in direct-booking-data.php: " . $e->getMessage());
+    
+    // Generate sample data for fallback
+    $sampleBookings = [];
+    for ($i = 0; $i < 3; $i++) {
+        $sampleBookings[] = [
+            'id' => 1001 + $i,
+            'userId' => 101,
+            'bookingNumber' => 'BK'.rand(10000, 99999),
+            'pickupLocation' => generateRandomLocation(),
+            'dropLocation' => generateRandomLocation(),
+            'pickupDate' => date('Y-m-d H:i:s', strtotime(rand(-7, 7).' days')),
+            'returnDate' => rand(0, 1) ? date('Y-m-d H:i:s', strtotime(rand(8, 14).' days')) : null,
+            'cabType' => generateRandomCabType(),
+            'distance' => rand(5, 50) + (rand(0, 100) / 100),
+            'tripType' => ['outstation', 'local', 'airport'][rand(0, 2)],
+            'tripMode' => rand(0, 1) ? 'roundtrip' : 'oneway',
+            'totalAmount' => rand(1000, 10000),
+            'status' => ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)],
+            'passengerName' => generateRandomName(),
+            'passengerPhone' => '9'.rand(700000000, 999999999),
+            'passengerEmail' => strtolower(substr(generateRandomName(), 0, 5)) . '@example.com',
+            'driverName' => rand(0, 3) > 0 ? generateRandomName() : null,
+            'driverPhone' => rand(0, 3) > 0 ? '8'.rand(700000000, 999999999) : null,
+            'createdAt' => date('Y-m-d H:i:s', strtotime((-30 + $i*10).' days')),
+            'updatedAt' => date('Y-m-d H:i:s', strtotime((-25 + $i*10).' days'))
+        ];
+    }
     
     // Return error response with sample data as fallback
     echo json_encode([
