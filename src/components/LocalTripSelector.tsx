@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -42,24 +43,24 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
   };
   
-  // Load packages with API pricing
+  // Load packages with DB prices
   const loadPackages = async () => {
     setIsLoading(true);
     setLoadError(null);
     
     try {
-      console.log('LocalTripSelector: Loading package data with API pricing');
+      console.log('LocalTripSelector: Loading package data with DB prices');
       
       // Create package objects with template data first
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
-      // Use these vehicles as references for getting prices
+      // These are the reference vehicles we'll use for pricing
       const referenceVehicles = ['sedan', 'ertiga', 'innova_crysta'];
       
-      // Update all package prices in parallel for each vehicle type
+      // Update all package prices in parallel
       await Promise.all(updatedPackages.map(async (pkg) => {
         try {
-          // Try to get prices from multiple vehicle types to ensure we have accurate data
+          // Try to get prices from multiple vehicle types to ensure we have reliable data
           for (const vehicleId of referenceVehicles) {
             const price = await getLocalPackagePrice(pkg.id, vehicleId, true);
             if (price > 0) {
@@ -103,7 +104,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         }));
       }
       
-      // Fetch full fares in the background
+      // Pre-fetch all fares in the background
       fetchAndCacheLocalFares(true).catch(error => {
         console.error('Error fetching local fares in background:', error);
       });
