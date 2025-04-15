@@ -64,7 +64,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // Make direct API call to get the latest price
-    const apiUrl = `${getApiUrl()}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`;
+    const apiUrl = `${getApiUrl('api')}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`;
     console.log(`Fetching price from API: ${apiUrl}`);
     
     const response = await axios.get(apiUrl, {
@@ -166,7 +166,7 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
     for (const vehicleId of vehicleIds) {
       try {
         // Make API call to get prices for this vehicle
-        const apiUrl = `${getApiUrl()}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${vehicleId}`;
+        const apiUrl = `${getApiUrl('api')}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${vehicleId}`;
         console.log(`Fetching all fares for ${vehicleId} from API: ${apiUrl}`);
         
         const response = await axios.get(apiUrl, {
