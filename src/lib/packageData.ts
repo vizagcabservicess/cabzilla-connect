@@ -45,46 +45,6 @@ if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
   window.localPackagePriceCache = {};
 }
 
-// IMPORTANT: These are the master fallback prices that will be used when API calls fail
-// Make sure these values are CONSISTENT across the entire application
-const MASTER_FALLBACK_PRICES = {
-  'sedan': {
-    '4hrs-40km': 1200,
-    '8hrs-80km': 2000,
-    '10hrs-100km': 2500,
-    'priceExtraKm': 12,
-    'priceExtraHour': 100
-  },
-  'ertiga': {
-    '4hrs-40km': 1500,
-    '8hrs-80km': 2500,
-    '10hrs-100km': 3000,
-    'priceExtraKm': 15,
-    'priceExtraHour': 120
-  },
-  'innova_crysta': {
-    '4hrs-40km': 1800,
-    '8hrs-80km': 3000,
-    '10hrs-100km': 3500,
-    'priceExtraKm': 18,
-    'priceExtraHour': 150
-  },
-  'innova_hycross': {
-    '4hrs-40km': 2000,
-    '8hrs-80km': 3200,
-    '10hrs-100km': 3800,
-    'priceExtraKm': 20,
-    'priceExtraHour': 160
-  },
-  'tempo': {
-    '4hrs-40km': 2500,
-    '8hrs-80km': 4000,
-    '10hrs-100km': 5000,
-    'priceExtraKm': 25,
-    'priceExtraHour': 200
-  }
-};
-
 // Function to get price for a local package (main function used throughout the app)
 export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
   try {
@@ -118,7 +78,6 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // Try all available API endpoints in sequence until one works
-    // IMPORTANT FIX: Use proper URL construction without /api duplication
     const apiEndpoints = [
       `${getApiUrl('')}/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
       `${getApiUrl('')}/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
@@ -204,16 +163,16 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       throw lastError;
     }
     
-    // If no API price is available, use CONSISTENT master fallback prices
-    const fallbackPrice = getFallbackPrice(normalizedVehicleType, normalizedPackageId);
+    // If no API price is available, use vehicle-specific fixed prices
+    const fixedPrice = getFixedPrice(normalizedVehicleType, normalizedPackageId);
     
-    console.log(`Using fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fallbackPrice}`);
+    console.log(`Using fixed price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fixedPrice}`);
     
-    // Update cache with hardcoded price
+    // Update cache with fixed price
     window.localPackagePriceCache[cacheKey] = { 
-      price: fallbackPrice, 
+      price: fixedPrice, 
       timestamp: Date.now(), 
-      source: 'hardcoded-fallback' 
+      source: 'fixed-price' 
     };
     
     // Dispatch event for consistency
@@ -221,16 +180,16 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       detail: { 
         vehicleType: normalizedVehicleType, 
         packageId: normalizedPackageId, 
-        price: fallbackPrice, 
-        source: 'hardcoded-fallback' 
+        price: fixedPrice, 
+        source: 'fixed-price' 
       }
     }));
     
-    return fallbackPrice;
+    return fixedPrice;
   } catch (error) {
     console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
     
-    // Use CONSISTENT master fallback prices
+    // Use consistent fixed prices
     const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
     let normalizedPackageId = packageId;
     if (packageId.includes('hr-')) {
@@ -246,65 +205,76 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       normalizedPackageId = '4hrs-40km';
     }
     
-    // Get fallback price
-    const fallbackPrice = getFallbackPrice(normalizedVehicleType, normalizedPackageId);
+    // Get fixed price
+    const fixedPrice = getFixedPrice(normalizedVehicleType, normalizedPackageId);
     
     // Create unique cache key
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
     
-    console.log(`Using fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fallbackPrice}`);
+    console.log(`Using fixed price for ${normalizedVehicleType}, ${normalizedPackageId}: ${fixedPrice}`);
     
-    // Update cache with hardcoded price
+    // Update cache with fixed price
     window.localPackagePriceCache[cacheKey] = { 
-      price: fallbackPrice, 
+      price: fixedPrice, 
       timestamp: Date.now(), 
-      source: 'hardcoded-fallback' 
+      source: 'fixed-price' 
     };
     
     window.dispatchEvent(new CustomEvent('local-fare-updated', {
       detail: { 
         vehicleType: normalizedVehicleType, 
         packageId: normalizedPackageId, 
-        price: fallbackPrice, 
-        source: 'hardcoded-fallback' 
+        price: fixedPrice, 
+        source: 'fixed-price' 
       }
     }));
     
-    return fallbackPrice;
+    return fixedPrice;
   }
 }
 
-// Helper function to get consistent fallback prices
-function getFallbackPrice(vehicleType: string, packageId: string): number {
-  // First, try to get from master fallback prices
-  if (MASTER_FALLBACK_PRICES[vehicleType] && MASTER_FALLBACK_PRICES[vehicleType][packageId]) {
-    return MASTER_FALLBACK_PRICES[vehicleType][packageId];
+// Helper function to get fixed prices that match what's displayed in the UI
+function getFixedPrice(vehicleType: string, packageId: string): number {
+  // These prices should match exactly what's shown in the UI
+  if (vehicleType.includes('sedan')) {
+    if (packageId.includes('4hrs')) return 1200;
+    if (packageId.includes('8hrs')) return 2000;
+    if (packageId.includes('10hrs')) return 2500;
+    return 2000; // Default to 8hrs price
   }
   
-  // If vehicle type not found directly, try to match based on name
-  let matchedVehicleType = vehicleType;
-  if (vehicleType.includes('innova') && vehicleType.includes('hycross')) {
-    matchedVehicleType = 'innova_hycross';
-  } else if (vehicleType.includes('innova')) {
-    matchedVehicleType = 'innova_crysta';
-  } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
-    matchedVehicleType = 'tempo';
-  } else if (vehicleType.includes('ertiga') || vehicleType.includes('suv')) {
-    matchedVehicleType = 'ertiga';
-  } else {
-    matchedVehicleType = 'sedan'; // Default fallback
+  if (vehicleType.includes('ertiga')) {
+    if (packageId.includes('4hrs')) return 1500;
+    if (packageId.includes('8hrs')) return 2500;
+    if (packageId.includes('10hrs')) return 3000;
+    return 2500; // Default to 8hrs price
   }
   
-  // Now try with the matched vehicle type
-  if (MASTER_FALLBACK_PRICES[matchedVehicleType] && MASTER_FALLBACK_PRICES[matchedVehicleType][packageId]) {
-    return MASTER_FALLBACK_PRICES[matchedVehicleType][packageId];
+  if (vehicleType.includes('innova_crysta')) {
+    if (packageId.includes('4hrs')) return 1800;
+    if (packageId.includes('8hrs')) return 3000;
+    if (packageId.includes('10hrs')) return 3500;
+    return 3000; // Default to 8hrs price
   }
   
-  // Last resort: return a default price based on vehicle type
-  return matchedVehicleType.includes('innova_hycross') ? 3200 : 
-         matchedVehicleType.includes('innova') ? 3000 : 
-         matchedVehicleType.includes('ertiga') ? 2500 : 
-         matchedVehicleType.includes('tempo') ? 4000 : 2000;
+  if (vehicleType.includes('innova_hycross')) {
+    if (packageId.includes('4hrs')) return 2000;
+    if (packageId.includes('8hrs')) return 2000; // Fixed to match UI
+    if (packageId.includes('10hrs')) return 3800;
+    return 2000; // Default to 8hrs price
+  }
+  
+  if (vehicleType.includes('tempo')) {
+    if (packageId.includes('4hrs')) return 2500;
+    if (packageId.includes('8hrs')) return 4000;
+    if (packageId.includes('10hrs')) return 5000;
+    return 4000; // Default to 8hrs price
+  }
+  
+  // Default fallback - this should never be reached if vehicle types are passed correctly
+  return packageId.includes('4hrs') ? 1200 : 
+         packageId.includes('8hrs') ? 2000 : 
+         packageId.includes('10hrs') ? 2500 : 2000;
 }
 
 // Function to get local package price from localStorage (for backward compatibility)
@@ -361,7 +331,6 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
     for (const vehicleId of vehicleIds) {
       try {
         // Try multiple API endpoints for each vehicle
-        // IMPORTANT FIX: Use proper URL construction without /api duplication
         const apiEndpoints = [
           `${getApiUrl('')}/user/direct-booking-data.php?check_sync=true&vehicle_id=${vehicleId}`,
           `${getApiUrl('')}/local-package-fares.php?vehicle_id=${vehicleId}`,
@@ -419,32 +388,44 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
           }
         }
         
-        // If none of the API endpoints worked, use MASTER_FALLBACK_PRICES
+        // If none of the API endpoints worked, use fixed prices
         if (!success) {
-          // Use hardcoded fallback prices - ENSURE CONSISTENCY with MASTER_FALLBACK_PRICES
+          // Use fixed prices that match the UI
           fares[vehicleId] = {
-            price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]?.['4hrs-40km'] || 0,
-            price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]?.['8hrs-80km'] || 0, 
-            price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]?.['10hrs-100km'] || 0,
-            priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraKm'] || 0,
-            priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraHour'] || 0
+            price4hrs40km: getFixedPrice(vehicleId, '4hrs-40km'),
+            price8hrs80km: getFixedPrice(vehicleId, '8hrs-80km'),
+            price10hrs100km: getFixedPrice(vehicleId, '10hrs-100km'),
+            priceExtraKm: vehicleId === 'sedan' ? 12 : 
+                          vehicleId === 'ertiga' ? 15 : 
+                          vehicleId === 'innova_crysta' ? 18 : 
+                          vehicleId === 'innova_hycross' ? 20 : 25,
+            priceExtraHour: vehicleId === 'sedan' ? 100 : 
+                           vehicleId === 'ertiga' ? 120 : 
+                           vehicleId === 'innova_crysta' ? 150 : 
+                           vehicleId === 'innova_hycross' ? 160 : 200
           };
           
-          console.log(`Using hardcoded fallback prices for ${vehicleId}`);
+          console.log(`Using fixed prices for ${vehicleId}`);
         }
       } catch (vehicleError) {
         console.error(`Error fetching fares for ${vehicleId}:`, vehicleError);
         
-        // Use hardcoded fallback prices - ENSURE CONSISTENCY with MASTER_FALLBACK_PRICES
+        // Use fixed prices that match the UI
         fares[vehicleId] = {
-          price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]?.['4hrs-40km'] || 0,
-          price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]?.['8hrs-80km'] || 0, 
-          price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]?.['10hrs-100km'] || 0,
-          priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraKm'] || 0,
-          priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]?.['priceExtraHour'] || 0
+          price4hrs40km: getFixedPrice(vehicleId, '4hrs-40km'),
+          price8hrs80km: getFixedPrice(vehicleId, '8hrs-80km'),
+          price10hrs100km: getFixedPrice(vehicleId, '10hrs-100km'),
+          priceExtraKm: vehicleId === 'sedan' ? 12 : 
+                       vehicleId === 'ertiga' ? 15 : 
+                       vehicleId === 'innova_crysta' ? 18 : 
+                       vehicleId === 'innova_hycross' ? 20 : 25,
+          priceExtraHour: vehicleId === 'sedan' ? 100 : 
+                        vehicleId === 'ertiga' ? 120 : 
+                        vehicleId === 'innova_crysta' ? 150 : 
+                        vehicleId === 'innova_hycross' ? 160 : 200
         };
         
-        console.log(`Using hardcoded fallback prices for ${vehicleId}`);
+        console.log(`Using fixed prices for ${vehicleId}`);
       }
     }
     
@@ -457,24 +438,32 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
   } catch (error) {
     console.error('Error fetching all local fares:', error);
     
-    // Create fallback fares from MASTER_FALLBACK_PRICES for consistency
-    const fallbackFares: Record<string, any> = {};
+    // Create fixed fares using our getFixedPrice function for consistency
+    const fixedFares: Record<string, any> = {};
+    const vehicleIds = ['sedan', 'ertiga', 'innova_crysta', 'innova_hycross', 'tempo'];
     
-    for (const vehicleId in MASTER_FALLBACK_PRICES) {
-      fallbackFares[vehicleId] = {
-        price4hrs40km: MASTER_FALLBACK_PRICES[vehicleId]['4hrs-40km'],
-        price8hrs80km: MASTER_FALLBACK_PRICES[vehicleId]['8hrs-80km'],
-        price10hrs100km: MASTER_FALLBACK_PRICES[vehicleId]['10hrs-100km'],
-        priceExtraKm: MASTER_FALLBACK_PRICES[vehicleId]['priceExtraKm'],
-        priceExtraHour: MASTER_FALLBACK_PRICES[vehicleId]['priceExtraHour']
+    for (const vehicleId of vehicleIds) {
+      fixedFares[vehicleId] = {
+        price4hrs40km: getFixedPrice(vehicleId, '4hrs-40km'),
+        price8hrs80km: getFixedPrice(vehicleId, '8hrs-80km'),
+        price10hrs100km: getFixedPrice(vehicleId, '10hrs-100km'),
+        priceExtraKm: vehicleId === 'sedan' ? 12 : 
+                     vehicleId === 'ertiga' ? 15 : 
+                     vehicleId === 'innova_crysta' ? 18 : 
+                     vehicleId === 'innova_hycross' ? 20 : 25,
+        priceExtraHour: vehicleId === 'sedan' ? 100 : 
+                       vehicleId === 'ertiga' ? 120 : 
+                       vehicleId === 'innova_crysta' ? 150 : 
+                       vehicleId === 'innova_hycross' ? 160 : 200
       };
     }
     
-    // Dispatch event to notify components about fallback fares
+    // Dispatch event to notify components about fixed fares
     window.dispatchEvent(new CustomEvent('local-fares-updated', {
-      detail: { timestamp: Date.now(), source: 'hardcoded-fallback' }
+      detail: { timestamp: Date.now(), source: 'fixed-prices' }
     }));
     
-    return fallbackFares;
+    return fixedFares;
   }
 }
+
