@@ -3,7 +3,7 @@ import React from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import Image from "@/components/ui/image";
+import Image from "next/image"; // Updated import path
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -58,12 +58,10 @@ export const CabList: React.FC<CabListProps> = ({
           >
             <CardContent className="p-4 h-full flex flex-col">
               <div className="relative mb-4 pb-[56.25%] overflow-hidden rounded-md bg-muted">
-                <Image
+                <img
                   src={cab.image || "/cars/sedan.png"}
                   alt={cab.name}
                   className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-                  width={300}
-                  height={200}
                 />
               </div>
 
