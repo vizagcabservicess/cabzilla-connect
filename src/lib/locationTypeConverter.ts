@@ -10,7 +10,8 @@ export function convertApiLocationToInternalLocation(location: ApiLocationType):
     ...location,
     popularityScore: 0, // Default popularity score
     isInVizag: location.isInVizag ?? false,
-    type: location.type || 'general',
+    // Cast the type to ensure compatibility - use a valid fallback if type is invalid
+    type: (location.type as "airport" | "train_station" | "bus_station" | "hotel" | "landmark" | "other") || 'general',
     lat: location.lat || 0,
     lng: location.lng || 0
   };

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { LocalPackageFare, LocalPackageFaresResponse } from '@/types/api';
 
@@ -219,20 +218,23 @@ export const hourlyPackages = [
     name: '4 Hours Package',
     hours: 4,
     kilometers: 40,
-    description: 'Up to 4 hours and 40 kilometers'
+    description: 'Up to 4 hours and 40 kilometers',
+    basePrice: 800  // Add basePrice property to fix the error
   },
   {
     id: '8hrs-80km',
     name: '8 Hours Package',
     hours: 8,
     kilometers: 80,
-    description: 'Up to 8 hours and 80 kilometers'
+    description: 'Up to 8 hours and 80 kilometers',
+    basePrice: 1500  // Add basePrice property to fix the error
   },
   {
     id: '10hrs-100km',
     name: '10 Hours Package',
     hours: 10,
     kilometers: 100,
-    description: 'Up to 10 hours and 100 kilometers'
+    description: 'Up to 10 hours and 100 kilometers',
+    basePrice: 2000  // Add basePrice property to fix the error
   }
 ];
