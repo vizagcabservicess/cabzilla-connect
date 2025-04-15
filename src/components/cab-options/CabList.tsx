@@ -3,7 +3,6 @@ import React from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import Image from "next/image"; // Updated import path
 
 interface CabListProps {
   cabTypes: CabType[];
