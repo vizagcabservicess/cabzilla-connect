@@ -96,6 +96,7 @@ export function Hero() {
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
+  const [totalPrice, setTotalPrice] = useState<number>(0);
 
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
@@ -224,6 +225,17 @@ export function Hero() {
     }
   }, [tripType, hourlyPackage]);
 
+  useEffect(() => {
+    const updatePrice = async () => {
+      if (selectedCab) {
+        const price = await calculatePrice();
+        setTotalPrice(price);
+      }
+    };
+    
+    updatePrice();
+  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+
   function handleContinue() {
     if (!isFormValid) {
       toast({
@@ -250,7 +262,7 @@ export function Hero() {
     }
   };
 
-  function calculatePrice() {
+  async function calculatePrice() {
     if (!selectedCab) return 0;
     
     let totalPrice = 0;
@@ -261,16 +273,30 @@ export function Hero() {
       // Get the local package kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       
-      // For local trips, use the exact package km for price calculation
-      totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
-      
-      // Only add extra distance if it's specifically calculated for local trips
-      // and is greater than the package limit
-      if (distance > packageKm && tripType === 'local') {
-        const extraKm = distance - packageKm;
-        const extraKmRate = selectedCab.pricePerKm;
-        totalPrice += extraKm * extraKmRate;
-        console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
+      try {
+        // For local trips, use the exact package km for price calculation
+        totalPrice = await getLocalPackagePrice(hourlyPackage, selectedCab.name);
+        
+        // Only add extra distance if it's specifically calculated for local trips
+        // and is greater than the package limit
+        if (distance > packageKm && tripType === 'local') {
+          const extraKm = distance - packageKm;
+          const extraKmRate = selectedCab.pricePerKm;
+          totalPrice += extraKm * extraKmRate;
+          console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
+        }
+      } catch (error) {
+        console.error('Error calculating local package price:', error);
+        // Fallback pricing if the API call fails
+        if (selectedCab.name.toLowerCase().includes('sedan')) {
+          totalPrice = 1500;
+        } else if (selectedCab.name.toLowerCase().includes('ertiga')) {
+          totalPrice = 2000;
+        } else if (selectedCab.name.toLowerCase().includes('innova')) {
+          totalPrice = 2500;
+        } else {
+          totalPrice = 2000;
+        }
       }
     } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -324,9 +350,7 @@ export function Hero() {
     return Math.ceil(totalPrice / 10) * 10;
   };
 
-  let totalPrice = calculatePrice();
-
-  async function handleGuestDetailsSubmit(guestDetails: any) {
+  function handleGuestDetailsSubmit(guestDetails: any) {
     try {
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);

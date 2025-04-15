@@ -59,10 +59,12 @@ export interface FareCache {
 export interface TourInfo {
   id: string;
   name: string;
-  description: string;
-  duration: string;
-  places: string[];
+  description?: string;
+  duration?: string;
+  places?: string[];
   image?: string;
+  distance?: number; // Add distance property
+  days?: number;    // Add days property
 }
 
 // Tour fare mapping by vehicle types
@@ -118,6 +120,8 @@ export interface LocalFare {
   package10hr100km?: number;
   extraKmRate: number;
   extraHourRate: number;
+  priceExtraKm?: number; // Add priceExtraKm property for fareService.ts
+  priceExtraHour?: number; // Add related property
 }
 
 // Airport fare structure
