@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
-import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
+import { CabType, LocalFare, OutstationFare, AirportFare } from '@/types/cab';
 
 // Create a global timestamp for fare cache refreshes
 let globalTimestamp = Date.now();

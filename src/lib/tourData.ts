@@ -1,5 +1,4 @@
-
-import { TourInfo, TourFares } from '@/types/cab';
+import { CabType, TourInfo, TourFares } from '@/types/cab';
 import { fareAPI } from '@/services/api';
 
 export const availableTours: TourInfo[] = [

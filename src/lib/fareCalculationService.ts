@@ -336,8 +336,9 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // If we couldn't get from API, try to get from package price matrix
         if (calculatedFare <= 0) {
           try {
-            calculatedFare = getLocalPackagePrice(packageId, cabType.id);
-            console.log(`Retrieved local package price from matrix: ₹${calculatedFare}`);
+            const price = await getLocalPackagePrice(packageId, cabType);
+            console.log(`Retrieved local package price from matrix: ₹${price}`);
+            calculatedFare = price;
           } catch (error) {
             console.error('Error getting local package price:', error);
           }

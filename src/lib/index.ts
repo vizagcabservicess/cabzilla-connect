@@ -74,15 +74,16 @@ export {
   getVehicleTypes
 } from '@/services/vehicleDataService';
 
-// Re-export CabType from the types directly
+// Re-export CabType from the types directly 
 export type { 
   CabType, 
-  HourlyPackage, 
-  FareCache, 
-  TourInfo, 
-  TourFares, 
-  ExtraCharges, 
-  LocalPackagePriceMatrix, 
+  HourlyPackage,
+  // Include these types only if they are defined in @/types/cab
+  FareCache,
+  TourInfo,
+  TourFares,
+  ExtraCharges,
+  LocalPackagePriceMatrix,
   FareCalculationParams,
   VehiclePricing,
   OutstationFare,

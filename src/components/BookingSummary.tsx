@@ -331,7 +331,7 @@ export const BookingSummary = ({
         
         if (localFares.price8hrs80km > 0) {
           newBaseFare = localFares.price8hrs80km;
-        } else if (selectedCab.localPackageFares?.price8hrs80km) {
+        } else if (selectedCab.localPackageFares && selectedCab.localPackageFares.price8hrs80km) {
           newBaseFare = selectedCab.localPackageFares.price8hrs80km;
         } else {
           if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
