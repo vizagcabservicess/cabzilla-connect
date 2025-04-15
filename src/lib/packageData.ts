@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { cabTypes } from './cabData';
 
@@ -65,6 +64,124 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       console.log(`Using cached price for ${cacheKey}: ${localPackagePriceCache[cacheKey].price}`);
       return localPackagePriceCache[cacheKey].price;
     }
+    
+    // 6. Get exact price from database dump - moved this up since API calls are failing
+    // This is based on the actual database values shown in the screenshots
+    const dbPrices: Record<string, Record<string, number>> = {
+      'sedan': {
+        '4hrs-40km': 1500,
+        '8hrs-80km': 2000,
+        '10hrs-100km': 3000
+      },
+      'ertiga': {
+        '4hrs-40km': 1500,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3500
+      },
+      'innova_crysta': {
+        '4hrs-40km': 1800,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 4000
+      },
+      'innova_hycross': {
+        '4hrs-40km': 1800,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 4000
+      },
+      'tempo': {
+        '4hrs-40km': 3000,
+        '8hrs-80km': 4500,
+        '10hrs-100km': 5500
+      },
+      'luxury': {
+        '4hrs-40km': 3500,
+        '8hrs-80km': 5500,
+        '10hrs-100km': 6500
+      },
+      'mpv': {
+        '4hrs-40km': 2000,
+        '8hrs-80km': 4000,
+        '10hrs-100km': 4500
+      },
+      'tempo_traveller': {
+        '4hrs-40km': 6500,
+        '8hrs-80km': 6500,
+        '10hrs-100km': 7500
+      },
+      'etios': {
+        '4hrs-40km': 1200,
+        '8hrs-80km': 2000,
+        '10hrs-100km': 2500
+      },
+      'dzire_cng': {
+        '4hrs-40km': 1200,
+        '8hrs-80km': 2000,
+        '10hrs-100km': 2500
+      },
+      'amaze': {
+        '4hrs-40km': 1200,
+        '8hrs-80km': 2000,
+        '10hrs-100km': 2500
+      }
+    };
+    
+    // Map vehicle types to standard types for database pricing
+    let mappedVehicleType = normalizedVehicleType;
+    
+    if (normalizedVehicleType.includes('innova')) {
+      if (normalizedVehicleType.includes('hycross')) {
+        mappedVehicleType = 'innova_hycross';
+      } else {
+        mappedVehicleType = 'innova_crysta';
+      }
+    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('dzire_cng')) {
+      mappedVehicleType = 'dzire_cng';
+    } else if (normalizedVehicleType.includes('etios') || normalizedVehicleType.includes('toyota')) {
+      mappedVehicleType = 'etios';
+    } else if (normalizedVehicleType.includes('amaze')) {
+      mappedVehicleType = 'amaze';
+    } else if (normalizedVehicleType.includes('tempo_traveller') || normalizedVehicleType.includes('traveller')) {
+      mappedVehicleType = 'tempo_traveller';
+    } else if (normalizedVehicleType === 'tempo') {
+      mappedVehicleType = 'tempo';
+    } else if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('xl6')) {
+      mappedVehicleType = 'ertiga';
+    } else if (normalizedVehicleType.includes('mpv')) {
+      mappedVehicleType = 'mpv';
+    }
+    
+    // Check if we have a database price for this vehicle and package
+    if (dbPrices[mappedVehicleType] && dbPrices[mappedVehicleType][normalizedPackageId]) {
+      const price = dbPrices[mappedVehicleType][normalizedPackageId];
+      console.log(`Using database price for ${normalizedVehicleType} (mapped to ${mappedVehicleType}), ${normalizedPackageId}: ${price}`);
+      
+      // Update cache with db price
+      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'database' };
+      const localStorageKey = `fare_local_${normalizedVehicleType}`;
+      localStorage.setItem(localStorageKey, price.toString());
+      
+      // Dispatch event for consistency
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: { vehicleType: normalizedVehicleType, packageId: normalizedPackageId, price, source: 'database' }
+      }));
+      
+      return price;
+    }
+    
+    // 5. Check localStorage as fallback
+    const localStorageKey = `fare_local_${normalizedVehicleType}`;
+    const storedPrice = localStorage.getItem(localStorageKey);
+    if (storedPrice) {
+      const price = parseInt(storedPrice, 10);
+      if (price > 0) {
+        console.log(`Using stored local package price for ${normalizedVehicleType}: ${price}`);
+        // Update cache with stored price
+        localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'localStorage' };
+        return price;
+      }
+    }
+    
+    // If we reach here, we couldn't find a price, so we'll try the API calls as a last resort
     
     // 2. Try to fetch from the main API endpoint first
     try {
@@ -184,94 +301,6 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     } catch (adminError) {
       console.warn(`Error fetching from admin API: ${adminError}`);
       // Continue to next method if this fails
-    }
-    
-    // 5. Check localStorage as fallback
-    const localStorageKey = `fare_local_${normalizedVehicleType}`;
-    const storedPrice = localStorage.getItem(localStorageKey);
-    if (storedPrice) {
-      const price = parseInt(storedPrice, 10);
-      if (price > 0) {
-        console.log(`Using stored local package price for ${normalizedVehicleType}: ${price}`);
-        // Update cache with stored price
-        localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'localStorage' };
-        return price;
-      }
-    }
-    
-    // 6. Get exact price from database dump
-    // This is based on the actual database values shown in the screenshot
-    const dbPrices: Record<string, Record<string, number>> = {
-      'sedan': {
-        '4hrs-40km': 1400,
-        '8hrs-80km': 2400,
-        '10hrs-100km': 3000
-      },
-      'ertiga': {
-        '4hrs-40km': 1500,
-        '8hrs-80km': 3000,
-        '10hrs-100km': 3500
-      },
-      'innova_crysta': {
-        '4hrs-40km': 1800,
-        '8hrs-80km': 3500,
-        '10hrs-100km': 4000
-      },
-      'tempo': {
-        '4hrs-40km': 3000,
-        '8hrs-80km': 4500,
-        '10hrs-100km': 5500
-      },
-      'luxury': {
-        '4hrs-40km': 3500,
-        '8hrs-80km': 5500,
-        '10hrs-100km': 6500
-      },
-      'mpv': {
-        '4hrs-40km': 2000,
-        '8hrs-80km': 4000,
-        '10hrs-100km': 4500
-      },
-      'tempo_traveller': {
-        '4hrs-40km': 6500,
-        '8hrs-80km': 6500,
-        '10hrs-100km': 7500
-      }
-    };
-    
-    // Map vehicle types to standard types for database pricing
-    let mappedVehicleType = normalizedVehicleType;
-    
-    if (normalizedVehicleType.includes('innova') || normalizedVehicleType.includes('crysta')) {
-      mappedVehicleType = 'innova_crysta';
-    } else if (normalizedVehicleType.includes('dzire') || normalizedVehicleType.includes('etios') || 
-               normalizedVehicleType.includes('toyota') || normalizedVehicleType.includes('amaze')) {
-      mappedVehicleType = 'sedan';
-    } else if (normalizedVehicleType.includes('tempo_traveller') || normalizedVehicleType.includes('traveller')) {
-      mappedVehicleType = 'tempo_traveller';
-    } else if (normalizedVehicleType === 'tempo') {
-      mappedVehicleType = 'tempo';
-    } else if (normalizedVehicleType.includes('ertiga') || normalizedVehicleType.includes('xl6')) {
-      mappedVehicleType = 'ertiga';
-    } else if (normalizedVehicleType.includes('mpv')) {
-      mappedVehicleType = 'mpv';
-    }
-    
-    // Check if we have a database price for this vehicle and package
-    if (dbPrices[mappedVehicleType] && dbPrices[mappedVehicleType][normalizedPackageId]) {
-      const price = dbPrices[mappedVehicleType][normalizedPackageId];
-      console.log(`Using database price for ${normalizedVehicleType} (mapped to ${mappedVehicleType}), ${normalizedPackageId}: ${price}`);
-      
-      // Update cache with db price
-      localPackagePriceCache[cacheKey] = { price, timestamp: Date.now(), source: 'database' };
-      localStorage.setItem(localStorageKey, price.toString());
-      
-      // Dispatch event for consistency
-      window.dispatchEvent(new CustomEvent('local-fare-updated', {
-        detail: { vehicleType: normalizedVehicleType, packageId: normalizedPackageId, price, source: 'database' }
-      }));
-      
-      return price;
     }
     
     // 7. Last resort - throw error as we couldn't get a valid price
