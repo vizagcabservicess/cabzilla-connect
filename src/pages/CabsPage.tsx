@@ -21,7 +21,7 @@ import {
 } from "@/lib/cabData";
 import { calculateFare } from "@/lib/fareCalculationService";
 import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
-import { hourlyPackages } from "@/lib/packageData";
+import { hourlyPackages, HourlyPackage } from '@/lib/packageData';
 import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";

@@ -2,7 +2,40 @@
 import axios from 'axios';
 import { cabTypes } from './cabData';
 
-export const hourlyPackages = [
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  basePrice: number;
+}
+
+export const hourlyPackages: HourlyPackage[] = [
+  { 
+    id: '4hrs-40km', 
+    name: '4 Hours Package', 
+    hours: 4, 
+    kilometers: 40, 
+    basePrice: 1500 
+  },
+  { 
+    id: '8hrs-80km', 
+    name: '8 Hours Package', 
+    hours: 8, 
+    kilometers: 80, 
+    basePrice: 2000 
+  },
+  { 
+    id: '10hrs-100km', 
+    name: '10 Hours Package', 
+    hours: 10, 
+    kilometers: 100, 
+    basePrice: 2500 
+  }
+];
+
+// Legacy format hourly packages (for backward compatibility)
+export const hourlyPackageOptions = [
   { value: '4hrs-40km', label: '4 Hours / 40 KM' },
   { value: '8hrs-80km', label: '8 Hours / 80 KM' },
   { value: '10hrs-100km', label: '10 Hours / 100 KM' }
@@ -51,7 +84,10 @@ const defaultLocalPackagePrices: LocalPackagePrices = {
 };
 
 // Cache for local package prices
-let localPackagePriceCache: Record<string, Record<string, number>> = {};
+let localPackagePriceCache: Record<string, any> = {};
+
+// Function to get price for a local package - alias for backwards compatibility
+export const getLocalPackagePriceFromApi = getLocalPackagePrice;
 
 // Function to get price for a local package
 export async function getLocalPackagePrice(packageId: string, vehicleType: string): Promise<number> {
@@ -206,4 +242,19 @@ export function getLocalPackagePriceFromStorage(packageId: string, vehicleType: 
   }
   
   return defaultLocalPackagePrices['sedan'][packageId];
+}
+
+// Function to fetch and cache local fares
+export async function fetchAndCacheLocalFares() {
+  try {
+    const response = await axios.get('/api/admin/direct-local-fares.php');
+    if (response.data && response.data.status === 'success' && response.data.fares) {
+      const fares = response.data.fares;
+      return fares;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching local fares:', error);
+    return null;
+  }
 }

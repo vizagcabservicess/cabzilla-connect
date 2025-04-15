@@ -14,6 +14,16 @@ interface LocalTripSelectorProps {
   onPackageSelect: (packageId: string) => void;
 }
 
+interface FareData {
+  price4hrs40km?: number;
+  price_4hr_40km?: number;
+  price8hrs80km?: number;
+  price_8hr_80km?: number;
+  price10hrs100km?: number;
+  price_10hr_100km?: number;
+  [key: string]: any;
+}
+
 export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTripSelectorProps) {
   const [packages, setPackages] = useState<HourlyPackage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -85,7 +95,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       
       // Populate package prices using the first vehicle's fares
       // (UI will display package options, actual vehicle-specific pricing is handled elsewhere)
-      const firstVehicle = Object.values(fares)[0];
+      const firstVehicle = Object.values(fares)[0] as FareData;
       
       if (firstVehicle) {
         packageTemplates[0].basePrice = firstVehicle.price4hrs40km || firstVehicle.price_4hr_40km || 0;
@@ -130,10 +140,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       setLoadError(`Unable to load package pricing. Please try again later. (${error instanceof Error ? error.message : 'Unknown error'})`);
       
       // Fallback to template packages with no prices (UI only)
-      setPackages(hourlyPackages.map(pkg => ({
-        ...pkg,
-        basePrice: 0
-      })));
+      setPackages(hourlyPackages);
     } finally {
       setIsLoading(false);
     }

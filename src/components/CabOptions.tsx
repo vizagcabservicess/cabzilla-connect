@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getLocalPackagePriceFromApi } from '@/lib/packageData';
+import { getLocalPackagePrice } from '@/lib/packageData';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -112,7 +111,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       // For each cab, get the price for the selected package from the API
       await Promise.all(cabTypes.map(async (cab) => {
         try {
-          const price = await getLocalPackagePriceFromApi(hourlyPackage, cab.id);
+          const price = await getLocalPackagePrice(hourlyPackage, cab.id);
           if (price > 0) {
             updatedFares[cab.id] = price;
             
@@ -202,7 +201,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       // For local trips, fetch the exact fare from the API before emitting with fare
       if (tripType === 'local' && hourlyPackage) {
         setIsCalculatingFares(true);
-        getLocalPackagePriceFromApi(hourlyPackage, cab.id)
+        getLocalPackagePrice(hourlyPackage, cab.id)
           .then(price => {
             if (price > 0) {
               // Update our cab fares state
@@ -385,7 +384,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       // If we already have a selected cab, fetch its fare
       if (selectedCab && tripType === 'local' && hourlyPackage) {
-        getLocalPackagePriceFromApi(hourlyPackage, selectedCab.id)
+        getLocalPackagePrice(hourlyPackage, selectedCab.id)
           .then(price => {
             if (price > 0) {
               setCabFares(prev => ({
@@ -513,7 +512,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         
         // If local trip type, refetch from API
         if (tripType === 'local' && hourlyPackage) {
-          getLocalPackagePriceFromApi(hourlyPackage, event.detail.cabId)
+          getLocalPackagePrice(hourlyPackage, event.detail.cabId)
             .then(price => {
               if (price > 0) {
                 setCabFares(prev => ({
