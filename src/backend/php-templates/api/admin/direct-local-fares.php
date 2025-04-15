@@ -40,6 +40,10 @@ if (!$vehicleId) {
 // Normalize vehicle ID for consistency
 $normalizedVehicleId = strtolower($vehicleId);
 
+// Clean up vehicle ID to match database naming conventions
+// Convert spaces to underscores and remove special characters
+$normalizedVehicleId = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $normalizedVehicleId));
+
 // First attempt to get data directly from database
 $localFares = [];
 $dbSuccess = false;
@@ -49,25 +53,67 @@ try {
     $conn = getDbConnection();
     
     if ($conn) {
-        // Query the local_package_fares table directly
-        $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param("s", $normalizedVehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        // Query the local_package_fares table directly - try different variations of vehicle ID
+        $possibleVehicleIds = [
+            $normalizedVehicleId,
+            str_replace('_', '', $normalizedVehicleId),
+            // Add common variations for vehicle types
+            str_replace('dzire_cng', 'dzire', $normalizedVehicleId),
+            str_replace('dzire_cng', 'cng', $normalizedVehicleId),
+            str_replace('innova_hycross', 'innova', $normalizedVehicleId),
+            str_replace('innova_crysta', 'innova', $normalizedVehicleId),
+            str_replace('tempo_traveller', 'tempo', $normalizedVehicleId)
+        ];
         
-        if ($result && $row = $result->fetch_assoc()) {
-            // Successfully found data in database
-            $localFares[] = [
-                'vehicleId' => $row['vehicle_id'],
-                'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                'priceExtraKm' => (float)$row['price_extra_km'],
-                'priceExtraHour' => (float)$row['price_extra_hour'],
-                'source' => 'database'
-            ];
-            $dbSuccess = true;
+        foreach ($possibleVehicleIds as $possibleId) {
+            if (empty($possibleId)) continue;
+            
+            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("s", $possibleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result && $row = $result->fetch_assoc()) {
+                // Successfully found data in database
+                $localFares[] = [
+                    'vehicleId' => $row['vehicle_id'],
+                    'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                    'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                    'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                    'priceExtraKm' => (float)$row['price_extra_km'],
+                    'priceExtraHour' => (float)$row['price_extra_hour'],
+                    'source' => 'database',
+                    'timestamp' => time()
+                ];
+                $dbSuccess = true;
+                break; // Found a match, exit the loop
+            }
+        }
+        
+        // If still not found, try a more flexible query using LIKE
+        if (!$dbSuccess) {
+            $likePattern = '%' . str_replace('_', '%', $normalizedVehicleId) . '%';
+            $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ? LIMIT 1";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("s", $likePattern);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result && $row = $result->fetch_assoc()) {
+                // Successfully found data with LIKE query
+                $localFares[] = [
+                    'vehicleId' => $row['vehicle_id'],
+                    'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                    'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                    'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                    'priceExtraKm' => (float)$row['price_extra_km'],
+                    'priceExtraHour' => (float)$row['price_extra_hour'],
+                    'source' => 'database',
+                    'timestamp' => time()
+                ];
+                $dbSuccess = true;
+            }
         }
         
         // Close the database connection
@@ -83,16 +129,20 @@ if (!$dbSuccess) {
     // Helper function to calculate package prices based on vehicle category
     function calculateDynamicPrices($baseValue, $multiplier) {
         return [
-            'price4hrs40km' => round($baseValue * $multiplier * 1.2),
-            'price8hrs80km' => round($baseValue * $multiplier * 2.0),
-            'price10hrs100km' => round($baseValue * $multiplier * 2.5),
-            'priceExtraKm' => round($baseValue * $multiplier * 0.012),
-            'priceExtraHour' => round($baseValue * $multiplier * 0.1)
+            'price4hrs40km' => round($baseValue['4hr'] * $multiplier),
+            'price8hrs80km' => round($baseValue['8hr'] * $multiplier),
+            'price10hrs100km' => round($baseValue['10hr'] * $multiplier),
+            'priceExtraKm' => round(($baseValue['8hr'] * $multiplier) * 0.01),
+            'priceExtraHour' => round(($baseValue['8hr'] * $multiplier) * 0.1)
         ];
     }
 
     // Base price values that will be used for calculations
-    $baseValue = 1000;
+    $basePrices = [
+        '4hr' => 1200,
+        '8hr' => 2000,
+        '10hr' => 2500
+    ];
 
     // Determine vehicle category and apply appropriate multiplier
     $vehicleCategory = 'standard';
@@ -120,6 +170,9 @@ if (!$dbSuccess) {
         strpos($normalizedVehicleId, 'traveller') !== false) {
         $vehicleCategory = 'tempo';
         $multiplier = 2.0;
+    } else if (strpos($normalizedVehicleId, 'cng') !== false) {
+        $vehicleCategory = 'cng';
+        $multiplier = 1.0; // Same as sedan
     } else {
         // Default - use standard sedan pricing
         $vehicleCategory = 'other';
@@ -127,7 +180,7 @@ if (!$dbSuccess) {
     }
 
     // Calculate prices dynamically
-    $prices = calculateDynamicPrices($baseValue, $multiplier);
+    $prices = calculateDynamicPrices($basePrices, $multiplier);
 
     // Create the response object
     $localFares[] = [
@@ -138,7 +191,8 @@ if (!$dbSuccess) {
         'price10hrs100km' => $prices['price10hrs100km'],
         'priceExtraKm' => $prices['priceExtraKm'],
         'priceExtraHour' => $prices['priceExtraHour'],
-        'source' => 'dynamic'
+        'source' => 'dynamic',
+        'timestamp' => time()
     ];
 }
 
@@ -148,5 +202,7 @@ echo json_encode([
     'message' => $dbSuccess ? 'Local fares retrieved from database' : 'Local fares dynamically generated',
     'fares' => $localFares,
     'dynamicallyGenerated' => !$dbSuccess,
+    'requestedVehicleId' => $vehicleId,
+    'normalizedVehicleId' => $normalizedVehicleId,
     'timestamp' => time()
 ]);
