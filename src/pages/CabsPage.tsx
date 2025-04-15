@@ -33,7 +33,7 @@ import { Check, MapPin } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { getApiUrl } from "@/config/api";
-import { toast } from "sonner";
+import { toast as sonnerToast } from "sonner";
 
 const CabsPage = () => {
   const navigate = useNavigate();
@@ -288,7 +288,7 @@ const CabsPage = () => {
           
           // Show a notification to make the price change more visible
           if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
-            toast.info(`Price updated: ₹${customEvent.detail.fare}`, {
+            sonnerToast.info(`Price updated: ₹${customEvent.detail.fare}`, {
               id: `price-update-${customEvent.detail.cabId}`,
               duration: 3000
             });
@@ -312,7 +312,7 @@ const CabsPage = () => {
         
         // Show a notification for significant price changes
         if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
-          toast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
+          sonnerToast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
             id: `price-update-${customEvent.detail.cabId}`,
             duration: 3000
           });
@@ -795,7 +795,6 @@ const CabsPage = () => {
                   tripMode={tripMode}
                 />
                 
-                {/* Add the BookingSummaryHelper to ensure price consistency */}
                 {selectedCab && tripType === "local" && (
                   <BookingSummaryHelper
                     tripType={tripType}
