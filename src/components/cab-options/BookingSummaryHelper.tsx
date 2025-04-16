@@ -31,6 +31,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const pendingFareRef = useRef<number | null>(null);
   const activeRequestRef = useRef<boolean>(false);
   const currentCabRef = useRef<string | null>(null);
+  const requestRetryCount = useRef<Record<string, number>>({});
   
   // Log props for debugging
   useEffect(() => {
@@ -188,13 +189,17 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     
     activeRequestRef.current = true;
     
+    // Reset the retry count for this fetch attempt
+    const requestKey = `${cabId}_${packageId}`;
+    requestRetryCount.current[requestKey] = 0;
+    
     try {
       console.log(`BookingSummaryHelper: Fetching fare for ${cabId} with ${packageId}`);
       
-      // Direct package api endpoint - using the actual cab ID, not hardcoded "sedan"
-      const packageApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${cabId}&package_id=${packageId}`);
+      // First try with the user API endpoint that uses dynamic pricing as fallback
+      const userApiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${cabId}&package_id=${packageId}`);
       
-      const response = await axios.get(packageApiUrl, {
+      const response = await axios.get(userApiUrl, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
@@ -203,8 +208,26 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         timeout: 5000
       });
       
-      if (response.data && response.data.status === 'success' && response.data.price) {
-        const price = Number(response.data.price);
+      if (response.data && response.data.status === 'success') {
+        let price = 0;
+        
+        // Check if price is directly in the response
+        if (response.data.price) {
+          price = Number(response.data.price);
+        } 
+        // Check if it's in the data object
+        else if (response.data.data) {
+          const data = response.data.data;
+          
+          if (packageId.includes('4hrs-40km') && data.price4hrs40km) {
+            price = Number(data.price4hrs40km);
+          } else if (packageId.includes('8hrs-80km') && data.price8hrs80km) {
+            price = Number(data.price8hrs80km);
+          } else if (packageId.includes('10hrs-100km') && data.price10hrs100km) {
+            price = Number(data.price10hrs100km);
+          }
+        }
+        
         if (price > 0) {
           console.log(`BookingSummaryHelper: Retrieved fare directly from API: ₹${price} for cab ${cabId}`);
           
@@ -231,13 +254,17 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             setDisableOverrides(true);
             setTimeout(() => setDisableOverrides(false), 3000);
           }
+          
+          // Request was successful, no need to retry
+          activeRequestRef.current = false;
+          return;
         }
-      } else {
-        console.log(`BookingSummaryHelper: Could not get valid price from API response:`, response.data);
-        
-        // Try alternative API endpoint as fallback
-        await fetchFromAlternativeEndpoint(cabId, packageId);
       }
+      
+      // If we get here, the user API didn't provide a valid price
+      // Try the direct local-package-fares API
+      await fetchFromAlternativeEndpoint(cabId, packageId);
+      
     } catch (error) {
       console.error(`BookingSummaryHelper: Error fetching fare from database: ${error}`);
       
@@ -248,10 +275,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     }
   };
   
-  // New function to try an alternative endpoint if the first one fails
+  // Function to try an alternative endpoint if the first one fails
   const fetchFromAlternativeEndpoint = async (cabId: string, packageId: string) => {
     try {
-      const alternativeApiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${cabId}&package_id=${packageId}`);
+      const alternativeApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${cabId}&package_id=${packageId}`);
       
       console.log(`BookingSummaryHelper: Trying alternative API for ${cabId} with ${packageId}`);
       
@@ -292,48 +319,111 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             setDisableOverrides(true);
             setTimeout(() => setDisableOverrides(false), 3000);
           }
-        }
-      } else if (response.data && response.data.data) {
-        // Handle alternative response format
-        const data = response.data.data;
-        let price = 0;
-        
-        if (packageId.includes('4hrs-40km') && data.price4hrs40km) {
-          price = Number(data.price4hrs40km);
-        } else if (packageId.includes('8hrs-80km') && data.price8hrs80km) {
-          price = Number(data.price8hrs80km);
-        } else if (packageId.includes('10hrs-100km') && data.price10hrs100km) {
-          price = Number(data.price10hrs100km);
-        }
-        
-        if (price > 0) {
-          console.log(`BookingSummaryHelper: Retrieved fare from alternative format: ₹${price}`);
-          
-          // Store this price in localStorage
-          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, price.toString());
-          
-          // Only update if there's a significant difference (more than ₹10)
-          if (Math.abs(price - totalPrice) > 10 && !disableOverrides) {
-            // Dispatch booking summary update event
-            window.dispatchEvent(new CustomEvent('booking-summary-update', {
-              detail: {
-                cabId: cabId,
-                tripType: tripType,
-                packageId: packageId,
-                fare: price,
-                source: 'alternative-format',
-                timestamp: Date.now()
-              }
-            }));
-            
-            // Temporary disable overrides to prevent immediate feedback loops
-            setDisableOverrides(true);
-            setTimeout(() => setDisableOverrides(false), 3000);
-          }
+          return;
         }
       }
+      
+      // If both API attempts failed, use vehicle-specific fallback pricing
+      useFallbackPricing(cabId, packageId);
+      
     } catch (error) {
       console.error(`BookingSummaryHelper: Error fetching from alternative endpoint: ${error}`);
+      
+      // If all API attempts failed, use vehicle-specific fallback pricing
+      useFallbackPricing(cabId, packageId);
+    }
+  };
+  
+  // New function to provide reliable fallback pricing when APIs fail
+  const useFallbackPricing = (cabId: string, packageId: string) => {
+    // Check if we already have a cached fare first
+    const cacheKey = `selected_fare_${cabId}_${packageId}`;
+    const cachedFare = localStorage.getItem(cacheKey);
+    if (cachedFare) {
+      const parsedFare = parseFloat(cachedFare);
+      if (!isNaN(parsedFare) && parsedFare > 0) {
+        console.log(`BookingSummaryHelper: Using cached fare: ₹${parsedFare}`);
+        return;
+      }
+    }
+    
+    // Vehicle-specific pricing table for fallback
+    const fallbackPrices: Record<string, Record<string, number>> = {
+      'sedan': {
+        '4hrs-40km': 1400,
+        '8hrs-80km': 2400,
+        '10hrs-100km': 3000
+      },
+      'ertiga': {
+        '4hrs-40km': 1800,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3600
+      },
+      'innova_crysta': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 4000,
+        '10hrs-100km': 4800
+      },
+      'innova_hycross': {
+        '4hrs-40km': 2600,
+        '8hrs-80km': 4200,
+        '10hrs-100km': 5000
+      },
+      'tempo': {
+        '4hrs-40km': 3000,
+        '8hrs-80km': 5000,
+        '10hrs-100km': 6000
+      },
+      'luxury': {
+        '4hrs-40km': 2800,
+        '8hrs-80km': 4500,
+        '10hrs-100km': 5500
+      }
+    };
+    
+    // Normalize the cab ID to match our fallback keys
+    const normalizedCabId = cabId.toLowerCase().replace(/\s+/g, '_');
+    
+    // Find the closest matching vehicle type
+    let matchingVehicleType = 'sedan'; // Default fallback
+    
+    for (const vehicleType of Object.keys(fallbackPrices)) {
+      if (normalizedCabId.includes(vehicleType)) {
+        matchingVehicleType = vehicleType;
+        break;
+      }
+    }
+    
+    // Get pricing for the matching vehicle type
+    const vehiclePricing = fallbackPrices[matchingVehicleType];
+    
+    // Get the fare for the selected package
+    let fallbackFare = vehiclePricing[packageId] || vehiclePricing['8hrs-80km'] || 3000;
+    
+    console.log(`BookingSummaryHelper: Using fallback pricing for ${cabId}: ₹${fallbackFare} (matched to ${matchingVehicleType})`);
+    
+    // Store this fallback price in localStorage
+    localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fallbackFare.toString());
+    
+    // Only update if there's a significant difference and updates are not disabled
+    if (Math.abs(fallbackFare - totalPrice) > 10 && !disableOverrides) {
+      console.log(`BookingSummaryHelper: Updating from fallback pricing: ${totalPrice} to ${fallbackFare}`);
+      
+      // Dispatch booking summary update event
+      window.dispatchEvent(new CustomEvent('booking-summary-update', {
+        detail: {
+          cabId: cabId,
+          tripType: tripType,
+          packageId: packageId,
+          fare: fallbackFare,
+          source: 'fallback-pricing',
+          timestamp: Date.now()
+        }
+      }));
+      
+      // Temporary disable overrides to prevent feedback loops
+      setDisableOverrides(true);
+      setTimeout(() => setDisableOverrides(false), 3000);
     }
   };
   

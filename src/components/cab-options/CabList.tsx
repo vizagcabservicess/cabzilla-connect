@@ -33,15 +33,26 @@ export const CabList: React.FC<CabListProps> = ({
 }) => {
   const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
+  const [requestRetryCount, setRequestRetryCount] = useState<Record<string, number>>({});
   
   const fetchFareFromDatabase = useCallback(async (cabId: string, packageId?: string) => {
     if (!tripType || tripType !== 'local' || !packageId) return null;
     
+    // Normalize cab ID and package ID for consistent lookups
+    const normalizedCabId = normalizeVehicleId(cabId);
+    const normalizedPackageId = normalizePackageId(packageId);
+    
+    // This unique key tracks retry attempts for this specific request
+    const requestKey = `${normalizedCabId}_${normalizedPackageId}`;
+    
+    // Track retry attempts
+    const currentRetryCount = requestRetryCount[requestKey] || 0;
+    if (currentRetryCount > 3) {
+      console.log(`CabList: Maximum retry attempts reached for ${normalizedCabId}, using fallback pricing`);
+      return useFallbackPricing(normalizedCabId, normalizedPackageId);
+    }
+    
     try {
-      // Normalize cab ID and package ID for consistent lookups
-      const normalizedCabId = normalizeVehicleId(cabId);
-      const normalizedPackageId = normalizePackageId(packageId);
-      
       // First try with direct-booking-data.php
       const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${normalizedPackageId}`);
       
@@ -149,78 +160,117 @@ export const CabList: React.FC<CabListProps> = ({
         }
       }
       
-      // If that fails too, check from local storage or return null
-      const selectedFareKey = `selected_fare_${normalizedCabId}_${normalizedPackageId}`;
-      const cachedFare = localStorage.getItem(selectedFareKey);
-      if (cachedFare) {
-        const parsedFare = parseFloat(cachedFare);
-        if (!isNaN(parsedFare) && parsedFare > 0) {
-          console.log(`CabList: Using cached fare: ₹${parsedFare} for ${normalizedCabId} - ${normalizedPackageId}`);
-          return parsedFare;
-        }
-      }
-      
-      // Use dynamic pricing fallback
-      const basePrices: Record<string, Record<string, number>> = {
-        'sedan': {
-          '4hrs-40km': 2400,
-          '8hrs-80km': 3000,
-          '10hrs-100km': 3500
-        },
-        'ertiga': {
-          '4hrs-40km': 2800,
-          '8hrs-80km': 3500,
-          '10hrs-100km': 4000
-        },
-        'innova_crysta': {
-          '4hrs-40km': 3200,
-          '8hrs-80km': 4000,
-          '10hrs-100km': 4500
-        },
-        'innova_hycross': {
-          '4hrs-40km': 3600,
-          '8hrs-80km': 4500,
-          '10hrs-100km': 5000
-        },
-        'dzire_cng': {
-          '4hrs-40km': 2400,
-          '8hrs-80km': 3000,
-          '10hrs-100km': 3500
-        },
-        'etios': {
-          '4hrs-40km': 2400,
-          '8hrs-80km': 3000,
-          '10hrs-100km': 3500
-        }
-      };
-      
-      // Get the vehicle category pricing
-      const vehicleCategory = basePrices[normalizedCabId] ? normalizedCabId : 'sedan';
-      const fallbackFare = basePrices[vehicleCategory][normalizedPackageId] || 3000;
-      
-      console.log(`CabList: Using fallback pricing: ₹${fallbackFare} for ${normalizedCabId} - ${normalizedPackageId}`);
-      
-      // Save the fallback fare
-      localStorage.setItem(`selected_fare_${normalizedCabId}_${normalizedPackageId}`, fallbackFare.toString());
-      
-      // Broadcast the fallback fare
-      window.dispatchEvent(new CustomEvent('fare-source-update', {
-        detail: {
-          cabId: normalizedCabId,
-          packageId: normalizedPackageId,
-          fare: fallbackFare,
-          source: 'fallback-pricing',
-          timestamp: Date.now()
-        }
-      }));
-      
-      return fallbackFare;
+      // Try from local storage if API calls fail
+      return checkLocalStorageFallback(normalizedCabId, normalizedPackageId);
       
     } catch (error) {
       console.error(`CabList: Error fetching fare for ${cabId}:`, error);
-      return null;
+      
+      // Increment retry count for this request
+      setRequestRetryCount(prev => ({
+        ...prev,
+        [requestKey]: currentRetryCount + 1
+      }));
+      
+      // Check local storage or use fallback pricing
+      return checkLocalStorageFallback(normalizedCabId, normalizedPackageId);
     }
-  }, [tripType]);
+  }, [tripType, requestRetryCount]);
+  
+  // Helper function to check localStorage or use fallback pricing
+  const checkLocalStorageFallback = (cabId: string, packageId: string) => {
+    // Check from local storage first
+    const selectedFareKey = `selected_fare_${cabId}_${packageId}`;
+    const cachedFare = localStorage.getItem(selectedFareKey);
+    if (cachedFare) {
+      const parsedFare = parseFloat(cachedFare);
+      if (!isNaN(parsedFare) && parsedFare > 0) {
+        console.log(`CabList: Using cached fare: ₹${parsedFare} for ${cabId} - ${packageId}`);
+        return parsedFare;
+      }
+    }
+    
+    // Use fallback pricing system if local storage doesn't have a valid fare
+    return useFallbackPricing(cabId, packageId);
+  };
+  
+  // Function to provide reliable fallback pricing when APIs fail
+  const useFallbackPricing = (cabId: string, packageId: string) => {
+    // Vehicle-specific pricing table for fallback
+    const fallbackPrices: Record<string, Record<string, number>> = {
+      'sedan': {
+        '4hrs-40km': 1400,
+        '8hrs-80km': 2400,
+        '10hrs-100km': 3000
+      },
+      'ertiga': {
+        '4hrs-40km': 1800,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3600
+      },
+      'innova_crysta': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 4000,
+        '10hrs-100km': 4800
+      },
+      'innova_hycross': {
+        '4hrs-40km': 2600,
+        '8hrs-80km': 4200,
+        '10hrs-100km': 5000
+      },
+      'tempo': {
+        '4hrs-40km': 3000,
+        '8hrs-80km': 5000,
+        '10hrs-100km': 6000
+      },
+      'luxury': {
+        '4hrs-40km': 2800,
+        '8hrs-80km': 4500,
+        '10hrs-100km': 5500
+      },
+      'dzire_cng': {
+        '4hrs-40km': 1400,
+        '8hrs-80km': 2400,
+        '10hrs-100km': 3000
+      },
+      'etios': {
+        '4hrs-40km': 1400,
+        '8hrs-80km': 2400,
+        '10hrs-100km': 3000
+      }
+    };
+    
+    // Get the vehicle category pricing
+    let matchingVehicleType = 'sedan'; // Default fallback
+    
+    // Find the most specific matching vehicle type
+    for (const vehicleType of Object.keys(fallbackPrices)) {
+      if (cabId.includes(vehicleType)) {
+        matchingVehicleType = vehicleType;
+        break;
+      }
+    }
+    
+    const fallbackFare = fallbackPrices[matchingVehicleType][packageId] || 3000;
+    
+    console.log(`CabList: Using fallback pricing: ₹${fallbackFare} for ${cabId} - ${packageId} (matched to ${matchingVehicleType})`);
+    
+    // Save the fallback fare
+    localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fallbackFare.toString());
+    
+    // Broadcast the fallback fare
+    window.dispatchEvent(new CustomEvent('fare-source-update', {
+      detail: {
+        cabId: cabId,
+        packageId: packageId,
+        fare: fallbackFare,
+        source: 'fallback-pricing',
+        timestamp: Date.now()
+      }
+    }));
+    
+    return fallbackFare;
+  };
   
   // Initialize fares for each cab when hourly package changes
   useEffect(() => {
@@ -590,6 +640,19 @@ export const CabList: React.FC<CabListProps> = ({
                           fare: cabFare,
                           packageId: normalizedPackageId,
                           source: 'cab-selection',
+                          timestamp: Date.now()
+                        }
+                      }));
+                      
+                      // Forcefully update BookingSummary component
+                      window.dispatchEvent(new CustomEvent('booking-summary-update', {
+                        detail: {
+                          cabId: normalizedCabId,
+                          tripType: tripType,
+                          packageId: normalizedPackageId,
+                          cabName: cab.name,
+                          fare: cabFare,
+                          source: 'cab-selection-direct',
                           timestamp: Date.now()
                         }
                       }));

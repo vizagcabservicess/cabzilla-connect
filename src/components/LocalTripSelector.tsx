@@ -21,6 +21,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   const [lastSelectedCabId, setLastSelectedCabId] = useState<string | null | undefined>(selectedCabId);
+  const [apiFailureCount, setApiFailureCount] = useState<number>(0);
   
   // Ensure the standard package IDs are consistent
   const standardPackageIds: Record<string, string> = {
@@ -32,6 +33,50 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     "8hrs_80km": "8hrs-80km", 
     "10hr_100km": "10hrs-100km",
     "10hrs_100km": "10hrs-100km"
+  };
+  
+  // Vehicle-specific pricing table for fallback
+  const fallbackPrices: Record<string, Record<string, number>> = {
+    'sedan': {
+      '4hrs-40km': 1400,
+      '8hrs-80km': 2400,
+      '10hrs-100km': 3000
+    },
+    'ertiga': {
+      '4hrs-40km': 1800,
+      '8hrs-80km': 3000,
+      '10hrs-100km': 3600
+    },
+    'innova_crysta': {
+      '4hrs-40km': 2400,
+      '8hrs-80km': 4000,
+      '10hrs-100km': 4800
+    },
+    'innova_hycross': {
+      '4hrs-40km': 2600,
+      '8hrs-80km': 4200,
+      '10hrs-100km': 5000
+    },
+    'tempo': {
+      '4hrs-40km': 3000,
+      '8hrs-80km': 5000,
+      '10hrs-100km': 6000
+    },
+    'luxury': {
+      '4hrs-40km': 2800,
+      '8hrs-80km': 4500,
+      '10hrs-100km': 5500
+    },
+    'dzire_cng': {
+      '4hrs-40km': 1400,
+      '8hrs-80km': 2400,
+      '10hrs-100km': 3000
+    },
+    'etios': {
+      '4hrs-40km': 1400,
+      '8hrs-80km': 2400,
+      '10hrs-100km': 3000
+    }
   };
   
   // Load packages with API prices
@@ -46,11 +91,13 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
       // Use the selected cab if available, otherwise default to sedan
-      // FIXED: Properly normalize the vehicle ID before using it
       const referenceVehicle = selectedCabId ? 
         normalizeVehicleId(selectedCabId) : 'sedan';
       
       console.log(`LocalTripSelector: Using ${referenceVehicle} as reference for package prices (original ID: ${selectedCabId})`);
+      
+      // Track whether we had API failures
+      let apiFailures = 0;
       
       // Update all package prices in parallel
       await Promise.all(updatedPackages.map(async (pkg) => {
@@ -75,6 +122,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
             localStorage.setItem(`selected_fare_${referenceVehicle}_${pkg.id}`, price.toString());
           } else {
             console.warn(`API returned zero or invalid price for ${pkg.id} with vehicle ${referenceVehicle}`);
+            apiFailures++;
             
             // Try a direct API call as fallback - use the normalized vehicle ID
             try {
@@ -102,36 +150,44 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
               throw new Error(`Could not get valid price from alternative API for ${pkg.id}`);
             } catch (altError) {
               console.error(`Failed to get price from alternative API:`, altError);
-              throw new Error(`Invalid price (${price}) for ${pkg.id}`);
+              apiFailures++;
+              
+              // Use cached price if available
+              const cachedKey = `selected_fare_${referenceVehicle}_${pkg.id}`;
+              const cachedPrice = localStorage.getItem(cachedKey);
+              if (cachedPrice) {
+                const parsedPrice = parseFloat(cachedPrice);
+                if (!isNaN(parsedPrice) && parsedPrice > 0) {
+                  pkg.basePrice = parsedPrice;
+                  console.log(`Using cached price for ${pkg.id}: ${parsedPrice}`);
+                  return;
+                }
+              }
+              
+              // Use fallback prices
+              useFallbackPricingForPackage(pkg, referenceVehicle);
             }
           }
         } catch (error) {
           console.error(`Could not fetch price for package ${pkg.id}:`, error);
-          setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
+          apiFailures++;
           
-          // Use fallback prices based on vehicle type - use the NORMALIZED vehicle type
-          const normalizedVehicleType = referenceVehicle.toLowerCase().replace(/\s+/g, '_');
-          
-          if (normalizedVehicleType.includes('sedan')) {
-            if (pkg.id.includes('4hrs')) pkg.basePrice = 1400;
-            else if (pkg.id.includes('8hrs')) pkg.basePrice = 2400;
-            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3000;
-          } else if (normalizedVehicleType.includes('ertiga')) {
-            if (pkg.id.includes('4hrs')) pkg.basePrice = 1800;
-            else if (pkg.id.includes('8hrs')) pkg.basePrice = 3000;
-            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3600;
-          } else if (normalizedVehicleType.includes('innova')) {
-            if (pkg.id.includes('4hrs')) pkg.basePrice = 2400;
-            else if (pkg.id.includes('8hrs')) pkg.basePrice = 4000;
-            else if (pkg.id.includes('10hrs')) pkg.basePrice = 4800;
-          } else {
-            // Default fallback
-            if (pkg.id.includes('4hrs')) pkg.basePrice = 1400;
-            else if (pkg.id.includes('8hrs')) pkg.basePrice = 2400;
-            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3000;
-          }
+          // Use fallback prices based on vehicle type
+          useFallbackPricingForPackage(pkg, referenceVehicle);
         }
       }));
+      
+      // Update API failure count
+      setApiFailureCount(apiFailures);
+      
+      // If all API calls failed, show error message but still display packages
+      if (apiFailures >= updatedPackages.length) {
+        setLoadError(`Unable to connect to pricing server. Using fallback prices.`);
+        toast.error("Network error: Using offline pricing", { 
+          id: "pricing-fallback",
+          duration: 3000
+        });
+      }
       
       console.log('Available hourly packages with updated prices:', updatedPackages);
       setPackages(updatedPackages);
@@ -175,6 +231,26 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
             timestamp
           }
         }));
+        
+        // Also broadcast a direct fare update event to ensure BookingSummary is updated
+        const normalizedPackageId = normalizePackageId(selectedPackage);
+        const packagePrice = getPackagePriceByVehicle(normalizedPackageId, referenceVehicle);
+        
+        if (packagePrice > 0) {
+          // Save to localStorage to ensure consistency
+          localStorage.setItem(`selected_fare_${referenceVehicle}_${normalizedPackageId}`, packagePrice.toString());
+          
+          window.dispatchEvent(new CustomEvent('booking-summary-update', {
+            detail: {
+              cabId: referenceVehicle,
+              tripType: 'local',
+              packageId: normalizedPackageId,
+              fare: packagePrice,
+              source: 'LocalTripSelector-direct',
+              timestamp
+            }
+          }));
+        }
       }
       
       // Pre-fetch all fares in the background - include the current vehicle ID
@@ -188,6 +264,59 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Helper function to get fallback price for a package based on vehicle type
+  const getPackagePriceByVehicle = (packageId: string, vehicleId: string): number => {
+    // Normalize the IDs
+    const normalizedPackageId = normalizePackageId(packageId);
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    
+    // Check localStorage first
+    const cacheKey = `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`;
+    const cachedPrice = localStorage.getItem(cacheKey);
+    if (cachedPrice) {
+      const parsedPrice = parseFloat(cachedPrice);
+      if (!isNaN(parsedPrice) && parsedPrice > 0) {
+        return parsedPrice;
+      }
+    }
+    
+    // Find the most specific matching vehicle type in our fallback prices
+    let matchingVehicleType: string | null = null;
+    
+    for (const vehicleType of Object.keys(fallbackPrices)) {
+      if (normalizedVehicleId.includes(vehicleType)) {
+        if (!matchingVehicleType || vehicleType.length > matchingVehicleType.length) {
+          matchingVehicleType = vehicleType;
+        }
+      }
+    }
+    
+    // If no match found, use sedan as default
+    if (!matchingVehicleType) {
+      matchingVehicleType = 'sedan';
+    }
+    
+    // Get the price from our fallback prices
+    const vehiclePrices = fallbackPrices[matchingVehicleType];
+    const price = vehiclePrices[normalizedPackageId] || 3000;
+    
+    return price;
+  };
+  
+  // Helper function to set fallback pricing for a package
+  const useFallbackPricingForPackage = (pkg: HourlyPackage, vehicleId: string) => {
+    const normalizedVehicleType = vehicleId.toLowerCase().replace(/\s+/g, '_');
+    const price = getPackagePriceByVehicle(pkg.id, normalizedVehicleType);
+    
+    pkg.basePrice = price;
+    console.log(`Using fallback price for ${pkg.id} with ${vehicleId}: ₹${price}`);
+    
+    // Store in localStorage for consistency
+    localStorage.setItem(`selected_fare_${normalizedVehicleType}_${pkg.id}`, price.toString());
+    
+    return price;
   };
   
   // Initial load and setup event listeners
@@ -214,7 +343,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
             if (pkg.id === event.detail.packageId && selectedCabId) {
-              // FIXED: Properly normalize vehicle type before comparison 
+              // Properly normalize vehicle type before comparison 
               const normalizedSelectedCab = normalizeVehicleId(selectedCabId);
               const normalizedEventVehicle = event.detail.vehicleType.toLowerCase().replace(/\s+/g, '_');
               
@@ -293,7 +422,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     
     // Add debounce to prevent too many events firing at once
     setTimeout(() => {
-      // FIXED: Use the properly normalized vehicle ID
+      // Use the properly normalized vehicle ID
       const referenceVehicle = selectedCabId ? 
         normalizeVehicleId(selectedCabId) : 'sedan';
         
@@ -317,7 +446,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         }
       }));
       
-      // FIXED: Add an additional event to ensure consistent fares
+      // Add an additional event to ensure consistent fares
       window.dispatchEvent(new CustomEvent('selected-package-fare-sync', {
         detail: { 
           packageId: normalizedPackageId,
@@ -326,6 +455,25 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
           timestamp: Date.now() 
         }
       }));
+      
+      // Also broadcast a direct fare update event to ensure BookingSummary is updated
+      const packagePrice = getPackagePriceByVehicle(normalizedPackageId, referenceVehicle);
+      
+      if (packagePrice > 0) {
+        // Save to localStorage to ensure consistency
+        localStorage.setItem(`selected_fare_${referenceVehicle}_${normalizedPackageId}`, packagePrice.toString());
+        
+        window.dispatchEvent(new CustomEvent('booking-summary-update', {
+          detail: {
+            cabId: referenceVehicle,
+            tripType: 'local',
+            packageId: normalizedPackageId,
+            fare: packagePrice,
+            source: 'LocalTripSelector-package-selection',
+            timestamp: Date.now()
+          }
+        }));
+      }
     }, 300);
     
     // Show a toast notification
@@ -335,12 +483,62 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
   // Display an error message if loading failed
   if (loadError) {
     return (
-      <Alert variant="destructive" className="mb-4">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          {loadError}
-        </AlertDescription>
-      </Alert>
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <CardTitle className="mb-4">Select Hourly Package</CardTitle>
+          <Alert variant={apiFailureCount > 0 ? "default" : "destructive"} className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {loadError}
+            </AlertDescription>
+          </Alert>
+          {packages.length > 0 && (
+            <RadioGroup 
+              value={selectedPackage} 
+              onValueChange={handlePackageSelect}
+              className="space-y-3"
+              data-last-update={lastUpdateTime}
+              data-selected-cab={selectedCabId || 'none'}
+            >
+              {packages.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-muted ${
+                    selectedPackage === pkg.id ? "border-primary bg-primary/5" : ""
+                  }`}
+                  onClick={() => handlePackageSelect(pkg.id)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem value={pkg.id} id={pkg.id} />
+                    <Label htmlFor={pkg.id} className="flex flex-col cursor-pointer">
+                      <span className="font-medium">{pkg.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {pkg.hours} hours, up to {pkg.kilometers} km
+                      </span>
+                    </Label>
+                  </div>
+                  
+                  <div className="text-right">
+                    {pkg.basePrice > 0 ? (
+                      <span className="font-medium text-sm">
+                        ₹{pkg.basePrice.toLocaleString('en-IN')}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-destructive">
+                        <Loader2 className="h-4 w-4 inline-block animate-spin mr-1" />
+                        Loading...
+                      </span>
+                    )}
+                    <span className="block text-xs text-muted-foreground">
+                      Base price
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </RadioGroup>
+          )}
+        </CardContent>
+      </Card>
     );
   }
   
