@@ -1,8 +1,9 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
+import { normalizeVehicleId, normalizePackageId } from '@/config/requestConfig';
 
 interface BookingSummaryHelperProps {
   tripType: string;
@@ -25,6 +26,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<number>(0);
   const [disableOverrides, setDisableOverrides] = useState<boolean>(false);
   
+  // Throttling mechanism to prevent excessive updates
+  const updateThrottleTimeRef = useRef<number>(0);
+  const pendingFareRef = useRef<number | null>(null);
+  const activeRequestRef = useRef<boolean>(false);
+  
   // Track fare sources for debugging
   useEffect(() => {
     // Listen for fare source updates to track where fares are coming from
@@ -32,8 +38,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.source) {
         const { cabId, source } = customEvent.detail;
-        if (selectedCabId && cabId === selectedCabId.toLowerCase().replace(/\s+/g, '_')) {
-          console.log(`BookingSummaryHelper: Fare source for ${cabId} is ${source}`);
+        if (selectedCabId) {
+          const normalizedSelectedCabId = normalizeVehicleId(selectedCabId);
+          if (cabId === normalizedSelectedCabId) {
+            console.log(`BookingSummaryHelper: Fare source for ${cabId} is ${source}`);
+          }
         }
       }
     };
@@ -49,129 +58,185 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   useEffect(() => {
     if (!selectedCabId || !tripType || !hourlyPackage) return;
     
-    // Prevent excessive sync attempts (throttle to once per second)
+    // Prevent excessive sync attempts (throttle to once per 1.5 seconds)
     const now = Date.now();
-    if (now - lastSyncTime < 1000) return;
+    if (now - lastSyncTime < 1500) {
+      pendingFareRef.current = totalPrice;
+      return;
+    }
+    
     setLastSyncTime(now);
+    pendingFareRef.current = null;
 
-    // Normalize the cab ID for consistency with stored values
-    const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+    // Normalize the cab ID and package ID for consistency
+    const normalizedCabId = normalizeVehicleId(selectedCabId);
+    const normalizedPackageId = normalizePackageId(hourlyPackage);
+    
+    console.log(`BookingSummaryHelper: Checking fare consistency for ${normalizedCabId} with ${normalizedPackageId}`);
+    
+    // Check if we should override based on time since last fetch
+    const shouldFetch = now - lastFetchAttempt > 3000 && !activeRequestRef.current;
     
     // Get the selected fare from CabList's selection event
-    const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+    const selectedFareKey = `selected_fare_${normalizedCabId}_${normalizedPackageId}`;
     const selectedFare = localStorage.getItem(selectedFareKey);
     
     if (selectedFare) {
       const parsedFare = parseFloat(selectedFare);
       if (!isNaN(parsedFare) && parsedFare > 0) {
-        console.log(`BookingSummaryHelper: Using selected fare from CabList: ₹${parsedFare} for ${normalizedCabId} with ${hourlyPackage}`);
+        console.log(`BookingSummaryHelper: Using selected fare from storage: ₹${parsedFare} for ${normalizedCabId} with ${normalizedPackageId}`);
         
         // Only update if there's a significant difference (more than ₹10)
         if (Math.abs(parsedFare - totalPrice) > 10) {
           console.log(`BookingSummaryHelper: Updating fare from ${totalPrice} to ${parsedFare}`);
           
           // Dispatch booking summary update event
-          window.dispatchEvent(new CustomEvent('booking-summary-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: tripType,
-              packageId: hourlyPackage,
-              fare: parsedFare,
-              source: 'cab-list-selected',
-              timestamp: now
-            }
-          }));
-          
-          // Also dispatch a fare calculated event
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: tripType,
-              calculated: true,
-              fare: parsedFare,
-              packageId: hourlyPackage,
-              source: 'booking-summary-helper',
-              timestamp: now
-            }
-          }));
+          if (!disableOverrides) {
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: tripType,
+                packageId: normalizedPackageId,
+                fare: parsedFare,
+                source: 'local-storage',
+                timestamp: now
+              }
+            }));
+          } else {
+            console.log(`BookingSummaryHelper: Fare update suppressed during throttling period`);
+          }
         }
+        
+        // Even with a stored fare, we might still want to verify it against the database after a delay
+        if (shouldFetch) {
+          fetchFareFromDatabase(normalizedCabId, normalizedPackageId);
+        }
+        
         return;
       }
     }
     
-    // Only fetch from database if we don't have a valid selected fare
-    // and it's been at least 3 seconds since last fetch attempt
-    if (now - lastFetchAttempt < 3000) return;
-    setLastFetchAttempt(now);
-    
-    const fetchFareFromDatabase = async () => {
-      try {
-        console.log(`BookingSummaryHelper: Fetching fare for ${normalizedCabId} with ${hourlyPackage}`);
-        
-        // Direct package api endpoint
-        const packageApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
-        
-        const response = await axios.get(packageApiUrl, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'X-Force-Refresh': 'true'
-          },
-          timeout: 5000
-        });
-        
-        if (response.data && response.data.status === 'success' && response.data.price) {
-          const price = Number(response.data.price);
-          if (price > 0) {
-            console.log(`BookingSummaryHelper: Retrieved fare directly from API: ₹${price}`);
-            
-            // Store this price in localStorage
-            localStorage.setItem(selectedFareKey, price.toString());
-            
-            // Only update if there's a significant difference (more than ₹10)
-            if (Math.abs(price - totalPrice) > 10) {
-              console.log(`BookingSummaryHelper: Updating fare from ${totalPrice} to ${price}`);
-              
-              // Dispatch booking summary update event
-              window.dispatchEvent(new CustomEvent('booking-summary-update', {
-                detail: {
-                  cabId: normalizedCabId,
-                  tripType: tripType,
-                  packageId: hourlyPackage,
-                  fare: price,
-                  source: 'direct-api',
-                  timestamp: now
-                }
-              }));
+    // If we don't have a valid selected fare, fetch from database
+    if (shouldFetch) {
+      fetchFareFromDatabase(normalizedCabId, normalizedPackageId);
+    }
+  }, [tripType, selectedCabId, hourlyPackage, totalPrice, lastSyncTime, lastFetchAttempt, disableOverrides]);
+  
+  // Handle throttled fare updates
+  useEffect(() => {
+    const handleThrottledUpdates = () => {
+      if (pendingFareRef.current !== null && !disableOverrides && selectedCabId && hourlyPackage) {
+        const now = Date.now();
+        if (now - updateThrottleTimeRef.current > 2000) {
+          updateThrottleTimeRef.current = now;
+          
+          const normalizedCabId = normalizeVehicleId(selectedCabId);
+          const normalizedPackageId = normalizePackageId(hourlyPackage);
+          
+          console.log(`BookingSummaryHelper: Processing throttled update: ₹${pendingFareRef.current}`);
+          
+          window.dispatchEvent(new CustomEvent('booking-summary-update', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: tripType,
+              packageId: normalizedPackageId,
+              fare: pendingFareRef.current,
+              source: 'throttled-update',
+              timestamp: now
             }
-            
-            return price;
-          }
+          }));
+          
+          pendingFareRef.current = null;
         }
-        
-        return null;
-      } catch (error) {
-        console.error(`Error fetching fare from database: ${error}`);
-        return null;
       }
     };
     
-    fetchFareFromDatabase();
-  }, [tripType, selectedCabId, hourlyPackage, totalPrice, lastSyncTime, lastFetchAttempt]);
+    const interval = setInterval(handleThrottledUpdates, 2000);
+    return () => clearInterval(interval);
+  }, [tripType, selectedCabId, hourlyPackage, disableOverrides]);
+  
+  // Function to fetch fare directly from the database
+  const fetchFareFromDatabase = async (cabId: string, packageId: string) => {
+    // Mark that we've attempted a fetch so we don't try too frequently
+    setLastFetchAttempt(Date.now());
+    
+    // If there's already an active request, don't start another one
+    if (activeRequestRef.current) {
+      console.log(`BookingSummaryHelper: Skipping fetch as there's already an active request`);
+      return;
+    }
+    
+    activeRequestRef.current = true;
+    
+    try {
+      console.log(`BookingSummaryHelper: Fetching fare for ${cabId} with ${packageId}`);
+      
+      // Direct package api endpoint
+      const packageApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${cabId}&package_id=${packageId}`);
+      
+      const response = await axios.get(packageApiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (response.data && response.data.status === 'success' && response.data.price) {
+        const price = Number(response.data.price);
+        if (price > 0) {
+          console.log(`BookingSummaryHelper: Retrieved fare directly from API: ₹${price}`);
+          
+          // Store this price in localStorage
+          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, price.toString());
+          
+          // Only update if there's a significant difference (more than ₹10)
+          if (Math.abs(price - totalPrice) > 10 && !disableOverrides) {
+            console.log(`BookingSummaryHelper: Updating fare from ${totalPrice} to ${price}`);
+            
+            // Dispatch booking summary update event
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: cabId,
+                tripType: tripType,
+                packageId: packageId,
+                fare: price,
+                source: 'direct-api',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Temporary disable overrides to prevent immediate feedback loops
+            setDisableOverrides(true);
+            setTimeout(() => setDisableOverrides(false), 3000);
+          }
+        }
+      } else {
+        console.log(`BookingSummaryHelper: Could not get valid price from API response:`, response.data);
+      }
+    } catch (error) {
+      console.error(`BookingSummaryHelper: Error fetching fare from database: ${error}`);
+    } finally {
+      activeRequestRef.current = false;
+    }
+  };
   
   // Listen for cab selection events to immediately update fare
   useEffect(() => {
     const handleCabSelected = (event: Event) => {
       const customEvent = event as CustomEvent;
-      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare !== undefined) {
         const { cabId, cabName, fare, packageId } = customEvent.detail;
         
-        if (selectedCabId === cabName || selectedCabId === cabId) {
+        const normalizedSelectedCabId = selectedCabId ? normalizeVehicleId(selectedCabId) : null;
+        
+        if (normalizedSelectedCabId === cabId || selectedCabId === cabName) {
           console.log(`BookingSummaryHelper: Cab selected: ${cabName} with fare ${fare}`);
           
           // Temporary disable overrides to prevent conflicts
           setDisableOverrides(true);
-          setTimeout(() => setDisableOverrides(false), 1000);
+          setTimeout(() => setDisableOverrides(false), 3000);
           
           // Dispatch booking summary update event
           window.dispatchEvent(new CustomEvent('booking-summary-update', {

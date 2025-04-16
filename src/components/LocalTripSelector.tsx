@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -11,9 +12,10 @@ import { toast } from 'sonner';
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
   onPackageSelect: (packageId: string) => void;
+  selectedCabId?: string | null; // Add this prop to get the selected cab
 }
 
-export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTripSelectorProps) {
+export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCabId }: LocalTripSelectorProps) {
   const [packages, setPackages] = useState<HourlyPackage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -42,8 +44,11 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       // Create package objects with template data first
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
-      // Reference vehicle for pricing
-      const referenceVehicle = 'sedan';
+      // Use the selected cab if available, otherwise default to sedan
+      const referenceVehicle = selectedCabId ? 
+        selectedCabId.toLowerCase().replace(/\s+/g, '_') : 'sedan';
+      
+      console.log(`LocalTripSelector: Using ${referenceVehicle} as reference for package prices`);
       
       // Update all package prices in parallel
       await Promise.all(updatedPackages.map(async (pkg) => {
@@ -52,7 +57,17 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           const price = await getLocalPackagePrice(pkg.id, referenceVehicle, true);
           if (price > 0) {
             pkg.basePrice = price;
-            console.log(`Updated ${pkg.id} price to ${price} from API`);
+            console.log(`Updated ${pkg.id} price to ${price} from API for ${referenceVehicle}`);
+            
+            // Also dispatch an event to notify other components about this fare
+            window.dispatchEvent(new CustomEvent('local-fare-updated', {
+              detail: { 
+                packageId: pkg.id, 
+                vehicleType: referenceVehicle, 
+                price: price,
+                timestamp: Date.now()
+              }
+            }));
           } else {
             console.warn(`API returned zero or invalid price for ${pkg.id}`);
             throw new Error(`Invalid price (${price}) for ${pkg.id}`);
@@ -126,7 +141,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         // Update just the specific package price if it exists in our packages array
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
-            if (pkg.id === event.detail.packageId && event.detail.vehicleType === 'sedan') {
+            if (pkg.id === event.detail.packageId && selectedCabId && event.detail.vehicleType === selectedCabId.toLowerCase().replace(/\s+/g, '_')) {
               return { ...pkg, basePrice: event.detail.price };
             }
             return pkg;
@@ -135,17 +150,35 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       }
     };
     
+    const handleCabSelected = (event: CustomEvent) => {
+      if (event.detail && event.detail.cabId) {
+        console.log(`LocalTripSelector: Cab selection changed to ${event.detail.cabId}, reloading packages`);
+        // Reload packages with prices for the newly selected cab
+        loadPackages();
+      }
+    };
+    
     // Set up all event listeners
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
     window.addEventListener('force-fare-recalculation', handleForceRecalculation);
     window.addEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
+    window.addEventListener('cab-selected', handleCabSelected as EventListener);
     
     return () => {
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
       window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
       window.removeEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
+      window.removeEventListener('cab-selected', handleCabSelected as EventListener);
     };
-  }, [selectedPackage, onPackageSelect]);
+  }, [selectedPackage, onPackageSelect, selectedCabId]);
+  
+  // Refresh package prices when selected cab changes
+  useEffect(() => {
+    if (selectedCabId) {
+      console.log(`LocalTripSelector: Selected cab changed to ${selectedCabId}, reloading packages`);
+      loadPackages();
+    }
+  }, [selectedCabId]);
   
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
@@ -234,6 +267,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           onValueChange={handlePackageSelect}
           className="space-y-3"
           data-last-update={lastUpdateTime}
+          data-selected-cab={selectedCabId || 'none'}
         >
           {packages.map((pkg) => (
             <div
