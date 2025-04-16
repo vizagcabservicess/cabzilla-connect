@@ -27,16 +27,59 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const [fareSource, setFareSource] = useState<string>('');
   const [currentPackage, setCurrentPackage] = useState<string | undefined>(hourlyPackage);
 
+  // Normalize package ID to ensure consistency
+  const normalizePackageId = (packageId?: string): string => {
+    if (!packageId) return '8hrs-80km'; // Default
+    
+    const normalized = packageId.toLowerCase();
+    
+    if (normalized.includes('10hr') || normalized.includes('100km')) {
+      return '10hrs-100km';
+    }
+    
+    if (normalized.includes('8hr') || normalized.includes('80km')) {
+      return '8hrs-80km';
+    }
+    
+    if (normalized.includes('4hr') || normalized.includes('40km')) {
+      return '4hrs-40km';
+    }
+    
+    return '8hrs-80km'; // Default fallback
+  };
+
+  // Normalize vehicle ID to ensure consistency
+  const normalizeVehicleId = (vehicleId?: string): string => {
+    if (!vehicleId) return '';
+    
+    const normalized = vehicleId.toLowerCase().replace(/\s+/g, '_');
+    
+    if (normalized.includes('hycross') || normalized === 'mpv') {
+      return 'innova_hycross';
+    }
+    
+    if (normalized.includes('crysta')) {
+      return 'innova_crysta';
+    }
+    
+    if (normalized.includes('innova') && !normalized.includes('hycross') && !normalized.includes('crysta')) {
+      return 'innova_crysta'; // Default Innova to Crysta if not specified
+    }
+    
+    return normalized;
+  };
+
   // Listen for package changes specifically
   useEffect(() => {
     const handleBookingPackageChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.packageId) {
         const { packageId } = customEvent.detail;
-        console.log(`BookingSummaryHelper: Detected package change to ${packageId}`);
+        const normalizedPackageId = normalizePackageId(packageId);
+        console.log(`BookingSummaryHelper: Detected package change to ${packageId} (normalized: ${normalizedPackageId})`);
         
         // Update our current package
-        setCurrentPackage(packageId);
+        setCurrentPackage(normalizedPackageId);
         
         // Trigger a retry to get new price for updated package
         setRetryCount(prev => prev + 1);
@@ -44,12 +87,13 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         // Force clear any selected fare data for consistency
         try {
           if (selectedCabId) {
-            const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
-            const selectedFareKey = `selected_fare_${normalizedCabId}_${packageId}`;
+            const normalizedCabId = normalizeVehicleId(selectedCabId);
+            const selectedFareKey = `selected_fare_${normalizedCabId}_${normalizedPackageId}`;
             
             // Clear localStorage for previous package
             if (hourlyPackage && hourlyPackage !== packageId) {
-              const prevSelectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+              const normalizedPrevPackage = normalizePackageId(hourlyPackage);
+              const prevSelectedFareKey = `selected_fare_${normalizedCabId}_${normalizedPrevPackage}`;
               localStorage.removeItem(prevSelectedFareKey);
               console.log(`BookingSummaryHelper: Cleared previous package fare: ${prevSelectedFareKey}`);
             }
@@ -58,8 +102,8 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             window.dispatchEvent(new CustomEvent('booking-summary-package-update', {
               detail: {
                 cabId: normalizedCabId,
-                packageId: packageId,
-                previousPackage: hourlyPackage,
+                packageId: normalizedPackageId,
+                previousPackage: hourlyPackage ? normalizePackageId(hourlyPackage) : undefined,
                 source: 'booking-summary-helper',
                 timestamp: Date.now()
               }
@@ -84,9 +128,12 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
 
   // Update hourlyPackage in state when the prop changes
   useEffect(() => {
-    if (hourlyPackage && hourlyPackage !== currentPackage) {
-      console.log(`BookingSummaryHelper: hourlyPackage prop changed to ${hourlyPackage}`);
-      setCurrentPackage(hourlyPackage);
+    if (hourlyPackage) {
+      const normalizedPackage = normalizePackageId(hourlyPackage);
+      if (normalizedPackage !== currentPackage) {
+        console.log(`BookingSummaryHelper: hourlyPackage prop changed to ${hourlyPackage} (normalized: ${normalizedPackage})`);
+        setCurrentPackage(normalizedPackage);
+      }
     }
   }, [hourlyPackage, currentPackage]);
 
@@ -116,11 +163,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     if (!selectedCabId) return;
     
     // Always use current package from state if available (to handle package changes)
-    const packageToUse = currentPackage || hourlyPackage;
+    const packageToUse = normalizePackageId(currentPackage || hourlyPackage);
     
     // For local trips, first check if there's a selected fare in localStorage
     if (tripType === 'local' && packageToUse) {
-      const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+      const normalizedCabId = normalizeVehicleId(selectedCabId);
       
       // HIGHEST PRIORITY: Check if there's a selected fare from CabList
       const selectedFareKey = `selected_fare_${normalizedCabId}_${packageToUse}`;
@@ -361,6 +408,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             localStorage.setItem(selectedFareKey, calculatedPrice.toString());
             localStorage.setItem(`fare_local_${normalizedCabId}`, calculatedPrice.toString());
             
+            // Also store specific package price in localStorage
+            const packageFareKey = `fare_local_${normalizedCabId}_${packageToUse}`;
+            localStorage.setItem(packageFareKey, calculatedPrice.toString());
+            
             // If current total price is significantly different from calculated price, dispatch an update
             if (Math.abs(calculatedPrice - totalPrice) > 10) {
               dispatchFareUpdate(normalizedCabId, calculatedPrice, packageToUse, 'error-fallback-calculation');
@@ -466,9 +517,9 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     }));
     
     // Additional alert to make the price change more noticeable
-    toast.info(`Updated price for ${cabId.replace(/_/g, ' ')}: ₹${fare}`, {
+    toast.info(`Updated price for ${packageId}: ₹${fare}`, {
       duration: 3000,
-      id: `price-update-${cabId}`
+      id: `price-update-${cabId}-${packageId}`
     });
   };
   
@@ -528,52 +579,50 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       }
     };
     
-    // Determine vehicle category
-    let vehicleCategory = vehicleId;
+    // Normalize vehicle ID
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    const normalizedPackageId = normalizePackageId(packageId);
     
-    // Fallback to matched category if not found directly
-    if (!basePrices[vehicleCategory]) {
-      if (vehicleCategory.includes('ertiga')) {
-        vehicleCategory = 'ertiga';
-      } else if (vehicleCategory.includes('innova')) {
-        if (vehicleCategory.includes('hycross') || vehicleCategory.includes('mpv')) {
-          vehicleCategory = 'innova_hycross';
-        } else {
-          vehicleCategory = 'innova_crysta';
-        }
-      } else if (vehicleCategory.includes('cng') || vehicleCategory.includes('dzire')) {
-        vehicleCategory = 'dzire_cng';
-      } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
-        vehicleCategory = 'tempo_traveller';
-      } else if (vehicleCategory.includes('mpv')) {
-        vehicleCategory = 'mpv';
-      } else if (vehicleCategory.includes('urbania')) {
-        vehicleCategory = 'bus';
-      } else if (vehicleCategory.includes('amaze')) {
-        vehicleCategory = 'amaze';
-      } else if (vehicleCategory.includes('etios') || vehicleCategory.includes('toyota')) {
-        vehicleCategory = 'etios';
-      } else {
-        vehicleCategory = 'sedan'; // default
-      }
+    // Determine vehicle category
+    let vehicleCategory = normalizedVehicleId;
+    
+    // Special handling for Innova Hycross
+    if (vehicleCategory === 'innova_hycross' || vehicleCategory === 'mpv') {
+      vehicleCategory = 'innova_hycross';
     }
     
     // Get price for the package
-    let packageKey = '';
-    if (packageId.includes('4hrs-40km')) {
-      packageKey = '4hrs-40km';
-    } else if (packageId.includes('8hrs-80km')) {
-      packageKey = '8hrs-80km';
-    } else if (packageId.includes('10hrs-100km')) {
-      packageKey = '10hrs-100km';
+    if (basePrices[vehicleCategory] && basePrices[vehicleCategory][normalizedPackageId]) {
+      const price = basePrices[vehicleCategory][normalizedPackageId];
+      console.log(`Found dynamic price for ${vehicleCategory}, ${normalizedPackageId}: ${price}`);
+      return price;
     }
     
-    if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
-      return basePrices[vehicleCategory][packageKey];
+    // Fallback logic for unknown vehicle categories
+    if (vehicleCategory.includes('innova')) {
+      if (vehicleCategory.includes('hycross')) {
+        vehicleCategory = 'innova_hycross';
+      } else {
+        vehicleCategory = 'innova_crysta';
+      }
+    } else if (vehicleCategory.includes('tempo')) {
+      vehicleCategory = 'tempo_traveller';
+    } else if (vehicleCategory.includes('dzire') || vehicleCategory.includes('cng')) {
+      vehicleCategory = 'dzire_cng';
+    } else {
+      vehicleCategory = 'sedan'; // default
     }
     
-    // Default fallback
-    return 0;
+    if (basePrices[vehicleCategory] && basePrices[vehicleCategory][normalizedPackageId]) {
+      const price = basePrices[vehicleCategory][normalizedPackageId];
+      console.log(`Found fallback dynamic price for ${vehicleCategory}, ${normalizedPackageId}: ${price}`);
+      return price;
+    }
+    
+    // Ultimate fallback
+    const defaultPrice = 3000;
+    console.log(`Using default price for ${vehicleCategory}, ${normalizedPackageId}: ${defaultPrice}`);
+    return defaultPrice;
   };
   
   // This component doesn't render anything visible

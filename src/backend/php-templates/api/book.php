@@ -50,6 +50,83 @@ function logBooking($message, $data = null) {
     error_log($logEntry); // Also log to PHP error log
 }
 
+// Normalize package ID to ensure consistency
+function normalizePackageId($packageId) {
+    if (!$packageId) return '8hrs-80km'; // Default
+    
+    $normalized = strtolower($packageId);
+    
+    if (strpos($normalized, '10hr') !== false || strpos($normalized, '100km') !== false) {
+        return '10hrs-100km';
+    }
+    
+    if (strpos($normalized, '8hr') !== false || strpos($normalized, '80km') !== false) {
+        return '8hrs-80km';
+    }
+    
+    if (strpos($normalized, '4hr') !== false || strpos($normalized, '40km') !== false) {
+        return '4hrs-40km';
+    }
+    
+    return '8hrs-80km'; // Default fallback
+}
+
+// Normalize vehicle ID to ensure consistency
+function normalizeVehicleId($vehicleId) {
+    if (!$vehicleId) return '';
+    
+    // Convert to lowercase and replace spaces with underscores
+    $result = strtolower(trim($vehicleId));
+    $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
+    
+    // Special case for MPV and Innova Hycross - always treated the same
+    if ($result === 'mpv' || strpos($result, 'hycross') !== false) {
+        return 'innova_hycross';
+    }
+    
+    // Handle common variations
+    $mappings = [
+        'innovahycross' => 'innova_hycross',
+        'innovacrystal' => 'innova_crysta',
+        'innovacrista' => 'innova_crysta',
+        'innova_crista' => 'innova_crysta',
+        'innovahicross' => 'innova_hycross',
+        'innova_hicross' => 'innova_hycross',
+        'tempotraveller' => 'tempo_traveller',
+        'tempo_traveler' => 'tempo_traveller',
+        'cng' => 'dzire_cng',
+        'dzirecng' => 'dzire_cng',
+        'sedancng' => 'dzire_cng',
+        'swift' => 'sedan',
+        'swiftdzire' => 'dzire',
+        'swift_dzire' => 'dzire',
+        'innovaold' => 'innova_crysta',
+        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
+    ];
+    
+    foreach ($mappings as $search => $replace) {
+        if ($result === $search) {
+            return $replace;
+        }
+    }
+    
+    // Special handling for "innova" which might come without specifics
+    if ($result === 'innova' || strpos($result, 'innova') !== false) {
+        if (strpos($result, 'hycross') !== false) {
+            return 'innova_hycross';
+        }
+        if (strpos($result, 'crysta') !== false) {
+            return 'innova_crysta';
+        }
+        // Default any plain "innova" to crysta
+        if ($result === 'innova') {
+            return 'innova_crysta';
+        }
+    }
+    
+    return $result;
+}
+
 // Send JSON response function to ensure proper output
 function sendJsonResponse($data, $statusCode = 200) {
     // Clean any previous output
@@ -116,6 +193,23 @@ try {
     }
     logBooking("Parsed booking data", $logData);
     
+    // Normalize the cab type and hourly package if present
+    if (isset($data['cabType'])) {
+        $data['cabType'] = normalizeVehicleId($data['cabType']);
+        logBooking("Normalized cab type", $data['cabType']);
+    }
+    
+    if (isset($data['hourlyPackage']) && $data['tripType'] === 'local') {
+        $originalPackage = $data['hourlyPackage'];
+        $data['hourlyPackage'] = normalizePackageId($data['hourlyPackage']);
+        if ($originalPackage !== $data['hourlyPackage']) {
+            logBooking("Normalized hourly package", [
+                'original' => $originalPackage,
+                'normalized' => $data['hourlyPackage']
+            ]);
+        }
+    }
+    
     // Validate required fields
     $requiredFields = [
         'pickupLocation', 'cabType', 'tripType', 'tripMode', 
@@ -125,6 +219,11 @@ try {
     // For non-local trips, require drop location
     if (!isset($data['tripType']) || $data['tripType'] !== 'local') {
         $requiredFields[] = 'dropLocation';
+    }
+    
+    // For local trips, require hourlyPackage
+    if (isset($data['tripType']) && $data['tripType'] === 'local') {
+        $requiredFields[] = 'hourlyPackage';
     }
     
     // Validate all required fields
