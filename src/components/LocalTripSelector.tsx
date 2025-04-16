@@ -37,6 +37,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const apiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  // Define a reference vehicle for fare lookups
+  const referenceVehicle = 'sedan';
+  
   // Normalize the selected package for consistency
   const normalizedSelectedPackage = selectedPackage ? normalizePackageId(selectedPackage) : undefined;
   
@@ -73,8 +76,6 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       console.log('LocalTripSelector: Loading package data');
       
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
-      
-      const referenceVehicle = 'sedan';
       
       // Use the fareManager to get cached prices first
       let successfulPrices = 0;
