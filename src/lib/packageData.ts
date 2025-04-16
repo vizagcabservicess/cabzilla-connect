@@ -441,7 +441,7 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
     for (const vehicleType of vehicleTypes) {
       for (const pkg of hourlyPackages) {
         try {
-          // Fetch and cache each price (don't await - let these happen in parallel)
+          // Fetch and cache each price with forceRefresh explicitly set to true
           const price = await getLocalPackagePrice(pkg.id, vehicleType, true);
         } catch (error) {
           console.warn(`Error caching price for ${vehicleType}, ${pkg.id}:`, error);
