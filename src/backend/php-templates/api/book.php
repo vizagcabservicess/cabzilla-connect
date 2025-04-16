@@ -1,4 +1,3 @@
-
 <?php
 /**
  * CRITICAL API ENDPOINT: Creates new bookings
@@ -54,8 +53,22 @@ function logBooking($message, $data = null) {
 function normalizePackageId($packageId) {
     if (!$packageId) return '8hrs-80km'; // Default
     
-    $normalized = strtolower($packageId);
+    $normalized = strtolower(trim($packageId));
     
+    // First check for direct matches to standard package IDs
+    if ($normalized === '10hrs-100km' || $normalized === '10hrs_100km') {
+        return '10hrs-100km';
+    }
+    
+    if ($normalized === '8hrs-80km' || $normalized === '8hrs_80km') {
+        return '8hrs-80km';
+    }
+    
+    if ($normalized === '4hrs-40km' || $normalized === '4hrs_40km') {
+        return '4hrs-40km';
+    }
+    
+    // Then check for substring matches if not an exact match
     if (strpos($normalized, '10hr') !== false || strpos($normalized, '100km') !== false) {
         return '10hrs-100km';
     }
@@ -195,19 +208,21 @@ try {
     
     // Normalize the cab type and hourly package if present
     if (isset($data['cabType'])) {
+        $originalCabType = $data['cabType'];
         $data['cabType'] = normalizeVehicleId($data['cabType']);
-        logBooking("Normalized cab type", $data['cabType']);
+        logBooking("Normalized cab type", [
+            'original' => $originalCabType,
+            'normalized' => $data['cabType']
+        ]);
     }
     
     if (isset($data['hourlyPackage']) && $data['tripType'] === 'local') {
         $originalPackage = $data['hourlyPackage'];
         $data['hourlyPackage'] = normalizePackageId($data['hourlyPackage']);
-        if ($originalPackage !== $data['hourlyPackage']) {
-            logBooking("Normalized hourly package", [
-                'original' => $originalPackage,
-                'normalized' => $data['hourlyPackage']
-            ]);
-        }
+        logBooking("Normalized hourly package", [
+            'original' => $originalPackage,
+            'normalized' => $data['hourlyPackage']
+        ]);
     }
     
     // Validate required fields
@@ -281,7 +296,7 @@ try {
             booking_number, pickup_location, drop_location, pickup_date, return_date,
             cab_type, distance, trip_type, trip_mode, total_amount, status,
             passenger_name, passenger_phone, passenger_email, hourly_package
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {

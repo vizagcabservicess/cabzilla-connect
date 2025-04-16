@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
+import { normalizePackageId, normalizeVehicleId } from './fareCalculationService';
 
 export interface HourlyPackage {
   id: string;
@@ -61,90 +62,6 @@ const vehicleMultipliers: Record<string, number> = {
   cng: 1.0
 };
 
-// Enhanced vehicle normalization function
-function normalizeVehicleType(vehicleType: string): string {
-  // Convert to lowercase and standardize format
-  const normalizedType = vehicleType.toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/-/g, '_');
-  
-  // Special case mappings for common vehicle variants
-  if (normalizedType.includes('hycross') || normalizedType.includes('mpv')) {
-    return 'innova_hycross';
-  }
-  
-  if (normalizedType.includes('crysta')) {
-    return 'innova_crysta';
-  }
-  
-  if (normalizedType.includes('innova') && !normalizedType.includes('hycross') && !normalizedType.includes('crysta')) {
-    return 'innova_crysta'; // Default Innova to Crysta if not specified
-  }
-  
-  if (normalizedType.includes('tempo') || normalizedType.includes('traveller')) {
-    return 'tempo_traveller';
-  }
-  
-  if (normalizedType.includes('dzire') || normalizedType.includes('cng')) {
-    return 'dzire_cng';
-  }
-  
-  if (normalizedType === 'mpv') {
-    return 'innova_hycross';
-  }
-  
-  // Return as is if no special mapping applies
-  return normalizedType;
-}
-
-// Enhanced package ID normalization
-function normalizePackageId(packageId: string): string {
-  if (!packageId) return '8hrs-80km'; // Default to 8hrs if not specified
-  
-  const normalized = packageId.toLowerCase();
-  
-  if (normalized.includes('10hr') || normalized.includes('100km')) {
-    return '10hrs-100km';
-  }
-  
-  if (normalized.includes('8hr') || normalized.includes('80km')) {
-    return '8hrs-80km';
-  }
-  
-  if (normalized.includes('4hr') || normalized.includes('40km')) {
-    return '4hrs-40km';
-  }
-  
-  return '8hrs-80km'; // Default fallback
-}
-
-// Calculate a dynamic price for a given vehicle and package
-const calculateDynamicPrice = (vehicleType: string, packageId: string): number => {
-  // Normalize vehicle type to match multipliers
-  const normalizedVehicleType = normalizeVehicleType(vehicleType);
-  
-  // Determine the multiplier based on vehicle type (default to 1.0 if not found)
-  const multiplier = vehicleMultipliers[normalizedVehicleType] || 1.0;
-  
-  // Base prices for different packages
-  const baseValues = {
-    '4hrs-40km': 1200,
-    '8hrs-80km': 2000,
-    '10hrs-100km': 2500
-  };
-  
-  // Normalize package ID
-  const normalizedPackageId = normalizePackageId(packageId);
-  
-  // Get base value for package (default to 2000 if not found)
-  const baseValue = baseValues[normalizedPackageId as keyof typeof baseValues] || 2000;
-  
-  // Calculate and return the dynamic price
-  const price = Math.round(baseValue * multiplier);
-  console.log(`Calculated dynamic price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price} (multiplier: ${multiplier})`);
-  return price;
-};
-
 // Utility function to normalize and validate API URLs
 const validateApiUrl = (url: string): boolean => {
   // Basic validation - check if the URL has a valid structure
@@ -157,19 +74,81 @@ const validateApiUrl = (url: string): boolean => {
   }
 };
 
+// Calculate a dynamic price for a given vehicle and package
+const calculateDynamicPrice = (vehicleType: string, packageId: string): number => {
+  // Ensure we're working with normalized IDs
+  const normalizedVehicleType = normalizeVehicleId(vehicleType);
+  const normalizedPackageId = normalizePackageId(packageId);
+  
+  // Determine the multiplier based on vehicle type (default to 1.0 if not found)
+  let multiplier = vehicleMultipliers[normalizedVehicleType] || 1.0;
+  
+  // Make absolutely sure the Innova Hycross and MPV use the correct multiplier
+  if (normalizedVehicleType === 'innova_hycross' || normalizedVehicleType === 'mpv') {
+    multiplier = vehicleMultipliers.innova_hycross;
+  }
+  
+  // Base prices for different packages
+  const baseValues = {
+    '4hrs-40km': 1200,
+    '8hrs-80km': 2000,
+    '10hrs-100km': 2500
+  };
+  
+  // Get base value for package (default to 2000 if not found)
+  const baseValue = baseValues[normalizedPackageId as keyof typeof baseValues] || 2000;
+  
+  // Calculate and return the dynamic price
+  const price = Math.round(baseValue * multiplier);
+  console.log(`Calculated dynamic price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price} (multiplier: ${multiplier}, baseValue: ${baseValue})`);
+  return price;
+};
+
 // Function to fetch local package prices directly from database via API
 export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
   try {
-    console.log(`Getting local package price for ${vehicleType}, package: ${packageId}, forceRefresh: ${forceRefresh}`);
-    
-    // Normalize parameters
-    const normalizedVehicleType = normalizeVehicleType(vehicleType);
+    // Normalize parameters first
     const normalizedPackageId = normalizePackageId(packageId);
+    const normalizedVehicleType = normalizeVehicleId(vehicleType);
     
-    console.log(`Normalized parameters: Vehicle: ${normalizedVehicleType}, Package: ${normalizedPackageId}`);
+    console.log(`Getting local package price for ${normalizedVehicleType} (original: ${vehicleType}), package: ${normalizedPackageId} (original: ${packageId}), forceRefresh: ${forceRefresh}`);
     
     // Create unique cache key
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
+    
+    // Check if there's a manual override price in localStorage
+    const manualOverrideKey = `manual_override_${normalizedVehicleType}_${normalizedPackageId}`;
+    const manualOverride = localStorage.getItem(manualOverrideKey);
+    if (manualOverride && !forceRefresh) {
+      const overridePrice = parseFloat(manualOverride);
+      if (!isNaN(overridePrice) && overridePrice > 0) {
+        console.log(`Using manual price override for ${cacheKey}: ${overridePrice}`);
+        return overridePrice;
+      }
+    }
+    
+    // Check if there's a user-selected fare for this package
+    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    const selectedFare = localStorage.getItem(selectedFareKey);
+    if (selectedFare && !forceRefresh) {
+      const selectedPrice = parseFloat(selectedFare);
+      if (!isNaN(selectedPrice) && selectedPrice > 0) {
+        console.log(`Using user-selected fare for ${cacheKey}: ${selectedPrice}`);
+        
+        // Broadcast this selected price
+        window.dispatchEvent(new CustomEvent('local-fare-updated', {
+          detail: {
+            packageId: normalizedPackageId,
+            vehicleType: normalizedVehicleType,
+            price: selectedPrice,
+            source: 'selected-cache',
+            timestamp: Date.now()
+          }
+        }));
+        
+        return selectedPrice;
+      }
+    }
     
     // Only check cache if force refresh not requested
     if (!forceRefresh && window.localPackagePriceCache && 
@@ -245,7 +224,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       if (response.data) {
         // Check if we got a fares array from direct-local-fares.php
         if (response.data.fares && Array.isArray(response.data.fares) && response.data.fares.length > 0) {
-          const fareData = response.data.fares[0];
+          const fareData = response.data.fares.find((fare: any) => 
+            normalizeVehicleId(fare.vehicleId || fare.vehicle_id) === normalizedVehicleType
+          ) || response.data.fares[0];
           
           // Extract the right price for the selected package
           let price = 0;
@@ -269,6 +250,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
             // Also store specific package price in localStorage
             const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
             localStorage.setItem(packageFareKey, price.toString());
+            
+            // Store as the selected fare for this vehicle/package
+            localStorage.setItem(selectedFareKey, price.toString());
             
             console.log(`Stored fare in localStorage: ${packageFareKey} = ${price}`);
             
@@ -307,6 +291,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       lastError = error instanceof Error ? error : new Error(String(error));
     }
     
+    // Try other API endpoints if primary failed
     // If API call fails, use fallback calculation
     const calculatedPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
     if (calculatedPrice > 0) {
@@ -322,6 +307,10 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       // Also store specific package price in localStorage
       const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
       localStorage.setItem(packageFareKey, calculatedPrice.toString());
+      
+      // Store as the selected fare for this vehicle/package
+      const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+      localStorage.setItem(selectedFareKey, calculatedPrice.toString());
       
       console.log(`Stored calculated fare in localStorage: ${packageFareKey} = ${calculatedPrice}`);
       
@@ -353,7 +342,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // All API endpoints failed or returned invalid data, use dynamic calculation
     console.error(`All API endpoints failed for ${vehicleType}, ${packageId}. Last error:`, lastError);
     
-    // Use dynamic calculation
+    // Use dynamic calculation with properly normalized IDs
     const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
     console.log(`Using dynamically calculated price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
     
@@ -364,6 +353,14 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const fareKey = `fare_local_${normalizedVehicleType}`;
     localStorage.setItem(fareKey, dynamicPrice.toString());
     console.log(`Stored fare in localStorage: ${fareKey} = ${dynamicPrice}`);
+    
+    // Also store as the selected fare
+    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    localStorage.setItem(selectedFareKey, dynamicPrice.toString());
+    
+    // Also store specific package price in localStorage
+    const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
+    localStorage.setItem(packageFareKey, dynamicPrice.toString());
     
     // Dispatch an event to notify other components about the updated price
     window.dispatchEvent(new CustomEvent('local-fare-updated', {
@@ -392,8 +389,8 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
   } catch (error) {
     console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
     
-    // Last resort: calculate a dynamic price
-    const normalizedVehicleType = normalizeVehicleType(vehicleType);
+    // Last resort: calculate a dynamic price with properly normalized IDs
+    const normalizedVehicleType = normalizeVehicleId(vehicleType);
     const normalizedPackageId = normalizePackageId(packageId);
     const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
     
@@ -402,6 +399,10 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Store in localStorage for better cross-component consistency
     const fareKey = `fare_local_${normalizedVehicleType}`;
     localStorage.setItem(fareKey, dynamicPrice.toString());
+    
+    // Store as the selected fare
+    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    localStorage.setItem(selectedFareKey, dynamicPrice.toString());
     
     // Also store specific package price in localStorage
     const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;

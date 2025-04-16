@@ -14,6 +14,72 @@ let lastEventDispatchTime = Date.now();
 let eventDispatchCount = 0;
 const MAX_EVENTS_PER_MINUTE = 5;
 
+// Helper function to normalize package ID
+export const normalizePackageId = (packageId?: string): string => {
+  if (!packageId) return '8hrs-80km'; // Default
+  
+  const normalized = packageId.toLowerCase().trim();
+  
+  // First check for exact matches
+  if (normalized === '10hrs-100km' || normalized === '10hrs_100km') {
+    return '10hrs-100km';
+  }
+  
+  if (normalized === '8hrs-80km' || normalized === '8hrs_80km') {
+    return '8hrs-80km';
+  }
+  
+  if (normalized === '4hrs-40km' || normalized === '4hrs_40km') {
+    return '4hrs-40km';
+  }
+  
+  // Then check for substring matches
+  if (normalized.includes('10hr') || normalized.includes('100km')) {
+    return '10hrs-100km';
+  }
+  
+  if (normalized.includes('8hr') || normalized.includes('80km')) {
+    return '8hrs-80km';
+  }
+  
+  if (normalized.includes('4hr') || normalized.includes('40km')) {
+    return '4hrs-40km';
+  }
+  
+  return '8hrs-80km'; // Default fallback
+};
+
+// Helper function to normalize vehicle ID
+export const normalizeVehicleId = (vehicleId?: string): string => {
+  if (!vehicleId) return ''; 
+  
+  // Convert to lowercase and replace spaces with underscores
+  const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Special cases for common vehicle types
+  if (normalized === 'mpv' || normalized.includes('hycross')) {
+    return 'innova_hycross';
+  }
+  
+  if (normalized.includes('crysta')) {
+    return 'innova_crysta';
+  }
+  
+  if (normalized === 'innova' || (normalized.includes('innova') && !normalized.includes('crysta') && !normalized.includes('hycross'))) {
+    return 'innova_crysta';
+  }
+  
+  if (normalized.includes('tempo')) {
+    return 'tempo_traveller';
+  }
+  
+  if (normalized.includes('dzire') || normalized.includes('cng')) {
+    return 'dzire_cng';
+  }
+  
+  return normalized;
+};
+
 // Clear the fare cache
 export const clearFareCache = () => {
   // Prevent multiple cache clears within 30 seconds
@@ -162,27 +228,22 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     else if (tripType === 'local') {
       try {
         // For local hourly packages - get from API only
-        const packageId = hourlyPackage || '8hrs-80km';
+        const rawPackageId = hourlyPackage || '8hrs-80km';
         
         // Normalize the package ID to ensure consistency
-        let normalizedPackageId = packageId;
+        const normalizedPackageId = normalizePackageId(rawPackageId);
         
-        // Critical fix: Ensure we're using consistent package IDs
-        if (packageId.includes('10hr')) {
-          normalizedPackageId = '10hrs-100km';
-        } else if (packageId.includes('8hr')) {
-          normalizedPackageId = '8hrs-80km';
-        } else if (packageId.includes('4hr')) {
-          normalizedPackageId = '4hrs-40km';
-        }
+        console.log(`Using normalized package ID for local fare calculation: ${normalizedPackageId} (from original: ${rawPackageId})`);
         
-        console.log(`Using normalized package ID for local fare calculation: ${normalizedPackageId}`);
+        // Normalize vehicle ID
+        const normalizedVehicleId = normalizeVehicleId(cabType.id);
+        console.log(`Using normalized vehicle ID for local fare calculation: ${normalizedVehicleId} (from original: ${cabType.id})`);
         
         // Direct API call to get package price
-        const packagePrice = await getLocalPackagePrice(normalizedPackageId, cabType.id, forceRefresh);
+        const packagePrice = await getLocalPackagePrice(normalizedPackageId, normalizedVehicleId, forceRefresh);
         
         if (!packagePrice || packagePrice <= 0) {
-          throw new Error(`Invalid package price retrieved for ${cabType.id}, package ${normalizedPackageId}: ${packagePrice}`);
+          throw new Error(`Invalid package price retrieved for ${normalizedVehicleId}, package ${normalizedPackageId}: ${packagePrice}`);
         }
         
         console.log(`Retrieved local package price from API: ₹${packagePrice}`);
@@ -190,12 +251,14 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // Dispatch fare calculation event to update UI components
         window.dispatchEvent(new CustomEvent('fare-calculated', {
           detail: {
-            cabId: cabType.id,
+            cabId: normalizedVehicleId,
+            originalCabId: cabType.id,
             tripType,
             tripMode,
             calculated: true,
             fare: packagePrice,
             packageId: normalizedPackageId, // Include the normalized package ID
+            originalPackageId: rawPackageId,
             timestamp: Date.now()
           }
         }));
@@ -203,12 +266,26 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // Also dispatch a more specific event for this package
         window.dispatchEvent(new CustomEvent('local-package-fare-calculated', {
           detail: {
-            cabId: cabType.id,
+            cabId: normalizedVehicleId,
+            originalCabId: cabType.id,
             packageId: normalizedPackageId,
+            originalPackageId: rawPackageId,
             fare: packagePrice,
             timestamp: Date.now()
           }
         }));
+        
+        // Store the selected fare in localStorage for consistency
+        try {
+          const selectedFareKey = `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`;
+          localStorage.setItem(selectedFareKey, packagePrice.toString());
+          console.log(`Stored selected fare in localStorage: ${selectedFareKey} = ${packagePrice}`);
+          
+          // Also store the package ID that was used
+          localStorage.setItem(`selected_package_${normalizedVehicleId}`, normalizedPackageId);
+        } catch (error) {
+          console.error('Error storing fare in localStorage:', error);
+        }
         
         return packagePrice;
       } catch (error) {
