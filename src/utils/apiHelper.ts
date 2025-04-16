@@ -1,5 +1,8 @@
 import { toast } from 'sonner';
-import { apiBaseUrl, forceRefreshHeaders, getApiUrl } from '@/config/api';
+import { getApiUrl, getApiBaseUrl, forceRefreshHeaders } from '@/config/api';
+
+// Define apiBaseUrl variable for local use
+const apiBaseUrl = getApiBaseUrl();
 
 /**
  * Database connection check response type

@@ -24,6 +24,9 @@ export const getApiBaseUrl = (): string => {
   return import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 };
 
+// Add apiBaseUrl export that returns the current base URL
+export const apiBaseUrl = getApiBaseUrl();
+
 /**
  * Get the full API URL for a specific endpoint
  * @param endpoint API endpoint path (should start with 'api/')
@@ -64,8 +67,27 @@ export const getAuthApiUrl = (endpoint: string): string => {
   return url;
 };
 
+// Add forceRefreshHeaders for use in API requests
+export const forceRefreshHeaders = {
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'X-Force-Refresh': 'true',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
+// Add defaultHeaders for API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
 export default {
   getApiBaseUrl,
   getApiUrl,
-  getAuthApiUrl
+  getAuthApiUrl,
+  apiBaseUrl,
+  forceRefreshHeaders,
+  defaultHeaders
 };

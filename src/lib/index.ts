@@ -23,14 +23,23 @@ export {
   isTourTripType
 } from './tripTypes';
 
-// Import and re-export from config instead of fareService
-export { 
+// Import and re-export from requestConfig
+import { 
   getBypassHeaders,
   getForcedRequestConfig,
   formatDataForMultipart,
   normalizePackageId,
   normalizeVehicleId
 } from '@/config/requestConfig';
+
+// Re-export the imported functions
+export { 
+  getBypassHeaders,
+  getForcedRequestConfig,
+  formatDataForMultipart,
+  normalizePackageId,
+  normalizeVehicleId
+};
 
 // Re-export all methods from fareService
 export { 
@@ -51,7 +60,7 @@ export {
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions (use only what's available)
+// Export vehicle service functions
 export { 
   addVehicle as createVehicle,
   updateVehicle,

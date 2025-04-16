@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { getApiUrl } from '@/config/api';
 import { Loader2, RefreshCcw, Save, AlertTriangle } from 'lucide-react';
-import { syncLocalFaresWithDatabase, fetchAndCacheLocalFares } from '@/lib/packageData';
+import { syncLocalFaresWithDatabase } from '@/lib/packageData';
+import { fetchAndCacheLocalFares } from '@/services/localFareService';
 
 interface FareItem {
   vehicleId: string;
@@ -42,7 +43,7 @@ export function LocalPackageFareManager() {
     setError(null);
     
     try {
-      const apiUrl = getApiUrl();
+      const apiUrl = getApiUrl('');
       const endpoint = `${apiUrl}/api/admin/direct-local-fares.php`;
       
       // Get list of vehicles first
@@ -102,7 +103,8 @@ export function LocalPackageFareManager() {
   const handleSyncWithDatabase = async () => {
     setSyncing(true);
     try {
-      const success = await syncLocalFaresWithDatabase();
+      // Pass true for forceRefresh parameter to syncLocalFaresWithDatabase
+      const success = await syncLocalFaresWithDatabase(true);
       
       if (success) {
         toast.success('Local package fares synced with database');
@@ -113,7 +115,7 @@ export function LocalPackageFareManager() {
           window.localPackagePriceCache = {};
         }
         
-        // Trigger refresh in the background
+        // Trigger refresh in the background - pass true for silent parameter
         fetchAndCacheLocalFares(true);
       } else {
         toast.error('Failed to sync local package fares');

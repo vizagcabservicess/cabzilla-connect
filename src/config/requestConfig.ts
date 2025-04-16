@@ -117,8 +117,90 @@ export const buildBookingRequestParams = (formData: any): Record<string, any> =>
   };
 };
 
+// Add getBypassHeaders function for API requests
+export const getBypassHeaders = () => {
+  return {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'X-Force-Refresh': 'true',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-Bypass-Cache': 'true'
+  };
+};
+
+// Add getForcedRequestConfig function for API requests
+export const getForcedRequestConfig = () => {
+  return {
+    headers: getBypassHeaders(),
+    timeout: 10000, // 10 second timeout
+    cache: 'no-store' as RequestCache
+  };
+};
+
+// Add formatDataForMultipart function
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    
+    if (value === undefined || value === null) {
+      return;
+    }
+    
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+    } else if (typeof value === 'object' && !(value instanceof File)) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      formData.append(key, value);
+    }
+  });
+  
+  return formData;
+};
+
+// Add safeFetch function for safer API requests
+export const safeFetch = async (endpoint: string, options: RequestInit = {}) => {
+  const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  
+  const defaultOptions: RequestInit = {
+    headers: {
+      ...getBypassHeaders(),
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include',
+    mode: 'cors'
+  };
+  
+  const mergedOptions = {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...(options.headers || {})
+    }
+  };
+  
+  try {
+    const response = await fetch(url, mergedOptions);
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+    return response;
+  } catch (error) {
+    console.error(`safeFetch error for ${url}:`, error);
+    throw error;
+  }
+};
+
 export default {
   normalizeVehicleId,
   normalizePackageId,
-  buildBookingRequestParams
+  buildBookingRequestParams,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  formatDataForMultipart,
+  safeFetch
 };

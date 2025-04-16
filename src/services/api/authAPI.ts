@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getApiUrl, forceRefreshHeaders } from '@/config/api';
+import { getApiUrl, getApiBaseUrl, forceRefreshHeaders } from '@/config/api';
 import { User } from '@/types/api';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 
