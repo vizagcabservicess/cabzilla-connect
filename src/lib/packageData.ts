@@ -311,7 +311,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
       localStorage.setItem(packageFareKey, calculatedPrice.toString());
       
-      // Store as the selected fare for this vehicle/package - using the same variable name as above
+      // Store as the selected fare for this vehicle/package
       localStorage.setItem(selectedFareKey, calculatedPrice.toString());
       
       console.log(`Stored calculated fare in localStorage: ${packageFareKey} = ${calculatedPrice}`);
@@ -356,7 +356,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     localStorage.setItem(fareKey, dynamicPrice.toString());
     console.log(`Stored fare in localStorage: ${fareKey} = ${dynamicPrice}`);
     
-    // Also store as the selected fare - using the existing selectedFareKey variable, not redeclaring it
+    // Also store as the selected fare
     localStorage.setItem(selectedFareKey, dynamicPrice.toString());
     
     // Also store specific package price in localStorage
@@ -397,15 +397,13 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     
     console.log(`Using dynamically calculated fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
     
-    // Create selectedFareKey one last time for this scope
+    // Set up selectedFareKey for this scope
     const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
     
     // Store in localStorage for better cross-component consistency
     const fareKey = `fare_local_${normalizedVehicleType}`;
     localStorage.setItem(fareKey, dynamicPrice.toString());
     
-    // The following refers to the same variable as already used higher up, so we reuse it
-    // without redeclaring
     localStorage.setItem(selectedFareKey, dynamicPrice.toString());
     
     // Also store specific package price in localStorage
@@ -422,7 +420,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
 export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Promise<void> {
   try {
     // Common vehicle types to pre-cache
-    const vehicleTypes = ['sedan', 'ertiga', 'innova_crysta', 'dzire_cng', 'tempo_traveller'];
+    const vehicleTypes = ['sedan', 'ertiga', 'innova_crysta', 'dzire_cng', 'tempo_traveller', 'innova_hycross', 'mpv'];
     
     // Loop through all combinations of vehicles and packages
     for (const vehicleType of vehicleTypes) {

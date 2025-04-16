@@ -21,31 +21,32 @@ export const normalizePackageId = (packageId?: string): string => {
   const normalized = packageId.toLowerCase().trim();
   
   // First check for exact matches
-  if (normalized === '10hrs-100km' || normalized === '10hrs_100km') {
+  if (normalized === '10hrs-100km' || normalized === '10hrs_100km' || normalized === '10 hours') {
     return '10hrs-100km';
   }
   
-  if (normalized === '8hrs-80km' || normalized === '8hrs_80km') {
+  if (normalized === '8hrs-80km' || normalized === '8hrs_80km' || normalized === '8 hours') {
     return '8hrs-80km';
   }
   
-  if (normalized === '4hrs-40km' || normalized === '4hrs_40km') {
+  if (normalized === '4hrs-40km' || normalized === '4hrs_40km' || normalized === '4 hours') {
     return '4hrs-40km';
   }
   
   // Then check for substring matches
-  if (normalized.includes('10hr') || normalized.includes('100km')) {
+  if (normalized.includes('10') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('100km'))) {
     return '10hrs-100km';
   }
   
-  if (normalized.includes('8hr') || normalized.includes('80km')) {
+  if (normalized.includes('8') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('80km'))) {
     return '8hrs-80km';
   }
   
-  if (normalized.includes('4hr') || normalized.includes('40km')) {
+  if (normalized.includes('4') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('40km'))) {
     return '4hrs-40km';
   }
   
+  console.log(`Warning: Unable to match package ID "${packageId}" to a known package, defaulting to 8hrs-80km`);
   return '8hrs-80km'; // Default fallback
 };
 
@@ -56,27 +57,39 @@ export const normalizeVehicleId = (vehicleId?: string): string => {
   // Convert to lowercase and replace spaces with underscores
   const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
   
-  // Special cases for common vehicle types
-  if (normalized === 'mpv' || normalized.includes('hycross')) {
+  // Special case to ensure MPV is always mapped correctly - check this first
+  if (normalized === 'mpv' || 
+      normalized === 'innova hycross' || 
+      normalized === 'innovahycross' ||
+      normalized === 'innova_hycross' ||
+      normalized.includes('hycross') ||
+      normalized.includes('hi_cross') ||
+      normalized.includes('hi-cross')) {
+    console.log(`Normalized vehicle '${vehicleId}' to 'innova_hycross'`);
     return 'innova_hycross';
   }
   
-  if (normalized.includes('crysta')) {
-    return 'innova_crysta';
-  }
-  
-  if (normalized === 'innova' || (normalized.includes('innova') && !normalized.includes('crysta') && !normalized.includes('hycross'))) {
+  // Handle other special cases
+  if (normalized.includes('crysta') || 
+      (normalized.includes('innova') && !normalized.includes('hycross'))) {
+    console.log(`Normalized vehicle '${vehicleId}' to 'innova_crysta'`);
     return 'innova_crysta';
   }
   
   if (normalized.includes('tempo')) {
+    console.log(`Normalized vehicle '${vehicleId}' to 'tempo_traveller'`);
     return 'tempo_traveller';
   }
   
-  if (normalized.includes('dzire') || normalized.includes('cng')) {
+  if (normalized.includes('dzire') || 
+      normalized === 'cng' || 
+      normalized.includes('cng')) {
+    console.log(`Normalized vehicle '${vehicleId}' to 'dzire_cng'`);
     return 'dzire_cng';
   }
   
+  // For any other cases, just return the normalized ID
+  console.log(`Normalized vehicle '${vehicleId}' to '${normalized}'`);
   return normalized;
 };
 

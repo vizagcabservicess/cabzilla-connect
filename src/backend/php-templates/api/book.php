@@ -56,28 +56,28 @@ function normalizePackageId($packageId) {
     $normalized = strtolower(trim($packageId));
     
     // First check for direct matches to standard package IDs
-    if ($normalized === '10hrs-100km' || $normalized === '10hrs_100km') {
+    if ($normalized === '10hrs-100km' || $normalized === '10hrs_100km' || $normalized === '10 hours' || $normalized === '10hrs') {
         return '10hrs-100km';
     }
     
-    if ($normalized === '8hrs-80km' || $normalized === '8hrs_80km') {
+    if ($normalized === '8hrs-80km' || $normalized === '8hrs_80km' || $normalized === '8 hours' || $normalized === '8hrs') {
         return '8hrs-80km';
     }
     
-    if ($normalized === '4hrs-40km' || $normalized === '4hrs_40km') {
+    if ($normalized === '4hrs-40km' || $normalized === '4hrs_40km' || $normalized === '4 hours' || $normalized === '4hrs') {
         return '4hrs-40km';
     }
     
     // Then check for substring matches if not an exact match
-    if (strpos($normalized, '10hr') !== false || strpos($normalized, '100km') !== false) {
+    if (strpos($normalized, '10') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '100km') !== false)) {
         return '10hrs-100km';
     }
     
-    if (strpos($normalized, '8hr') !== false || strpos($normalized, '80km') !== false) {
+    if (strpos($normalized, '8') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '80km') !== false)) {
         return '8hrs-80km';
     }
     
-    if (strpos($normalized, '4hr') !== false || strpos($normalized, '40km') !== false) {
+    if (strpos($normalized, '4') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '40km') !== false)) {
         return '4hrs-40km';
     }
     
@@ -93,7 +93,7 @@ function normalizeVehicleId($vehicleId) {
     $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
     
     // Special case for MPV and Innova Hycross - always treated the same
-    if ($result === 'mpv' || strpos($result, 'hycross') !== false) {
+    if ($result === 'mpv' || strpos($result, 'hycross') !== false || $result === 'mpv') {
         return 'innova_hycross';
     }
     
