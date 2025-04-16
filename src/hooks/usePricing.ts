@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
-import { normalizePackageId, normalizeVehicleId } from '../lib/packageUtils';
+import { normalizePackageId, normalizeVehicleId, shouldThrottle } from '../lib/packageUtils';
 import { calculateFare } from '@/lib/fareCalculationService';
 
 interface UsePricingProps {
@@ -47,9 +47,21 @@ export const usePricing = ({
   const pendingCalculationRef = useRef<boolean>(false);
   const mountedRef = useRef<boolean>(true);
   const priceCache = useRef<Record<string, { price: number, timestamp: number }>>({});
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Normalize package ID and vehicle ID for consistency
   const normalizedHourlyPackage = hourlyPackage ? normalizePackageId(hourlyPackage) : undefined;
   const vehicleId = selectedCab ? normalizeVehicleId(selectedCab.id) : '';
+
+  // Log normalized values for debugging
+  useEffect(() => {
+    if (hourlyPackage) {
+      console.log(`[DEBUG] usePricing: Package normalized from ${hourlyPackage} to ${normalizedHourlyPackage}`);
+    }
+    if (selectedCab) {
+      console.log(`[DEBUG] usePricing: Vehicle normalized from ${selectedCab.id} to ${vehicleId}`);
+    }
+  }, [hourlyPackage, selectedCab, normalizedHourlyPackage, vehicleId]);
 
   // Generate a cache key for the current parameters
   const getCacheKey = useCallback(() => {
@@ -59,6 +71,8 @@ export const usePricing = ({
 
   // Check if calculation is allowed based on throttling
   const canCalculate = useCallback((forceRefresh: boolean = false): boolean => {
+    if (!mountedRef.current) return false;
+    
     const now = Date.now();
     const timeSinceLastCalculation = now - lastCalculationTimeRef.current;
     
@@ -69,12 +83,16 @@ export const usePricing = ({
     
     if (!forceRefresh && timeSinceLastCalculation < calculationThrottleRef.current) {
       console.log(`usePricing: Throttling calculation (${timeSinceLastCalculation}ms < ${calculationThrottleRef.current}ms)`);
-      return false;
+      
+      // If we have a cached price, this is perfectly fine
+      const cacheKey = getCacheKey();
+      const cachedPrice = priceCache.current[cacheKey];
+      return cachedPrice?.price > 0 ? false : (timeSinceLastCalculation > 1000);
     }
     
     // Allow calculation if forced or throttle time has passed
     return true;
-  }, []);
+  }, [getCacheKey]);
 
   // Calculate price based on the current parameters
   const calculatePrice = useCallback(async (forceRefresh = false) => {
@@ -88,10 +106,9 @@ export const usePricing = ({
       return 0;
     }
 
-    // Check throttling and skip if not allowed
-    if (!canCalculate(forceRefresh)) {
-      // If we have a cached price, use it
-      const cacheKey = getCacheKey();
+    // First try to use cache if available and not forcing refresh
+    const cacheKey = getCacheKey();
+    if (!forceRefresh) {
       const cachedPrice = priceCache.current[cacheKey];
       if (cachedPrice && cachedPrice.price > 0) {
         console.log(`usePricing: Using cached price for ${cacheKey}: ${cachedPrice.price}`);
@@ -103,7 +120,10 @@ export const usePricing = ({
         }));
         return cachedPrice.price;
       }
-      
+    }
+
+    // Check throttling and skip if not allowed
+    if (!canCalculate(forceRefresh)) {
       return pricingState.totalPrice;
     }
 
@@ -131,7 +151,7 @@ export const usePricing = ({
           });
           
           // Update cache
-          priceCache.current[getCacheKey()] = {
+          priceCache.current[cacheKey] = {
             price: parsedFare,
             timestamp: Date.now()
           };
@@ -182,7 +202,7 @@ export const usePricing = ({
       });
       
       // Update cache
-      priceCache.current[getCacheKey()] = {
+      priceCache.current[cacheKey] = {
         price: roundedFare,
         timestamp: Date.now()
       };
@@ -213,7 +233,6 @@ export const usePricing = ({
       }));
       
       // Try to use cached price as fallback
-      const cacheKey = getCacheKey();
       const cachedPrice = priceCache.current[cacheKey];
       if (cachedPrice && cachedPrice.price > 0) {
         console.log(`usePricing: Using cached price after error: ${cachedPrice.price}`);
@@ -225,6 +244,33 @@ export const usePricing = ({
         return cachedPrice.price;
       }
       
+      // Fall back to localStorage as a last resort
+      try {
+        const allStorageKeys = Object.keys(localStorage);
+        const relevantKeys = allStorageKeys.filter(key => 
+          key.startsWith('calculated_fare_') && 
+          key.includes(vehicleId)
+        );
+        
+        if (relevantKeys.length > 0) {
+          // Use the most recent one as a fallback
+          const mostRecentKey = relevantKeys[0];
+          const fallbackPrice = parseInt(localStorage.getItem(mostRecentKey) || '0', 10);
+          
+          if (fallbackPrice > 0) {
+            console.log(`usePricing: Using fallback price from localStorage: ${fallbackPrice}`);
+            setPricingState(prev => ({
+              ...prev,
+              totalPrice: fallbackPrice,
+              error: "Using estimated price due to calculation error"
+            }));
+            return fallbackPrice;
+          }
+        }
+      } catch (storageError) {
+        console.error('Error accessing localStorage for fallback:', storageError);
+      }
+      
       pendingCalculationRef.current = false;
       return 0;
     }
@@ -232,15 +278,23 @@ export const usePricing = ({
 
   // Calculate price when relevant parameters change, with debounce
   useEffect(() => {
+    // Clear any existing timeout to prevent multiple calculations
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
     // Use setTimeout for debouncing instead of immediate calculation
-    const debounceTimeout = setTimeout(() => {
+    debounceTimeoutRef.current = setTimeout(() => {
       if (mountedRef.current) {
         calculatePrice();
       }
+      debounceTimeoutRef.current = null;
     }, 300); // 300ms debounce
     
     return () => {
-      clearTimeout(debounceTimeout);
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
     };
   }, [calculatePrice]);
 
@@ -248,14 +302,11 @@ export const usePricing = ({
   useEffect(() => {
     mountedRef.current = true;
     
-    const handleForceRecalculation = (event: Event) => {
+    const handleForceRecalculation = () => {
       if (!mountedRef.current) return;
       
       // Apply additional throttling for events
-      const now = Date.now();
-      const timeSinceLastCalculation = now - lastCalculationTimeRef.current;
-      
-      if (timeSinceLastCalculation < 10000) { // 10s throttle for forced recalculations
+      if (shouldThrottle('priceCalculation', 10000)) {
         console.log('usePricing: Ignoring forced recalculation due to throttling');
         return;
       }
@@ -275,6 +326,14 @@ export const usePricing = ({
   return {
     ...pricingState,
     calculatePrice,
-    refreshPrice: () => calculatePrice(true)
+    refreshPrice: () => calculatePrice(true),
+    getCachedPrice: (specificCab?: CabType) => {
+      if (specificCab) {
+        const specificVehicleId = normalizeVehicleId(specificCab.id);
+        const specificCacheKey = `${specificVehicleId}_${tripType}_${normalizedHourlyPackage || ''}`;
+        return priceCache.current[specificCacheKey]?.price || 0;
+      }
+      return priceCache.current[getCacheKey()]?.price || 0;
+    }
   };
 };
