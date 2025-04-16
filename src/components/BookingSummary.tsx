@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -479,6 +480,8 @@ export const BookingSummary = ({
           console.error('Error fetching direct local fares:', error);
           
           try {
+            const packageToUse = packageIdArg || currentPackageRef.current || hourlyPackage || '8hrs-80km';
+            
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
             
             if (packageToUse.includes('4hrs') && localFares.price4hrs40km > 0) {
