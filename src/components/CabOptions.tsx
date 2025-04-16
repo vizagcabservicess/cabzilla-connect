@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getLocalPackagePrice } from '@/lib/packageData';
+import { getLocalPackagePrice, normalizePackageId } from '@/lib/packageData';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -97,6 +96,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     setFareErrors({});
     
     try {
+      const normalizedPackageId = normalizePackageId(hourlyPackage);
+      console.log(`Loading fares for normalized package: ${normalizedPackageId}`);
+      
       const updatedFares: Record<string, number> = {};
       const updatedErrors: Record<string, string> = {};
       
@@ -104,11 +106,15 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       for (const cab of cabTypes) {
         try {
           // Get price from database with force refresh
-          const price = await getLocalPackagePrice(hourlyPackage, cab.id, true);
+          const price = await getLocalPackagePrice(normalizedPackageId, cab.id, true);
           if (price > 0) {
             updatedFares[cab.id] = price;
             
-            // Store in localStorage for consistency with booking summary
+            // Store in localStorage with a more precise key that includes the package
+            const preciseFareKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+            localStorage.setItem(preciseFareKey, price.toString());
+            
+            // Also store with the original format for backward compatibility
             const localStorageKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}`;
             localStorage.setItem(localStorageKey, price.toString());
             
@@ -117,7 +123,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 cabId: cab.id,
                 tripType: 'local',
                 tripMode: tripMode,
-                hourlyPackage,
+                hourlyPackage: normalizedPackageId,
                 calculated: true,
                 fare: price,
                 timestamp: Date.now(),
@@ -190,8 +196,12 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       if (tripType === 'local' && hourlyPackage) {
         setIsCalculatingFares(true);
+        
+        const normalizedPackageId = normalizePackageId(hourlyPackage);
+        console.log(`Getting price for selected cab ${cab.id} with normalized package: ${normalizedPackageId}`);
+        
         // Force refresh to ensure we get latest price from database
-        getLocalPackagePrice(hourlyPackage, cab.id, true)
+        getLocalPackagePrice(normalizedPackageId, cab.id, true)
           .then(price => {
             if (price > 0) {
               setCabFares(prev => ({
@@ -199,9 +209,17 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 [cab.id]: price
               }));
               
-              // Store in localStorage for consistency with booking summary
+              // Store in localStorage with package-specific key for precise lookup
+              const preciseFareKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(preciseFareKey, price.toString());
+              
+              // Also store with the original format for backward compatibility
               const localStorageKey = `fare_local_${cab.id.toLowerCase().replace(/\s+/g, '')}`;
               localStorage.setItem(localStorageKey, price.toString());
+              
+              // Set again with the selected fare for better tracking
+              const selectedFareKey = `selected_fare_${cab.id.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(selectedFareKey, price.toString());
               
               // Dispatch event to update booking summary
               window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
@@ -211,7 +229,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   fare: price,
                   tripType: tripType,
                   tripMode: tripMode,
-                  hourlyPackage,
+                  hourlyPackage: normalizedPackageId,
                   timestamp: now + 1,
                   source: 'database'
                 }
@@ -224,7 +242,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   cabName: cab.name,
                   tripType: 'local',
                   tripMode: tripMode,
-                  hourlyPackage,
+                  hourlyPackage: normalizedPackageId,
                   calculated: true,
                   fare: price,
                   timestamp: now + 2,
@@ -258,7 +276,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 error: error instanceof Error ? error.message : 'Price unavailable',
                 tripType: tripType,
                 tripMode: tripMode,
-                hourlyPackage,
+                hourlyPackage: normalizedPackageId,
                 timestamp: now + 1
               }
             }));
@@ -375,7 +393,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       
       if (selectedCab && tripType === 'local' && hourlyPackage) {
         // Force refresh to ensure consistent pricing for selected cab
-        getLocalPackagePrice(hourlyPackage, selectedCab.id, true)
+        const normalizedPackageId = normalizePackageId(hourlyPackage);
+        
+        getLocalPackagePrice(normalizedPackageId, selectedCab.id, true)
           .then(price => {
             if (price > 0) {
               setCabFares(prev => ({
@@ -383,9 +403,17 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 [selectedCab.id]: price
               }));
               
-              // Ensure the same price is used in the booking summary
+              // Store in localStorage with package-specific key for precise lookup
+              const preciseFareKey = `fare_local_${selectedCab.id.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(preciseFareKey, price.toString());
+              
+              // Also store with the original format for backward compatibility
               const localStorageKey = `fare_local_${selectedCab.id.toLowerCase().replace(/\s+/g, '')}`;
               localStorage.setItem(localStorageKey, price.toString());
+              
+              // Set again with the selected fare for better tracking
+              const selectedFareKey = `selected_fare_${selectedCab.id.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(selectedFareKey, price.toString());
               
               window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
                 detail: {
@@ -394,7 +422,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   fare: price,
                   tripType: tripType,
                   tripMode: tripMode,
-                  hourlyPackage,
+                  hourlyPackage: normalizedPackageId,
                   timestamp: Date.now(),
                   source: 'database'
                 }
@@ -407,7 +435,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                   cabName: selectedCab.name,
                   tripType: 'local',
                   tripMode: tripMode,
-                  hourlyPackage,
+                  hourlyPackage: normalizedPackageId,
                   calculated: true,
                   fare: price,
                   timestamp: Date.now() + 1,
@@ -441,7 +469,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   useEffect(() => {
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
-        const { cabId, fare, tripType: eventTripType, calculated = false } = event.detail;
+        const { cabId, fare, tripType: eventTripType, hourlyPackage: eventPackage, calculated = false } = event.detail;
         console.log(`CabOptions: Received fare-calculated event for ${cabId}: ${fare}, calculated=${calculated}`);
         
         setCabFares(prev => {
@@ -461,6 +489,16 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         if (selectedCab?.id === cabId) {
           try {
             // Ensure consistent pricing in booking summary
+            if (tripType === 'local' && hourlyPackage) {
+              const normalizedPackageId = normalizePackageId(hourlyPackage);
+              const preciseFareKey = `fare_local_${cabId.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(preciseFareKey, fare.toString());
+              
+              const selectedFareKey = `selected_fare_${cabId.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              localStorage.setItem(selectedFareKey, fare.toString());
+            }
+            
+            // Standard fare key for backward compatibility
             const localStorageKey = `fare_local_${cabId.toLowerCase().replace(/\s+/g, '')}`;
             localStorage.setItem(localStorageKey, fare.toString());
             
@@ -471,7 +509,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
                 fare: fare,
                 tripType: tripType,
                 tripMode: tripMode,
-                hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
+                hourlyPackage: tripType === 'local' ? 
+                  (eventPackage || normalizePackageId(hourlyPackage || '8hrs-80km')) : 
+                  undefined,
                 timestamp: Date.now(),
                 source: event.detail.source || 'database'
               }
@@ -619,7 +659,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated as EventListener);
       window.removeEventListener('fare-error', handleFareError as EventListener);
     };
-  }, [cabFares, selectedCab, tripType, tripMode, hourlyPackage]);
+  }, [selectedCab, tripType, hourlyPackage, tripMode]);
 
   const getFareDetails = (cab: CabType): string => {
     if (tripType === 'local') {
@@ -631,38 +671,29 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   };
 
-  if (fareErrors.global) {
-    return (
-      <>
+  return (
+    <>
+      {fareErrors.global && (
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            {fareErrors.global}
-          </AlertDescription>
+          <AlertDescription>{fareErrors.global}</AlertDescription>
         </Alert>
-        <CabList
-          cabTypes={cabTypes}
-          selectedCabId={selectedCab?.id || null}
-          cabFares={{}}
-          isCalculatingFares={isCalculatingFares}
-          handleSelectCab={handleCabSelect}
-          getFareDetails={getFareDetails}
-        />
-      </>
-    );
-  }
-
-  return (
-    <CabList
-      cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id || null}
-      cabFares={cabFares}
-      isCalculatingFares={isCalculatingFares}
-      cabErrors={fareErrors}
-      handleSelectCab={handleCabSelect}
-      getFareDetails={getFareDetails}
-    />
+      )}
+      
+      <CabList
+        cabTypes={cabTypes}
+        selectedCabId={selectedCab?.id}
+        onSelectCab={handleCabSelect}
+        distance={distance}
+        tripType={tripType as TripType}
+        tripMode={tripMode as TripMode}
+        hourlyPackage={hourlyPackage}
+        pickupDate={pickupDate}
+        returnDate={returnDate}
+        cabFares={cabFares}
+        isLoading={isCalculatingFares}
+        errors={fareErrors}
+      />
+    </>
   );
 };
-
-export default CabOptions;

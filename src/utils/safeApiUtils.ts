@@ -37,7 +37,9 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
     };
 
     // Make the request with a reasonable timeout
-    const response = await axios.get(url, {
+    const response = await axios({
+      method: config.method || 'get',
+      url,
       ...config,
       headers,
       timeout: config.timeout || 8000
@@ -80,19 +82,57 @@ export async function tryMultipleEndpoints<T = any>(
   }
 
   let lastError: Error | null = null;
+  let failures = 0;
 
   for (const endpoint of endpoints) {
     try {
+      console.log(`Trying endpoint ${failures+1}/${endpoints.length}: ${endpoint}`);
       const result = await safeApiRequest<T>(endpoint, config);
       if (result) {
+        console.log(`Successfully fetched data from endpoint: ${endpoint}`);
         return result;
       }
     } catch (error) {
+      failures++;
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(`API endpoint ${endpoint} failed, trying next endpoint`);
+      console.warn(`API endpoint ${endpoint} failed (${failures}/${endpoints.length}), trying next endpoint`);
     }
   }
 
-  console.error(`All API endpoints failed. Last error:`, lastError);
+  console.error(`All ${endpoints.length} API endpoints failed. Last error:`, lastError);
   return null;
+}
+
+/**
+ * Fetches data from a local fallback file when API requests fail
+ * @param apiEndpoints API endpoints to try first
+ * @param fallbackPath Path to local fallback JSON file
+ * @param config Axios request configuration
+ * @returns API response or fallback data
+ */
+export async function fetchWithLocalFallback<T = any>(
+  apiEndpoints: string[],
+  fallbackPath: string,
+  config: AxiosRequestConfig = {}
+): Promise<T | null> {
+  // First try the API endpoints
+  const apiResult = await tryMultipleEndpoints<T>(apiEndpoints, config);
+  if (apiResult) {
+    return apiResult;
+  }
+
+  // If API fails, try the local fallback
+  try {
+    console.log(`All API endpoints failed, trying local fallback: ${fallbackPath}`);
+    const fallbackResponse = await fetch(fallbackPath);
+    if (!fallbackResponse.ok) {
+      throw new Error(`Fallback fetch failed with status: ${fallbackResponse.status}`);
+    }
+    const fallbackData = await fallbackResponse.json();
+    console.log(`Successfully loaded fallback data from: ${fallbackPath}`);
+    return fallbackData as T;
+  } catch (fallbackError) {
+    console.error(`Fallback data fetch failed:`, fallbackError);
+    return null;
+  }
 }

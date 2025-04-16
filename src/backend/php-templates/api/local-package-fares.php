@@ -77,6 +77,13 @@ function normalizeVehicleId($vehicleId) {
 
 // Normalize the package ID
 function normalizePackageId($packageId) {
+    if (empty($packageId)) {
+        return '8hrs-80km';
+    }
+    
+    // Remove spaces and convert to lowercase
+    $result = strtolower(trim($packageId));
+    
     // Handle common variations
     $mappings = [
         '4hr_40km' => '4hrs-40km',
@@ -90,8 +97,10 @@ function normalizePackageId($packageId) {
     ];
     
     // Normalize to lowercase and replace spaces with hyphens
-    $result = strtolower(trim($packageId));
     $result = str_replace('_', '-', $result);
+    
+    // Fix formats with "hr" instead of "hrs"
+    $result = preg_replace('/(\d+)hr-/', '$1hrs-', $result);
     
     foreach ($mappings as $search => $replace) {
         if ($result === $search) {
@@ -106,7 +115,7 @@ function normalizePackageId($packageId) {
 $normalizedVehicleId = normalizeVehicleId($vehicleId);
 $normalizedPackageId = normalizePackageId($packageId);
 
-// Vehicle-specific pricing table
+// Vehicle-specific pricing table - updated for more accurate pricing
 $packagePrices = [
     'sedan' => [
         '4hrs-40km' => 1400,
@@ -194,6 +203,20 @@ if (!isset($packagePrices[$normalizedVehicleId][$normalizedPackageId])) {
 // Get the price for the vehicle and package
 $price = $packagePrices[$normalizedVehicleId][$normalizedPackageId];
 
+// Extra information for enhanced debugging
+$extraInfo = [
+    'allPackages' => array_keys($packagePrices[$normalizedVehicleId]),
+    'matchedPackage' => $normalizedPackageId,
+    'originalRequest' => [
+        'vehicle_id' => $vehicleId,
+        'package_id' => $packageId
+    ],
+    'normalizedValues' => [
+        'vehicle_id' => $normalizedVehicleId,
+        'package_id' => $normalizedPackageId
+    ]
+];
+
 // Return the price as JSON
 echo json_encode([
     'status' => 'success',
@@ -204,6 +227,7 @@ echo json_encode([
     'original_package_id' => $packageId,
     'price' => $price,
     'currency' => 'INR',
-    'source' => 'fallback',
-    'timestamp' => time()
+    'source' => 'local-package-fares',
+    'timestamp' => time(),
+    'debug' => $extraInfo
 ]);

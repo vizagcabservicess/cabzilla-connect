@@ -1,7 +1,8 @@
 
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { normalizeVehicleId, normalizePackageId } from '@/config/requestConfig';
+import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
+import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
 
 interface LocalFareResponse {
   status: string;
@@ -111,12 +112,26 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   console.log(`Using cache key: ${cacheKey} for local package price`);
   
   // Check localStorage first for previously set fares
-  const storedFare = localStorage.getItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`);
+  const specificFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
+  const storedFare = localStorage.getItem(specificFareKey) || localStorage.getItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`);
   
   if (storedFare && !forceRefresh) {
     const parsedFare = parseFloat(storedFare);
     if (!isNaN(parsedFare) && parsedFare > 0) {
       console.log(`Using stored fare from localStorage: ${parsedFare}`);
+      
+      // Verify this fare with the cache entry
+      if (localPackagePriceCache[cacheKey] && localPackagePriceCache[cacheKey].price === parsedFare) {
+        return parsedFare;
+      }
+      
+      // Store in cache for future use
+      localPackagePriceCache[cacheKey] = {
+        price: parsedFare,
+        timestamp: Date.now(),
+        source: 'localStorage'
+      };
+      
       return parsedFare;
     }
   }
@@ -127,95 +142,96 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   
   if (cachedResult && !forceRefresh && now - cachedResult.timestamp < 300000) {
     console.log(`Using cached price: ${cachedResult.price} from ${cachedResult.source}`);
+    
+    // Store in localStorage for consistency
+    localStorage.setItem(specificFareKey, cachedResult.price.toString());
+    
     return cachedResult.price;
   }
   
   try {
-    // Try the admin direct-local-fares.php endpoint first
-    console.log(`Fetching price from API: ${getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`)}`);
+    const apiUrl = getApiUrl('');
     
-    const response = await axios.get<LocalFareResponse>(
-      getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`),
-      {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 8000 // Increased timeout
-      }
-    );
+    // Array of API endpoints to try
+    const endpoints = [
+      // Use local-package-fares.php as primary endpoint (most reliable)
+      `${apiUrl}/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
+      // Admin direct local fares endpoint as backup
+      `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
+      // Alternative endpoints
+      `${apiUrl}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
+    ];
     
-    if (response.data && response.data.status === 'success' && response.data.fares && response.data.fares.length > 0) {
-      const fareData = response.data.fares[0];
-      
+    // Use the improved tryMultipleEndpoints utility
+    const response = await tryMultipleEndpoints<LocalFareResponse>(endpoints, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+      },
+      timeout: 8000 // Reasonable timeout
+    });
+    
+    if (response) {
       let price = 0;
       
-      if (normalizedPackageId.includes('4hrs-40km')) {
-        price = fareData.price4hrs40km;
-      } else if (normalizedPackageId.includes('8hrs-80km')) {
-        price = fareData.price8hrs80km;
-      } else if (normalizedPackageId.includes('10hrs-100km')) {
-        price = fareData.price10hrs100km;
+      // Process response based on endpoint format
+      if (response.price) {
+        // Direct price field from local-package-fares.php
+        price = Number(response.price);
+        console.log(`Retrieved direct price from API: ₹${price}`);
+      } else if (response.fares && Array.isArray(response.fares) && response.fares.length > 0) {
+        // Format from direct-local-fares.php
+        const fareData = response.fares[0];
+        
+        if (normalizedPackageId.includes('4hrs-40km')) {
+          price = Number(fareData.price4hrs40km);
+        } else if (normalizedPackageId.includes('8hrs-80km')) {
+          price = Number(fareData.price8hrs80km);
+        } else if (normalizedPackageId.includes('10hrs-100km')) {
+          price = Number(fareData.price10hrs100km);
+        }
+        
+        console.log(`Retrieved fare from fares array: ₹${price}`);
+      } else if (response.data && response.data.price) {
+        // Format from booking-data.php
+        price = Number(response.data.price);
+        console.log(`Retrieved fare from data.price: ₹${price}`);
       }
       
+      // If we got a valid price, store it and return
       if (price > 0) {
-        console.log(`Retrieved fare directly from database API: ₹${price}`);
-        
         // Store in cache
         localPackagePriceCache[cacheKey] = {
           price,
           timestamp: now,
-          source: 'direct-api'
+          source: 'api'
         };
         
         // Store in localStorage for persistence
+        localStorage.setItem(specificFareKey, price.toString());
         localStorage.setItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
+        
+        // Dispatch fare update event
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: normalizedVehicleId,
+              tripType: 'local',
+              hourlyPackage: normalizedPackageId,
+              calculated: true,
+              fare: price,
+              timestamp: Date.now(),
+              source: 'api'
+            }
+          }));
+        }
         
         return price;
       }
     }
     
-    // If direct API failed, try the local-package-fares.php endpoint
-    console.log(`Trying local-package-fares.php API for ${normalizedVehicleId}, ${normalizedPackageId}`);
-    
-    try {
-      const alternativeResponse = await axios.get<LocalFareResponse>(
-        getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`),
-        {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'X-Force-Refresh': 'true'
-          },
-          timeout: 5000
-        }
-      );
-      
-      if (alternativeResponse.data && alternativeResponse.data.status === 'success' && alternativeResponse.data.price) {
-        const price = Number(alternativeResponse.data.price);
-        
-        if (price > 0) {
-          console.log(`Retrieved fare from alternative API: ₹${price}`);
-          
-          // Store in cache
-          localPackagePriceCache[cacheKey] = {
-            price,
-            timestamp: now,
-            source: 'alternative-api'
-          };
-          
-          // Store in localStorage for persistence
-          localStorage.setItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
-          
-          return price;
-        }
-      }
-    } catch (alternativeError) {
-      console.error('Error fetching from alternative API:', alternativeError);
-    }
-    
-    // If all APIs fail, use fallback pricing
+    // If API fails or returns invalid price, use fallback pricing
     return getFallbackPrice(normalizedVehicleId, normalizedPackageId);
   } catch (error) {
     console.error('Error fetching local package price:', error);
@@ -230,13 +246,30 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
  */
 export const getFallbackPrice = (vehicleId: string, packageId: string): number => {
   // Check if we already have a cached fare first
-  const cacheKey = `selected_fare_${vehicleId}_${packageId}`;
-  const cachedFare = localStorage.getItem(cacheKey);
+  const cacheKey = `${vehicleId}_${packageId}`;
+  const cachedEntry = localPackagePriceCache[cacheKey];
+  
+  if (cachedEntry && cachedEntry.price > 0) {
+    console.log(`Using cached fare from fallback mechanism: ₹${cachedEntry.price}`);
+    return cachedEntry.price;
+  }
+  
+  // Check localStorage
+  const specificFareKey = `fare_local_${vehicleId}_${packageId}`;
+  const cachedFare = localStorage.getItem(specificFareKey) || localStorage.getItem(`selected_fare_${vehicleId}_${packageId}`);
   
   if (cachedFare) {
     const parsedFare = parseFloat(cachedFare);
     if (!isNaN(parsedFare) && parsedFare > 0) {
-      console.log(`Using cached fare from fallback: ₹${parsedFare}`);
+      console.log(`Using cached fare from localStorage fallback: ₹${parsedFare}`);
+      
+      // Store in cache
+      localPackagePriceCache[cacheKey] = {
+        price: parsedFare,
+        timestamp: Date.now(),
+        source: 'localStorage-fallback'
+      };
+      
       return parsedFare;
     }
   }
@@ -269,23 +302,42 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     }
   }
   
+  // Normalize package ID
+  const normalizedPackageId = normalizePackageId(packageId);
+  
   // Get pricing for the matching vehicle type
   const vehiclePricing = fallbackPrices[matchingVehicleType];
   
   // Get the fare for the selected package
-  let fallbackFare = vehiclePricing[packageId] || vehiclePricing['8hrs-80km'] || 3000;
+  let fallbackFare = vehiclePricing[normalizedPackageId] || vehiclePricing['8hrs-80km'] || 3000;
   
   console.log(`Using fallback pricing for ${vehicleId}: ₹${fallbackFare} (matched to ${matchingVehicleType})`);
   
   // Store this fallback price in localStorage
+  localStorage.setItem(specificFareKey, fallbackFare.toString());
   localStorage.setItem(`selected_fare_${vehicleId}_${packageId}`, fallbackFare.toString());
   
   // Also cache it
-  localPackagePriceCache[`${vehicleId}_${packageId}`] = {
+  localPackagePriceCache[cacheKey] = {
     price: fallbackFare,
     timestamp: Date.now(),
     source: 'fallback-pricing'
   };
+  
+  // Dispatch fare update event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        cabId: vehicleId,
+        tripType: 'local',
+        hourlyPackage: packageId,
+        calculated: true,
+        fare: fallbackFare,
+        timestamp: Date.now(),
+        source: 'fallback'
+      }
+    }));
+  }
   
   return fallbackFare;
 };
@@ -326,21 +378,36 @@ export const fetchAndCacheLocalFares = async (silent: boolean = false): Promise<
   console.log('Finished pre-fetching all local package fares');
   
   // Dispatch an event to notify other components that fares have been updated
-  window.dispatchEvent(new CustomEvent('local-fares-updated', {
-    detail: {
-      timestamp: Date.now(),
-      source: 'fetchAndCacheLocalFares'
-    }
-  }));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('local-fares-updated', {
+      detail: {
+        timestamp: Date.now(),
+        source: 'fetchAndCacheLocalFares'
+      }
+    }));
+  }
 };
 
 // Export the cache for external use
 export const clearLocalPackagePriceCache = () => {
   localPackagePriceCache = {};
   console.log('Cleared local package price cache');
+  
+  // Also dispatch an event to notify components
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('local-fares-cache-cleared', {
+      detail: {
+        timestamp: Date.now()
+      }
+    }));
+  }
 };
 
 // Initialize by pre-fetching fares in the background on module load
-setTimeout(() => {
-  fetchAndCacheLocalFares(true).catch(console.error);
-}, 500);
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      fetchAndCacheLocalFares(true).catch(console.error);
+    }, 500);
+  });
+}
