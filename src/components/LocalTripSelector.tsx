@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -161,7 +160,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           }
         }
         
-        // Clear any pending fare calculations
+        // Clear any pending fare calculations - safely check if property exists first
         if (window.pendingFareRequests) {
           window.pendingFareRequests = {};
         }
@@ -316,3 +315,8 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     </Card>
   );
 }
+
+const formatPrice = (price?: number) => {
+  if (!price || price <= 0) return "Price unavailable";
+  return `₹${price.toLocaleString('en-IN')}`;
+};
