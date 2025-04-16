@@ -46,6 +46,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     };
   }, [selectedCabId]);
 
+  // This effect handles package selection changes and fare updates
   useEffect(() => {
     // Don't do anything if we don't have a selected cab
     if (!selectedCabId) return;
@@ -89,315 +90,228 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         }
       }
       
-      // Set a timestamp for this fetch attempt
+      // If no valid cached fare, attempt to fetch from API
       const currentTime = Date.now();
       setLastFetchAttempt(currentTime);
       
-      // Create an array of fetch attempts to try in order - EXACTLY MATCH CabList ORDER
-      const fetchAttempts = [
-        // First try: direct-booking-data.php - primary API
-        async () => {
-          try {
-            console.log(`BookingSummaryHelper: Fetching fare from primary API for ${normalizedCabId} - ${hourlyPackage}`);
-            const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
-            
-            const response = await axios.get(apiUrl, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              },
-              timeout: 8000
-            });
-            
-            if (response.data && response.data.status === 'success' && response.data.price) {
-              const price = Number(response.data.price);
-              if (price > 0) {
-                console.log(`BookingSummaryHelper: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
-                
-                // Store this as the selected fare for consistency
-                localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
-                localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
-                
-                return { price, source: 'direct-booking-data' };
-              }
-            } else if (response.data && response.data.data) {
-              // Handle alternative response format
-              const data = response.data.data;
-              let price = 0;
-              
-              if (hourlyPackage.includes('4hrs-40km') && data.price4hrs40km) {
-                price = Number(data.price4hrs40km);
-              } else if (hourlyPackage.includes('8hrs-80km') && data.price8hrs80km) {
-                price = Number(data.price8hrs80km);
-              } else if (hourlyPackage.includes('10hrs-100km') && data.price10hrs100km) {
-                price = Number(data.price10hrs100km);
-              }
-              
-              if (price > 0) {
-                console.log(`BookingSummaryHelper: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
-                
-                // Store this as the selected fare for consistency
-                localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
-                localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
-                
-                return { price, source: 'direct-booking-data-alternate' };
-              }
-            }
-            
-            return null;
-          } catch (error) {
-            console.error('Error fetching from primary API:', error);
-            return null;
-          }
-        },
-        
-        // Second try: local-package-fares.php
-        async () => {
-          try {
-            console.log(`BookingSummaryHelper: Trying local-package-fares API for ${normalizedCabId} - ${hourlyPackage}`);
-            const apiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
-            
-            const response = await axios.get(apiUrl, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              },
-              timeout: 5000
-            });
-            
-            if (response.data && response.data.status === 'success' && response.data.price) {
-              const price = Number(response.data.price);
-              if (price > 0) {
-                console.log(`BookingSummaryHelper: Retrieved fare from local-package-fares API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
-                
-                // Store this as the selected fare for consistency
-                localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
-                localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
-                
-                return { price, source: 'local-package-fares' };
-              }
-            }
-            
-            return null;
-          } catch (error) {
-            console.error('Error fetching from local-package-fares:', error);
-            return null;
-          }
-        },
-        
-        // Third try: direct-local-fares.php 
-        async () => {
-          try {
-            console.log(`BookingSummaryHelper: Trying fallback API for ${normalizedCabId}`);
-            const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
-            
-            const response = await axios.get(apiUrl, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              },
-              timeout: 5000
-            });
-            
-            if (response.data && response.data.fares) {
-              const fareData = response.data.fares[normalizedCabId];
-              
-              // Extract the right price for the selected package
-              let price = 0;
-              if (hourlyPackage.includes('4hrs-40km')) {
-                price = Number(fareData?.price4hrs40km || 0);
-              } else if (hourlyPackage.includes('8hrs-80km')) {
-                price = Number(fareData?.price8hrs80km || 0);
-              } else if (hourlyPackage.includes('10hrs-100km')) {
-                price = Number(fareData?.price10hrs100km || 0);
-              }
-              
-              if (price > 0) {
-                console.log(`BookingSummaryHelper: Retrieved fare from fallback endpoint: ₹${price}`);
-                
-                // Store this as the selected fare for consistency
-                localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
-                localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
-                
-                return { price, source: 'direct-local-fares' };
-              }
-            }
-            
-            return null;
-          } catch (error) {
-            console.error('Error fetching from fallback endpoint:', error);
-            return null;
-          }
-        },
-        
-        // Last resort: use direct calculation - IDENTICAL to the one in CabList
-        async () => {
-          console.log(`BookingSummaryHelper: Using direct calculation for ${normalizedCabId} - ${hourlyPackage}`);
+      const fetchFare = async () => {
+        try {
+          console.log(`BookingSummaryHelper: Fetching fare from primary API for ${normalizedCabId} - ${hourlyPackage}`);
+          const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
           
-          // Base prices for different vehicle types (IDENTICAL to CabList's fallback)
-          const basePrices: Record<string, Record<string, number>> = {
-            'sedan': {
-              '4hrs-40km': 2400,
-              '8hrs-80km': 3000,
-              '10hrs-100km': 3500
+          const response = await axios.get(apiUrl, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
             },
-            'ertiga': {
-              '4hrs-40km': 2800,
-              '8hrs-80km': 3500,
-              '10hrs-100km': 4000
-            },
-            'innova_crysta': {
-              '4hrs-40km': 3200,
-              '8hrs-80km': 4000,
-              '10hrs-100km': 4500
-            },
-            'innova_hycross': {
-              '4hrs-40km': 3600,
-              '8hrs-80km': 4500,
-              '10hrs-100km': 5000
-            },
-            'dzire_cng': {
-              '4hrs-40km': 2400,
-              '8hrs-80km': 3000,
-              '10hrs-100km': 3500
-            },
-            'tempo_traveller': {
-              '4hrs-40km': 4000,
-              '8hrs-80km': 5500,
-              '10hrs-100km': 7000
-            },
-            'mpv': {
-              '4hrs-40km': 3600,
-              '8hrs-80km': 4500,
-              '10hrs-100km': 5000
-            },
-            'etios': {
-              '4hrs-40km': 2400,
-              '8hrs-80km': 3000,
-              '10hrs-100km': 3500
-            }
-          };
+            timeout: 8000
+          });
           
-          // Determine vehicle category
-          let vehicleCategory = normalizedCabId;
-          
-          // Fallback to matched category if not found directly
-          if (!basePrices[vehicleCategory]) {
-            if (vehicleCategory.includes('ertiga')) {
-              vehicleCategory = 'ertiga';
-            } else if (vehicleCategory.includes('innova')) {
-              if (vehicleCategory.includes('hycross') || vehicleCategory.includes('mpv')) {
-                vehicleCategory = 'innova_hycross';
-              } else {
-                vehicleCategory = 'innova_crysta';
+          if (response.data && response.data.status === 'success' && response.data.price) {
+            const price = Number(response.data.price);
+            if (price > 0) {
+              console.log(`BookingSummaryHelper: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+              
+              setFetchedFare(price);
+              setFareSource('direct-booking-data');
+              
+              // Store the fare in localStorage for future reference
+              localStorage.setItem(selectedFareKey, price.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+              
+              // If current total price is significantly different from fetched price, dispatch an update
+              if (Math.abs(price - totalPrice) > 10) {
+                dispatchFareUpdate(normalizedCabId, price, hourlyPackage, 'direct-booking-data');
               }
-            } else if (vehicleCategory.includes('cng') || vehicleCategory.includes('dzire')) {
-              vehicleCategory = 'dzire_cng';
-            } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
-              vehicleCategory = 'tempo_traveller';
-            } else if (vehicleCategory.includes('mpv')) {
-              vehicleCategory = 'innova_hycross'; // Treat MPV as Innova Hycross
+              
+              return;
+            }
+          } else if (response.data && response.data.data) {
+            // Handle alternative response format
+            const data = response.data.data;
+            let price = 0;
+            
+            if (hourlyPackage.includes('4hrs-40km') && data.price4hrs40km) {
+              price = Number(data.price4hrs40km);
+            } else if (hourlyPackage.includes('8hrs-80km') && data.price8hrs80km) {
+              price = Number(data.price8hrs80km);
+            } else if (hourlyPackage.includes('10hrs-100km') && data.price10hrs100km) {
+              price = Number(data.price10hrs100km);
+            }
+            
+            if (price > 0) {
+              console.log(`BookingSummaryHelper: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+              
+              setFetchedFare(price);
+              setFareSource('direct-booking-data-alternate');
+              
+              // Store the fare in localStorage for future reference
+              localStorage.setItem(selectedFareKey, price.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+              
+              // If current total price is significantly different from fetched price, dispatch an update
+              if (Math.abs(price - totalPrice) > 10) {
+                dispatchFareUpdate(normalizedCabId, price, hourlyPackage, 'direct-booking-data-alternate');
+              }
+              
+              return;
+            }
+          }
+          
+          // Try local-package-fares.php as backup
+          console.log(`BookingSummaryHelper: Trying local-package-fares API for ${normalizedCabId} - ${hourlyPackage}`);
+          const backupApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
+          
+          const backupResponse = await axios.get(backupApiUrl, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 5000
+          });
+          
+          if (backupResponse.data && backupResponse.data.status === 'success' && backupResponse.data.price) {
+            const price = Number(backupResponse.data.price);
+            if (price > 0) {
+              console.log(`BookingSummaryHelper: Retrieved fare from local-package-fares API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+              
+              setFetchedFare(price);
+              setFareSource('local-package-fares');
+              
+              // Store the fare in localStorage for future reference
+              localStorage.setItem(selectedFareKey, price.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+              
+              // If current total price is significantly different from fetched price, dispatch an update
+              if (Math.abs(price - totalPrice) > 10) {
+                dispatchFareUpdate(normalizedCabId, price, hourlyPackage, 'local-package-fares');
+              }
+              
+              return;
+            }
+          }
+          
+          // Try fallback to direct-local-fares.php as last resort
+          console.log(`BookingSummaryHelper: Trying fallback API for ${normalizedCabId}`);
+          const fallbackApiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+          
+          const fallbackResponse = await axios.get(fallbackApiUrl, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 5000
+          });
+          
+          if (fallbackResponse.data && fallbackResponse.data.fares) {
+            // Handle API response format (array or object)
+            let fareData;
+            if (Array.isArray(fallbackResponse.data.fares)) {
+              // Find the matching vehicle in the array
+              fareData = fallbackResponse.data.fares.find((fare: any) => 
+                fare.vehicleId?.toLowerCase() === normalizedCabId || 
+                fare.vehicle_id?.toLowerCase() === normalizedCabId
+              );
             } else {
-              vehicleCategory = 'sedan'; // default
+              // Direct object mapping by vehicle ID
+              fareData = fallbackResponse.data.fares[normalizedCabId];
+            }
+            
+            if (fareData) {
+              let price = 0;
+              
+              if (hourlyPackage.includes('4hrs-40km') && fareData.price4hrs40km) {
+                price = Number(fareData.price4hrs40km);
+              } else if (hourlyPackage.includes('8hrs-80km') && fareData.price8hrs80km) {
+                price = Number(fareData.price8hrs80km);
+              } else if (hourlyPackage.includes('10hrs-100km') && fareData.price10hrs100km) {
+                price = Number(fareData.price10hrs100km);
+              }
+              
+              if (price > 0) {
+                console.log(`BookingSummaryHelper: Retrieved fare from fallback API: ₹${price} for ${normalizedCabId} - ${hourlyPackage}`);
+                
+                setFetchedFare(price);
+                setFareSource('direct-local-fares');
+                
+                // Store the fare in localStorage for future reference
+                localStorage.setItem(selectedFareKey, price.toString());
+                localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+                
+                // If current total price is significantly different from fetched price, dispatch an update
+                if (Math.abs(price - totalPrice) > 10) {
+                  dispatchFareUpdate(normalizedCabId, price, hourlyPackage, 'direct-local-fares');
+                }
+                
+                return;
+              }
             }
           }
           
-          // Get price for the package
-          let packageKey = '';
-          if (hourlyPackage.includes('4hrs-40km')) {
-            packageKey = '4hrs-40km';
-          } else if (hourlyPackage.includes('8hrs-80km')) {
-            packageKey = '8hrs-80km';
-          } else if (hourlyPackage.includes('10hrs-100km')) {
-            packageKey = '10hrs-100km';
-          }
-          
-          if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
-            const price = basePrices[vehicleCategory][packageKey];
-            console.log(`BookingSummaryHelper: Calculated fare using fallback method: ₹${price}`);
+          // If all API calls fail, use fallback calculation
+          const calculatedPrice = calculateDynamicPriceForVehicle(normalizedCabId, hourlyPackage);
+          if (calculatedPrice > 0) {
+            console.log(`BookingSummaryHelper: Using fallback calculation: ₹${calculatedPrice} for ${normalizedCabId} - ${hourlyPackage}`);
             
-            // Store this as the selected fare for consistency
-            localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
-            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+            setFetchedFare(calculatedPrice);
+            setFareSource('fallback-calculation');
             
-            return { price, source: 'direct-calculation' };
+            // Store the calculated fare in localStorage
+            localStorage.setItem(selectedFareKey, calculatedPrice.toString());
+            localStorage.setItem(`fare_local_${normalizedCabId}`, calculatedPrice.toString());
+            
+            // If current total price is significantly different from calculated price, dispatch an update
+            if (Math.abs(calculatedPrice - totalPrice) > 10) {
+              dispatchFareUpdate(normalizedCabId, calculatedPrice, hourlyPackage, 'fallback-calculation');
+            }
           }
+        } catch (error) {
+          console.error('BookingSummaryHelper: Error fetching fare:', error);
           
-          return null;
-        }
-      ];
-      
-      // Execute the fetch attempts
-      const fetchFareFromDatabase = async () => {
-        // Try each fetch method in order until one succeeds (EXACTLY matching CabList order)
-        for (const attempt of fetchAttempts) {
-          const result = await attempt();
-          if (result && result.price > 0) {
-            return result;
+          // On error, try the fallback calculation
+          const calculatedPrice = calculateDynamicPriceForVehicle(normalizedCabId, hourlyPackage);
+          if (calculatedPrice > 0) {
+            console.log(`BookingSummaryHelper: Using fallback calculation after error: ₹${calculatedPrice}`);
+            
+            setFetchedFare(calculatedPrice);
+            setFareSource('error-fallback-calculation');
+            
+            // Store the calculated fare in localStorage
+            localStorage.setItem(selectedFareKey, calculatedPrice.toString());
+            localStorage.setItem(`fare_local_${normalizedCabId}`, calculatedPrice.toString());
+            
+            // If current total price is significantly different from calculated price, dispatch an update
+            if (Math.abs(calculatedPrice - totalPrice) > 10) {
+              dispatchFareUpdate(normalizedCabId, calculatedPrice, hourlyPackage, 'error-fallback-calculation');
+            }
           }
         }
-        return null;
       };
       
-      // Trigger the fetch
-      fetchFareFromDatabase().then(result => {
-        if (result && result.price > 0) {
-          setFetchedFare(result.price);
-          setFareSource(result.source);
-          
-          // Dispatch a global fare update event to synchronize all components
-          window.dispatchEvent(new CustomEvent('global-fare-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: 'local',
-              packageId: hourlyPackage,
-              fare: result.price,
-              source: `direct-api-${result.source}`,
-              timestamp: currentTime
-            }
-          }));
-          
-          // Store in localStorage for persistence
-          try {
-            // Regular booking fare cache
-            localStorage.setItem(`fare_${tripType}_${normalizedCabId}`, result.price.toString());
-            
-            // Also store as selected fare for that specific package
-            localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, result.price.toString());
-          } catch (error) {
-            console.error('Error storing fare in localStorage:', error);
-          }
-          
-          // If current total price is significantly different from fetched price, dispatch an update
-          if (Math.abs(result.price - totalPrice) > 10) {
-            console.log(`BookingSummaryHelper: Database price (${result.price}) differs from component price (${totalPrice}), updating booking summary`);
-            
-            window.dispatchEvent(new CustomEvent('booking-summary-update', {
-              detail: {
-                cabId: normalizedCabId,
-                tripType: 'local',
-                packageId: hourlyPackage,
-                fare: result.price,
-                source: result.source,
-                timestamp: currentTime
-              }
-            }));
-            
-            // Additional alert to make the price change more noticeable
-            toast.info(`Updated price for ${normalizedCabId.replace(/_/g, ' ')}: ₹${result.price}`, {
-              duration: 3000,
-              id: `price-update-${normalizedCabId}`
-            });
-          }
-        } else {
-          console.log(`BookingSummaryHelper: No fare could be fetched for ${normalizedCabId} with package ${hourlyPackage}`);
-        }
-      });
+      fetchFare();
     }
   }, [tripType, selectedCabId, hourlyPackage, retryCount, totalPrice]);
+  
+  // Listen for hourly package changes
+  useEffect(() => {
+    const handleHourlyPackageSelected = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.packageId && selectedCabId) {
+        console.log(`BookingSummaryHelper: Detected hourly package change to ${customEvent.detail.packageId}`);
+        // Trigger a retry to fetch new price for the updated package
+        setRetryCount(prev => prev + 1);
+      }
+    };
+    
+    window.addEventListener('hourly-package-selected', handleHourlyPackageSelected as EventListener);
+    
+    return () => {
+      window.removeEventListener('hourly-package-selected', handleHourlyPackageSelected as EventListener);
+    };
+  }, [selectedCabId]);
   
   // Listen for changes to the total price and retrigger fare check if needed
   useEffect(() => {
@@ -412,6 +326,144 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       }
     }
   }, [totalPrice, fetchedFare, selectedCabId, tripType, hourlyPackage, lastFetchAttempt]);
+  
+  // Helper function to dispatch fare update events
+  const dispatchFareUpdate = (cabId: string, fare: number, packageId: string, source: string) => {
+    console.log(`BookingSummaryHelper: Database price (${fare}) differs from component price (${totalPrice}), updating booking summary`);
+    
+    window.dispatchEvent(new CustomEvent('booking-summary-update', {
+      detail: {
+        cabId: cabId,
+        tripType: 'local',
+        packageId: packageId,
+        fare: fare,
+        source: source,
+        timestamp: Date.now()
+      }
+    }));
+    
+    // Also dispatch a global fare update
+    window.dispatchEvent(new CustomEvent('global-fare-update', {
+      detail: {
+        cabId: cabId,
+        tripType: 'local',
+        packageId: packageId,
+        fare: fare,
+        source: `booking-summary-${source}`,
+        timestamp: Date.now() + 1
+      }
+    }));
+    
+    // Additional alert to make the price change more noticeable
+    toast.info(`Updated price for ${cabId.replace(/_/g, ' ')}: ₹${fare}`, {
+      duration: 3000,
+      id: `price-update-${cabId}`
+    });
+  };
+  
+  // Helper function to calculate dynamic price when not in database
+  const calculateDynamicPriceForVehicle = (vehicleId: string, packageId: string): number => {
+    // Base prices for different vehicle types
+    const basePrices: Record<string, Record<string, number>> = {
+      'sedan': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3500
+      },
+      'ertiga': {
+        '4hrs-40km': 2800,
+        '8hrs-80km': 3500,
+        '10hrs-100km': 4000
+      },
+      'innova_crysta': {
+        '4hrs-40km': 3200,
+        '8hrs-80km': 4000,
+        '10hrs-100km': 4500
+      },
+      'innova_hycross': {
+        '4hrs-40km': 3600,
+        '8hrs-80km': 4500,
+        '10hrs-100km': 5000
+      },
+      'dzire_cng': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3500
+      },
+      'tempo_traveller': {
+        '4hrs-40km': 4000,
+        '8hrs-80km': 5500,
+        '10hrs-100km': 7000
+      },
+      'mpv': {
+        '4hrs-40km': 3600,
+        '8hrs-80km': 4500,
+        '10hrs-100km': 5000
+      },
+      'etios': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3500
+      },
+      'amaze': {
+        '4hrs-40km': 2400,
+        '8hrs-80km': 3000,
+        '10hrs-100km': 3500
+      },
+      'bus': {
+        '4hrs-40km': 4000,
+        '8hrs-80km': 7000,
+        '10hrs-100km': 9000
+      }
+    };
+    
+    // Determine vehicle category
+    let vehicleCategory = vehicleId;
+    
+    // Fallback to matched category if not found directly
+    if (!basePrices[vehicleCategory]) {
+      if (vehicleCategory.includes('ertiga')) {
+        vehicleCategory = 'ertiga';
+      } else if (vehicleCategory.includes('innova')) {
+        if (vehicleCategory.includes('hycross') || vehicleCategory.includes('mpv')) {
+          vehicleCategory = 'innova_hycross';
+        } else {
+          vehicleCategory = 'innova_crysta';
+        }
+      } else if (vehicleCategory.includes('cng') || vehicleCategory.includes('dzire')) {
+        vehicleCategory = 'dzire_cng';
+      } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
+        vehicleCategory = 'tempo_traveller';
+      } else if (vehicleCategory.includes('mpv')) {
+        vehicleCategory = 'mpv';
+      } else if (vehicleCategory.includes('urbania')) {
+        vehicleCategory = 'bus';
+      } else if (vehicleCategory.includes('amaze')) {
+        vehicleCategory = 'amaze';
+      } else if (vehicleCategory.includes('etios') || vehicleCategory.includes('toyota')) {
+        vehicleCategory = 'etios';
+      } else {
+        vehicleCategory = 'sedan'; // default
+      }
+    }
+    
+    // Get price for the package
+    let packageKey = '';
+    if (packageId.includes('4hrs-40km')) {
+      packageKey = '4hrs-40km';
+    } else if (packageId.includes('8hrs-80km')) {
+      packageKey = '8hrs-80km';
+    } else if (packageId.includes('10hrs-100km')) {
+      packageKey = '10hrs-100km';
+    }
+    
+    if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
+      return basePrices[vehicleCategory][packageKey];
+    }
+    
+    // Default fallback
+    return 0;
+  };
   
   // This component doesn't render anything visible
   return null;

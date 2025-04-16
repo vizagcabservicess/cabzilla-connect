@@ -278,14 +278,17 @@ const CabsPage = () => {
         if (selectedCab && customEvent.detail.cabId === selectedCab.id.toLowerCase().replace(/\s+/g, '_')) {
           console.log(`CabsPage: Received fare update for selected cab: ${customEvent.detail.fare} from ${customEvent.detail.source || 'unknown'}`);
           
-          setTotalPrice(customEvent.detail.fare);
-          
-          // Show a notification to make the price change more visible
-          if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
-            sonnerToast.info(`Price updated: ₹${customEvent.detail.fare}`, {
-              id: `price-update-${customEvent.detail.cabId}`,
-              duration: 3000
-            });
+          // Only update if the fare is significantly different to avoid unnecessary re-renders
+          if (Math.abs(totalPrice - customEvent.detail.fare) > 5) {
+            setTotalPrice(customEvent.detail.fare);
+            
+            // Show a notification to make the price change more visible
+            if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
+              sonnerToast.info(`Price updated: ₹${customEvent.detail.fare}`, {
+                id: `price-update-${customEvent.detail.cabId}`,
+                duration: 3000
+              });
+            }
           }
         }
       }
@@ -297,27 +300,51 @@ const CabsPage = () => {
         if (selectedCab && customEvent.detail.cabId === selectedCab.id.toLowerCase().replace(/\s+/g, '_')) {
           console.log(`CabsPage: Received database fare update for selected cab: ${customEvent.detail.fare} from ${customEvent.detail.source || 'unknown'}`);
           
-          setTotalPrice(customEvent.detail.fare);
-          
-          // Show a notification for significant price changes
-          if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
-            sonnerToast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
-              id: `price-update-${customEvent.detail.cabId}`,
-              duration: 3000
-            });
+          // Only update if the fare is significantly different
+          if (Math.abs(totalPrice - customEvent.detail.fare) > 5) {
+            setTotalPrice(customEvent.detail.fare);
+            
+            // Save to localStorage to ensure consistency across components
+            if (tripType === 'local' && hourlyPackage) {
+              const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
+              localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, customEvent.detail.fare.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, customEvent.detail.fare.toString());
+            }
+            
+            // Show a notification for significant price changes
+            if (Math.abs(totalPrice - customEvent.detail.fare) > 100) {
+              sonnerToast.info(`Price updated from database: ₹${customEvent.detail.fare}`, {
+                id: `price-update-${customEvent.detail.cabId}`,
+                duration: 3000
+              });
+            }
           }
+        }
+      }
+    };
+    
+    const handleHourlyPackageSelected = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.packageId) {
+        console.log(`CabsPage: Detected hourly package change to ${customEvent.detail.packageId}`);
+        
+        // Reset total price to trigger a recalculation
+        if (selectedCab) {
+          setTotalPrice(0);
         }
       }
     };
     
     window.addEventListener('global-fare-update', handleFareUpdate);
     window.addEventListener('booking-summary-update', handleDatabaseFareUpdate);
+    window.addEventListener('hourly-package-selected', handleHourlyPackageSelected as EventListener);
     
     return () => {
       window.removeEventListener('global-fare-update', handleFareUpdate);
       window.removeEventListener('booking-summary-update', handleDatabaseFareUpdate);
+      window.removeEventListener('hourly-package-selected', handleHourlyPackageSelected as EventListener);
     };
-  }, [selectedCab, totalPrice]);
+  }, [selectedCab, totalPrice, tripType, hourlyPackage]);
 
   useEffect(() => {
     if (selectedCab && distance > 0) {
