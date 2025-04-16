@@ -104,13 +104,19 @@ const validateApiUrl = (url: string): boolean => {
   }
 };
 
-// Function to fetch local package prices directly from database via API
-export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
+/**
+ * Fetches the fare for a local package from the API
+ * @param packageId The package ID (e.g., '8hrs-80km')
+ * @param vehicleId The vehicle ID (e.g., 'sedan')
+ * @param forceRefresh Whether to bypass the cache and force a refresh from the API
+ * @returns The fare price
+ */
+export const getLocalPackagePrice = async (packageId: string, vehicleId: string, forceRefresh: boolean = false): Promise<number> => {
   try {
-    console.log(`Getting local package price for ${vehicleType}, package: ${packageId}, forceRefresh: ${forceRefresh}`);
+    console.log(`Getting local package price for ${vehicleId}, package: ${packageId}, forceRefresh: ${forceRefresh}`);
     
     // Normalize parameters
-    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const normalizedVehicleType = vehicleId.toLowerCase().replace(/\s+/g, '_');
     
     // Fix: Make sure we format "8hr-80km" as "8hrs-80km"
     let normalizedPackageId = packageId;
@@ -370,7 +376,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // All API endpoints failed or returned invalid data, use dynamic calculation
-    console.error(`All API endpoints failed for ${vehicleType}, ${packageId}. Last error:`, lastError);
+    console.error(`All API endpoints failed for ${vehicleId}, ${packageId}. Last error:`, lastError);
     
     // Use dynamic calculation
     const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
@@ -409,14 +415,14 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     
     return dynamicPrice;
   } catch (error) {
-    console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
+    console.error(`Error getting local package price for ${vehicleId}, ${packageId}:`, error);
     
     // Last resort: calculate a dynamic price
-    const dynamicPrice = calculateDynamicPrice(vehicleType, packageId);
-    console.log(`Using dynamically calculated fallback price for ${vehicleType}, ${packageId}: ${dynamicPrice}`);
+    const dynamicPrice = calculateDynamicPrice(vehicleId, packageId);
+    console.log(`Using dynamically calculated fallback price for ${vehicleId}, ${packageId}: ${dynamicPrice}`);
     
     // Store in localStorage for better cross-component consistency
-    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const normalizedVehicleType = vehicleId.toLowerCase().replace(/\s+/g, '_');
     const fareKey = `fare_local_${normalizedVehicleType}`;
     localStorage.setItem(fareKey, dynamicPrice.toString());
     console.log(`Stored fallback fare in localStorage: ${fareKey} = ${dynamicPrice}`);
@@ -455,7 +461,7 @@ export async function syncLocalFaresWithDatabase(forceRefresh: boolean = false):
   try {
     console.log('Forcing sync of local package fares with database...');
     
-    const apiUrl = getApiUrl() || '';
+    const apiUrl = getApiUrl('') || '';
     const syncEndpoint = `${apiUrl}/api/admin/sync-local-fares.php`;
     
     const response = await axios.get(syncEndpoint, {

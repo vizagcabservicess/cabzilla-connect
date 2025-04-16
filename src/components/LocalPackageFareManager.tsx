@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -110,7 +111,7 @@ export function LocalPackageFareManager() {
           window.localPackagePriceCache = {};
         }
         
-        fetchAndCacheLocalFares();
+        fetchAndCacheLocalFares(true); // Pass true for silent parameter
       } else {
         toast.error('Failed to sync local package fares');
       }
@@ -126,7 +127,7 @@ export function LocalPackageFareManager() {
     setSaving(true);
     
     try {
-      const apiUrl = getApiUrl();
+      const apiUrl = getApiUrl('');
       const editedFares = fares.filter(fare => fare.isEdited);
       
       if (editedFares.length === 0) {
