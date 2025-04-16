@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
@@ -58,8 +57,8 @@ const vehicleMultipliers: Record<string, number> = {
   tempo: 2.0,
   luxury: 1.7,
   suv: 1.25,
-  mpv: 1.4,
-  dzire_cng: 1.0, // Same as sedan
+  mpv: 1.6,
+  dzire_cng: 1.0,
   dzire: 1.0,
   cng: 1.0
 };
@@ -78,8 +77,12 @@ const calculateDynamicPrice = (vehicleType: string, packageId: string): number =
     .replace('crysta', 'crysta')
     .replace('hycross', 'hycross');
   
+  // Check for MPV specifically (should have the same pricing as Innova Hycross)
+  const vehicleKey = normalizedVehicleType === 'mpv' ? 'innova_hycross' : normalizedVehicleType;
+  
   // Determine the multiplier based on vehicle type (default to 1.0 if not found)
-  const multiplier = vehicleMultipliers[normalizedVehicleType] || 1.0;
+  const multiplier = vehicleMultipliers[vehicleKey] || 
+                    (vehicleKey.includes('hycross') ? vehicleMultipliers.innova_hycross : 1.6);
   
   // Base prices for different packages
   const baseValues = {
@@ -92,10 +95,7 @@ const calculateDynamicPrice = (vehicleType: string, packageId: string): number =
   let normalizedPackageId = packageId;
   
   try {
-    normalizedPackageId = packageId
-      .replace(/\d+hr-/, match => match.replace('hr-', 'hrs-'))
-      .replace(/\d+hr_/, match => match.replace('hr_', 'hrs-'))
-      .replace('_', '-');
+    normalizedPackageId = normalizePackageId(packageId);
   } catch (e) {
     console.error('Error normalizing packageId', packageId, e);
     normalizedPackageId = '8hrs-80km'; // Default to 8hrs if normalization fails
@@ -128,12 +128,60 @@ const validateApiUrl = (url: string): boolean => {
 export const normalizePackageId = (packageId: string): string => {
   if (!packageId) return '8hrs-80km';
 
-  // Handle common variations
-  return packageId
-    .toLowerCase()
-    .replace(/\d+hr-/, match => match.replace('hr-', 'hrs-'))
-    .replace(/\d+hr_/, match => match.replace('hr_', 'hrs-'))
-    .replace('_', '-');
+  // Convert to lowercase first
+  const lowerPackageId = packageId.toLowerCase();
+  
+  // Handle common variations more comprehensively
+  let normalized = lowerPackageId
+    .replace(/_/g, '-')                // Replace all underscores with hyphens
+    .replace(/(\d+)hr(?!s)/, '$1hrs')  // Change "hr" to "hrs" if it follows a number and isn't already "hrs"
+    .replace(/(\d+)hour/, '$1hrs')     // Change "hour" to "hrs"
+    .replace(/(\d+)h-/, '$1hrs-')      // Change "h-" to "hrs-"
+    .replace(/(\d+)h_/, '$1hrs-');     // Change "h_" to "hrs-"
+  
+  // Map specific common package IDs
+  const packageMap: Record<string, string> = {
+    '4hrs': '4hrs-40km',
+    '4hour': '4hrs-40km',
+    '4hr': '4hrs-40km',
+    '4hr-40': '4hrs-40km',
+    '4hrs-40': '4hrs-40km',
+    '4hours': '4hrs-40km',
+    '8hrs': '8hrs-80km',
+    '8hour': '8hrs-80km',
+    '8hr': '8hrs-80km',
+    '8hr-80': '8hrs-80km',
+    '8hrs-80': '8hrs-80km',
+    '8hours': '8hrs-80km',
+    '10hrs': '10hrs-100km',
+    '10hour': '10hrs-100km',
+    '10hr': '10hrs-100km',
+    '10hr-100': '10hrs-100km',
+    '10hrs-100': '10hrs-100km',
+    '10hours': '10hrs-100km'
+  };
+  
+  // Check if this is a known package ID format
+  if (packageMap[normalized]) {
+    return packageMap[normalized];
+  }
+  
+  // If it already contains the standard format, return it
+  if (normalized.match(/^\d+hrs-\d+km$/)) {
+    return normalized;
+  }
+  
+  // For cases that only have the hour part
+  if (normalized === '4hrs' || normalized.startsWith('4hrs-')) {
+    return '4hrs-40km';
+  } else if (normalized === '8hrs' || normalized.startsWith('8hrs-')) {
+    return '8hrs-80km';
+  } else if (normalized === '10hrs' || normalized.startsWith('10hrs-')) {
+    return '10hrs-100km';
+  }
+  
+  // If all else fails, return the normalized version or default to 8hrs
+  return normalized || '8hrs-80km';
 };
 
 // Normalize vehicle ID for consistency
@@ -141,9 +189,48 @@ export const normalizeVehicleId = (vehicleId: string): string => {
   if (!vehicleId) return 'sedan';
   
   // Convert to lowercase and replace spaces with underscores
-  return vehicleId.toLowerCase()
+  let normalized = vehicleId.toLowerCase()
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
+  
+  // Map common vehicle types
+  const vehicleMap: Record<string, string> = {
+    'hycross': 'innova_hycross',
+    'innovahycross': 'innova_hycross',
+    'innovahicross': 'innova_hycross',
+    'crysta': 'innova_crysta',
+    'innovacrysta': 'innova_crysta',
+    'tempo': 'tempo_traveller',
+    'traveller': 'tempo_traveller',
+    'traveler': 'tempo_traveller',
+    'swift': 'sedan',
+    'dzireczng': 'dzire_cng',
+    'cng': 'dzire_cng'
+  };
+  
+  // Check for specific mappings
+  if (vehicleMap[normalized]) {
+    return vehicleMap[normalized];
+  }
+  
+  // MPV should be treated as a separate category, but similar to Innova Hycross
+  if (normalized === 'mpv') {
+    return 'mpv';
+  }
+  
+  // Special handling for Innova variants
+  if (normalized.includes('innova')) {
+    if (normalized.includes('hycross') || normalized.includes('hicross')) {
+      return 'innova_hycross';
+    } else if (normalized.includes('crysta') || normalized.includes('crysta')) {
+      return 'innova_crysta';
+    } else {
+      // Default Innova is treated as Crysta
+      return 'innova_crysta';
+    }
+  }
+  
+  return normalized;
 };
 
 /**

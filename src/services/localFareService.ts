@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
@@ -78,7 +77,7 @@ const fallbackPrices: Record<string, Record<string, number>> = {
     '8hrs-80km': 7000,
     '10hrs-100km': 8500
   },
-  'mpv': { // Explicit pricing for MPV that matches Innova Hycross
+  'mpv': { // Explicit pricing for MPV that exactly matches Innova Hycross
     '4hrs-40km': 2600,
     '8hrs-80km': 4200,
     '10hrs-100km': 5000
@@ -117,6 +116,13 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   const normalizedVehicleId = normalizeVehicleId(vehicleId);
   
   console.log(`Getting local package price for ${normalizedVehicleId}, package: ${normalizedPackageId}, forceRefresh: ${forceRefresh} (original: ${vehicleId})`);
+  
+  // Special handling for MPV - set custom flag for debugging
+  const isMpvType = normalizedVehicleId === 'mpv' || vehicleId.toLowerCase() === 'mpv';
+  
+  if (isMpvType) {
+    console.log('MPV vehicle type detected: will use specific MPV pricing');
+  }
   
   // Create a cache key that includes both vehicle ID and package ID
   const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
@@ -162,12 +168,12 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
-    // Always prioritize local mock API endpoints in Lovable environment
+    // Always prioritize backend PHP templates for API requests in Lovable environment
     const endpoints = [
-      // First try with direct path to local mock API
+      // First try with direct path to backend PHP templates
       `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try direct PHP file path
+      // Then try API path
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
       // Then try with admin endpoint for all fares
@@ -333,10 +339,13 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
   // Normalize the cab ID to match our fallback keys
   let normalizedCabId = vehicleId.toLowerCase().replace(/\s+/g, '_');
   
-  // Custom mappings for specific vehicle types
+  // Special handling for Innova Hycross which should have its own price bucket
+  // This is critical for maintaining distinct pricing from other vehicles
   if (normalizedCabId === 'mpv') {
-    normalizedCabId = 'innova_hycross';
+    console.log('Using explicitly defined MPV pricing (matches Innova Hycross)');
+    normalizedCabId = 'mpv';
   } else if (normalizedCabId.includes('hycross')) {
+    console.log('Using explicitly defined Innova Hycross pricing');
     normalizedCabId = 'innova_hycross';
   } else if (normalizedCabId.includes('crysta')) {
     normalizedCabId = 'innova_crysta';
@@ -348,19 +357,19 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     normalizedCabId = 'bus';
   }
   
-  // Special handling for Hycross when identified as MPV
-  if ((vehicleId === 'mpv' || normalizedCabId === 'mpv') && fallbackPrices['mpv']) {
-    console.log('Using explicit MPV fallback pricing for Innova Hycross');
-    normalizedCabId = 'mpv';
-  }
-  
   // Find the closest matching vehicle type
   let matchingVehicleType = 'sedan'; // Default fallback
   
-  for (const vehicleType of Object.keys(fallbackPrices)) {
-    if (normalizedCabId.includes(vehicleType)) {
-      matchingVehicleType = vehicleType;
-      break;
+  // Try to find an exact match first
+  if (fallbackPrices[normalizedCabId]) {
+    matchingVehicleType = normalizedCabId;
+  } else {
+    // Otherwise find the closest match
+    for (const vehicleType of Object.keys(fallbackPrices)) {
+      if (normalizedCabId.includes(vehicleType)) {
+        matchingVehicleType = vehicleType;
+        break;
+      }
     }
   }
   
@@ -369,6 +378,11 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
   
   // Get pricing for the matching vehicle type
   const vehiclePricing = fallbackPrices[matchingVehicleType];
+  
+  // Ensure we have pricing for the selected package
+  if (!vehiclePricing[normalizedPackageId]) {
+    console.warn(`No pricing found for ${normalizedPackageId}, using 8hrs-80km`);
+  }
   
   // Get the fare for the selected package
   let fallbackFare = vehiclePricing[normalizedPackageId] || vehiclePricing['8hrs-80km'] || 3000;

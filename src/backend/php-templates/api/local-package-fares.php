@@ -1,4 +1,3 @@
-
 <?php
 // Mock PHP file for local-package-fares.php
 // This serves as a fallback API endpoint when direct-local-fares.php fails
@@ -58,9 +57,7 @@ function normalizeVehicleId($vehicleId) {
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
-        'tempo' => 'tempo_traveller', // Normalize "tempo" to full "tempo_traveller"
-        'hycross' => 'innova_hycross'
+        'tempotraveler' => 'tempo_traveller'
     ];
     
     foreach ($mappings as $search => $replace) {
@@ -82,9 +79,9 @@ function normalizeVehicleId($vehicleId) {
         return 'tempo_traveller';
     }
     
-    // MPV is often Innova Hycross
+    // For MPV, keep it as a distinct category
     if ($result === 'mpv') {
-        return 'innova_hycross';
+        return 'mpv';
     }
     
     return $result;
@@ -110,6 +107,12 @@ function normalizePackageId($packageId) {
         '10hr_100km' => '10hrs-100km',
         '10hrs_100km' => '10hrs-100km',
         '10hr' => '10hrs-100km',
+        '10hrs' => '10hrs-100km',
+        '4hr' => '4hrs-40km',
+        '4hrs' => '4hrs-40km',
+        '8hr' => '8hrs-80km',
+        '8hrs' => '8hrs-80km',
+        '10hr' => '10hrs-100km',
         '10hrs' => '10hrs-100km'
     ];
     
@@ -128,7 +131,7 @@ function normalizePackageId($packageId) {
         }
         
         // Any package starting with 10hrs should be treated as 10hrs-100km
-        if (strpos($result, '10hrs') === 0) {
+        if (strpos($result, '10hrs') === 0 || strpos($result, '10hr') === 0) {
             return '10hrs-100km';
         }
     }
@@ -214,6 +217,14 @@ $packagePrices = [
     ]
 ];
 
+// If MPV or Innova Hycross, ensure consistent pricing between them
+if ($normalizedVehicleId === 'mpv') {
+    // Ensure MPV pricing exists (should match Innova Hycross)
+    if (!isset($packagePrices['mpv'])) {
+        $packagePrices['mpv'] = $packagePrices['innova_hycross'];
+    }
+}
+
 // Default to sedan if the vehicle type is not found
 if (!isset($packagePrices[$normalizedVehicleId])) {
     // Try to find the closest match
@@ -226,19 +237,13 @@ if (!isset($packagePrices[$normalizedVehicleId])) {
         }
     }
     
-    // Special MPV case for Innova Hycross
-    if (strpos($vehicleId, 'mpv') !== false || $vehicleId === 'MPV') {
-        $normalizedVehicleId = 'mpv';
-        $matchFound = true;
-    }
-    
     // If still no match, default to sedan
     if (!$matchFound) {
         $normalizedVehicleId = 'sedan';
     }
 }
 
-// Make sure we have all standardized package IDs available
+// Make sure all standardized package IDs are available for all vehicles
 $standardPackageIds = ['4hrs-40km', '8hrs-80km', '10hrs-100km'];
 
 // Default to 8hrs-80km if the package is not found
@@ -271,7 +276,8 @@ $extraInfo = [
     'normalizedValues' => [
         'vehicle_id' => $normalizedVehicleId,
         'package_id' => $normalizedPackageId
-    ]
+    ],
+    'availablePackages' => $standardPackageIds
 ];
 
 // Return the price as JSON
@@ -286,5 +292,6 @@ echo json_encode([
     'currency' => 'INR',
     'source' => 'local-package-fares',
     'timestamp' => time(),
-    'debug' => $extraInfo
+    'debug' => $extraInfo,
+    'availablePackages' => $standardPackageIds
 ]);
