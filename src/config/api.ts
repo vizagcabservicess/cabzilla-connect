@@ -1,42 +1,71 @@
 
-// API configuration
+/**
+ * Configuration for API endpoints
+ */
 
-// Base API URL - auto-detect between development and production
-export const apiBaseUrl = process.env.NODE_ENV === 'production' 
-  ? 'https://vizagup.com' 
-  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
-
-// Helper function to get full API URL
-export const getApiUrl = (path: string = ''): string => {
-  // If no path is provided, return the base URL
-  if (!path) {
-    return apiBaseUrl;
+/**
+ * Get the base API URL from environment variables or fallback to a default
+ */
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Check if running in development mode with local API
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // If in development, use the VITE_API_BASE_URL env variable or fallback to localhost
+    if (isLocalDev) {
+      return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    }
+    
+    // In production, use the same origin
+    return window.location.origin;
   }
   
-  // Ensure path starts with a slash if it doesn't already
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  // Remove any duplicate slashes that might occur when joining
-  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
-  return fullUrl;
+  // Fallback for SSR or other environments
+  return import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 };
 
-// Force refresh headers for API requests to bypass cache
-export const forceRefreshHeaders = {
-  'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-  'Pragma': 'no-cache',
-  'Expires': '0'
+/**
+ * Get the full API URL for a specific endpoint
+ * @param endpoint API endpoint path (should start with 'api/')
+ * @returns Full API URL
+ */
+export const getApiUrl = (endpoint: string): string => {
+  const baseUrl = getApiBaseUrl();
+  
+  // Ensure endpoint starts with a slash if it doesn't already
+  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  // For absolute URLs (those that already contain http:// or https://), return as is
+  if (endpoint.match(/^https?:\/\//i)) {
+    return endpoint;
+  }
+  
+  // Compose and return the full URL
+  return `${baseUrl}${formattedEndpoint}`;
 };
 
-// Default headers for API requests
-export const defaultHeaders = {
-  'Content-Type': 'application/json',
-  'X-Requested-With': 'XMLHttpRequest'
+/**
+ * Get an authenticated API URL with token
+ * @param endpoint API endpoint path
+ * @returns Full API URL with auth token
+ */
+export const getAuthApiUrl = (endpoint: string): string => {
+  const url = getApiUrl(endpoint);
+  
+  // Get the auth token from localStorage
+  const token = localStorage.getItem('authToken');
+  
+  // If token exists, append it as a query parameter
+  if (token) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}token=${encodeURIComponent(token)}`;
+  }
+  
+  return url;
 };
 
-// Export configuration options
 export default {
-  baseUrl: apiBaseUrl,
-  defaultHeaders,
-  forceRefreshHeaders
+  getApiBaseUrl,
+  getApiUrl,
+  getAuthApiUrl
 };
