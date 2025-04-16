@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -195,6 +196,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         packageName: getPackageDisplayName(normalizedPackageId),
         source: 'LocalTripSelector',
         timestamp: Date.now() + 2
+      }
+    }));
+    
+    // Send specific package update to booking summary
+    window.dispatchEvent(new CustomEvent('booking-summary-package-update', {
+      detail: {
+        packageId: normalizedPackageId,
+        packageName: getPackageDisplayName(normalizedPackageId),
+        source: 'LocalTripSelector',
+        timestamp: Date.now() + 3
       }
     }));
     
