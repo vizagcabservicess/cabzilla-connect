@@ -1,3 +1,4 @@
+
 /**
  * Configuration for API endpoints
  */
@@ -37,38 +38,34 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // In Lovable environment, use backend/php-templates path for PHP files
-  if (typeof window !== 'undefined' && 
-      (window.location.hostname.includes('lovableproject.com') || 
-       window.location.hostname.includes('localhost') || 
-       window.location.hostname === '127.0.0.1')) {
-    
-    // If endpoint contains .php, route it through the backend/php-templates directory
-    if (endpoint && endpoint.includes('.php')) {
-      // Handle both with and without leading slash
-      if (endpoint.startsWith('/')) {
-        // If it already has /backend/php-templates, don't add it again
-        if (endpoint.startsWith('/backend/php-templates')) {
-          return endpoint;
-        }
-        // If it starts with /api, replace with /backend/php-templates/api
-        if (endpoint.startsWith('/api/')) {
-          return `/backend/php-templates${endpoint}`;
-        }
-        return `/backend/php-templates${endpoint}`;
-      } else {
-        // Add leading slash if missing
-        return `/backend/php-templates/${endpoint}`;
-      }
-    }
-    
-    // Otherwise just ensure there's a leading slash
-    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  // Check if the endpoint already starts with /backend or /api in Lovable environment
+  if (endpoint && (endpoint.startsWith('/backend/') || endpoint.startsWith('/api/'))) {
+    return endpoint;
   }
   
-  // Outside Lovable, use the base URL
   const baseUrl = getApiBaseUrl();
-  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  // If we're in Lovable environment or no base URL, use relative paths
+  if (!baseUrl) {
+    // Try the backend path for PHP templates first in Lovable environment
+    if (endpoint && endpoint.includes('php')) {
+      // Prioritize the backend PHP template path
+      const backendPath = endpoint.startsWith('/') 
+        ? `/backend/php-templates${endpoint}` 
+        : `/backend/php-templates/${endpoint}`;
+      
+      console.log(`Using backend PHP template path: ${backendPath}`);
+      return backendPath;
+    }
+    
+    // Ensure endpoint starts with a slash for relative paths
+    return endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
+  }
+  
+  // Ensure endpoint starts with a slash if it doesn't already
+  const formattedEndpoint = endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
+  
+  // Compose and return the full URL
   return `${baseUrl}${formattedEndpoint}`;
 };
 

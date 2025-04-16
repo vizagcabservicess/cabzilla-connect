@@ -19,8 +19,15 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
   }
 
   try {
-    // Get the full URL with the proper base path
-    const url = getApiUrl(endpoint);
+    // Endpoint could be either relative or absolute URL
+    let url = endpoint;
+    
+    // Only add the base URL if the endpoint is not already a full URL
+    if (!endpoint.match(/^https?:\/\//i)) {
+      // If endpoint doesn't start with a slash, add it
+      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = formattedEndpoint;
+    }
     
     console.log(`Making API request to: ${url}`);
     
@@ -39,14 +46,6 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
       headers,
       timeout: config.timeout || 8000
     });
-
-    // Check if the response is HTML (which indicates an error in our PHP API)
-    if (typeof response.data === 'string' && 
-        (response.data.includes('<!DOCTYPE html>') || 
-         response.data.includes('<html'))) {
-      console.error(`API endpoint ${url} returned HTML instead of JSON`, response.data.substring(0, 150));
-      return null;
-    }
 
     return response.data as T;
   } catch (error) {
@@ -87,28 +86,23 @@ export async function tryMultipleEndpoints<T = any>(
   let lastError: Error | null = null;
   let failures = 0;
 
-  // Try the backend PHP templates first for Lovable environment
-  const prioritizedEndpoints = [...endpoints].map(endpoint => {
-    // Ensure local PHP endpoints use the correct path
-    if (endpoint.includes('.php') && !endpoint.includes('/backend/php-templates')) {
-      const trimmedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      return `/backend/php-templates${trimmedEndpoint}`;
-    }
-    return endpoint;
+  // Always prioritize local API endpoints first
+  const prioritizedEndpoints = [...endpoints];
+  
+  // Move any endpoint that starts with /api to the front
+  prioritizedEndpoints.sort((a, b) => {
+    if (a.startsWith('/api') && !b.startsWith('/api')) return -1;
+    if (!a.startsWith('/api') && b.startsWith('/api')) return 1;
+    return 0;
   });
 
-  console.log(`Attempting to fetch pricing data from ${prioritizedEndpoints.length} endpoints`);
-  
-  for (let i = 0; i < prioritizedEndpoints.length; i++) {
-    const endpoint = prioritizedEndpoints[i];
+  for (const endpoint of prioritizedEndpoints) {
     try {
-      console.log(`Trying endpoint ${i+1}/${endpoints.length}: ${endpoint}`);
+      console.log(`Trying endpoint ${failures+1}/${endpoints.length}: ${endpoint}`);
       const result = await safeApiRequest<T>(endpoint, config);
       if (result) {
         console.log(`Successfully fetched data from endpoint: ${endpoint}`);
         return result;
-      } else {
-        console.warn(`Endpoint ${endpoint} returned no valid data`);
       }
     } catch (error) {
       failures++;
@@ -119,9 +113,9 @@ export async function tryMultipleEndpoints<T = any>(
 
   console.error(`All ${endpoints.length} API endpoints failed. Last error:`, lastError);
   
-  // Try one more time with direct fetch API for PHP endpoints
+  // Try one more time with direct fetch API
   try {
-    const endpoint = prioritizedEndpoints.find(ep => ep.includes('.php')) || prioritizedEndpoints[0];
+    const endpoint = prioritizedEndpoints[0];
     console.log(`Trying one last attempt with direct fetch: ${endpoint}`);
     
     // Convert Axios headers to standard fetch headers
@@ -145,18 +139,9 @@ export async function tryMultipleEndpoints<T = any>(
     });
     
     if (response.ok) {
-      const contentType = response.headers.get('content-type');
-      // Check if the response is HTML
-      if (contentType && contentType.includes('text/html')) {
-        console.error(`Endpoint ${endpoint} returned HTML instead of JSON`);
-        return null;
-      }
-      
       const data = await response.json();
       console.log(`Direct fetch succeeded for ${endpoint}`);
       return data as T;
-    } else {
-      console.error(`Direct fetch failed with status: ${response.status}`);
     }
   } catch (error) {
     console.error('Final direct fetch attempt also failed:', error);
@@ -177,16 +162,18 @@ export async function fetchWithLocalFallback<T = any>(
   fallbackPath: string,
   config: AxiosRequestConfig = {}
 ): Promise<T | null> {
-  // First try the local endpoints in Lovable environment
-  const phpTemplateEndpoints = apiEndpoints.map(endpoint => {
-    if (endpoint.includes('.php') && !endpoint.includes('/backend/php-templates')) {
-      const trimmedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      return `/backend/php-templates${trimmedEndpoint}`;
-    }
-    return endpoint;
-  });
+  // First try the local endpoints
+  const localEndpoints = apiEndpoints.filter(ep => ep.startsWith('/api'));
   
-  const apiResult = await tryMultipleEndpoints<T>(phpTemplateEndpoints, config);
+  if (localEndpoints.length > 0) {
+    const localResult = await tryMultipleEndpoints<T>(localEndpoints, config);
+    if (localResult) {
+      return localResult;
+    }
+  }
+  
+  // Then try all endpoints
+  const apiResult = await tryMultipleEndpoints<T>(apiEndpoints, config);
   if (apiResult) {
     return apiResult;
   }

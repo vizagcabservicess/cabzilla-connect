@@ -1,6 +1,7 @@
 
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
+import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
 
 interface LocalFareResponse {
@@ -30,118 +31,7 @@ interface LocalFareResponse {
   debug?: any;
 }
 
-// Normalize vehicle ID for consistent lookup
-export const normalizeVehicleId = (vehicleId: string): string => {
-  if (!vehicleId) return 'sedan';
-  
-  // Convert to lowercase and replace spaces with underscores
-  const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-  
-  // Common mappings for vehicle types
-  const mappings: Record<string, string> = {
-    'innovahycross': 'innova_hycross',
-    'innovacrystal': 'innova_crysta',
-    'innovacrista': 'innova_crysta',
-    'innova_crista': 'innova_crysta',
-    'innovahicross': 'innova_hycross',
-    'innova_hicross': 'innova_hycross',
-    'tempotraveller': 'tempo_traveller',
-    'tempo_traveler': 'tempo_traveller',
-    'cng': 'dzire_cng',
-    'dzirecng': 'dzire_cng',
-    'sedancng': 'dzire_cng',
-    'swift': 'sedan',
-    'swiftdzire': 'dzire',
-    'swift_dzire': 'dzire',
-    'innovaold': 'innova_crysta',
-    'tempo': 'tempo_traveller',
-    'mpv': 'innova_hycross'
-  };
-  
-  // Direct mapping check
-  if (mappings[normalized]) {
-    return mappings[normalized];
-  }
-  
-  // Special handling for partial matches
-  if (normalized.includes('innova') && normalized.includes('hycross')) {
-    return 'innova_hycross';
-  }
-  
-  if (normalized.includes('innova') && normalized.includes('crysta')) {
-    return 'innova_crysta';
-  }
-  
-  if (normalized.includes('tempo')) {
-    return 'tempo_traveller';
-  }
-  
-  // MPV is often Innova Hycross
-  if (normalized === 'mpv') {
-    return 'innova_hycross';
-  }
-  
-  return normalized;
-};
-
-// Normalize package ID for consistent lookup
-export const normalizePackageId = (packageId: string): string => {
-  if (!packageId) return '8hrs-80km';
-  
-  // Remove spaces and convert to lowercase
-  const normalized = packageId.toLowerCase().trim();
-  
-  // Handle common variations
-  const mappings: Record<string, string> = {
-    '4hr_40km': '4hrs-40km',
-    '04hr_40km': '4hrs-40km',
-    '04hrs_40km': '4hrs-40km',
-    '4hrs_40km': '4hrs-40km',
-    '8hr_80km': '8hrs-80km',
-    '8hrs_80km': '8hrs-80km', 
-    '10hr_100km': '10hrs-100km',
-    '10hrs_100km': '10hrs-100km',
-    '10hr': '10hrs-100km',
-    '10hrs': '10hrs-100km'
-  };
-  
-  // Direct mapping check
-  const normalizedWithHyphens = normalized.replace('_', '-');
-  if (mappings[normalizedWithHyphens]) {
-    return mappings[normalizedWithHyphens];
-  }
-  
-  // Handle various formats
-  let result = normalizedWithHyphens;
-  if (/^(\d+)hr-/.test(result)) {
-    result = result.replace(/(\d+)hr-/, '$1hrs-');
-  }
-  
-  // Special case for 10hrs-100km
-  if (result.startsWith('10')) {
-    if (result.includes('100km')) {
-      return '10hrs-100km';
-    }
-    
-    if (result.startsWith('10hrs')) {
-      return '10hrs-100km';
-    }
-  }
-  
-  // Check for packages with only the hour part
-  if (result === '4hrs' || result === '4hr') {
-    return '4hrs-40km';
-  } else if (result === '8hrs' || result === '8hr') {
-    return '8hrs-80km';
-  } else if (result === '10hrs' || result === '10hr') {
-    return '10hrs-100km';
-  }
-  
-  return result;
-};
-
-// Vehicle-specific pricing table for fallback with consistent pricing
+// Vehicle-specific pricing table for fallback with adjusted prices
 const fallbackPrices: Record<string, Record<string, number>> = {
   'sedan': {
     '4hrs-40km': 1400,
@@ -188,7 +78,7 @@ const fallbackPrices: Record<string, Record<string, number>> = {
     '8hrs-80km': 7000,
     '10hrs-100km': 8500
   },
-  'mpv': { // Explicit matching pricing for MPV that mirrors Innova Hycross
+  'mpv': { // Explicit pricing for MPV that matches Innova Hycross
     '4hrs-40km': 2600,
     '8hrs-80km': 4200,
     '10hrs-100km': 5000
@@ -272,28 +162,25 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
-    console.log('Attempting to fetch pricing data from API endpoints');
-    
-    // Always prioritize the backend PHP templates path in Lovable environment
+    // Always prioritize local mock API endpoints in Lovable environment
     const endpoints = [
       // First try with direct path to local mock API
       `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try with api prefix
+      // Then try direct PHP file path
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try with admin endpoint
-      `/backend/php-templates/api/admin/local-package-fares.php?vehicle_id=${normalizedVehicleId}`,
+      // Then try with admin endpoint for all fares
+      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
       
-      // Then try the same with api prefix
-      `/api/admin/local-package-fares.php?vehicle_id=${normalizedVehicleId}`,
+      // Then try alternatives
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Add more backup endpoints
-      `/backend/php-templates/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
-      
-      // Try with the full API URL as last resort
-      `${getApiUrl(`api/local-package-fares.php`)}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
+      // Only try external endpoints as last resort
+      `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
     ];
+    
+    console.log(`Attempting API requests with endpoints:`, endpoints);
     
     // Use the improved tryMultipleEndpoints utility
     const response = await tryMultipleEndpoints<LocalFareResponse>(endpoints, {
@@ -345,13 +232,6 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
         localStorage.setItem(specificFareKey, price.toString());
         localStorage.setItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
         
-        // Also store price for special vehicle mappings
-        if (normalizedVehicleId === 'innova_hycross') {
-          // Store the same price for MPV since they're often treated as the same
-          localStorage.setItem(`fare_local_mpv_${normalizedPackageId}`, price.toString());
-          localStorage.setItem(`selected_fare_mpv_${normalizedPackageId}`, price.toString());
-        }
-        
         // Dispatch fare update event
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('fare-calculated', {
@@ -370,8 +250,6 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
         return price;
       }
     }
-    
-    console.log('No valid price received from API, using fallback calculation');
     
     // If API fails or returns invalid price, use fallback pricing
     return getFallbackPrice(normalizedVehicleId, normalizedPackageId);
@@ -423,12 +301,8 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
  * Gets fallback pricing when API calls fail
  */
 export const getFallbackPrice = (vehicleId: string, packageId: string): number => {
-  // Handle MPV and Innova Hycross mapping
-  const normalizedVehicleId = vehicleId === 'mpv' ? 'innova_hycross' : normalizeVehicleId(vehicleId);
-  const normalizedPackageId = normalizePackageId(packageId);
-  
   // Check if we already have a cached fare first
-  const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+  const cacheKey = `${vehicleId}_${packageId}`;
   const cachedEntry = localPackagePriceCache[cacheKey];
   
   if (cachedEntry && cachedEntry.price > 0) {
@@ -437,8 +311,8 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
   }
   
   // Check localStorage
-  const specificFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
-  const cachedFare = localStorage.getItem(specificFareKey) || localStorage.getItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`);
+  const specificFareKey = `fare_local_${vehicleId}_${packageId}`;
+  const cachedFare = localStorage.getItem(specificFareKey) || localStorage.getItem(`selected_fare_${vehicleId}_${packageId}`);
   
   if (cachedFare) {
     const parsedFare = parseFloat(cachedFare);
@@ -456,41 +330,54 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     }
   }
   
-  // Find the matching vehicle type in our fallback prices
+  // Normalize the cab ID to match our fallback keys
+  let normalizedCabId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+  
+  // Custom mappings for specific vehicle types
+  if (normalizedCabId === 'mpv') {
+    normalizedCabId = 'innova_hycross';
+  } else if (normalizedCabId.includes('hycross')) {
+    normalizedCabId = 'innova_hycross';
+  } else if (normalizedCabId.includes('crysta')) {
+    normalizedCabId = 'innova_crysta';
+  } else if (normalizedCabId.includes('tempo')) {
+    normalizedCabId = 'tempo_traveller';
+  } else if (normalizedCabId.includes('dzire') && normalizedCabId.includes('cng')) {
+    normalizedCabId = 'dzire_cng';
+  } else if (normalizedCabId.includes('urbania')) {
+    normalizedCabId = 'bus';
+  }
+  
+  // Special handling for Hycross when identified as MPV
+  if ((vehicleId === 'mpv' || normalizedCabId === 'mpv') && fallbackPrices['mpv']) {
+    console.log('Using explicit MPV fallback pricing for Innova Hycross');
+    normalizedCabId = 'mpv';
+  }
+  
+  // Find the closest matching vehicle type
   let matchingVehicleType = 'sedan'; // Default fallback
   
-  // First check for exact match
-  if (fallbackPrices[normalizedVehicleId]) {
-    matchingVehicleType = normalizedVehicleId;
-  } else {
-    // Find the closest matching vehicle type
-    for (const vehicleType of Object.keys(fallbackPrices)) {
-      if (normalizedVehicleId.includes(vehicleType)) {
-        matchingVehicleType = vehicleType;
-        break;
-      }
+  for (const vehicleType of Object.keys(fallbackPrices)) {
+    if (normalizedCabId.includes(vehicleType)) {
+      matchingVehicleType = vehicleType;
+      break;
     }
   }
   
-  // Special cases
-  if (normalizedVehicleId === 'innova_hycross' || vehicleId === 'mpv') {
-    matchingVehicleType = 'innova_hycross';
-  }
+  // Normalize package ID
+  const normalizedPackageId = normalizePackageId(packageId);
   
-  if (normalizedVehicleId.includes('tempo')) {
-    matchingVehicleType = 'tempo_traveller';
-  }
+  // Get pricing for the matching vehicle type
+  const vehiclePricing = fallbackPrices[matchingVehicleType];
   
   // Get the fare for the selected package
-  const vehiclePricing = fallbackPrices[matchingVehicleType];
   let fallbackFare = vehiclePricing[normalizedPackageId] || vehiclePricing['8hrs-80km'] || 3000;
   
-  console.log(`Final price for ${vehicleId}, ${packageId}: ${fallbackFare}`);
+  console.log(`Using fallback pricing for ${vehicleId}: ₹${fallbackFare} (matched to ${matchingVehicleType})`);
   
   // Store this fallback price in localStorage
   localStorage.setItem(specificFareKey, fallbackFare.toString());
   localStorage.setItem(`selected_fare_${vehicleId}_${packageId}`, fallbackFare.toString());
-  console.log(`Stored fare in localStorage: ${specificFareKey} = ${fallbackFare}`);
   
   // Also cache it
   localPackagePriceCache[cacheKey] = {
@@ -550,7 +437,7 @@ export const fetchAndCacheLocalFares = async (silent: boolean = false): Promise<
   }
   
   await Promise.all(fetchPromises);
-  console.log('Background caching of local fares completed');
+  console.log('Finished pre-fetching all local package fares');
   
   // Dispatch an event to notify other components that fares have been updated
   if (typeof window !== 'undefined') {
@@ -563,7 +450,7 @@ export const fetchAndCacheLocalFares = async (silent: boolean = false): Promise<
   }
 };
 
-// Export the cache clearing function
+// Export the cache for external use
 export const clearLocalPackagePriceCache = () => {
   localPackagePriceCache = {};
   console.log('Cleared local package price cache');
@@ -586,13 +473,3 @@ if (typeof window !== 'undefined') {
     }, 500);
   });
 }
-
-// Export everything for use in other modules
-export default {
-  getLocalPackagePrice,
-  getFallbackPrice,
-  fetchAndCacheLocalFares,
-  clearLocalPackagePriceCache,
-  normalizeVehicleId,
-  normalizePackageId
-};
