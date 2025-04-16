@@ -24,21 +24,9 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
     
     // Only add the base URL if the endpoint is not already a full URL
     if (!endpoint.match(/^https?:\/\//i)) {
-      // Special handling for PHP endpoints in the Lovable environment
-      if (endpoint.includes('.php')) {
-        // For PHP endpoints, prioritize the backend path
-        if (!endpoint.startsWith('/backend/') && !endpoint.startsWith('/api/')) {
-          // Strip any leading slash for cleaner concatenation
-          const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-          url = `/backend/php-templates/api/${cleanEndpoint}`;
-          console.log(`Converted PHP endpoint to backend path: ${url}`);
-        } else {
-          url = endpoint;
-        }
-      } else {
-        // If endpoint doesn't start with a slash, add it
-        url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      }
+      // If endpoint doesn't start with a slash, add it
+      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = formattedEndpoint;
     }
     
     console.log(`Making API request to: ${url}`);
@@ -47,7 +35,6 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
     const headers = {
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
-      'X-Requested-With': 'XMLHttpRequest',
       ...config.headers
     };
 
@@ -68,36 +55,6 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
         console.error(`API request to ${endpoint} timed out`);
       } else if (error.response) {
         console.error(`API request to ${endpoint} failed with status ${error.response.status}:`, error.response.data);
-        
-        // If we get a 404 for a PHP endpoint, try the fallback path
-        if (error.response.status === 404 && endpoint.includes('.php')) {
-          try {
-            console.log(`Trying fallback for PHP endpoint ${endpoint}`);
-            
-            // Try with a different path structure
-            const endpointBase = endpoint.split('/').pop() || '';
-            const fallbackUrl = `/backend/php-templates/api/${endpointBase}`;
-            
-            console.log(`Using fallback URL: ${fallbackUrl}`);
-            
-            const fallbackResponse = await axios({
-              method: config.method || 'get',
-              url: fallbackUrl,
-              ...config,
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...config.headers
-              },
-              timeout: config.timeout || 8000
-            });
-            
-            return fallbackResponse.data as T;
-          } catch (fallbackError) {
-            console.error(`Fallback PHP endpoint also failed:`, fallbackError);
-          }
-        }
       } else if (error.request) {
         console.error(`No response received from ${endpoint}:`, error.message);
       } else {
@@ -129,17 +86,13 @@ export async function tryMultipleEndpoints<T = any>(
   let lastError: Error | null = null;
   let failures = 0;
 
-  // Always prioritize backend PHP template paths for PHP files
+  // Always prioritize local API endpoints first
   const prioritizedEndpoints = [...endpoints];
+  
+  // Move any endpoint that starts with /api to the front
   prioritizedEndpoints.sort((a, b) => {
-    // First priority: backend PHP templates
-    if (a.includes('/backend/php-templates/') && !b.includes('/backend/php-templates/')) return -1;
-    if (!a.includes('/backend/php-templates/') && b.includes('/backend/php-templates/')) return 1;
-    
-    // Second priority: API paths
-    if (a.startsWith('/api/') && !b.startsWith('/api/')) return -1;
-    if (!a.startsWith('/api/') && b.startsWith('/api/')) return 1;
-    
+    if (a.startsWith('/api') && !b.startsWith('/api')) return -1;
+    if (!a.startsWith('/api') && b.startsWith('/api')) return 1;
     return 0;
   });
 
@@ -160,43 +113,38 @@ export async function tryMultipleEndpoints<T = any>(
 
   console.error(`All ${endpoints.length} API endpoints failed. Last error:`, lastError);
   
-  // Try alternatives for PHP files before giving up completely
-  const phpEndpoints = endpoints.filter(e => e.includes('.php'));
-  if (phpEndpoints.length > 0) {
-    for (const phpEndpoint of phpEndpoints) {
-      try {
-        // Extract the PHP filename
-        const phpFile = phpEndpoint.split('/').pop() || '';
-        // Try various path combinations
-        const alternativePaths = [
-          `/backend/php-templates/api/${phpFile}`, 
-          `/api/${phpFile}`,
-          `/${phpFile}`
-        ];
-        
-        for (const altPath of alternativePaths) {
-          try {
-            console.log(`Trying one last attempt with path: ${altPath}`);
-            const response = await fetch(altPath, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-              }
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              console.log(`Alternative path succeeded for ${altPath}`);
-              return data as T;
-            }
-          } catch (altError) {
-            console.warn(`Alternative path ${altPath} failed:`, altError);
-          }
+  // Try one more time with direct fetch API
+  try {
+    const endpoint = prioritizedEndpoints[0];
+    console.log(`Trying one last attempt with direct fetch: ${endpoint}`);
+    
+    // Convert Axios headers to standard fetch headers
+    const fetchHeaders: Record<string, string> = {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    };
+    
+    // Safely copy relevant headers from config
+    if (config.headers) {
+      // Extract and convert headers to string values
+      Object.entries(config.headers).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          fetchHeaders[key] = String(value);
         }
-      } catch (error) {
-        console.error('Final PHP alternatives also failed:', error);
-      }
+      });
     }
+    
+    const response = await fetch(endpoint, {
+      headers: fetchHeaders
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`Direct fetch succeeded for ${endpoint}`);
+      return data as T;
+    }
+  } catch (error) {
+    console.error('Final direct fetch attempt also failed:', error);
   }
   
   return null;
@@ -214,22 +162,8 @@ export async function fetchWithLocalFallback<T = any>(
   fallbackPath: string,
   config: AxiosRequestConfig = {}
 ): Promise<T | null> {
-  // First try the backend PHP templates for PHP endpoints
-  const phpEndpoints = apiEndpoints.filter(ep => ep.includes('.php'));
-  const backendPhpEndpoints = phpEndpoints.map(ep => {
-    const phpFile = ep.split('/').pop() || '';
-    return `/backend/php-templates/api/${phpFile}`;
-  });
-  
-  if (backendPhpEndpoints.length > 0) {
-    const backendResult = await tryMultipleEndpoints<T>(backendPhpEndpoints, config);
-    if (backendResult) {
-      return backendResult;
-    }
-  }
-  
-  // Then try the local endpoints
-  const localEndpoints = apiEndpoints.filter(ep => ep.startsWith('/api') || ep.startsWith('/backend'));
+  // First try the local endpoints
+  const localEndpoints = apiEndpoints.filter(ep => ep.startsWith('/api'));
   
   if (localEndpoints.length > 0) {
     const localResult = await tryMultipleEndpoints<T>(localEndpoints, config);
