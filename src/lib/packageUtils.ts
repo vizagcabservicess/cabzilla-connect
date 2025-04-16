@@ -1,617 +1,386 @@
 
-/**
- * Standard package normalization utility to ensure consistent package IDs across the application
- */
+import { toast } from 'sonner';
 
-// Standard mapping for package IDs with strict formatting
-const standardPackageIds: Record<string, string> = {
-  // 4hr packages
-  "4hr_40km": "4hrs-40km",
-  "04hr_40km": "4hrs-40km",
-  "04hrs_40km": "4hrs-40km",
-  "4hrs_40km": "4hrs-40km",
-  "4hours_40km": "4hrs-40km",
-  "4hr-40km": "4hrs-40km",
-  "4hrs": "4hrs-40km",
-  "4hours": "4hrs-40km",
-  "40km": "4hrs-40km",
-  
-  // 8hr packages
-  "8hr_80km": "8hrs-80km",
-  "08hr_80km": "8hrs-80km",
-  "08hrs_80km": "8hrs-80km",
-  "8hrs_80km": "8hrs-80km",
-  "8hours_80km": "8hrs-80km",
-  "8hr-80km": "8hrs-80km",
-  "8hrs": "8hrs-80km",
-  "8hours": "8hrs-80km",
-  "80km": "8hrs-80km",
-  
-  // 10hr packages
-  "10hr_100km": "10hrs-100km",
-  "10hrs_100km": "10hrs-100km",
-  "10hours_100km": "10hrs-100km",
-  "10hr-100km": "10hrs-100km",
-  "10hrs": "10hrs-100km",
-  "10hours": "10hrs-100km",
-  "100km": "10hrs-100km"
-};
-
-// Standard vehicle ID mapping to ensure consistency
-const standardVehicleIds: Record<string, string> = {
-  // Sedan variants
-  "sedan": "sedan",
-  "swift dzire": "dzire_cng",
-  "dzire": "dzire_cng",
-  "cng": "dzire_cng",
-  "dzire_cng": "dzire_cng",
-  "swift": "dzire_cng",
-  
-  // Ertiga variants
-  "ertiga": "ertiga",
-  "maruti_ertiga": "ertiga",
-  "maruti ertiga": "ertiga",
-  
-  // Innova variants
-  "innova": "innova_crysta",
-  "crysta": "innova_crysta",
-  "innova_crysta": "innova_crysta",
-  "innova crysta": "innova_crysta",
-  "toyota_innova": "innova_crysta",
-  "toyota innova": "innova_crysta",
-  
-  // Innova Hycross
-  "hycross": "innova_hycross",
-  "hi-cross": "innova_hycross",
-  "hi_cross": "innova_hycross",
-  "innova_hycross": "innova_hycross",
-  "innova hycross": "innova_hycross",
-  "mpv": "innova_hycross",
-  
-  // Tempo Traveller variants
-  "tempo": "tempo_traveller",
-  "traveller": "tempo_traveller",
-  "tempo_traveller": "tempo_traveller",
-  "tempo traveller": "tempo_traveller"
-};
-
-// Cache for normalized values to improve performance
-const normalizationCache = {
-  packageIds: new Map<string, string>(),
-  vehicleIds: new Map<string, string>()
-};
-
-// Timestamps for event throttling
-const lastEventTimes: Record<string, number> = {
-  packageChange: 0,
-  vehicleChange: 0,
-  priceCalculation: 0,
-  fareRefresh: 0
-};
-
-// Constants for throttling durations
-const THROTTLE_DURATIONS = {
-  PACKAGE_CHANGE: 3000,
-  VEHICLE_CHANGE: 3000,
-  PRICE_CALCULATION: 5000,
-  FARE_REFRESH: 10000,
-  SHORT: 1000,
-  MEDIUM: 3000,
-  LONG: 5000
-};
-
-// Fare cache management
-interface FareCacheEntry {
-  price: number;
-  timestamp: number;
-  source: string;
-  expiresAt: number;
-}
-
-const fareCache: Map<string, FareCacheEntry> = new Map();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes default TTL
+// Throttle timestamps to prevent excessive operations
+const throttleTimestamps: Record<string, number> = {};
 
 /**
- * Centralized fare cache management to reduce redundant API calls
+ * Check if an operation should be throttled based on the last execution time
  */
-export const fareManager = {
-  /**
-   * Store fare in the cache with expiration
-   */
-  storeFare(vehicleId: string, packageId: string, price: number, source: string = 'api'): void {
-    if (!vehicleId || !packageId || price <= 0) return;
-    
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
-    const normalizedPackageId = normalizePackageId(packageId);
-    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
-    
-    const entry: FareCacheEntry = {
-      price,
-      timestamp: Date.now(),
-      source,
-      expiresAt: Date.now() + CACHE_TTL
-    };
-    
-    // Update in-memory cache
-    fareCache.set(cacheKey, entry);
-    
-    // Update localStorage for persistence
-    try {
-      localStorage.setItem(`fare_${cacheKey}`, JSON.stringify(entry));
-      
-      // Also update specific format keys for backward compatibility
-      localStorage.setItem(`fare_local_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
-      localStorage.setItem(`fare_local_${normalizedVehicleId}`, price.toString());
-      localStorage.setItem(`package_price_${normalizedPackageId}_${normalizedVehicleId}`, price.toString());
-      
-      console.log(`Stored fare in cache: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${price} (source: ${source})`);
-    } catch (error) {
-      console.error('Error storing fare in localStorage:', error);
-    }
-    
-    // Dispatch an event with limited frequency
-    this.notifyFareUpdate(normalizedVehicleId, normalizedPackageId, price, source);
-  },
-  
-  /**
-   * Get fare from cache if available and not expired
-   */
-  getFare(vehicleId: string, packageId: string): { price: number, source: string } | null {
-    if (!vehicleId || !packageId) return null;
-    
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
-    const normalizedPackageId = normalizePackageId(packageId);
-    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
-    
-    // First try memory cache
-    const memoryCached = fareCache.get(cacheKey);
-    if (memoryCached && memoryCached.expiresAt > Date.now()) {
-      console.log(`Retrieved fare from memory cache: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${memoryCached.price}`);
-      return { price: memoryCached.price, source: memoryCached.source };
-    }
-    
-    // Then try localStorage
-    try {
-      const storedEntry = localStorage.getItem(`fare_${cacheKey}`);
-      if (storedEntry) {
-        const parsed = JSON.parse(storedEntry) as FareCacheEntry;
-        
-        // Check if entry is still valid
-        if (parsed.expiresAt > Date.now()) {
-          // Update memory cache
-          fareCache.set(cacheKey, parsed);
-          console.log(`Retrieved fare from localStorage: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${parsed.price}`);
-          return { price: parsed.price, source: parsed.source };
-        }
-      }
-      
-      // Try legacy cache formats
-      const legacyKeys = [
-        `fare_local_${normalizedVehicleId}_${normalizedPackageId}`,
-        `fare_local_${normalizedVehicleId}`,
-        `package_price_${normalizedPackageId}_${normalizedVehicleId}`
-      ];
-      
-      for (const key of legacyKeys) {
-        const value = localStorage.getItem(key);
-        if (value) {
-          const price = parseInt(value, 10);
-          if (!isNaN(price) && price > 0) {
-            // Create a proper cache entry
-            this.storeFare(normalizedVehicleId, normalizedPackageId, price, 'legacy-cache');
-            console.log(`Retrieved fare from legacy cache (${key}): ${normalizedVehicleId}, ${normalizedPackageId}, ₹${price}`);
-            return { price, source: 'legacy-cache' };
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error retrieving fare from localStorage:', error);
-    }
-    
-    return null;
-  },
-  
-  /**
-   * Clear fare cache for all or specific entries
-   */
-  clearCache(vehicleId?: string, packageId?: string): void {
-    if (!vehicleId && !packageId) {
-      // Clear all cache
-      fareCache.clear();
-      
-      // Clear localStorage cache entries
-      try {
-        const keys = Object.keys(localStorage);
-        for (const key of keys) {
-          if (key.startsWith('fare_') || key.startsWith('package_price_')) {
-            localStorage.removeItem(key);
-          }
-        }
-        console.log('Cleared all fare cache');
-      } catch (error) {
-        console.error('Error clearing fare cache from localStorage:', error);
-      }
-      
-      return;
-    }
-    
-    // Clear specific cache entries
-    const normalizedVehicleId = vehicleId ? normalizeVehicleId(vehicleId) : '';
-    const normalizedPackageId = packageId ? normalizePackageId(packageId) : '';
-    
-    // Clear from memory cache
-    if (normalizedVehicleId && normalizedPackageId) {
-      const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
-      fareCache.delete(cacheKey);
-      
-      // Clear from localStorage
-      try {
-        localStorage.removeItem(`fare_${cacheKey}`);
-        localStorage.removeItem(`fare_local_${normalizedVehicleId}_${normalizedPackageId}`);
-        localStorage.removeItem(`package_price_${normalizedPackageId}_${normalizedVehicleId}`);
-        console.log(`Cleared fare cache for ${normalizedVehicleId}, ${normalizedPackageId}`);
-      } catch (error) {
-        console.error('Error clearing specific fare cache from localStorage:', error);
-      }
-    } else if (normalizedVehicleId) {
-      // Clear all entries for this vehicle
-      for (const [key, _] of fareCache.entries()) {
-        if (key.startsWith(`${normalizedVehicleId}_`)) {
-          fareCache.delete(key);
-        }
-      }
-      
-      // Clear from localStorage
-      try {
-        const keys = Object.keys(localStorage);
-        for (const key of keys) {
-          if ((key.startsWith('fare_') || key.startsWith('package_price_')) && 
-              key.includes(normalizedVehicleId)) {
-            localStorage.removeItem(key);
-          }
-        }
-        console.log(`Cleared all fare cache for vehicle ${normalizedVehicleId}`);
-      } catch (error) {
-        console.error('Error clearing vehicle fare cache from localStorage:', error);
-      }
-    }
-  },
-  
-  /**
-   * Notify components about fare updates with throttling
-   */
-  notifyFareUpdate(vehicleId: string, packageId: string, price: number, source: string): void {
-    if (shouldThrottle('fare-notification', 1000)) return;
-    
-    try {
-      // Dispatch a single fare update event
-      window.dispatchEvent(new CustomEvent('fare-updated', {
-        detail: {
-          vehicleId,
-          packageId,
-          price,
-          source,
-          timestamp: Date.now()
-        }
-      }));
-      
-      console.log(`Dispatched fare-updated event for ${vehicleId}, ${packageId}, ₹${price}`);
-    } catch (error) {
-      console.error('Error dispatching fare-updated event:', error);
-    }
-  }
-};
-
-// Load fare cache from localStorage on startup
-try {
-  const keys = Object.keys(localStorage);
-  let loadedEntries = 0;
-  
-  for (const key of keys) {
-    if (key.startsWith('fare_') && !key.startsWith('fare_local_')) {
-      try {
-        const storedEntry = localStorage.getItem(key);
-        if (storedEntry) {
-          const parsed = JSON.parse(storedEntry) as FareCacheEntry;
-          // Only load if not expired
-          if (parsed.expiresAt > Date.now()) {
-            fareCache.set(key.replace('fare_', ''), parsed);
-            loadedEntries++;
-          }
-        }
-      } catch (e) {
-        // Ignore parsing errors for individual entries
-      }
-    }
-  }
-  
-  console.log(`Loaded ${loadedEntries} fare cache entries from localStorage`);
-} catch (error) {
-  console.error('Error loading fare cache from localStorage:', error);
-}
-
-/**
- * Throttle function to prevent excessive calls
- * @param key - Unique key to track this throttle type
- * @param duration - Time in ms to throttle
- * @returns Whether the action should be throttled (true) or allowed (false)
- */
-export const shouldThrottle = (key: string, duration: number = THROTTLE_DURATIONS.MEDIUM): boolean => {
+export const shouldThrottle = (operationKey: string, throttleDuration: number = 1000): boolean => {
   const now = Date.now();
-  const lastTime = lastEventTimes[key] || 0;
+  const lastTime = throttleTimestamps[operationKey] || 0;
   
-  if (now - lastTime < duration) {
-    console.log(`[Throttle] ${key} throttled (${now - lastTime}ms < ${duration}ms)`);
+  if (now - lastTime < throttleDuration) {
+    console.log(`Throttling operation '${operationKey}' (${Math.floor((now - lastTime))}ms < ${throttleDuration}ms)`);
     return true;
   }
   
-  lastEventTimes[key] = now;
+  throttleTimestamps[operationKey] = now;
   return false;
 };
 
 /**
- * Normalizes package IDs to ensure consistency across the application
- * Uses caching to improve performance for repeated calls
- * @param packageId - The package ID to normalize
- * @returns The normalized package ID
+ * Normalize package ID to ensure consistent format
  */
 export const normalizePackageId = (packageId?: string): string => {
-  if (!packageId) return "8hrs-80km"; // Default package
+  if (!packageId) return '8hrs-80km'; // Default
   
-  // Check cache first for performance
-  const cachedResult = normalizationCache.packageIds.get(packageId);
-  if (cachedResult) return cachedResult;
+  const normalized = packageId.toLowerCase().trim();
   
-  // Convert to lowercase and standardize separators
-  const normalizedId = packageId.toLowerCase()
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace('hrs-', 'hr_')
-    .replace('hr-', 'hr_');
+  // First check for exact matches
+  if (normalized === '10hrs-100km' || normalized === '10hrs_100km' || normalized === '10 hours') {
+    return '10hrs-100km';
+  }
   
-  // First check for exact matches in our standardization map
-  if (standardPackageIds[normalizedId]) {
-    const result = standardPackageIds[normalizedId];
-    normalizationCache.packageIds.set(packageId, result);
-    return result;
+  if (normalized === '8hrs-80km' || normalized === '8hrs_80km' || normalized === '8 hours') {
+    return '8hrs-80km';
+  }
+  
+  if (normalized === '4hrs-40km' || normalized === '4hrs_40km' || normalized === '4 hours') {
+    return '4hrs-40km';
   }
   
   // Then check for substring matches
-  let result: string;
-  if (normalizedId.includes('10') || normalizedId.includes('100')) {
-    result = "10hrs-100km";
-  } else if (normalizedId.includes('8') || normalizedId.includes('80')) {
-    result = "8hrs-80km";
-  } else if (normalizedId.includes('4') || normalizedId.includes('40')) {
-    result = "4hrs-40km";
-  } else {
-    // Default to 8hr package if no match
-    result = "8hrs-80km";
+  if (normalized.includes('10') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('100km'))) {
+    return '10hrs-100km';
   }
   
-  // Cache the result for future calls
-  normalizationCache.packageIds.set(packageId, result);
-  return result;
+  if (normalized.includes('8') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('80km'))) {
+    return '8hrs-80km';
+  }
+  
+  if (normalized.includes('4') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('40km'))) {
+    return '4hrs-40km';
+  }
+  
+  console.log(`Warning: Unable to match package ID "${packageId}" to a known package, defaulting to 8hrs-80km`);
+  return '8hrs-80km'; // Default fallback
 };
 
 /**
- * Normalizes vehicle IDs to ensure consistency across the application
- * Uses caching to improve performance for repeated calls
- * @param vehicleId - The vehicle ID to normalize
- * @returns The normalized vehicle ID
+ * Normalize vehicle ID for consistency
  */
 export const normalizeVehicleId = (vehicleId?: string): string => {
   if (!vehicleId) return ''; 
   
-  // Check cache first for performance
-  const cachedResult = normalizationCache.vehicleIds.get(vehicleId);
-  if (cachedResult) return cachedResult;
+  // Convert to lowercase and replace spaces with underscores
+  const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
   
-  // Convert to lowercase, trim and standardize
-  const normalizedId = vehicleId.toLowerCase().trim();
-  
-  // Check direct mapping first
-  if (standardVehicleIds[normalizedId]) {
-    const result = standardVehicleIds[normalizedId];
-    normalizationCache.vehicleIds.set(vehicleId, result);
-    return result;
+  // Special case to ensure MPV is always mapped correctly - check this first
+  if (normalized === 'mpv' || 
+      normalized === 'innova hycross' || 
+      normalized === 'innovahycross' ||
+      normalized === 'innova_hycross' ||
+      normalized.includes('hycross') ||
+      normalized.includes('hi_cross') ||
+      normalized.includes('hi-cross')) {
+    return 'innova_hycross';
   }
   
-  // Special case checks for partial matches
-  let result: string;
-  if (normalizedId.includes('hycross') || 
-      normalizedId.includes('hi-cross') ||
-      normalizedId.includes('hi_cross') ||
-      normalizedId === 'mpv') {
-    result = 'innova_hycross';
-  } else if (normalizedId.includes('crysta') || 
-      (normalizedId.includes('innova') && !normalizedId.includes('hycross'))) {
-    result = 'innova_crysta';
-  } else if (normalizedId.includes('tempo') || normalizedId.includes('traveller')) {
-    result = 'tempo_traveller';
-  } else if (normalizedId.includes('dzire') || 
-      normalizedId.includes('cng') || 
-      normalizedId.includes('swift')) {
-    result = 'dzire_cng';
-  } else if (normalizedId.includes('ertiga')) {
-    result = 'ertiga';
-  } else if (normalizedId === 'sedan') {
-    result = 'sedan';
-  } else {
-    // Remove spaces and special characters for other vehicle types
-    result = normalizedId.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  // Handle other special cases
+  if (normalized.includes('crysta') || 
+      (normalized.includes('innova') && !normalized.includes('hycross'))) {
+    return 'innova_crysta';
   }
   
-  // Cache the result for future calls
-  normalizationCache.vehicleIds.set(vehicleId, result);
-  return result;
+  if (normalized.includes('tempo')) {
+    return 'tempo_traveller';
+  }
+  
+  if (normalized.includes('dzire') || 
+      normalized === 'cng' || 
+      normalized.includes('cng')) {
+    return 'dzire_cng';
+  }
+  
+  return normalized;
 };
 
 /**
- * Gets the display name for a package
- * @param packageId - The package ID
- * @returns The display name for the package
+ * Get display name for a package ID
  */
 export const getPackageDisplayName = (packageId: string): string => {
-  const normalizedId = normalizePackageId(packageId);
+  const normalized = normalizePackageId(packageId);
   
-  switch (normalizedId) {
-    case '4hrs-40km':
-      return '4 Hours / 40 KM';
-    case '8hrs-80km':
-      return '8 Hours / 80 KM';
-    case '10hrs-100km':
-      return '10 Hours / 100 KM';
-    default:
-      return packageId.replace(/-/g, ' ').replace(/_/g, ' ');
+  if (normalized === '10hrs-100km') {
+    return '10 Hours / 100 KM';
+  } else if (normalized === '8hrs-80km') {
+    return '8 Hours / 80 KM';
+  } else if (normalized === '4hrs-40km') {
+    return '4 Hours / 40 KM';
   }
+  
+  return packageId;
 };
 
 /**
- * Gets the standard hourly package options
- * @returns Array of hourly package options
+ * Save package selection to local storage
  */
-export const getStandardHourlyPackageOptions = () => [
-  { value: "4hrs-40km", label: "4 Hours / 40 KM" },
-  { value: "8hrs-80km", label: "8 Hours / 80 KM" },
-  { value: "10hrs-100km", label: "10 Hours / 100 KM" }
-];
-
-/**
- * Dispatches events to notify components of package changes with throttling
- * @param packageId - The selected package ID
- */
-export const notifyPackageChange = (packageId: string) => {
-  if (!packageId) return;
-  
-  // Throttle notifications to prevent event loops
-  if (shouldThrottle('packageChange', THROTTLE_DURATIONS.PACKAGE_CHANGE)) {
-    console.log(`Package change notification throttled`);
-    return;
-  }
-  
-  const normalizedId = normalizePackageId(packageId);
-  
+export const savePackageSelection = (packageId: string): void => {
   try {
-    // Dispatch fewer events with more consolidated data
-    window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-      detail: { 
-        packageId: normalizedId,
-        originalPackageId: packageId,
-        packageName: getPackageDisplayName(normalizedId),
-        timestamp: Date.now(),
-        // Include more data to reduce need for multiple events
-        forceRefresh: false
-      }
-    }));
-    
-    console.log(`Dispatched package change event for ${normalizedId}`);
-  } catch (error) {
-    console.error('Error dispatching package change event:', error);
-  }
-};
-
-/**
- * Saves package selection to storage
- * @param packageId - The package ID to save
- */
-export const savePackageSelection = (packageId: string) => {
-  if (!packageId) return;
-  
-  const normalizedId = normalizePackageId(packageId);
-  
-  try {
-    // Save to sessionStorage for the current session
-    sessionStorage.setItem('hourlyPackage', normalizedId);
-    
-    // Save to localStorage for persistence across sessions
-    localStorage.setItem('selected_package', normalizedId);
-    
-    console.log(`Saved package selection: ${normalizedId}`);
+    const normalized = normalizePackageId(packageId);
+    localStorage.setItem('selectedPackage', normalized);
+    console.log(`Saved package selection: ${normalized}`);
   } catch (error) {
     console.error('Error saving package selection:', error);
   }
 };
 
 /**
- * Force refresh fare calculations with throttling
+ * Notify other components about package change
  */
-export const forceFareRecalculation = () => {
-  if (shouldThrottle('fareRefresh', THROTTLE_DURATIONS.FARE_REFRESH)) {
-    console.log('Fare recalculation throttled');
-    return;
-  }
+export const notifyPackageChange = (packageId: string): void => {
+  if (shouldThrottle('notify-package-change', 500)) return;
   
-  console.log('Forcing fare recalculation');
-  window.dispatchEvent(new CustomEvent('force-fare-recalculation'));
+  try {
+    const normalized = normalizePackageId(packageId);
+    
+    // Dispatch custom event for components to listen for
+    window.dispatchEvent(new CustomEvent('package-changed', {
+      detail: {
+        packageId: normalized,
+        timestamp: Date.now()
+      }
+    }));
+    
+    console.log(`Notified package change: ${normalized}`);
+  } catch (error) {
+    console.error('Error notifying package change:', error);
+  }
 };
 
 /**
- * Clears fare caches for a specific package
- * @param packageId - Package ID to clear cache for
+ * Clear package fare cache to force refresh of fares
  */
-export const clearPackageFareCache = (packageId: string) => {
-  if (!packageId) return;
+export const clearPackageFareCache = (packageId?: string): void => {
+  if (shouldThrottle('clear-package-cache', 3000)) return;
   
   try {
-    const normalizedId = normalizePackageId(packageId);
-    fareManager.clearCache(undefined, normalizedId);
-    console.log(`Cleared cache entries for package ${normalizedId}`);
+    if (packageId) {
+      const normalized = normalizePackageId(packageId);
+      
+      // Clear only for this package
+      Object.keys(window.localPackagePriceCache || {}).forEach(key => {
+        if (key.endsWith(normalized)) {
+          delete window.localPackagePriceCache[key];
+        }
+      });
+      
+      console.log(`Cleared package fare cache for ${normalized}`);
+    } else {
+      // Clear all package fares
+      window.localPackagePriceCache = {};
+      console.log('Cleared all package fare cache');
+    }
+    
+    // Force refresh event
+    forceFareRecalculation();
   } catch (error) {
     console.error('Error clearing package fare cache:', error);
   }
 };
 
 /**
- * Gets price from local storage cache if available
- * @param vehicleId - The vehicle ID
- * @param packageId - The package ID
- * @returns The cached price or undefined if not cached
+ * Force recalculation of fares
  */
-export const getCachedPrice = (vehicleId: string, packageId: string): number | undefined => {
+export const forceFareRecalculation = (): void => {
+  if (shouldThrottle('force-fare-recalc', 5000)) return;
+  
+  console.log('Forcing fare recalculation...');
+  
   try {
-    if (!vehicleId || !packageId) return undefined;
-    
-    // Use the central fare manager
-    const result = fareManager.getFare(vehicleId, packageId);
-    return result ? result.price : undefined;
+    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
+      detail: {
+        timestamp: Date.now()
+      }
+    }));
   } catch (error) {
-    console.error('Error retrieving cached price:', error);
-    return undefined;
+    console.error('Error dispatching force-fare-recalculation event:', error);
   }
 };
 
 /**
- * Saves price to local storage with consistent cache keys
- * @param vehicleId - The vehicle ID 
- * @param packageId - The package ID
- * @param price - The price to save
+ * Get cached price from localStorage
+ */
+export const getCachedPrice = (vehicleId: string, packageId: string): number => {
+  try {
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    const normalizedPackageId = normalizePackageId(packageId);
+    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+    
+    if (window.localPackagePriceCache && window.localPackagePriceCache[cacheKey]) {
+      return window.localPackagePriceCache[cacheKey];
+    }
+    
+    // Alternative cache key format
+    const altCacheKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
+    const localStorageValue = localStorage.getItem(altCacheKey);
+    
+    if (localStorageValue) {
+      const parsedValue = parseInt(localStorageValue, 10);
+      if (!isNaN(parsedValue) && parsedValue > 0) {
+        return parsedValue;
+      }
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error('Error getting cached price:', error);
+    return 0;
+  }
+};
+
+/**
+ * Save price to cache
  */
 export const saveCachedPrice = (vehicleId: string, packageId: string, price: number): void => {
   try {
-    if (!vehicleId || !packageId || !price || price <= 0) return;
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    const normalizedPackageId = normalizePackageId(packageId);
+    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
     
-    // Use the central fare manager
-    fareManager.storeFare(vehicleId, packageId, price, 'manual-save');
+    if (typeof window !== 'undefined') {
+      if (!window.localPackagePriceCache) {
+        window.localPackagePriceCache = {};
+      }
+      
+      window.localPackagePriceCache[cacheKey] = price;
+      
+      // Also save to localStorage for persistence
+      localStorage.setItem(`fare_local_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
+      
+      console.log(`Cached price for ${cacheKey}: ${price}`);
+    }
   } catch (error) {
     console.error('Error saving cached price:', error);
   }
 };
 
 /**
- * Dispatches a single consolidated fare update event
- * to synchronize fare across components
+ * Synchronize fare information across components
  */
-export const synchronizeFareAcrossComponents = (vehicleId: string, packageId: string, price: number) => {
-  if (shouldThrottle('fare-sync', 1000)) return;
+export const synchronizeFareAcrossComponents = (vehicleId: string, packageId: string, price: number, source: string): void => {
+  if (shouldThrottle(`sync-fare-${vehicleId}-${packageId}`, 1000)) return;
   
   try {
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
     const normalizedPackageId = normalizePackageId(packageId);
     
-    // Use the central fare manager
-    fareManager.storeFare(normalizedVehicleId, normalizedPackageId, price, 'synchronize');
+    // Save to cache
+    saveCachedPrice(normalizedVehicleId, normalizedPackageId, price);
+    
+    // Update fare manager
+    fareManager.storeFare(normalizedVehicleId, normalizedPackageId, price, source);
+    
+    // Notify components
+    fareManager.notifyFareUpdate(normalizedVehicleId, normalizedPackageId, price, source);
   } catch (error) {
     console.error('Error synchronizing fare:', error);
+  }
+};
+
+/**
+ * Centralized fare manager for consistent fare handling
+ */
+export const fareManager = {
+  // Internal storage
+  _fares: new Map<string, { price: number, timestamp: number, source: string }>(),
+  
+  /**
+   * Store fare information
+   */
+  storeFare(vehicleId: string, packageId: string, price: number, source: string = 'unknown'): void {
+    try {
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
+      const normalizedPackageId = normalizePackageId(packageId);
+      const key = `${normalizedVehicleId}_${normalizedPackageId}`;
+      
+      this._fares.set(key, {
+        price,
+        timestamp: Date.now(),
+        source
+      });
+      
+      // Also save to cache
+      saveCachedPrice(normalizedVehicleId, normalizedPackageId, price);
+    } catch (error) {
+      console.error('Error storing fare:', error);
+    }
+  },
+  
+  /**
+   * Get fare information
+   */
+  getFare(vehicleId: string, packageId: string): { price: number, timestamp: number, source: string } | null {
+    try {
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
+      const normalizedPackageId = normalizePackageId(packageId);
+      const key = `${normalizedVehicleId}_${normalizedPackageId}`;
+      
+      const fare = this._fares.get(key);
+      
+      if (fare) {
+        return fare;
+      }
+      
+      // Check cache
+      const cachedPrice = getCachedPrice(normalizedVehicleId, normalizedPackageId);
+      
+      if (cachedPrice > 0) {
+        // Store in memory
+        this._fares.set(key, {
+          price: cachedPrice,
+          timestamp: Date.now(),
+          source: 'cache'
+        });
+        
+        return {
+          price: cachedPrice,
+          timestamp: Date.now(),
+          source: 'cache'
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting fare:', error);
+      return null;
+    }
+  },
+  
+  /**
+   * Notify components about fare update
+   */
+  notifyFareUpdate(vehicleId: string, packageId: string, price: number, source: string): void {
+    if (shouldThrottle(`notify-fare-${vehicleId}-${packageId}`, 1000)) return;
+    
+    try {
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
+      const normalizedPackageId = normalizePackageId(packageId);
+      
+      console.log(`Notifying fare update: ${normalizedVehicleId}, ${normalizedPackageId}, ${price} (source: ${source})`);
+      
+      window.dispatchEvent(new CustomEvent('fare-updated', {
+        detail: {
+          vehicleId: normalizedVehicleId,
+          packageId: normalizedPackageId,
+          price,
+          source,
+          timestamp: Date.now()
+        }
+      }));
+    } catch (error) {
+      console.error('Error notifying fare update:', error);
+    }
+  },
+  
+  /**
+   * Clear all fares
+   */
+  clearFares(): void {
+    console.log('Clearing all fares');
+    this._fares.clear();
+    window.localPackagePriceCache = {};
   }
 };

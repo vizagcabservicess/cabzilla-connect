@@ -1,7 +1,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
-import { normalizePackageId, normalizeVehicleId, fareManager } from '@/lib/packageUtils';
+import { normalizePackageId, normalizeVehicleId, fareManager, shouldThrottle } from '@/lib/packageUtils';
 
 interface BookingSummaryHelperProps {
   tripType: string;
@@ -30,7 +30,8 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Track when we've dispatched a price update so we don't get into loops
-  const lastDispatchTimeRef = useRef<number>(0);
+  const lastDispatchTimeRef = useRef<Record<string, number>>({});
+  const mountedRef = useRef<boolean>(true);
   
   // Update hourlyPackage in state when the prop changes
   useEffect(() => {
@@ -48,38 +49,18 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     // Skip if no cab selected or not a local trip
     if (!selectedCabId || tripType !== 'local' || !currentPackage || totalPrice <= 0) return;
     
-    // Throttle check frequency
-    const now = Date.now();
-    if (now - lastCheckTimeRef.current < 3000) { // 3 second throttle
-      // If we need to update but are throttled, set a flag for later
-      if (!pendingUpdateRef.current) {
-        pendingUpdateRef.current = true;
-        
-        // Clear any existing timeout
-        if (updateTimeoutRef.current) {
-          clearTimeout(updateTimeoutRef.current);
-        }
-        
-        // Schedule a check after throttle period
-        updateTimeoutRef.current = setTimeout(() => {
-          lastCheckTimeRef.current = Date.now();
-          pendingUpdateRef.current = false;
-          
-          // Re-check for price difference
-          checkAndUpdatePrice();
-        }, 3000);
-      }
+    // Throttle check frequency - more aggressive throttling to prevent loops
+    if (shouldThrottle('booking-summary-check', 5000)) {
       return;
     }
     
-    lastCheckTimeRef.current = now;
-    pendingUpdateRef.current = false;
-    
+    lastCheckTimeRef.current = Date.now();
     checkAndUpdatePrice();
     
     function checkAndUpdatePrice() {
       const normalizedCabId = normalizeVehicleId(selectedCabId);
       const normalizedPackageId = normalizePackageId(currentPackage!);
+      const cacheKey = `${normalizedCabId}_${normalizedPackageId}`;
       
       // Get price from fare manager
       const cachedFare = fareManager.getFare(normalizedCabId, normalizedPackageId);
@@ -88,21 +69,27 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       if (cachedFare && Math.abs(cachedFare.price - totalPrice) > 10) {
         console.log(`BookingSummaryHelper: Cached fare (${cachedFare.price}) differs from current (${totalPrice}), syncing`);
         
-        // Throttle notifications to prevent excessive dispatches
+        // Throttle notifications for this specific vehicle/package combination
         const now = Date.now();
-        if (now - lastDispatchTimeRef.current < 5000) {
+        const lastTime = lastDispatchTimeRef.current[cacheKey] || 0;
+        
+        if (now - lastTime < 8000) { // 8 second throttle per vehicle/package
+          console.log(`BookingSummaryHelper: Throttling price sync for ${cacheKey}`);
           return;
         }
-        lastDispatchTimeRef.current = now;
+        
+        lastDispatchTimeRef.current[cacheKey] = now;
         
         // Notify components about updated price
         fareManager.notifyFareUpdate(normalizedCabId, normalizedPackageId, cachedFare.price, 'booking-summary-helper');
         
-        // Show toast for significant price changes
-        toast.info(`Updated price to ₹${cachedFare.price.toLocaleString('en-IN')}`, {
-          duration: 3000,
-          id: `price-update-${normalizedCabId}`
-        });
+        // Show toast for significant price changes - only for large differences
+        if (Math.abs(cachedFare.price - totalPrice) > 100) {
+          toast.info(`Updated price to ₹${cachedFare.price.toLocaleString('en-IN')}`, {
+            duration: 3000,
+            id: `price-update-${normalizedCabId}`
+          });
+        }
       } else if (!cachedFare && totalPrice > 0) {
         // If we don't have a cached fare but we do have a price, store it
         fareManager.storeFare(normalizedCabId, normalizedPackageId, totalPrice, 'booking-summary');
@@ -112,7 +99,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   
   // Clean up timeouts on unmount
   useEffect(() => {
+    mountedRef.current = true;
+    
     return () => {
+      mountedRef.current = false;
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }

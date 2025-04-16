@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -35,6 +36,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const apiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  // Define the reference vehicle here at component level so it's in scope throughout
   const referenceVehicle = 'sedan';
   
   const normalizedSelectedPackage = selectedPackage ? normalizePackageId(selectedPackage) : undefined;
@@ -72,6 +74,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       
       let successfulPrices = 0;
       
+      // First pass: Get prices from cache
       for (const pkg of updatedPackages) {
         const normalizedPackageId = normalizePackageId(pkg.id);
         pkg.id = normalizedPackageId;
@@ -84,6 +87,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         }
       }
       
+      // Set up a timeout to use default values if API calls take too long
       if (apiTimeoutRef.current) {
         clearTimeout(apiTimeoutRef.current);
       }
@@ -127,24 +131,56 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         }
       }, 3000);
       
+      // Second pass: Only fetch prices not in cache with a small delay between requests
       if (forceRefresh || successfulPrices < updatedPackages.length) {
         console.log(`Cache status: ${successfulPrices}/${updatedPackages.length} packages from cache. ${forceRefresh ? 'Force refreshing.' : ''}`);
         
         for (const pkg of updatedPackages) {
           if (forceRefresh || pkg.basePrice <= 0) {
             try {
-              const price = await getLocalPackagePrice(pkg.id, referenceVehicle, forceRefresh);
-              if (price > 0) {
-                pkg.basePrice = price;
-                console.log(`Updated ${pkg.id} price to ${price} from API`);
-                
-                fareManager.storeFare(referenceVehicle, pkg.id, price, 'api');
+              // Add retry mechanism with exponential backoff for API calls
+              let retries = 0;
+              const maxRetries = 2;
+              let price = 0;
+              
+              while (retries <= maxRetries && price <= 0) {
+                try {
+                  price = await getLocalPackagePrice(pkg.id, referenceVehicle, forceRefresh);
+                  
+                  if (price > 0) {
+                    console.log(`Updated ${pkg.id} price to ${price} from API`);
+                    pkg.basePrice = price;
+                    fareManager.storeFare(referenceVehicle, pkg.id, price, 'api');
+                    break;
+                  }
+                } catch (error) {
+                  retries++;
+                  console.log(`API call attempt ${retries} failed for ${pkg.id}`);
+                  // Exponential backoff
+                  await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retries)));
+                }
+              }
+              
+              // If all retries fail, use fallback price
+              if (price <= 0) {
+                console.log(`All API calls failed for ${pkg.id}, using fallback price`);
+                const fallbackPrice = pkg.id === '10hrs-100km' ? 3500 : 
+                                      pkg.id === '4hrs-40km' ? 1800 : 2500;
+                pkg.basePrice = fallbackPrice;
+                fareManager.storeFare(referenceVehicle, pkg.id, fallbackPrice, 'fallback');
               }
             } catch (error) {
               console.error(`Error fetching price for ${pkg.id}:`, error);
+              
+              // Set fallback price
+              const fallbackPrice = pkg.id === '10hrs-100km' ? 3500 : 
+                                    pkg.id === '4hrs-40km' ? 1800 : 2500;
+              pkg.basePrice = fallbackPrice;
+              fareManager.storeFare(referenceVehicle, pkg.id, fallbackPrice, 'error-fallback');
             }
             
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Add a small delay between API calls to avoid overloading the server
+            await new Promise(resolve => setTimeout(resolve, 150));
           }
         }
         
