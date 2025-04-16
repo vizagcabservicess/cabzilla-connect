@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { hourlyPackages } from './packageData';
 
@@ -29,6 +28,29 @@ export const shouldThrottle = (operationKey: string, throttleDuration: number = 
   }
   
   throttleTimestamps[operationKey] = now;
+  return false;
+};
+
+// Additional throttle mechanism specifically for problematic vehicle combinations
+const vehicleThrottleTimestamps: Map<string, number> = new Map();
+const RECURSIVE_PROTECTION_THROTTLE = 10000; // 10 seconds
+
+/**
+ * Check if a vehicle-specific operation should be throttled
+ * This adds extra protection against recursive loops for specific vehicles
+ */
+export const shouldThrottleForVehicle = (vehicleId: string, operationKey: string, throttleDuration: number = RECURSIVE_PROTECTION_THROTTLE): boolean => {
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  const key = `${normalizedVehicleId}_${operationKey}`;
+  const now = Date.now();
+  const lastTime = vehicleThrottleTimestamps.get(key) || 0;
+  
+  if (now - lastTime < throttleDuration) {
+    console.log(`Vehicle-specific throttling for ${normalizedVehicleId} operation '${operationKey}' (${Math.floor((now - lastTime))}ms < ${throttleDuration}ms)`);
+    return true;
+  }
+  
+  vehicleThrottleTimestamps.set(key, now);
   return false;
 };
 
@@ -72,6 +94,7 @@ export const normalizePackageId = (packageId?: string): string => {
 
 /**
  * Normalize vehicle ID for consistency
+ * Fixed to properly handle Innova Hycross cases
  */
 export const normalizeVehicleId = (vehicleId?: string): string => {
   if (!vehicleId) return ''; 
@@ -79,15 +102,17 @@ export const normalizeVehicleId = (vehicleId?: string): string => {
   // Convert to lowercase and replace spaces with underscores
   const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
   
-  // Special case to ensure MPV is always mapped correctly - check this first
+  // Special case to ensure Innova Hycross is always mapped correctly
+  // This was causing recursive loops due to inconsistent normalization
   if (normalized === 'mpv' || 
-      normalized === 'innova hycross' || 
+      normalized === 'innova_hycross' || 
       normalized === 'innovahycross' ||
+      normalized === 'innova-hycross' ||
       normalized === 'innova_hycross' ||
       normalized.includes('hycross') ||
       normalized.includes('hi_cross') ||
       normalized.includes('hi-cross')) {
-    return 'innova_hycross';
+    return 'innova_hycross'; // Consistently return the same string for all Hycross variants
   }
   
   // Handle other special cases
@@ -252,6 +277,14 @@ export const saveCachedPrice = (vehicleId: string, packageId: string, price: num
     const normalizedPackageId = normalizePackageId(packageId);
     const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
     
+    // Special handling for Innova Hycross to prevent recursive updates
+    if (normalizedVehicleId === 'innova_hycross' || normalizedVehicleId === 'mpv') {
+      if (shouldThrottleForVehicle(normalizedVehicleId, 'price-cache-save', 8000)) {
+        console.log(`Preventing too frequent cache updates for ${normalizedVehicleId}`);
+        return;
+      }
+    }
+    
     if (typeof window !== 'undefined') {
       if (!window.localPackagePriceCache) {
         window.localPackagePriceCache = {};
@@ -271,12 +304,22 @@ export const saveCachedPrice = (vehicleId: string, packageId: string, price: num
 
 /**
  * Synchronize fare information across components
+ * Modified to prevent recursive updates
  */
 export const synchronizeFareAcrossComponents = (vehicleId: string, packageId: string, price: number, source: string): void => {
-  if (shouldThrottle(`sync-fare-${vehicleId}-${packageId}`, 1000)) return;
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  
+  // Extra protection for Innova Hycross which seems to cause recursive loops
+  if (normalizedVehicleId === 'innova_hycross' || normalizedVehicleId === 'mpv') {
+    if (shouldThrottleForVehicle(normalizedVehicleId, 'sync-fare', 8000)) {
+      return;
+    }
+  }
+  
+  // General throttling for all vehicles
+  if (shouldThrottle(`sync-fare-${normalizedVehicleId}-${packageId}`, 3000)) return;
   
   try {
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
     const normalizedPackageId = normalizePackageId(packageId);
     
     // Save to cache
@@ -285,8 +328,10 @@ export const synchronizeFareAcrossComponents = (vehicleId: string, packageId: st
     // Update fare manager
     fareManager.storeFare(normalizedVehicleId, normalizedPackageId, price, source);
     
-    // Notify components
-    fareManager.notifyFareUpdate(normalizedVehicleId, normalizedPackageId, price, source);
+    // Notify components using a small delay to prevent recursive updates
+    setTimeout(() => {
+      fareManager.notifyFareUpdate(normalizedVehicleId, normalizedPackageId, price, source);
+    }, 500);
   } catch (error) {
     console.error('Error synchronizing fare:', error);
   }
@@ -306,6 +351,15 @@ export const fareManager = {
     try {
       const normalizedVehicleId = normalizeVehicleId(vehicleId);
       const normalizedPackageId = normalizePackageId(packageId);
+      
+      // Special handling for Innova Hycross to prevent recursive updates
+      if (normalizedVehicleId === 'innova_hycross' || normalizedVehicleId === 'mpv') {
+        if (shouldThrottleForVehicle(normalizedVehicleId, 'store-fare', 8000)) {
+          console.log(`Preventing too frequent fare storage for ${normalizedVehicleId}`);
+          return;
+        }
+      }
+      
       const key = `${normalizedVehicleId}_${normalizedPackageId}`;
       
       this._fares.set(key, {
@@ -365,10 +419,19 @@ export const fareManager = {
    * Notify components about fare update
    */
   notifyFareUpdate(vehicleId: string, packageId: string, price: number, source: string): void {
-    if (shouldThrottle(`notify-fare-${vehicleId}-${packageId}`, 1000)) return;
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    
+    // Special handling for Innova Hycross to prevent recursive updates
+    if (normalizedVehicleId === 'innova_hycross' || normalizedVehicleId === 'mpv') {
+      if (shouldThrottleForVehicle(normalizedVehicleId, 'notify-fare', 8000)) {
+        console.log(`Preventing too frequent fare notifications for ${normalizedVehicleId}`);
+        return;
+      }
+    }
+    
+    if (shouldThrottle(`notify-fare-${normalizedVehicleId}-${packageId}`, 3000)) return;
     
     try {
-      const normalizedVehicleId = normalizeVehicleId(vehicleId);
       const normalizedPackageId = normalizePackageId(packageId);
       
       console.log(`Notifying fare update: ${normalizedVehicleId}, ${normalizedPackageId}, ${price} (source: ${source})`);

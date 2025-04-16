@@ -32,6 +32,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   // Track when we've dispatched a price update so we don't get into loops
   const lastDispatchTimeRef = useRef<Record<string, number>>({});
   const mountedRef = useRef<boolean>(true);
+  const lastProcessedPriceRef = useRef<number>(0);
   
   // Update hourlyPackage in state when the prop changes
   useEffect(() => {
@@ -44,20 +45,43 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     }
   }, [hourlyPackage, currentPackage]);
 
-  // Main price synchronization effect - simplified to reduce overhead
+  // Main price synchronization effect - significantly more aggressive throttling to prevent loops
   useEffect(() => {
     // Skip if no cab selected or not a local trip
     if (!selectedCabId || tripType !== 'local' || !currentPackage || totalPrice <= 0) return;
     
-    // Throttle check frequency - more aggressive throttling to prevent loops
+    // Check if this is the same price we just processed to prevent loops
+    if (totalPrice === lastProcessedPriceRef.current) {
+      return; // Skip processing the same price multiple times
+    }
+    
+    // Extremely aggressive throttling specifically for Innova Hycross to break the loop
+    const normalizedCabId = normalizeVehicleId(selectedCabId);
+    if (normalizedCabId === 'innova_hycross' || normalizedCabId === 'mpv') {
+      // 15 second throttle for Innova Hycross which seems particularly problematic
+      if (shouldThrottle(`booking-summary-hycross-${normalizedCabId}`, 15000)) {
+        console.log(`BookingSummaryHelper: Extra throttling for ${normalizedCabId}`);
+        return;
+      }
+    }
+    
+    // General throttle check with much higher timeout (5 seconds)
     if (shouldThrottle('booking-summary-check', 5000)) {
       return;
     }
     
     lastCheckTimeRef.current = Date.now();
-    checkAndUpdatePrice();
+    lastProcessedPriceRef.current = totalPrice;
     
-    function checkAndUpdatePrice() {
+    // Guard clause against recursive updates
+    if (pendingUpdateRef.current) {
+      console.log('BookingSummaryHelper: Update already in progress, skipping');
+      return;
+    }
+    
+    pendingUpdateRef.current = true;
+    
+    try {
       const normalizedCabId = normalizeVehicleId(selectedCabId);
       const normalizedPackageId = normalizePackageId(currentPackage!);
       const cacheKey = `${normalizedCabId}_${normalizedPackageId}`;
@@ -75,25 +99,43 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         
         if (now - lastTime < 8000) { // 8 second throttle per vehicle/package
           console.log(`BookingSummaryHelper: Throttling price sync for ${cacheKey}`);
+          pendingUpdateRef.current = false;
           return;
         }
         
         lastDispatchTimeRef.current[cacheKey] = now;
         
-        // Notify components about updated price
-        fareManager.notifyFareUpdate(normalizedCabId, normalizedPackageId, cachedFare.price, 'booking-summary-helper');
-        
-        // Show toast for significant price changes - only for large differences
-        if (Math.abs(cachedFare.price - totalPrice) > 100) {
-          toast.info(`Updated price to ₹${cachedFare.price.toLocaleString('en-IN')}`, {
-            duration: 3000,
-            id: `price-update-${normalizedCabId}`
-          });
+        // Notify components about updated price - but use setTimeout to defer execution
+        // This helps break circular update patterns
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
         }
+        
+        updateTimeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          
+          fareManager.notifyFareUpdate(normalizedCabId, normalizedPackageId, cachedFare.price, 'booking-summary-helper');
+          
+          // Show toast for significant price changes - only for large differences
+          if (Math.abs(cachedFare.price - totalPrice) > 100) {
+            toast.info(`Updated price to ₹${cachedFare.price.toLocaleString('en-IN')}`, {
+              duration: 3000,
+              id: `price-update-${normalizedCabId}`
+            });
+          }
+          
+          pendingUpdateRef.current = false;
+        }, 1000); // 1 second delay before dispatch to break potential loops
       } else if (!cachedFare && totalPrice > 0) {
         // If we don't have a cached fare but we do have a price, store it
         fareManager.storeFare(normalizedCabId, normalizedPackageId, totalPrice, 'booking-summary');
+        pendingUpdateRef.current = false;
+      } else {
+        pendingUpdateRef.current = false;
       }
+    } catch (error) {
+      console.error('Error in BookingSummaryHelper:', error);
+      pendingUpdateRef.current = false;
     }
   }, [selectedCabId, tripType, currentPackage, totalPrice]);
   
