@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { normalizePackageId, normalizeVehicleId } from './fareCalculationService';
@@ -308,8 +309,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       const packageFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
       localStorage.setItem(packageFareKey, calculatedPrice.toString());
       
-      // Store as the selected fare for this vehicle/package
-      const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+      // Store as the selected fare for this vehicle/package - using the same variable name as above
       localStorage.setItem(selectedFareKey, calculatedPrice.toString());
       
       console.log(`Stored calculated fare in localStorage: ${packageFareKey} = ${calculatedPrice}`);
@@ -354,8 +354,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     localStorage.setItem(fareKey, dynamicPrice.toString());
     console.log(`Stored fare in localStorage: ${fareKey} = ${dynamicPrice}`);
     
-    // Also store as the selected fare
-    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    // Also store as the selected fare - using the existing selectedFareKey variable, not redeclaring it
     localStorage.setItem(selectedFareKey, dynamicPrice.toString());
     
     // Also store specific package price in localStorage
@@ -400,8 +399,8 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const fareKey = `fare_local_${normalizedVehicleType}`;
     localStorage.setItem(fareKey, dynamicPrice.toString());
     
-    // Store as the selected fare
-    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    // The following refers to the same variable as already used higher up, so we reuse it
+    // without redeclaring
     localStorage.setItem(selectedFareKey, dynamicPrice.toString());
     
     // Also store specific package price in localStorage
