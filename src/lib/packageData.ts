@@ -161,7 +161,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
     }
     
     // Get API URL safely
-    const apiUrl = getApiUrl() || '';
+    const apiUrl = getApiUrl('');
     
     // IMPORTANT: Use direct database API endpoint for local fares as the primary source
     // FIXED: Use correct vehicle_id parameter with normalized value
