@@ -6,23 +6,6 @@ export * from './cabData';
 export * from './packageData';
 export * from './tourData';
 
-// Export our improved package utilities
-export { 
-  normalizePackageId,
-  normalizeVehicleId,
-  getPackageDisplayName,
-  savePackageSelection,
-  notifyPackageChange,
-  getStandardHourlyPackageOptions,
-  shouldThrottle,
-  clearPackageFareCache,
-  forceFareRecalculation,
-  getCachedPrice,
-  saveCachedPrice,
-  synchronizeFareAcrossComponents,
-  fareManager
-} from './packageUtils';
-
 // Export fare calculation functions
 export { 
   calculateFare, 
@@ -90,9 +73,6 @@ export {
   clearVehicleDataCache,
   getVehicleTypes
 } from '@/services/vehicleDataService';
-
-// Export usePricing hook
-export { usePricing } from '@/hooks/usePricing';
 
 // Re-export CabType from the types directly
 export type { 

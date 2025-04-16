@@ -1,9 +1,7 @@
 
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { toast } from 'sonner';
 
-// Define package type
 export interface HourlyPackage {
   id: string;
   name: string;
@@ -12,323 +10,481 @@ export interface HourlyPackage {
   basePrice: number;
 }
 
-// Standard hourly packages
 export const hourlyPackages: HourlyPackage[] = [
-  {
-    id: '4hrs-40km',
-    name: '4 Hours Package',
-    hours: 4,
-    kilometers: 40,
-    basePrice: 0
+  { 
+    id: '4hrs-40km', 
+    name: '4 Hours Package', 
+    hours: 4, 
+    kilometers: 40, 
+    basePrice: 0  // Will be populated from API
   },
-  {
-    id: '8hrs-80km',
-    name: '8 Hours Package',
-    hours: 8,
-    kilometers: 80,
-    basePrice: 0
+  { 
+    id: '8hrs-80km', 
+    name: '8 Hours Package', 
+    hours: 8, 
+    kilometers: 80, 
+    basePrice: 0  // Will be populated from API
   },
-  {
-    id: '10hrs-100km',
-    name: '10 Hours Package',
-    hours: 10,
-    kilometers: 100,
-    basePrice: 0
+  { 
+    id: '10hrs-100km', 
+    name: '10 Hours Package', 
+    hours: 10, 
+    kilometers: 100, 
+    basePrice: 0  // Will be populated from API
   }
 ];
 
-// Local package price cache
+// Legacy format hourly packages (for backward compatibility)
+export const hourlyPackageOptions = hourlyPackages.map(pkg => ({
+  value: pkg.id,
+  label: `${pkg.hours} Hours / ${pkg.kilometers} KM`
+}));
+
+// Initialize the global cache if it doesn't exist
 if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
   window.localPackagePriceCache = {};
 }
 
-// Price matrix for local packages
-let localPackagePriceMatrix: Record<string, Record<string, number>> = {};
+// Define price multipliers based on vehicle type for fallback calculations
+const vehicleMultipliers: Record<string, number> = {
+  sedan: 1.0,
+  ertiga: 1.25,
+  innova: 1.5,
+  innova_crysta: 1.5,
+  innova_hycross: 1.6,
+  tempo_traveller: 2.0,
+  tempo: 2.0,
+  luxury: 1.7,
+  suv: 1.25,
+  mpv: 1.4,
+  dzire_cng: 1.0, // Same as sedan
+  dzire: 1.0,
+  cng: 1.0
+};
 
-/**
- * Get price for a local package, first from cache, then from API with fallback mechanism
- */
-export const getLocalPackagePrice = async (
-  packageId: string,
-  vehicleId: string = 'sedan',
-  forceRefresh: boolean = false
-): Promise<number> => {
-  // Normalize package ID and vehicle ID
-  packageId = packageId.toLowerCase().replace(/\s+/g, '-');
-  vehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+// Calculate a dynamic price for a given vehicle and package
+const calculateDynamicPrice = (vehicleType: string, packageId: string): number => {
+  // Normalize vehicle type to match multipliers
+  const normalizedVehicleType = vehicleType.toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace('crysta', 'crysta')
+    .replace('hycross', 'hycross');
   
-  // Create cache key
-  const cacheKey = `${vehicleId}_${packageId}`;
+  // Determine the multiplier based on vehicle type (default to 1.0 if not found)
+  const multiplier = vehicleMultipliers[normalizedVehicleType] || 1.0;
   
-  // Check cache first unless forced refresh
-  if (!forceRefresh && window.localPackagePriceCache && window.localPackagePriceCache[cacheKey]) {
-    console.log(`Retrieved cached price for ${cacheKey}: ${window.localPackagePriceCache[cacheKey]}`);
-    return window.localPackagePriceCache[cacheKey];
-  }
-  
-  // Next check if we have a price in the matrix (works offline)
-  if (localPackagePriceMatrix[vehicleId] && localPackagePriceMatrix[vehicleId][packageId]) {
-    const price = localPackagePriceMatrix[vehicleId][packageId];
-    if (price > 0) {
-      console.log(`Retrieved price from matrix for ${cacheKey}: ${price}`);
-      
-      // Still cache it for future use
-      if (window.localPackagePriceCache) {
-        window.localPackagePriceCache[cacheKey] = price;
-      }
-      
-      return price;
-    }
-  }
-  
-  // Default prices by package type in case API fails
-  const defaultPrices: Record<string, Record<string, number>> = {
-    'sedan': {
-      '4hrs-40km': 1800,
-      '8hrs-80km': 2500,
-      '10hrs-100km': 3500
-    },
-    'dzire_cng': {
-      '4hrs-40km': 1800,
-      '8hrs-80km': 2500,
-      '10hrs-100km': 3500
-    },
-    'ertiga': {
-      '4hrs-40km': 2100,
-      '8hrs-80km': 3200,
-      '10hrs-100km': 4000
-    },
-    'innova_crysta': {
-      '4hrs-40km': 2500,
-      '8hrs-80km': 3800,
-      '10hrs-100km': 4500
-    },
-    'innova_hycross': {
-      '4hrs-40km': 3000,
-      '8hrs-80km': 4500,
-      '10hrs-100km': 5500
-    },
-    'luxury': {
-      '4hrs-40km': 3000,
-      '8hrs-80km': 4500,
-      '10hrs-100km': 5500
-    },
-    'tempo_traveller': {
-      '4hrs-40km': 3000,
-      '8hrs-80km': 5500,
-      '10hrs-100km': 6500
-    }
+  // Base prices for different packages
+  const baseValues = {
+    '4hrs-40km': 1200,
+    '8hrs-80km': 2000,
+    '10hrs-100km': 2500
   };
   
+  // Normalize package ID to match base values
+  const normalizedPackageId = packageId
+    .replace(/\d+hr-/, match => match.replace('hr-', 'hrs-'))
+    .replace(/\d+hr_/, match => match.replace('hr_', 'hrs-'))
+    .replace('_', '-');
+  
+  // Get base value for package (default to 2000 if not found)
+  const baseValue = baseValues[normalizedPackageId as keyof typeof baseValues] || 2000;
+  
+  // Calculate and return the dynamic price
+  return Math.round(baseValue * multiplier);
+};
+
+// Utility function to normalize and validate API URLs
+const validateApiUrl = (url: string): boolean => {
+  // Basic validation - check if the URL has a valid structure
   try {
-    const apiUrl = getApiUrl();
-    console.log(`Fetching price from API: ${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${vehicleId}`);
-    
-    // Set a lower timeout value to handle API failures quicker
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-    
-    const response = await axios.get(`${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${vehicleId}`, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
-      },
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
-      // Update the price matrix for this vehicle
-      if (!localPackagePriceMatrix[vehicleId]) {
-        localPackagePriceMatrix[vehicleId] = {};
-      }
-      
-      // Process the response to extract prices for different packages
-      const prices = {};
-      let foundPrice = 0;
-      
-      // Map API response to prices
-      response.data.fares.forEach((fare: any) => {
-        // Process the response data and extract prices for the packages
-        if (fare.price4hrs40km) localPackagePriceMatrix[vehicleId]['4hrs-40km'] = parseFloat(fare.price4hrs40km);
-        if (fare.price8hrs80km) localPackagePriceMatrix[vehicleId]['8hrs-80km'] = parseFloat(fare.price8hrs80km);
-        if (fare.price10hrs100km) localPackagePriceMatrix[vehicleId]['10hrs-100km'] = parseFloat(fare.price10hrs100km);
-        
-        // Store in cache
-        if (window.localPackagePriceCache) {
-          if (fare.price4hrs40km) window.localPackagePriceCache[`${vehicleId}_4hrs-40km`] = parseFloat(fare.price4hrs40km);
-          if (fare.price8hrs80km) window.localPackagePriceCache[`${vehicleId}_8hrs-80km`] = parseFloat(fare.price8hrs80km);
-          if (fare.price10hrs100km) window.localPackagePriceCache[`${vehicleId}_10hrs-100km`] = parseFloat(fare.price10hrs100km);
-        }
-        
-        // Get the price for the requested package
-        if (packageId === '4hrs-40km' && fare.price4hrs40km) foundPrice = parseFloat(fare.price4hrs40km);
-        else if (packageId === '8hrs-80km' && fare.price8hrs80km) foundPrice = parseFloat(fare.price8hrs80km);
-        else if (packageId === '10hrs-100km' && fare.price10hrs100km) foundPrice = parseFloat(fare.price10hrs100km);
-      });
-      
-      // If we found a price for the requested package, use it
-      if (foundPrice > 0) {
-        console.log(`API returned price for ${cacheKey}: ${foundPrice}`);
-        return foundPrice;
-      }
-    }
-    
-    // If we didn't get a valid price from the API, use default price
-    const defaultPrice = getDefaultPrice(vehicleId, packageId, defaultPrices);
-    console.log(`Using default price for ${cacheKey}: ${defaultPrice}`);
-    
-    // Cache the default price
-    if (window.localPackagePriceCache) {
-      window.localPackagePriceCache[cacheKey] = defaultPrice;
-    }
-    
-    return defaultPrice;
-  } catch (error: any) {
-    console.error(`API call failed for ${cacheKey}:`, error.message || 'Unknown error');
-    
-    // Fallback to default price
-    const defaultPrice = getDefaultPrice(vehicleId, packageId, defaultPrices);
-    console.log(`Using fallback price for ${cacheKey} after error: ${defaultPrice}`);
-    
-    // Cache the default price
-    if (window.localPackagePriceCache) {
-      window.localPackagePriceCache[cacheKey] = defaultPrice;
-    }
-    
-    return defaultPrice;
+    new URL(url);
+    return true;
+  } catch {
+    // If the URL is relative, it's probably valid for our purposes
+    return url.startsWith('/') || url.startsWith('./') || url.startsWith('../');
   }
 };
 
-/**
- * Helper function to get the default price for a package
- */
-function getDefaultPrice(
-  vehicleId: string,
-  packageId: string,
-  defaultPrices: Record<string, Record<string, number>>
-): number {
-  // Try to get the exact vehicle specific price first
-  if (defaultPrices[vehicleId] && defaultPrices[vehicleId][packageId]) {
-    return defaultPrices[vehicleId][packageId];
+// Function to fetch local package prices directly from database via API
+export async function getLocalPackagePrice(packageId: string, vehicleType: string, forceRefresh: boolean = false): Promise<number> {
+  try {
+    console.log(`Getting local package price for ${vehicleType}, package: ${packageId}, forceRefresh: ${forceRefresh}`);
+    
+    // Normalize parameters
+    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    
+    // Fix: Make sure we format "8hr-80km" as "8hrs-80km"
+    let normalizedPackageId = packageId;
+    if (packageId.includes('hr-')) {
+      normalizedPackageId = packageId.replace('hr-', 'hrs-');
+    }
+    
+    // Make sure we're using the correct format "8hrs-80km" not "8hrs-8km"
+    if (normalizedPackageId === '8hrs-8km') {
+      normalizedPackageId = '8hrs-80km';
+    } else if (normalizedPackageId === '10hrs-10km') {
+      normalizedPackageId = '10hrs-100km';
+    } else if (normalizedPackageId === '4hrs-4km') {
+      normalizedPackageId = '4hrs-40km';
+    }
+    
+    // Create unique cache key
+    const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
+    
+    // Only check cache if force refresh not requested
+    if (!forceRefresh && window.localPackagePriceCache && 
+        window.localPackagePriceCache[cacheKey] && 
+        window.localPackagePriceCache[cacheKey].price > 0 &&
+        Date.now() - window.localPackagePriceCache[cacheKey].timestamp < 60000) { // Only use cache if less than 1 minute old
+      console.log(`Using cached price for ${cacheKey}: ${window.localPackagePriceCache[cacheKey].price}`);
+      
+      // Always broadcast the price for consistency even when using cache
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: {
+          packageId: normalizedPackageId,
+          vehicleType: normalizedVehicleType,
+          price: window.localPackagePriceCache[cacheKey].price,
+          source: 'cache',
+          timestamp: Date.now()
+        }
+      }));
+      
+      return window.localPackagePriceCache[cacheKey].price;
+    }
+    
+    // Get API URL safely
+    const apiUrl = getApiUrl() || '';
+    
+    // IMPORTANT: Use direct database API endpoint for local fares as the primary source
+    const primaryEndpoint = `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`;
+    
+    // Array of API endpoints to try - validate them first
+    const apiEndpoints = [
+      primaryEndpoint,
+      `${apiUrl}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
+      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
+    ].filter(url => validateApiUrl(url));
+    
+    if (apiEndpoints.length === 0) {
+      console.warn('No valid API endpoints available. Using dynamic pricing.');
+      // Proceed with fallback calculation if no valid endpoints
+      const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
+      window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
+      
+      // Broadcast the dynamic price
+      window.dispatchEvent(new CustomEvent('local-fare-updated', {
+        detail: {
+          packageId: normalizedPackageId,
+          vehicleType: normalizedVehicleType,
+          price: dynamicPrice,
+          source: 'dynamic',
+          timestamp: Date.now()
+        }
+      }));
+      
+      return dynamicPrice;
+    }
+    
+    // Try each endpoint until one succeeds
+    let lastError: Error | null = null;
+    let allEndpointsFailed = true;
+    
+    for (const endpoint of apiEndpoints) {
+      try {
+        console.log(`Fetching price from API: ${endpoint}`);
+        const response = await axios.get(endpoint, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+          },
+          // Add timeout to prevent long-hanging requests
+          timeout: 5000
+        });
+        
+        if (response.data) {
+          // Check if we got a fares array from direct-local-fares.php
+          if (response.data.fares && Array.isArray(response.data.fares) && response.data.fares.length > 0) {
+            const fareData = response.data.fares[0];
+            
+            // Extract the right price for the selected package
+            let price = 0;
+            if (normalizedPackageId.includes('4hrs-40km')) {
+              price = Number(fareData.price4hrs40km || 0);
+            } else if (normalizedPackageId.includes('8hrs-80km')) {
+              price = Number(fareData.price8hrs80km || 0);
+            } else if (normalizedPackageId.includes('10hrs-100km')) {
+              price = Number(fareData.price10hrs100km || 0);
+            }
+            
+            if (price > 0) {
+              console.log(`Retrieved fare directly from database API: ₹${price}`);
+              // Cache the price
+              window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+              
+              // Store in localStorage for better cross-component consistency
+              const fareKey = `fare_local_${normalizedVehicleType}`;
+              localStorage.setItem(fareKey, price.toString());
+              console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+              
+              // Dispatch an event to notify other components about the updated price
+              window.dispatchEvent(new CustomEvent('local-fare-updated', {
+                detail: {
+                  packageId: normalizedPackageId,
+                  vehicleType: normalizedVehicleType,
+                  price: price,
+                  source: 'database',
+                  timestamp: Date.now()
+                }
+              }));
+              
+              // Dispatch a more general fare-calculated event for broader component updates
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: normalizedVehicleType,
+                  tripType: 'local',
+                  calculated: true,
+                  fare: price,
+                  packageId: normalizedPackageId,
+                  timestamp: Date.now()
+                }
+              }));
+              
+              allEndpointsFailed = false;
+              return price;
+            }
+          }
+          
+          // Check if the API returned a pricing object with the specific package
+          if (response.data.data && response.data.data.price) {
+            const price = Number(response.data.data.price);
+            if (price > 0) {
+              console.log(`Retrieved specific package price from API: ₹${price}`);
+              // Cache the price
+              window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+              
+              // Store in localStorage for better cross-component consistency
+              const fareKey = `fare_local_${normalizedVehicleType}`;
+              localStorage.setItem(fareKey, price.toString());
+              console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+              
+              // Dispatch an event to notify other components about the updated price
+              window.dispatchEvent(new CustomEvent('local-fare-updated', {
+                detail: {
+                  packageId: normalizedPackageId,
+                  vehicleType: normalizedVehicleType,
+                  price: price,
+                  timestamp: Date.now()
+                }
+              }));
+              
+              // Dispatch a more general fare-calculated event for broader component updates
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: normalizedVehicleType,
+                  tripType: 'local',
+                  calculated: true,
+                  fare: price,
+                  packageId: normalizedPackageId,
+                  timestamp: Date.now()
+                }
+              }));
+              
+              allEndpointsFailed = false;
+              return price;
+            }
+          }
+          
+          // Extract price from the general fare object for the specific package
+          if (response.data.data || response.data.fares) {
+            const data = response.data.data || (Array.isArray(response.data.fares) ? response.data.fares[0] : response.data.fares);
+            
+            if (data) {
+              let price = 0;
+              
+              // Check different price formats based on package
+              if (normalizedPackageId.includes('4hrs-40km')) {
+                price = Number(data.price4hrs40km || data.price_4hr_40km || data.price4hr40km || data.price_4hrs_40km || 0);
+              } else if (normalizedPackageId.includes('8hrs-80km')) {
+                price = Number(data.price8hrs80km || data.price_8hr_80km || data.price8hr80km || data.price_8hrs_80km || 0);
+              } else if (normalizedPackageId.includes('10hrs-100km')) {
+                price = Number(data.price10hrs100km || data.price_10hr_100km || data.price10hr100km || data.price_10hrs_100km || 0);
+              }
+              
+              if (price > 0) {
+                console.log(`Retrieved generic package price from API: ₹${price}`);
+                // Cache the price
+                window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+                
+                // Store in localStorage for better cross-component consistency
+                const fareKey = `fare_local_${normalizedVehicleType}`;
+                localStorage.setItem(fareKey, price.toString());
+                console.log(`Stored fare in localStorage: ${fareKey} = ${price}`);
+                
+                // Dispatch an event to notify other components about the updated price
+                window.dispatchEvent(new CustomEvent('local-fare-updated', {
+                  detail: {
+                    packageId: normalizedPackageId,
+                    vehicleType: normalizedVehicleType,
+                    price: price,
+                    timestamp: Date.now()
+                  }
+                }));
+                
+                // Dispatch a more general fare-calculated event for broader component updates
+                window.dispatchEvent(new CustomEvent('fare-calculated', {
+                  detail: {
+                    cabId: normalizedVehicleType,
+                    tripType: 'local',
+                    calculated: true,
+                    fare: price,
+                    packageId: normalizedPackageId,
+                    timestamp: Date.now()
+                  }
+                }));
+                
+                allEndpointsFailed = false;
+                return price;
+              }
+            }
+          }
+          
+          // If still no valid price, check if we can generate one
+          if (response.data.dynamicallyGenerated || response.data.source === 'dynamic') {
+            console.log(`API returned dynamically generated values, using those as reference`);
+          }
+        }
+      } catch (error) {
+        console.log(`API endpoint ${endpoint} failed:`, error);
+        lastError = error instanceof Error ? error : new Error(String(error));
+      }
+    }
+    
+    // All API endpoints failed or returned invalid data, use dynamic calculation
+    console.error(`All API endpoints failed for ${vehicleType}, ${packageId}. Last error:`, lastError);
+    
+    // Use dynamic calculation
+    const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
+    console.log(`Using dynamically calculated price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
+    
+    // Cache the dynamically calculated price
+    window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
+    
+    // Store in localStorage for better cross-component consistency
+    const fareKey = `fare_local_${normalizedVehicleType}`;
+    localStorage.setItem(fareKey, dynamicPrice.toString());
+    console.log(`Stored fare in localStorage: ${fareKey} = ${dynamicPrice}`);
+    
+    // Dispatch an event to notify other components about the updated price
+    window.dispatchEvent(new CustomEvent('local-fare-updated', {
+      detail: {
+        packageId: normalizedPackageId,
+        vehicleType: normalizedVehicleType,
+        price: dynamicPrice,
+        source: 'dynamic',
+        timestamp: Date.now()
+      }
+    }));
+    
+    // Dispatch a more general fare-calculated event for broader component updates
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        cabId: normalizedVehicleType,
+        tripType: 'local',
+        calculated: true,
+        fare: dynamicPrice,
+        packageId: normalizedPackageId,
+        timestamp: Date.now()
+      }
+    }));
+    
+    return dynamicPrice;
+  } catch (error) {
+    console.error(`Error getting local package price for ${vehicleType}, ${packageId}:`, error);
+    
+    // Last resort: calculate a dynamic price
+    const dynamicPrice = calculateDynamicPrice(vehicleType, packageId);
+    console.log(`Using dynamically calculated fallback price for ${vehicleType}, ${packageId}: ${dynamicPrice}`);
+    
+    // Store in localStorage for better cross-component consistency
+    const normalizedVehicleType = vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const fareKey = `fare_local_${normalizedVehicleType}`;
+    localStorage.setItem(fareKey, dynamicPrice.toString());
+    console.log(`Stored fallback fare in localStorage: ${fareKey} = ${dynamicPrice}`);
+    
+    return dynamicPrice;
   }
-  
-  // Fallback to a similar vehicle
-  let similarVehicle = 'sedan';
-  if (vehicleId.includes('innova')) similarVehicle = 'innova_crysta';
-  else if (vehicleId.includes('ertiga')) similarVehicle = 'ertiga';
-  else if (vehicleId.includes('tempo')) similarVehicle = 'tempo_traveller';
-  else if (vehicleId.includes('luxury')) similarVehicle = 'luxury';
-  
-  // Return the price for the similar vehicle and package, or default to sedan 8hrs-80km price
-  if (defaultPrices[similarVehicle] && defaultPrices[similarVehicle][packageId]) {
-    return defaultPrices[similarVehicle][packageId];
-  }
-  
-  // Last resort - use sedan 8hrs-80km price
-  return 2500;
 }
 
-/**
- * Sync local fares with database to ensure data consistency
- */
-export const syncLocalFaresWithDatabase = async (): Promise<boolean> => {
+// Function to fetch and cache all local fares in the background
+export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Promise<void> {
   try {
-    console.log('Syncing local package fares with database...');
-    const apiUrl = getApiUrl();
+    // Common vehicle types to pre-cache
+    const vehicleTypes = ['sedan', 'ertiga', 'innova_crysta', 'dzire_cng', 'tempo_traveller'];
     
-    const response = await axios.get(`${apiUrl}/api/admin/sync-local-fares.php`, {
+    // Loop through all combinations of vehicles and packages
+    for (const vehicleType of vehicleTypes) {
+      for (const pkg of hourlyPackages) {
+        try {
+          // Fetch and cache each price (don't await - let these happen in parallel)
+          getLocalPackagePrice(pkg.id, vehicleType, forceRefresh)
+            .catch(err => console.warn(`Failed to cache price for ${vehicleType}, ${pkg.id}:`, err));
+        } catch (error) {
+          console.warn(`Error caching price for ${vehicleType}, ${pkg.id}:`, error);
+        }
+      }
+    }
+    
+    console.log('Background caching of local fares initiated');
+  } catch (error) {
+    console.error('Error in fetchAndCacheLocalFares:', error);
+  }
+}
+
+// Force sync with database via admin API
+export async function syncLocalFaresWithDatabase(): Promise<boolean> {
+  try {
+    console.log('Forcing sync of local package fares with database...');
+    
+    const apiUrl = getApiUrl() || '';
+    const syncEndpoint = `${apiUrl}/api/admin/sync-local-fares.php`;
+    
+    const response = await axios.get(syncEndpoint, {
       headers: {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
         'X-Force-Refresh': 'true',
         'X-Admin-Mode': 'true'
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 10000 // 10 second timeout for sync operation
     });
     
     if (response.data && response.data.status === 'success') {
-      console.log('Local fares synced successfully');
+      console.log('Local fares successfully synced with database:', response.data);
+      
+      // After successful sync, clear all cached prices
+      window.localPackagePriceCache = {};
+      
+      // Dispatch event to notify components about updated fares
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: {
+          timestamp: Date.now(),
+          vehicles: response.data.vehicles || [],
+          source: 'database-sync'
+        }
+      }));
+      
+      // Refresh all fares in the background
+      fetchAndCacheLocalFares(true);
+      
       return true;
     } else {
-      console.error('Sync failed:', response.data);
+      console.error('Local fares sync failed:', response.data);
       return false;
     }
   } catch (error) {
-    console.error('Error syncing local fares:', error);
+    console.error('Error syncing local fares with database:', error);
     return false;
   }
-};
-
-/**
- * Fetch and cache all local fares for better performance
- */
-export const fetchAndCacheLocalFares = async (forceRefresh = false): Promise<boolean> => {
-  try {
-    console.log('Fetching and caching all local package fares...');
-    const vehicleTypes = ['sedan', 'ertiga', 'innova_crysta', 'luxury', 'tempo_traveller'];
-    const packageTypes = ['4hrs-40km', '8hrs-80km', '10hrs-100km'];
-    
-    // Prepare an array of fetch promises
-    const fetchPromises = vehicleTypes.map(async (vehicleId) => {
-      try {
-        // Get prices for this vehicle
-        return await Promise.all(packageTypes.map(async (packageId) => {
-          try {
-            const price = await getLocalPackagePrice(packageId, vehicleId, forceRefresh);
-            console.log(`Cached price for ${vehicleId} ${packageId}: ${price}`);
-            return { vehicleId, packageId, price, success: true };
-          } catch (e) {
-            console.error(`Failed to fetch price for ${vehicleId} ${packageId}:`, e);
-            return { vehicleId, packageId, price: 0, success: false };
-          }
-        }));
-      } catch (e) {
-        console.error(`Failed to fetch prices for vehicle ${vehicleId}:`, e);
-        return packageTypes.map(packageId => ({ vehicleId, packageId, price: 0, success: false }));
-      }
-    });
-    
-    // Execute all fetch operations with a maximum timeout
-    const timeoutPromise = new Promise<any[]>((resolve) => {
-      setTimeout(() => {
-        resolve([{ timedOut: true }]);
-      }, 15000); // 15 second overall timeout
-    });
-    
-    const results = await Promise.race([
-      Promise.all(fetchPromises),
-      timeoutPromise
-    ]);
-    
-    if (results[0]?.timedOut) {
-      console.log('Fetching all prices timed out');
-      return false;
-    }
-    
-    // Flatten results and count successes
-    const flatResults = results.flat(2);
-    const successCount = flatResults.filter(r => r.success).length;
-    
-    console.log(`Cached ${successCount}/${vehicleTypes.length * packageTypes.length} local package prices`);
-    
-    // Store timestamp of last full cache update
-    localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
-    
-    // Dispatch an event to notify components about the updated prices
-    window.dispatchEvent(new CustomEvent('local-fares-cached', {
-      detail: {
-        success: true,
-        count: successCount,
-        timestamp: Date.now()
-      }
-    }));
-    
-    return successCount > 0;
-  } catch (error) {
-    console.error('Error fetching and caching local fares:', error);
-    return false;
-  }
-};
+}
