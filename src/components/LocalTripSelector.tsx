@@ -7,6 +7,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
 import { toast } from 'sonner';
+import { 
+  normalizePackageId, 
+  getPackageDisplayName,
+  savePackageSelection,
+  notifyPackageChange 
+} from '@/lib/packageUtils';
 
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
@@ -18,27 +24,6 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
-  
-  const standardPackageIds: Record<string, string> = {
-    "4hr_40km": "4hrs-40km",
-    "04hr_40km": "4hrs-40km",
-    "04hrs_40km": "4hrs-40km",
-    "4hrs_40km": "4hrs-40km",
-    "8hr_80km": "8hrs-80km",
-    "8hrs_80km": "8hrs-80km", 
-    "10hr_100km": "10hrs-100km",
-    "10hrs_100km": "10hrs-100km"
-  };
-  
-  const normalizePackageId = (packageId: string): string => {
-    if (!packageId) return "8hrs-80km";
-    
-    const normalized = packageId
-      .replace('hrs-', 'hr_')
-      .replace('hr-', 'hr_');
-    
-    return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
-  };
   
   const loadPackages = async () => {
     setIsLoading(true);
@@ -53,9 +38,11 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       
       await Promise.all(updatedPackages.map(async (pkg) => {
         try {
-          const price = await getLocalPackagePrice(pkg.id, referenceVehicle, true);
+          const normalizedPackageId = normalizePackageId(pkg.id);
+          const price = await getLocalPackagePrice(normalizedPackageId, referenceVehicle, true);
           if (price > 0) {
             pkg.basePrice = price;
+            pkg.id = normalizedPackageId; // Ensure normalized ID
             console.log(`Updated ${pkg.id} price to ${price} from API`);
           } else {
             console.warn(`API returned zero or invalid price for ${pkg.id}`);
@@ -75,9 +62,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         console.log('Setting default package:', defaultPackage);
         onPackageSelect(defaultPackage);
         
-        window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-          detail: { packageId: defaultPackage, timestamp: Date.now() }
-        }));
+        // Use our utility functions for consistent handling
+        savePackageSelection(defaultPackage);
+        notifyPackageChange(defaultPackage);
       }
       
       const timestamp = Date.now();
@@ -136,23 +123,18 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const handlePackageSelect = (packageId: string) => {
     console.log(`Selected package: ${packageId}`);
     
-    let normalizedPackageId = packageId;
+    // Normalize the package ID using our utility
+    const normalizedPackageId = normalizePackageId(packageId);
     
-    if (packageId === '04hrs-40km') {
-      normalizedPackageId = '4hrs-40km';
-    } else {
-      normalizedPackageId = normalizePackageId(packageId);
-    }
-    
-    // Clear all selected fare cache for ALL cab types to force refresh
+    // Clear fare caches to force refresh
     try {
       if (typeof window !== 'undefined') {
-        console.log(`Clearing all fare caches due to package change to ${normalizedPackageId}`);
+        console.log(`Clearing fare caches due to package change to ${normalizedPackageId}`);
         
-        // First, clear our global fare cache object
+        // First, clear global fare cache object
         window.localPackagePriceCache = {};
         
-        // Clear any selected_fare entries in localStorage for ALL vehicles
+        // Clear any selected_fare entries in localStorage
         const localStorageKeys = Object.keys(localStorage);
         for (const key of localStorageKeys) {
           if (key.startsWith('selected_fare_') || key.startsWith('fare_local_')) {
@@ -161,7 +143,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           }
         }
         
-        // Clear any pending fare calculations - safely check if property exists first
+        // Clear any pending fare calculations
         if (window.pendingFareRequests) {
           window.pendingFareRequests = {};
         }
@@ -170,57 +152,14 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       console.error('Error clearing caches:', error);
     }
     
+    // Update parent component
     onPackageSelect(normalizedPackageId);
     
-    // Dispatch multiple events to ensure all components update correctly
-    window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-      detail: { 
-        packageId: normalizedPackageId, 
-        timestamp: Date.now() 
-      }
-    }));
+    // Use utilities for consistent handling
+    savePackageSelection(normalizedPackageId);
+    notifyPackageChange(normalizedPackageId);
     
-    // Force all fare calculations to refresh
-    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
-      detail: { 
-        source: 'LocalTripSelector', 
-        packageId: normalizedPackageId,
-        timestamp: Date.now() + 1 
-      }
-    }));
-    
-    // Force booking summary to update with new package
-    window.dispatchEvent(new CustomEvent('booking-package-changed', {
-      detail: {
-        packageId: normalizedPackageId,
-        packageName: getPackageDisplayName(normalizedPackageId),
-        source: 'LocalTripSelector',
-        timestamp: Date.now() + 2
-      }
-    }));
-    
-    // Send specific package update to booking summary
-    window.dispatchEvent(new CustomEvent('booking-summary-package-update', {
-      detail: {
-        packageId: normalizedPackageId,
-        packageName: getPackageDisplayName(normalizedPackageId),
-        source: 'LocalTripSelector',
-        timestamp: Date.now() + 3
-      }
-    }));
-    
-    toast.success(`Selected ${normalizedPackageId.replace(/-/g, ' ')} package`);
-  };
-  
-  const getPackageDisplayName = (packageId: string): string => {
-    if (packageId.includes('4hrs-40km')) {
-      return '4hrs 40KM Package';
-    } else if (packageId.includes('8hrs-80km')) {
-      return '8hrs 80KM Package';
-    } else if (packageId.includes('10hrs-100km')) {
-      return '10hrs 100KM Package';
-    }
-    return packageId.replace(/-/g, ' ');
+    toast.success(`Selected ${getPackageDisplayName(normalizedPackageId)} package`);
   };
   
   if (loadError) {
@@ -326,8 +265,3 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     </Card>
   );
 }
-
-const formatPrice = (price?: number) => {
-  if (!price || price <= 0) return "Price unavailable";
-  return `₹${price.toLocaleString('en-IN')}`;
-};

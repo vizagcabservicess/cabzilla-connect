@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -10,7 +11,7 @@ import {
 } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { cabTypes, formatPrice } from '@/lib/cabData';
-import { hourlyPackages, getLocalPackagePrice, hourlyPackageOptions } from '@/lib/packageData';
+import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
@@ -25,12 +26,17 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
-import { normalizePackageId, normalizeVehicleId } from '@/lib/fareCalculationService';
+import { 
+  normalizePackageId, 
+  normalizeVehicleId, 
+  getStandardHourlyPackageOptions,
+  savePackageSelection,
+  notifyPackageChange
+} from '@/lib/packageUtils';
+import { usePricing } from '@/hooks/usePricing';
 
-const localHourlyPackageOptions = [
-  { value: "8hrs-80km", label: "8 Hours / 80 KM" },
-  { value: "10hrs-100km", label: "10 Hours / 100 KM" }
-];
+// Use the standard hourly package options from our utility
+const localHourlyPackageOptions = getStandardHourlyPackageOptions();
 
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
@@ -56,6 +62,7 @@ export function Hero() {
       let hourlyPkgData = sessionStorage.getItem('hourlyPackage');
       const cabData = sessionStorage.getItem('selectedCab');
       
+      // Ensure the hourlyPackage is normalized
       if (hourlyPkgData) {
         hourlyPkgData = normalizePackageId(hourlyPkgData);
       }
@@ -67,7 +74,7 @@ export function Hero() {
         returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
         tripType: tripTypeData as TripType || 'outstation',
         tripMode: tripModeData as TripMode || 'one-way',
-        hourlyPackage: hourlyPkgData || localHourlyPackageOptions[0].value,
+        hourlyPackage: hourlyPkgData || localHourlyPackageOptions[1].value, // Default to 8hrs-80km
         selectedCab: cabData ? JSON.parse(cabData) as CabType : null
       };
     } catch (error) {
@@ -79,7 +86,7 @@ export function Hero() {
         returnDate: null,
         tripType: 'outstation' as TripType,
         tripMode: 'one-way' as TripMode,
-        hourlyPackage: localHourlyPackageOptions[0].value,
+        hourlyPackage: localHourlyPackageOptions[1].value,
         selectedCab: null
       };
     }
@@ -98,11 +105,20 @@ export function Hero() {
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
   const [tripType, setTripType] = useState<TripType>(savedData.tripType);
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
-  const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
+  const [hourlyPackage, setHourlyPackage] = useState<string>(normalizePackageId(savedData.hourlyPackage));
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
-  const [totalPrice, setTotalPrice] = useState<number>(0);
-  const [localPackagePrice, setLocalPackagePrice] = useState<number>(0);
+
+  // Use our new pricing hook to manage price calculations
+  const { totalPrice, isCalculating: isPriceCalculating, error: pricingError } = usePricing({
+    selectedCab,
+    distance,
+    tripType,
+    tripMode,
+    hourlyPackage,
+    pickupDate,
+    returnDate
+  });
 
   useEffect(() => {
     if (selectedCab) {
@@ -126,6 +142,9 @@ export function Hero() {
     if (normalizedPackage !== hourlyPackage) {
       console.log(`Hero: Normalized hourly package from ${hourlyPackage} to ${normalizedPackage}`);
       setHourlyPackage(normalizedPackage);
+      
+      // Save the normalized package ID to storage
+      savePackageSelection(normalizedPackage);
     }
   }, [hourlyPackage]);
 
@@ -182,9 +201,6 @@ export function Hero() {
     sessionStorage.setItem('tripType', tripType);
     sessionStorage.setItem('tripMode', tripMode);
     
-    if (tripType === 'airport' && airportLocation) {
-    }
-    
     if (tripType === 'local') {
       if (!pickupLocation) {
         const defaultLocation = vizagLocations.find(loc => loc.id.includes('vizag'));
@@ -195,8 +211,18 @@ export function Hero() {
       }
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
+      
+      // Ensure hourly package is set and normalized
+      const normalizedPackage = normalizePackageId(hourlyPackage);
+      if (normalizedPackage !== hourlyPackage) {
+        setHourlyPackage(normalizedPackage);
+      }
+      
+      // Save the package ID and dispatch events
+      savePackageSelection(normalizedPackage);
+      notifyPackageChange(normalizedPackage);
     }
-  }, [tripType, tripMode]);
+  }, [tripType, tripMode, hourlyPackage, pickupLocation]);
 
   useEffect(() => {
     if (pickupLocation) {
@@ -219,14 +245,8 @@ export function Hero() {
   }, [pickupDate, returnDate]);
 
   useEffect(() => {
-    sessionStorage.setItem('hourlyPackage', hourlyPackage);
-    console.log(`Hero: Saved hourly package to sessionStorage: ${hourlyPackage}`);
-    
-    if (hourlyPackage) {
-      const normalizedPackage = normalizePackageId(hourlyPackage);
-      localStorage.setItem('selected_package', normalizedPackage);
-      console.log(`Hero: Stored normalized hourly package in localStorage: ${normalizedPackage}`);
-    }
+    // Save hourly package using our utility
+    savePackageSelection(hourlyPackage);
   }, [hourlyPackage]);
 
   useEffect(() => {
@@ -256,55 +276,6 @@ export function Hero() {
     }
   }, [tripType, hourlyPackage]);
 
-  useEffect(() => {
-    const loadLocalPackagePrice = async () => {
-      if (tripType === 'local' && selectedCab) {
-        try {
-          const normalizedPackageId = normalizePackageId(hourlyPackage);
-          const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
-          
-          console.log(`Hero: Loading price for ${normalizedVehicleId} (${selectedCab.id}), package ${normalizedPackageId} (${hourlyPackage})`);
-          
-          const price = await getLocalPackagePrice(normalizedPackageId, normalizedVehicleId, true);
-          console.log(`Hero: Fetched local package price for ${normalizedVehicleId}: ${price}`);
-          
-          if (price > 0) {
-            setLocalPackagePrice(price);
-            
-            const fareKey = `fare_local_${normalizedVehicleId}`;
-            localStorage.setItem(fareKey, price.toString());
-            
-            const packageFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
-            localStorage.setItem(packageFareKey, price.toString());
-            
-            console.log(`Hero: Stored local package price in localStorage: ${packageFareKey} = ${price}`);
-          } else {
-            console.warn(`Invalid price (${price}) returned for ${normalizedVehicleId}, package ${normalizedPackageId}`);
-          }
-        } catch (error) {
-          console.error('Error loading local package price:', error);
-          if (selectedCab.price && selectedCab.price > 0) {
-            setLocalPackagePrice(selectedCab.price);
-            console.log(`Using fallback price from cab object: ${selectedCab.price}`);
-          }
-        }
-      }
-    };
-    
-    loadLocalPackagePrice();
-  }, [selectedCab, hourlyPackage, tripType]);
-
-  useEffect(() => {
-    const updatePrice = async () => {
-      if (selectedCab) {
-        const price = await calculatePrice();
-        setTotalPrice(price);
-      }
-    };
-    
-    updatePrice();
-  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, localPackagePrice]);
-
   function handleContinue() {
     if (!isFormValid) {
       toast({
@@ -322,7 +293,7 @@ export function Hero() {
         if (normalizedPackage !== hourlyPackage) {
           console.log(`Normalizing hourly package on continue: ${hourlyPackage} → ${normalizedPackage}`);
           setHourlyPackage(normalizedPackage);
-          sessionStorage.setItem('hourlyPackage', normalizedPackage);
+          savePackageSelection(normalizedPackage);
         }
       }
       
@@ -337,81 +308,6 @@ export function Hero() {
       setIsCalculatingDistance(false);
       console.log(`Distance calculated for ${tripType}: ${calculatedDistance}km, ${calculatedDuration} minutes`);
     }
-  };
-
-  async function calculatePrice() {
-    if (!selectedCab) return 0;
-    
-    let totalPrice = 0;
-    
-    if (tripType === 'airport') {
-      totalPrice = await calculateAirportFare(selectedCab.name, distance);
-    } else if (tripType === 'local') {
-      totalPrice = localPackagePrice > 0 ? localPackagePrice : selectedCab.price;
-      
-      const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      
-      if (distance > packageKm && tripType === 'local') {
-        const extraKm = distance - packageKm;
-        const extraKmRate = selectedCab.pricePerKm;
-        totalPrice += extraKm * extraKmRate;
-        console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
-      }
-      
-      const fareKey = `fare_local_${selectedCab.name.toLowerCase().replace(/\s+/g, '')}`;
-      localStorage.setItem(fareKey, totalPrice.toString());
-      console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
-      console.log(`BookingSummary: Stored fare in localStorage: ${fareKey} = ${totalPrice}`);
-    } else if (tripType === 'outstation') {
-      let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
-      
-      switch (selectedCab.name.toLowerCase()) {
-        case "sedan":
-          basePrice = 4200;
-          perKmRate = 14;
-          nightHaltCharge = 700;
-          break;
-        case "ertiga":
-          basePrice = 5400;
-          perKmRate = 18;
-          nightHaltCharge = 1000;
-          break;
-        case "innova crysta":
-          basePrice = 6000;
-          perKmRate = 20;
-          nightHaltCharge = 1000;
-          break;
-        default:
-          basePrice = selectedCab.price;
-          perKmRate = selectedCab.pricePerKm;
-          nightHaltCharge = 700;
-      }
-      
-      if (tripMode === 'one-way') {
-        const days = 1;
-        const totalMinKm = days * 300;
-        const effectiveDistance = distance * 2;
-        const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
-        const totalBaseFare = basePrice;
-        const totalDistanceFare = extraKm * perKmRate;
-        const totalDriverAllowance = driverAllowance;
-        
-        totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance;
-      } else {
-        const days = Math.max(1, differenceInCalendarDays(returnDate || pickupDate, pickupDate) + 1);
-        const totalMinKm = days * 300;
-        const effectiveDistance = distance * 2;
-        const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
-        const totalBaseFare = days * basePrice;
-        const totalDistanceFare = extraKm * perKmRate;
-        const totalDriverAllowance = days * driverAllowance;
-        const totalNightHalt = (days - 1) * nightHaltCharge;
-        
-        totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance + totalNightHalt;
-      }
-    }
-    
-    return Math.ceil(totalPrice / 10) * 10;
   };
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
@@ -559,8 +455,10 @@ export function Hero() {
                           const normalizedValue = normalizePackageId(value);
                           console.log(`Package selected: ${value} (normalized: ${normalizedValue})`);
                           setHourlyPackage(normalizedValue);
-                          sessionStorage.setItem('hourlyPackage', normalizedValue);
-                          localStorage.setItem('selected_package', normalizedValue);
+                          
+                          // Save the package and notify components
+                          savePackageSelection(normalizedValue);
+                          notifyPackageChange(normalizedValue);
                         }}
                       >
                         <SelectTrigger className="w-full">
@@ -642,7 +540,7 @@ export function Hero() {
                         <div>
                           <p className="text-xs">PACKAGE</p>
                           <p className="font-medium">
-                            {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
+                            {localHourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label || hourlyPackage}
                           </p>
                         </div>
                       )}
@@ -701,9 +599,9 @@ export function Hero() {
                   <Button 
                     onClick={handleBookNow}
                     className="w-full mt-4 py-6 text-base"
-                    disabled={!isFormValid || !selectedCab}
+                    disabled={!isFormValid || !selectedCab || isPriceCalculating}
                   >
-                    Book Now
+                    {isPriceCalculating ? 'Calculating Price...' : 'Book Now'}
                   </Button>
                 </div>
               </div>
