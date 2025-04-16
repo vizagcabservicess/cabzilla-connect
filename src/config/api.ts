@@ -8,20 +8,26 @@
  */
 export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // Check if running in development mode with local API
-    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Check if running in Lovable environment
+    const isLovableEnv = window.location.hostname.includes('lovableproject.com');
     
-    // If in development, use the VITE_API_BASE_URL env variable or fallback to localhost
-    if (isLocalDev) {
-      return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    // If in Lovable environment, use relative URLs (empty base)
+    if (isLovableEnv) {
+      return '';
     }
     
-    // In production, use the same origin
-    return window.location.origin;
+    // If in development, use the VITE_API_BASE_URL env variable or fallback to empty string
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalDev) {
+      return import.meta.env.VITE_API_BASE_URL || '';
+    }
+    
+    // In production, use the environment variable if available, otherwise same origin
+    return import.meta.env.VITE_API_BASE_URL || window.location.origin;
   }
   
   // Fallback for SSR or other environments
-  return import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+  return import.meta.env.VITE_API_BASE_URL || '';
 };
 
 // Add apiBaseUrl export that returns the current base URL
@@ -35,13 +41,18 @@ export const apiBaseUrl = getApiBaseUrl();
 export const getApiUrl = (endpoint: string): string => {
   const baseUrl = getApiBaseUrl();
   
-  // Ensure endpoint starts with a slash if it doesn't already
-  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
   // For absolute URLs (those that already contain http:// or https://), return as is
   if (endpoint.match(/^https?:\/\//i)) {
     return endpoint;
   }
+  
+  // If no base URL, just use the endpoint as is (relative path)
+  if (!baseUrl) {
+    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  }
+  
+  // Ensure endpoint starts with a slash if it doesn't already
+  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   
   // Compose and return the full URL
   return `${baseUrl}${formattedEndpoint}`;

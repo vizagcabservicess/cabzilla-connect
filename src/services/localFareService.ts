@@ -156,11 +156,17 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
+    // IMPORTANT: Change the API URL strategy to prioritize local endpoints
     const apiUrl = getApiUrl('');
+    const isLocalDevelopment = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || 
+       window.location.hostname.includes('lovableproject.com'));
     
-    // Array of API endpoints to try
+    // Prioritize the relative paths for Lovable environment
     const endpoints = [
-      // Use local-package-fares.php as primary endpoint (most reliable)
+      // First try relative paths which work in Lovable environment
+      `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
+      // Then try the api endpoints
       `${apiUrl}/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       // Admin direct local fares endpoint as backup
       `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
