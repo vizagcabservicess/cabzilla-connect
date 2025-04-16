@@ -5,7 +5,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
-import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
+import { hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
+import type { HourlyPackage } from '@/lib/packageData';
 import { normalizePackageId, normalizeVehicleId } from '@/config/requestConfig';
 import { toast } from 'sonner';
 

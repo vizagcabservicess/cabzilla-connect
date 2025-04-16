@@ -1,11 +1,19 @@
-
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
 import { getApiUrl } from '@/config/api';
 
-export const hourlyPackages = [
-  { id: "4hrs-40km", name: "4 Hours / 40 KM" },
-  { id: "8hrs-80km", name: "8 Hours / 80 KM" },
-  { id: "10hrs-100km", name: "10 Hours / 100 KM" }
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  description?: string;
+  basePrice?: number;
+}
+
+export const hourlyPackages: HourlyPackage[] = [
+  { id: "4hrs-40km", name: "4 Hours / 40 KM", hours: 4, kilometers: 40 },
+  { id: "8hrs-80km", name: "8 Hours / 80 KM", hours: 8, kilometers: 80 },
+  { id: "10hrs-100km", name: "10 Hours / 100 KM", hours: 10, kilometers: 100 }
 ];
 
 /**
@@ -225,4 +233,90 @@ function calculateFallbackPrice(vehicleId: string, packageId: string): number {
   console.log(`Stored fare in localStorage: ${specificFareKey} = ${price}`);
   
   return price;
+}
+
+/**
+ * Syncs local package fares with the database
+ * @param silent Whether to display notifications about the sync
+ * @returns Whether the sync was successful
+ */
+export async function syncLocalFaresWithDatabase(silent: boolean = false): Promise<boolean> {
+  try {
+    const apiUrl = getApiUrl('api/admin/sync-local-fares.php');
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true'
+      },
+      body: JSON.stringify({ force: true })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Local fares sync result:', result);
+      
+      // Clear any cached data
+      if (typeof window !== 'undefined') {
+        window.localPackagePriceCache = {};
+      }
+      
+      // Dispatch an event to notify components about the update
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error syncing local fares with database:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetches and caches all local package fares
+ * @param silent Whether to display notifications about the fetch
+ * @returns Whether the fetch was successful
+ */
+export async function fetchAndCacheLocalFares(silent: boolean = false): Promise<boolean> {
+  try {
+    const apiUrl = getApiUrl('api/user/local-fares.php');
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true'
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.fares && Array.isArray(data.fares)) {
+        // Cache the fares in localStorage
+        data.fares.forEach((fare: any) => {
+          if (fare.vehicleId && fare.packageId && fare.price) {
+            const cacheKey = `fare_local_${fare.vehicleId}_${fare.packageId}`;
+            localStorage.setItem(cacheKey, fare.price.toString());
+          }
+        });
+        
+        // Dispatch an event to notify components about the update
+        window.dispatchEvent(new CustomEvent('local-fares-cached', {
+          detail: { 
+            count: data.fares.length,
+            timestamp: Date.now() 
+          }
+        }));
+        
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('Error fetching and caching local fares:', error);
+    return false;
+  }
 }
