@@ -34,6 +34,7 @@ import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { getApiUrl } from "@/config/api";
 import { toast as sonnerToast } from "sonner";
+import { LocalTripSelector } from "@/components/LocalTripSelector";
 
 const CabsPage = () => {
   const navigate = useNavigate();
