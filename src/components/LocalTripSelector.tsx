@@ -50,7 +50,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     }
   }, [selectedPackage, normalizedSelectedPackage]);
   
-  // Function to load packages with prices
+  // Function to load packages with prices - optimized to reduce API calls and event emissions
   const loadPackages = async (forceRefresh = false) => {
     // Skip if already loading
     if (loadingRef.current) {
@@ -147,14 +147,11 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       if (forceRefresh || successfulPrices < updatedPackages.length) {
         console.log(`Cache status: ${successfulPrices}/${updatedPackages.length} packages from cache. ${forceRefresh ? 'Force refreshing.' : ''}`);
         
-        // Process packages with limit on concurrent requests - only those we don't have prices for
-        const packagePromises = updatedPackages
-          .filter(pkg => forceRefresh || pkg.basePrice <= 0)
-          .map(async pkg => {
+        // Instead of making multiple parallel requests, we'll make a single sequential request for each package
+        // This prevents overwhelming the network and reduces redundant callbacks
+        for (const pkg of updatedPackages) {
+          if (forceRefresh || pkg.basePrice <= 0) {
             try {
-              // Skip if we already have a price for this package and not forcing refresh
-              if (!forceRefresh && pkg.basePrice > 0) return null;
-              
               const price = await getLocalPackagePrice(pkg.id, referenceVehicle, forceRefresh);
               if (price > 0) {
                 pkg.basePrice = price;
@@ -162,28 +159,21 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
                 
                 // Store in fare manager
                 fareManager.storeFare(referenceVehicle, pkg.id, price, 'api');
-                
-                return { id: pkg.id, price };
               }
-              return null;
             } catch (error) {
               console.error(`Error fetching price for ${pkg.id}:`, error);
-              return null;
+              // Continue with other packages
             }
-          });
-        
-        try {
-          // Process promises in parallel
-          await Promise.all(packagePromises);
-          
-          // Clear API timeout if we have successful results
-          if (apiTimeoutRef.current) {
-            clearTimeout(apiTimeoutRef.current);
-            apiTimeoutRef.current = null;
+            
+            // Small delay between requests to prevent overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
-        } catch (e) {
-          console.error('Error fetching package prices:', e);
-          // API timeout will handle fallback
+        }
+        
+        // Clear API timeout if we have successful results
+        if (apiTimeoutRef.current) {
+          clearTimeout(apiTimeoutRef.current);
+          apiTimeoutRef.current = null;
         }
       }
       
@@ -213,6 +203,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         clearTimeout(apiTimeoutRef.current);
         apiTimeoutRef.current = null;
       }
+      
+      setIsLoading(false);
+      loadingRef.current = false;
     } catch (error) {
       console.error('Failed to load package data:', error);
       setLoadError(`Unable to load package pricing. Please try again.`);
@@ -253,6 +246,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           notifyPackageChange(defaultPackage);
         }
       }
+      
+      setIsLoading(false);
+      loadingRef.current = false;
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -272,14 +268,15 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     mountedRef.current = true;
     loadPackages();
     
-    // Handle fare update events
+    // Handle fare update events - optimized to reduce redundant updates
     const handleFareUpdated = (event: CustomEvent) => {
+      // Throttle fare update handling to prevent excessive re-renders
       if (!mountedRef.current || shouldThrottle('fare-update-packages', 1000)) return;
       
       if (event.detail && event.detail.packageId) {
         console.log(`LocalTripSelector: Received fare update for ${event.detail.packageId}: ${event.detail.price}`);
         
-        // Update matching package price
+        // Update matching package price - use functional update to prevent race conditions
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
             if (pkg.id === event.detail.packageId) {
@@ -288,13 +285,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
             return pkg;
           });
         });
+        
+        // Update last update time to trigger re-render
+        setLastUpdateTime(Date.now());
       }
     };
     
-    // Listen for fare-related events
+    // Listen for fare-related events - use a single handler for multiple event types
     window.addEventListener('fare-updated', handleFareUpdated as EventListener);
     
-    // Handle force recalculation events
+    // Handle force recalculation events with throttling
     const handleForceRecalculation = () => {
       if (!mountedRef.current || shouldThrottle('force-recalc-packages', 10000)) return;
       
@@ -320,9 +320,12 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     };
   }, []);
   
-  // Handle package selection with consistent normalization
+  // Handle package selection with consistent normalization and event throttling
   const handlePackageSelect = (packageId: string) => {
-    if (shouldThrottle('package-selection', 1000)) return;
+    if (shouldThrottle('package-selection', 1000)) {
+      console.log('Package selection throttled, skipping to prevent multiple events');
+      return;
+    }
     
     if (!packageId) {
       console.warn('Attempted to select null or empty package ID');
@@ -346,7 +349,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     // Update parent component
     onPackageSelect(normalizedPackageId);
     
-    // Use utilities for consistent handling
+    // Use utilities for consistent handling - but only do this ONCE
     savePackageSelection(normalizedPackageId);
     notifyPackageChange(normalizedPackageId);
     
