@@ -438,24 +438,26 @@ export const CabList: React.FC<CabListProps> = ({
                 }));
               }
             } else {
-              // Fetch from database if not in localStorage
-              fetchFareFromDatabase(cab.id, normalizedPackageId)
-                .then(price => {
-                  if (price && price > 0) {
-                    console.log(`CabList: Updated fare for ${normalizedCabId} to ${price} for package ${normalizedPackageId}`);
-                    
-                    setLocalFares(prev => ({
-                      ...prev,
-                      [normalizedCabId]: price
-                    }));
-                    
-                    // Save to localStorage
-                    localStorage.setItem(selectedFareKey, price.toString());
-                  }
-                })
-                .catch(error => {
-                  console.error(`Error fetching fare for ${cab.id}:`, error);
-                });
+              // Fetch from database if not in localStorage - add debounce to avoid too many requests
+              setTimeout(() => {
+                fetchFareFromDatabase(cab.id, normalizedPackageId)
+                  .then(price => {
+                    if (price && price > 0) {
+                      console.log(`CabList: Updated fare for ${normalizedCabId} to ${price} for package ${normalizedPackageId}`);
+                      
+                      setLocalFares(prev => ({
+                        ...prev,
+                        [normalizedCabId]: price
+                      }));
+                      
+                      // Save to localStorage
+                      localStorage.setItem(selectedFareKey, price.toString());
+                    }
+                  })
+                  .catch(error => {
+                    console.error(`Error fetching fare for ${cab.id}:`, error);
+                  });
+              }, Math.random() * 1000); // Stagger requests to avoid overwhelming the server
             }
           });
           

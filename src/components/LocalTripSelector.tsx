@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
   onPackageSelect: (packageId: string) => void;
-  selectedCabId?: string | null; // Add this prop to get the selected cab
+  selectedCabId?: string | null; // Added prop for selected cab
 }
 
 export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCabId }: LocalTripSelectorProps) {
@@ -196,15 +196,18 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
       window.localPackagePriceCache = {};
     }
     
-    // Dispatch an event to notify other components about the package selection
-    window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-      detail: { packageId: normalizedPackageId, timestamp: Date.now() }
-    }));
-    
-    // Also dispatch a global force refresh event
-    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
-      detail: { source: 'LocalTripSelector', timestamp: Date.now() }
-    }));
+    // Add debounce to prevent too many events firing at once
+    setTimeout(() => {
+      // Dispatch an event to notify other components about the package selection
+      window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+        detail: { packageId: normalizedPackageId, timestamp: Date.now() }
+      }));
+      
+      // Also dispatch a global force refresh event
+      window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
+        detail: { source: 'LocalTripSelector', timestamp: Date.now() }
+      }));
+    }, 300);
     
     // Show a toast notification
     toast.success(`Selected ${normalizedPackageId.replace(/-/g, ' ')} package`);

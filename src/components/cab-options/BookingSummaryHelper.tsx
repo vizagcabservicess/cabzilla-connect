@@ -31,6 +31,15 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const pendingFareRef = useRef<number | null>(null);
   const activeRequestRef = useRef<boolean>(false);
   
+  // Log props for debugging
+  useEffect(() => {
+    console.log("🚧 BookingSummaryHelper Active Props →", {
+      cab: selectedCabId,
+      pkg: hourlyPackage,
+      fare: totalPrice
+    });
+  }, [selectedCabId, hourlyPackage, totalPrice]);
+  
   // Track fare sources for debugging
   useEffect(() => {
     // Listen for fare source updates to track where fares are coming from
