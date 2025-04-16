@@ -107,12 +107,25 @@ export async function tryMultipleEndpoints<T = any>(
   try {
     const endpoint = endpoints[0];
     console.log(`Trying one last attempt with direct fetch: ${endpoint}`);
+    
+    // Convert Axios headers to standard fetch headers
+    const fetchHeaders: Record<string, string> = {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    };
+    
+    // Safely copy relevant headers from config
+    if (config.headers) {
+      // Extract and convert headers to string values
+      Object.entries(config.headers).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          fetchHeaders[key] = String(value);
+        }
+      });
+    }
+    
     const response = await fetch(endpoint, {
-      headers: {
-        ...config.headers,
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
+      headers: fetchHeaders
     });
     
     if (response.ok) {
