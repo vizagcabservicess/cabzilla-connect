@@ -27,7 +27,6 @@ import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { normalizePackageId, normalizeVehicleId } from '@/lib/fareCalculationService';
 
-// Use hourlyPackageOptions from packageData.ts for consistency
 const localHourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
   { value: "10hrs-100km", label: "10 Hours / 100 KM" }
@@ -57,7 +56,6 @@ export function Hero() {
       let hourlyPkgData = sessionStorage.getItem('hourlyPackage');
       const cabData = sessionStorage.getItem('selectedCab');
       
-      // Ensure the hourlyPackage is normalized
       if (hourlyPkgData) {
         hourlyPkgData = normalizePackageId(hourlyPkgData);
       }
@@ -720,7 +718,10 @@ export function Hero() {
                   Back
                 </Button>
               </div>
-              <GuestDetailsForm onSubmit={handleGuestDetailsSubmit} />
+              <GuestDetailsForm 
+                onSubmit={handleGuestDetailsSubmit} 
+                totalPrice={totalPrice}
+              />
             </div>
           </div>
         )}
