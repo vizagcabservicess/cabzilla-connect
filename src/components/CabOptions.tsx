@@ -488,11 +488,24 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           try {
             if (tripType === 'local' && hourlyPackage) {
               const normalizedPackageId = normalizePackageId(hourlyPackage);
-              const preciseFareKey = `fare_local_${cabId.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              const preciseFareKey = `selected_fare_${cabId}_${normalizedPackageId}`;
               localStorage.setItem(preciseFareKey, fare.toString());
               
-              const selectedFareKey = `selected_fare_${cabId.toLowerCase().replace(/\s+/g, '')}_${normalizedPackageId}`;
+              const selectedFareKey = `selected_fare_${cabId}_${normalizedPackageId}`;
               localStorage.setItem(selectedFareKey, fare.toString());
+              
+              window.dispatchEvent(new CustomEvent('booking-summary-update', {
+                detail: {
+                  cabType: cabId,
+                  cabName: selectedCab.name,
+                  fare: fare,
+                  tripType: tripType,
+                  tripMode: tripMode,
+                  hourlyPackage: normalizedPackageId,
+                  timestamp: Date.now(),
+                  source: 'CabOptions-direct'
+                }
+              }));
             }
             
             const localStorageKey = `fare_local_${cabId.toLowerCase().replace(/\s+/g, '')}`;

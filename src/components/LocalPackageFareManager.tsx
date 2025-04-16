@@ -9,30 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { getApiUrl } from '@/config/api';
 import { Loader2, RefreshCcw, Save, AlertTriangle } from 'lucide-react';
-import { syncLocalFaresWithDatabase } from '@/lib/packageData';
-
-const fetchAndCacheLocalFares = async (silent: boolean = false): Promise<boolean> => {
-  try {
-    const apiUrl = getApiUrl('api/user/local-fares.php');
-    const response = await fetch(apiUrl, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'X-Force-Refresh': 'true'
-      }
-    });
-
-    if (response.ok) {
-      if (!silent) {
-        toast.success('Local fares cached successfully');
-      }
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('Error fetching local fares:', error);
-    return false;
-  }
-};
+import { syncLocalFaresWithDatabase, fetchAndCacheLocalFares } from '@/lib/packageData';
 
 interface FareItem {
   vehicleId: string;

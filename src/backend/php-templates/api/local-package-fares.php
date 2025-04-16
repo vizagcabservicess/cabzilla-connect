@@ -42,13 +42,19 @@ function normalizeVehicleId($vehicleId) {
         'tempotraveller' => 'tempo_traveller',
         'tempo_traveler' => 'tempo_traveller',
         'tempo' => 'tempo_traveller',
-        'mpv' => 'innova_hycross'
+        'mpv' => 'innova_hycross',
+        'hycross' => 'innova_hycross'
     ];
     
     foreach ($mappings as $search => $replace) {
         if ($result === $search) {
             return $replace;
         }
+    }
+    
+    // Additional check for partial matches
+    if (strpos($result, 'hycross') !== false) {
+        return 'innova_hycross';
     }
     
     return $result;
@@ -129,6 +135,11 @@ $packagePrices = [
         '10hrs-100km' => 3000
     ]
 ];
+
+// Ensure all vehicle IDs are properly mapped
+if ($normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false) {
+    $normalizedVehicleId = 'innova_hycross';
+}
 
 // Default to sedan if the vehicle type is not found
 if (!isset($packagePrices[$normalizedVehicleId])) {

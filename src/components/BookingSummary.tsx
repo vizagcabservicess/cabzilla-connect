@@ -46,7 +46,9 @@ export const BookingSummary = ({
   const [effectiveDistance, setEffectiveDistance] = useState<number>(distance);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
-  
+  const [fare, setFare] = useState<number>(totalPrice);
+  const [totalAmount, setTotalAmount] = useState<number>(totalPrice);
+
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
@@ -158,6 +160,36 @@ export const BookingSummary = ({
       }, 100);
     }
   }, [distance, tripMode, totalPrice]);
+
+  useEffect(() => {
+    const handleCabSelectedWithFare = (event: CustomEvent) => {
+      if (event.detail && event.detail.cabType && event.detail.fare) {
+        console.log(`BookingSummary: Received cab-selected-with-fare event for ${event.detail.cabType}:`, event.detail);
+        
+        // Update the fare using the exact fare from the cab selection
+        setFare(event.detail.fare);
+        setTotalAmount(event.detail.fare);
+        
+        // Store the fare in localStorage for persistence
+        const cacheKey = `booking_summary_fare_${event.detail.cabType}`;
+        localStorage.setItem(cacheKey, event.detail.fare.toString());
+        
+        // Store the current package fare for reference
+        if (event.detail.hourlyPackage) {
+          const packageKey = `selected_fare_${event.detail.cabType}_${event.detail.hourlyPackage}`;
+          localStorage.setItem(packageKey, event.detail.fare.toString());
+        }
+      }
+    };
+    
+    window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare as EventListener);
+    window.addEventListener('booking-summary-update', handleCabSelectedWithFare as EventListener);
+    
+    return () => {
+      window.removeEventListener('cab-selected-with-fare', handleCabSelectedWithFare as EventListener);
+      window.removeEventListener('booking-summary-update', handleCabSelectedWithFare as EventListener);
+    };
+  }, []);
 
   const fetchDirectDatabaseFare = async () => {
     if (!selectedCab) {
@@ -681,6 +713,87 @@ export const BookingSummary = ({
     return () => clearTimeout(initialLoadTimer);
   }, [selectedCab, tripType, totalPrice]);
 
+  const renderPriceBreakdown = () => {
+    console.log('BookingSummary: rendering price breakdown with fare:', fare, 'totalAmount:', totalAmount);
+    
+    return (
+      <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
+        {tripType === 'outstation' && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-gray-700">Base fare (300 km included)</span>
+              <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+            </div>
+            
+            <div className="text-gray-600 text-sm ml-1">
+              {tripMode === 'one-way' ? (
+                <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
+              ) : (
+                <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
+              )}
+            </div>
+            
+            {extraDistance > 0 && extraDistanceFare > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+              </div>
+            )}
+            
+            <div className="flex justify-between">
+              <span className="text-gray-700">Driver allowance</span>
+              <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+            </div>
+            
+            {nightCharges > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">Night charges</span>
+                <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
+              </div>
+            )}
+          </>
+        )}
+        
+        {tripType === 'local' && (
+          <div className="flex justify-between">
+            <span className="text-gray-700">08hrs 80KM Package</span>
+            <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+          </div>
+        )}
+        
+        {(tripType === 'airport' || tripType === 'tour') && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-gray-700">Base fare</span>
+              <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+            </div>
+            
+            {extraDistance > 0 && tripType === 'airport' && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {tripType === 'airport' && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">Driver allowance</span>
+                <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+              </div>
+            )}
+          </>
+        )}
+        
+        <Separator />
+        
+        <div className="flex justify-between text-lg font-bold pt-2">
+          <span>Total Amount</span>
+          <span>₹{totalAmount.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  };
+
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
@@ -746,80 +859,7 @@ export const BookingSummary = ({
         </div>
         
         <div>
-          <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
-            {tripType === 'outstation' && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare (300 km included)</span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-                </div>
-                
-                <div className="text-gray-600 text-sm ml-1">
-                  {tripMode === 'one-way' ? (
-                    <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
-                  ) : (
-                    <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
-                  )}
-                </div>
-                
-                {extraDistance > 0 && extraDistanceFare > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
-                )}
-                
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Driver allowance</span>
-                  <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                </div>
-                
-                {nightCharges > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Night charges</span>
-                    <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            )}
-            
-            {tripType === 'local' && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">08hrs 80KM Package</span>
-                <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-              </div>
-            )}
-            
-            {(tripType === 'airport' || tripType === 'tour') && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare</span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-                </div>
-                
-                {extraDistance > 0 && tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
-                )}
-                
-                {tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Driver allowance</span>
-                    <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            )}
-            
-            <Separator />
-            
-            <div className="flex justify-between text-lg font-bold pt-2">
-              <span>Total Amount</span>
-              <span>₹{finalTotal.toLocaleString()}</span>
-            </div>
-          </div>
+          {renderPriceBreakdown()}
         </div>
       </div>
       
