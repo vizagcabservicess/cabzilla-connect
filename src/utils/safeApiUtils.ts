@@ -86,7 +86,17 @@ export async function tryMultipleEndpoints<T = any>(
   let lastError: Error | null = null;
   let failures = 0;
 
-  for (const endpoint of endpoints) {
+  // Always prioritize local API endpoints first
+  const prioritizedEndpoints = [...endpoints];
+  
+  // Move any endpoint that starts with /api to the front
+  prioritizedEndpoints.sort((a, b) => {
+    if (a.startsWith('/api') && !b.startsWith('/api')) return -1;
+    if (!a.startsWith('/api') && b.startsWith('/api')) return 1;
+    return 0;
+  });
+
+  for (const endpoint of prioritizedEndpoints) {
     try {
       console.log(`Trying endpoint ${failures+1}/${endpoints.length}: ${endpoint}`);
       const result = await safeApiRequest<T>(endpoint, config);
@@ -105,7 +115,7 @@ export async function tryMultipleEndpoints<T = any>(
   
   // Try one more time with direct fetch API
   try {
-    const endpoint = endpoints[0];
+    const endpoint = prioritizedEndpoints[0];
     console.log(`Trying one last attempt with direct fetch: ${endpoint}`);
     
     // Convert Axios headers to standard fetch headers
@@ -152,7 +162,17 @@ export async function fetchWithLocalFallback<T = any>(
   fallbackPath: string,
   config: AxiosRequestConfig = {}
 ): Promise<T | null> {
-  // First try the API endpoints
+  // First try the local endpoints
+  const localEndpoints = apiEndpoints.filter(ep => ep.startsWith('/api'));
+  
+  if (localEndpoints.length > 0) {
+    const localResult = await tryMultipleEndpoints<T>(localEndpoints, config);
+    if (localResult) {
+      return localResult;
+    }
+  }
+  
+  // Then try all endpoints
   const apiResult = await tryMultipleEndpoints<T>(apiEndpoints, config);
   if (apiResult) {
     return apiResult;

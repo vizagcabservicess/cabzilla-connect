@@ -58,13 +58,27 @@ function normalizeVehicleId($vehicleId) {
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
+        'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
+        'tempo' => 'tempo_traveller' // Normalize "tempo" to full "tempo_traveller"
     ];
     
     foreach ($mappings as $search => $replace) {
         if ($result === $search) {
             return $replace;
         }
+    }
+    
+    // Special handling for partial matches
+    if (strpos($result, 'innova') !== false && strpos($result, 'hycross') !== false) {
+        return 'innova_hycross';
+    }
+    
+    if (strpos($result, 'innova') !== false && strpos($result, 'crysta') !== false) {
+        return 'innova_crysta';
+    }
+    
+    if (strpos($result, 'tempo') !== false) {
+        return 'tempo_traveller';
     }
     
     // MPV is often Innova Hycross
@@ -96,14 +110,23 @@ function normalizePackageId($packageId) {
         '10hrs_100km' => '10hrs-100km'
     ];
     
-    // Normalize to lowercase and replace spaces with hyphens
+    // Normalize to lowercase and replace underscores with hyphens
     $result = str_replace('_', '-', $result);
     
-    // Fix formats with "hr" instead of "hrs"
-    $result = preg_replace('/(\d+)hr-/', '$1hrs-', $result);
+    // Handle various formats
+    if (preg_match('/^(\d+)hr-/', $result)) {
+        $result = preg_replace('/(\d+)hr-/', '$1hrs-', $result);
+    }
+    
+    // Special case for 10hrs-100km that might be in different formats
+    if (strpos($result, '10') === 0) {
+        if (strpos($result, '100km') !== false) {
+            return '10hrs-100km';
+        }
+    }
     
     foreach ($mappings as $search => $replace) {
-        if ($result === $search) {
+        if (strtolower($result) === strtolower($search)) {
             return $replace;
         }
     }
@@ -161,6 +184,11 @@ $packagePrices = [
         '4hrs-40km' => 1400,
         '8hrs-80km' => 2400,
         '10hrs-100km' => 3000
+    ],
+    'tempo' => [
+        '4hrs-40km' => 3000,
+        '8hrs-80km' => 5000,
+        '10hrs-100km' => 6000
     ]
 ];
 
@@ -182,20 +210,21 @@ if (!isset($packagePrices[$normalizedVehicleId])) {
     }
 }
 
+// Make sure we have all standardized package IDs available
+$standardPackageIds = ['4hrs-40km', '8hrs-80km', '10hrs-100km'];
+
 // Default to 8hrs-80km if the package is not found
 if (!isset($packagePrices[$normalizedVehicleId][$normalizedPackageId])) {
-    // Try to find the closest match
-    $matchFound = false;
-    foreach (array_keys($packagePrices[$normalizedVehicleId]) as $package) {
-        if (strpos($normalizedPackageId, substr($package, 0, 4)) !== false) {
-            $normalizedPackageId = $package;
-            $matchFound = true;
+    // Check if it's a standard package ID but with different formatting
+    foreach ($standardPackageIds as $standardId) {
+        if (strpos(strtolower($normalizedPackageId), substr($standardId, 0, 4)) !== false) {
+            $normalizedPackageId = $standardId;
             break;
         }
     }
     
     // If still no match, default to 8hrs-80km
-    if (!$matchFound) {
+    if (!isset($packagePrices[$normalizedVehicleId][$normalizedPackageId])) {
         $normalizedPackageId = '8hrs-80km';
     }
 }

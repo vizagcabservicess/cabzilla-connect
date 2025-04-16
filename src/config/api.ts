@@ -7,22 +7,21 @@
  * Get the base API URL from environment variables or fallback to a default
  */
 export const getApiBaseUrl = (): string => {
-  // Always use relative URLs in Lovable environment
-  if (typeof window !== 'undefined' && window.location.hostname.includes('lovableproject.com')) {
+  // Always use relative URLs in Lovable environment - prioritize this case
+  if (typeof window !== 'undefined' && 
+      (window.location.hostname.includes('lovableproject.com') || 
+       window.location.hostname.includes('localhost') || 
+       window.location.hostname === '127.0.0.1')) {
     return '';
   }
   
-  // Check if running in local development
-  const isLocalDev = typeof window !== 'undefined' && 
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  
-  // If in local development, use the environment variable or an empty string (relative URLs)
-  if (isLocalDev) {
-    return import.meta.env.VITE_API_BASE_URL || '';
+  // In production, use environment variable or same origin
+  const envApiUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envApiUrl) {
+    return envApiUrl;
   }
   
-  // In production, use environment variable or same origin
-  return import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+  return typeof window !== 'undefined' ? window.location.origin : '';
 };
 
 // Add apiBaseUrl export that returns the current base URL

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
@@ -19,10 +18,16 @@ interface LocalFareResponse {
   timestamp: number;
   data?: {
     price?: number;
-    // Add other potential properties that might be in the data object
     package_id?: string;
     vehicle_id?: string;
   };
+  vehicle_id?: string;
+  package_id?: string;
+  original_vehicle_id?: string;
+  original_package_id?: string;
+  currency?: string;
+  source?: string;
+  debug?: any;
 }
 
 // Vehicle-specific pricing table for fallback
@@ -158,16 +163,16 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   try {
     // Always prioritize local mock API endpoints in Lovable environment
     const endpoints = [
-      // First try directly with just the endpoint path
+      // First try with direct path to local mock API
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try with api/ prefix
+      // Then try with admin endpoint for all fares
       `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
       
       // Then try alternatives
       `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Last try with full base URL
+      // Only try external endpoints as last resort
       `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
     ];
     
@@ -187,7 +192,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
       let price = 0;
       
       // Process response based on endpoint format
-      if (response.price) {
+      if (response.price !== undefined && response.price !== null) {
         // Direct price field from local-package-fares.php
         price = Number(response.price);
         console.log(`Retrieved direct price from API: ₹${price}`);
