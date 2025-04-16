@@ -19,18 +19,14 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
   }
 
   try {
-    // Process the endpoint to make sure it's correctly formatted
+    // Endpoint could be either relative or absolute URL
     let url = endpoint;
     
-    // Handle PHP endpoints specifically for Lovable environment
-    if (endpoint.includes('.php') && !endpoint.match(/^https?:\/\//i)) {
-      url = getApiUrl(endpoint);
-      console.log(`Processed PHP endpoint to: ${url}`);
-    } 
     // Only add the base URL if the endpoint is not already a full URL
-    else if (!endpoint.match(/^https?:\/\//i) && !endpoint.startsWith('/')) {
-      url = getApiUrl(endpoint);
-      console.log(`Processed relative endpoint to: ${url}`);
+    if (!endpoint.match(/^https?:\/\//i)) {
+      // If endpoint doesn't start with a slash, add it
+      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = formattedEndpoint;
     }
     
     console.log(`Making API request to: ${url}`);
@@ -90,38 +86,20 @@ export async function tryMultipleEndpoints<T = any>(
   let lastError: Error | null = null;
   let failures = 0;
 
-  // Always prioritize PHP endpoints for Lovable environment
+  // Always prioritize local API endpoints first
   const prioritizedEndpoints = [...endpoints];
   
-  if (typeof window !== 'undefined' && 
-     (window.location.hostname.includes('lovableproject.com') || 
-      window.location.hostname.includes('localhost') || 
-      window.location.hostname === '127.0.0.1')) {
-    
-    // Move PHP endpoints to the front
-    prioritizedEndpoints.sort((a, b) => {
-      if (a.includes('.php') && !b.includes('.php')) return -1;
-      if (!a.includes('.php') && b.includes('.php')) return 1;
-      return 0;
-    });
-  }
+  // Move any endpoint that starts with /api to the front
+  prioritizedEndpoints.sort((a, b) => {
+    if (a.startsWith('/api') && !b.startsWith('/api')) return -1;
+    if (!a.startsWith('/api') && b.startsWith('/api')) return 1;
+    return 0;
+  });
 
   for (const endpoint of prioritizedEndpoints) {
     try {
       console.log(`Trying endpoint ${failures+1}/${endpoints.length}: ${endpoint}`);
-      
-      // Special handling for PHP endpoints in Lovable environment
-      let processedEndpoint = endpoint;
-      if (endpoint.includes('.php') && 
-          typeof window !== 'undefined' && 
-          (window.location.hostname.includes('lovableproject.com') || 
-           window.location.hostname.includes('localhost') || 
-           window.location.hostname === '127.0.0.1')) {
-        processedEndpoint = getApiUrl(endpoint);
-        console.log(`Processed PHP endpoint to: ${processedEndpoint}`);
-      }
-      
-      const result = await safeApiRequest<T>(processedEndpoint, config);
+      const result = await safeApiRequest<T>(endpoint, config);
       if (result) {
         console.log(`Successfully fetched data from endpoint: ${endpoint}`);
         return result;

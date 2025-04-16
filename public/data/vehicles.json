@@ -46,21 +46,6 @@
     "isActive": true
   },
   {
-    "id": "innova_hycross",
-    "name": "Innova Hycross",
-    "capacity": 7,
-    "luggageCapacity": 4,
-    "price": 4200,
-    "pricePerKm": 22,
-    "image": "/cars/innova.png",
-    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "USB Ports"],
-    "description": "New generation premium SUV with advanced features and ample space for 7 passengers.",
-    "ac": true,
-    "nightHaltCharge": 1100,
-    "driverAllowance": 300,
-    "isActive": true
-  },
-  {
     "id": "luxury",
     "name": "Luxury Sedan",
     "capacity": 4,
@@ -76,32 +61,17 @@
     "isActive": true
   },
   {
-    "id": "tempo_traveller",
+    "id": "tempo",
     "name": "Tempo Traveller",
     "capacity": 12,
     "luggageCapacity": 8,
     "price": 5500,
-    "pricePerKm": 25,
+    "pricePerKm": 22,
     "image": "/cars/tempo.png",
-    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Pushback Seats"],
-    "description": "Large vehicle suitable for groups of up to 12 passengers.",
+    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point"],
+    "description": "Spacious van suitable for group travel of up to 12 passengers.",
     "ac": true,
     "nightHaltCharge": 1200,
-    "driverAllowance": 300,
-    "isActive": true
-  },
-  {
-    "id": "mpv",
-    "name": "MPV",
-    "capacity": 7,
-    "luggageCapacity": 4,
-    "price": 4200,
-    "pricePerKm": 22,
-    "image": "/cars/innova.png",
-    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "USB Ports"],
-    "description": "Multi-Purpose Vehicle with ample space for 7 passengers.",
-    "ac": true,
-    "nightHaltCharge": 1100,
     "driverAllowance": 300,
     "isActive": true
   }

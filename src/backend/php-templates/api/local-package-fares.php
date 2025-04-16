@@ -1,7 +1,7 @@
 
 <?php
 // Mock PHP file for local-package-fares.php
-// This serves as a fallback API endpoint for local package fares
+// This serves as a fallback API endpoint when direct-local-fares.php fails
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -35,7 +35,7 @@ if (!$packageId) {
     $packageId = '8hrs-80km';
 }
 
-// Normalize the vehicle ID for consistency
+// Normalize the vehicle ID
 function normalizeVehicleId($vehicleId) {
     // Convert to lowercase and replace spaces with underscores
     $result = strtolower(trim($vehicleId));
@@ -59,8 +59,7 @@ function normalizeVehicleId($vehicleId) {
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
         'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
-        'tempo' => 'tempo_traveller', // Normalize "tempo" to full "tempo_traveller"
-        'hycross' => 'innova_hycross'
+        'tempo' => 'tempo_traveller' // Normalize "tempo" to full "tempo_traveller"
     ];
     
     foreach ($mappings as $search => $replace) {
@@ -90,7 +89,7 @@ function normalizeVehicleId($vehicleId) {
     return $result;
 }
 
-// Normalize the package ID for consistency
+// Normalize the package ID
 function normalizePackageId($packageId) {
     if (empty($packageId)) {
         return '8hrs-80km';
@@ -108,9 +107,7 @@ function normalizePackageId($packageId) {
         '8hr_80km' => '8hrs-80km',
         '8hrs_80km' => '8hrs-80km', 
         '10hr_100km' => '10hrs-100km',
-        '10hrs_100km' => '10hrs-100km',
-        '10hr' => '10hrs-100km',
-        '10hrs' => '10hrs-100km'
+        '10hrs_100km' => '10hrs-100km'
     ];
     
     // Normalize to lowercase and replace underscores with hyphens
@@ -126,26 +123,12 @@ function normalizePackageId($packageId) {
         if (strpos($result, '100km') !== false) {
             return '10hrs-100km';
         }
-        
-        // Any package starting with 10hrs should be treated as 10hrs-100km
-        if (strpos($result, '10hrs') === 0) {
-            return '10hrs-100km';
-        }
     }
     
     foreach ($mappings as $search => $replace) {
         if (strtolower($result) === strtolower($search)) {
             return $replace;
         }
-    }
-    
-    // One more check for packages with only the hour part
-    if ($result === '4hrs' || $result === '4hr') {
-        return '4hrs-40km';
-    } else if ($result === '8hrs' || $result === '8hr') {
-        return '8hrs-80km';
-    } else if ($result === '10hrs' || $result === '10hr') {
-        return '10hrs-100km';
     }
     
     return $result;
@@ -206,11 +189,6 @@ $packagePrices = [
         '4hrs-40km' => 3000,
         '8hrs-80km' => 5000,
         '10hrs-100km' => 6000
-    ],
-    'mpv' => [
-        '4hrs-40km' => 2600,
-        '8hrs-80km' => 4200,
-        '10hrs-100km' => 5000
     ]
 ];
 
@@ -224,12 +202,6 @@ if (!isset($packagePrices[$normalizedVehicleId])) {
             $matchFound = true;
             break;
         }
-    }
-    
-    // Special MPV case for Innova Hycross
-    if (strpos($vehicleId, 'mpv') !== false || $vehicleId === 'MPV') {
-        $normalizedVehicleId = 'mpv';
-        $matchFound = true;
     }
     
     // If still no match, default to sedan

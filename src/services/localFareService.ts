@@ -30,7 +30,7 @@ interface LocalFareResponse {
   debug?: any;
 }
 
-// Vehicle-specific pricing table for fallback with adjusted prices
+// Vehicle-specific pricing table for fallback
 const fallbackPrices: Record<string, Record<string, number>> = {
   'sedan': {
     '4hrs-40km': 1400,
@@ -77,7 +77,7 @@ const fallbackPrices: Record<string, Record<string, number>> = {
     '8hrs-80km': 7000,
     '10hrs-100km': 8500
   },
-  'mpv': { // Explicit pricing for MPV that matches Innova Hycross
+  'mpv': { // For Innova Hycross fallback
     '4hrs-40km': 2600,
     '8hrs-80km': 4200,
     '10hrs-100km': 5000
@@ -115,7 +115,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   const normalizedPackageId = normalizePackageId(packageId);
   const normalizedVehicleId = normalizeVehicleId(vehicleId);
   
-  console.log(`Getting local package price for ${normalizedVehicleId}, package: ${normalizedPackageId}, forceRefresh: ${forceRefresh} (original: ${vehicleId})`);
+  console.log(`Getting local package price for ${normalizedVehicleId}, package: ${normalizedPackageId}, forceRefresh: ${forceRefresh}`);
   
   // Create a cache key that includes both vehicle ID and package ID
   const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
@@ -161,17 +161,19 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
-    // Define endpoints to try, prioritizing the PHP template path for Lovable environment
+    // Always prioritize local mock API endpoints in Lovable environment
     const endpoints = [
       // First try with direct path to local mock API
-      `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
-      
-      // Then try direct API path (without backend prefix)
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try alternatives
+      // Then try with admin endpoint for all fares
       `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
-      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
+      
+      // Then try alternatives
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
+      
+      // Only try external endpoints as last resort
+      `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
     ];
     
     console.log(`Attempting API requests with endpoints:`, endpoints);
@@ -252,7 +254,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
     
     // Try direct fetch before falling back to static prices
     try {
-      const directEndpoint = `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`;
+      const directEndpoint = `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`;
       console.log(`Attempting direct fetch to: ${directEndpoint}`);
       
       const response = await fetch(directEndpoint, {
@@ -342,20 +344,13 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     normalizedCabId = 'bus';
   }
   
-  // Special handling for Hycross when identified as MPV
-  if ((vehicleId === 'mpv' || normalizedCabId === 'mpv') && fallbackPrices['mpv']) {
-    console.log('Using explicit MPV fallback pricing for Innova Hycross');
-    normalizedCabId = 'mpv';
-  }
-  
-  // Find the closest matching vehicle type in our fallback prices
+  // Find the closest matching vehicle type
   let matchingVehicleType = 'sedan'; // Default fallback
   
   for (const vehicleType of Object.keys(fallbackPrices)) {
     if (normalizedCabId.includes(vehicleType)) {
-      if (!matchingVehicleType || vehicleType.length > matchingVehicleType.length) {
-        matchingVehicleType = vehicleType;
-      }
+      matchingVehicleType = vehicleType;
+      break;
     }
   }
   

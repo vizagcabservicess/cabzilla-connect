@@ -1,3 +1,4 @@
+
 /**
  * Configuration for API endpoints
  */
@@ -37,33 +38,18 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // For Lovable environment, prioritize direct backend path for PHP templates
-  if (typeof window !== 'undefined' && 
-      (window.location.hostname.includes('lovableproject.com') || 
-       window.location.hostname.includes('localhost') || 
-       window.location.hostname === '127.0.0.1')) {
-       
-    // Handle direct PHP endpoints - use backend path
-    if (endpoint && endpoint.includes('.php')) {
-      const backendPath = endpoint.startsWith('/') 
-        ? `/backend/php-templates${endpoint}` 
-        : `/backend/php-templates/${endpoint}`;
-      
-      console.log(`Using backend PHP template path: ${backendPath}`);
-      return backendPath;
-    }
-    
-    // Handle other API endpoints
-    if (endpoint) {
-      return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    }
-    
-    return '/';
+  const baseUrl = getApiBaseUrl();
+  
+  // If we're in Lovable environment or no base URL, use relative paths
+  if (!baseUrl) {
+    // Ensure endpoint starts with a slash for relative paths
+    return endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
   }
   
-  // Standard API URL construction for non-Lovable environments
-  const baseUrl = getApiBaseUrl();
+  // Ensure endpoint starts with a slash if it doesn't already
   const formattedEndpoint = endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
+  
+  // Compose and return the full URL
   return `${baseUrl}${formattedEndpoint}`;
 };
 
