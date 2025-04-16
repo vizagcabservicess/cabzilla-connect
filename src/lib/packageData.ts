@@ -1,3 +1,4 @@
+
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
 import { getApiUrl } from '@/config/api';
 
@@ -109,7 +110,21 @@ export async function getLocalPackagePrice(packageId: string, vehicleId: string,
   const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
   console.log(`Using cache key: ${cacheKey} for local package price`);
   
-  // Check localStorage first for previously set fares
+  // Initialize window.localPackagePriceCache if it doesn't exist
+  if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
+    window.localPackagePriceCache = {};
+  }
+  
+  // Check in-memory cache first
+  if (!forceRefresh && 
+      window.localPackagePriceCache && 
+      window.localPackagePriceCache[cacheKey] && 
+      window.localPackagePriceCache[cacheKey].timestamp > Date.now() - 60000) {
+    console.log(`Using in-memory cache for ${cacheKey}: ${window.localPackagePriceCache[cacheKey].price}`);
+    return window.localPackagePriceCache[cacheKey].price;
+  }
+  
+  // Check localStorage next for previously set fares
   const specificFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
   const storedFare = localStorage.getItem(specificFareKey);
   
@@ -117,6 +132,15 @@ export async function getLocalPackagePrice(packageId: string, vehicleId: string,
     const parsedFare = parseFloat(storedFare);
     if (!isNaN(parsedFare) && parsedFare > 0) {
       console.log(`Using stored fare from localStorage: ${parsedFare}`);
+      
+      // Update in-memory cache for faster subsequent access
+      if (window.localPackagePriceCache) {
+        window.localPackagePriceCache[cacheKey] = {
+          price: parsedFare,
+          timestamp: Date.now()
+        };
+      }
+      
       return parsedFare;
     }
   }
@@ -143,16 +167,61 @@ export async function getLocalPackagePrice(packageId: string, vehicleId: string,
     
     if (response && response.price && typeof response.price === 'number') {
       console.log(`Retrieved price from API: ${response.price}`);
+      
+      // Store in localStorage for future use
       localStorage.setItem(specificFareKey, response.price.toString());
+      
+      // Update in-memory cache
+      if (window.localPackagePriceCache) {
+        window.localPackagePriceCache[cacheKey] = {
+          price: response.price,
+          timestamp: Date.now()
+        };
+      }
+      
+      // Dispatch event to notify components that a fare was retrieved
+      window.dispatchEvent(new CustomEvent('fare-retrieved', {
+        detail: {
+          vehicleId: normalizedVehicleId,
+          packageId: normalizedPackageId,
+          price: response.price,
+          source: 'api',
+          timestamp: Date.now()
+        }
+      }));
+      
       return response.price;
     }
     
     // If we didn't get a valid response, use fallback pricing
     console.log(`No valid price received from API, using fallback calculation`);
-    return calculateFallbackPrice(normalizedVehicleId, normalizedPackageId);
+    const fallbackPrice = calculateFallbackPrice(normalizedVehicleId, normalizedPackageId);
+    
+    // Update in-memory cache with fallback price
+    if (window.localPackagePriceCache) {
+      window.localPackagePriceCache[cacheKey] = {
+        price: fallbackPrice,
+        timestamp: Date.now(),
+        isFallback: true
+      };
+    }
+    
+    return fallbackPrice;
   } catch (error) {
     console.error(`Error fetching local package price: ${error}`);
-    return calculateFallbackPrice(normalizedVehicleId, normalizedPackageId);
+    const fallbackPrice = calculateFallbackPrice(normalizedVehicleId, normalizedPackageId);
+    
+    // Update in-memory cache with fallback price
+    if (window.localPackagePriceCache) {
+      window.localPackagePriceCache[cacheKey] = {
+        price: fallbackPrice,
+        timestamp: Date.now(),
+        isFallback: true,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+    
+    return fallbackPrice;
   }
 }
 
@@ -194,6 +263,16 @@ function calculateFallbackPrice(vehicleId: string, packageId: string): number {
       '4hrs-40km': 2800,
       '8hrs-80km': 4500,
       '10hrs-100km': 5500
+    },
+    'dzire_cng': {
+      '4hrs-40km': 1400,
+      '8hrs-80km': 2400,
+      '10hrs-100km': 3000
+    },
+    'etios': {
+      '4hrs-40km': 1400,
+      '8hrs-80km': 2400,
+      '10hrs-100km': 3000
     }
   };
   
@@ -295,11 +374,30 @@ export async function fetchAndCacheLocalFares(silent: boolean = false): Promise<
       const data = await response.json();
       
       if (data.fares && Array.isArray(data.fares)) {
-        // Cache the fares in localStorage
+        // Clear existing in-memory cache
+        if (typeof window !== 'undefined') {
+          window.localPackagePriceCache = window.localPackagePriceCache || {};
+        }
+        
+        // Cache the fares in localStorage and in-memory
         data.fares.forEach((fare: any) => {
           if (fare.vehicleId && fare.packageId && fare.price) {
-            const cacheKey = `fare_local_${fare.vehicleId}_${fare.packageId}`;
-            localStorage.setItem(cacheKey, fare.price.toString());
+            const normalizedVehicleId = normalizeVehicleId(fare.vehicleId);
+            const normalizedPackageId = normalizePackageId(fare.packageId);
+            const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+            
+            // Store in in-memory cache
+            if (window.localPackagePriceCache) {
+              window.localPackagePriceCache[cacheKey] = {
+                price: parseFloat(fare.price),
+                timestamp: Date.now(),
+                source: 'api'
+              };
+            }
+            
+            // Store in localStorage
+            const specificFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
+            localStorage.setItem(specificFareKey, fare.price.toString());
           }
         });
         
@@ -318,5 +416,18 @@ export async function fetchAndCacheLocalFares(silent: boolean = false): Promise<
   } catch (error) {
     console.error('Error fetching and caching local fares:', error);
     return false;
+  }
+}
+
+// Add a global declaration for the window object to include our cache
+declare global {
+  interface Window {
+    localPackagePriceCache?: Record<string, {
+      price: number;
+      timestamp: number;
+      isFallback?: boolean;
+      source?: string;
+      error?: string;
+    }>;
   }
 }

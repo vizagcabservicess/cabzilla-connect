@@ -43,7 +43,9 @@ function normalizeVehicleId($vehicleId) {
         'tempo_traveler' => 'tempo_traveller',
         'tempo' => 'tempo_traveller',
         'mpv' => 'innova_hycross',
-        'hycross' => 'innova_hycross'
+        'hycross' => 'innova_hycross',
+        'etios' => 'etios',
+        'dzire_cng' => 'dzire_cng'
     ];
     
     foreach ($mappings as $search => $replace) {
@@ -130,6 +132,11 @@ $packagePrices = [
         '10hrs-100km' => 5500
     ],
     'dzire_cng' => [
+        '4hrs-40km' => 1400,
+        '8hrs-80km' => 2400,
+        '10hrs-100km' => 3000
+    ],
+    'etios' => [
         '4hrs-40km' => 1400,
         '8hrs-80km' => 2400,
         '10hrs-100km' => 3000
