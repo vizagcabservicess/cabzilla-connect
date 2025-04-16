@@ -17,6 +17,12 @@ interface LocalFareResponse {
     priceExtraHour: number;
   }>;
   timestamp: number;
+  data?: {
+    price?: number;
+    // Add other potential properties that might be in the data object
+    package_id?: string;
+    vehicle_id?: string;
+  };
 }
 
 // Vehicle-specific pricing table for fallback
@@ -193,7 +199,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
         }
         
         console.log(`Retrieved fare from fares array: ₹${price}`);
-      } else if (response.data && response.data.price) {
+      } else if (response.data && response.data.price !== undefined) {
         // Format from booking-data.php
         price = Number(response.data.price);
         console.log(`Retrieved fare from data.price: ₹${price}`);

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,28 +11,43 @@ interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
   cabFares: Record<string, number>;
-  isCalculatingFares: boolean;
-  cabErrors?: Record<string, string>;
-  handleSelectCab: (cab: CabType) => void;
-  getFareDetails: (cab: CabType) => string;
-  tripType?: string;
+  isLoading: boolean;
+  errors?: Record<string, string>;
+  onSelectCab: (cab: CabType) => void;
+  distance: number;
+  tripType: string;
+  tripMode?: string;
   hourlyPackage?: string;
+  pickupDate?: Date;
+  returnDate?: Date | null;
 }
 
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
   cabFares,
-  isCalculatingFares,
-  cabErrors = {},
-  handleSelectCab,
-  getFareDetails,
+  isLoading: isCalculatingFares,
+  errors: cabErrors = {},
+  onSelectCab: handleSelectCab,
+  distance,
   tripType,
-  hourlyPackage
+  hourlyPackage,
+  // Other props can be destructured here if needed
 }) => {
   const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [requestRetryCount, setRequestRetryCount] = useState<Record<string, number>>({});
+  
+  // Helper function for formatting the fare details
+  const getFareDetails = (cab: CabType): string => {
+    if (tripType === 'local') {
+      return 'Local package';
+    } else if (tripType === 'airport') {
+      return 'Airport transfer';
+    } else {
+      return tripType === 'round-trip' ? 'Round trip' : 'One way';
+    }
+  };
   
   const fetchFareFromDatabase = useCallback(async (cabId: string, packageId?: string) => {
     if (!tripType || tripType !== 'local' || !packageId) return null;
