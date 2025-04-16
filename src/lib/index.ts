@@ -6,7 +6,7 @@ export * from './cabData';
 export * from './packageData';
 export * from './tourData';
 
-// Export our package utilities
+// Export our improved package utilities
 export * from './packageUtils';
 
 // Export fare calculation functions

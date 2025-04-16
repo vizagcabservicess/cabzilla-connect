@@ -3,7 +3,7 @@
  * Standard package normalization utility to ensure consistent package IDs across the application
  */
 
-// Standard mapping for package IDs
+// Standard mapping for package IDs with strict formatting
 const standardPackageIds: Record<string, string> = {
   // 4hr packages
   "4hr_40km": "4hrs-40km",
@@ -11,16 +11,66 @@ const standardPackageIds: Record<string, string> = {
   "04hrs_40km": "4hrs-40km",
   "4hrs_40km": "4hrs-40km",
   "4hours_40km": "4hrs-40km",
+  "4hr-40km": "4hrs-40km",
+  "4hrs": "4hrs-40km",
+  "4hours": "4hrs-40km",
+  "40km": "4hrs-40km",
   
   // 8hr packages
   "8hr_80km": "8hrs-80km",
   "8hrs_80km": "8hrs-80km",
   "8hours_80km": "8hrs-80km",
+  "8hr-80km": "8hrs-80km",
+  "8hrs": "8hrs-80km",
+  "8hours": "8hrs-80km",
+  "80km": "8hrs-80km",
   
   // 10hr packages
   "10hr_100km": "10hrs-100km",
   "10hrs_100km": "10hrs-100km",
-  "10hours_100km": "10hrs-100km"
+  "10hours_100km": "10hrs-100km",
+  "10hr-100km": "10hrs-100km",
+  "10hrs": "10hrs-100km",
+  "10hours": "10hrs-100km",
+  "100km": "10hrs-100km"
+};
+
+// Standard vehicle ID mapping to ensure consistency
+const standardVehicleIds: Record<string, string> = {
+  // Sedan variants
+  "sedan": "sedan",
+  "swift dzire": "dzire_cng",
+  "dzire": "dzire_cng",
+  "cng": "dzire_cng",
+  "dzire_cng": "dzire_cng",
+  "swift": "dzire_cng",
+  
+  // Ertiga variants
+  "ertiga": "ertiga",
+  "maruti_ertiga": "ertiga",
+  "maruti ertiga": "ertiga",
+  
+  // Innova variants
+  "innova": "innova_crysta",
+  "crysta": "innova_crysta",
+  "innova_crysta": "innova_crysta",
+  "innova crysta": "innova_crysta",
+  "toyota_innova": "innova_crysta",
+  "toyota innova": "innova_crysta",
+  
+  // Innova Hycross
+  "hycross": "innova_hycross",
+  "hi-cross": "innova_hycross",
+  "hi_cross": "innova_hycross",
+  "innova_hycross": "innova_hycross",
+  "innova hycross": "innova_hycross",
+  "mpv": "innova_hycross",
+  
+  // Tempo Traveller variants
+  "tempo": "tempo_traveller",
+  "traveller": "tempo_traveller",
+  "tempo_traveller": "tempo_traveller",
+  "tempo traveller": "tempo_traveller"
 };
 
 /**
@@ -31,45 +81,33 @@ const standardPackageIds: Record<string, string> = {
 export const normalizePackageId = (packageId?: string): string => {
   if (!packageId) return "8hrs-80km"; // Default package
   
+  // Convert to lowercase and standardize separators
+  const normalizedId = packageId.toLowerCase()
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace('hrs-', 'hr_')
+    .replace('hr-', 'hr_');
+  
   // First check for exact matches in our standardization map
-  const normalizedId = packageId.replace('hrs-', 'hr_').replace('hr-', 'hr_');
   if (standardPackageIds[normalizedId]) {
-    console.log(`Normalized package ID from ${packageId} to ${standardPackageIds[normalizedId]}`);
     return standardPackageIds[normalizedId];
   }
   
   // Then check for substring matches
-  const packageIdLower = packageId.toLowerCase();
-  
-  if (packageIdLower.includes('10') && (
-    packageIdLower.includes('hr') || 
-    packageIdLower.includes('hour') || 
-    packageIdLower.includes('100')
-  )) {
-    console.log(`Normalized package ID from ${packageId} to 10hrs-100km`);
+  if (normalizedId.includes('10') || normalizedId.includes('100')) {
     return "10hrs-100km";
   }
   
-  if (packageIdLower.includes('8') && (
-    packageIdLower.includes('hr') || 
-    packageIdLower.includes('hour') || 
-    packageIdLower.includes('80')
-  )) {
-    console.log(`Normalized package ID from ${packageId} to 8hrs-80km`);
+  if (normalizedId.includes('8') || normalizedId.includes('80')) {
     return "8hrs-80km";
   }
   
-  if (packageIdLower.includes('4') && (
-    packageIdLower.includes('hr') || 
-    packageIdLower.includes('hour') || 
-    packageIdLower.includes('40')
-  )) {
-    console.log(`Normalized package ID from ${packageId} to 4hrs-40km`);
+  if (normalizedId.includes('4') || normalizedId.includes('40')) {
     return "4hrs-40km";
   }
   
-  console.log(`Could not normalize package ID: ${packageId}, using default 8hrs-80km`);
-  return "8hrs-80km"; // Default fallback
+  // Default to 8hr package if no match
+  return "8hrs-80km";
 };
 
 /**
@@ -80,47 +118,47 @@ export const normalizePackageId = (packageId?: string): string => {
 export const normalizeVehicleId = (vehicleId?: string): string => {
   if (!vehicleId) return ''; 
   
-  // Convert to lowercase and trim
-  const normalized = vehicleId.toLowerCase().trim();
+  // Convert to lowercase, trim and standardize
+  const normalizedId = vehicleId.toLowerCase().trim();
   
-  // Special case for MPV and Innova Hycross
-  if (normalized === 'mpv' || 
-      normalized.includes('hycross') || 
-      normalized.includes('hi-cross') ||
-      normalized.includes('hi_cross')) {
-    console.log(`Normalized vehicle ID from ${vehicleId} to innova_hycross`);
+  // Check direct mapping first
+  if (standardVehicleIds[normalizedId]) {
+    return standardVehicleIds[normalizedId];
+  }
+  
+  // Special case checks for partial matches
+  if (normalizedId.includes('hycross') || 
+      normalizedId.includes('hi-cross') ||
+      normalizedId.includes('hi_cross') ||
+      normalizedId === 'mpv') {
     return 'innova_hycross';
   }
   
-  // Handle Innova Crysta variations
-  if (normalized.includes('crysta') || 
-      (normalized.includes('innova') && !normalized.includes('hycross'))) {
-    console.log(`Normalized vehicle ID from ${vehicleId} to innova_crysta`);
+  if (normalizedId.includes('crysta') || 
+      (normalizedId.includes('innova') && !normalizedId.includes('hycross'))) {
     return 'innova_crysta';
   }
   
-  // Handle other specific mappings
-  if (normalized.includes('tempo')) {
-    console.log(`Normalized vehicle ID from ${vehicleId} to tempo_traveller`);
+  if (normalizedId.includes('tempo') || normalizedId.includes('traveller')) {
     return 'tempo_traveller';
   }
   
-  if (normalized.includes('dzire') || normalized === 'cng' || normalized.includes('cng')) {
-    console.log(`Normalized vehicle ID from ${vehicleId} to dzire_cng`);
+  if (normalizedId.includes('dzire') || 
+      normalizedId.includes('cng') || 
+      normalizedId.includes('swift')) {
     return 'dzire_cng';
   }
   
-  if (normalized === 'sedan') {
-    return 'sedan';
-  }
-  
-  if (normalized === 'ertiga') {
+  if (normalizedId.includes('ertiga')) {
     return 'ertiga';
   }
   
+  if (normalizedId === 'sedan') {
+    return 'sedan';
+  }
+  
   // Remove spaces and special characters for other vehicle types
-  const result = normalized.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-  console.log(`Normalized vehicle ID from ${vehicleId} to ${result}`);
+  const result = normalizedId.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   return result;
 };
 
@@ -155,46 +193,41 @@ export const getStandardHourlyPackageOptions = () => [
 ];
 
 /**
- * Dispatches events to notify components of package changes
+ * Dispatches events to notify components of package changes with throttling
  * @param packageId - The selected package ID
  */
 export const notifyPackageChange = (packageId: string) => {
   if (!packageId) return;
   
   const normalizedId = normalizePackageId(packageId);
-  const timestamp = Date.now();
+  
+  // Check if we've recently dispatched this same event to prevent loops
+  const lastEventTime = parseInt(sessionStorage.getItem('lastPackageChangeEvent') || '0', 10);
+  const now = Date.now();
+  
+  if (now - lastEventTime < 5000) { // 5 second throttle
+    console.log(`Package change notification throttled (${now - lastEventTime}ms since last event)`);
+    return;
+  }
+  
+  sessionStorage.setItem('lastPackageChangeEvent', now.toString());
   
   try {
-    // Main package selection event
+    // Dispatch fewer events with more consolidated data
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {
       detail: { 
         packageId: normalizedId,
         originalPackageId: packageId,
-        timestamp: timestamp
-      }
-    }));
-    
-    // Force fare recalculation
-    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
-      detail: { 
-        source: 'packageUtils',
-        packageId: normalizedId,
-        timestamp: timestamp + 1
-      }
-    }));
-    
-    // Booking summary package change
-    window.dispatchEvent(new CustomEvent('booking-package-changed', {
-      detail: {
-        packageId: normalizedId,
         packageName: getPackageDisplayName(normalizedId),
-        timestamp: timestamp + 2
+        timestamp: now,
+        // Include more data to reduce need for multiple events
+        forceRefresh: true
       }
     }));
     
-    console.log(`Dispatched package change events for ${normalizedId}`);
+    console.log(`Dispatched package change event for ${normalizedId}`);
   } catch (error) {
-    console.error('Error dispatching package change events:', error);
+    console.error('Error dispatching package change event:', error);
   }
 };
 
