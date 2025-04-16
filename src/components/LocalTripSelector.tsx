@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -62,7 +63,6 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           }
         } catch (error) {
           console.error(`Could not fetch price for package ${pkg.id}:`, error);
-          setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
           setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
         }
       }));
@@ -144,23 +144,35 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       normalizedPackageId = normalizePackageId(packageId);
     }
     
-    onPackageSelect(normalizedPackageId);
-    
-    if (typeof window !== 'undefined') {
-      try {
+    // Clear all selected fare cache for ALL cab types to force refresh
+    try {
+      if (typeof window !== 'undefined') {
+        console.log(`Clearing all fare caches due to package change to ${normalizedPackageId}`);
+        
+        // First, clear our global fare cache object
         window.localPackagePriceCache = {};
         
-        for (const key of Object.keys(localStorage)) {
-          if (key.startsWith('selected_fare_') && key.endsWith(normalizedPackageId)) {
-            console.log(`Clearing cached fare for ${key} due to package change`);
+        // Clear any selected_fare entries in localStorage for ALL vehicles
+        const localStorageKeys = Object.keys(localStorage);
+        for (const key of localStorageKeys) {
+          if (key.startsWith('selected_fare_') || key.startsWith('fare_local_')) {
             localStorage.removeItem(key);
+            console.log(`Cleared cached fare for ${key} due to package change`);
           }
         }
-      } catch (error) {
-        console.error('Error clearing cache:', error);
+        
+        // Clear any pending fare calculations
+        if (window.pendingFareRequests) {
+          window.pendingFareRequests = {};
+        }
       }
+    } catch (error) {
+      console.error('Error clearing caches:', error);
     }
     
+    onPackageSelect(normalizedPackageId);
+    
+    // Dispatch multiple events to ensure all components update correctly
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {
       detail: { 
         packageId: normalizedPackageId, 
@@ -168,11 +180,37 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       }
     }));
     
+    // Force all fare calculations to refresh
     window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
-      detail: { source: 'LocalTripSelector', timestamp: Date.now() }
+      detail: { 
+        source: 'LocalTripSelector', 
+        packageId: normalizedPackageId,
+        timestamp: Date.now() + 1 
+      }
+    }));
+    
+    // Force booking summary to update with new package
+    window.dispatchEvent(new CustomEvent('booking-package-changed', {
+      detail: {
+        packageId: normalizedPackageId,
+        packageName: getPackageDisplayName(normalizedPackageId),
+        source: 'LocalTripSelector',
+        timestamp: Date.now() + 2
+      }
     }));
     
     toast.success(`Selected ${normalizedPackageId.replace(/-/g, ' ')} package`);
+  };
+  
+  const getPackageDisplayName = (packageId: string): string => {
+    if (packageId.includes('4hrs-40km')) {
+      return '4hrs 40KM Package';
+    } else if (packageId.includes('8hrs-80km')) {
+      return '8hrs 80KM Package';
+    } else if (packageId.includes('10hrs-100km')) {
+      return '10hrs 100KM Package';
+    }
+    return packageId.replace(/-/g, ' ');
   };
   
   if (loadError) {
