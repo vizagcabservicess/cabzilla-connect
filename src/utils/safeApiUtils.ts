@@ -19,14 +19,12 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
   }
 
   try {
-    // Endpoint could be either relative or absolute URL
+    // Ensure endpoint is properly formatted
     let url = endpoint;
     
-    // Only add the base URL if the endpoint is not already a full URL
+    // If endpoint doesn't start with http(s), treat it as a relative path and add the base URL
     if (!endpoint.match(/^https?:\/\//i)) {
-      // If endpoint doesn't start with a slash, add it
-      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      url = formattedEndpoint;
+      url = getApiUrl(endpoint);
     }
     
     console.log(`Making API request to: ${url}`);
@@ -83,6 +81,8 @@ export async function tryMultipleEndpoints<T = any>(
     return null;
   }
 
+  console.log(`Attempting to fetch pricing data from ${endpoints.length} endpoints`);
+  
   let lastError: Error | null = null;
   let failures = 0;
 
@@ -96,14 +96,16 @@ export async function tryMultipleEndpoints<T = any>(
     return 0;
   });
 
-  for (const endpoint of prioritizedEndpoints) {
+  for (let i = 0; i < prioritizedEndpoints.length; i++) {
+    const endpoint = prioritizedEndpoints[i];
     try {
-      console.log(`Trying endpoint ${failures+1}/${endpoints.length}: ${endpoint}`);
+      console.log(`Trying endpoint ${i+1}/${endpoints.length}: ${endpoint}`);
       const result = await safeApiRequest<T>(endpoint, config);
       if (result) {
         console.log(`Successfully fetched data from endpoint: ${endpoint}`);
         return result;
       }
+      console.log(`API response received: ${JSON.stringify(result).substring(0, 500)}`);
     } catch (error) {
       failures++;
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -134,7 +136,7 @@ export async function tryMultipleEndpoints<T = any>(
       });
     }
     
-    const response = await fetch(endpoint, {
+    const response = await fetch(getApiUrl(endpoint), {
       headers: fetchHeaders
     });
     
@@ -162,17 +164,7 @@ export async function fetchWithLocalFallback<T = any>(
   fallbackPath: string,
   config: AxiosRequestConfig = {}
 ): Promise<T | null> {
-  // First try the local endpoints
-  const localEndpoints = apiEndpoints.filter(ep => ep.startsWith('/api'));
-  
-  if (localEndpoints.length > 0) {
-    const localResult = await tryMultipleEndpoints<T>(localEndpoints, config);
-    if (localResult) {
-      return localResult;
-    }
-  }
-  
-  // Then try all endpoints
+  // First try the API endpoints
   const apiResult = await tryMultipleEndpoints<T>(apiEndpoints, config);
   if (apiResult) {
     return apiResult;
@@ -190,6 +182,7 @@ export async function fetchWithLocalFallback<T = any>(
     return fallbackData as T;
   } catch (fallbackError) {
     console.error(`Fallback data fetch failed:`, fallbackError);
+    console.log(`No valid price received from API, using fallback calculation`);
     return null;
   }
 }

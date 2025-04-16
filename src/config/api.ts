@@ -40,17 +40,24 @@ export const getApiUrl = (endpoint: string): string => {
   
   const baseUrl = getApiBaseUrl();
   
-  // If we're in Lovable environment or no base URL, use relative paths
-  if (!baseUrl) {
-    // Ensure endpoint starts with a slash for relative paths
-    return endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
+  // Clean the endpoint to ensure it starts with /api/ if it doesn't contain it already
+  let formattedEndpoint = endpoint;
+  
+  // If it's a relative path that doesn't start with a slash, add one
+  if (formattedEndpoint && !formattedEndpoint.startsWith('/')) {
+    formattedEndpoint = `/${formattedEndpoint}`;
   }
   
-  // Ensure endpoint starts with a slash if it doesn't already
-  const formattedEndpoint = endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
+  // For paths that should be in /api/ but don't have it yet, adjust them
+  if (formattedEndpoint && 
+      !formattedEndpoint.startsWith('/api/') && 
+      !formattedEndpoint.includes('/api/') &&
+      formattedEndpoint.includes('.php')) {
+    formattedEndpoint = `/api${formattedEndpoint}`;
+  }
   
-  // Compose and return the full URL
-  return `${baseUrl}${formattedEndpoint}`;
+  // Compose the full URL
+  return baseUrl + formattedEndpoint;
 };
 
 /**
