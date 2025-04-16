@@ -1,7 +1,6 @@
 
 <?php
-// Mock PHP file for local-package-fares.php
-// This serves as a direct API endpoint for package fares
+// Simple API endpoint for local package fares
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
