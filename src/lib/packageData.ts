@@ -131,6 +131,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Create unique cache key
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
     
+    // Log the exact cache key we're using to help debugging
+    console.log(`Using cache key: ${cacheKey} for local package price`);
+    
     // Only check cache if force refresh not requested
     if (!forceRefresh && window.localPackagePriceCache && 
         window.localPackagePriceCache[cacheKey] && 
@@ -156,6 +159,7 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const apiUrl = getApiUrl() || '';
     
     // IMPORTANT: Use direct database API endpoint for local fares as the primary source
+    // FIXED: Use correct vehicle_id parameter with normalized value
     const primaryEndpoint = `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`;
     
     // Array of API endpoints to try - validate them first
@@ -163,7 +167,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       primaryEndpoint,
       `${apiUrl}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
       `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
-      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
+      // Add local package fares endpoint
+      `/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
     ].filter(url => validateApiUrl(url));
     
     if (apiEndpoints.length === 0) {
@@ -171,6 +177,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
       // Proceed with fallback calculation if no valid endpoints
       const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
       window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
+      
+      // Log the fallback price
+      console.log(`Using dynamically calculated price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
       
       // Broadcast the dynamic price
       window.dispatchEvent(new CustomEvent('local-fare-updated', {

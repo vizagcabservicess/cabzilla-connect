@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
@@ -44,6 +45,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       currentCabRef.current = selectedCabId;
       // Force a new fetch when cab changes
       setLastFetchAttempt(0);
+      
+      // Log the normalized vehicle ID for debugging
+      const normalizedCabId = normalizeVehicleId(selectedCabId);
+      console.log(`BookingSummaryHelper: Cab changed to ${selectedCabId}, normalized to ${normalizedCabId}`);
     }
   }, [selectedCabId, hourlyPackage, totalPrice]);
   
@@ -53,11 +58,16 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     const handleFareSourceUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.source) {
-        const { cabId, source } = customEvent.detail;
+        const { cabId, source, forceConsistency } = customEvent.detail;
         if (selectedCabId) {
           const normalizedSelectedCabId = normalizeVehicleId(selectedCabId);
-          if (cabId === normalizedSelectedCabId) {
+          if (cabId === normalizedSelectedCabId || forceConsistency) {
             console.log(`BookingSummaryHelper: Fare source for ${cabId} is ${source}`);
+            
+            // Force a new fetch if consistency is required
+            if (forceConsistency) {
+              setLastFetchAttempt(0);
+            }
           }
         }
       }
@@ -69,6 +79,32 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       window.removeEventListener('fare-source-update', handleFareSourceUpdate as EventListener);
     };
   }, [selectedCabId]);
+
+  // New listener for package selection fare sync
+  useEffect(() => {
+    const handlePackageFareSync = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.packageId && customEvent.detail.vehicleId && customEvent.detail.needsSync) {
+        const { packageId, vehicleId } = customEvent.detail;
+        
+        if (selectedCabId && hourlyPackage) {
+          const normalizedSelectedCabId = normalizeVehicleId(selectedCabId);
+          const normalizedPackageId = normalizePackageId(hourlyPackage);
+          
+          if (vehicleId === normalizedSelectedCabId && packageId === normalizedPackageId) {
+            console.log(`BookingSummaryHelper: Forced sync requested for ${vehicleId} with ${packageId}`);
+            setLastFetchAttempt(0); // Force a new fetch
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('selected-package-fare-sync', handlePackageFareSync as EventListener);
+    
+    return () => {
+      window.removeEventListener('selected-package-fare-sync', handlePackageFareSync as EventListener);
+    };
+  }, [selectedCabId, hourlyPackage]);
 
   // Core synchronization logic - respects the latest selected fare
   useEffect(() => {
@@ -89,6 +125,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     const normalizedPackageId = normalizePackageId(hourlyPackage);
     
     console.log(`BookingSummaryHelper: Checking fare consistency for ${normalizedCabId} with ${normalizedPackageId}`);
+    console.log(`BookingSummaryHelper: Original cab ID: ${selectedCabId}`);
     
     // Check if we should override based on time since last fetch
     const shouldFetch = now - lastFetchAttempt > 3000 && !activeRequestRef.current;
@@ -137,39 +174,6 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       fetchFareFromDatabase(normalizedCabId, normalizedPackageId);
     }
   }, [tripType, selectedCabId, hourlyPackage, totalPrice, lastSyncTime, lastFetchAttempt, disableOverrides]);
-  
-  // Handle throttled fare updates
-  useEffect(() => {
-    const handleThrottledUpdates = () => {
-      if (pendingFareRef.current !== null && !disableOverrides && selectedCabId && hourlyPackage) {
-        const now = Date.now();
-        if (now - updateThrottleTimeRef.current > 2000) {
-          updateThrottleTimeRef.current = now;
-          
-          const normalizedCabId = normalizeVehicleId(selectedCabId);
-          const normalizedPackageId = normalizePackageId(hourlyPackage);
-          
-          console.log(`BookingSummaryHelper: Processing throttled update: ₹${pendingFareRef.current}`);
-          
-          window.dispatchEvent(new CustomEvent('booking-summary-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: tripType,
-              packageId: normalizedPackageId,
-              fare: pendingFareRef.current,
-              source: 'throttled-update',
-              timestamp: now
-            }
-          }));
-          
-          pendingFareRef.current = null;
-        }
-      }
-    };
-    
-    const interval = setInterval(handleThrottledUpdates, 2000);
-    return () => clearInterval(interval);
-  }, [tripType, selectedCabId, hourlyPackage, disableOverrides]);
   
   // Function to fetch fare directly from the database
   const fetchFareFromDatabase = async (cabId: string, packageId: string) => {

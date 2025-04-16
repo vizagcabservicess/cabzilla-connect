@@ -46,15 +46,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
       // Use the selected cab if available, otherwise default to sedan
+      // FIXED: Properly normalize the vehicle ID before using it
       const referenceVehicle = selectedCabId ? 
         normalizeVehicleId(selectedCabId) : 'sedan';
       
-      console.log(`LocalTripSelector: Using ${referenceVehicle} as reference for package prices`);
+      console.log(`LocalTripSelector: Using ${referenceVehicle} as reference for package prices (original ID: ${selectedCabId})`);
       
       // Update all package prices in parallel
       await Promise.all(updatedPackages.map(async (pkg) => {
         try {
-          // Get prices directly from API - no fallbacks
+          // Get prices directly from API with the correct vehicle ID
           const price = await getLocalPackagePrice(pkg.id, referenceVehicle, true);
           if (price > 0) {
             pkg.basePrice = price;
@@ -70,12 +71,12 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
               }
             }));
             
-            // Store the price in localStorage too for quick reference
+            // Store the price in localStorage with the correct vehicle ID
             localStorage.setItem(`selected_fare_${referenceVehicle}_${pkg.id}`, price.toString());
           } else {
             console.warn(`API returned zero or invalid price for ${pkg.id} with vehicle ${referenceVehicle}`);
             
-            // Try a direct API call as fallback
+            // Try a direct API call as fallback - use the normalized vehicle ID
             try {
               const apiUrl = `/api/local-package-fares.php?vehicle_id=${referenceVehicle}&package_id=${pkg.id}`;
               const response = await fetch(apiUrl, {
@@ -108,16 +109,18 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
           console.error(`Could not fetch price for package ${pkg.id}:`, error);
           setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
           
-          // Use fallback prices based on vehicle type
-          if (referenceVehicle.includes('sedan')) {
+          // Use fallback prices based on vehicle type - use the NORMALIZED vehicle type
+          const normalizedVehicleType = referenceVehicle.toLowerCase().replace(/\s+/g, '_');
+          
+          if (normalizedVehicleType.includes('sedan')) {
             if (pkg.id.includes('4hrs')) pkg.basePrice = 1400;
             else if (pkg.id.includes('8hrs')) pkg.basePrice = 2400;
             else if (pkg.id.includes('10hrs')) pkg.basePrice = 3000;
-          } else if (referenceVehicle.includes('ertiga')) {
+          } else if (normalizedVehicleType.includes('ertiga')) {
             if (pkg.id.includes('4hrs')) pkg.basePrice = 1800;
             else if (pkg.id.includes('8hrs')) pkg.basePrice = 3000;
             else if (pkg.id.includes('10hrs')) pkg.basePrice = 3600;
-          } else if (referenceVehicle.includes('innova')) {
+          } else if (normalizedVehicleType.includes('innova')) {
             if (pkg.id.includes('4hrs')) pkg.basePrice = 2400;
             else if (pkg.id.includes('8hrs')) pkg.basePrice = 4000;
             else if (pkg.id.includes('10hrs')) pkg.basePrice = 4800;
@@ -139,7 +142,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         console.log('Setting default package:', defaultPackage);
         onPackageSelect(defaultPackage);
         
-        // Announce the selection
+        // Announce the selection with the correct vehicle type
         window.dispatchEvent(new CustomEvent('hourly-package-selected', {
           detail: { 
             packageId: defaultPackage, 
@@ -162,9 +165,19 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
             timestamp 
           }
         }));
+        
+        // Also announce the correct vehicle and fare combination
+        window.dispatchEvent(new CustomEvent('fare-source-update', {
+          detail: {
+            cabId: referenceVehicle,
+            source: 'LocalTripSelector',
+            forceConsistency: true,
+            timestamp
+          }
+        }));
       }
       
-      // Pre-fetch all fares in the background
+      // Pre-fetch all fares in the background - include the current vehicle ID
       fetchAndCacheLocalFares(true).catch(error => {
         console.error('Error fetching local fares in background:', error);
       });
@@ -200,8 +213,14 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         // Update just the specific package price if it exists in our packages array
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
-            if (pkg.id === event.detail.packageId && selectedCabId && event.detail.vehicleType === selectedCabId.toLowerCase().replace(/\s+/g, '_')) {
-              return { ...pkg, basePrice: event.detail.price };
+            if (pkg.id === event.detail.packageId && selectedCabId) {
+              // FIXED: Properly normalize vehicle type before comparison 
+              const normalizedSelectedCab = normalizeVehicleId(selectedCabId);
+              const normalizedEventVehicle = event.detail.vehicleType.toLowerCase().replace(/\s+/g, '_');
+              
+              if (normalizedSelectedCab === normalizedEventVehicle) {
+                return { ...pkg, basePrice: event.detail.price };
+              }
             }
             return pkg;
           });
@@ -236,9 +255,25 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     if (selectedCabId && selectedCabId !== lastSelectedCabId) {
       console.log(`LocalTripSelector: Selected cab changed from ${lastSelectedCabId} to ${selectedCabId}, reloading packages`);
       setLastSelectedCabId(selectedCabId);
-      loadPackages();
+      
+      // Add a small delay to ensure the cab selection is processed first
+      setTimeout(() => {
+        loadPackages();
+        
+        // Also dispatch a new event to force consistency
+        if (selectedPackage) {
+          const normalizedVehicleId = normalizeVehicleId(selectedCabId);
+          window.dispatchEvent(new CustomEvent('force-fare-consistency', {
+            detail: { 
+              vehicleId: normalizedVehicleId,
+              packageId: selectedPackage,
+              timestamp: Date.now() 
+            }
+          }));
+        }
+      }, 100);
     }
-  }, [selectedCabId, lastSelectedCabId]);
+  }, [selectedCabId, lastSelectedCabId, selectedPackage]);
   
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
@@ -258,9 +293,12 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     
     // Add debounce to prevent too many events firing at once
     setTimeout(() => {
+      // FIXED: Use the properly normalized vehicle ID
       const referenceVehicle = selectedCabId ? 
-        selectedCabId.toLowerCase().replace(/\s+/g, '_') : 'sedan';
+        normalizeVehicleId(selectedCabId) : 'sedan';
         
+      console.log(`Dispatching hourly-package-selected event with vehicle ${referenceVehicle}`);
+      
       // Dispatch an event to notify other components about the package selection
       window.dispatchEvent(new CustomEvent('hourly-package-selected', {
         detail: { 
@@ -275,6 +313,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         detail: { 
           source: 'LocalTripSelector', 
           vehicleType: referenceVehicle,
+          timestamp: Date.now() 
+        }
+      }));
+      
+      // FIXED: Add an additional event to ensure consistent fares
+      window.dispatchEvent(new CustomEvent('selected-package-fare-sync', {
+        detail: { 
+          packageId: normalizedPackageId,
+          vehicleId: referenceVehicle,
+          needsSync: true,
           timestamp: Date.now() 
         }
       }));
