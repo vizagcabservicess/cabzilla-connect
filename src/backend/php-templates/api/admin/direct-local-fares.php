@@ -32,49 +32,17 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
 }
 
-// Get package ID if available
-$packageId = isset($_GET['package_id']) ? $_GET['package_id'] : null;
-if (!$packageId && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    $packageId = isset($data['packageId']) ? $data['packageId'] : (isset($data['package_id']) ? $data['package_id'] : null);
-}
-
 // If still no vehicleId, set a default for the mock data
 if (!$vehicleId) {
     $vehicleId = 'sedan';
 }
 
-// IMPROVED: Normalize package ID to ensure consistency
-function normalizePackageId($packageId) {
-    if (!$packageId) return '8hrs-80km'; // Default
-    
-    $normalized = strtolower($packageId);
-    
-    if (strpos($normalized, '10hr') !== false || strpos($normalized, '100km') !== false) {
-        return '10hrs-100km';
-    }
-    
-    if (strpos($normalized, '8hr') !== false || strpos($normalized, '80km') !== false) {
-        return '8hrs-80km';
-    }
-    
-    if (strpos($normalized, '4hr') !== false || strpos($normalized, '40km') !== false) {
-        return '4hrs-40km';
-    }
-    
-    return '8hrs-80km'; // Default fallback
-}
-
-// IMPROVED: Additional normalization for common vehicle name variations
+// IMPORTANT: Additional normalization for common vehicle name variations
+// This ensures we catch all possible vehicle name formats
 function normalizeVehicleId($vehicleId) {
     // Convert to lowercase and replace spaces with underscores
     $result = strtolower(trim($vehicleId));
     $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
-    
-    // Special case for MPV and Innova Hycross - always treated the same
-    if ($result === 'mpv' || strpos($result, 'hycross') !== false) {
-        return 'innova_hycross';
-    }
     
     // Handle common variations
     $mappings = [
@@ -102,26 +70,21 @@ function normalizeVehicleId($vehicleId) {
         }
     }
     
-    // Special handling for "innova" which might come without specifics
-    if ($result === 'innova' || strpos($result, 'innova') !== false) {
-        if (strpos($result, 'hycross') !== false) {
-            return 'innova_hycross';
-        }
-        if (strpos($result, 'crysta') !== false) {
-            return 'innova_crysta';
-        }
-        // Default any plain "innova" to crysta
-        if ($result === 'innova') {
-            return 'innova_crysta';
-        }
+    // Special handling for "innova hycross" which might come as "mpv"
+    if (strpos($result, 'innova') !== false && strpos($result, 'hycross') !== false) {
+        return 'innova_hycross';
+    }
+    
+    // Many systems use "MPV" to refer to Innova Hycross
+    if ($result === 'mpv') {
+        return 'innova_hycross';
     }
     
     return $result;
 }
 
-// Normalize vehicle ID and package ID
+// Normalize vehicle ID for consistency
 $normalizedVehicleId = normalizeVehicleId($vehicleId);
-$normalizedPackageId = normalizePackageId($packageId);
 
 // First attempt to get data directly from database
 $localFares = [];
@@ -349,89 +312,69 @@ try {
 // If database query failed, generate dynamic prices as fallback
 if (!$dbSuccess) {
     // Helper function to calculate package prices based on vehicle category
-    function calculateDynamicPrices($vehicleType) {
-        // IMPROVED: More accurate vehicle type-specific pricing with special case for MPV/Innova Hycross
-        $basePrices = [
-            'sedan' => [
-                'price4hrs40km' => 2400,
-                'price8hrs80km' => 3000,
-                'price10hrs100km' => 3500,
-                'priceExtraKm' => 30,
-                'priceExtraHour' => 300
-            ],
-            'ertiga' => [
-                'price4hrs40km' => 2800,
-                'price8hrs80km' => 3500,
-                'price10hrs100km' => 4000,
-                'priceExtraKm' => 35,
-                'priceExtraHour' => 350
-            ],
-            'innova_crysta' => [
-                'price4hrs40km' => 3200,
-                'price8hrs80km' => 4000,
-                'price10hrs100km' => 4500,
-                'priceExtraKm' => 40,
-                'priceExtraHour' => 400
-            ],
-            'innova_hycross' => [
-                'price4hrs40km' => 3600,
-                'price8hrs80km' => 4500,
-                'price10hrs100km' => 5000,
-                'priceExtraKm' => 45,
-                'priceExtraHour' => 450
-            ],
-            'tempo_traveller' => [
-                'price4hrs40km' => 4000,
-                'price8hrs80km' => 5500,
-                'price10hrs100km' => 7000,
-                'priceExtraKm' => 55,
-                'priceExtraHour' => 550
-            ],
-            'dzire_cng' => [
-                'price4hrs40km' => 2400,
-                'price8hrs80km' => 3000,
-                'price10hrs100km' => 3500,
-                'priceExtraKm' => 30,
-                'priceExtraHour' => 300
-            ]
+    function calculateDynamicPrices($baseValue, $multiplier) {
+        return [
+            'price4hrs40km' => round($baseValue['4hr'] * $multiplier),
+            'price8hrs80km' => round($baseValue['8hr'] * $multiplier),
+            'price10hrs100km' => round($baseValue['10hr'] * $multiplier),
+            'priceExtraKm' => round(($baseValue['8hr'] * $multiplier) * 0.01),
+            'priceExtraHour' => round(($baseValue['8hr'] * $multiplier) * 0.1)
         ];
-        
-        // Use specific vehicle type if available, otherwise fallback to category
-        if (isset($basePrices[$vehicleType])) {
-            return $basePrices[$vehicleType];
-        }
-        
-        // Determine vehicle category based on type
-        if (strpos($vehicleType, 'innova') !== false) {
-            if (strpos($vehicleType, 'hycross') !== false) {
-                return $basePrices['innova_hycross'];
-            }
-            return $basePrices['innova_crysta'];
-        } 
-        else if (strpos($vehicleType, 'ertiga') !== false) {
-            return $basePrices['ertiga'];
-        }
-        else if (strpos($vehicleType, 'tempo') !== false || strpos($vehicleType, 'traveller') !== false) {
-            return $basePrices['tempo_traveller'];
-        }
-        else if (strpos($vehicleType, 'dzire') !== false || strpos($vehicleType, 'cng') !== false) {
-            return $basePrices['dzire_cng'];
-        }
-        else if ($vehicleType === 'mpv') {
-            return $basePrices['innova_hycross'];
-        }
-        
-        // Default to sedan pricing
-        return $basePrices['sedan'];
     }
 
-    // Calculate prices dynamically based on normalized vehicle ID
-    $prices = calculateDynamicPrices($normalizedVehicleId);
+    // Base price values that will be used for calculations
+    $basePrices = [
+        '4hr' => 1200,
+        '8hr' => 2000,
+        '10hr' => 2500
+    ];
+
+    // Determine vehicle category and apply appropriate multiplier
+    $vehicleCategory = 'standard';
+    $multiplier = 1.0;
+
+    if (strpos($normalizedVehicleId, 'sedan') !== false || 
+        strpos($normalizedVehicleId, 'swift') !== false || 
+        strpos($normalizedVehicleId, 'dzire') !== false ||
+        strpos($normalizedVehicleId, 'amaze') !== false ||
+        strpos($normalizedVehicleId, 'etios') !== false) {
+        $vehicleCategory = 'sedan';
+        $multiplier = 1.0;
+    } else if (strpos($normalizedVehicleId, 'ertiga') !== false || 
+        strpos($normalizedVehicleId, 'suv') !== false) {
+        $vehicleCategory = 'suv';
+        $multiplier = 1.25;
+    } else if (strpos($normalizedVehicleId, 'innova') !== false || 
+        strpos($normalizedVehicleId, 'mpv') !== false) {
+        $vehicleCategory = 'mpv';
+        if (strpos($normalizedVehicleId, 'hycross') !== false) {
+            $multiplier = 1.6;
+        } else {
+            $multiplier = 1.5;
+        }
+    } else if (strpos($normalizedVehicleId, 'tempo') !== false || 
+        strpos($normalizedVehicleId, 'traveller') !== false) {
+        $vehicleCategory = 'tempo';
+        $multiplier = 2.0;
+    } else if (strpos($normalizedVehicleId, 'cng') !== false) {
+        $vehicleCategory = 'cng';
+        $multiplier = 1.0; // Same as sedan
+    } else if ($normalizedVehicleId === 'mpv') {
+        $vehicleCategory = 'innova_hycross';
+        $multiplier = 1.6; // Same as Innova Hycross
+    } else {
+        // Default - use standard sedan pricing
+        $vehicleCategory = 'other';
+        $multiplier = 1.0;
+    }
+
+    // Calculate prices dynamically
+    $prices = calculateDynamicPrices($basePrices, $multiplier);
 
     // Create the response object
     $localFares[] = [
-        'vehicleId' => $normalizedVehicleId,
-        'vehicleCategory' => $normalizedVehicleId,
+        'vehicleId' => $vehicleId,
+        'vehicleCategory' => $vehicleCategory,
         'matchedWith' => 'none',
         'originalRequest' => $vehicleId,
         'price4hrs40km' => $prices['price4hrs40km'],
@@ -444,20 +387,6 @@ if (!$dbSuccess) {
     ];
 }
 
-// If a specific package was requested, include its price directly in the response
-$packagePrice = null;
-if ($normalizedPackageId && !empty($localFares)) {
-    $fare = $localFares[0];
-    
-    if ($normalizedPackageId === '4hrs-40km' && isset($fare['price4hrs40km'])) {
-        $packagePrice = $fare['price4hrs40km'];
-    } else if ($normalizedPackageId === '8hrs-80km' && isset($fare['price8hrs80km'])) {
-        $packagePrice = $fare['price8hrs80km'];
-    } else if ($normalizedPackageId === '10hrs-100km' && isset($fare['price10hrs100km'])) {
-        $packagePrice = $fare['price10hrs100km'];
-    }
-}
-
 // Return JSON response
 echo json_encode([
     'status' => 'success',
@@ -466,8 +395,5 @@ echo json_encode([
     'dynamicallyGenerated' => !$dbSuccess,
     'requestedVehicleId' => $vehicleId,
     'normalizedVehicleId' => $normalizedVehicleId,
-    'requestedPackageId' => $packageId,
-    'normalizedPackageId' => $normalizedPackageId,
-    'price' => $packagePrice, // Include the specific package price if requested
     'timestamp' => time()
 ]);

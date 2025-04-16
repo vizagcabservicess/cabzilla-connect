@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.58');
+header('X-API-Version: 1.0.57');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -23,110 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Log the request
 error_log("Direct booking data request received: " . json_encode($_GET));
 
-// Normalize package ID to ensure consistency
-function normalizePackageId($packageId) {
-    if (!$packageId) return '8hrs-80km'; // Default
-    
-    $normalized = strtolower(trim($packageId));
-    
-    // First check for direct matches to standard package IDs
-    if ($normalized === '10hrs-100km' || $normalized === '10hrs_100km') {
-        return '10hrs-100km';
-    }
-    
-    if ($normalized === '8hrs-80km' || $normalized === '8hrs_80km') {
-        return '8hrs-80km';
-    }
-    
-    if ($normalized === '4hrs-40km' || $normalized === '4hrs_40km') {
-        return '4hrs-40km';
-    }
-    
-    // Then check for substring matches if not an exact match
-    if (strpos($normalized, '10hr') !== false || strpos($normalized, '100km') !== false) {
-        return '10hrs-100km';
-    }
-    
-    if (strpos($normalized, '8hr') !== false || strpos($normalized, '80km') !== false) {
-        return '8hrs-80km';
-    }
-    
-    if (strpos($normalized, '4hr') !== false || strpos($normalized, '40km') !== false) {
-        return '4hrs-40km';
-    }
-    
-    return '8hrs-80km'; // Default fallback
-}
-
-// Normalize vehicle ID to ensure consistency
-function normalizeVehicleId($vehicleId) {
-    if (!$vehicleId) return '';
-    
-    // Convert to lowercase and replace spaces with underscores
-    $result = strtolower(trim($vehicleId));
-    $result = str_replace(' ', '_', $result);
-    $result = preg_replace('/[^a-z0-9_]/', '', $result);
-    
-    // Special case for MPV and Innova Hycross - always treated the same
-    if ($result === 'mpv' || strpos($result, 'hycross') !== false) {
-        return 'innova_hycross';
-    }
-    
-    // Handle common variations
-    $mappings = [
-        'innovahycross' => 'innova_hycross',
-        'innovacrystal' => 'innova_crysta',
-        'innovacrista' => 'innova_crysta',
-        'innova_crista' => 'innova_crysta',
-        'innovahicross' => 'innova_hycross',
-        'innova_hicross' => 'innova_hycross',
-        'tempotraveller' => 'tempo_traveller',
-        'tempo_traveler' => 'tempo_traveller',
-        'cng' => 'dzire_cng',
-        'dzirecng' => 'dzire_cng',
-        'sedancng' => 'dzire_cng',
-        'swift' => 'sedan',
-        'swiftdzire' => 'dzire',
-        'swift_dzire' => 'dzire',
-        'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
-    ];
-    
-    foreach ($mappings as $search => $replace) {
-        if ($result === $search) {
-            return $replace;
-        }
-    }
-    
-    // Special handling for "innova" which might come without specifics
-    if ($result === 'innova' || strpos($result, 'innova') !== false) {
-        if (strpos($result, 'hycross') !== false) {
-            return 'innova_hycross';
-        }
-        if (strpos($result, 'crysta') !== false) {
-            return 'innova_crysta';
-        }
-        // Default any plain "innova" to crysta
-        if ($result === 'innova') {
-            return 'innova_crysta';
-        }
-    }
-    
-    return $result;
-}
-
 // Check if the request is for local package fares
 if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     error_log("Local package fares sync check request received");
     
     $vehicleId = $_GET['vehicle_id'];
     $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : null;
-    
-    // Normalize the IDs
-    $normalizedVehicleId = normalizeVehicleId($vehicleId);
-    $normalizedPackageId = $packageId ? normalizePackageId($packageId) : null;
-    
-    error_log("Normalized vehicle ID: $normalizedVehicleId, Normalized package ID: $normalizedPackageId");
     
     // Try to get from database first
     try {
@@ -141,7 +43,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                 // Query for the vehicle's fare data
                 $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $normalizedVehicleId);
+                $stmt->bind_param("s", $vehicleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
@@ -149,18 +51,18 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     $row = $result->fetch_assoc();
                     
                     // If a specific package was requested, return only that package's price
-                    if ($normalizedPackageId) {
+                    if ($packageId) {
                         $packagePrice = 0;
                         $packageName = '';
                         
-                        // Get appropriate price based on normalized package ID
-                        if ($normalizedPackageId === '4hrs-40km') {
+                        // Normalize package ID to match database field names
+                        if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
                             $packagePrice = floatval($row['price_4hr_40km']);
                             $packageName = '4 Hours Package (40km)';
-                        } else if ($normalizedPackageId === '8hrs-80km') {
+                        } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
                             $packagePrice = floatval($row['price_8hr_80km']);
                             $packageName = '8 Hours Package (80km)';
-                        } else if ($normalizedPackageId === '10hrs-100km') {
+                        } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
                             $packagePrice = floatval($row['price_10hr_100km']);
                             $packageName = '10 Hours Package (100km)';
                         }
@@ -168,16 +70,14 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                         echo json_encode([
                             'status' => 'success',
                             'exists' => true,
-                            'vehicleId' => $normalizedVehicleId,
-                            'originalVehicleId' => $vehicleId,
-                            'packageId' => $normalizedPackageId,
-                            'originalPackageId' => $packageId,
+                            'vehicleId' => $vehicleId,
+                            'packageId' => $packageId,
                             'packageName' => $packageName,
                             'baseFare' => $packagePrice,
                             'price' => $packagePrice,
                             'data' => [
-                                'vehicleId' => $normalizedVehicleId,
-                                'packageId' => $normalizedPackageId,
+                                'vehicleId' => $vehicleId,
+                                'packageId' => $packageId,
                                 'price' => $packagePrice,
                                 'baseFare' => $packagePrice
                             ],
@@ -191,8 +91,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                         'status' => 'success',
                         'exists' => true,
                         'data' => [
-                            'vehicleId' => $normalizedVehicleId,
-                            'originalVehicleId' => $vehicleId,
+                            'vehicleId' => $row['vehicle_id'],
                             'price4hrs40km' => floatval($row['price_4hr_40km']),
                             'price8hrs80km' => floatval($row['price_8hr_80km']),
                             'price10hrs100km' => floatval($row['price_10hr_100km']),
@@ -224,10 +123,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         'tempo' => 2.0,
         'luxury' => 1.7,
         'suv' => 1.25,
-        'mpv' => 1.6,
-        'dzire_cng' => 1.0,
-        'dzire' => 1.0,
-        'cng' => 1.0
+        'mpv' => 1.4
     ];
     
     // Helper function to calculate package prices dynamically
@@ -249,23 +145,17 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     ];
     
     // Determine appropriate multiplier based on vehicle type
-    $priceMultiplier = 1.0; // Default multiplier
+    $normalizedVehicleId = strtolower($vehicleId);
+    $normalizedVehicleId = str_replace(' ', '_', $normalizedVehicleId);
     
-    // Special case for Innova Hycross and MPV
-    if ($normalizedVehicleId === 'innova_hycross' || $normalizedVehicleId === 'mpv') {
-        $priceMultiplier = $vehicleMultipliers['innova_hycross'];
-    }
+    // Default multiplier
+    $priceMultiplier = 1.0;
+    
     // Check if we have a predefined multiplier for this vehicle type
-    else if (isset($vehicleMultipliers[$normalizedVehicleId])) {
-        $priceMultiplier = $vehicleMultipliers[$normalizedVehicleId];
-    }
-    // Fallback to checking if vehicle type contains a known type
-    else {
-        foreach ($vehicleMultipliers as $vehicleType => $multiplier) {
-            if (strpos($normalizedVehicleId, $vehicleType) !== false) {
-                $priceMultiplier = $multiplier;
-                break;
-            }
+    foreach ($vehicleMultipliers as $vehicleType => $multiplier) {
+        if (strpos($normalizedVehicleId, $vehicleType) !== false) {
+            $priceMultiplier = $multiplier;
+            break;
         }
     }
     
@@ -273,18 +163,18 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     $prices = calculateDynamicPrices($basePrices, $priceMultiplier);
     
     // If a specific package was requested, return only that package's price
-    if ($normalizedPackageId) {
+    if ($packageId) {
         $packagePrice = 0;
         $packageName = '';
         
         // Get price from dynamically calculated values
-        if ($normalizedPackageId === '4hrs-40km') {
+        if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
             $packagePrice = $prices['price4hr40km'];
             $packageName = '4 Hours Package (40km)';
-        } else if ($normalizedPackageId === '8hrs-80km') {
+        } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
             $packagePrice = $prices['price8hr80km'];
             $packageName = '8 Hours Package (80km)';
-        } else if ($normalizedPackageId === '10hrs-100km') {
+        } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
             $packagePrice = $prices['price10hr100km'];
             $packageName = '10 Hours Package (100km)';
         }
@@ -292,18 +182,15 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         echo json_encode([
             'status' => 'success',
             'exists' => true,
-            'vehicleId' => $normalizedVehicleId,
-            'originalVehicleId' => $vehicleId,
-            'packageId' => $normalizedPackageId,
-            'originalPackageId' => $packageId,
+            'vehicleId' => $vehicleId,
+            'packageId' => $packageId,
             'packageName' => $packageName,
             'baseFare' => $packagePrice,
             'price' => $packagePrice,
             'source' => 'dynamic',
-            'multiplier' => $priceMultiplier,
             'data' => [
-                'vehicleId' => $normalizedVehicleId,
-                'packageId' => $normalizedPackageId,
+                'vehicleId' => $vehicleId,
+                'packageId' => $packageId,
                 'price' => $packagePrice,
                 'baseFare' => $packagePrice
             ],
@@ -317,11 +204,8 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
         'status' => 'success',
         'exists' => true,
         'source' => 'dynamic',
-        'vehicleId' => $normalizedVehicleId,
-        'originalVehicleId' => $vehicleId,
-        'multiplier' => $priceMultiplier,
         'data' => [
-            'vehicleId' => $normalizedVehicleId,
+            'vehicleId' => $vehicleId,
             'price4hrs40km' => $prices['price4hr40km'],
             'price8hrs80km' => $prices['price8hr80km'],
             'price10hrs100km' => $prices['price10hr100km'],

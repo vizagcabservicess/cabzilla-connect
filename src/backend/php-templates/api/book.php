@@ -1,3 +1,4 @@
+
 <?php
 /**
  * CRITICAL API ENDPOINT: Creates new bookings
@@ -47,97 +48,6 @@ function logBooking($message, $data = null) {
     
     file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
     error_log($logEntry); // Also log to PHP error log
-}
-
-// Normalize package ID to ensure consistency
-function normalizePackageId($packageId) {
-    if (!$packageId) return '8hrs-80km'; // Default
-    
-    $normalized = strtolower(trim($packageId));
-    
-    // First check for direct matches to standard package IDs
-    if ($normalized === '10hrs-100km' || $normalized === '10hrs_100km' || $normalized === '10 hours' || $normalized === '10hrs') {
-        return '10hrs-100km';
-    }
-    
-    if ($normalized === '8hrs-80km' || $normalized === '8hrs_80km' || $normalized === '8 hours' || $normalized === '8hrs') {
-        return '8hrs-80km';
-    }
-    
-    if ($normalized === '4hrs-40km' || $normalized === '4hrs_40km' || $normalized === '4 hours' || $normalized === '4hrs') {
-        return '4hrs-40km';
-    }
-    
-    // Then check for substring matches if not an exact match
-    if (strpos($normalized, '10') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '100km') !== false)) {
-        return '10hrs-100km';
-    }
-    
-    if (strpos($normalized, '8') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '80km') !== false)) {
-        return '8hrs-80km';
-    }
-    
-    if (strpos($normalized, '4') !== false && (strpos($normalized, 'hr') !== false || strpos($normalized, 'hour') !== false || strpos($normalized, '40km') !== false)) {
-        return '4hrs-40km';
-    }
-    
-    return '8hrs-80km'; // Default fallback
-}
-
-// Normalize vehicle ID to ensure consistency
-function normalizeVehicleId($vehicleId) {
-    if (!$vehicleId) return '';
-    
-    // Convert to lowercase and replace spaces with underscores
-    $result = strtolower(trim($vehicleId));
-    $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
-    
-    // Special case for MPV and Innova Hycross - always treated the same
-    if ($result === 'mpv' || strpos($result, 'hycross') !== false || $result === 'mpv') {
-        return 'innova_hycross';
-    }
-    
-    // Handle common variations
-    $mappings = [
-        'innovahycross' => 'innova_hycross',
-        'innovacrystal' => 'innova_crysta',
-        'innovacrista' => 'innova_crysta',
-        'innova_crista' => 'innova_crysta',
-        'innovahicross' => 'innova_hycross',
-        'innova_hicross' => 'innova_hycross',
-        'tempotraveller' => 'tempo_traveller',
-        'tempo_traveler' => 'tempo_traveller',
-        'cng' => 'dzire_cng',
-        'dzirecng' => 'dzire_cng',
-        'sedancng' => 'dzire_cng',
-        'swift' => 'sedan',
-        'swiftdzire' => 'dzire',
-        'swift_dzire' => 'dzire',
-        'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
-    ];
-    
-    foreach ($mappings as $search => $replace) {
-        if ($result === $search) {
-            return $replace;
-        }
-    }
-    
-    // Special handling for "innova" which might come without specifics
-    if ($result === 'innova' || strpos($result, 'innova') !== false) {
-        if (strpos($result, 'hycross') !== false) {
-            return 'innova_hycross';
-        }
-        if (strpos($result, 'crysta') !== false) {
-            return 'innova_crysta';
-        }
-        // Default any plain "innova" to crysta
-        if ($result === 'innova') {
-            return 'innova_crysta';
-        }
-    }
-    
-    return $result;
 }
 
 // Send JSON response function to ensure proper output
@@ -206,25 +116,6 @@ try {
     }
     logBooking("Parsed booking data", $logData);
     
-    // Normalize the cab type and hourly package if present
-    if (isset($data['cabType'])) {
-        $originalCabType = $data['cabType'];
-        $data['cabType'] = normalizeVehicleId($data['cabType']);
-        logBooking("Normalized cab type", [
-            'original' => $originalCabType,
-            'normalized' => $data['cabType']
-        ]);
-    }
-    
-    if (isset($data['hourlyPackage']) && $data['tripType'] === 'local') {
-        $originalPackage = $data['hourlyPackage'];
-        $data['hourlyPackage'] = normalizePackageId($data['hourlyPackage']);
-        logBooking("Normalized hourly package", [
-            'original' => $originalPackage,
-            'normalized' => $data['hourlyPackage']
-        ]);
-    }
-    
     // Validate required fields
     $requiredFields = [
         'pickupLocation', 'cabType', 'tripType', 'tripMode', 
@@ -234,11 +125,6 @@ try {
     // For non-local trips, require drop location
     if (!isset($data['tripType']) || $data['tripType'] !== 'local') {
         $requiredFields[] = 'dropLocation';
-    }
-    
-    // For local trips, require hourlyPackage
-    if (isset($data['tripType']) && $data['tripType'] === 'local') {
-        $requiredFields[] = 'hourlyPackage';
     }
     
     // Validate all required fields
@@ -296,7 +182,7 @@ try {
             booking_number, pickup_location, drop_location, pickup_date, return_date,
             cab_type, distance, trip_type, trip_mode, total_amount, status,
             passenger_name, passenger_phone, passenger_email, hourly_package
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {

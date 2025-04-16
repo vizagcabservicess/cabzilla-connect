@@ -14,85 +14,6 @@ let lastEventDispatchTime = Date.now();
 let eventDispatchCount = 0;
 const MAX_EVENTS_PER_MINUTE = 5;
 
-// Helper function to normalize package ID
-export const normalizePackageId = (packageId?: string): string => {
-  if (!packageId) return '8hrs-80km'; // Default
-  
-  const normalized = packageId.toLowerCase().trim();
-  
-  // First check for exact matches
-  if (normalized === '10hrs-100km' || normalized === '10hrs_100km' || normalized === '10 hours') {
-    return '10hrs-100km';
-  }
-  
-  if (normalized === '8hrs-80km' || normalized === '8hrs_80km' || normalized === '8 hours') {
-    return '8hrs-80km';
-  }
-  
-  if (normalized === '4hrs-40km' || normalized === '4hrs_40km' || normalized === '4 hours') {
-    return '4hrs-40km';
-  }
-  
-  // Then check for substring matches
-  if (normalized.includes('10') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('100km'))) {
-    return '10hrs-100km';
-  }
-  
-  if (normalized.includes('8') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('80km'))) {
-    return '8hrs-80km';
-  }
-  
-  if (normalized.includes('4') && (normalized.includes('hr') || normalized.includes('hour') || normalized.includes('40km'))) {
-    return '4hrs-40km';
-  }
-  
-  console.log(`Warning: Unable to match package ID "${packageId}" to a known package, defaulting to 8hrs-80km`);
-  return '8hrs-80km'; // Default fallback
-};
-
-// Helper function to normalize vehicle ID
-export const normalizeVehicleId = (vehicleId?: string): string => {
-  if (!vehicleId) return ''; 
-  
-  // Convert to lowercase and replace spaces with underscores
-  const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
-  
-  // Special case to ensure MPV is always mapped correctly - check this first
-  if (normalized === 'mpv' || 
-      normalized === 'innova hycross' || 
-      normalized === 'innovahycross' ||
-      normalized === 'innova_hycross' ||
-      normalized.includes('hycross') ||
-      normalized.includes('hi_cross') ||
-      normalized.includes('hi-cross')) {
-    console.log(`Normalized vehicle '${vehicleId}' to 'innova_hycross'`);
-    return 'innova_hycross';
-  }
-  
-  // Handle other special cases
-  if (normalized.includes('crysta') || 
-      (normalized.includes('innova') && !normalized.includes('hycross'))) {
-    console.log(`Normalized vehicle '${vehicleId}' to 'innova_crysta'`);
-    return 'innova_crysta';
-  }
-  
-  if (normalized.includes('tempo')) {
-    console.log(`Normalized vehicle '${vehicleId}' to 'tempo_traveller'`);
-    return 'tempo_traveller';
-  }
-  
-  if (normalized.includes('dzire') || 
-      normalized === 'cng' || 
-      normalized.includes('cng')) {
-    console.log(`Normalized vehicle '${vehicleId}' to 'dzire_cng'`);
-    return 'dzire_cng';
-  }
-  
-  // For any other cases, just return the normalized ID
-  console.log(`Normalized vehicle '${vehicleId}' to '${normalized}'`);
-  return normalized;
-};
-
 // Clear the fare cache
 export const clearFareCache = () => {
   // Prevent multiple cache clears within 30 seconds
@@ -241,22 +162,13 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     else if (tripType === 'local') {
       try {
         // For local hourly packages - get from API only
-        const rawPackageId = hourlyPackage || '8hrs-80km';
-        
-        // Normalize the package ID to ensure consistency
-        const normalizedPackageId = normalizePackageId(rawPackageId);
-        
-        console.log(`Using normalized package ID for local fare calculation: ${normalizedPackageId} (from original: ${rawPackageId})`);
-        
-        // Normalize vehicle ID
-        const normalizedVehicleId = normalizeVehicleId(cabType.id);
-        console.log(`Using normalized vehicle ID for local fare calculation: ${normalizedVehicleId} (from original: ${cabType.id})`);
+        const packageId = hourlyPackage || '8hrs-80km';
         
         // Direct API call to get package price
-        const packagePrice = await getLocalPackagePrice(normalizedPackageId, normalizedVehicleId, forceRefresh);
+        const packagePrice = await getLocalPackagePrice(packageId, cabType.id, forceRefresh);
         
         if (!packagePrice || packagePrice <= 0) {
-          throw new Error(`Invalid package price retrieved for ${normalizedVehicleId}, package ${normalizedPackageId}: ${packagePrice}`);
+          throw new Error(`Invalid package price retrieved for ${cabType.id}, package ${packageId}: ${packagePrice}`);
         }
         
         console.log(`Retrieved local package price from API: ₹${packagePrice}`);
@@ -264,41 +176,14 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // Dispatch fare calculation event to update UI components
         window.dispatchEvent(new CustomEvent('fare-calculated', {
           detail: {
-            cabId: normalizedVehicleId,
-            originalCabId: cabType.id,
+            cabId: cabType.id,
             tripType,
             tripMode,
             calculated: true,
             fare: packagePrice,
-            packageId: normalizedPackageId, // Include the normalized package ID
-            originalPackageId: rawPackageId,
             timestamp: Date.now()
           }
         }));
-        
-        // Also dispatch a more specific event for this package
-        window.dispatchEvent(new CustomEvent('local-package-fare-calculated', {
-          detail: {
-            cabId: normalizedVehicleId,
-            originalCabId: cabType.id,
-            packageId: normalizedPackageId,
-            originalPackageId: rawPackageId,
-            fare: packagePrice,
-            timestamp: Date.now()
-          }
-        }));
-        
-        // Store the selected fare in localStorage for consistency
-        try {
-          const selectedFareKey = `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`;
-          localStorage.setItem(selectedFareKey, packagePrice.toString());
-          console.log(`Stored selected fare in localStorage: ${selectedFareKey} = ${packagePrice}`);
-          
-          // Also store the package ID that was used
-          localStorage.setItem(`selected_package_${normalizedVehicleId}`, normalizedPackageId);
-        } catch (error) {
-          console.error('Error storing fare in localStorage:', error);
-        }
         
         return packagePrice;
       } catch (error) {

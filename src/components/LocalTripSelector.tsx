@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -7,14 +7,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
 import { toast } from 'sonner';
-import { 
-  normalizePackageId, 
-  getPackageDisplayName,
-  savePackageSelection,
-  notifyPackageChange,
-  shouldThrottle,
-  clearPackageFareCache
-} from '@/lib/packageUtils';
 
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
@@ -27,224 +19,101 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   
-  // Add refs for throttling and tracking
-  const lastLoadRef = useRef<number>(0);
-  const loadingRef = useRef<boolean>(false);
-  const loadAttemptsRef = useRef<number>(0);
-  const mountedRef = useRef<boolean>(true);
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const standardPackageIds: Record<string, string> = {
+    "4hr_40km": "4hrs-40km",
+    "04hr_40km": "4hrs-40km",
+    "04hrs_40km": "4hrs-40km",
+    "4hrs_40km": "4hrs-40km",
+    "8hr_80km": "8hrs-80km",
+    "8hrs_80km": "8hrs-80km", 
+    "10hr_100km": "10hrs-100km",
+    "10hrs_100km": "10hrs-100km"
+  };
   
-  // Normalize the selected package for consistency
-  const normalizedSelectedPackage = selectedPackage ? normalizePackageId(selectedPackage) : undefined;
+  const normalizePackageId = (packageId: string): string => {
+    if (!packageId) return "8hrs-80km";
+    
+    const normalized = packageId
+      .replace('hrs-', 'hr_')
+      .replace('hr-', 'hr_');
+    
+    return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
+  };
   
-  // Debug logging for package normalization
-  useEffect(() => {
-    if (selectedPackage) {
-      console.log(`[DEBUG] LocalTripSelector: Selected package normalized from ${selectedPackage} to ${normalizedSelectedPackage}`);
-    }
-  }, [selectedPackage, normalizedSelectedPackage]);
-  
-  const loadPackages = async (forceRefresh = false) => {
-    // Skip if already loading
-    if (loadingRef.current) {
-      console.log('LocalTripSelector: Already loading packages, skipping');
-      return;
-    }
-    
-    const now = Date.now();
-    const timeSinceLastLoad = now - lastLoadRef.current;
-    
-    if (!forceRefresh && timeSinceLastLoad < 5000 && loadAttemptsRef.current > 0) { // 5 second throttle
-      console.log(`LocalTripSelector: Throttling load (${timeSinceLastLoad}ms since last load)`);
-      return;
-    }
-    
-    loadingRef.current = true;
+  const loadPackages = async () => {
     setIsLoading(true);
     setLoadError(null);
-    lastLoadRef.current = now;
-    loadAttemptsRef.current++;
     
     try {
-      console.log('LocalTripSelector: Loading package data');
+      console.log('LocalTripSelector: Loading package data from API');
       
       const updatedPackages: HourlyPackage[] = [...hourlyPackages];
       
       const referenceVehicle = 'sedan';
       
-      // First try to load from localStorage cache to avoid network requests
-      let usedCache = false;
-      let successfulPrices = 0;
-      
-      try {
-        for (const pkg of updatedPackages) {
-          const normalizedPackageId = normalizePackageId(pkg.id);
-          // Update the package id to normalized form for consistency
-          pkg.id = normalizedPackageId;
-          
-          const cacheKey = `package_price_${normalizedPackageId}_${referenceVehicle}`;
-          const cachedPrice = localStorage.getItem(cacheKey);
-          
-          if (cachedPrice) {
-            const price = parseInt(cachedPrice, 10);
-            if (!isNaN(price) && price > 0) {
-              pkg.basePrice = price;
-              console.log(`Using cached price for ${pkg.id}: ${price}`);
-              usedCache = true;
-              successfulPrices++;
-            }
+      await Promise.all(updatedPackages.map(async (pkg) => {
+        try {
+          const price = await getLocalPackagePrice(pkg.id, referenceVehicle, true);
+          if (price > 0) {
+            pkg.basePrice = price;
+            console.log(`Updated ${pkg.id} price to ${price} from API`);
+          } else {
+            console.warn(`API returned zero or invalid price for ${pkg.id}`);
+            throw new Error(`Invalid price (${price}) for ${pkg.id}`);
           }
+        } catch (error) {
+          console.error(`Could not fetch price for package ${pkg.id}:`, error);
+          setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
         }
-      } catch (cacheError) {
-        console.error('Error using cached prices:', cacheError);
-      }
-      
-      // Only make network requests if cache was incomplete or force refreshing
-      if (forceRefresh || !usedCache || successfulPrices < updatedPackages.length) {
-        console.log(`Cache status: ${successfulPrices}/${updatedPackages.length} packages from cache. ${forceRefresh ? 'Force refreshing.' : ''}`);
-        
-        // Use a timeout to prevent hanging requests
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Package price fetch timed out')), 5000);
-        });
-        
-        // Process packages one at a time to avoid overwhelming the server
-        for (const pkg of updatedPackages) {
-          if (!mountedRef.current) break;
-          
-          // Skip if we already have a price for this package and not forcing refresh
-          if (!forceRefresh && pkg.basePrice > 0) continue;
-          
-          try {
-            const normalizedPackageId = pkg.id; // Already normalized above
-            // Don't force refresh unless explicitly needed to reduce network traffic
-            const shouldForceRefresh = forceRefresh || loadAttemptsRef.current <= 1;
-            
-            const pricePromise = getLocalPackagePrice(normalizedPackageId, referenceVehicle, shouldForceRefresh);
-            const price = await Promise.race([pricePromise, timeoutPromise]) as number;
-            
-            if (price > 0) {
-              pkg.basePrice = price;
-              console.log(`Updated ${pkg.id} price to ${price} from API`);
-              
-              // Cache the price in localStorage
-              try {
-                const cacheKey = `package_price_${normalizedPackageId}_${referenceVehicle}`;
-                localStorage.setItem(cacheKey, price.toString());
-              } catch (cacheError) {
-                console.error('Error caching price:', cacheError);
-              }
-            } else {
-              console.warn(`API returned zero or invalid price for ${pkg.id}`);
-            }
-          } catch (error) {
-            console.error(`Could not fetch price for package ${pkg.id}:`, error);
-            // Don't set error if some packages succeeded - we'll try again later
-            if (successfulPrices === 0 && updatedPackages.every(p => p.basePrice <= 0)) {
-              setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
-            }
-          }
-        }
-      }
+      }));
       
       console.log('Available hourly packages with updated prices:', updatedPackages);
       setPackages(updatedPackages);
       
-      // Set default package if none selected yet
-      if (!normalizedSelectedPackage && updatedPackages.length > 0) {
-        // Prefer 8hr package as default
-        const defaultPackage = updatedPackages.find(p => p.id === '8hrs-80km')?.id || 
-                               updatedPackages[1]?.id || 
-                               updatedPackages[0]?.id;
+      if (!selectedPackage && updatedPackages.length > 0) {
+        const defaultPackage = updatedPackages[1].id;
+        console.log('Setting default package:', defaultPackage);
+        onPackageSelect(defaultPackage);
         
-        if (defaultPackage) {
-          console.log('Setting default package:', defaultPackage);
-          
-          // Set default package using consistent utilities
-          const normalizedDefaultPackage = normalizePackageId(defaultPackage);
-          
-          // Use our utility functions for consistent handling
-          onPackageSelect(normalizedDefaultPackage);
-          savePackageSelection(normalizedDefaultPackage);
-          notifyPackageChange(normalizedDefaultPackage);
-        }
+        window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+          detail: { packageId: defaultPackage, timestamp: Date.now() }
+        }));
       }
       
-      setLastUpdateTime(Date.now());
+      const timestamp = Date.now();
+      setLastUpdateTime(timestamp);
       
-      // If we got no successful prices, schedule a retry
-      if (successfulPrices === 0 && updatedPackages.every(p => p.basePrice <= 0)) {
-        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-        
-        retryTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            console.log('Retrying package price fetch due to previous failure');
-            loadPackages(true);
-          }
-          retryTimeoutRef.current = null;
-        }, 3000); // 3 second delay before retry
-      } else {
-        // Fetch additional fare data in the background with low priority
-        if (!shouldThrottle('background-fetch', 30000)) {
-          setTimeout(() => {
-            if (mountedRef.current) {
-              fetchAndCacheLocalFares(false).catch(error => {
-                console.error('Error fetching local fares in background:', error);
-              });
-            }
-          }, 3000);
-        }
-      }
+      fetchAndCacheLocalFares(true).catch(error => {
+        console.error('Error fetching local fares in background:', error);
+      });
     } catch (error) {
       console.error('Failed to load package data:', error);
       setLoadError(`Unable to load package pricing. Please try again.`);
-      
-      // Schedule retry after error
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      
-      retryTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          console.log('Retrying package price fetch after error');
-          loadPackages(true);
-        }
-        retryTimeoutRef.current = null;
-      }, 5000); // 5 second delay before retry after error
     } finally {
-      if (mountedRef.current) {
-        setIsLoading(false);
-        loadingRef.current = false;
-      }
+      setIsLoading(false);
     }
   };
   
   useEffect(() => {
-    mountedRef.current = true;
     loadPackages();
     
     const handleLocalFaresUpdated = () => {
-      if (!mountedRef.current || shouldThrottle('fares-updated', 10000)) return;
-      
       console.log('LocalTripSelector detected local fares updated event, refreshing packages');
       loadPackages();
     };
     
     const handleForceRecalculation = () => {
-      if (!mountedRef.current || shouldThrottle('force-recalculation', 10000)) return;
-      
       console.log('LocalTripSelector detected force recalculation event, refreshing packages');
-      loadPackages(true);
+      loadPackages();
     };
     
     const handleLocalFareUpdated = (event: CustomEvent) => {
-      if (!mountedRef.current || shouldThrottle('fare-updated', 2000)) return;
-      
       if (event.detail && event.detail.packageId && event.detail.price) {
         console.log(`LocalTripSelector detected local fare update for ${event.detail.packageId}: ${event.detail.price}`);
         
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
-            if (normalizePackageId(pkg.id) === normalizePackageId(event.detail.packageId) && 
-                event.detail.vehicleType === 'sedan') {
+            if (pkg.id === event.detail.packageId && event.detail.vehicleType === 'sedan') {
               return { ...pkg, basePrice: event.detail.price };
             }
             return pkg;
@@ -258,56 +127,98 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     window.addEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
     
     return () => {
-      mountedRef.current = false;
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
       window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
       window.removeEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
     };
-  }, []);
+  }, [selectedPackage, onPackageSelect]);
   
-  // Handle package selection with consistent normalization
   const handlePackageSelect = (packageId: string) => {
-    if (shouldThrottle('package-selection', 1000)) return;
-    
     console.log(`Selected package: ${packageId}`);
     
-    // Normalize the package ID using our utility
-    const normalizedPackageId = normalizePackageId(packageId);
+    let normalizedPackageId = packageId;
     
-    // Don't proceed if package hasn't changed
-    if (normalizedPackageId === normalizedSelectedPackage) {
-      console.log(`Package ${normalizedPackageId} already selected, skipping update`);
-      return;
+    if (packageId === '04hrs-40km') {
+      normalizedPackageId = '4hrs-40km';
+    } else {
+      normalizedPackageId = normalizePackageId(packageId);
     }
     
-    // Clear relevant caches for the new package to ensure fresh pricing
-    clearPackageFareCache(normalizedPackageId);
+    // Clear all selected fare cache for ALL cab types to force refresh
+    try {
+      if (typeof window !== 'undefined') {
+        console.log(`Clearing all fare caches due to package change to ${normalizedPackageId}`);
+        
+        // First, clear our global fare cache object
+        window.localPackagePriceCache = {};
+        
+        // Clear any selected_fare entries in localStorage for ALL vehicles
+        const localStorageKeys = Object.keys(localStorage);
+        for (const key of localStorageKeys) {
+          if (key.startsWith('selected_fare_') || key.startsWith('fare_local_')) {
+            localStorage.removeItem(key);
+            console.log(`Cleared cached fare for ${key} due to package change`);
+          }
+        }
+        
+        // Clear any pending fare calculations
+        if (window.pendingFareRequests) {
+          window.pendingFareRequests = {};
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing caches:', error);
+    }
     
-    // Update parent component
     onPackageSelect(normalizedPackageId);
     
-    // Use utilities for consistent handling
-    savePackageSelection(normalizedPackageId);
-    notifyPackageChange(normalizedPackageId);
+    // Dispatch multiple events to ensure all components update correctly
+    window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+      detail: { 
+        packageId: normalizedPackageId, 
+        timestamp: Date.now() 
+      }
+    }));
     
-    toast.success(`Selected ${getPackageDisplayName(normalizedPackageId)} package`);
+    // Force all fare calculations to refresh
+    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
+      detail: { 
+        source: 'LocalTripSelector', 
+        packageId: normalizedPackageId,
+        timestamp: Date.now() + 1 
+      }
+    }));
+    
+    // Force booking summary to update with new package
+    window.dispatchEvent(new CustomEvent('booking-package-changed', {
+      detail: {
+        packageId: normalizedPackageId,
+        packageName: getPackageDisplayName(normalizedPackageId),
+        source: 'LocalTripSelector',
+        timestamp: Date.now() + 2
+      }
+    }));
+    
+    toast.success(`Selected ${normalizedPackageId.replace(/-/g, ' ')} package`);
+  };
+  
+  const getPackageDisplayName = (packageId: string): string => {
+    if (packageId.includes('4hrs-40km')) {
+      return '4hrs 40KM Package';
+    } else if (packageId.includes('8hrs-80km')) {
+      return '8hrs 80KM Package';
+    } else if (packageId.includes('10hrs-100km')) {
+      return '10hrs 100KM Package';
+    }
+    return packageId.replace(/-/g, ' ');
   };
   
   if (loadError) {
     return (
       <Alert variant="destructive" className="mb-4">
         <AlertTriangle className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <span>{loadError}</span>
-          <button 
-            onClick={() => loadPackages(true)} 
-            className="px-3 py-1 bg-destructive/10 hover:bg-destructive/20 rounded-md text-xs"
-          >
-            Try Again
-          </button>
+        <AlertDescription>
+          {loadError}
         </AlertDescription>
       </Alert>
     );
@@ -333,14 +244,8 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     return (
       <Alert className="mb-4">
         <Info className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <span>No hourly packages are currently available.</span>
-          <button 
-            onClick={() => loadPackages(true)} 
-            className="px-3 py-1 bg-primary/10 hover:bg-primary/20 rounded-md text-xs"
-          >
-            Refresh
-          </button>
+        <AlertDescription>
+          No hourly packages are currently available. Please try again later.
         </AlertDescription>
       </Alert>
     );
@@ -354,20 +259,10 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   return (
     <Card className="mb-4">
       <CardContent className="pt-4">
-        <CardTitle className="mb-4 flex justify-between items-center">
-          <span>Select Hourly Package</span>
-          <button 
-            onClick={() => loadPackages(true)} 
-            className="text-xs text-muted-foreground hover:text-primary flex items-center"
-            title="Refresh prices"
-          >
-            <Loader2 className="h-3 w-3 mr-1" />
-            Refresh
-          </button>
-        </CardTitle>
+        <CardTitle className="mb-4">Select Hourly Package</CardTitle>
         
         <RadioGroup 
-          value={normalizedSelectedPackage} 
+          value={selectedPackage} 
           onValueChange={handlePackageSelect}
           className="space-y-3"
           data-last-update={lastUpdateTime}
@@ -376,7 +271,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
             <div
               key={pkg.id}
               className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-muted ${
-                normalizedSelectedPackage === pkg.id ? "border-primary bg-primary/5" : ""
+                selectedPackage === pkg.id ? "border-primary bg-primary/5" : ""
               }`}
               onClick={() => handlePackageSelect(pkg.id)}
             >
