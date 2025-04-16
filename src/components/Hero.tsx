@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -107,31 +106,23 @@ export function Hero() {
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [localPackagePrice, setLocalPackagePrice] = useState<number>(0);
 
-  // Normalize selected cab type if it exists
   useEffect(() => {
     if (selectedCab) {
-      // Store normalized cab type
       const normalizedCabType = normalizeVehicleId(selectedCab.id);
       console.log(`Hero: Normalized selected cab type from ${selectedCab.id} to ${normalizedCabType}`);
       
-      // If we have MPV selected, make sure it's treated as innova_hycross
       if (selectedCab.id.toLowerCase() === 'mpv' && normalizedCabType === 'innova_hycross') {
         const updatedCab = {
           ...selectedCab,
           normalizedId: normalizedCabType
         };
         
-        // Don't reset the entire cab object, just add normalized ID
-        // This prevents unnecessary re-renders
         setSelectedCab(updatedCab);
-        
-        // Update sessionStorage
         sessionStorage.setItem('selectedCab', JSON.stringify(updatedCab));
       }
     }
   }, [selectedCab]);
 
-  // Normalize hourly package
   useEffect(() => {
     const normalizedPackage = normalizePackageId(hourlyPackage);
     if (normalizedPackage !== hourlyPackage) {
@@ -143,7 +134,6 @@ export function Hero() {
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
     
-    // Make sure isInVizag is determined if not already set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
@@ -155,7 +145,6 @@ export function Hero() {
   const handleDropLocationChange = (location: Location) => {
     if (!location) return; // Safety check
     
-    // Make sure isInVizag is determined if not already set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
@@ -196,8 +185,6 @@ export function Hero() {
     sessionStorage.setItem('tripMode', tripMode);
     
     if (tripType === 'airport' && airportLocation) {
-      // No automatic reset for airport transfers
-      // We'll let user choose source/destination
     }
     
     if (tripType === 'local') {
@@ -208,7 +195,6 @@ export function Hero() {
           sessionStorage.setItem('pickupLocation', JSON.stringify(defaultLocation));
         }
       }
-      // For local trips, we don't need drop location
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
     }
@@ -238,7 +224,6 @@ export function Hero() {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
     console.log(`Hero: Saved hourly package to sessionStorage: ${hourlyPackage}`);
     
-    // Also store the normalized version for consistency
     if (hourlyPackage) {
       const normalizedPackage = normalizePackageId(hourlyPackage);
       localStorage.setItem('selected_package', normalizedPackage);
@@ -264,11 +249,9 @@ export function Hero() {
 
   useEffect(() => {
     if (tripType === 'local') {
-      // For local trips, reset the distance to match the selected package
       const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;
       setDistance(selectedPackage);
       
-      // Reset dropLocation for local trips
       setDropLocation(null);
       
       console.log(`Resetting distance for local trip to ${selectedPackage}km`);
@@ -279,24 +262,20 @@ export function Hero() {
     const loadLocalPackagePrice = async () => {
       if (tripType === 'local' && selectedCab) {
         try {
-          // Normalize both package ID and vehicle type for consistency
           const normalizedPackageId = normalizePackageId(hourlyPackage);
           const normalizedVehicleId = normalizeVehicleId(selectedCab.id);
           
           console.log(`Hero: Loading price for ${normalizedVehicleId} (${selectedCab.id}), package ${normalizedPackageId} (${hourlyPackage})`);
           
-          // Force a refresh to get the latest price
           const price = await getLocalPackagePrice(normalizedPackageId, normalizedVehicleId, true);
           console.log(`Hero: Fetched local package price for ${normalizedVehicleId}: ${price}`);
           
           if (price > 0) {
             setLocalPackagePrice(price);
             
-            // Store in localStorage for consistency
             const fareKey = `fare_local_${normalizedVehicleId}`;
             localStorage.setItem(fareKey, price.toString());
             
-            // Store specific package price
             const packageFareKey = `fare_local_${normalizedVehicleId}_${normalizedPackageId}`;
             localStorage.setItem(packageFareKey, price.toString());
             
@@ -306,7 +285,6 @@ export function Hero() {
           }
         } catch (error) {
           console.error('Error loading local package price:', error);
-          // Use the cab's default price as fallback only if we really have to
           if (selectedCab.price && selectedCab.price > 0) {
             setLocalPackagePrice(selectedCab.price);
             console.log(`Using fallback price from cab object: ${selectedCab.price}`);
@@ -341,7 +319,6 @@ export function Hero() {
     }
     
     if (currentStep === 1) {
-      // When moving to step 2, normalize package selection just to be sure
       if (tripType === 'local') {
         const normalizedPackage = normalizePackageId(hourlyPackage);
         if (normalizedPackage !== hourlyPackage) {
@@ -356,7 +333,6 @@ export function Hero() {
   };
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
-    // Only update distance for non-local trips
     if (tripType !== 'local') {
       setDistance(calculatedDistance);
       setDuration(calculatedDuration);
@@ -373,14 +349,10 @@ export function Hero() {
     if (tripType === 'airport') {
       totalPrice = await calculateAirportFare(selectedCab.name, distance);
     } else if (tripType === 'local') {
-      // For local trips, use the price that we've separately fetched
       totalPrice = localPackagePrice > 0 ? localPackagePrice : selectedCab.price;
       
-      // Get the local package kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       
-      // Only add extra distance if it's specifically calculated for local trips
-      // and is greater than the package limit
       if (distance > packageKm && tripType === 'local') {
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
@@ -388,7 +360,6 @@ export function Hero() {
         console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
       }
       
-      // Store calculated fare for consistency
       const fareKey = `fare_local_${selectedCab.name.toLowerCase().replace(/\s+/g, '')}`;
       localStorage.setItem(fareKey, totalPrice.toString());
       console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
@@ -450,7 +421,6 @@ export function Hero() {
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);
       
-      // Normalize vehicle type and package ID
       const normalizedVehicleType = selectedCab ? normalizeVehicleId(selectedCab.name) : '';
       const normalizedPackageId = tripType === 'local' ? normalizePackageId(hourlyPackage) : null;
       
@@ -742,7 +712,17 @@ export function Hero() {
             )}
           </>
         ) : (
-          /* ... keep existing code (GuestDetailsForm component) */
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-xl shadow-card p-6 mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Guest Details</h2>
+                <Button variant="outline" size="sm" onClick={handleBackToSelection}>
+                  Back
+                </Button>
+              </div>
+              <GuestDetailsForm onSubmit={handleGuestDetailsSubmit} />
+            </div>
+          </div>
         )}
       </div>
     </section>
