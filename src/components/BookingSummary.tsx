@@ -11,6 +11,7 @@ import { calculateFare } from '@/lib/fareCalculationService';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
+import { normalizeVehicleId } from '@/config/requestConfig';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -96,7 +97,6 @@ export const BookingSummary = ({
         fetchDirectDatabaseFare();
       }, 100);
 
-      // Setup event listeners for fare updates
       const handleFareUpdate = (event: CustomEvent) => {
         if (event.detail && 
             event.detail.cabId && 
@@ -172,7 +172,7 @@ export const BookingSummary = ({
       return;
     }
     
-    const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
+    const normalizedCabId = normalizeVehicleId(selectedCab.id);
     const hourlyPackage = '8hrs-80km'; // This should come from props in a real implementation
     
     setIsRefreshing(true);
@@ -219,7 +219,46 @@ export const BookingSummary = ({
         }
       }
       
-      // If we couldn't get a direct price, fallback to recalculation
+      const altApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
+      
+      const altResponse = await axios.get(altApiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (altResponse.data && altResponse.data.status === 'success' && altResponse.data.price) {
+        const price = Number(altResponse.data.price);
+        console.log(`BookingSummary: Retrieved fare from alternative API: ₹${price}`);
+        
+        if (price > 0) {
+          setCalculatedFare(price);
+          totalPriceRef.current = price;
+          
+          // Adjust the base fare accordingly
+          setBaseFare(price - driverAllowance);
+          
+          // Dispatch global fare update event
+          window.dispatchEvent(new CustomEvent('global-fare-update', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: price,
+              source: 'booking-summary-alt-fetch',
+              timestamp: Date.now()
+            }
+          }));
+          
+          setShowDetailsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+      }
+      
       recalculateFareDetails();
       
     } catch (error) {
@@ -357,11 +396,10 @@ export const BookingSummary = ({
         newDriverAllowance = 250;
       } else if (tripType === 'local') {
         try {
-          // Direct database API call for most accurate pricing
-          const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
+          const normalizedCabId = normalizeVehicleId(selectedCab.id);
           const hourlyPackage = '8hrs-80km'; // This should come from props in a real implementation
           
-          console.log(`BookingSummary: Using ${normalizedCabId} for local fare calculation (NOT sedan)`);
+          console.log(`BookingSummary: Using ${normalizedCabId} for local fare calculation (NOT using 'sedan')`);
           
           const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
           
@@ -393,19 +431,49 @@ export const BookingSummary = ({
               }
             }));
           } else {
-            // Fallback to local fares service
-            const localFares = await getLocalFaresForVehicle(selectedCab.id);
-            console.log(`BookingSummary: Retrieved local fares from service for ${selectedCab.id}:`, localFares);
+            const altApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
             
-            if (localFares.price8hrs80km > 0) {
-              newBaseFare = localFares.price8hrs80km;
-            } else if (selectedCab.localPackageFares?.price8hrs80km) {
-              newBaseFare = selectedCab.localPackageFares.price8hrs80km;
+            const altResponse = await axios.get(altApiUrl, {
+              headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'X-Force-Refresh': 'true'
+              },
+              timeout: 5000
+            });
+            
+            if (altResponse.data && altResponse.data.status === 'success' && altResponse.data.price) {
+              const price = Number(altResponse.data.price);
+              console.log(`BookingSummary: Retrieved local fare from alternative API: ₹${price} for ${normalizedCabId}`);
+              
+              newBaseFare = price;
+              newDriverAllowance = 0;
+              
+              // Dispatch an update event
+              window.dispatchEvent(new CustomEvent('global-fare-update', {
+                detail: {
+                  cabId: normalizedCabId,
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  source: 'alternative-api-recalc',
+                  timestamp: Date.now()
+                }
+              }));
             } else {
-              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
-              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 1800;
-              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 2200;
-              else newBaseFare = 1500;
+              const localFares = await getLocalFaresForVehicle(selectedCab.id);
+              console.log(`BookingSummary: Retrieved local fares from service for ${selectedCab.id}:`, localFares);
+              
+              if (localFares.price8hrs80km > 0) {
+                newBaseFare = localFares.price8hrs80km;
+              } else if (selectedCab.localPackageFares?.price8hrs80km) {
+                newBaseFare = selectedCab.localPackageFares.price8hrs80km;
+              } else {
+                if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1400;
+                else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 3000;
+                else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 4000;
+                else newBaseFare = 1500;
+              }
             }
           }
           
@@ -413,7 +481,6 @@ export const BookingSummary = ({
         } catch (error) {
           console.error('Error fetching direct local fares:', error);
           
-          // Final fallback to local fares service
           try {
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
             console.log(`BookingSummary: Fallback fares for ${selectedCab.id}:`, localFares);
@@ -423,9 +490,9 @@ export const BookingSummary = ({
             } else if (selectedCab.localPackageFares?.price8hrs80km) {
               newBaseFare = selectedCab.localPackageFares.price8hrs80km;
             } else {
-              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
-              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 1800;
-              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 2200;
+              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1400;
+              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 3000;
+              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 4000;
               else newBaseFare = 1500;
             }
           } catch (innerError) {
@@ -458,7 +525,6 @@ export const BookingSummary = ({
       
       const newCalculatedFare = newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare;
       
-      // Only update if we got a valid fare calculation or use parent's totalPrice
       const finalFare = (newCalculatedFare > 0) ? newCalculatedFare : 
                        (totalPrice > 0) ? totalPrice : 
                        totalPriceRef.current;
@@ -466,7 +532,6 @@ export const BookingSummary = ({
       setCalculatedFare(finalFare);
       totalPriceRef.current = finalFare;
       
-      // Dispatch a global fare update event
       if (selectedCab && finalFare > 0) {
         const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
         
@@ -483,7 +548,6 @@ export const BookingSummary = ({
         }));
       }
       
-      // If there's a significant difference between calculated fare and parent's totalPrice
       if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
         console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
         
@@ -578,7 +642,6 @@ export const BookingSummary = ({
         setCalculatedFare(customEvent.detail.fare);
         totalPriceRef.current = customEvent.detail.fare;
         
-        // Update base fare and other calculations
         if (tripType === 'local') {
           setBaseFare(customEvent.detail.fare);
           setDriverAllowance(0);

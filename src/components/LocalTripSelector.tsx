@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
-import { normalizePackageId } from '@/config/requestConfig';
+import { normalizePackageId, normalizeVehicleId } from '@/config/requestConfig';
 import { toast } from 'sonner';
 
 interface LocalTripSelectorProps {
@@ -47,7 +47,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
       
       // Use the selected cab if available, otherwise default to sedan
       const referenceVehicle = selectedCabId ? 
-        selectedCabId.toLowerCase().replace(/\s+/g, '_') : 'sedan';
+        normalizeVehicleId(selectedCabId) : 'sedan';
       
       console.log(`LocalTripSelector: Using ${referenceVehicle} as reference for package prices`);
       
@@ -69,14 +69,64 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
                 timestamp: Date.now()
               }
             }));
+            
+            // Store the price in localStorage too for quick reference
+            localStorage.setItem(`selected_fare_${referenceVehicle}_${pkg.id}`, price.toString());
           } else {
-            console.warn(`API returned zero or invalid price for ${pkg.id}`);
-            throw new Error(`Invalid price (${price}) for ${pkg.id}`);
+            console.warn(`API returned zero or invalid price for ${pkg.id} with vehicle ${referenceVehicle}`);
+            
+            // Try a direct API call as fallback
+            try {
+              const apiUrl = `/api/local-package-fares.php?vehicle_id=${referenceVehicle}&package_id=${pkg.id}`;
+              const response = await fetch(apiUrl, {
+                headers: {
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache',
+                  'X-Force-Refresh': 'true'
+                }
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success' && data.price) {
+                  const altPrice = Number(data.price);
+                  if (altPrice > 0) {
+                    pkg.basePrice = altPrice;
+                    console.log(`Updated ${pkg.id} price to ${altPrice} from alternative API for ${referenceVehicle}`);
+                    return;
+                  }
+                }
+              }
+              
+              throw new Error(`Could not get valid price from alternative API for ${pkg.id}`);
+            } catch (altError) {
+              console.error(`Failed to get price from alternative API:`, altError);
+              throw new Error(`Invalid price (${price}) for ${pkg.id}`);
+            }
           }
         } catch (error) {
           console.error(`Could not fetch price for package ${pkg.id}:`, error);
           setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
-          // Don't set fallback prices - keep it as 0
+          
+          // Use fallback prices based on vehicle type
+          if (referenceVehicle.includes('sedan')) {
+            if (pkg.id.includes('4hrs')) pkg.basePrice = 1400;
+            else if (pkg.id.includes('8hrs')) pkg.basePrice = 2400;
+            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3000;
+          } else if (referenceVehicle.includes('ertiga')) {
+            if (pkg.id.includes('4hrs')) pkg.basePrice = 1800;
+            else if (pkg.id.includes('8hrs')) pkg.basePrice = 3000;
+            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3600;
+          } else if (referenceVehicle.includes('innova')) {
+            if (pkg.id.includes('4hrs')) pkg.basePrice = 2400;
+            else if (pkg.id.includes('8hrs')) pkg.basePrice = 4000;
+            else if (pkg.id.includes('10hrs')) pkg.basePrice = 4800;
+          } else {
+            // Default fallback
+            if (pkg.id.includes('4hrs')) pkg.basePrice = 1400;
+            else if (pkg.id.includes('8hrs')) pkg.basePrice = 2400;
+            else if (pkg.id.includes('10hrs')) pkg.basePrice = 3000;
+          }
         }
       }));
       
