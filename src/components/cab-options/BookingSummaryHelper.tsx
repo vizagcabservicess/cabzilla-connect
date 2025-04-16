@@ -30,6 +30,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const updateThrottleTimeRef = useRef<number>(0);
   const pendingFareRef = useRef<number | null>(null);
   const activeRequestRef = useRef<boolean>(false);
+  const currentCabRef = useRef<string | null>(null);
   
   // Log props for debugging
   useEffect(() => {
@@ -38,6 +39,13 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       pkg: hourlyPackage,
       fare: totalPrice
     });
+    
+    // Update current cab ref when selectedCabId changes
+    if (selectedCabId && selectedCabId !== currentCabRef.current) {
+      currentCabRef.current = selectedCabId;
+      // Force a new fetch when cab changes
+      setLastFetchAttempt(0);
+    }
   }, [selectedCabId, hourlyPackage, totalPrice]);
   
   // Track fare sources for debugging

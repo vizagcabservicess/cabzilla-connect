@@ -20,6 +20,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
+  const [lastSelectedCabId, setLastSelectedCabId] = useState<string | null | undefined>(selectedCabId);
   
   // Ensure the standard package IDs are consistent
   const standardPackageIds: Record<string, string> = {
@@ -90,7 +91,11 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
         
         // Announce the selection
         window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-          detail: { packageId: defaultPackage, timestamp: Date.now() }
+          detail: { 
+            packageId: defaultPackage, 
+            vehicleType: referenceVehicle,
+            timestamp: Date.now() 
+          }
         }));
       }
       
@@ -101,7 +106,11 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
       if (selectedPackage) {
         console.log('Re-announcing selected package:', selectedPackage);
         window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-          detail: { packageId: selectedPackage, timestamp }
+          detail: { 
+            packageId: selectedPackage, 
+            vehicleType: referenceVehicle,
+            timestamp 
+          }
         }));
       }
       
@@ -174,11 +183,12 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
   
   // Refresh package prices when selected cab changes
   useEffect(() => {
-    if (selectedCabId) {
-      console.log(`LocalTripSelector: Selected cab changed to ${selectedCabId}, reloading packages`);
+    if (selectedCabId && selectedCabId !== lastSelectedCabId) {
+      console.log(`LocalTripSelector: Selected cab changed from ${lastSelectedCabId} to ${selectedCabId}, reloading packages`);
+      setLastSelectedCabId(selectedCabId);
       loadPackages();
     }
-  }, [selectedCabId]);
+  }, [selectedCabId, lastSelectedCabId]);
   
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
@@ -198,14 +208,25 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect, selectedCa
     
     // Add debounce to prevent too many events firing at once
     setTimeout(() => {
+      const referenceVehicle = selectedCabId ? 
+        selectedCabId.toLowerCase().replace(/\s+/g, '_') : 'sedan';
+        
       // Dispatch an event to notify other components about the package selection
       window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-        detail: { packageId: normalizedPackageId, timestamp: Date.now() }
+        detail: { 
+          packageId: normalizedPackageId, 
+          vehicleType: referenceVehicle,
+          timestamp: Date.now() 
+        }
       }));
       
       // Also dispatch a global force refresh event
       window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
-        detail: { source: 'LocalTripSelector', timestamp: Date.now() }
+        detail: { 
+          source: 'LocalTripSelector', 
+          vehicleType: referenceVehicle,
+          timestamp: Date.now() 
+        }
       }));
     }, 300);
     

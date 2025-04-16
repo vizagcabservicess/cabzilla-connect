@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -362,6 +361,8 @@ export const BookingSummary = ({
           const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
           const hourlyPackage = '8hrs-80km'; // This should come from props in a real implementation
           
+          console.log(`BookingSummary: Using ${normalizedCabId} for local fare calculation (NOT sedan)`);
+          
           const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
           
           const response = await axios.get(apiUrl, {
@@ -375,7 +376,7 @@ export const BookingSummary = ({
           
           if (response.data && response.data.status === 'success' && response.data.price) {
             const price = Number(response.data.price);
-            console.log(`BookingSummary: Retrieved local fare directly from API: ₹${price}`);
+            console.log(`BookingSummary: Retrieved local fare directly from API: ₹${price} for ${normalizedCabId}`);
             
             newBaseFare = price;
             newDriverAllowance = 0;
@@ -394,7 +395,7 @@ export const BookingSummary = ({
           } else {
             // Fallback to local fares service
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
-            console.log('BookingSummary: Retrieved local fares from service:', localFares);
+            console.log(`BookingSummary: Retrieved local fares from service for ${selectedCab.id}:`, localFares);
             
             if (localFares.price8hrs80km > 0) {
               newBaseFare = localFares.price8hrs80km;
@@ -415,6 +416,7 @@ export const BookingSummary = ({
           // Final fallback to local fares service
           try {
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
+            console.log(`BookingSummary: Fallback fares for ${selectedCab.id}:`, localFares);
             
             if (localFares.price8hrs80km > 0) {
               newBaseFare = localFares.price8hrs80km;
