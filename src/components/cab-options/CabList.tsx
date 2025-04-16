@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { normalizePackageId, normalizeVehicleId } from '@/config/requestConfig';
+import { normalizePackageId, normalizeVehicleId } from '@/lib/packageData';
 import { toast } from 'sonner';
 
 interface CabListProps {
@@ -18,22 +18,21 @@ interface CabListProps {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
-  cabPrices?: Record<string, number>; // Changed from cabFares to cabPrices to match what's passed
-  isCalculating?: boolean; // Changed from isLoading to match what's passed
+  cabPrices?: Record<string, number>; 
+  isCalculating?: boolean; 
   errors?: Record<string, string>;
 }
 
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
-  cabPrices = {}, // Default to empty object and rename from cabFares
-  isCalculating = false, // Renamed from isLoading
+  cabPrices = {}, 
+  isCalculating = false,
   errors: cabErrors = {},
   onSelectCab: handleSelectCab,
   distance,
   tripType,
   hourlyPackage,
-  // Other props can be destructured here if needed
 }) => {
   const [localFares, setLocalFares] = useState<Record<string, number>>(cabPrices);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
@@ -623,7 +622,7 @@ export const CabList: React.FC<CabListProps> = ({
 
               <div
                 onClick={() => {
-                  if (!isCalculatingFares) {
+                  if (!isCalculating) {
                     handleSelectCab(cab);
                     
                     // When a cab is selected, broadcast the selection event with fare info
@@ -690,7 +689,7 @@ export const CabList: React.FC<CabListProps> = ({
                   {isSelected ? "Selected" : "Select"}
                 </span>
                 <span className="font-semibold">
-                  {isCalculatingFares ? (
+                  {isCalculating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : hasError ? (
                     <span className="text-xs text-destructive">{hasError}</span>
@@ -707,4 +706,6 @@ export const CabList: React.FC<CabListProps> = ({
       })}
     </div>
   );
-}
+};
+
+export default CabList;
