@@ -1,8 +1,20 @@
 
 import { toast } from 'sonner';
+import { hourlyPackages } from './packageData';
 
 // Throttle timestamps to prevent excessive operations
 const throttleTimestamps: Record<string, number> = {};
+
+/**
+ * Return standard hourly package options for dropdowns and selection menus
+ */
+export const getStandardHourlyPackageOptions = () => {
+  return [
+    { value: '4hrs-40km', label: '4 Hours / 40 KM' },
+    { value: '8hrs-80km', label: '8 Hours / 80 KM' },
+    { value: '10hrs-100km', label: '10 Hours / 100 KM' }
+  ];
+};
 
 /**
  * Check if an operation should be throttled based on the last execution time
