@@ -117,6 +117,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     // Create unique cache key
     const cacheKey = `${normalizedVehicleType}_${normalizedPackageId}`;
     
+    // Create selectedFareKey variable once so we can reuse it throughout the function
+    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
+    
     // Check if there's a manual override price in localStorage
     const manualOverrideKey = `manual_override_${normalizedVehicleType}_${normalizedPackageId}`;
     const manualOverride = localStorage.getItem(manualOverrideKey);
@@ -129,7 +132,6 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     }
     
     // Check if there's a user-selected fare for this package
-    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
     const selectedFare = localStorage.getItem(selectedFareKey);
     if (selectedFare && !forceRefresh) {
       const selectedPrice = parseFloat(selectedFare);
@@ -394,6 +396,9 @@ export async function getLocalPackagePrice(packageId: string, vehicleType: strin
     const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
     
     console.log(`Using dynamically calculated fallback price for ${normalizedVehicleType}, ${normalizedPackageId}: ${dynamicPrice}`);
+    
+    // Create selectedFareKey one last time for this scope
+    const selectedFareKey = `selected_fare_${normalizedVehicleType}_${normalizedPackageId}`;
     
     // Store in localStorage for better cross-component consistency
     const fareKey = `fare_local_${normalizedVehicleType}`;
