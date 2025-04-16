@@ -1,7 +1,7 @@
 
 <?php
 // Mock PHP file for local-package-fares.php
-// This serves as a fallback API endpoint when direct-local-fares.php fails
+// This script provides fare information for local packages based on vehicle type and package
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -58,9 +58,8 @@ function normalizeVehicleId($vehicleId) {
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
-        'tempo' => 'tempo_traveller', // Normalize "tempo" to full "tempo_traveller"
-        'hycross' => 'innova_hycross'
+        'tempo' => 'tempo_traveller',
+        'mpv' => 'innova_hycross'
     ];
     
     foreach ($mappings as $search => $replace) {
@@ -155,7 +154,7 @@ function normalizePackageId($packageId) {
 $normalizedVehicleId = normalizeVehicleId($vehicleId);
 $normalizedPackageId = normalizePackageId($packageId);
 
-// Vehicle-specific pricing table - updated for more accurate pricing
+// Vehicle-specific pricing table - updated with consistent pricing
 $packagePrices = [
     'sedan' => [
         '4hrs-40km' => 1400,
