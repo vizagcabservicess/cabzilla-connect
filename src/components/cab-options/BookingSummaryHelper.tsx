@@ -72,11 +72,23 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     };
     
     window.addEventListener('booking-package-changed', handleBookingPackageChanged as EventListener);
+    window.addEventListener('hourly-package-selected', handleBookingPackageChanged as EventListener);
+    window.addEventListener('booking-summary-package-update', handleBookingPackageChanged as EventListener);
     
     return () => {
       window.removeEventListener('booking-package-changed', handleBookingPackageChanged as EventListener);
+      window.removeEventListener('hourly-package-selected', handleBookingPackageChanged as EventListener);
+      window.removeEventListener('booking-summary-package-update', handleBookingPackageChanged as EventListener);
     };
   }, [selectedCabId, hourlyPackage]);
+
+  // Update hourlyPackage in state when the prop changes
+  useEffect(() => {
+    if (hourlyPackage && hourlyPackage !== currentPackage) {
+      console.log(`BookingSummaryHelper: hourlyPackage prop changed to ${hourlyPackage}`);
+      setCurrentPackage(hourlyPackage);
+    }
+  }, [hourlyPackage, currentPackage]);
 
   useEffect(() => {
     // Listen for fare source updates to track where fares are coming from
@@ -117,7 +129,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       if (selectedFare) {
         const parsedFare = parseFloat(selectedFare);
         if (!isNaN(parsedFare) && parsedFare > 0) {
-          console.log(`BookingSummaryHelper: Using selected fare from CabList: ₹${parsedFare} for ${normalizedCabId}`);
+          console.log(`BookingSummaryHelper: Using selected fare from CabList: ₹${parsedFare} for ${normalizedCabId} (package: ${packageToUse})`);
           setFetchedFare(parsedFare);
           setFareSource('cab-list-selection');
           
@@ -139,6 +151,17 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             
             // Also update the regular fare cache for consistency
             localStorage.setItem(`fare_local_${normalizedCabId}`, parsedFare.toString());
+            
+            // Also specifically update any component displaying the package
+            window.dispatchEvent(new CustomEvent('booking-summary-package-update', {
+              detail: {
+                cabId: normalizedCabId,
+                packageId: packageToUse,
+                fare: parsedFare,
+                source: 'selected-fare-cache',
+                timestamp: Date.now() + 1
+              }
+            }));
           }
           
           return; // Skip API fetching if we have a valid selected fare

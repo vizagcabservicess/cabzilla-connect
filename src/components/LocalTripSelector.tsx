@@ -161,7 +161,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           }
         }
         
-        // Clear any pending fare calculations
+        // Clear any pending fare calculations - safely check if property exists first
         if (window.pendingFareRequests) {
           window.pendingFareRequests = {};
         }
@@ -196,6 +196,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         packageName: getPackageDisplayName(normalizedPackageId),
         source: 'LocalTripSelector',
         timestamp: Date.now() + 2
+      }
+    }));
+    
+    // Send specific package update to booking summary
+    window.dispatchEvent(new CustomEvent('booking-summary-package-update', {
+      detail: {
+        packageId: normalizedPackageId,
+        packageName: getPackageDisplayName(normalizedPackageId),
+        source: 'LocalTripSelector',
+        timestamp: Date.now() + 3
       }
     }));
     
@@ -316,3 +326,8 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     </Card>
   );
 }
+
+const formatPrice = (price?: number) => {
+  if (!price || price <= 0) return "Price unavailable";
+  return `₹${price.toLocaleString('en-IN')}`;
+};
