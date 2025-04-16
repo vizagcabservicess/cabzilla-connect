@@ -1,4 +1,3 @@
-
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
 import { getApiUrl } from '@/config/api';
 
@@ -419,15 +418,5 @@ export async function fetchAndCacheLocalFares(silent: boolean = false): Promise<
   }
 }
 
-// Add a global declaration for the window object to include our cache
-declare global {
-  interface Window {
-    localPackagePriceCache?: Record<string, {
-      price: number;
-      timestamp: number;
-      isFallback?: boolean;
-      source?: string;
-      error?: string;
-    }>;
-  }
-}
+// IMPORTANT: Remove the duplicate global declaration that was causing errors
+// The declaration is now only in the window.d.ts file

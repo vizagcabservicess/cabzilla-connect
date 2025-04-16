@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +11,6 @@ import { toast } from 'sonner';
 interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
-  cabFares: Record<string, number>;
-  isLoading: boolean;
-  errors?: Record<string, string>;
   onSelectCab: (cab: CabType) => void;
   distance: number;
   tripType: string;
@@ -20,13 +18,16 @@ interface CabListProps {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
+  cabPrices?: Record<string, number>; // Changed from cabFares to cabPrices to match what's passed
+  isCalculating?: boolean; // Changed from isLoading to match what's passed
+  errors?: Record<string, string>;
 }
 
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
-  cabFares,
-  isLoading: isCalculatingFares,
+  cabPrices = {}, // Default to empty object and rename from cabFares
+  isCalculating = false, // Renamed from isLoading
   errors: cabErrors = {},
   onSelectCab: handleSelectCab,
   distance,
@@ -34,7 +35,7 @@ export const CabList: React.FC<CabListProps> = ({
   hourlyPackage,
   // Other props can be destructured here if needed
 }) => {
-  const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
+  const [localFares, setLocalFares] = useState<Record<string, number>>(cabPrices);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [requestRetryCount, setRequestRetryCount] = useState<Record<string, number>>({});
   
@@ -543,10 +544,10 @@ export const CabList: React.FC<CabListProps> = ({
     };
   }, [tripType, cabTypes, fetchFareFromDatabase]);
   
-  // Initial sync with cabFares from props
+  // Initial sync with cabPrices from props
   useEffect(() => {
-    setLocalFares(cabFares);
-  }, [cabFares]);
+    setLocalFares(cabPrices);
+  }, [cabPrices]);
   
   const formatPrice = (price?: number) => {
     if (!price && price !== 0) return "Price unavailable";
@@ -567,7 +568,7 @@ export const CabList: React.FC<CabListProps> = ({
       {cabTypes.map((cab) => {
         const isSelected = selectedCabId === cab.id;
         const normalizedCabId = normalizeVehicleId(cab.id);
-        const cabFare = localFares[normalizedCabId] || localFares[cab.id] || cabFares[normalizedCabId] || cabFares[cab.id] || 0;
+        const cabFare = localFares[normalizedCabId] || localFares[cab.id] || cabPrices[normalizedCabId] || cabPrices[cab.id] || 0;
         const hasError = cabErrors[cab.id];
         
         return (
