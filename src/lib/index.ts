@@ -27,7 +27,9 @@ export {
 export { 
   getBypassHeaders,
   getForcedRequestConfig,
-  formatDataForMultipart
+  formatDataForMultipart,
+  normalizePackageId,
+  normalizeVehicleId
 } from '@/config/requestConfig';
 
 // Re-export all methods from fareService

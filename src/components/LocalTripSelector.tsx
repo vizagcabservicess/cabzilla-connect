@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
+import { normalizePackageId } from '@/config/requestConfig';
 import { toast } from 'sonner';
 
 interface LocalTripSelectorProps {
@@ -28,18 +29,6 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     "8hrs_80km": "8hrs-80km", 
     "10hr_100km": "10hrs-100km",
     "10hrs_100km": "10hrs-100km"
-  };
-  
-  // Convert legacy package ID to standard format if needed
-  const normalizePackageId = (packageId: string): string => {
-    if (!packageId) return "8hrs-80km"; // Default package if none provided
-    
-    const normalized = packageId
-      .replace('hrs-', 'hr_')
-      .replace('hr-', 'hr_');
-    
-    // Map to standard IDs if possible
-    return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
   };
   
   // Load packages with API prices
@@ -162,16 +151,9 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const handlePackageSelect = (packageId: string) => {
     console.log(`Selected package: ${packageId}`);
     
-    // Support 04hrs-40km format by converting to 4hrs-40km
-    let normalizedPackageId = packageId;
-    
-    // First check for the specific 04hrs-40km case
-    if (packageId === '04hrs-40km') {
-      normalizedPackageId = '4hrs-40km';
-    } else {
-      // Then apply general normalization rules
-      normalizedPackageId = normalizePackageId(packageId);
-    }
+    // Normalize the package ID for consistent handling
+    const normalizedPackageId = normalizePackageId(packageId);
+    console.log(`Normalized package ID: ${normalizedPackageId}`);
     
     // Always call onPackageSelect to update the parent component
     onPackageSelect(normalizedPackageId);

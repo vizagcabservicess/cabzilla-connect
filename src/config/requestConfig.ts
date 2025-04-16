@@ -1,4 +1,3 @@
-
 // Helper functions for making API requests
 import { apiBaseUrl, defaultHeaders } from './api';
 
@@ -148,23 +147,108 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
 };
 
 /**
+ * Normalize package ID to ensure consistent format
+ * This is crucial for proper fare lookup
+ */
+export const normalizePackageId = (packageId: string): string => {
+  if (!packageId) return "8hrs-80km"; // Default package if none provided
+  
+  // Standardize format with hyphen
+  let normalized = packageId
+    .replace('_', '-')
+    .toLowerCase();
+  
+  // Handle common variations
+  if (normalized.includes('04hrs') || normalized.includes('4hr-')) {
+    normalized = '4hrs-40km';
+  } else if (normalized.includes('8hr-') || normalized.includes('8hrs-8')) {
+    normalized = '8hrs-80km';
+  } else if (normalized.includes('10hr-') || normalized.includes('10hrs-10')) {
+    normalized = '10hrs-100km';
+  }
+  
+  // Make sure package has correct format
+  if (!normalized.includes('hrs-')) {
+    const hours = normalized.match(/(\d+)/)?.[0] || '8';
+    
+    if (hours === '4') {
+      normalized = '4hrs-40km';
+    } else if (hours === '8') {
+      normalized = '8hrs-80km';
+    } else if (hours === '10') {
+      normalized = '10hrs-100km';
+    }
+  }
+  
+  return normalized;
+};
+
+/**
+ * Normalize vehicle ID for consistent lookup
+ */
+export const normalizeVehicleId = (vehicleId: string): string => {
+  if (!vehicleId) return 'sedan';
+  
+  const normalized = vehicleId.toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/\.+/g, '')
+    .replace(/-+/g, '_');
+  
+  // Map common aliases to standard names
+  if (normalized.includes('dzire') || normalized.includes('swift')) {
+    if (normalized.includes('cng')) {
+      return 'dzire_cng';
+    }
+    return 'sedan';
+  }
+  
+  if (normalized.includes('innova')) {
+    if (normalized.includes('hycross')) {
+      return 'innova_hycross';
+    }
+    if (normalized.includes('crysta')) {
+      return 'innova_crysta';
+    }
+    return 'innova_crysta';
+  }
+  
+  if (normalized.includes('etios') || normalized.includes('etos')) {
+    return 'etios';
+  }
+  
+  if (normalized.includes('ertiga')) {
+    return 'ertiga';
+  }
+  
+  if (normalized.includes('tempo') || normalized.includes('traveller')) {
+    return 'tempo_traveller';
+  }
+  
+  return normalized;
+};
+
+/**
  * Fetch local package fares directly from the API
  */
 export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: string): Promise<any> => {
   try {
+    // Normalize inputs for consistency
+    const normalizedVehicleId = normalizeVehicleId(vehicleId || 'sedan');
+    const normalizedPackageId = normalizePackageId(packageId || '8hrs-80km');
+    
     // Check if there's a cached fare from the CabList component first
     if (vehicleId && packageId) {
-      const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
-      const selectedFareFromLocalStorage = localStorage.getItem(`selected_fare_${normalizedVehicleId}_${packageId}`);
+      const selectedFareKey = `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`;
+      const selectedFareFromLocalStorage = localStorage.getItem(selectedFareKey);
       
       if (selectedFareFromLocalStorage) {
         const parsedFare = parseFloat(selectedFareFromLocalStorage);
         if (!isNaN(parsedFare) && parsedFare > 0) {
-          console.log(`Using selected fare from localStorage: ${parsedFare} for ${normalizedVehicleId}`);
+          console.log(`Using selected fare from localStorage: ${parsedFare} for ${normalizedVehicleId} with ${normalizedPackageId}`);
           return {
             status: 'success',
             vehicleId: normalizedVehicleId,
-            packageId: packageId,
+            packageId: normalizedPackageId,
             price: parsedFare,
             source: 'selected-fare-localstorage',
             timestamp: Date.now()
@@ -180,11 +264,11 @@ export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: str
     let queryParams = [];
     
     if (vehicleId) {
-      queryParams.push(`vehicle_id=${encodeURIComponent(vehicleId)}`);
+      queryParams.push(`vehicle_id=${encodeURIComponent(normalizedVehicleId)}`);
     }
     
     if (packageId) {
-      queryParams.push(`package_id=${encodeURIComponent(packageId)}`);
+      queryParams.push(`package_id=${encodeURIComponent(normalizedPackageId)}`);
     }
     
     // Add timestamp to bust cache
@@ -195,7 +279,7 @@ export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: str
     
     console.log(`Fetching local package fares from: ${url}`);
     
-    const response = await safeFetch(url, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...getBypassHeaders(),
@@ -205,11 +289,30 @@ export const fetchLocalPackageFares = async (vehicleId?: string, packageId?: str
     
     if (!response.ok) {
       console.error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
-      console.log('Response text:', await response.text());
       throw new Error(`Failed to fetch local package fares: ${response.status} ${response.statusText}`);
     }
     
     const data = await response.json();
+    
+    // Store the result in localStorage for consistency
+    if (data && data.status === 'success' && data.price && vehicleId && packageId) {
+      const selectedFareKey = `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`;
+      localStorage.setItem(selectedFareKey, data.price.toString());
+      
+      // Broadcast this fare update
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: normalizedVehicleId,
+          tripType: 'local',
+          calculated: true,
+          fare: data.price,
+          packageId: normalizedPackageId,
+          source: 'api-direct',
+          timestamp: Date.now()
+        }
+      }));
+    }
+    
     return data;
   } catch (error) {
     console.error('Error fetching local package fares:', error);
@@ -222,7 +325,7 @@ export const safeLocalPackageFares = async (vehicleId?: string, packageId?: stri
   try {
     // First, check if there's a cached fare from the CabList component
     if (vehicleId && packageId) {
-      const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
       const cabListFareKey = `selected_fare_${normalizedVehicleId}_${packageId}`;
       const selectedFareFromLocalStorage = localStorage.getItem(cabListFareKey);
       
@@ -298,6 +401,8 @@ export const safeLocalPackageFares = async (vehicleId?: string, packageId?: stri
 
 // Dynamic price calculation (matches the one in local-package-fares.php)
 function calculateDynamicPrices(vehicleId: string): Record<string, number> {
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  
   const basePrices: Record<string, Record<string, number>> = {
     'sedan': {
       '4hrs-40km': 2400,
@@ -333,11 +438,22 @@ function calculateDynamicPrices(vehicleId: string): Record<string, number> {
       '10hrs-100km': 5000,
       'extraKm': 22,
       'extraHour': 450
+    },
+    'dzire_cng': {
+      '4hrs-40km': 2400,
+      '8hrs-80km': 3000,
+      '10hrs-100km': 3500,
+      'extraKm': 14,
+      'extraHour': 300
+    },
+    'etios': {
+      '4hrs-40km': 2400,
+      '8hrs-80km': 3000,
+      '10hrs-100km': 3500,
+      'extraKm': 14,
+      'extraHour': 300
     }
   };
-  
-  // Normalize vehicle ID 
-  const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
   
   // Try direct match
   if (basePrices[normalizedVehicleId]) {
