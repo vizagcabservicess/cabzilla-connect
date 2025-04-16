@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { safeApiRequest, tryMultipleEndpoints } from '@/utils/safeApiUtils';
@@ -129,11 +128,37 @@ export const normalizePackageId = (packageId: string): string => {
   if (!packageId) return '8hrs-80km';
 
   // Handle common variations
-  return packageId
+  const result = packageId
     .toLowerCase()
-    .replace(/\d+hr-/, match => match.replace('hr-', 'hrs-'))
-    .replace(/\d+hr_/, match => match.replace('hr_', 'hrs-'))
-    .replace('_', '-');
+    .replace(/(\d+)hr[-_]/, '$1hrs-')
+    .replace(/\s+/g, '')
+    .replace(/_/g, '-');
+  
+  // Handle special cases with just numbers
+  if (result === '4hrs' || result === '4hr') {
+    return '4hrs-40km';
+  } else if (result === '8hrs' || result === '8hr') {
+    return '8hrs-80km';
+  } else if (result === '10hrs' || result === '10hr') {
+    return '10hrs-100km';
+  }
+  
+  // Handle variations with just hours and km
+  if (result.includes('4hrs') && result.includes('40km')) {
+    return '4hrs-40km';
+  } else if (result.includes('8hrs') && result.includes('80km')) {
+    return '8hrs-80km';
+  } else if (result.includes('10hrs') && result.includes('100km')) {
+    return '10hrs-100km';
+  }
+  
+  // Check for standard ID patterns
+  if (result.startsWith('4hrs')) return '4hrs-40km';
+  if (result.startsWith('8hrs')) return '8hrs-80km';
+  if (result.startsWith('10hrs')) return '10hrs-100km';
+  
+  // Default to 8hrs package if no match
+  return '8hrs-80km';
 };
 
 // Normalize vehicle ID for consistency
@@ -141,9 +166,21 @@ export const normalizeVehicleId = (vehicleId: string): string => {
   if (!vehicleId) return 'sedan';
   
   // Convert to lowercase and replace spaces with underscores
-  return vehicleId.toLowerCase()
+  const result = vehicleId.toLowerCase()
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
+  
+  // Handle common variations
+  if (result === 'mpv') return 'innova_hycross';
+  if (result.includes('hycross')) return 'innova_hycross';
+  if (result.includes('crysta')) return 'innova_crysta';
+  if (result.includes('tempo')) return 'tempo_traveller';
+  if (result.includes('dzire') && result.includes('cng')) return 'dzire_cng';
+  if (result === 'cng') return 'dzire_cng';
+  if (result === 'dzire') return 'sedan';
+  if (result === 'swift') return 'sedan';
+  
+  return result;
 };
 
 /**
@@ -213,125 +250,160 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
     }
     
     // Get API URL safely
-    const apiUrl = getApiUrl('');
+    const apiUrl = '';
     
-    // Safety check for API URL
-    if (!apiUrl) {
-      console.warn('API URL is undefined, using direct calculation');
-      const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
+    // First try the PHP endpoint directly
+    const phpEndpoint = `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`;
+    
+    try {
+      console.log(`Attempting direct fetch from PHP template: ${phpEndpoint}`);
+      const response = await fetch(phpEndpoint, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+        }
+      });
       
-      // Save to cache
-      // @ts-ignore - adding property to window
-      if (window.localPackagePriceCache) {
-        // @ts-ignore - adding property to window
-        window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
-      }
-      
-      return dynamicPrice;
-    }
-
-    // Array of API endpoints to try - validate them first
-    const apiEndpoints = [
-      // IMPORTANT: Use local-package-fares.php as the primary source
-      `${apiUrl}/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      // Then try the admin direct endpoints
-      `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
-      `${apiUrl}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`,
-      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleType}`,
-      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`
-    ].filter(url => validateApiUrl(url));
-    
-    console.log(`Attempting to fetch pricing data from ${apiEndpoints.length} endpoints`);
-    
-    // Try the improved multi-endpoint request utility
-    const response = await tryMultipleEndpoints(apiEndpoints, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
-      },
-      timeout: 8000
-    });
-
-    let price = 0;
-    
-    if (response) {
-      console.log(`API response received:`, response);
-      
-      // Check if we got a fares array from direct-local-fares.php
-      if (response.fares && Array.isArray(response.fares) && response.fares.length > 0) {
-        const fareData = response.fares[0];
-        
-        // Extract the right price for the selected package
-        if (normalizedPackageId.includes('4hrs-40km')) {
-          price = Number(fareData.price4hrs40km || 0);
-        } else if (normalizedPackageId.includes('8hrs-80km')) {
-          price = Number(fareData.price8hrs80km || 0);
-        } else if (normalizedPackageId.includes('10hrs-100km')) {
-          price = Number(fareData.price10hrs100km || 0);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.price && typeof data.price === 'number' && data.price > 0) {
+          console.log(`Direct PHP fetch successful, price: ${data.price}`);
+          
+          // Cache the price
+          // @ts-ignore - adding property to window
+          if (window.localPackagePriceCache) {
+            // @ts-ignore - adding property to window
+            window.localPackagePriceCache[cacheKey] = { price: data.price, timestamp: Date.now() };
+          }
+          
+          // Store in localStorage for better cross-component consistency
+          const fareKey = `fare_local_${normalizedVehicleType}`;
+          localStorage.setItem(fareKey, data.price.toString());
+          
+          // Also store with full package ID for better precision
+          const preciseFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
+          localStorage.setItem(preciseFareKey, data.price.toString());
+          console.log(`Stored fare in localStorage: ${preciseFareKey} = ${data.price}`);
+          
+          // Dispatch an event to notify other components about the updated price
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('local-fare-updated', {
+              detail: {
+                packageId: normalizedPackageId,
+                vehicleType: normalizedVehicleType,
+                price: data.price,
+                source: 'php',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Dispatch a more general fare-calculated event for broader component updates
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: normalizedVehicleType,
+                tripType: 'local',
+                calculated: true,
+                fare: data.price,
+                packageId: normalizedPackageId,
+                timestamp: Date.now()
+              }
+            }));
+          }
+          
+          return data.price;
         }
       }
-      // Check if the API returned a direct price
-      else if (response.price) {
-        price = Number(response.price);
-      }
-      // Check other possible response formats
-      else if (response.data && response.data.price) {
-        price = Number(response.data.price);
-      }
-    }
-
-    // Use fallback calculation if API call failed or returned invalid price
-    if (price <= 0) {
-      console.log(`No valid price received from API, using fallback calculation`);
-      price = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
+    } catch (phpError) {
+      console.warn('PHP template endpoint failed:', phpError);
     }
     
-    console.log(`Final price for ${normalizedVehicleType}, ${normalizedPackageId}: ${price}`);
+    // If direct PHP fetch fails, try the API endpoint
+    const apiEndpoint = `/api/local-package-fares.php?vehicle_id=${normalizedVehicleType}&package_id=${normalizedPackageId}`;
+    
+    try {
+      console.log(`Attempting fetch from API: ${apiEndpoint}`);
+      const response = await fetch(apiEndpoint, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.price && typeof data.price === 'number' && data.price > 0) {
+          console.log(`API fetch successful, price: ${data.price}`);
+          
+          // Cache the price
+          // @ts-ignore - adding property to window
+          if (window.localPackagePriceCache) {
+            // @ts-ignore - adding property to window
+            window.localPackagePriceCache[cacheKey] = { price: data.price, timestamp: Date.now() };
+          }
+          
+          // Store in localStorage for better cross-component consistency
+          const fareKey = `fare_local_${normalizedVehicleType}`;
+          localStorage.setItem(fareKey, data.price.toString());
+          
+          // Also store with full package ID for better precision
+          const preciseFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
+          localStorage.setItem(preciseFareKey, data.price.toString());
+          console.log(`Stored fare in localStorage: ${preciseFareKey} = ${data.price}`);
+          
+          // Dispatch an event to notify other components about the updated price
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('local-fare-updated', {
+              detail: {
+                packageId: normalizedPackageId,
+                vehicleType: normalizedVehicleType,
+                price: data.price,
+                source: 'api',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Dispatch a more general fare-calculated event for broader component updates
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: normalizedVehicleType,
+                tripType: 'local',
+                calculated: true,
+                fare: data.price,
+                packageId: normalizedPackageId,
+                timestamp: Date.now()
+              }
+            }));
+          }
+          
+          return data.price;
+        }
+      }
+    } catch (apiError) {
+      console.warn('API endpoint failed:', apiError);
+    }
+    
+    // If all API attempts fail, use fallback calculation
+    console.log(`All API attempts failed, using fallback calculation`);
+    const dynamicPrice = calculateDynamicPrice(normalizedVehicleType, normalizedPackageId);
     
     // Cache the price
     // @ts-ignore - adding property to window
     if (window.localPackagePriceCache) {
       // @ts-ignore - adding property to window
-      window.localPackagePriceCache[cacheKey] = { price, timestamp: Date.now() };
+      window.localPackagePriceCache[cacheKey] = { price: dynamicPrice, timestamp: Date.now() };
     }
     
     // Store in localStorage for better cross-component consistency
     const fareKey = `fare_local_${normalizedVehicleType}`;
-    localStorage.setItem(fareKey, price.toString());
+    localStorage.setItem(fareKey, dynamicPrice.toString());
     
-    // Also store with full package ID for better precision
+    // Also store with full package ID
     const preciseFareKey = `fare_local_${normalizedVehicleType}_${normalizedPackageId}`;
-    localStorage.setItem(preciseFareKey, price.toString());
-    console.log(`Stored fare in localStorage: ${preciseFareKey} = ${price}`);
+    localStorage.setItem(preciseFareKey, dynamicPrice.toString());
     
-    // Dispatch an event to notify other components about the updated price
-    if (typeof window !== 'undefined' && window.dispatchEvent) {
-      window.dispatchEvent(new CustomEvent('local-fare-updated', {
-        detail: {
-          packageId: normalizedPackageId,
-          vehicleType: normalizedVehicleType,
-          price: price,
-          source: 'api',
-          timestamp: Date.now()
-        }
-      }));
-      
-      // Dispatch a more general fare-calculated event for broader component updates
-      window.dispatchEvent(new CustomEvent('fare-calculated', {
-        detail: {
-          cabId: normalizedVehicleType,
-          tripType: 'local',
-          calculated: true,
-          fare: price,
-          packageId: normalizedPackageId,
-          timestamp: Date.now()
-        }
-      }));
-    }
-    
-    return price;
+    return dynamicPrice;
     
   } catch (error) {
     console.error(`Error getting local package price for ${vehicleId}, ${packageId}:`, error);

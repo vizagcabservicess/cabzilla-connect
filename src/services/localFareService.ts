@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
@@ -162,22 +161,17 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
-    // Always prioritize local mock API endpoints in Lovable environment
+    // Define endpoints to try, prioritizing the PHP template path for Lovable environment
     const endpoints = [
       // First try with direct path to local mock API
       `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try direct PHP file path
+      // Then try direct API path (without backend prefix)
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
-      // Then try with admin endpoint for all fares
-      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
-      
       // Then try alternatives
-      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
-      
-      // Only try external endpoints as last resort
-      `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
+      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
     ];
     
     console.log(`Attempting API requests with endpoints:`, endpoints);
@@ -354,13 +348,14 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     normalizedCabId = 'mpv';
   }
   
-  // Find the closest matching vehicle type
+  // Find the closest matching vehicle type in our fallback prices
   let matchingVehicleType = 'sedan'; // Default fallback
   
   for (const vehicleType of Object.keys(fallbackPrices)) {
     if (normalizedCabId.includes(vehicleType)) {
-      matchingVehicleType = vehicleType;
-      break;
+      if (!matchingVehicleType || vehicleType.length > matchingVehicleType.length) {
+        matchingVehicleType = vehicleType;
+      }
     }
   }
   

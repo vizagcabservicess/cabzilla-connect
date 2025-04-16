@@ -1,7 +1,7 @@
 
 <?php
 // Mock PHP file for local-package-fares.php
-// This serves as a fallback API endpoint when direct-local-fares.php fails
+// This serves as a fallback API endpoint for local package fares
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -35,7 +35,7 @@ if (!$packageId) {
     $packageId = '8hrs-80km';
 }
 
-// Normalize the vehicle ID
+// Normalize the vehicle ID for consistency
 function normalizeVehicleId($vehicleId) {
     // Convert to lowercase and replace spaces with underscores
     $result = strtolower(trim($vehicleId));
@@ -90,7 +90,7 @@ function normalizeVehicleId($vehicleId) {
     return $result;
 }
 
-// Normalize the package ID
+// Normalize the package ID for consistency
 function normalizePackageId($packageId) {
     if (empty($packageId)) {
         return '8hrs-80km';
