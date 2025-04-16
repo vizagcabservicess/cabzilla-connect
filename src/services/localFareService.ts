@@ -156,23 +156,22 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   }
   
   try {
-    // IMPORTANT: Change the API URL strategy to prioritize local endpoints
-    const apiUrl = getApiUrl('');
-    const isLocalDevelopment = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || 
-       window.location.hostname.includes('lovableproject.com'));
-    
-    // Prioritize the relative paths for Lovable environment
+    // Always prioritize local mock API endpoints in Lovable environment
     const endpoints = [
-      // First try relative paths which work in Lovable environment
+      // First try directly with just the endpoint path
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
-      // Then try the api endpoints
-      `${apiUrl}/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
-      // Admin direct local fares endpoint as backup
-      `${apiUrl}/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
-      // Alternative endpoints
-      `${apiUrl}/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
+      
+      // Then try with api/ prefix
+      `/api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`,
+      
+      // Then try alternatives
+      `/api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
+      
+      // Last try with full base URL
+      `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`
     ];
+    
+    console.log(`Attempting API requests with endpoints:`, endpoints);
     
     // Use the improved tryMultipleEndpoints utility
     const response = await tryMultipleEndpoints<LocalFareResponse>(endpoints, {
@@ -248,7 +247,43 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   } catch (error) {
     console.error('Error fetching local package price:', error);
     
-    // Use fallback pricing when API fails
+    // Try direct fetch before falling back to static prices
+    try {
+      const directEndpoint = `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`;
+      console.log(`Attempting direct fetch to: ${directEndpoint}`);
+      
+      const response = await fetch(directEndpoint, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': forceRefresh ? 'true' : 'false'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.price && typeof data.price === 'number' && data.price > 0) {
+          console.log(`Direct fetch successful, price: ${data.price}`);
+          
+          // Store in cache
+          localPackagePriceCache[cacheKey] = {
+            price: data.price,
+            timestamp: Date.now(),
+            source: 'direct-fetch'
+          };
+          
+          // Store in localStorage
+          localStorage.setItem(specificFareKey, data.price.toString());
+          localStorage.setItem(`selected_fare_${normalizedVehicleId}_${normalizedPackageId}`, data.price.toString());
+          
+          return data.price;
+        }
+      }
+    } catch (directError) {
+      console.error('Direct fetch also failed:', directError);
+    }
+    
+    // Use fallback pricing when all API calls fail
     return getFallbackPrice(normalizedVehicleId, normalizedPackageId);
   }
 };

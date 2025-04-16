@@ -19,15 +19,17 @@ export async function safeApiRequest<T = any>(endpoint: string, config: AxiosReq
   }
 
   try {
-    // Ensure the endpoint has a leading slash if it's a relative path
-    const normalizedEndpoint = endpoint.startsWith('/') || endpoint.startsWith('http') 
-      ? endpoint 
-      : `/${endpoint}`;
+    // Endpoint could be either relative or absolute URL
+    let url = endpoint;
     
-    // Construct the full URL if needed
-    const url = normalizedEndpoint.startsWith('http') 
-      ? normalizedEndpoint 
-      : `${getApiUrl('')}${normalizedEndpoint}`;
+    // Only add the base URL if the endpoint is not already a full URL
+    if (!endpoint.match(/^https?:\/\//i)) {
+      // If endpoint doesn't start with a slash, add it
+      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      url = formattedEndpoint;
+    }
+    
+    console.log(`Making API request to: ${url}`);
     
     // Apply default headers for better caching control
     const headers = {
@@ -100,6 +102,28 @@ export async function tryMultipleEndpoints<T = any>(
   }
 
   console.error(`All ${endpoints.length} API endpoints failed. Last error:`, lastError);
+  
+  // Try one more time with direct fetch API
+  try {
+    const endpoint = endpoints[0];
+    console.log(`Trying one last attempt with direct fetch: ${endpoint}`);
+    const response = await fetch(endpoint, {
+      headers: {
+        ...config.headers,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`Direct fetch succeeded for ${endpoint}`);
+      return data as T;
+    }
+  } catch (error) {
+    console.error('Final direct fetch attempt also failed:', error);
+  }
+  
   return null;
 }
 

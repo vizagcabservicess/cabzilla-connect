@@ -7,27 +7,22 @@
  * Get the base API URL from environment variables or fallback to a default
  */
 export const getApiBaseUrl = (): string => {
-  if (typeof window !== 'undefined') {
-    // Check if running in Lovable environment
-    const isLovableEnv = window.location.hostname.includes('lovableproject.com');
-    
-    // If in Lovable environment, use relative URLs (empty base)
-    if (isLovableEnv) {
-      return '';
-    }
-    
-    // If in development, use the VITE_API_BASE_URL env variable or fallback to empty string
-    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalDev) {
-      return import.meta.env.VITE_API_BASE_URL || '';
-    }
-    
-    // In production, use the environment variable if available, otherwise same origin
-    return import.meta.env.VITE_API_BASE_URL || window.location.origin;
+  // Always use relative URLs in Lovable environment
+  if (typeof window !== 'undefined' && window.location.hostname.includes('lovableproject.com')) {
+    return '';
   }
   
-  // Fallback for SSR or other environments
-  return import.meta.env.VITE_API_BASE_URL || '';
+  // Check if running in local development
+  const isLocalDev = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  // If in local development, use the environment variable or an empty string (relative URLs)
+  if (isLocalDev) {
+    return import.meta.env.VITE_API_BASE_URL || '';
+  }
+  
+  // In production, use environment variable or same origin
+  return import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 };
 
 // Add apiBaseUrl export that returns the current base URL
@@ -39,20 +34,21 @@ export const apiBaseUrl = getApiBaseUrl();
  * @returns Full API URL
  */
 export const getApiUrl = (endpoint: string): string => {
-  const baseUrl = getApiBaseUrl();
-  
   // For absolute URLs (those that already contain http:// or https://), return as is
-  if (endpoint.match(/^https?:\/\//i)) {
+  if (endpoint && endpoint.match(/^https?:\/\//i)) {
     return endpoint;
   }
   
-  // If no base URL, just use the endpoint as is (relative path)
+  const baseUrl = getApiBaseUrl();
+  
+  // If we're in Lovable environment or no base URL, use relative paths
   if (!baseUrl) {
-    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    // Ensure endpoint starts with a slash for relative paths
+    return endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
   }
   
   // Ensure endpoint starts with a slash if it doesn't already
-  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const formattedEndpoint = endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
   
   // Compose and return the full URL
   return `${baseUrl}${formattedEndpoint}`;
