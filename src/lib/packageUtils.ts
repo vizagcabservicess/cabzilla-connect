@@ -100,6 +100,236 @@ const THROTTLE_DURATIONS = {
   LONG: 5000
 };
 
+// Fare cache management
+interface FareCacheEntry {
+  price: number;
+  timestamp: number;
+  source: string;
+  expiresAt: number;
+}
+
+const fareCache: Map<string, FareCacheEntry> = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes default TTL
+
+/**
+ * Centralized fare cache management to reduce redundant API calls
+ */
+export const fareManager = {
+  /**
+   * Store fare in the cache with expiration
+   */
+  storeFare(vehicleId: string, packageId: string, price: number, source: string = 'api'): void {
+    if (!vehicleId || !packageId || price <= 0) return;
+    
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    const normalizedPackageId = normalizePackageId(packageId);
+    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+    
+    const entry: FareCacheEntry = {
+      price,
+      timestamp: Date.now(),
+      source,
+      expiresAt: Date.now() + CACHE_TTL
+    };
+    
+    // Update in-memory cache
+    fareCache.set(cacheKey, entry);
+    
+    // Update localStorage for persistence
+    try {
+      localStorage.setItem(`fare_${cacheKey}`, JSON.stringify(entry));
+      
+      // Also update specific format keys for backward compatibility
+      localStorage.setItem(`fare_local_${normalizedVehicleId}_${normalizedPackageId}`, price.toString());
+      localStorage.setItem(`fare_local_${normalizedVehicleId}`, price.toString());
+      localStorage.setItem(`package_price_${normalizedPackageId}_${normalizedVehicleId}`, price.toString());
+      
+      console.log(`Stored fare in cache: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${price} (source: ${source})`);
+    } catch (error) {
+      console.error('Error storing fare in localStorage:', error);
+    }
+    
+    // Dispatch an event with limited frequency
+    this.notifyFareUpdate(normalizedVehicleId, normalizedPackageId, price, source);
+  },
+  
+  /**
+   * Get fare from cache if available and not expired
+   */
+  getFare(vehicleId: string, packageId: string): { price: number, source: string } | null {
+    if (!vehicleId || !packageId) return null;
+    
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    const normalizedPackageId = normalizePackageId(packageId);
+    const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+    
+    // First try memory cache
+    const memoryCached = fareCache.get(cacheKey);
+    if (memoryCached && memoryCached.expiresAt > Date.now()) {
+      console.log(`Retrieved fare from memory cache: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${memoryCached.price}`);
+      return { price: memoryCached.price, source: memoryCached.source };
+    }
+    
+    // Then try localStorage
+    try {
+      const storedEntry = localStorage.getItem(`fare_${cacheKey}`);
+      if (storedEntry) {
+        const parsed = JSON.parse(storedEntry) as FareCacheEntry;
+        
+        // Check if entry is still valid
+        if (parsed.expiresAt > Date.now()) {
+          // Update memory cache
+          fareCache.set(cacheKey, parsed);
+          console.log(`Retrieved fare from localStorage: ${normalizedVehicleId}, ${normalizedPackageId}, ₹${parsed.price}`);
+          return { price: parsed.price, source: parsed.source };
+        }
+      }
+      
+      // Try legacy cache formats
+      const legacyKeys = [
+        `fare_local_${normalizedVehicleId}_${normalizedPackageId}`,
+        `fare_local_${normalizedVehicleId}`,
+        `package_price_${normalizedPackageId}_${normalizedVehicleId}`
+      ];
+      
+      for (const key of legacyKeys) {
+        const value = localStorage.getItem(key);
+        if (value) {
+          const price = parseInt(value, 10);
+          if (!isNaN(price) && price > 0) {
+            // Create a proper cache entry
+            this.storeFare(normalizedVehicleId, normalizedPackageId, price, 'legacy-cache');
+            console.log(`Retrieved fare from legacy cache (${key}): ${normalizedVehicleId}, ${normalizedPackageId}, ₹${price}`);
+            return { price, source: 'legacy-cache' };
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error retrieving fare from localStorage:', error);
+    }
+    
+    return null;
+  },
+  
+  /**
+   * Clear fare cache for all or specific entries
+   */
+  clearCache(vehicleId?: string, packageId?: string): void {
+    if (!vehicleId && !packageId) {
+      // Clear all cache
+      fareCache.clear();
+      
+      // Clear localStorage cache entries
+      try {
+        const keys = Object.keys(localStorage);
+        for (const key of keys) {
+          if (key.startsWith('fare_') || key.startsWith('package_price_')) {
+            localStorage.removeItem(key);
+          }
+        }
+        console.log('Cleared all fare cache');
+      } catch (error) {
+        console.error('Error clearing fare cache from localStorage:', error);
+      }
+      
+      return;
+    }
+    
+    // Clear specific cache entries
+    const normalizedVehicleId = vehicleId ? normalizeVehicleId(vehicleId) : '';
+    const normalizedPackageId = packageId ? normalizePackageId(packageId) : '';
+    
+    // Clear from memory cache
+    if (normalizedVehicleId && normalizedPackageId) {
+      const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
+      fareCache.delete(cacheKey);
+      
+      // Clear from localStorage
+      try {
+        localStorage.removeItem(`fare_${cacheKey}`);
+        localStorage.removeItem(`fare_local_${normalizedVehicleId}_${normalizedPackageId}`);
+        localStorage.removeItem(`package_price_${normalizedPackageId}_${normalizedVehicleId}`);
+        console.log(`Cleared fare cache for ${normalizedVehicleId}, ${normalizedPackageId}`);
+      } catch (error) {
+        console.error('Error clearing specific fare cache from localStorage:', error);
+      }
+    } else if (normalizedVehicleId) {
+      // Clear all entries for this vehicle
+      for (const [key, _] of fareCache.entries()) {
+        if (key.startsWith(`${normalizedVehicleId}_`)) {
+          fareCache.delete(key);
+        }
+      }
+      
+      // Clear from localStorage
+      try {
+        const keys = Object.keys(localStorage);
+        for (const key of keys) {
+          if ((key.startsWith('fare_') || key.startsWith('package_price_')) && 
+              key.includes(normalizedVehicleId)) {
+            localStorage.removeItem(key);
+          }
+        }
+        console.log(`Cleared all fare cache for vehicle ${normalizedVehicleId}`);
+      } catch (error) {
+        console.error('Error clearing vehicle fare cache from localStorage:', error);
+      }
+    }
+  },
+  
+  /**
+   * Notify components about fare updates with throttling
+   */
+  notifyFareUpdate(vehicleId: string, packageId: string, price: number, source: string): void {
+    if (shouldThrottle('fare-notification', 1000)) return;
+    
+    try {
+      // Dispatch a single fare update event
+      window.dispatchEvent(new CustomEvent('fare-updated', {
+        detail: {
+          vehicleId,
+          packageId,
+          price,
+          source,
+          timestamp: Date.now()
+        }
+      }));
+      
+      console.log(`Dispatched fare-updated event for ${vehicleId}, ${packageId}, ₹${price}`);
+    } catch (error) {
+      console.error('Error dispatching fare-updated event:', error);
+    }
+  }
+};
+
+// Load fare cache from localStorage on startup
+try {
+  const keys = Object.keys(localStorage);
+  let loadedEntries = 0;
+  
+  for (const key of keys) {
+    if (key.startsWith('fare_') && !key.startsWith('fare_local_')) {
+      try {
+        const storedEntry = localStorage.getItem(key);
+        if (storedEntry) {
+          const parsed = JSON.parse(storedEntry) as FareCacheEntry;
+          // Only load if not expired
+          if (parsed.expiresAt > Date.now()) {
+            fareCache.set(key.replace('fare_', ''), parsed);
+            loadedEntries++;
+          }
+        }
+      } catch (e) {
+        // Ignore parsing errors for individual entries
+      }
+    }
+  }
+  
+  console.log(`Loaded ${loadedEntries} fare cache entries from localStorage`);
+} catch (error) {
+  console.error('Error loading fare cache from localStorage:', error);
+}
+
 /**
  * Throttle function to prevent excessive calls
  * @param key - Unique key to track this throttle type
@@ -325,18 +555,8 @@ export const clearPackageFareCache = (packageId: string) => {
   
   try {
     const normalizedId = normalizePackageId(packageId);
-    const localStorageKeys = Object.keys(localStorage);
-    
-    let clearedCount = 0;
-    for (const key of localStorageKeys) {
-      if (key.includes(normalizedId) && 
-         (key.startsWith('fare_') || key.startsWith('package_price_'))) {
-        localStorage.removeItem(key);
-        clearedCount++;
-      }
-    }
-    
-    console.log(`Cleared ${clearedCount} cache entries for package ${normalizedId}`);
+    fareManager.clearCache(undefined, normalizedId);
+    console.log(`Cleared cache entries for package ${normalizedId}`);
   } catch (error) {
     console.error('Error clearing package fare cache:', error);
   }
@@ -352,30 +572,9 @@ export const getCachedPrice = (vehicleId: string, packageId: string): number | u
   try {
     if (!vehicleId || !packageId) return undefined;
     
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
-    const normalizedPackageId = normalizePackageId(packageId);
-    
-    // Try different cache key formats for maximum compatibility
-    const cacheKeys = [
-      `fare_local_${normalizedVehicleId}_${normalizedPackageId}`,
-      `fare_local_${normalizedVehicleId}`,
-      `package_price_${normalizedPackageId}_${normalizedVehicleId}`,
-      `calculated_fare_${normalizedVehicleId}_local_${normalizedPackageId}`,
-      `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`
-    ];
-    
-    for (const key of cacheKeys) {
-      const value = localStorage.getItem(key);
-      if (value) {
-        const price = parseInt(value, 10);
-        if (!isNaN(price) && price > 0) {
-          console.log(`Retrieved cached price from ${key}: ${price}`);
-          return price;
-        }
-      }
-    }
-    
-    return undefined;
+    // Use the central fare manager
+    const result = fareManager.getFare(vehicleId, packageId);
+    return result ? result.price : undefined;
   } catch (error) {
     console.error('Error retrieving cached price:', error);
     return undefined;
@@ -392,22 +591,8 @@ export const saveCachedPrice = (vehicleId: string, packageId: string, price: num
   try {
     if (!vehicleId || !packageId || !price || price <= 0) return;
     
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
-    const normalizedPackageId = normalizePackageId(packageId);
-    
-    // Use consistent cache keys for all components to reference
-    const cacheKeys = [
-      `fare_local_${normalizedVehicleId}`,
-      `package_price_${normalizedPackageId}_${normalizedVehicleId}`,
-      `calculated_fare_${normalizedVehicleId}_local_${normalizedPackageId}`,
-      `selected_fare_${normalizedVehicleId}_${normalizedPackageId}`
-    ];
-    
-    for (const key of cacheKeys) {
-      localStorage.setItem(key, price.toString());
-    }
-    
-    console.log(`Saved price ${price} for ${normalizedVehicleId} with package ${normalizedPackageId}`);
+    // Use the central fare manager
+    fareManager.storeFare(vehicleId, packageId, price, 'manual-save');
   } catch (error) {
     console.error('Error saving cached price:', error);
   }
@@ -424,22 +609,8 @@ export const synchronizeFareAcrossComponents = (vehicleId: string, packageId: st
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
     const normalizedPackageId = normalizePackageId(packageId);
     
-    // Save to cache first
-    saveCachedPrice(normalizedVehicleId, normalizedPackageId, price);
-    
-    // Dispatch a consolidated event
-    window.dispatchEvent(new CustomEvent('fare-synchronized', {
-      detail: {
-        vehicleId: normalizedVehicleId,
-        originalVehicleId: vehicleId,
-        packageId: normalizedPackageId,
-        originalPackageId: packageId,
-        price: price,
-        timestamp: Date.now()
-      }
-    }));
-    
-    console.log(`Dispatched synchronized fare event for ${normalizedVehicleId}: ${price}`);
+    // Use the central fare manager
+    fareManager.storeFare(normalizedVehicleId, normalizedPackageId, price, 'synchronize');
   } catch (error) {
     console.error('Error synchronizing fare:', error);
   }

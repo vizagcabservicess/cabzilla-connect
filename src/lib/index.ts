@@ -19,7 +19,8 @@ export {
   forceFareRecalculation,
   getCachedPrice,
   saveCachedPrice,
-  synchronizeFareAcrossComponents
+  synchronizeFareAcrossComponents,
+  fareManager
 } from './packageUtils';
 
 // Export fare calculation functions
