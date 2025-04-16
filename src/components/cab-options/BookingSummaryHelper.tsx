@@ -180,7 +180,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     try {
       console.log(`BookingSummaryHelper: Fetching fare for ${cabId} with ${packageId}`);
       
-      // Direct package api endpoint
+      // Direct package api endpoint - using the actual cab ID, not hardcoded "sedan"
       const packageApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${cabId}&package_id=${packageId}`);
       
       const response = await axios.get(packageApiUrl, {
@@ -195,7 +195,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       if (response.data && response.data.status === 'success' && response.data.price) {
         const price = Number(response.data.price);
         if (price > 0) {
-          console.log(`BookingSummaryHelper: Retrieved fare directly from API: ₹${price}`);
+          console.log(`BookingSummaryHelper: Retrieved fare directly from API: ₹${price} for cab ${cabId}`);
           
           // Store this price in localStorage
           localStorage.setItem(`selected_fare_${cabId}_${packageId}`, price.toString());
@@ -223,11 +223,106 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         }
       } else {
         console.log(`BookingSummaryHelper: Could not get valid price from API response:`, response.data);
+        
+        // Try alternative API endpoint as fallback
+        await fetchFromAlternativeEndpoint(cabId, packageId);
       }
     } catch (error) {
       console.error(`BookingSummaryHelper: Error fetching fare from database: ${error}`);
+      
+      // Try alternative API endpoint as fallback
+      await fetchFromAlternativeEndpoint(cabId, packageId);
     } finally {
       activeRequestRef.current = false;
+    }
+  };
+  
+  // New function to try an alternative endpoint if the first one fails
+  const fetchFromAlternativeEndpoint = async (cabId: string, packageId: string) => {
+    try {
+      const alternativeApiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${cabId}&package_id=${packageId}`);
+      
+      console.log(`BookingSummaryHelper: Trying alternative API for ${cabId} with ${packageId}`);
+      
+      const response = await axios.get(alternativeApiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (response.data && response.data.status === 'success' && response.data.price) {
+        const price = Number(response.data.price);
+        if (price > 0) {
+          console.log(`BookingSummaryHelper: Retrieved fare from alternative API: ₹${price}`);
+          
+          // Store this price in localStorage
+          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, price.toString());
+          
+          // Only update if there's a significant difference (more than ₹10)
+          if (Math.abs(price - totalPrice) > 10 && !disableOverrides) {
+            console.log(`BookingSummaryHelper: Updating fare from ${totalPrice} to ${price}`);
+            
+            // Dispatch booking summary update event
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: cabId,
+                tripType: tripType,
+                packageId: packageId,
+                fare: price,
+                source: 'alternative-api',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Temporary disable overrides to prevent immediate feedback loops
+            setDisableOverrides(true);
+            setTimeout(() => setDisableOverrides(false), 3000);
+          }
+        }
+      } else if (response.data && response.data.data) {
+        // Handle alternative response format
+        const data = response.data.data;
+        let price = 0;
+        
+        if (packageId.includes('4hrs-40km') && data.price4hrs40km) {
+          price = Number(data.price4hrs40km);
+        } else if (packageId.includes('8hrs-80km') && data.price8hrs80km) {
+          price = Number(data.price8hrs80km);
+        } else if (packageId.includes('10hrs-100km') && data.price10hrs100km) {
+          price = Number(data.price10hrs100km);
+        }
+        
+        if (price > 0) {
+          console.log(`BookingSummaryHelper: Retrieved fare from alternative format: ₹${price}`);
+          
+          // Store this price in localStorage
+          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, price.toString());
+          
+          // Only update if there's a significant difference (more than ₹10)
+          if (Math.abs(price - totalPrice) > 10 && !disableOverrides) {
+            // Dispatch booking summary update event
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: cabId,
+                tripType: tripType,
+                packageId: packageId,
+                fare: price,
+                source: 'alternative-format',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Temporary disable overrides to prevent immediate feedback loops
+            setDisableOverrides(true);
+            setTimeout(() => setDisableOverrides(false), 3000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`BookingSummaryHelper: Error fetching from alternative endpoint: ${error}`);
     }
   };
   

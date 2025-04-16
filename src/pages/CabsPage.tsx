@@ -8,6 +8,7 @@ import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary"; 
 import { BookingSummaryHelper } from "@/components/cab-options/BookingSummaryHelper";
+import { LocalTripSelector } from "@/components/LocalTripSelector";
 import { 
   Location, 
   vizagLocations, 
@@ -34,7 +35,6 @@ import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { getApiUrl } from "@/config/api";
 import { toast as sonnerToast } from "sonner";
-import { LocalTripSelector } from "@/components/LocalTripSelector";
 
 const CabsPage = () => {
   const navigate = useNavigate();
