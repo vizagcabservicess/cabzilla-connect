@@ -164,25 +164,11 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // For local hourly packages - get from API only
         const packageId = hourlyPackage || '8hrs-80km';
         
-        // Normalize the package ID to ensure consistency
-        let normalizedPackageId = packageId;
-        
-        // Critical fix: Ensure we're using consistent package IDs
-        if (packageId.includes('10hr')) {
-          normalizedPackageId = '10hrs-100km';
-        } else if (packageId.includes('8hr')) {
-          normalizedPackageId = '8hrs-80km';
-        } else if (packageId.includes('4hr')) {
-          normalizedPackageId = '4hrs-40km';
-        }
-        
-        console.log(`Using normalized package ID for local fare calculation: ${normalizedPackageId}`);
-        
         // Direct API call to get package price
-        const packagePrice = await getLocalPackagePrice(normalizedPackageId, cabType.id, forceRefresh);
+        const packagePrice = await getLocalPackagePrice(packageId, cabType.id, forceRefresh);
         
         if (!packagePrice || packagePrice <= 0) {
-          throw new Error(`Invalid package price retrieved for ${cabType.id}, package ${normalizedPackageId}: ${packagePrice}`);
+          throw new Error(`Invalid package price retrieved for ${cabType.id}, package ${packageId}: ${packagePrice}`);
         }
         
         console.log(`Retrieved local package price from API: ₹${packagePrice}`);
@@ -194,17 +180,6 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
             tripType,
             tripMode,
             calculated: true,
-            fare: packagePrice,
-            packageId: normalizedPackageId, // Include the normalized package ID
-            timestamp: Date.now()
-          }
-        }));
-        
-        // Also dispatch a more specific event for this package
-        window.dispatchEvent(new CustomEvent('local-package-fare-calculated', {
-          detail: {
-            cabId: cabType.id,
-            packageId: normalizedPackageId,
             fare: packagePrice,
             timestamp: Date.now()
           }

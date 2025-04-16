@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -10,10 +11,8 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: local-package-fares.php');
-header('X-API-Version: 1.0.57');
+header('X-API-Version: 1.0.56');
 header('X-Timestamp: ' . time());
-header('X-Request-URI: ' . $_SERVER['REQUEST_URI']);
-header('X-Query-String: ' . $_SERVER['QUERY_STRING']);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -30,8 +29,6 @@ if (!file_exists($logDir)) {
 // Log request for debugging
 $timestamp = date('Y-m-d H:i:s');
 error_log("[$timestamp] local-package-fares.php: " . $_SERVER['REQUEST_METHOD'] . " request received", 3, $logDir . '/local-package-fares.log');
-error_log("[$timestamp] Request URI: " . $_SERVER['REQUEST_URI'], 3, $logDir . '/local-package-fares.log');
-error_log("[$timestamp] Query string: " . $_SERVER['QUERY_STRING'], 3, $logDir . '/local-package-fares.log');
 error_log("[$timestamp] GET params: " . json_encode($_GET), 3, $logDir . '/local-package-fares.log');
 
 // Map numeric IDs to proper vehicle_ids - keep this mapping consistent across all files
@@ -430,20 +427,13 @@ try {
             }
             
             if ($price <= 0) {
-                // Use dynamic calculation as fallback
-                $dynamicPrice = calculateDynamicPriceForVehicle($vehicleId, $packageId);
-                if ($dynamicPrice > 0) {
-                    $price = $dynamicPrice;
-                    error_log("[$timestamp] Using dynamic price for $vehicleId - $packageId: $price", 3, $logDir . '/local-package-fares.log');
-                } else {
-                    http_response_code(404);
-                    echo json_encode([
-                        'status' => 'error',
-                        'message' => "Price not available for package $packageId and vehicle $vehicleId",
-                        'timestamp' => time()
-                    ]);
-                    exit;
-                }
+                http_response_code(404);
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => "Price not available for package $packageId and vehicle $vehicleId",
+                    'timestamp' => time()
+                ]);
+                exit;
             }
             
             echo json_encode([
@@ -457,33 +447,6 @@ try {
             ]);
             exit;
         } else {
-            // Use dynamic calculation if not found in database
-            $dynamicPrice = calculateDynamicPriceForVehicle($vehicleId, $packageId);
-            if ($dynamicPrice > 0) {
-                error_log("[$timestamp] Using dynamic price for $vehicleId - $packageId: $dynamicPrice (not in DB)", 3, $logDir . '/local-package-fares.log');
-                
-                $packageName = '';
-                if (strpos($packageId, '4hr') !== false || strpos($packageId, '4hrs') !== false) {
-                    $packageName = '4 Hours Package (40km)';
-                } else if (strpos($packageId, '8hr') !== false || strpos($packageId, '8hrs') !== false) {
-                    $packageName = '8 Hours Package (80km)';
-                } else if (strpos($packageId, '10hr') !== false || strpos($packageId, '10hrs') !== false) {
-                    $packageName = '10 Hours Package (100km)';
-                }
-                
-                echo json_encode([
-                    'status' => 'success',
-                    'vehicleId' => $vehicleId,
-                    'packageId' => $packageId,
-                    'packageName' => $packageName,
-                    'baseFare' => $dynamicPrice,
-                    'price' => $dynamicPrice,
-                    'source' => 'dynamic-calculation',
-                    'timestamp' => time()
-                ]);
-                exit;
-            }
-            
             http_response_code(404);
             echo json_encode([
                 'status' => 'error',
@@ -541,53 +504,15 @@ try {
         ];
     }
     
-    // If no fares found and a specific vehicle was requested, return dynamic calculation
+    // If no fares found and a specific vehicle was requested, return 404
     if (empty($fares) && $vehicleId) {
-        // Provide dynamic price calculation as fallback
-        $dynamicFare = [
-            'id' => $vehicleId,
-            'vehicleId' => $vehicleId,
-            'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
-        ];
-        
-        // Generate dynamic prices based on vehicle type
-        $baseValue = 1000;
-        $multiplier = 1.0;
-        
-        // Adjust multiplier based on vehicle type
-        if (stripos($vehicleId, 'sedan') !== false) {
-            $multiplier = 1.0;
-        } else if (stripos($vehicleId, 'ertiga') !== false) {
-            $multiplier = 1.25;
-        } else if (stripos($vehicleId, 'innova_crysta') !== false || stripos($vehicleId, 'innova_crystal') !== false) {
-            $multiplier = 1.5;
-        } else if (stripos($vehicleId, 'innova_hycross') !== false || stripos($vehicleId, 'innova_hycros') !== false) {
-            $multiplier = 1.6;
-        } else if (stripos($vehicleId, 'innova') !== false) {
-            $multiplier = 1.5;
-        } else if (stripos($vehicleId, 'tempo') !== false) {
-            $multiplier = 2.0;
-        } else if (stripos($vehicleId, 'luxury') !== false) {
-            $multiplier = 1.7;
-        } else if (stripos($vehicleId, 'mpv') !== false) {
-            $multiplier = 1.4;
-        }
-        
-        // Calculate prices
-        $dynamicFare['price4hrs40km'] = round($baseValue * 1.2 * $multiplier);
-        $dynamicFare['price8hrs80km'] = round($baseValue * 2.0 * $multiplier);
-        $dynamicFare['price10hrs100km'] = round($baseValue * 2.5 * $multiplier);
-        $dynamicFare['priceExtraKm'] = round($baseValue * 0.012 * $multiplier);
-        $dynamicFare['priceExtraHour'] = round($baseValue * 0.1 * $multiplier);
-        
-        // Include original column names
-        $dynamicFare['price_4hr_40km'] = $dynamicFare['price4hrs40km'];
-        $dynamicFare['price_8hr_80km'] = $dynamicFare['price8hrs80km'];
-        $dynamicFare['price_10hr_100km'] = $dynamicFare['price10hrs100km'];
-        $dynamicFare['price_extra_km'] = $dynamicFare['priceExtraKm'];
-        $dynamicFare['price_extra_hour'] = $dynamicFare['priceExtraHour'];
-        
-        $fares[$vehicleId] = $dynamicFare;
+        http_response_code(404);
+        echo json_encode([
+            'status' => 'error',
+            'message' => "No fare found for vehicle $vehicleId",
+            'timestamp' => time()
+        ]);
+        exit;
     }
     
     // Return all fares
@@ -606,102 +531,4 @@ try {
         'message' => "Server error: " . $e->getMessage(),
         'timestamp' => time()
     ]);
-}
-
-// Helper function to calculate dynamic price when not in database
-function calculateDynamicPriceForVehicle($vehicleId, $packageId) {
-    // Base prices for different vehicle types
-    $basePrices = [
-        'sedan' => [
-            '4hrs-40km' => 2400, 
-            '8hrs-80km' => 3000, 
-            '10hrs-100km' => 3500
-        ],
-        'ertiga' => [
-            '4hrs-40km' => 2800, 
-            '8hrs-80km' => 3500, 
-            '10hrs-100km' => 4000
-        ],
-        'innova_crysta' => [
-            '4hrs-40km' => 3200, 
-            '8hrs-80km' => 4000, 
-            '10hrs-100km' => 4500
-        ],
-        'innova_hycross' => [
-            '4hrs-40km' => 3600, 
-            '8hrs-80km' => 4500, 
-            '10hrs-100km' => 5000
-        ],
-        'dzire_cng' => [
-            '4hrs-40km' => 2400, 
-            '8hrs-80km' => 3000, 
-            '10hrs-100km' => 3500
-        ],
-        'tempo_traveller' => [
-            '4hrs-40km' => 4000, 
-            '8hrs-80km' => 5500, 
-            '10hrs-100km' => 7000
-        ],
-        'mpv' => [
-            '4hrs-40km' => 3600, 
-            '8hrs-80km' => 4500, 
-            '10hrs-100km' => 5000
-        ],
-        'innova' => [
-            '4hrs-40km' => 3200, 
-            '8hrs-80km' => 4000, 
-            '10hrs-100km' => 4500
-        ]
-    ];
-    
-    // Normalize vehicle ID and package ID
-    $normalizedVehicleId = strtolower($vehicleId);
-    $normalizedVehicleId = str_replace(' ', '_', $normalizedVehicleId);
-    
-    $normalizedPackageId = strtolower($packageId);
-    
-    // Map package ID variants to standard keys
-    if (strpos($normalizedPackageId, '4hr') !== false || strpos($normalizedPackageId, '4hrs') !== false) {
-        $normalizedPackageId = '4hrs-40km';
-    } else if (strpos($normalizedPackageId, '8hr') !== false || strpos($normalizedPackageId, '8hrs') !== false) {
-        $normalizedPackageId = '8hrs-80km';
-    } else if (strpos($normalizedPackageId, '10hr') !== false || strpos($normalizedPackageId, '10hrs') !== false) {
-        $normalizedPackageId = '10hrs-100km';
-    }
-    
-    // Get the correct vehicle category
-    $vehicleCategory = null;
-    
-    // Direct match
-    if (isset($basePrices[$normalizedVehicleId])) {
-        $vehicleCategory = $normalizedVehicleId;
-    } else {
-        // Check for partial matches
-        if (strpos($normalizedVehicleId, 'sedan') !== false) {
-            $vehicleCategory = 'sedan';
-        } else if (strpos($normalizedVehicleId, 'ertiga') !== false) {
-            $vehicleCategory = 'ertiga';
-        } else if (strpos($normalizedVehicleId, 'crysta') !== false || strpos($normalizedVehicleId, 'crystal') !== false) {
-            $vehicleCategory = 'innova_crysta';
-        } else if (strpos($normalizedVehicleId, 'hycross') !== false || strpos($normalizedVehicleId, 'hycros') !== false) {
-            $vehicleCategory = 'innova_hycross';
-        } else if (strpos($normalizedVehicleId, 'innova') !== false || strpos($normalizedVehicleId, 'mpv') !== false) {
-            $vehicleCategory = 'innova';
-        } else if (strpos($normalizedVehicleId, 'dzire') !== false || strpos($normalizedVehicleId, 'cng') !== false) {
-            $vehicleCategory = 'dzire_cng';
-        } else if (strpos($normalizedVehicleId, 'tempo') !== false || strpos($normalizedVehicleId, 'traveller') !== false) {
-            $vehicleCategory = 'tempo_traveller';
-        } else {
-            // Default to sedan if no match found
-            $vehicleCategory = 'sedan';
-        }
-    }
-    
-    // Get the price for this vehicle category and package
-    if (isset($basePrices[$vehicleCategory][$normalizedPackageId])) {
-        return $basePrices[$vehicleCategory][$normalizedPackageId];
-    }
-    
-    // Default price if we couldn't find a match
-    return 0;
 }
