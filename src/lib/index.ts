@@ -16,7 +16,10 @@ export {
   getStandardHourlyPackageOptions,
   shouldThrottle,
   clearPackageFareCache,
-  forceFareRecalculation
+  forceFareRecalculation,
+  getCachedPrice,
+  saveCachedPrice,
+  synchronizeFareAcrossComponents
 } from './packageUtils';
 
 // Export fare calculation functions

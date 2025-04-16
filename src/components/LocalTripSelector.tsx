@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
-import { HourlyPackage, hourlyPackages, getLocalPackagePrice, fetchAndCacheLocalFares } from '@/lib/packageData';
+import { HourlyPackage, hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { toast } from 'sonner';
 import { 
   normalizePackageId, 
@@ -13,7 +13,10 @@ import {
   savePackageSelection,
   notifyPackageChange,
   shouldThrottle,
-  clearPackageFareCache
+  clearPackageFareCache,
+  getCachedPrice,
+  saveCachedPrice,
+  synchronizeFareAcrossComponents
 } from '@/lib/packageUtils';
 
 interface LocalTripSelectorProps {
@@ -33,6 +36,8 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const loadAttemptsRef = useRef<number>(0);
   const mountedRef = useRef<boolean>(true);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const apiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Normalize the selected package for consistency
   const normalizedSelectedPackage = selectedPackage ? normalizePackageId(selectedPackage) : undefined;
@@ -43,6 +48,25 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       console.log(`[DEBUG] LocalTripSelector: Selected package normalized from ${selectedPackage} to ${normalizedSelectedPackage}`);
     }
   }, [selectedPackage, normalizedSelectedPackage]);
+  
+  // Helper to get price from cache with fallback
+  const getPackagePriceWithFallback = (packageId: string, vehicleType: string = 'sedan') => {
+    const normalizedPackageId = normalizePackageId(packageId);
+    
+    // Try to get price from cache first
+    const cachedPrice = getCachedPrice(vehicleType, normalizedPackageId);
+    if (cachedPrice) {
+      console.log(`LocalTripSelector: Using cached price for ${normalizedPackageId}: ${cachedPrice}`);
+      return cachedPrice;
+    }
+    
+    // Fallback price estimates based on package type
+    const fallbackPrice = normalizedPackageId === '10hrs-100km' ? 3500 :
+                          normalizedPackageId === '8hrs-80km' ? 2500 : 1800;
+    
+    console.log(`LocalTripSelector: Using fallback price for ${normalizedPackageId}: ${fallbackPrice}`);
+    return fallbackPrice;
+  };
   
   const loadPackages = async (forceRefresh = false) => {
     // Skip if already loading
@@ -82,68 +106,102 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           // Update the package id to normalized form for consistency
           pkg.id = normalizedPackageId;
           
-          const cacheKey = `package_price_${normalizedPackageId}_${referenceVehicle}`;
-          const cachedPrice = localStorage.getItem(cacheKey);
-          
-          if (cachedPrice) {
-            const price = parseInt(cachedPrice, 10);
-            if (!isNaN(price) && price > 0) {
-              pkg.basePrice = price;
-              console.log(`Using cached price for ${pkg.id}: ${price}`);
-              usedCache = true;
-              successfulPrices++;
-            }
+          // Try to get price from cache
+          const cachedPrice = getCachedPrice(referenceVehicle, normalizedPackageId);
+          if (cachedPrice && cachedPrice > 0) {
+            pkg.basePrice = cachedPrice;
+            console.log(`Using cached price for ${pkg.id}: ${cachedPrice}`);
+            usedCache = true;
+            successfulPrices++;
           }
         }
       } catch (cacheError) {
         console.error('Error using cached prices:', cacheError);
       }
       
+      // Set up timeout for API calls
+      if (apiTimeoutRef.current) {
+        clearTimeout(apiTimeoutRef.current);
+      }
+      
+      apiTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current || !loadingRef.current) return;
+        
+        console.log('LocalTripSelector: API timeout, using fallback prices');
+        
+        // Update packages with fallback prices
+        const updatedPackagesWithFallbacks = updatedPackages.map(pkg => {
+          if (pkg.basePrice <= 0) {
+            pkg.basePrice = getPackagePriceWithFallback(pkg.id);
+          }
+          return pkg;
+        });
+        
+        setPackages(updatedPackagesWithFallbacks);
+        setIsLoading(false);
+        loadingRef.current = false;
+        
+        // Also set a reasonable default package if none selected
+        if (!normalizedSelectedPackage && updatedPackagesWithFallbacks.length > 0) {
+          const defaultPackage = updatedPackagesWithFallbacks.find(p => p.id === '8hrs-80km')?.id || 
+                                updatedPackagesWithFallbacks[0]?.id;
+          
+          if (defaultPackage) {
+            console.log(`Setting default package due to timeout: ${defaultPackage}`);
+            onPackageSelect(defaultPackage);
+            savePackageSelection(defaultPackage);
+            notifyPackageChange(defaultPackage);
+          }
+        }
+      }, 4000); // 4 second timeout
+      
       // Only make network requests if cache was incomplete or force refreshing
       if (forceRefresh || !usedCache || successfulPrices < updatedPackages.length) {
         console.log(`Cache status: ${successfulPrices}/${updatedPackages.length} packages from cache. ${forceRefresh ? 'Force refreshing.' : ''}`);
         
-        // Use a timeout to prevent hanging requests
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Package price fetch timed out')), 5000);
-        });
+        // Process packages with limit on concurrent requests
+        const packagePromises = updatedPackages
+          .filter(pkg => forceRefresh || pkg.basePrice <= 0)
+          .map(pkg => {
+            // Skip if we already have a price for this package and not forcing refresh
+            if (!forceRefresh && pkg.basePrice > 0) return null;
+            
+            return getLocalPackagePrice(pkg.id, referenceVehicle, forceRefresh)
+              .then(price => {
+                if (price > 0) {
+                  pkg.basePrice = price;
+                  console.log(`Updated ${pkg.id} price to ${price} from API`);
+                  
+                  // Cache the price
+                  saveCachedPrice(referenceVehicle, pkg.id, price);
+                  
+                  return { id: pkg.id, price };
+                }
+                return null;
+              })
+              .catch(error => {
+                console.error(`Error fetching price for ${pkg.id}:`, error);
+                return null;
+              });
+          })
+          .filter(Boolean); // Filter out any null promises
         
-        // Process packages one at a time to avoid overwhelming the server
-        for (const pkg of updatedPackages) {
-          if (!mountedRef.current) break;
+        try {
+          // Use Promise.allSettled to handle individual failures
+          const results = await Promise.allSettled(packagePromises as Promise<any>[]);
           
-          // Skip if we already have a price for this package and not forcing refresh
-          if (!forceRefresh && pkg.basePrice > 0) continue;
+          // Count successful price fetches
+          const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
+          console.log(`Successfully fetched ${successCount} package prices`);
           
-          try {
-            const normalizedPackageId = pkg.id; // Already normalized above
-            // Don't force refresh unless explicitly needed to reduce network traffic
-            const shouldForceRefresh = forceRefresh || loadAttemptsRef.current <= 1;
-            
-            const pricePromise = getLocalPackagePrice(normalizedPackageId, referenceVehicle, shouldForceRefresh);
-            const price = await Promise.race([pricePromise, timeoutPromise]) as number;
-            
-            if (price > 0) {
-              pkg.basePrice = price;
-              console.log(`Updated ${pkg.id} price to ${price} from API`);
-              
-              // Cache the price in localStorage
-              try {
-                const cacheKey = `package_price_${normalizedPackageId}_${referenceVehicle}`;
-                localStorage.setItem(cacheKey, price.toString());
-              } catch (cacheError) {
-                console.error('Error caching price:', cacheError);
-              }
-            } else {
-              console.warn(`API returned zero or invalid price for ${pkg.id}`);
-            }
-          } catch (error) {
-            console.error(`Could not fetch price for package ${pkg.id}:`, error);
-            // Don't set error if some packages succeeded - we'll try again later
-            if (successfulPrices === 0 && updatedPackages.every(p => p.basePrice <= 0)) {
-              setLoadError(`Unable to load pricing for ${pkg.name}. Please try again.`);
-            }
+          // Clear API timeout if we have successful results
+          if (apiTimeoutRef.current) {
+            clearTimeout(apiTimeoutRef.current);
+            apiTimeoutRef.current = null;
           }
+        } catch (e) {
+          console.error('Error fetching package prices:', e);
+          // API timeout will handle fallback
         }
       }
       
@@ -154,65 +212,63 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       if (!normalizedSelectedPackage && updatedPackages.length > 0) {
         // Prefer 8hr package as default
         const defaultPackage = updatedPackages.find(p => p.id === '8hrs-80km')?.id || 
-                               updatedPackages[1]?.id || 
                                updatedPackages[0]?.id;
         
         if (defaultPackage) {
           console.log('Setting default package:', defaultPackage);
           
           // Set default package using consistent utilities
-          const normalizedDefaultPackage = normalizePackageId(defaultPackage);
-          
-          // Use our utility functions for consistent handling
-          onPackageSelect(normalizedDefaultPackage);
-          savePackageSelection(normalizedDefaultPackage);
-          notifyPackageChange(normalizedDefaultPackage);
+          onPackageSelect(defaultPackage);
+          savePackageSelection(defaultPackage);
+          notifyPackageChange(defaultPackage);
         }
       }
       
       setLastUpdateTime(Date.now());
       
-      // If we got no successful prices, schedule a retry
-      if (successfulPrices === 0 && updatedPackages.every(p => p.basePrice <= 0)) {
-        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-        
-        retryTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            console.log('Retrying package price fetch due to previous failure');
-            loadPackages(true);
-          }
-          retryTimeoutRef.current = null;
-        }, 3000); // 3 second delay before retry
-      } else {
-        // Fetch additional fare data in the background with low priority
-        if (!shouldThrottle('background-fetch', 30000)) {
-          setTimeout(() => {
-            if (mountedRef.current) {
-              fetchAndCacheLocalFares(false).catch(error => {
-                console.error('Error fetching local fares in background:', error);
-              });
-            }
-          }, 3000);
-        }
+      // Clear API timeout if we're done processing
+      if (apiTimeoutRef.current) {
+        clearTimeout(apiTimeoutRef.current);
+        apiTimeoutRef.current = null;
       }
     } catch (error) {
       console.error('Failed to load package data:', error);
       setLoadError(`Unable to load package pricing. Please try again.`);
       
-      // Schedule retry after error
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      // Use fallback prices
+      const updatedPackagesWithFallbacks = hourlyPackages.map(pkg => {
+        const normalizedId = normalizePackageId(pkg.id);
+        return {
+          ...pkg,
+          id: normalizedId,
+          basePrice: getPackagePriceWithFallback(normalizedId)
+        };
+      });
       
-      retryTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          console.log('Retrying package price fetch after error');
-          loadPackages(true);
+      setPackages(updatedPackagesWithFallbacks);
+      
+      // Set default package if needed
+      if (!normalizedSelectedPackage && updatedPackagesWithFallbacks.length > 0) {
+        const defaultPackage = updatedPackagesWithFallbacks.find(p => p.id === '8hrs-80km')?.id || 
+                              updatedPackagesWithFallbacks[0]?.id;
+        
+        if (defaultPackage) {
+          console.log(`Setting default package due to error: ${defaultPackage}`);
+          onPackageSelect(defaultPackage);
+          savePackageSelection(defaultPackage);
+          notifyPackageChange(defaultPackage);
         }
-        retryTimeoutRef.current = null;
-      }, 5000); // 5 second delay before retry after error
+      }
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
         loadingRef.current = false;
+      }
+      
+      // Clear API timeout if it's still active
+      if (apiTimeoutRef.current) {
+        clearTimeout(apiTimeoutRef.current);
+        apiTimeoutRef.current = null;
       }
     }
   };
@@ -221,6 +277,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     mountedRef.current = true;
     loadPackages();
     
+    // Event handlers with throttling
     const handleLocalFaresUpdated = () => {
       if (!mountedRef.current || shouldThrottle('fares-updated', 10000)) return;
       
@@ -235,16 +292,16 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       loadPackages(true);
     };
     
-    const handleLocalFareUpdated = (event: CustomEvent) => {
-      if (!mountedRef.current || shouldThrottle('fare-updated', 2000)) return;
+    // Handle synchronized fare events
+    const handleFareSynchronized = (event: CustomEvent) => {
+      if (!mountedRef.current || shouldThrottle('fare-sync-update', 1000)) return;
       
-      if (event.detail && event.detail.packageId && event.detail.price) {
-        console.log(`LocalTripSelector detected local fare update for ${event.detail.packageId}: ${event.detail.price}`);
+      if (event.detail && event.detail.packageId && event.detail.price > 0) {
+        console.log(`LocalTripSelector: Received synchronized fare event for ${event.detail.packageId}: ${event.detail.price}`);
         
         setPackages(prevPackages => {
           return prevPackages.map(pkg => {
-            if (normalizePackageId(pkg.id) === normalizePackageId(event.detail.packageId) && 
-                event.detail.vehicleType === 'sedan') {
+            if (pkg.id === event.detail.packageId) {
               return { ...pkg, basePrice: event.detail.price };
             }
             return pkg;
@@ -255,22 +312,33 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
     window.addEventListener('force-fare-recalculation', handleForceRecalculation);
-    window.addEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
+    window.addEventListener('fare-synchronized', handleFareSynchronized as EventListener);
     
     return () => {
       mountedRef.current = false;
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
       }
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+      if (apiTimeoutRef.current) {
+        clearTimeout(apiTimeoutRef.current);
+      }
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
       window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
-      window.removeEventListener('local-fare-updated', handleLocalFareUpdated as EventListener);
+      window.removeEventListener('fare-synchronized', handleFareSynchronized as EventListener);
     };
   }, []);
   
   // Handle package selection with consistent normalization
   const handlePackageSelect = (packageId: string) => {
     if (shouldThrottle('package-selection', 1000)) return;
+    
+    if (!packageId) {
+      console.warn('Attempted to select null or empty package ID');
+      return;
+    }
     
     console.log(`Selected package: ${packageId}`);
     
