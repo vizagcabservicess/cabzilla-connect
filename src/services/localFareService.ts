@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { normalizeVehicleId, normalizePackageId } from '@/lib/packageData';
@@ -30,7 +31,7 @@ interface LocalFareResponse {
   debug?: any;
 }
 
-// Vehicle-specific pricing table for fallback
+// Vehicle-specific pricing table for fallback with adjusted prices
 const fallbackPrices: Record<string, Record<string, number>> = {
   'sedan': {
     '4hrs-40km': 1400,
@@ -77,7 +78,7 @@ const fallbackPrices: Record<string, Record<string, number>> = {
     '8hrs-80km': 7000,
     '10hrs-100km': 8500
   },
-  'mpv': { // For Innova Hycross fallback
+  'mpv': { // Explicit pricing for MPV that matches Innova Hycross
     '4hrs-40km': 2600,
     '8hrs-80km': 4200,
     '10hrs-100km': 5000
@@ -115,7 +116,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
   const normalizedPackageId = normalizePackageId(packageId);
   const normalizedVehicleId = normalizeVehicleId(vehicleId);
   
-  console.log(`Getting local package price for ${normalizedVehicleId}, package: ${normalizedPackageId}, forceRefresh: ${forceRefresh}`);
+  console.log(`Getting local package price for ${normalizedVehicleId}, package: ${normalizedPackageId}, forceRefresh: ${forceRefresh} (original: ${vehicleId})`);
   
   // Create a cache key that includes both vehicle ID and package ID
   const cacheKey = `${normalizedVehicleId}_${normalizedPackageId}`;
@@ -164,6 +165,9 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
     // Always prioritize local mock API endpoints in Lovable environment
     const endpoints = [
       // First try with direct path to local mock API
+      `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
+      
+      // Then try direct PHP file path
       `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`,
       
       // Then try with admin endpoint for all fares
@@ -254,7 +258,7 @@ export const getLocalPackagePrice = async (packageId: string, vehicleId: string,
     
     // Try direct fetch before falling back to static prices
     try {
-      const directEndpoint = `/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`;
+      const directEndpoint = `/backend/php-templates/api/local-package-fares.php?vehicle_id=${normalizedVehicleId}&package_id=${normalizedPackageId}`;
       console.log(`Attempting direct fetch to: ${directEndpoint}`);
       
       const response = await fetch(directEndpoint, {
@@ -342,6 +346,12 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
     normalizedCabId = 'dzire_cng';
   } else if (normalizedCabId.includes('urbania')) {
     normalizedCabId = 'bus';
+  }
+  
+  // Special handling for Hycross when identified as MPV
+  if ((vehicleId === 'mpv' || normalizedCabId === 'mpv') && fallbackPrices['mpv']) {
+    console.log('Using explicit MPV fallback pricing for Innova Hycross');
+    normalizedCabId = 'mpv';
   }
   
   // Find the closest matching vehicle type

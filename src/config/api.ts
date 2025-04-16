@@ -38,10 +38,26 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
+  // Check if the endpoint already starts with /backend or /api in Lovable environment
+  if (endpoint && (endpoint.startsWith('/backend/') || endpoint.startsWith('/api/'))) {
+    return endpoint;
+  }
+  
   const baseUrl = getApiBaseUrl();
   
   // If we're in Lovable environment or no base URL, use relative paths
   if (!baseUrl) {
+    // Try the backend path for PHP templates first in Lovable environment
+    if (endpoint && endpoint.includes('php')) {
+      // Prioritize the backend PHP template path
+      const backendPath = endpoint.startsWith('/') 
+        ? `/backend/php-templates${endpoint}` 
+        : `/backend/php-templates/${endpoint}`;
+      
+      console.log(`Using backend PHP template path: ${backendPath}`);
+      return backendPath;
+    }
+    
     // Ensure endpoint starts with a slash for relative paths
     return endpoint ? (endpoint.startsWith('/') ? endpoint : `/${endpoint}`) : '/';
   }
