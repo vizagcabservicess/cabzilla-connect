@@ -1,5 +1,6 @@
 
 // API and request configuration functions
+import { apiBaseUrl, getApiBaseUrl } from '@/config/api';
 
 /**
  * Normalize vehicle ID for consistent handling across components
@@ -163,7 +164,8 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
 
 // Add safeFetch function for safer API requests
 export const safeFetch = async (endpoint: string, options: RequestInit = {}) => {
-  const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   
   const defaultOptions: RequestInit = {
     headers: {

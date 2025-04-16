@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 
@@ -452,7 +451,7 @@ export async function fetchAndCacheLocalFares(forceRefresh: boolean = false): Pr
 }
 
 // Force sync with database via admin API
-export async function syncLocalFaresWithDatabase(): Promise<boolean> {
+export async function syncLocalFaresWithDatabase(forceRefresh: boolean = false): Promise<boolean> {
   try {
     console.log('Forcing sync of local package fares with database...');
     

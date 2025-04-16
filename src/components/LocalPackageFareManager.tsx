@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -33,7 +32,6 @@ export function LocalPackageFareManager() {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
 
-  // Load fares when component mounts
   useEffect(() => {
     loadFares();
   }, []);
@@ -46,7 +44,6 @@ export function LocalPackageFareManager() {
       const apiUrl = getApiUrl('');
       const endpoint = `${apiUrl}/api/admin/direct-local-fares.php`;
       
-      // Get list of vehicles first
       const vehiclesResponse = await axios.get(`${apiUrl}/data/vehicles.json`, {
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -103,20 +100,17 @@ export function LocalPackageFareManager() {
   const handleSyncWithDatabase = async () => {
     setSyncing(true);
     try {
-      // Pass true for forceRefresh parameter to syncLocalFaresWithDatabase
       const success = await syncLocalFaresWithDatabase(true);
       
       if (success) {
         toast.success('Local package fares synced with database');
         await loadFares();
         
-        // Clear the local cache and force refresh of all fares
         if (window.localPackagePriceCache) {
           window.localPackagePriceCache = {};
         }
         
-        // Trigger refresh in the background - pass true for silent parameter
-        fetchAndCacheLocalFares(true);
+        fetchAndCacheLocalFares();
       } else {
         toast.error('Failed to sync local package fares');
       }
@@ -143,7 +137,6 @@ export function LocalPackageFareManager() {
       
       const savePromises = editedFares.map(async (fare) => {
         try {
-          // This endpoint would need to be implemented on the backend
           const response = await axios.post(`${apiUrl}/api/admin/update-local-fares.php`, {
             vehicleId: fare.vehicleId,
             price4hrs40km: fare.price4hrs40km,
@@ -173,19 +166,16 @@ export function LocalPackageFareManager() {
       if (successCount === results.length) {
         toast.success(`Successfully saved changes for ${successCount} vehicles`);
         
-        // Clear edit flags
         setFares(prevFares => 
           prevFares.map(fare => ({ ...fare, isEdited: false }))
         );
         
-        // Trigger sync to ensure all tables are updated
         await handleSyncWithDatabase();
       } else if (successCount > 0) {
         toast.success(`Saved changes for ${successCount} vehicles`, {
           description: `Failed to save changes for ${failCount} vehicles`
         });
         
-        // Reload to get current state
         await loadFares();
       } else {
         toast.error(`Failed to save changes for all ${results.length} vehicles`);

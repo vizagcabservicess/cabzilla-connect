@@ -292,6 +292,7 @@ export const getFallbackPrice = (vehicleId: string, packageId: string): number =
 
 /**
  * Fetches and caches all local package fares for all popular vehicles
+ * @param silent Whether to suppress console logging
  */
 export const fetchAndCacheLocalFares = async (silent: boolean = false): Promise<void> => {
   const packages = ['4hrs-40km', '8hrs-80km', '10hrs-100km'];
