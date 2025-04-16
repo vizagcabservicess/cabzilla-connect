@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -253,7 +254,7 @@ export const BookingSummary = ({
     }
   };
 
-  const recalculateFareDetails = async (packageId?: string) => {
+  const recalculateFareDetails = async (packageIdArg?: string) => {
     if (!selectedCab) {
       console.log('BookingSummary: No cab selected, skipping calculation');
       setShowDetailsLoading(false);
@@ -383,7 +384,7 @@ export const BookingSummary = ({
       } else if (tripType === 'local') {
         try {
           const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-          const packageToUse = packageId || currentPackageRef.current || hourlyPackage || '8hrs-80km';
+          const packageToUse = packageIdArg || currentPackageRef.current || hourlyPackage || '8hrs-80km';
           
           const selectedFareKey = `selected_fare_${normalizedCabId}_${packageToUse}`;
           const selectedFare = localStorage.getItem(selectedFareKey);
@@ -479,6 +480,8 @@ export const BookingSummary = ({
           console.error('Error fetching direct local fares:', error);
           
           try {
+            const packageToUse = packageIdArg || currentPackageRef.current || hourlyPackage || '8hrs-80km';
+            
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
             
             if (packageToUse.includes('4hrs') && localFares.price4hrs40km > 0) {
@@ -536,7 +539,7 @@ export const BookingSummary = ({
       
       if (selectedCab && newCalculatedFare > 0) {
         const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-        const packageToUse = packageId || currentPackageRef.current || hourlyPackage || '8hrs-80km';
+        const packageToUse = packageIdArg || currentPackageRef.current || hourlyPackage || '8hrs-80km';
         
         window.dispatchEvent(new CustomEvent('global-fare-update', {
           detail: {
