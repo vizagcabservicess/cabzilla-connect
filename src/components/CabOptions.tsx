@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabOptionsHeader } from './cab-options/CabOptionsHeader';
@@ -39,53 +40,78 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   onPackageChange,
   isCalculatingFares = false
 }) => {
+  // Local state to handle warnings and errors
+  const [showWarning, setShowWarning] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Fetch data from useCabOptions hook
   const {
     isLoading,
-    isError,
-    handleRefresh,
-    showWarning,
-    setShowWarning,
-    errorMessage
-  } = useCabOptions();
+    error,
+    refresh
+  } = useCabOptions({ 
+    tripType, 
+    tripMode, 
+    distance 
+  });
+
+  // Convert error to errorMessage if present
+  useEffect(() => {
+    if (error) {
+      setErrorMessage(error);
+    } else {
+      setErrorMessage(null);
+    }
+  }, [error]);
+
+  // Refresh handler
+  const handleRefresh = () => {
+    return refresh();
+  };
 
   return (
     <div className="bg-white rounded-lg p-5 shadow-sm">
       <CabOptionsHeader
-        tripType={tripType}
-        hourlyPackage={hourlyPackage}
-        onPackageChange={onPackageChange}
-        isCalculatingFares={isCalculatingFares}
+        cabCount={cabTypes.length}
+        isRefreshing={isLoading}
+        refreshSuccessful={!error}
+        onRefresh={handleRefresh}
       />
 
       {isLoading ? (
         <CabLoading />
-      ) : isError ? (
+      ) : errorMessage ? (
         <FareUpdateError
-          errorMessage={errorMessage}
-          onRefresh={handleRefresh}
+          error={new Error(errorMessage)}
+          onRetry={handleRefresh}
         />
       ) : cabTypes.length > 0 ? (
         <CabList
           cabTypes={cabTypes}
-          selectedCab={selectedCab}
+          selectedCabId={selectedCab?.id || ''}
           onSelectCab={onSelectCab}
           distance={distance}
           tripType={tripType}
           tripMode={tripMode}
           hourlyPackage={hourlyPackage}
           pickupDate={pickupDate}
-          dropLocation={dropLocation}
-          returnDate={returnDate}
-          isCalculatingFares={isCalculatingFares}
+          returnDate={returnDate || undefined}
+          isCalculating={isCalculatingFares}
+          handleSelectCab={onSelectCab}
         />
       ) : (
-        <EmptyCabList />
+        <EmptyCabList
+          onRefresh={handleRefresh}
+          isRefreshing={isLoading}
+        />
       )}
 
-      <CabRefreshWarning
-        showWarning={showWarning}
-        onClose={() => setShowWarning(false)}
-      />
+      {showWarning && (
+        <CabRefreshWarning
+          message="There was an issue with refreshing the cab data."
+          onRefresh={handleRefresh}
+        />
+      )}
     </div>
   );
 };
