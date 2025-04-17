@@ -27,11 +27,14 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const lastHourlyPackageRef = useRef<string | undefined>(hourlyPackage);
   const currentFareRef = useRef<number>(totalPrice);
   const lastFetchResultRef = useRef<{cabId?: string, fare?: number, timestamp?: number}>({});
+  const pendingFetchRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Normalize vehicle ID consistently across the application
+  // Normalize vehicle ID consistently across the application with stricter rules
   const normalizeVehicleId = (id: string | null): string => {
     if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
+    // Convert to lowercase, remove any spaces, and replace any special characters
+    return id.toLowerCase().replace(/[\s.,-]+/g, '_').replace(/__+/g, '_');
   };
 
   // Verify if two vehicle IDs match, using strict normalization
@@ -40,15 +43,31 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     return normalizeVehicleId(id1) === normalizeVehicleId(id2);
   };
 
-  // Immediately update references when props change
+  // Immediately update references when props change and reset state if needed
   useEffect(() => {
+    // Check if the cab has actually changed
+    const cabChanged = !doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId);
+    const packageChanged = lastHourlyPackageRef.current !== hourlyPackage;
+    
+    // Update refs
     selectedCabIdRef.current = selectedCabId;
     lastHourlyPackageRef.current = hourlyPackage;
     currentFareRef.current = totalPrice;
     
-    // Reset retry count when cab changes
-    if (!doVehicleIdsMatch(selectedCabId, selectedCabIdRef.current)) {
+    // If the cab or package changed, cancel any pending requests and reset state
+    if (cabChanged || packageChanged) {
+      console.log(`BookingSummaryHelper: Cab or package changed, resetting state`);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
       setRetryCount(0);
+      lastFetchResultRef.current = {};
+      pendingFetchRef.current = false;
+      
+      // Set a slight delay before allowing a new fetch
+      setLastFetchAttempt(Date.now() - 1800); // Almost ready to fetch again
     }
   }, [selectedCabId, hourlyPackage, totalPrice]);
 
@@ -64,28 +83,50 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       return;
     }
     
+    // Check if there's already a fetch in progress
+    if (pendingFetchRef.current) {
+      console.log(`BookingSummaryHelper: Fetch already in progress, will retry later`);
+      return;
+    }
+    
+    pendingFetchRef.current = true;
     setLastFetchAttempt(currentTime);
+    
+    // Cancel any existing requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create a new abort controller for this request
+    abortControllerRef.current = new AbortController();
     
     try {
       const normalizedCabId = normalizeVehicleId(selectedCabId);
-      console.log(`BookingSummaryHelper: Fetching local fares for vehicle ${normalizedCabId}, package: ${hourlyPackage}`);
+      console.log(`BookingSummaryHelper: Fetching local fares for vehicle ${normalizedCabId}, package: ${hourlyPackage}, timestamp: ${currentTime}`);
       
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
       console.log(`BookingSummaryHelper: Fetching price from API: ${apiUrl}`);
       
       const response = await axios.get(apiUrl, {
-        headers: forceRefreshHeaders,
-        timeout: 8000
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Request-ID': `fare-${normalizedCabId}-${currentTime}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        timeout: 8000,
+        signal: abortControllerRef.current.signal
       });
       
-      // Important: Verify the selectedCabId hasn't changed during the API call
+      // CRITICAL: Verify the selectedCabId hasn't changed during the API call
       if (!doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId) || lastHourlyPackageRef.current !== hourlyPackage) {
         console.log('BookingSummaryHelper: Cab or package changed during API call, discarding result');
+        pendingFetchRef.current = false;
         return 0;
       }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
+        console.log(`BookingSummaryHelper: Retrieved fare data for ${normalizedCabId}:`, fareData);
         
         // Extract the correct price for the selected package
         let price = 0;
@@ -98,7 +139,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         }
         
         if (price > 0) {
-          console.log(`BookingSummaryHelper: Retrieved fare directly from database API: ₹${price}`);
+          console.log(`BookingSummaryHelper: Retrieved fare directly from database API: ₹${price} for ${normalizedCabId}`);
           lastFetchResultRef.current = {
             cabId: normalizedCabId,
             fare: price,
@@ -116,25 +157,35 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
                 fare: price,
                 source: 'direct-api-helper',
                 timestamp: currentTime,
-                selectedCabId: selectedCabId // Include the original selected cab ID for verification
+                selectedCabId: selectedCabId, // Include the original selected cab ID for verification
+                vehicleName: response.data.fares[0].vehicle_name // Include vehicle name for logging
               }
             }));
             
+            pendingFetchRef.current = false;
             return price;
           } else {
             console.log('BookingSummaryHelper: Cab or package changed after API call, discarding result');
+            pendingFetchRef.current = false;
             return 0;
           }
         } else {
           console.warn(`BookingSummaryHelper: No valid price found for ${normalizedCabId} with package ${hourlyPackage}`);
+          pendingFetchRef.current = false;
           return 0;
         }
       } else {
         console.warn(`BookingSummaryHelper: No fare data returned for ${normalizedCabId}`);
+        pendingFetchRef.current = false;
         return 0;
       }
     } catch (error) {
-      console.error('BookingSummaryHelper: Error fetching fare from direct API:', error);
+      if (axios.isCancel(error)) {
+        console.log('BookingSummaryHelper: Request was cancelled');
+      } else {
+        console.error('BookingSummaryHelper: Error fetching fare from direct API:', error);
+      }
+      pendingFetchRef.current = false;
       return 0;
     }
   };
@@ -143,7 +194,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   useEffect(() => {
     const delay = setTimeout(() => {
       fetchCorrectFareForSelectedCab();
-    }, 200); // Small delay to avoid race conditions
+    }, 500); // Small delay to avoid race conditions
     
     return () => clearTimeout(delay);
   }, [selectedCabId, hourlyPackage, tripType]);
@@ -159,6 +210,9 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         // Only process if this event is relevant to our current state and matches the current cab
         if (doVehicleIdsMatch(selectedCabId, cabType) && eventTripType === 'local' && doVehicleIdsMatch(cabType, selectedCabIdRef.current)) {
           console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
+          
+          // Reset fetch state
+          pendingFetchRef.current = false;
           
           // Add a small delay to allow other state changes to complete
           setTimeout(() => {
@@ -183,7 +237,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       const retryInterval = setInterval(() => {
         // Only increment retry count if the selectedCabId hasn't changed
         if (doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId)) {
-          setRetryCount(prev => prev + 1);
+          setRetryCount(prev => Math.min(prev + 1, 5)); // Cap retries at 5
         } else {
           // Reset retry count for new cab ID
           setRetryCount(0);
@@ -197,6 +251,8 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   // Execute fetch on retry counter change
   useEffect(() => {
     if (retryCount > 0 && doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId)) {
+      console.log(`BookingSummaryHelper: Executing retry attempt ${retryCount} for ${selectedCabId}`);
+      pendingFetchRef.current = false; // Reset to allow a new fetch
       fetchCorrectFareForSelectedCab();
     }
   }, [retryCount]);

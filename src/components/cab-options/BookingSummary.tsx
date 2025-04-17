@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { formatPrice } from '@/lib';
 import { BookingSummaryHelper } from './BookingSummaryHelper';
 import { toast } from 'sonner';
@@ -45,7 +45,14 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const selectedCabIdRef = useRef<string | null>(selectedCab?.id || null);
   const hourlyPackageRef = useRef(hourlyPackage);
   const fareUpdateInProgressRef = useRef(false);
-  const debugInfoRef = useRef<{lastEvent?: string, lastFare?: number, lastSource?: string}>({});
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const debugInfoRef = useRef<{
+    lastEvent?: string, 
+    lastFare?: number, 
+    lastSource?: string,
+    lastNormalizedId?: string,
+    lastSelectedId?: string
+  }>({});
 
   // Generate a formatted date for display
   const formatDisplayDate = (date: Date) => {
@@ -63,10 +70,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Normalize vehicle ID consistently across the application
+  // Normalize vehicle ID consistently across the application with stricter rules
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
+    // Convert to lowercase, remove any spaces, and replace any special characters
+    return id.toLowerCase().replace(/[\s.,-]+/g, '_').replace(/__+/g, '_');
   };
 
   // Verify if two vehicle IDs match, using strict normalization
@@ -77,22 +85,43 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
   // Update refs when props change
   useEffect(() => {
+    // Check if cab has changed
+    const cabChanged = selectedCab?.id !== selectedCabIdRef.current;
+    
+    if (cabChanged) {
+      console.log(`BookingSummary: Selected cab changed from ${selectedCabIdRef.current} to ${selectedCab?.id}`);
+      
+      // Cancel any pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      // Reset all state
+      setPackageFare(0);
+      setTotalAmount(0);
+      setDriverAllowance(0);
+      setNightCharges(0);
+      setExtraDistanceFare(0);
+      setLastSelectedCabId(selectedCab?.id || "");
+      fareUpdateInProgressRef.current = false;
+      
+      // Reset debug info
+      debugInfoRef.current = {
+        lastNormalizedId: selectedCab?.id ? normalizeVehicleId(selectedCab.id) : '',
+        lastSelectedId: selectedCab?.id || ''
+      };
+    }
+    
+    // Update all references
     selectedCabRef.current = selectedCab;
     selectedCabIdRef.current = selectedCab?.id || null;
     hourlyPackageRef.current = hourlyPackage;
     
-    // Reset states when cab changes
-    if (selectedCab?.id !== lastSelectedCabId) {
-      console.log(`BookingSummary: Selected cab changed from ${lastSelectedCabId} to ${selectedCab?.id} - resetting fare states`);
-      setLastSelectedCabId(selectedCab?.id || "");
-      setPackageFare(0);
-      setTotalAmount(0);
-      debugInfoRef.current = {};
-    }
-  }, [selectedCab, hourlyPackage, lastSelectedCabId]);
+  }, [selectedCab, hourlyPackage]);
 
-  // Direct fare fetch from API for consistency
-  const fetchDirectFare = async (vehicleId: string, packageId: string) => {
+  // Direct fare fetch from API for consistency - core function to get correct fare
+  const fetchDirectFare = useCallback(async (vehicleId: string, packageId: string) => {
     if (!vehicleId || !packageId) return 0;
     
     // Set flag to prevent concurrent fetches
@@ -106,6 +135,14 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     console.log(`BookingSummary: Fetching local fares for ${normalizedVehicleId} with package: ${packageId}, timestamp: ${Date.now()}`);
     setIsFetchingFare(true);
     
+    // Cancel any existing requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create a new abort controller
+    abortControllerRef.current = new AbortController();
+    
     try {
       // Normalize vehicle ID for API request
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`);
@@ -113,13 +150,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       console.log(`BookingSummary: Fetching price from API: ${apiUrl}`);
       
       const response = await axios.get(apiUrl, {
-        headers: forceRefreshHeaders,
-        timeout: 8000
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Request-ID': `fare-${normalizedVehicleId}-${Date.now()}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        timeout: 8000,
+        signal: abortControllerRef.current.signal
       });
       
       // Critical: verify the selected cab hasn't changed during the API call
       if (!selectedCabRef.current || !doVehicleIdsMatch(selectedCabRef.current.id, vehicleId)) {
         console.log(`BookingSummary: Selected cab changed during API call (from ${vehicleId} to ${selectedCabRef.current?.id || 'none'}), discarding results`);
+        setIsFetchingFare(false);
+        fareUpdateInProgressRef.current = false;
         return 0;
       }
       
@@ -143,7 +187,8 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
             driverAllowance: 0,
             nightCharges: 0,
             extraDistance: 0,
-            extraDistanceFares: 0
+            extraDistanceFares: 0,
+            vehicleName: fareData.vehicle_name
           });
           
           // One final check that the cab and package haven't changed
@@ -151,8 +196,25 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
             debugInfoRef.current = {
               lastEvent: 'direct-api-fetch',
               lastFare: price,
-              lastSource: 'direct-api-fetch'
+              lastSource: 'direct-api-fetch',
+              lastNormalizedId: normalizedVehicleId,
+              lastSelectedId: vehicleId
             };
+            
+            // Broadcast the fare to ensure all components are in sync
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+              detail: {
+                cabId: normalizedVehicleId,
+                originalCabId: vehicleId,
+                tripType: 'local',
+                packageId: packageId,
+                fare: price,
+                source: 'direct-api-booking-summary',
+                timestamp: Date.now(),
+                vehicleName: fareData.vehicle_name
+              }
+            }));
+            
             return price;
           } else {
             console.log(`BookingSummary: Cab or package changed after API call completed, discarding results`);
@@ -168,13 +230,17 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       return 0;
       
     } catch (error) {
-      console.error('BookingSummary: Error fetching fare directly:', error);
+      if (axios.isCancel(error)) {
+        console.log('BookingSummary: Request was cancelled');
+      } else {
+        console.error('BookingSummary: Error fetching fare directly:', error);
+      }
       return 0;
     } finally {
       setIsFetchingFare(false);
       fareUpdateInProgressRef.current = false;
     }
-  };
+  }, []);
 
   // Calculate initial fare based on selected cab
   useEffect(() => {
@@ -211,14 +277,16 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
               packageId: hourlyPackage,
               timestamp: Date.now(),
               source: 'direct-api-booking-summary',
-              selectedCabId: selectedCab.id // Original ID for verification
+              originalCabId: selectedCab.id // Original ID for verification
             }
           }));
           
           debugInfoRef.current = {
             lastEvent: 'direct-calculation',
             lastFare: directFare,
-            lastSource: 'direct-api-booking-summary'
+            lastSource: 'direct-api-booking-summary',
+            lastNormalizedId: normalizedCabId,
+            lastSelectedId: selectedCab.id
           };
         } else {
           console.warn(`BookingSummary: Failed to get fare for ${selectedCab.id} from API`);
@@ -228,7 +296,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     };
 
     calculateFare();
-  }, [selectedCab, tripType, hourlyPackage]);
+  }, [selectedCab, tripType, hourlyPackage, fetchDirectFare]);
 
   // Force refresh the fare when cab selection or package changes
   useEffect(() => {
@@ -253,7 +321,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
             debugInfoRef.current = {
               lastEvent: 'refresh-when-changed',
               lastFare: directFare,
-              lastSource: 'package-changed'
+              lastSource: 'package-changed',
+              lastNormalizedId: normalizeVehicleId(selectedCab.id),
+              lastSelectedId: selectedCab.id
             };
           }
         } else {
@@ -265,7 +335,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       
       return () => clearTimeout(fetchTimeout);
     }
-  }, [selectedCab?.id, hourlyPackage]);
+  }, [selectedCab?.id, hourlyPackage, fetchDirectFare]);
 
   // Listen for fare updates from other components, verifying cab ID match
   useEffect(() => {
@@ -280,7 +350,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Critical: Only process events for the currently selected cab with strict ID verification
       const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
       const eventCabId = normalizeVehicleId(eventData.cabId);
-      const originalSelectedCabId = eventData.selectedCabId ? normalizeVehicleId(eventData.selectedCabId) : '';
+      const originalSelectedCabId = eventData.originalCabId ? normalizeVehicleId(eventData.originalCabId) : '';
       
       // Double verification: check both normalized IDs and any provided original IDs
       const isForCurrentCab = normalizedSelectedCabId === eventCabId || 
@@ -288,6 +358,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       
       if (isForCurrentCab) {
         console.log(`BookingSummary: Received fare update matching current cab (${normalizedSelectedCabId}): ${eventData.fare} from ${eventData.source || 'unknown'}`);
+        
+        // Additional verification - log vehicle name if available
+        if (eventData.vehicleName) {
+          console.log(`BookingSummary: Event contains vehicle name: ${eventData.vehicleName}`);
+        }
         
         if (eventData.fare > 0) {
           setPackageFare(eventData.fare);
@@ -297,7 +372,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           debugInfoRef.current = {
             lastEvent: 'event-update',
             lastFare: eventData.fare,
-            lastSource: eventData.source || 'unknown'
+            lastSource: eventData.source || 'unknown',
+            lastNormalizedId: eventCabId,
+            lastSelectedId: selectedCab.id
           };
         }
       } else {
@@ -407,4 +484,3 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     </div>
   );
 };
-
