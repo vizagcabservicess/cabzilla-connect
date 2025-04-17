@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -437,7 +436,6 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   }, [cabTypes, distance, tripType, hourlyPackage, selectedCab, tripMode, fareUpdateTriggered]);
 
-  // Listen for fare updates from other components
   useEffect(() => {
     const handleFareCalculated = (event: CustomEvent) => {
       if (event.detail && event.detail.cabId && event.detail.fare > 0) {
@@ -642,9 +640,16 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
         </Alert>
         <CabList
           cabTypes={cabTypes}
-          selectedCabId={selectedCab?.id || null}
-          cabFares={{}}
-          isCalculatingFares={isCalculatingFares}
+          selectedCabId={selectedCab?.id || ""}
+          onSelectCab={onSelectCab}
+          distance={distance}
+          tripType={tripType}
+          tripMode={tripMode}
+          hourlyPackage={hourlyPackage}
+          pickupDate={pickupDate}
+          returnDate={returnDate}
+          isCalculating={isCalculatingFares}
+          cabFares={cabFares}
           handleSelectCab={handleCabSelect}
           getFareDetails={getFareDetails}
         />
@@ -655,9 +660,16 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   return (
     <CabList
       cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id || null}
+      selectedCabId={selectedCab?.id || ""}
+      onSelectCab={onSelectCab}
+      distance={distance}
+      tripType={tripType}
+      tripMode={tripMode}
+      hourlyPackage={hourlyPackage}
+      pickupDate={pickupDate}
+      returnDate={returnDate}
+      isCalculating={isCalculatingFares}
       cabFares={cabFares}
-      isCalculatingFares={isCalculatingFares}
       cabErrors={fareErrors}
       handleSelectCab={handleCabSelect}
       getFareDetails={getFareDetails}

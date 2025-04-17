@@ -18,6 +18,11 @@ interface CabListProps {
   pickupDate?: Date;
   returnDate?: Date;
   isCalculating?: boolean;
+  // Add the missing props that CabOptions is trying to pass
+  cabFares?: Record<string, number>;
+  cabErrors?: Record<string, string>;
+  getFareDetails?: (cab: CabType) => string;
+  handleSelectCab?: (cab: CabType) => void;
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -30,12 +35,14 @@ export const CabList: React.FC<CabListProps> = ({
   hourlyPackage,
   pickupDate,
   returnDate,
-  isCalculating = false
+  isCalculating = false,
+  cabFares = {},
+  cabErrors = {},
+  getFareDetails,
+  handleSelectCab
 }) => {
-  const [cabPrices, setCabPrices] = useState<Record<string, number>>({});
-  const [isLoadingPrices, setIsLoadingPrices] = useState<boolean>(false);
-  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [loadingCabIds, setLoadingCabIds] = useState<string[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Fetch local package fares directly from the API
   const fetchLocalFare = async (vehicleId: string): Promise<number> => {
@@ -86,88 +93,6 @@ export const CabList: React.FC<CabListProps> = ({
     }
   };
 
-  // Calculate prices for all cabs
-  const calculatePrices = async () => {
-    if (!tripType || (tripType === 'local' && !hourlyPackage)) return;
-    
-    setIsLoadingPrices(true);
-    const prices: Record<string, number> = {};
-    
-    try {
-      // For local packages, fetch prices directly from the API
-      if (tripType === 'local' && hourlyPackage) {
-        // Fetch fares for all cabs in parallel
-        const fetchPromises = cabTypes.map(async (cab) => {
-          const fare = await fetchLocalFare(cab.id);
-          return { cabId: cab.id, fare };
-        });
-        
-        // Wait for all fetches to complete
-        const results = await Promise.all(fetchPromises);
-        
-        // Process results
-        for (const { cabId, fare } of results) {
-          if (fare > 0) {
-            prices[cabId] = fare;
-            
-            // Update the cab type price property directly
-            const cabIndex = cabTypes.findIndex(cab => cab.id === cabId);
-            if (cabIndex >= 0) {
-              cabTypes[cabIndex].price = fare;
-            }
-            
-            // Dispatch a fare update event
-            window.dispatchEvent(new CustomEvent('fare-calculated', {
-              detail: {
-                cabId,
-                tripType,
-                calculated: true,
-                fare,
-                timestamp: Date.now()
-              }
-            }));
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error calculating prices:', error);
-      toast.error('Error calculating prices. Please try again.');
-    } finally {
-      setCabPrices(prices);
-      setIsLoadingPrices(false);
-    }
-  };
-
-  // Calculate prices on initial render and when relevant props change
-  useEffect(() => {
-    calculatePrices();
-  }, [tripType, hourlyPackage, distance, refreshTrigger]);
-
-  // Handle cab selection and broadcast the event
-  const handleSelectCab = (cab: CabType) => {
-    onSelectCab(cab);
-    
-    // Get the current fare for the selected cab
-    const currentFare = cabPrices[cab.id] || cab.price;
-    
-    // Store the selected fare in localStorage for persistence
-    if (tripType === 'local' && hourlyPackage && currentFare) {
-      const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
-      localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, currentFare.toString());
-      
-      // Dispatch an event to notify other components about the cab selection
-      window.dispatchEvent(new CustomEvent('cab-selected', {
-        detail: {
-          cabId: normalizedCabId,
-          tripType,
-          packageId: hourlyPackage,
-          fare: currentFare,
-          timestamp: Date.now()
-        }
-      }));
-    }
-  };
-
   // Manually refresh prices
   const handleRefreshPrices = () => {
     toast.info('Refreshing fares from database...');
@@ -180,18 +105,19 @@ export const CabList: React.FC<CabListProps> = ({
       <div className="col-span-full flex justify-end mb-2">
         <button 
           onClick={handleRefreshPrices}
-          disabled={isLoadingPrices}
+          disabled={loadingCabIds.length > 0}
           className="flex items-center text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400"
         >
-          <RefreshCcw className={`w-4 h-4 mr-1 ${isLoadingPrices ? 'animate-spin' : ''}`} />
+          <RefreshCcw className={`w-4 h-4 mr-1 ${loadingCabIds.length > 0 ? 'animate-spin' : ''}`} />
           Refresh Prices
         </button>
       </div>
 
       {cabTypes.map((cab) => {
         const isSelected = cab.id === selectedCabId;
-        const price = cabPrices[cab.id] || cab.price || 0;
+        const price = cabFares[cab.id] || cab.price || 0;
         const isLoading = loadingCabIds.includes(cab.id) || isCalculating;
+        const error = cabErrors?.[cab.id];
         
         return (
           <div 
@@ -210,7 +136,9 @@ export const CabList: React.FC<CabListProps> = ({
               </div>
               
               <h3 className="text-lg font-medium">{cab.name}</h3>
-              <p className="text-sm text-gray-500 mb-2">Local package</p>
+              <p className="text-sm text-gray-500 mb-2">
+                {getFareDetails ? getFareDetails(cab) : tripType === 'local' ? 'Local package' : 'Outstation'}
+              </p>
               
               <div className="grid grid-cols-2 gap-4 mb-3">
                 <div>
@@ -236,6 +164,10 @@ export const CabList: React.FC<CabListProps> = ({
                 )}
               </div>
               
+              {error && (
+                <div className="text-xs text-red-500 mb-2">{error}</div>
+              )}
+              
               <div className="flex justify-between items-center mt-4">
                 {isSelected ? (
                   <button 
@@ -247,7 +179,7 @@ export const CabList: React.FC<CabListProps> = ({
                 ) : (
                   <button 
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded w-full"
-                    onClick={() => handleSelectCab(cab)}
+                    onClick={() => handleSelectCab ? handleSelectCab(cab) : onSelectCab(cab)}
                   >
                     Select
                   </button>
