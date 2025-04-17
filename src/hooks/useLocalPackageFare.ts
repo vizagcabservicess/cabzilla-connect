@@ -1,116 +1,64 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { useState, useCallback } from 'react';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { toast } from 'sonner';
 
-export function useLocalPackageFare(initialCabId?: string, initialPackage: string = '8hrs-80km') {
-  const [fare, setFare] = useState<number>(0);
-  const [isFetching, setIsFetching] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+// Type for the hook return
+interface LocalPackageFareResult {
+  fare: number;
+  isFetching: boolean;
+  error: string | null;
+  hourlyPackage: string;
+  changePackage: (packageId: string) => void;
+  clearFare: () => void;
+  fetchFare: (cabId: string, packageId?: string, forceRefresh?: boolean) => Promise<number>;
+}
+
+export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): LocalPackageFareResult {
   const [hourlyPackage, setHourlyPackage] = useState<string>(initialPackage);
-  
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const cacheRef = useRef<Record<string, {price: number, timestamp: number}>>({});
-  const lastRequestTimeRef = useRef<number>(0);
-  const currentCabIdRef = useRef<string | undefined>(initialCabId);
-  const isMountedRef = useRef<boolean>(true);
-  
-  // Ensure we clean up on unmount
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-  
+  const queryClient = useQueryClient();
+
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
     return id.toLowerCase().replace(/\s+/g, '_');
   };
 
+  // Clear fare function
   const clearFare = useCallback(() => {
-    setFare(0);
-    // Also clear any in-progress requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  }, []);
+    // Invalidate all queries related to fares
+    queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
+  }, [queryClient]);
 
-  const fetchFare = useCallback(async (cabId: string, packageId: string = hourlyPackage, forceRefresh: boolean = false) => {
-    if (!cabId || !packageId || !isMountedRef.current) {
+  // Change package function
+  const changePackage = useCallback((packageId: string) => {
+    setHourlyPackage(packageId);
+    clearFare();
+  }, [clearFare]);
+
+  // Fetch fare function that can be called manually
+  const fetchFare = useCallback(async (
+    cabId: string, 
+    packageId: string = hourlyPackage, 
+    forceRefresh: boolean = false
+  ): Promise<number> => {
+    if (!cabId || !packageId) {
+      console.warn('Missing cabId or packageId in fetchFare call');
       return 0;
     }
-    
-    // If cab has changed, immediately clear fare to prevent displaying stale data
-    if (currentCabIdRef.current !== cabId) {
-      currentCabIdRef.current = cabId;
-      clearFare();
-    }
-    
-    // Throttle requests - no more than one request every 300ms
-    const now = Date.now();
-    if (now - lastRequestTimeRef.current < 300 && !forceRefresh) {
-      console.log('Throttling API request');
-      return 0;
-    }
-    
-    lastRequestTimeRef.current = now;
-    
-    // Cancel any in-flight requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    
-    // Clear localStorage for this cab to prevent stale data
-    try {
-      const localStorageKey = `fare_local_${normalizeVehicleId(cabId)}`;
-      localStorage.removeItem(localStorageKey);
-    } catch (e) {
-      console.warn('Failed to clear localStorage:', e);
-    }
-    
-    // Only check cache if we're not forcing a refresh and the cab ID matches current selection
+
     const normalizedCabId = normalizeVehicleId(cabId);
-    const cacheKey = `${normalizedCabId}_${packageId}`;
-    const cachedData = cacheRef.current[cacheKey];
-    
-    if (!forceRefresh && cachedData && (now - cachedData.timestamp < 2 * 60 * 1000)) {
-      console.log(`Using cached fare for ${normalizedCabId}: ₹${cachedData.price}`);
-      if (isMountedRef.current) {
-        setFare(cachedData.price);
-      }
-      return cachedData.price;
-    }
-    
-    if (isMountedRef.current) {
-      setIsFetching(true);
-      setError(null);
-    }
-    
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
+    console.log(`Manually fetching local package fare for ${normalizedCabId}, package: ${packageId}`);
     
     try {
-      console.log(`Fetching local package fare for ${normalizedCabId}, package: ${packageId}`);
-      
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
       
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
         timeout: 8000,
-        signal: abortControllerRef.current.signal
       });
-      
-      if (!isMountedRef.current || currentCabIdRef.current !== cabId) {
-        console.log('Component unmounted or cab changed during request, ignoring response');
-        return 0;
-      }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
@@ -128,85 +76,45 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
         if (price > 0) {
           console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}`);
           
-          // Update cache
-          cacheRef.current[cacheKey] = {
-            price,
-            timestamp: now
-          };
-          
-          // Only set the fare if this is still the current cab
-          if (isMountedRef.current && currentCabIdRef.current === cabId) {
-            setFare(price);
-            
-            // Store in localStorage for consistency - with cab ID in the key to prevent conflicts
-            try {
-              const localStorageKey = `fare_local_${normalizedCabId}`;
-              localStorage.setItem(localStorageKey, price.toString());
-            } catch (e) {
-              console.warn('Failed to store in localStorage:', e);
-            }
-          } else {
-            console.log(`Ignoring stale fare response for ${normalizedCabId} as current cab is now ${currentCabIdRef.current}`);
-          }
+          // Update the query cache
+          queryClient.setQueryData(
+            ['localPackageFare', normalizedCabId, packageId],
+            price
+          );
           
           return price;
         } else {
           const errorMsg = `No valid price found for ${cabId} with package ${packageId}`;
           console.warn(errorMsg);
-          if (isMountedRef.current && currentCabIdRef.current === cabId) {
-            setError(errorMsg);
-          }
-          return 0;
+          throw new Error(errorMsg);
         }
       } else {
         const errorMsg = 'No fare data found from API';
         console.warn(errorMsg);
-        if (isMountedRef.current && currentCabIdRef.current === cabId) {
-          setError(errorMsg);
-        }
-        return 0;
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log('Request was cancelled');
-      } else {
-        console.error('Error fetching fare:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch fare';
-        if (isMountedRef.current && currentCabIdRef.current === cabId) {
-          setError(errorMsg);
-          toast.error('Failed to load fare. Please try again.');
-        }
-      }
-      return 0;
-    } finally {
-      // Only update isFetching if this is still the current cab and component is mounted
-      if (isMountedRef.current && currentCabIdRef.current === cabId) {
-        setIsFetching(false);
-      }
+      console.error('Error fetching fare:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to fetch fare';
+      toast.error('Failed to load fare. Please try again.');
+      throw error;
     }
-  }, [hourlyPackage, clearFare]);
+  }, [hourlyPackage, queryClient]);
 
-  const changePackage = useCallback((packageId: string) => {
-    setHourlyPackage(packageId);
-  }, []);
-
-  // Cleanup function to abort any pending requests
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      isMountedRef.current = false;
-    };
-  }, []);
+  // Use React Query to fetch and cache fare data
+  const { data: fare = 0, isFetching, error } = useQuery({
+    queryKey: ['localPackageFare', 'current'],
+    queryFn: async () => 0,
+    enabled: false, // Don't fetch automatically
+  });
 
   return {
     fare,
     isFetching,
-    error,
+    error: error ? (error instanceof Error ? error.message : String(error)) : null,
     hourlyPackage,
-    fetchFare,
     changePackage,
-    clearFare
+    clearFare,
+    fetchFare,
   };
 }

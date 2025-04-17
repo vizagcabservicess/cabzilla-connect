@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { CabOptions } from '@/components/CabOptions';
 import { BookingSummary } from '@/components/cab-options/BookingSummary';
 import { useLocalPackageFare } from '@/hooks/useLocalPackageFare';
 import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface LocalPackagesTemplateProps {
   cabTypes: CabType[];
@@ -13,57 +14,112 @@ interface LocalPackagesTemplateProps {
   distance: number;
 }
 
+type SelectionState = 'initial' | 'selecting' | 'fetching' | 'ready' | 'error';
+
 export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   cabTypes,
   pickupLocation,
   pickupDate,
   distance
 }) => {
-  // State for the selected cab
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
-  
-  // Use our custom hook for fare fetching
+  const [selectionState, setSelectionState] = useState<SelectionState>('initial');
+  const [currentFare, setCurrentFare] = useState<number>(0);
+  const [currentCabId, setCurrentCabId] = useState<string | null>(null);
   const { fare, isFetching, error, hourlyPackage, fetchFare, changePackage, clearFare } = useLocalPackageFare();
+  const queryClient = useQueryClient();
 
-  // Handle selecting a cab
+  useEffect(() => {
+    if (selectedCab && currentCabId !== selectedCab.id) {
+      console.log(`Selection state transition: ${selectionState} -> selecting (cab changed to ${selectedCab.name})`);
+      setSelectionState('selecting');
+      setCurrentFare(0);
+      setCurrentCabId(selectedCab.id);
+      clearFare();
+      setSelectionState('fetching');
+      fetchFare(selectedCab.id, hourlyPackage, true)
+        .then(newFare => {
+          if (currentCabId === selectedCab.id) {
+            console.log(`Selection state transition: fetching -> ready (fare: ${newFare})`);
+            setCurrentFare(newFare);
+            setSelectionState('ready');
+            setSelectedCab(prev => {
+              if (!prev) return null;
+              return { ...prev, price: newFare };
+            });
+          } else {
+            console.log(`Fare response received for ${selectedCab.id} but current cab is now ${currentCabId}, ignoring`);
+          }
+        })
+        .catch(err => {
+          if (currentCabId === selectedCab.id) {
+            console.log(`Selection state transition: fetching -> error`);
+            setSelectionState('error');
+            toast.error(`Could not retrieve price for ${selectedCab.name}`);
+          }
+        });
+    }
+  }, [selectedCab, currentCabId, hourlyPackage, clearFare, fetchFare]);
+
   const handleSelectCab = (cab: CabType) => {
     console.log(`User selected cab: ${cab.name}`);
-    
-    // First, clear the fare to prevent showing stale data
     clearFare();
-    
-    // Update selected cab
+    setCurrentFare(0);
     setSelectedCab(prevCab => {
-      // If selecting the same cab, don't trigger a re-render
-      if (prevCab?.id === cab.id) return prevCab;
+      if (prevCab?.id === cab.id) {
+        setSelectionState('selecting');
+        setTimeout(() => {
+          fetchFare(cab.id, hourlyPackage, true)
+            .then(newFare => {
+              if (currentCabId === cab.id) {
+                setCurrentFare(newFare);
+                setSelectionState('ready');
+              }
+            })
+            .catch(() => {
+              if (currentCabId === cab.id) {
+                setSelectionState('error');
+              }
+            });
+        }, 0);
+        return prevCab;
+      }
       return cab;
     });
   };
 
-  // Handle changing hourly package
   const handlePackageChange = (packageId: string) => {
     console.log(`User changed package to: ${packageId}`);
-    clearFare(); // Clear fare first to prevent stale data
+    clearFare();
+    setCurrentFare(0);
+    setSelectionState('selecting');
     changePackage(packageId);
+    if (selectedCab) {
+      setSelectionState('fetching');
+      fetchFare(selectedCab.id, packageId, true)
+        .then(newFare => {
+          if (currentCabId === selectedCab.id) {
+            setCurrentFare(newFare);
+            setSelectionState('ready');
+            setSelectedCab(prev => {
+              if (!prev) return null;
+              return { ...prev, price: newFare };
+            });
+          }
+        })
+        .catch(() => {
+          if (currentCabId === selectedCab.id) {
+            setSelectionState('error');
+          }
+        });
+    }
   };
 
-  // Fetch fare when selected cab or package changes
   useEffect(() => {
-    if (selectedCab) {
-      console.log(`Selected cab changed to ${selectedCab.name} or package changed to ${hourlyPackage}, fetching fare...`);
-      fetchFare(selectedCab.id, hourlyPackage, true);
-    }
-  }, [selectedCab?.id, hourlyPackage, fetchFare]);
-
-  // Update cab price when fare changes
-  useEffect(() => {
-    if (selectedCab && fare > 0) {
-      setSelectedCab(prevCab => {
-        if (!prevCab) return null;
-        return { ...prevCab, price: fare };
-      });
-    }
-  }, [fare]);
+    return () => {
+      queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
+    };
+  }, [queryClient]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
@@ -77,7 +133,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
           tripMode="one-way"
           hourlyPackage={hourlyPackage}
           pickupDate={pickupDate}
-          isCalculatingFares={isFetching}
+          isCalculatingFares={selectionState === 'fetching'}
           onPackageChange={handlePackageChange}
         />
       </div>
@@ -91,12 +147,12 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
             tripType="local"
             distance={distance}
             hourlyPackage={hourlyPackage}
-            isCalculatingFares={isFetching}
-            fare={fare}
+            isCalculatingFares={selectionState === 'fetching' || selectionState === 'selecting'}
+            fare={currentFare}
           />
         )}
         
-        {error && (
+        {error && selectionState === 'error' && (
           <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">
             {error}
           </div>
