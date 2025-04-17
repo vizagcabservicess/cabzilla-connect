@@ -100,13 +100,8 @@ interface PackagePriceCache {
   timestamp: number;
 }
 
-// Create a window-level cache for package prices
-// Fix: Use a single consistent declaration for the Window interface extension
-declare global {
-  interface Window {
-    localPackagePriceCache?: Record<string, PackagePriceCache>;
-  }
-}
+// Fix: Use a consistent interface extension for Window
+// We need to update types/global.d.ts instead of declaring here
 
 // Initialize the cache if it doesn't exist
 if (typeof window !== 'undefined' && !window.localPackagePriceCache) {
