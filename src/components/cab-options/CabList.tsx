@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib';
 import { RefreshCcw } from 'lucide-react';
@@ -43,6 +43,14 @@ export const CabList: React.FC<CabListProps> = ({
 }) => {
   const [loadingCabIds, setLoadingCabIds] = useState<string[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const selectedCabIdRef = useRef<string>(selectedCabId);
+  const hourlyPackageRef = useRef<string | undefined>(hourlyPackage);
+
+  // Update refs when props change
+  useEffect(() => {
+    selectedCabIdRef.current = selectedCabId;
+    hourlyPackageRef.current = hourlyPackage;
+  }, [selectedCabId, hourlyPackage]);
 
   // Fetch local package fares directly from the API
   const fetchLocalFare = async (vehicleId: string): Promise<number> => {
@@ -85,7 +93,8 @@ export const CabList: React.FC<CabListProps> = ({
               fare: price,
               calculated: true,
               source: 'direct-api-cablist',
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              selectedCabId: vehicleId // Include the original cab ID for verification
             }
           }));
           
@@ -130,7 +139,8 @@ export const CabList: React.FC<CabListProps> = ({
               packageId: hourlyPackage,
               fare: fare,
               source: 'refresh-button',
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              selectedCabId: selectedCabId
             }
           }));
         }

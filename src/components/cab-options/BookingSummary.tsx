@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { formatPrice } from '@/lib';
 import { BookingSummaryHelper } from './BookingSummaryHelper';
 import { toast } from 'sonner';
@@ -39,6 +39,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [isFetchingFare, setIsFetchingFare] = useState<boolean>(false);
   const [lastSelectedCabId, setLastSelectedCabId] = useState<string>("");
   const [lastUpdate, setLastUpdate] = useState<number>(0);
+  
+  // References to track current state in callbacks and prevent stale closures
+  const selectedCabRef = useRef(selectedCab);
+  const hourlyPackageRef = useRef(hourlyPackage);
+  const fareUpdateInProgressRef = useRef(false);
 
   // Generate a formatted date for display
   const formatDisplayDate = (date: Date) => {
@@ -56,10 +61,23 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Update refs when props change
+  useEffect(() => {
+    selectedCabRef.current = selectedCab;
+    hourlyPackageRef.current = hourlyPackage;
+  }, [selectedCab, hourlyPackage]);
+
   // Direct fare fetch from API for consistency
   const fetchDirectFare = async (vehicleId: string, packageId: string) => {
     if (!vehicleId || !packageId) return 0;
     
+    // Set flag to prevent concurrent fetches
+    if (fareUpdateInProgressRef.current) {
+      console.log(`BookingSummary: Fare update already in progress, skipping fetch for ${vehicleId}`);
+      return 0;
+    }
+    
+    fareUpdateInProgressRef.current = true;
     console.log(`BookingSummary: Fetching local fares for ${vehicleId} with package: ${packageId}, timestamp: ${Date.now()}`);
     setIsFetchingFare(true);
     
@@ -75,22 +93,28 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
         timeout: 8000
       });
       
+      // Critical: verify the selected cab hasn't changed during the API call
+      if (!selectedCabRef.current || selectedCabRef.current.id !== vehicleId) {
+        console.log(`BookingSummary: Selected cab changed during API call (from ${vehicleId} to ${selectedCabRef.current?.id || 'none'}), discarding results`);
+        return 0;
+      }
+      
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
-        console.log(`BookingSummary: Retrieved local fares from service:`, fareData);
+        console.log(`BookingSummary: Retrieved local fares from service for ${normalizedVehicleId}:`, fareData);
         
         // Extract the right price for the selected package
         let price = 0;
-        if (packageId.includes('4hrs-40km') && fareData.price4hrs40km) {
-          price = Number(fareData.price4hrs40km);
-        } else if (packageId.includes('8hrs-80km') && fareData.price8hrs80km) {
-          price = Number(fareData.price8hrs80km);
-        } else if (packageId.includes('10hrs-100km') && fareData.price10hrs100km) {
-          price = Number(fareData.price10hrs100km);
+        if (packageId.includes('4hrs-40km')) {
+          price = Number(fareData.price4hrs40km || 0);
+        } else if (packageId.includes('8hrs-80km')) {
+          price = Number(fareData.price8hrs80km || 0);
+        } else if (packageId.includes('10hrs-100km')) {
+          price = Number(fareData.price10hrs100km || 0);
         }
         
         if (price > 0) {
-          console.log(`BookingSummary: Calculated fare details:`, {
+          console.log(`BookingSummary: Calculated fare details for ${normalizedVehicleId}:`, {
             baseFare: price,
             driverAllowance: 0,
             nightCharges: 0,
@@ -98,7 +122,13 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
             extraDistanceFares: 0
           });
           
-          return price;
+          // One final check that the cab and package haven't changed
+          if (selectedCabRef.current?.id === vehicleId && hourlyPackageRef.current === packageId) {
+            return price;
+          } else {
+            console.log(`BookingSummary: Cab or package changed after API call completed, discarding results`);
+            return 0;
+          }
         } else {
           console.warn(`No valid price found for ${vehicleId} with package ${packageId}`);
           return 0;
@@ -113,6 +143,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       return 0;
     } finally {
       setIsFetchingFare(false);
+      fareUpdateInProgressRef.current = false;
     }
   };
 
@@ -121,16 +152,18 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     const calculateFare = async () => {
       if (!selectedCab) return;
 
-      // Only recalculate if cab ID changed to prevent unnecessary API calls
-      if (selectedCab.id === lastSelectedCabId && packageFare > 0) {
-        console.log(`BookingSummary: Using existing fare for ${selectedCab.id}: ${packageFare}`);
-        return;
-      }
-      
       setLastSelectedCabId(selectedCab.id);
       
       if (tripType === 'local' && hourlyPackage) {
+        setIsFetchingFare(true);
         const directFare = await fetchDirectFare(selectedCab.id, hourlyPackage);
+        
+        // Verify again that the selected cab hasn't changed during the API call
+        if (selectedCabRef.current?.id !== selectedCab.id) {
+          console.log(`BookingSummary: Selected cab changed after API call completed, not updating UI`);
+          setIsFetchingFare(false);
+          return;
+        }
         
         if (directFare > 0) {
           setPackageFare(directFare);
@@ -138,7 +171,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           setLastUpdate(Date.now());
           console.log(`BookingSummary: Set fare for ${selectedCab.id}: ${directFare} (refreshed from database)`);
           
-          // Dispatch event to notify other components
+          // Dispatch event to notify other components with cab ID for verification
           window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
             detail: {
               cabType: selectedCab.id,
@@ -147,13 +180,14 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
               tripType: 'local',
               packageId: hourlyPackage,
               timestamp: Date.now(),
-              source: 'direct-api-booking-summary'
+              source: 'direct-api-booking-summary',
+              selectedCabId: selectedCab.id
             }
           }));
         } else {
           console.warn(`Failed to get fare for ${selectedCab.id} from API`);
-          // Don't use localStorage fallbacks as per requirements
         }
+        setIsFetchingFare(false);
       }
     };
 
@@ -168,23 +202,69 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       setTotalAmount(0);
       setIsFetchingFare(true);
       
-      // Schedule a fresh API fetch
+      // Schedule a fresh API fetch with delay to avoid race conditions
       const fetchTimeout = setTimeout(async () => {
         const directFare = await fetchDirectFare(selectedCab.id, hourlyPackage);
         
-        if (directFare > 0) {
-          setPackageFare(directFare);
-          setTotalAmount(directFare);
-          setLastUpdate(Date.now());
-          console.log(`BookingSummary: Refreshed fare for ${selectedCab.id}: ${directFare}`);
+        // Verify cab still matches before updating state
+        if (selectedCabRef.current?.id === selectedCab.id && hourlyPackageRef.current === hourlyPackage) {
+          if (directFare > 0) {
+            setPackageFare(directFare);
+            setTotalAmount(directFare);
+            setLastUpdate(Date.now());
+            console.log(`BookingSummary: Refreshed fare for ${selectedCab.id}: ${directFare}`);
+          }
+        } else {
+          console.log(`BookingSummary: Selected cab changed during refresh, discarding update`);
         }
         
         setIsFetchingFare(false);
-      }, 100);
+      }, 300);
       
       return () => clearTimeout(fetchTimeout);
     }
   }, [selectedCab?.id, hourlyPackage]);
+
+  // Listen for fare updates from other components, verifying cab ID match
+  useEffect(() => {
+    const handleFareUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const eventData = customEvent.detail;
+      
+      if (eventData && eventData.cabId && eventData.fare !== undefined) {
+        // Critical: Only process events for the currently selected cab
+        const normalizedSelectedCabId = selectedCab?.id?.toLowerCase().replace(/\s+/g, '_');
+        const eventCabId = eventData.cabId.toLowerCase();
+        const originalSelectedCabId = eventData.selectedCabId?.toLowerCase().replace(/\s+/g, '_');
+        
+        // Check if this event is for our currently selected cab
+        const isForCurrentCab = normalizedSelectedCabId === eventCabId || 
+                               (originalSelectedCabId && normalizedSelectedCabId === originalSelectedCabId);
+        
+        if (selectedCab && isForCurrentCab) {
+          console.log(`BookingSummary: Received fare update matching current cab (${normalizedSelectedCabId}): ${eventData.fare} from ${eventData.source || 'unknown'}`);
+          
+          if (eventData.fare > 0) {
+            setPackageFare(eventData.fare);
+            setTotalAmount(eventData.fare);
+            setLastUpdate(Date.now());
+          }
+        } else {
+          // Log but ignore fare updates for other cabs
+          console.log(`BookingSummary: Ignoring fare update for ${eventCabId} as it doesn't match current cab (${normalizedSelectedCabId})`);
+        }
+      }
+    };
+    
+    // Register listeners for various fare update events
+    window.addEventListener('booking-summary-update', handleFareUpdate as EventListener);
+    window.addEventListener('booking-summary-fare-updated', handleFareUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('booking-summary-update', handleFareUpdate as EventListener);
+      window.removeEventListener('booking-summary-fare-updated', handleFareUpdate as EventListener);
+    };
+  }, [selectedCab]);
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;

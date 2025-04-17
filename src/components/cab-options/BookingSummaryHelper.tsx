@@ -1,7 +1,8 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
+import { toast } from 'sonner';
 
 interface BookingSummaryHelperProps {
   tripType: string;
@@ -22,6 +23,16 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
 }) => {
   const [lastFetchAttempt, setLastFetchAttempt] = useState<number>(0);
   const [retryCount, setRetryCount] = useState(0);
+  const selectedCabIdRef = useRef<string | null>(selectedCabId);
+  const lastHourlyPackageRef = useRef<string | undefined>(hourlyPackage);
+  const currentFareRef = useRef<number>(totalPrice);
+
+  // Immediately update references when props change
+  useEffect(() => {
+    selectedCabIdRef.current = selectedCabId;
+    lastHourlyPackageRef.current = hourlyPackage;
+    currentFareRef.current = totalPrice;
+  }, [selectedCabId, hourlyPackage, totalPrice]);
 
   // Ensures booking summary always has the correct fare
   const fetchCorrectFareForSelectedCab = async () => {
@@ -49,6 +60,12 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         timeout: 8000
       });
       
+      // Important: Verify the selectedCabId hasn't changed during the API call
+      if (selectedCabIdRef.current !== selectedCabId || lastHourlyPackageRef.current !== hourlyPackage) {
+        console.log('BookingSummaryHelper: Cab or package changed during API call, discarding result');
+        return 0;
+      }
+      
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
         
@@ -65,19 +82,26 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         if (price > 0) {
           console.log(`BookingSummaryHelper: Retrieved fare directly from database API: ₹${price}`);
           
-          // Broadcast the update to ensure consistency
-          window.dispatchEvent(new CustomEvent('booking-summary-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: 'local',
-              packageId: hourlyPackage,
-              fare: price,
-              source: 'direct-api-helper',
-              timestamp: currentTime
-            }
-          }));
-          
-          return price;
+          // One more verification before dispatching the event
+          if (selectedCabIdRef.current === selectedCabId && lastHourlyPackageRef.current === hourlyPackage) {
+            // Broadcast the update to ensure consistency
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: price,
+                source: 'direct-api-helper',
+                timestamp: currentTime,
+                selectedCabId: selectedCabId // Include the original selected cab ID for verification
+              }
+            }));
+            
+            return price;
+          } else {
+            console.log('BookingSummaryHelper: Cab or package changed after API call, discarding result');
+            return 0;
+          }
         } else {
           console.warn(`No valid price found for ${normalizedCabId} with package ${hourlyPackage}`);
           return 0;
@@ -94,7 +118,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   
   // Fetch the fare when the component mounts or when cab/package changes
   useEffect(() => {
-    fetchCorrectFareForSelectedCab();
+    const delay = setTimeout(() => {
+      fetchCorrectFareForSelectedCab();
+    }, 200); // Small delay to avoid race conditions
+    
+    return () => clearTimeout(delay);
   }, [selectedCabId, hourlyPackage, tripType]);
   
   // Setup listener for cab selection events
@@ -105,8 +133,8 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       if (customEvent.detail && customEvent.detail.cabType) {
         const { cabType, tripType: eventTripType } = customEvent.detail;
         
-        // Only process if this event is relevant to our current state
-        if (selectedCabId === cabType && eventTripType === 'local') {
+        // Only process if this event is relevant to our current state and matches the current cab
+        if (selectedCabId === cabType && eventTripType === 'local' && cabType === selectedCabIdRef.current) {
           console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
           
           // Add a small delay to allow other state changes to complete
@@ -130,7 +158,13 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
       // Check if we should trigger a retry (every 5 seconds)
       const retryInterval = setInterval(() => {
-        setRetryCount(prev => prev + 1);
+        // Only increment retry count if the selectedCabId hasn't changed
+        if (selectedCabIdRef.current === selectedCabId) {
+          setRetryCount(prev => prev + 1);
+        } else {
+          // Reset retry count for new cab ID
+          setRetryCount(0);
+        }
       }, 5000);
       
       return () => clearInterval(retryInterval);
@@ -139,7 +173,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   
   // Execute fetch on retry counter change
   useEffect(() => {
-    if (retryCount > 0) {
+    if (retryCount > 0 && selectedCabIdRef.current === selectedCabId) {
       fetchCorrectFareForSelectedCab();
     }
   }, [retryCount]);
