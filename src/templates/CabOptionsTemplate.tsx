@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CabType } from '@/types/cab';
 
@@ -12,8 +11,7 @@ interface CabOptionsProps {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
-  // Add the new isCalculatingFares property
-  isCalculatingFares: boolean;
+  isCalculatingFares?: boolean;
   onPackageChange?: (packageId: string) => void;
 }
 
@@ -27,11 +25,9 @@ export const CabOptionsTemplate: React.FC<CabOptionsProps> = ({
   hourlyPackage,
   pickupDate,
   returnDate,
-  // Add isCalculatingFares to destructured props
-  isCalculatingFares,
+  isCalculatingFares = false,
   onPackageChange
 }) => {
-  // Simple handler for cab selection - no events, just prop callback
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
   };
@@ -97,4 +93,3 @@ export const CabOptionsTemplate: React.FC<CabOptionsProps> = ({
 };
 
 export default CabOptionsTemplate;
-
