@@ -42,42 +42,66 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Add loading state to explicitly track when we're transitioning between cabs
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  // Create a ref to store the latest fare to avoid stale closures
-  const latestFareRef = useRef<number>(0);
+  // Create a ref to track if this is the initial mount
+  const isInitialMount = useRef<boolean>(true);
+  
+  // Create a ref to track whether we've received a fare for the current cab
+  const hasFareForCurrentCab = useRef<boolean>(false);
   
   // Reset display fare and set loading state when cab changes
   useEffect(() => {
     if (selectedCab?.id !== cabId) {
       console.log(`BookingSummary: Selected cab changed from ${cabId} to ${selectedCab?.id}, resetting display fare`);
+      
+      // Clear the display fare immediately on cab change
       setDisplayFare(0);
-      setIsLoading(true); // Explicitly enter loading state on cab change
+      
+      // Mark that we're loading
+      setIsLoading(true);
+      
+      // Reset the flag indicating we have a fare for this cab
+      hasFareForCurrentCab.current = false;
+      
+      // Update the stored cab ID
       setCabId(selectedCab?.id || '');
-      latestFareRef.current = 0; // Reset our ref value too
     }
   }, [selectedCab?.id, cabId]);
 
   // Update display fare when fare changes and it matches the current cab
   useEffect(() => {
-    // Store the latest fare value in ref to avoid closure issues
-    if (fare !== undefined) {
-      latestFareRef.current = fare;
+    // Skip on initial mount (we're still loading)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
     
     // Only update display fare if:
     // 1. We have a valid fare
-    // 2. We're showing the correct cab
+    // 2. We have a selected cab
     // 3. The fare isn't zero (which would be our reset state)
-    if (fare && fare > 0 && selectedCab?.id === cabId) {
+    // 4. We're not in a loading/calculating state
+    if (
+      fare && 
+      fare > 0 && 
+      selectedCab?.id === cabId && 
+      !isCalculatingFares
+    ) {
       console.log(`BookingSummary: Setting display fare for ${selectedCab.name} to ${fare}`);
       setDisplayFare(fare);
-      setIsLoading(false); // Clear loading state once we have valid data
+      
+      // Mark that we have received a fare for the current cab
+      hasFareForCurrentCab.current = true;
+      
+      // Clear loading state once we have valid data
+      setIsLoading(false);
     }
-  }, [fare, selectedCab, cabId]);
+  }, [fare, selectedCab, cabId, isCalculatingFares]);
 
   // Clear loading state if calculation completes but we don't have a valid fare
+  // This prevents indefinite loading states
   useEffect(() => {
-    if (!isCalculatingFares && isLoading && latestFareRef.current > 0) {
-      setDisplayFare(latestFareRef.current);
+    if (!isCalculatingFares && isLoading && hasFareForCurrentCab.current) {
+      // If we're no longer calculating and have a fare for this cab, clear loading
       setIsLoading(false);
     }
   }, [isCalculatingFares, isLoading]);
@@ -101,11 +125,14 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   };
 
   const renderLocalPackageDetails = () => {
+    // Check if we should show skeleton loading state
+    const shouldShowSkeleton = isLoading || isCalculatingFares || displayFare === 0;
+    
     return (
       <>
         <div className="flex justify-between items-center py-2 border-b">
           <div>{hourlyPackage?.replace(/-/g, ' ').replace('hrs', 'hrs ').toUpperCase()} Package</div>
-          {isLoading || isCalculatingFares || displayFare === 0 ? (
+          {shouldShowSkeleton ? (
             <Skeleton className="h-6 w-24" />
           ) : (
             <div>{formatPrice(displayFare)}</div>
@@ -115,8 +142,13 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     );
   };
 
-  // Determine when to show skeleton loaders
-  const shouldShowSkeleton = isLoading || isCalculatingFares || displayFare === 0;
+  // Determine when to show skeleton loaders - we're explicitly strict here
+  // to prevent ANY chance of showing stale data
+  const shouldShowSkeleton = 
+    isLoading || 
+    isCalculatingFares || 
+    displayFare === 0 || 
+    !hasFareForCurrentCab.current;
 
   return (
     <div className="bg-white rounded-lg p-5 shadow-sm mb-4">
@@ -178,10 +210,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       <BookingSummaryHelper 
         tripType={tripType} 
         selectedCabId={selectedCab?.id} 
-        totalPrice={displayFare || selectedCab.price || 0}
+        totalPrice={displayFare || 0}
         hourlyPackage={hourlyPackage}
       />
     </div>
   );
 };
-

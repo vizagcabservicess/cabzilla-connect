@@ -18,12 +18,11 @@ interface LocalPackageFareResult {
 
 export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): LocalPackageFareResult {
   const [hourlyPackage, setHourlyPackage] = useState<string>(initialPackage);
-  const [currentFare, setCurrentFare] = useState<number>(0);
   const queryClient = useQueryClient();
-  const requestIdRef = useRef<number>(0);
-  const currentCabIdRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
-
+  const requestIdRef = useRef<number>(0);
+  const lastCabIdRef = useRef<string | null>(null);
+  
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
@@ -33,14 +32,26 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
   // Clear fare function
   const clearFare = useCallback(() => {
     // Invalidate all queries related to fares
-    queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
-    setCurrentFare(0);
+    queryClient.removeQueries({ queryKey: ['localPackageFare'] });
     
     // Abort any in-flight requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    
+    // Reset the last cab ID
+    lastCabIdRef.current = null;
+    
+    // Clear any localStorage cache that might contain stale fares
+    const cacheKeys = Object.keys(localStorage).filter(key => 
+      key.startsWith('localPackageFare_') || 
+      key.startsWith('fare_')
+    );
+    
+    cacheKeys.forEach(key => localStorage.removeItem(key));
+    
+    console.log('Cleared all fare data and aborted pending requests');
   }, [queryClient]);
 
   // Change package function
@@ -60,21 +71,30 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       return 0;
     }
 
-    // Abort any in-flight requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // Check if the cab ID has changed since the last request
+    const isCabChanged = lastCabIdRef.current !== cabId;
+    if (isCabChanged) {
+      console.log(`Cab changed from ${lastCabIdRef.current} to ${cabId}, aborting previous requests`);
+      // Abort any in-flight requests for the previous cab
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // Update the last cab ID
+      lastCabIdRef.current = cabId;
+      
+      // Clear any existing query data for the previous cab
+      queryClient.removeQueries({ queryKey: ['localPackageFare'] });
     }
     
-    // Create a new abort controller
+    // Create a new abort controller for this request
     abortControllerRef.current = new AbortController();
     
-    // Generate a unique request ID
+    // Generate a unique request ID to track this specific request
     const requestId = ++requestIdRef.current;
-    // Store the current cab ID
-    currentCabIdRef.current = cabId;
     
     const normalizedCabId = normalizeVehicleId(cabId);
-    console.log(`Manually fetching local package fare for ${normalizedCabId}, package: ${packageId}`);
+    console.log(`Fetching local package fare for ${normalizedCabId}, package: ${packageId}, requestId: ${requestId}`);
     
     try {
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
@@ -85,8 +105,8 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         signal: abortControllerRef.current.signal
       });
       
-      // If this is not the most recent request, discard the results
-      if (requestId !== requestIdRef.current || currentCabIdRef.current !== cabId) {
+      // If this is not the most recent request for this cab, discard the results
+      if (requestId !== requestIdRef.current || lastCabIdRef.current !== cabId) {
         console.log(`Discarding stale fare response for ${normalizedCabId} (request ${requestId}, current ${requestIdRef.current})`);
         return 0;
       }
@@ -105,30 +125,13 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         }
         
         if (price > 0) {
-          console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}`);
+          console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}, requestId: ${requestId}`);
           
-          // Only update state if this cab ID is still current
-          if (currentCabIdRef.current === cabId) {
-            console.log(`Set fare for ${normalizedCabId}: ${price}`);
-            setCurrentFare(price);
-            
-            // Update the query cache
-            queryClient.setQueryData(
-              ['localPackageFare', normalizedCabId, packageId],
-              price
-            );
-          }
-          
-          // Dispatch a fare update event
-          window.dispatchEvent(new CustomEvent('fare-updated', {
-            detail: {
-              cabId: normalizedCabId,
-              fare: price,
-              packageId: packageId,
-              source: 'useLocalPackageFare.fetchFare',
-              requestId: requestId
-            }
-          }));
+          // Update the query cache with the latest fare data
+          queryClient.setQueryData(
+            ['localPackageFare', normalizedCabId, packageId],
+            price
+          );
           
           return price;
         } else {
@@ -144,7 +147,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     } catch (error) {
       // Don't show error if it was from an aborted request
       if (axios.isCancel(error)) {
-        console.log(`Request for ${normalizedCabId} was cancelled`);
+        console.log(`Request for ${normalizedCabId} was cancelled (requestId: ${requestId})`);
         return 0;
       }
       
@@ -155,11 +158,22 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     }
   }, [hourlyPackage, queryClient]);
 
-  // Use React Query to access cached fare data
-  const { data: fare = 0, isFetching, error } = useQuery({
-    queryKey: ['localPackageFare', 'current'],
-    queryFn: async () => currentFare,
-    enabled: true, // Always enabled to track current fare
+  // Use React Query to fetch and cache fare data
+  const { 
+    data: fare = 0, 
+    isFetching, 
+    error 
+  } = useQuery({
+    queryKey: ['localPackageFare', lastCabIdRef.current, hourlyPackage],
+    queryFn: async () => {
+      // Only fetch if we have a cab ID
+      if (!lastCabIdRef.current) return 0;
+      return fetchFare(lastCabIdRef.current, hourlyPackage, false);
+    },
+    enabled: !!lastCabIdRef.current,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    gcTime: 300000,   // Keep unused data in cache for 5 minutes
+    refetchOnWindowFocus: false
   });
 
   // Cleanup on unmount
@@ -172,7 +186,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
   }, []);
 
   return {
-    fare: currentFare,
+    fare,
     isFetching,
     error: error ? (error instanceof Error ? error.message : String(error)) : null,
     hourlyPackage,
