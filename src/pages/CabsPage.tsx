@@ -8,7 +8,6 @@ import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary"; 
 import { BookingSummaryHelper } from "@/components/cab-options/BookingSummaryHelper";
-import { LocalTripSelector } from "@/components/LocalTripSelector";
 import { 
   Location, 
   vizagLocations, 
@@ -691,11 +690,28 @@ const CabsPage = () => {
                 )}
 
                 {tripType === "local" && (
-                  <LocalTripSelector
-                    selectedPackage={hourlyPackage}
-                    onPackageSelect={handleHourlyPackageChange}
-                    selectedCabId={selectedCab?.id}
-                  />
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">SELECT PACKAGE</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {hourlyPackages.map((pkg) => (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          className={`p-3 border rounded-md text-left ${
+                            hourlyPackage === pkg.id
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }`}
+                          onClick={() => handleHourlyPackageChange(pkg.id)}
+                        >
+                          <div className="font-medium">{pkg.name}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Base price: ₹{pkg.basePrice}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <div className="text-xl font-bold text-gray-900 mt-4 mb-2">

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -11,7 +12,6 @@ import { calculateFare } from '@/lib/fareCalculationService';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { normalizeVehicleId } from '@/config/requestConfig';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -46,9 +46,7 @@ export const BookingSummary = ({
   const [effectiveDistance, setEffectiveDistance] = useState<number>(distance);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
-  const [fare, setFare] = useState<number>(totalPrice);
-  const [totalAmount, setTotalAmount] = useState<number>(totalPrice);
-
+  
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
@@ -99,6 +97,7 @@ export const BookingSummary = ({
         fetchDirectDatabaseFare();
       }, 100);
 
+      // Setup event listeners for fare updates
       const handleFareUpdate = (event: CustomEvent) => {
         if (event.detail && 
             event.detail.cabId && 
@@ -161,36 +160,6 @@ export const BookingSummary = ({
     }
   }, [distance, tripMode, totalPrice]);
 
-  useEffect(() => {
-    const handleCabSelectedWithFare = (event: CustomEvent) => {
-      if (event.detail && event.detail.cabType && event.detail.fare) {
-        console.log(`BookingSummary: Received cab-selected-with-fare event for ${event.detail.cabType}:`, event.detail);
-        
-        // Update the fare using the exact fare from the cab selection
-        setFare(event.detail.fare);
-        setTotalAmount(event.detail.fare);
-        
-        // Store the fare in localStorage for persistence
-        const cacheKey = `booking_summary_fare_${event.detail.cabType}`;
-        localStorage.setItem(cacheKey, event.detail.fare.toString());
-        
-        // Store the current package fare for reference
-        if (event.detail.hourlyPackage) {
-          const packageKey = `selected_fare_${event.detail.cabType}_${event.detail.hourlyPackage}`;
-          localStorage.setItem(packageKey, event.detail.fare.toString());
-        }
-      }
-    };
-    
-    window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare as EventListener);
-    window.addEventListener('booking-summary-update', handleCabSelectedWithFare as EventListener);
-    
-    return () => {
-      window.removeEventListener('cab-selected-with-fare', handleCabSelectedWithFare as EventListener);
-      window.removeEventListener('booking-summary-update', handleCabSelectedWithFare as EventListener);
-    };
-  }, []);
-
   const fetchDirectDatabaseFare = async () => {
     if (!selectedCab) {
       console.log('BookingSummary: No cab selected, skipping API call');
@@ -204,7 +173,7 @@ export const BookingSummary = ({
       return;
     }
     
-    const normalizedCabId = normalizeVehicleId(selectedCab.id);
+    const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
     const hourlyPackage = '8hrs-80km'; // This should come from props in a real implementation
     
     setIsRefreshing(true);
@@ -251,46 +220,7 @@ export const BookingSummary = ({
         }
       }
       
-      const altApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
-      
-      const altResponse = await axios.get(altApiUrl, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 5000
-      });
-      
-      if (altResponse.data && altResponse.data.status === 'success' && altResponse.data.price) {
-        const price = Number(altResponse.data.price);
-        console.log(`BookingSummary: Retrieved fare from alternative API: ₹${price}`);
-        
-        if (price > 0) {
-          setCalculatedFare(price);
-          totalPriceRef.current = price;
-          
-          // Adjust the base fare accordingly
-          setBaseFare(price - driverAllowance);
-          
-          // Dispatch global fare update event
-          window.dispatchEvent(new CustomEvent('global-fare-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: 'local',
-              packageId: hourlyPackage,
-              fare: price,
-              source: 'booking-summary-alt-fetch',
-              timestamp: Date.now()
-            }
-          }));
-          
-          setShowDetailsLoading(false);
-          setIsRefreshing(false);
-          return;
-        }
-      }
-      
+      // If we couldn't get a direct price, fallback to recalculation
       recalculateFareDetails();
       
     } catch (error) {
@@ -428,10 +358,9 @@ export const BookingSummary = ({
         newDriverAllowance = 250;
       } else if (tripType === 'local') {
         try {
-          const normalizedCabId = normalizeVehicleId(selectedCab.id);
+          // Direct database API call for most accurate pricing
+          const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
           const hourlyPackage = '8hrs-80km'; // This should come from props in a real implementation
-          
-          console.log(`BookingSummary: Using ${normalizedCabId} for local fare calculation (NOT using 'sedan')`);
           
           const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
           
@@ -446,7 +375,7 @@ export const BookingSummary = ({
           
           if (response.data && response.data.status === 'success' && response.data.price) {
             const price = Number(response.data.price);
-            console.log(`BookingSummary: Retrieved local fare directly from API: ₹${price} for ${normalizedCabId}`);
+            console.log(`BookingSummary: Retrieved local fare directly from API: ₹${price}`);
             
             newBaseFare = price;
             newDriverAllowance = 0;
@@ -463,49 +392,19 @@ export const BookingSummary = ({
               }
             }));
           } else {
-            const altApiUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${hourlyPackage}`);
+            // Fallback to local fares service
+            const localFares = await getLocalFaresForVehicle(selectedCab.id);
+            console.log('BookingSummary: Retrieved local fares from service:', localFares);
             
-            const altResponse = await axios.get(altApiUrl, {
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              },
-              timeout: 5000
-            });
-            
-            if (altResponse.data && altResponse.data.status === 'success' && altResponse.data.price) {
-              const price = Number(altResponse.data.price);
-              console.log(`BookingSummary: Retrieved local fare from alternative API: ₹${price} for ${normalizedCabId}`);
-              
-              newBaseFare = price;
-              newDriverAllowance = 0;
-              
-              // Dispatch an update event
-              window.dispatchEvent(new CustomEvent('global-fare-update', {
-                detail: {
-                  cabId: normalizedCabId,
-                  tripType: 'local',
-                  packageId: hourlyPackage,
-                  fare: price,
-                  source: 'alternative-api-recalc',
-                  timestamp: Date.now()
-                }
-              }));
+            if (localFares.price8hrs80km > 0) {
+              newBaseFare = localFares.price8hrs80km;
+            } else if (selectedCab.localPackageFares?.price8hrs80km) {
+              newBaseFare = selectedCab.localPackageFares.price8hrs80km;
             } else {
-              const localFares = await getLocalFaresForVehicle(selectedCab.id);
-              console.log(`BookingSummary: Retrieved local fares from service for ${selectedCab.id}:`, localFares);
-              
-              if (localFares.price8hrs80km > 0) {
-                newBaseFare = localFares.price8hrs80km;
-              } else if (selectedCab.localPackageFares?.price8hrs80km) {
-                newBaseFare = selectedCab.localPackageFares.price8hrs80km;
-              } else {
-                if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1400;
-                else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 3000;
-                else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 4000;
-                else newBaseFare = 1500;
-              }
+              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
+              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 1800;
+              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 2200;
+              else newBaseFare = 1500;
             }
           }
           
@@ -513,18 +412,18 @@ export const BookingSummary = ({
         } catch (error) {
           console.error('Error fetching direct local fares:', error);
           
+          // Final fallback to local fares service
           try {
             const localFares = await getLocalFaresForVehicle(selectedCab.id);
-            console.log(`BookingSummary: Fallback fares for ${selectedCab.id}:`, localFares);
             
             if (localFares.price8hrs80km > 0) {
               newBaseFare = localFares.price8hrs80km;
             } else if (selectedCab.localPackageFares?.price8hrs80km) {
               newBaseFare = selectedCab.localPackageFares.price8hrs80km;
             } else {
-              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1400;
-              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 3000;
-              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 4000;
+              if (selectedCab.name.toLowerCase().includes('sedan')) newBaseFare = 1500;
+              else if (selectedCab.name.toLowerCase().includes('ertiga')) newBaseFare = 1800;
+              else if (selectedCab.name.toLowerCase().includes('innova')) newBaseFare = 2200;
               else newBaseFare = 1500;
             }
           } catch (innerError) {
@@ -557,6 +456,7 @@ export const BookingSummary = ({
       
       const newCalculatedFare = newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare;
       
+      // Only update if we got a valid fare calculation or use parent's totalPrice
       const finalFare = (newCalculatedFare > 0) ? newCalculatedFare : 
                        (totalPrice > 0) ? totalPrice : 
                        totalPriceRef.current;
@@ -564,6 +464,7 @@ export const BookingSummary = ({
       setCalculatedFare(finalFare);
       totalPriceRef.current = finalFare;
       
+      // Dispatch a global fare update event
       if (selectedCab && finalFare > 0) {
         const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
         
@@ -580,6 +481,7 @@ export const BookingSummary = ({
         }));
       }
       
+      // If there's a significant difference between calculated fare and parent's totalPrice
       if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
         console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
         
@@ -674,6 +576,7 @@ export const BookingSummary = ({
         setCalculatedFare(customEvent.detail.fare);
         totalPriceRef.current = customEvent.detail.fare;
         
+        // Update base fare and other calculations
         if (tripType === 'local') {
           setBaseFare(customEvent.detail.fare);
           setDriverAllowance(0);
@@ -712,87 +615,6 @@ export const BookingSummary = ({
     
     return () => clearTimeout(initialLoadTimer);
   }, [selectedCab, tripType, totalPrice]);
-
-  const renderPriceBreakdown = () => {
-    console.log('BookingSummary: rendering price breakdown with fare:', fare, 'totalAmount:', totalAmount);
-    
-    return (
-      <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
-        {tripType === 'outstation' && (
-          <>
-            <div className="flex justify-between">
-              <span className="text-gray-700">Base fare (300 km included)</span>
-              <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-            </div>
-            
-            <div className="text-gray-600 text-sm ml-1">
-              {tripMode === 'one-way' ? (
-                <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
-              ) : (
-                <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
-              )}
-            </div>
-            
-            {extraDistance > 0 && extraDistanceFare > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-              </div>
-            )}
-            
-            <div className="flex justify-between">
-              <span className="text-gray-700">Driver allowance</span>
-              <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-            </div>
-            
-            {nightCharges > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">Night charges</span>
-                <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
-              </div>
-            )}
-          </>
-        )}
-        
-        {tripType === 'local' && (
-          <div className="flex justify-between">
-            <span className="text-gray-700">08hrs 80KM Package</span>
-            <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-          </div>
-        )}
-        
-        {(tripType === 'airport' || tripType === 'tour') && (
-          <>
-            <div className="flex justify-between">
-              <span className="text-gray-700">Base fare</span>
-              <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-            </div>
-            
-            {extraDistance > 0 && tripType === 'airport' && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-              </div>
-            )}
-            
-            {tripType === 'airport' && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">Driver allowance</span>
-                <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-              </div>
-            )}
-          </>
-        )}
-        
-        <Separator />
-        
-        <div className="flex justify-between text-lg font-bold pt-2">
-          <span>Total Amount</span>
-          <span>₹{totalAmount.toLocaleString()}</span>
-        </div>
-      </div>
-    );
-  };
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
@@ -859,7 +681,80 @@ export const BookingSummary = ({
         </div>
         
         <div>
-          {renderPriceBreakdown()}
+          <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            {tripType === 'outstation' && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Base fare (300 km included)</span>
+                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                </div>
+                
+                <div className="text-gray-600 text-sm ml-1">
+                  {tripMode === 'one-way' ? (
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
+                  ) : (
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
+                  )}
+                </div>
+                
+                {extraDistance > 0 && extraDistanceFare > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Driver allowance</span>
+                  <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+                </div>
+                
+                {nightCharges > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Night charges</span>
+                    <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
+                  </div>
+                )}
+              </>
+            )}
+            
+            {tripType === 'local' && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">08hrs 80KM Package</span>
+                <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+              </div>
+            )}
+            
+            {(tripType === 'airport' || tripType === 'tour') && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Base fare</span>
+                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                </div>
+                
+                {extraDistance > 0 && tripType === 'airport' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                {tripType === 'airport' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Driver allowance</span>
+                    <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+                  </div>
+                )}
+              </>
+            )}
+            
+            <Separator />
+            
+            <div className="flex justify-between text-lg font-bold pt-2">
+              <span>Total Amount</span>
+              <span>₹{finalTotal.toLocaleString()}</span>
+            </div>
+          </div>
         </div>
       </div>
       

@@ -1,317 +1,615 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CabType } from '@/types/cab';
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, RefreshCw } from "lucide-react";
-import { getApiUrl } from '@/config/api';
-import { normalizePackageId, normalizeVehicleId } from '@/lib/packageData';
-import { toast } from 'sonner';
+import { Loader2 } from "lucide-react";
 import axios from 'axios';
+import { getApiUrl } from '@/config/api';
+import { toast } from 'sonner';
 
 interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
-  onSelectCab: (cab: CabType) => void;
-  distance: number;
-  tripType: string;
-  tripMode?: string;
+  cabFares: Record<string, number>;
+  isCalculatingFares: boolean;
+  cabErrors?: Record<string, string>;
+  handleSelectCab: (cab: CabType) => void;
+  getFareDetails: (cab: CabType) => string;
+  tripType?: string;
   hourlyPackage?: string;
-  pickupDate?: Date;
-  returnDate?: Date | null;
-  cabPrices?: Record<string, number>; 
-  isCalculating?: boolean; 
-  errors?: Record<string, string>;
 }
 
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
-  cabPrices = {}, 
-  isCalculating = false,
-  errors: cabErrors = {},
-  onSelectCab: handleSelectCab,
-  distance,
+  cabFares,
+  isCalculatingFares,
+  cabErrors = {},
+  handleSelectCab,
+  getFareDetails,
   tripType,
-  hourlyPackage,
+  hourlyPackage
 }) => {
-  const [localFares, setLocalFares] = useState<Record<string, number>>(cabPrices);
+  const [localFares, setLocalFares] = useState<Record<string, number>>(cabFares);
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Helper function for formatting the fare details
-  const getFareDetails = (cab: CabType): string => {
-    if (tripType === 'local') {
-      return 'Local package';
-    } else if (tripType === 'airport') {
-      return 'Airport transfer';
-    } else {
-      return tripType === 'round-trip' ? 'Round trip' : 'One way';
-    }
-  };
-  
-  const fetchFareFromAPI = async (vehicleId: string, packageId?: string) => {
+  const fetchFareFromDatabase = useCallback(async (cabId: string, packageId?: string) => {
     if (!tripType || tripType !== 'local' || !packageId) return null;
     
-    // Normalize cab ID and package ID for consistent lookups
-    const normalizedCabId = normalizeVehicleId(vehicleId);
-    const normalizedPackageId = normalizePackageId(packageId);
-    
-    // Check first if we have this fare in localStorage
-    const storageKey = `selected_fare_${normalizedCabId}_${normalizedPackageId}`;
-    const cachedFare = localStorage.getItem(storageKey);
-    
-    if (cachedFare && !isRefreshing) {
-      const price = parseFloat(cachedFare);
-      if (!isNaN(price) && price > 0) {
-        console.log(`Using cached fare for ${normalizedCabId}: ${price}`);
-        return price;
-      }
-    }
-    
     try {
-      // Try several possible API endpoints to maximize chances of success
-      const endpoints = [
-        `${getApiUrl('api/local-package-fares.php')}?vehicle_id=${normalizedCabId}&package_id=${normalizedPackageId}`,
-        `${getApiUrl('api/admin/direct-local-fares.php')}?vehicle_id=${normalizedCabId}`,
-        `/api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${normalizedPackageId}`,
-        `/api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`
-      ];
+      // First try with direct-booking-data.php - MUST match requestConfig.fetchLocalPackageFares order
+      const normalizedCabId = cabId.toLowerCase().replace(/\s+/g, '_');
+      const apiUrl = getApiUrl(`api/user/direct-booking-data.php?check_sync=true&vehicle_id=${normalizedCabId}&package_id=${packageId}`);
       
-      let price = 0;
-      let success = false;
+      console.log(`CabList: Fetching fare from primary API for ${normalizedCabId} - ${packageId}`);
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
       
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying endpoint: ${endpoint}`);
-          const response = await axios.get(endpoint, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache',
-              'X-Force-Refresh': 'true'
-            },
-            timeout: 3000
-          });
+      if (response.data && response.data.status === 'success' && response.data.price) {
+        const price = Number(response.data.price);
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from primary API: ₹${price} for ${normalizedCabId} - ${packageId}`);
           
-          if (response.data) {
-            if (response.data.price && response.data.price > 0) {
-              price = Number(response.data.price);
-              success = true;
-              console.log(`Successfully fetched data from endpoint: ${endpoint}`);
-              break;
-            } else if (response.data.fares && Array.isArray(response.data.fares)) {
-              const matchingFare = response.data.fares.find((f: any) => 
-                (f.vehicleId === normalizedCabId || f.vehicle_id === normalizedCabId)
-              );
-              
-              if (matchingFare) {
-                if (normalizedPackageId.includes('4hrs-40km') && matchingFare.price_4hrs_40km) {
-                  price = Number(matchingFare.price_4hrs_40km);
-                } else if (normalizedPackageId.includes('8hrs-80km') && matchingFare.price_8hrs_80km) {
-                  price = Number(matchingFare.price_8hrs_80km);
-                } else if (normalizedPackageId.includes('10hrs-100km') && matchingFare.price_10hrs_100km) {
-                  price = Number(matchingFare.price_10hrs_100km);
-                }
-                
-                if (price > 0) {
-                  success = true;
-                  console.log(`Successfully fetched fare from endpoint: ${endpoint}`);
-                  break;
-                }
-              }
+          // Broadcast the source of this fare for debugging and consistency tracking
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-booking-data',
+              apiUrl: apiUrl,
+              timestamp: Date.now()
             }
-          }
-        } catch (error) {
-          console.log(`Error with endpoint ${endpoint}:`, error);
-          continue; // Try next endpoint
+          }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+          
+          return price;
         }
-      }
-      
-      if (success && price > 0) {
-        // Save to localStorage for future use
-        localStorage.setItem(storageKey, price.toString());
-        return price;
-      }
-      
-      // If all API attempts fail, use fallback pricing
-      return getFallbackPrice(normalizedCabId, normalizedPackageId);
-    } catch (error) {
-      console.error(`Error fetching fare for ${vehicleId}:`, error);
-      return getFallbackPrice(normalizedCabId, normalizedPackageId);
-    }
-  };
-  
-  // Helper function to provide reliable fallback pricing when APIs fail
-  const getFallbackPrice = (cabId: string, packageId: string) => {
-    // Vehicle-specific pricing table for fallback
-    const fallbackPrices: Record<string, Record<string, number>> = {
-      'sedan': {
-        '4hrs-40km': 1400,
-        '8hrs-80km': 2400,
-        '10hrs-100km': 3000
-      },
-      'ertiga': {
-        '4hrs-40km': 1800,
-        '8hrs-80km': 3000,
-        '10hrs-100km': 3600
-      },
-      'innova_crysta': {
-        '4hrs-40km': 2400,
-        '8hrs-80km': 4000,
-        '10hrs-100km': 4800
-      },
-      'innova_hycross': {
-        '4hrs-40km': 2600,
-        '8hrs-80km': 4200,
-        '10hrs-100km': 5000
-      },
-      'tempo_traveller': {
-        '4hrs-40km': 3000,
-        '8hrs-80km': 5000,
-        '10hrs-100km': 6000
-      },
-      'luxury': {
-        '4hrs-40km': 2800,
-        '8hrs-80km': 4500,
-        '10hrs-100km': 5500
-      },
-      'dzire_cng': {
-        '4hrs-40km': 1400,
-        '8hrs-80km': 2400,
-        '10hrs-100km': 3000
-      },
-      'etios': {
-        '4hrs-40km': 1400,
-        '8hrs-80km': 2400,
-        '10hrs-100km': 3000
-      }
-    };
-    
-    // Find the most specific matching vehicle type
-    let matchingVehicleType = 'sedan'; // Default fallback
-    
-    for (const vehicleType of Object.keys(fallbackPrices)) {
-      if (cabId.includes(vehicleType)) {
-        matchingVehicleType = vehicleType;
-        break;
-      }
-    }
-    
-    // Special case for MPV which is often Hycross
-    if (cabId === 'mpv') {
-      matchingVehicleType = 'innova_hycross';
-    }
-    
-    console.log(`No valid price received from API, using fallback calculation`);
-    const fallbackFare = fallbackPrices[matchingVehicleType][packageId] || 3000;
-    console.log(`Final price for ${cabId}, ${packageId}: ${fallbackFare}`);
-    
-    // Save the fallback fare
-    localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fallbackFare.toString());
-    console.log(`Stored fare in localStorage: fare_local_${cabId}_${packageId} = ${fallbackFare}`);
-    
-    return fallbackFare;
-  };
-  
-  // Initialize fares when component loads or when hourly package changes
-  useEffect(() => {
-    if (tripType === 'local' && hourlyPackage) {
-      console.log(`Hourly package changed to ${hourlyPackage}, updating fares for all cabs`);
-      
-      const normalizedPackageId = normalizePackageId(hourlyPackage);
-      
-      // Update fares for each cab with the new package
-      const updateFares = async () => {
-        for (const cab of cabTypes) {
-          try {
-            const normalizedCabId = normalizeVehicleId(cab.id);
-            const price = await fetchFareFromAPI(cab.id, normalizedPackageId);
-            
-            if (price && price > 0) {
-              console.log(`Set fare for ${normalizedCabId}: ${price} (refreshed from API)`);
-              
-              setLocalFares(prev => ({
-                ...prev,
-                [normalizedCabId]: price
-              }));
-              
-              // Save to localStorage
-              localStorage.setItem(`selected_fare_${normalizedCabId}_${normalizedPackageId}`, price.toString());
-            }
-          } catch (error) {
-            console.error(`Error updating fare for ${cab.id}:`, error);
-          }
+      } else if (response.data && response.data.data) {
+        // Handle alternative response format
+        const data = response.data.data;
+        let price = 0;
+        
+        if (packageId.includes('4hrs-40km') && data.price4hrs40km) {
+          price = Number(data.price4hrs40km);
+        } else if (packageId.includes('8hrs-80km') && data.price8hrs80km) {
+          price = Number(data.price8hrs80km);
+        } else if (packageId.includes('10hrs-100km') && data.price10hrs100km) {
+          price = Number(data.price10hrs100km);
         }
         
-        setIsRefreshing(false);
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from alternate format: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-booking-data-alternate',
+              apiUrl: apiUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+          
+          return price;
+        }
+      }
+      
+      // If primary API fails, try local-package-fares.php
+      const localFaresUrl = getApiUrl(`api/local-package-fares.php?vehicle_id=${normalizedCabId}&package_id=${packageId}`);
+      
+      console.log(`CabList: Trying local-package-fares API for ${normalizedCabId} - ${packageId}`);
+      const localFaresResponse = await axios.get(localFaresUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (localFaresResponse.data && localFaresResponse.data.status === 'success' && localFaresResponse.data.price) {
+        const price = Number(localFaresResponse.data.price);
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from local-package-fares API: ₹${price} for ${normalizedCabId} - ${packageId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'local-package-fares',
+              apiUrl: localFaresUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+          
+          return price;
+        }
+      }
+      
+      // If that fails too, try fallback API
+      const fallbackApiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+      
+      console.log(`CabList: Trying fallback API for ${normalizedCabId}`);
+      const fallbackResponse = await axios.get(fallbackApiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 5000
+      });
+      
+      if (fallbackResponse.data && fallbackResponse.data.fares && fallbackResponse.data.fares[normalizedCabId]) {
+        const fareData = fallbackResponse.data.fares[normalizedCabId];
+        
+        let price = 0;
+        if (packageId.includes('4hrs-40km')) {
+          price = Number(fareData.price4hrs40km || 0);
+        } else if (packageId.includes('8hrs-80km')) {
+          price = Number(fareData.price8hrs80km || 0);
+        } else if (packageId.includes('10hrs-100km')) {
+          price = Number(fareData.price10hrs100km || 0);
+        }
+        
+        if (price > 0) {
+          console.log(`CabList: Retrieved fare from fallback API: ₹${price} for ${normalizedCabId}`);
+          
+          // Broadcast the source of this fare
+          window.dispatchEvent(new CustomEvent('fare-source-update', {
+            detail: {
+              cabId: normalizedCabId,
+              packageId: packageId,
+              fare: price,
+              source: 'direct-local-fares',
+              apiUrl: fallbackApiUrl,
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Save the selected fare in localStorage for consistency
+          localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+          localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+          
+          return price;
+        }
+      }
+      
+      // If all API attempts fail, use dynamic calculation
+      // Base prices for different vehicle types (IDENTICAL to BookingSummaryHelper's fallback)
+      const basePrices: Record<string, Record<string, number>> = {
+        'sedan': {
+          '4hrs-40km': 2400,
+          '8hrs-80km': 3000,
+          '10hrs-100km': 3500
+        },
+        'ertiga': {
+          '4hrs-40km': 2800,
+          '8hrs-80km': 3500,
+          '10hrs-100km': 4000
+        },
+        'innova_crysta': {
+          '4hrs-40km': 3200,
+          '8hrs-80km': 4000,
+          '10hrs-100km': 4500
+        },
+        'innova_hycross': {
+          '4hrs-40km': 3600,
+          '8hrs-80km': 4500,
+          '10hrs-100km': 5000
+        },
+        'mpv': {
+          '4hrs-40km': 3600,
+          '8hrs-80km': 4500,
+          '10hrs-100km': 5000
+        },
+        'dzire_cng': {
+          '4hrs-40km': 2400,
+          '8hrs-80km': 3000,
+          '10hrs-100km': 3500
+        },
+        'tempo_traveller': {
+          '4hrs-40km': 4000,
+          '8hrs-80km': 5500,
+          '10hrs-100km': 7000
+        }
       };
       
-      updateFares();
+      // Find appropriate category
+      let vehicleCategory = normalizedCabId;
+      
+      if (!basePrices[vehicleCategory]) {
+        if (vehicleCategory.includes('ertiga')) {
+          vehicleCategory = 'ertiga';
+        } else if (vehicleCategory.includes('innova')) {
+          if (vehicleCategory.includes('hycross') || vehicleCategory.includes('mpv')) {
+            vehicleCategory = 'innova_hycross';
+          } else {
+            vehicleCategory = 'innova_crysta';
+          }
+        } else if (vehicleCategory.includes('cng') || vehicleCategory.includes('dzire')) {
+          vehicleCategory = 'dzire_cng';
+        } else if (vehicleCategory.includes('tempo') || vehicleCategory.includes('traveller')) {
+          vehicleCategory = 'tempo_traveller';
+        } else if (vehicleCategory.includes('mpv')) {
+          vehicleCategory = 'mpv';
+        } else {
+          vehicleCategory = 'sedan'; // default
+        }
+      }
+      
+      // Get price for the package
+      let packageKey = '';
+      if (packageId.includes('4hrs-40km')) {
+        packageKey = '4hrs-40km';
+      } else if (packageId.includes('8hrs-80km')) {
+        packageKey = '8hrs-80km';
+      } else if (packageId.includes('10hrs-100km')) {
+        packageKey = '10hrs-100km';
+      }
+      
+      if (basePrices[vehicleCategory] && basePrices[vehicleCategory][packageKey]) {
+        const price = basePrices[vehicleCategory][packageKey];
+        console.log(`CabList: Using dynamic calculation: ₹${price} for ${normalizedCabId}`);
+        
+        // Broadcast the source of this fare
+        window.dispatchEvent(new CustomEvent('fare-source-update', {
+          detail: {
+            cabId: normalizedCabId,
+            packageId: packageId,
+            fare: price,
+            source: 'dynamic-calculation',
+            timestamp: Date.now()
+          }
+        }));
+        
+        // Save the selected fare in localStorage for consistency
+        localStorage.setItem(`selected_fare_${normalizedCabId}_${packageId}`, price.toString());
+        localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+        
+        return price;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`CabList: Error fetching fare for ${cabId}:`, error);
+      return null;
     }
-  }, [hourlyPackage, tripType, cabTypes, isRefreshing]);
+  }, [tripType]);
   
-  // Update fares when cab is selected
   useEffect(() => {
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
-      const normalizedCabId = normalizeVehicleId(selectedCabId);
-      const normalizedPackageId = normalizePackageId(hourlyPackage);
+      // First check if there's a cached fare in localStorage
+      const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+      const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+      const cachedFare = localStorage.getItem(selectedFareKey);
       
-      fetchFareFromAPI(selectedCabId, normalizedPackageId)
+      if (cachedFare) {
+        const parsedFare = parseFloat(cachedFare);
+        if (!isNaN(parsedFare) && parsedFare > 0) {
+          console.log(`CabList: Using cached fare from localStorage: ${parsedFare} for ${normalizedCabId}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [normalizedCabId]: parsedFare
+          }));
+          
+          // Broadcast the price to ensure consistency
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: 'local',
+              calculated: true,
+              fare: parsedFare,
+              packageId: hourlyPackage,
+              source: 'localstorage-cached',
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Also send a global fare update
+          window.dispatchEvent(new CustomEvent('global-fare-update', {
+            detail: {
+              cabId: normalizedCabId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: parsedFare,
+              source: 'localstorage-cached',
+              timestamp: Date.now()
+            }
+          }));
+          
+          return;
+        }
+      }
+      
+      // If no valid cached fare, fetch from database
+      fetchFareFromDatabase(selectedCabId, hourlyPackage)
         .then(price => {
           if (price && price > 0) {
-            console.log(`CabList: Updating fare for ${normalizedCabId} to ${price}`);
+            const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
             
             setLocalFares(prev => ({
               ...prev,
               [normalizedCabId]: price
             }));
+            
+            // Save to localStorage for the BookingSummary to use
+            localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+            
+            // Broadcast to ensure other components use the same price
+            window.dispatchEvent(new CustomEvent('fare-calculated', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                calculated: true,
+                fare: price,
+                packageId: hourlyPackage,
+                source: 'database-direct-cablist',
+                timestamp: Date.now()
+              }
+            }));
+            
+            // Also send a global fare update for all components
+            window.dispatchEvent(new CustomEvent('global-fare-update', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: price,
+                source: 'database-direct-cablist',
+                timestamp: Date.now()
+              }
+            }));
           }
         });
     }
-  }, [selectedCabId, tripType, hourlyPackage]);
+  }, [selectedCabId, tripType, hourlyPackage, fetchFareFromDatabase]);
   
-  // Listen for fare updates from other components
   useEffect(() => {
     const handleFareCalculated = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare } = customEvent.detail;
+        const { cabId, fare, source, packageId } = customEvent.detail;
         
         if (customEvent.detail.tripType === tripType) {
-          console.log(`CabList: Updating fare for ${cabId} to ${fare} from event (source: ${customEvent.detail.source || 'unknown'})`);
+          console.log(`CabList: Updating fare for ${cabId} to ${fare} from event (source: ${source || 'unknown'})`);
           
           setLocalFares(prev => ({
             ...prev,
             [cabId]: fare
           }));
           
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
+          }
+          
           setLastFareUpdate(Date.now());
         }
       }
     };
     
+    const handleGlobalFareUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, source, packageId } = customEvent.detail;
+        
+        if (!customEvent.detail.tripType || customEvent.detail.tripType === tripType) {
+          console.log(`CabList: Received global fare update: ${fare} for ${cabId} (source: ${source || 'unknown'})`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: fare
+          }));
+          
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
+          }
+          
+          setLastFareUpdate(Date.now());
+        }
+      }
+    };
+    
+    const handleFareSyncRequired = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.databaseFare) {
+        const { cabId, databaseFare, tripType: eventTripType, packageId } = customEvent.detail;
+        
+        if (eventTripType === tripType) {
+          console.log(`CabList: Synchronizing fare for ${cabId} to database value: ${databaseFare}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: databaseFare
+          }));
+          
+          // Save to localStorage for the BookingSummary to use
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, databaseFare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, databaseFare.toString());
+          }
+          
+          setLastFareUpdate(Date.now());
+        }
+      }
+    };
+    
+    const handleBookingSummaryFareUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, tripType: eventTripType, packageId } = customEvent.detail;
+        
+        if (eventTripType === tripType) {
+          console.log(`CabList: Updating fare from booking summary for ${cabId}: ${fare}`);
+          
+          setLocalFares(prev => ({
+            ...prev,
+            [cabId]: fare
+          }));
+          
+          // Save to localStorage for consistency across components
+          if (packageId) {
+            localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+            localStorage.setItem(`fare_local_${cabId}`, fare.toString());
+          }
+          
+          setLastFareUpdate(Date.now());
+          
+          // If we're getting frequent price updates for a cab that's different from what we had,
+          // inform the user
+          if (cabId === selectedCabId?.toLowerCase().replace(/\s+/g, '_')) {
+            const selectedCabFare = cabFares[cabId];
+            if (Math.abs(selectedCabFare - fare) > 100) {
+              toast.info(`Price updated: ₹${fare}`, {
+                id: `price-update-${cabId}`,
+                duration: 3000
+              });
+            }
+          }
+        }
+      }
+    };
+    
+    const handleCabSelection = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare, packageId } = customEvent.detail;
+        
+        if (tripType === 'local' && packageId) {
+          console.log(`CabList: Saving selected fare for ${cabId} with package ${packageId}: ₹${fare}`);
+          
+          // Save the selected fare in localStorage
+          localStorage.setItem(`selected_fare_${cabId}_${packageId}`, fare.toString());
+          localStorage.setItem(`fare_local_${cabId}`, fare.toString());
+        }
+      }
+    };
+    
     window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
+    window.addEventListener('global-fare-update', handleGlobalFareUpdate as EventListener);
+    window.addEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
+    window.addEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
+    window.addEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
+    window.addEventListener('cab-selected', handleCabSelection as EventListener);
     
     return () => {
       window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
+      window.removeEventListener('global-fare-update', handleGlobalFareUpdate as EventListener);
+      window.removeEventListener('fare-sync-required', handleFareSyncRequired as EventListener);
+      window.removeEventListener('booking-summary-update', handleBookingSummaryFareUpdated as EventListener);
+      window.removeEventListener('booking-summary-fare-updated', handleBookingSummaryFareUpdated as EventListener);
+      window.removeEventListener('cab-selected', handleCabSelection as EventListener);
     };
-  }, [tripType]);
+  }, [tripType, selectedCabId, cabFares]);
   
-  // Initial sync with cabPrices from props
   useEffect(() => {
-    setLocalFares(cabPrices);
-  }, [cabPrices]);
+    setLocalFares(cabFares);
+  }, [cabFares]);
+  
+  useEffect(() => {
+    if (tripType === 'local' && hourlyPackage) {
+      const fetchAllFares = async () => {
+        console.log(`CabList: Pre-fetching fares for all cabs with package ${hourlyPackage}`);
+        
+        for (const cab of cabTypes) {
+          try {
+            // First check if there's a cached fare in localStorage
+            const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+            const selectedFareKey = `selected_fare_${normalizedCabId}_${hourlyPackage}`;
+            const cachedFare = localStorage.getItem(selectedFareKey);
+            
+            if (cachedFare) {
+              const parsedFare = parseFloat(cachedFare);
+              if (!isNaN(parsedFare) && parsedFare > 0) {
+                console.log(`CabList: Using cached fare for ${normalizedCabId}: ${parsedFare}`);
+                
+                setLocalFares(prev => ({
+                  ...prev,
+                  [normalizedCabId]: parsedFare
+                }));
+                
+                // Broadcast the price to ensure consistency
+                window.dispatchEvent(new CustomEvent('global-fare-update', {
+                  detail: {
+                    cabId: normalizedCabId,
+                    tripType: 'local',
+                    packageId: hourlyPackage,
+                    fare: parsedFare,
+                    source: 'localstorage-prefetch',
+                    timestamp: Date.now()
+                  }
+                }));
+                
+                continue; // Skip API fetch
+              }
+            }
+            
+            // If no valid cached fare, fetch from database
+            const price = await fetchFareFromDatabase(cab.id, hourlyPackage);
+            if (price && price > 0) {
+              const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+              
+              setLocalFares(prev => ({
+                ...prev,
+                [normalizedCabId]: price
+              }));
+              
+              // Save the selected fare in localStorage
+              localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, price.toString());
+              localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+              
+              // Broadcast the prices to ensure consistency across components
+              window.dispatchEvent(new CustomEvent('global-fare-update', {
+                detail: {
+                  cabId: normalizedCabId,
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  source: 'database-direct-cablist-prefetch',
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          } catch (error) {
+            console.error(`Error pre-fetching fare for ${cab.id}:`, error);
+          }
+        }
+      };
+      
+      fetchAllFares();
+    }
+  }, [tripType, hourlyPackage, cabTypes, fetchFareFromDatabase]);
   
   const formatPrice = (price?: number) => {
     if (!price && price !== 0) return "Price unavailable";
     return `₹${price.toLocaleString('en-IN')}`;
-  };
-  
-  const handleRefreshFares = () => {
-    setIsRefreshing(true);
-    toast.info("Refreshing fares...");
-    
-    // This will trigger the useEffect for fetching fares
-    setLastFareUpdate(Date.now());
   };
 
   if (cabTypes.length === 0) {
@@ -324,119 +622,129 @@ export const CabList: React.FC<CabListProps> = ({
   }
 
   return (
-    <div>
-      <div className="flex justify-end mb-3">
-        <button 
-          onClick={handleRefreshFares}
-          className="text-sm flex items-center px-3 py-1 rounded border bg-muted hover:bg-muted/80"
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh Fares
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cabTypes.map((cab) => {
-          const isSelected = selectedCabId === cab.id;
-          const normalizedCabId = normalizeVehicleId(cab.id);
-          const cabFare = localFares[normalizedCabId] || localFares[cab.id] || cabPrices[normalizedCabId] || cabPrices[cab.id] || 0;
-          const hasError = cabErrors[cab.id];
-          
-          return (
-            <Card
-              key={cab.id}
-              className={`relative border overflow-hidden transition-all duration-200 h-full ${
-                isSelected
-                  ? "border-primary shadow-md ring-1 ring-primary"
-                  : "hover:border-primary/50 hover:shadow-sm"
-              }`}
-            >
-              <CardContent className="p-4 h-full flex flex-col">
-                <div className="relative mb-4 pb-[56.25%] overflow-hidden rounded-md bg-muted">
-                  <img
-                    src={cab.image || "/cars/sedan.png"}
-                    alt={cab.name}
-                    className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-                  />
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {cabTypes.map((cab) => {
+        const isSelected = selectedCabId === cab.id;
+        const cabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+        const cabFare = localFares[cabId] || localFares[cab.id] || cabFares[cabId] || cabFares[cab.id] || 0;
+        const hasError = cabErrors[cab.id];
+        
+        return (
+          <Card
+            key={cab.id}
+            className={`relative border overflow-hidden transition-all duration-200 h-full ${
+              isSelected
+                ? "border-primary shadow-md ring-1 ring-primary"
+                : "hover:border-primary/50 hover:shadow-sm"
+            }`}
+          >
+            <CardContent className="p-4 h-full flex flex-col">
+              <div className="relative mb-4 pb-[56.25%] overflow-hidden rounded-md bg-muted">
+                <img
+                  src={cab.image || "/cars/sedan.png"}
+                  alt={cab.name}
+                  className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                />
+              </div>
+
+              <h3 className="text-lg font-semibold leading-tight">{cab.name}</h3>
+              <p className="text-muted-foreground text-sm mb-2">
+                {getFareDetails(cab)}
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-secondary/40 rounded px-2 py-1">
+                  <p className="text-xs text-muted-foreground">Capacity</p>
+                  <p className="font-medium">{cab.capacity} People</p>
                 </div>
-
-                <h3 className="text-lg font-semibold leading-tight">{cab.name}</h3>
-                <p className="text-muted-foreground text-sm mb-2">
-                  {getFareDetails(cab)}
-                </p>
-
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="bg-secondary/40 rounded px-2 py-1">
-                    <p className="text-xs text-muted-foreground">Capacity</p>
-                    <p className="font-medium">{cab.capacity} People</p>
-                  </div>
-                  <div className="bg-secondary/40 rounded px-2 py-1">
-                    <p className="text-xs text-muted-foreground">Luggage</p>
-                    <p className="font-medium">{cab.luggageCapacity} Bags</p>
-                  </div>
+                <div className="bg-secondary/40 rounded px-2 py-1">
+                  <p className="text-xs text-muted-foreground">Luggage</p>
+                  <p className="font-medium">{cab.luggageCapacity} Bags</p>
                 </div>
+              </div>
 
-                <div className="flex flex-wrap gap-1 mt-auto mb-3">
-                  {cab.amenities?.slice(0, 3).map((amenity, index) => (
-                    <span
-                      key={index}
-                      className="text-xs px-2 py-1 bg-secondary/40 rounded-full"
-                    >
-                      {amenity}
-                    </span>
-                  ))}
-                  {cab.amenities && cab.amenities.length > 3 && (
-                    <span className="text-xs px-2 py-1 bg-secondary/40 rounded-full">
-                      +{cab.amenities.length - 3} more
-                    </span>
-                  )}
-                </div>
+              <div className="flex flex-wrap gap-1 mt-auto mb-3">
+                {cab.amenities?.slice(0, 3).map((amenity, index) => (
+                  <span
+                    key={index}
+                    className="text-xs px-2 py-1 bg-secondary/40 rounded-full"
+                  >
+                    {amenity}
+                  </span>
+                ))}
+                {cab.amenities && cab.amenities.length > 3 && (
+                  <span className="text-xs px-2 py-1 bg-secondary/40 rounded-full">
+                    +{cab.amenities.length - 3} more
+                  </span>
+                )}
+              </div>
 
-                <div
-                  onClick={() => {
-                    if (!isCalculating) {
-                      handleSelectCab(cab);
+              <div
+                onClick={() => {
+                  if (!isCalculatingFares) {
+                    // Store the fare before selection
+                    const normalizedCabId = cab.id.toLowerCase().replace(/\s+/g, '_');
+                    if (tripType === 'local' && hourlyPackage && cabFare > 0) {
+                      console.log(`CabList: Saving selected fare for ${normalizedCabId}: ₹${cabFare}`);
                       
-                      if (tripType === 'local' && hourlyPackage && cabFare > 0) {
-                        const normalizedPackageId = normalizePackageId(hourlyPackage);
-                        localStorage.setItem(`selected_fare_${normalizedCabId}_${normalizedPackageId}`, cabFare.toString());
-                        
-                        toast.success(`Selected ${cab.name} - ${formatPrice(cabFare)}`, {
-                          id: `cab-selection-${normalizedCabId}`,
-                          duration: 3000
-                        });
-                      }
+                      // Save in both formats for maximum compatibility
+                      localStorage.setItem(`selected_fare_${normalizedCabId}_${hourlyPackage}`, cabFare.toString());
+                      localStorage.setItem(`fare_local_${normalizedCabId}`, cabFare.toString());
+                      
+                      // Dispatch an event to notify other components of the selection
+                      window.dispatchEvent(new CustomEvent('cab-selected', {
+                        detail: {
+                          cabId: normalizedCabId,
+                          cabName: cab.name,
+                          tripType: tripType,
+                          packageId: hourlyPackage,
+                          fare: cabFare,
+                          timestamp: Date.now()
+                        }
+                      }));
+                      
+                      // Also send a global update
+                      window.dispatchEvent(new CustomEvent('global-fare-update', {
+                        detail: {
+                          cabId: normalizedCabId,
+                          tripType: tripType,
+                          packageId: hourlyPackage,
+                          fare: cabFare,
+                          source: 'cab-selection',
+                          timestamp: Date.now()
+                        }
+                      }));
                     }
-                  }}
-                  className={`flex items-center justify-between p-3 mt-auto w-full rounded-md cursor-pointer transition-colors font-medium ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
-                >
-                  <span>
-                    {isSelected ? "Selected" : "Select"}
-                  </span>
-                  <span className="font-semibold">
-                    {isCalculating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : hasError ? (
-                      <span className="text-xs text-destructive">{hasError}</span>
-                    ) : cabFare > 0 ? (
-                      formatPrice(cabFare)
-                    ) : (
-                      <span className="text-xs">Getting price...</span>
-                    )}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                    
+                    // Then call the parent handler
+                    handleSelectCab(cab);
+                  }
+                }}
+                className={`flex items-center justify-between p-3 mt-auto w-full rounded-md cursor-pointer transition-colors font-medium ${
+                  isSelected
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted hover:bg-muted/80"
+                }`}
+              >
+                <span>
+                  {isSelected ? "Selected" : "Select"}
+                </span>
+                <span className="font-semibold">
+                  {isCalculatingFares ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : hasError ? (
+                    <span className="text-xs text-destructive">{hasError}</span>
+                  ) : cabFare > 0 ? (
+                    formatPrice(cabFare)
+                  ) : (
+                    <span className="text-xs">Getting price...</span>
+                  )}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
-};
-
-export default CabList;
+}

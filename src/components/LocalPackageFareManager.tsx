@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export function LocalPackageFareManager() {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
 
+  // Load fares when component mounts
   useEffect(() => {
     loadFares();
   }, []);
@@ -40,9 +42,10 @@ export function LocalPackageFareManager() {
     setError(null);
     
     try {
-      const apiUrl = getApiUrl('');
+      const apiUrl = getApiUrl();
       const endpoint = `${apiUrl}/api/admin/direct-local-fares.php`;
       
+      // Get list of vehicles first
       const vehiclesResponse = await axios.get(`${apiUrl}/data/vehicles.json`, {
         headers: { 'Cache-Control': 'no-cache' }
       });
@@ -99,17 +102,19 @@ export function LocalPackageFareManager() {
   const handleSyncWithDatabase = async () => {
     setSyncing(true);
     try {
-      const success = await syncLocalFaresWithDatabase(true);
+      const success = await syncLocalFaresWithDatabase();
       
       if (success) {
         toast.success('Local package fares synced with database');
         await loadFares();
         
+        // Clear the local cache and force refresh of all fares
         if (window.localPackagePriceCache) {
           window.localPackagePriceCache = {};
         }
         
-        fetchAndCacheLocalFares(true); // Pass true for silent parameter
+        // Trigger refresh in the background
+        fetchAndCacheLocalFares(true);
       } else {
         toast.error('Failed to sync local package fares');
       }
@@ -125,7 +130,7 @@ export function LocalPackageFareManager() {
     setSaving(true);
     
     try {
-      const apiUrl = getApiUrl('');
+      const apiUrl = getApiUrl();
       const editedFares = fares.filter(fare => fare.isEdited);
       
       if (editedFares.length === 0) {
@@ -136,6 +141,7 @@ export function LocalPackageFareManager() {
       
       const savePromises = editedFares.map(async (fare) => {
         try {
+          // This endpoint would need to be implemented on the backend
           const response = await axios.post(`${apiUrl}/api/admin/update-local-fares.php`, {
             vehicleId: fare.vehicleId,
             price4hrs40km: fare.price4hrs40km,
@@ -165,16 +171,19 @@ export function LocalPackageFareManager() {
       if (successCount === results.length) {
         toast.success(`Successfully saved changes for ${successCount} vehicles`);
         
+        // Clear edit flags
         setFares(prevFares => 
           prevFares.map(fare => ({ ...fare, isEdited: false }))
         );
         
+        // Trigger sync to ensure all tables are updated
         await handleSyncWithDatabase();
       } else if (successCount > 0) {
         toast.success(`Saved changes for ${successCount} vehicles`, {
           description: `Failed to save changes for ${failCount} vehicles`
         });
         
+        // Reload to get current state
         await loadFares();
       } else {
         toast.error(`Failed to save changes for all ${results.length} vehicles`);
