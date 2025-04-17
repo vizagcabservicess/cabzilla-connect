@@ -46,6 +46,7 @@ export const CabList: React.FC<CabListProps> = ({
   const selectedCabIdRef = useRef<string>(selectedCabId);
   const hourlyPackageRef = useRef<string | undefined>(hourlyPackage);
   const abortControllersRef = useRef<Record<string, AbortController>>({});
+  const lastEventTimestampRef = useRef<Record<string, number>>({});
 
   // Normalize vehicle ID consistently across the application with stricter rules
   const normalizeVehicleId = (id: string): string => {
@@ -81,14 +82,16 @@ export const CabList: React.FC<CabListProps> = ({
       setLoadingCabIds(prev => [...prev, vehicleId]);
       
       const normalizedVehicleId = normalizeVehicleId(vehicleId);
-      console.log(`CabList: Fetching local fares for vehicle ${normalizedVehicleId} with timestamp: ${Date.now()}`);
+      const currentTimestamp = Date.now();
+      
+      console.log(`CabList: Fetching local fares for vehicle ${normalizedVehicleId} with timestamp: ${currentTimestamp}`);
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`);
       
       console.log(`CabList: Fetching price from API: ${apiUrl}`);
       const response = await axios.get(apiUrl, {
         headers: {
           ...forceRefreshHeaders,
-          'X-Request-ID': `fare-${normalizedVehicleId}-${Date.now()}`,
+          'X-Request-ID': `fare-${normalizedVehicleId}-${currentTimestamp}`,
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
         timeout: 8000,
@@ -112,35 +115,51 @@ export const CabList: React.FC<CabListProps> = ({
         if (price > 0) {
           console.log(`CabList: Retrieved fare directly from database API: ₹${price} for ${normalizedVehicleId}`);
           
-          // Broadcast the update to ensure consistency
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: normalizedVehicleId,
-              tripType: 'local',
-              packageId: hourlyPackage,
-              fare: price,
-              calculated: true,
-              source: 'direct-api-cablist',
-              timestamp: Date.now(),
-              originalCabId: vehicleId, // Include the original cab ID for verification
-              vehicleName: fareData.vehicle_name // Include vehicle name for debugging
-            }
-          }));
-          
-          // If this is the selected cab, also dispatch a special event for the booking summary
+          // Only dispatch global events for the CURRENTLY SELECTED cab
           if (doVehicleIdsMatch(vehicleId, selectedCabIdRef.current)) {
-            window.dispatchEvent(new CustomEvent('booking-summary-update', {
-              detail: {
-                cabId: normalizedVehicleId,
-                tripType: 'local',
-                packageId: hourlyPackage,
-                fare: price,
-                source: 'direct-api-cablist-selected',
-                timestamp: Date.now(),
-                originalCabId: vehicleId,
-                vehicleName: fareData.vehicle_name
-              }
-            }));
+            // Check if this event is newer than the last one for this cab
+            if (!lastEventTimestampRef.current[normalizedVehicleId] || 
+                currentTimestamp > lastEventTimestampRef.current[normalizedVehicleId]) {
+              
+              // Update timestamp tracking
+              lastEventTimestampRef.current[normalizedVehicleId] = currentTimestamp;
+              
+              console.log(`CabList: Broadcasting fare update for SELECTED cab ${vehicleId}`);
+              
+              // Broadcast the update to ensure consistency
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: normalizedVehicleId,
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  calculated: true,
+                  source: 'direct-api-cablist',
+                  timestamp: currentTimestamp,
+                  originalCabId: vehicleId, // Include the original cab ID for verification
+                  vehicleName: fareData.vehicle_name // Include vehicle name for debugging
+                }
+              }));
+              
+              // If this is the selected cab, also dispatch a special event for the booking summary
+              window.dispatchEvent(new CustomEvent('booking-summary-update', {
+                detail: {
+                  cabId: normalizedVehicleId,
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  source: 'direct-api-cablist-selected',
+                  timestamp: currentTimestamp,
+                  originalCabId: vehicleId,
+                  vehicleName: fareData.vehicle_name
+                }
+              }));
+            } else {
+              console.log(`CabList: Skipping event dispatch - older than last event for ${normalizedVehicleId}`);
+            }
+          } else {
+            // For non-selected cabs, don't broadcast global events
+            console.log(`CabList: Not broadcasting fare update for non-selected cab ${vehicleId}`);
           }
           
           return price;
@@ -185,17 +204,28 @@ export const CabList: React.FC<CabListProps> = ({
         if (fare > 0) {
           // Explicitly notify booking summary
           const normalizedCabId = normalizeVehicleId(selectedCabId);
-          window.dispatchEvent(new CustomEvent('booking-summary-update', {
-            detail: {
-              cabId: normalizedCabId,
-              tripType: 'local',
-              packageId: hourlyPackage,
-              fare: fare,
-              source: 'refresh-button',
-              timestamp: Date.now(),
-              originalCabId: selectedCabId
-            }
-          }));
+          const currentTimestamp = Date.now();
+          
+          // Check if this event is newer than the last one
+          if (!lastEventTimestampRef.current[normalizedCabId] || 
+              currentTimestamp > lastEventTimestampRef.current[normalizedCabId]) {
+            
+            // Update timestamp tracking
+            lastEventTimestampRef.current[normalizedCabId] = currentTimestamp;
+            
+            window.dispatchEvent(new CustomEvent('booking-summary-update', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: fare,
+                source: 'refresh-button',
+                timestamp: currentTimestamp,
+                originalCabId: selectedCabId,
+                vehicleName: selectedCab.name
+              }
+            }));
+          }
         }
       }
     }

@@ -29,6 +29,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const lastFetchResultRef = useRef<{cabId?: string, fare?: number, timestamp?: number}>({});
   const pendingFetchRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastEventTimestampRef = useRef<number>(0);
 
   // Normalize vehicle ID consistently across the application with stricter rules
   const normalizeVehicleId = (id: string | null): string => {
@@ -89,6 +90,12 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       return;
     }
     
+    // Check cab ID match before even starting the fetch
+    if (!doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId)) {
+      console.log(`BookingSummaryHelper: Cab ID changed before fetch started, aborting`);
+      return;
+    }
+    
     pendingFetchRef.current = true;
     setLastFetchAttempt(currentTime);
     
@@ -100,8 +107,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     // Create a new abort controller for this request
     abortControllerRef.current = new AbortController();
     
+    // Store the cabId we're fetching for to verify it later
+    const fetchingForCabId = selectedCabId;
+    const normalizedCabId = normalizeVehicleId(fetchingForCabId);
+    
     try {
-      const normalizedCabId = normalizeVehicleId(selectedCabId);
       console.log(`BookingSummaryHelper: Fetching local fares for vehicle ${normalizedCabId}, package: ${hourlyPackage}, timestamp: ${currentTime}`);
       
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
@@ -118,7 +128,9 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       });
       
       // CRITICAL: Verify the selectedCabId hasn't changed during the API call
-      if (!doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId) || lastHourlyPackageRef.current !== hourlyPackage) {
+      // Only proceed if the cab we started fetching for is still the selected one
+      if (!doVehicleIdsMatch(selectedCabIdRef.current, fetchingForCabId) || 
+          lastHourlyPackageRef.current !== hourlyPackage) {
         console.log('BookingSummaryHelper: Cab or package changed during API call, discarding result');
         pendingFetchRef.current = false;
         return 0;
@@ -147,20 +159,31 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
           };
           
           // One more verification before dispatching the event
-          if (doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId) && lastHourlyPackageRef.current === hourlyPackage) {
-            // Broadcast the update to ensure consistency
-            window.dispatchEvent(new CustomEvent('booking-summary-update', {
-              detail: {
-                cabId: normalizedCabId,
-                tripType: 'local',
-                packageId: hourlyPackage,
-                fare: price,
-                source: 'direct-api-helper',
-                timestamp: currentTime,
-                selectedCabId: selectedCabId, // Include the original selected cab ID for verification
-                vehicleName: response.data.fares[0].vehicle_name // Include vehicle name for logging
-              }
-            }));
+          // Make sure we're only dispatching for the currently selected cab
+          if (doVehicleIdsMatch(selectedCabIdRef.current, fetchingForCabId) && 
+              lastHourlyPackageRef.current === hourlyPackage) {
+            
+            // Only dispatch if this is newer than our last event
+            if (currentTime > lastEventTimestampRef.current) {
+              lastEventTimestampRef.current = currentTime;
+              
+              // Broadcast the update to ensure consistency
+              window.dispatchEvent(new CustomEvent('booking-summary-update', {
+                detail: {
+                  cabId: normalizedCabId,
+                  tripType: 'local',
+                  packageId: hourlyPackage,
+                  fare: price,
+                  source: 'direct-api-helper',
+                  timestamp: currentTime,
+                  selectedCabId: fetchingForCabId, // Include the original selected cab ID for verification
+                  originalCabId: fetchingForCabId, // Include BOTH for strict matching
+                  vehicleName: response.data.fares[0].vehicle_name // Include vehicle name for logging
+                }
+              }));
+            } else {
+              console.log(`BookingSummaryHelper: Skipping event dispatch - older than last event`);
+            }
             
             pendingFetchRef.current = false;
             return price;
@@ -208,7 +231,9 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         const { cabType, tripType: eventTripType } = customEvent.detail;
         
         // Only process if this event is relevant to our current state and matches the current cab
-        if (doVehicleIdsMatch(selectedCabId, cabType) && eventTripType === 'local' && doVehicleIdsMatch(cabType, selectedCabIdRef.current)) {
+        if (doVehicleIdsMatch(selectedCabId, cabType) && 
+            eventTripType === 'local' && 
+            doVehicleIdsMatch(cabType, selectedCabIdRef.current)) {
           console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
           
           // Reset fetch state
