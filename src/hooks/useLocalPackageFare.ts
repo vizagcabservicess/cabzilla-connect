@@ -26,10 +26,11 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
+    // Ensure consistent normalization by converting to lowercase and replacing spaces/special chars
+    return id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   };
 
-  // Clear fare function
+  // Clear fare function - purges all cached fares
   const clearFare = useCallback(() => {
     // Invalidate all queries related to fares
     queryClient.removeQueries({ queryKey: ['localPackageFare'] });
@@ -40,25 +41,65 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       abortControllerRef.current = null;
     }
     
-    // Clear any localStorage cache that might contain stale fares
-    const cacheKeys = Object.keys(localStorage).filter(key => 
-      key.startsWith('localPackageFare_') || 
-      key.startsWith('fare_')
-    );
-    
-    cacheKeys.forEach(key => localStorage.removeItem(key));
+    // Clear any localStorage cache for all cab fares
+    purgeAllFareCacheEntries();
     
     // Reset current cab ID reference
     currentCabIdRef.current = null;
     
     console.log('Cleared all fare data and aborted pending requests');
   }, [queryClient]);
+  
+  // Function to purge all fare-related localStorage entries
+  const purgeAllFareCacheEntries = () => {
+    // Get all localStorage keys
+    const allKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) allKeys.push(key);
+    }
+    
+    // Filter and remove all fare-related keys
+    const fareKeys = allKeys.filter(key => 
+      key.startsWith('fare_') || 
+      key.startsWith('localPackageFare_')
+    );
+    
+    console.log(`Purging ${fareKeys.length} cached fare entries from localStorage`);
+    fareKeys.forEach(key => localStorage.removeItem(key));
+  };
+  
+  // Function to purge all fare entries except for the current cab
+  const purgeFareCacheExceptCurrent = (currentCabId: string) => {
+    if (!currentCabId) return;
+    
+    const normalizedCabId = normalizeVehicleId(currentCabId);
+    const currentCabCacheKey = `fare_local_${normalizedCabId}`;
+    
+    // Get all localStorage keys
+    const allKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) allKeys.push(key);
+    }
+    
+    // Filter fareKeys to remove
+    const fareKeysToRemove = allKeys.filter(key => 
+      (key.startsWith('fare_local_') && key !== currentCabCacheKey) ||
+      (key.startsWith('localPackageFare_') && !key.includes(normalizedCabId))
+    );
+    
+    console.log(`Purging ${fareKeysToRemove.length} stale fare entries from localStorage`);
+    fareKeysToRemove.forEach(key => localStorage.removeItem(key));
+  };
 
   // Change package function
   const changePackage = useCallback((packageId: string) => {
+    if (packageId === hourlyPackage) return;
+    
     setHourlyPackage(packageId);
     clearFare();
-  }, [clearFare]);
+  }, [clearFare, hourlyPackage]);
 
   // Fetch fare function that can be called manually
   const fetchFare = useCallback(async (
@@ -86,6 +127,9 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     // Create a timestamp for this request to track it
     const requestTimestamp = Date.now();
     lastFareRequestTimestampRef.current = requestTimestamp;
+    
+    // Before fetching new fare, purge all other cab fares
+    purgeFareCacheExceptCurrent(cabId);
     
     console.log(`Fetching local package fare for ${normalizedCabId}, package: ${packageId}, timestamp: ${requestTimestamp}`);
     
@@ -119,6 +163,14 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         
         if (price > 0) {
           console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}`);
+          
+          // Clear any stale localStorage entries first
+          purgeFareCacheExceptCurrent(cabId);
+          
+          // Update localStorage with the new fare using the normalized key
+          const cacheKey = `fare_local_${normalizedCabId}`;
+          localStorage.setItem(cacheKey, String(price));
+          console.log(`Stored fare in localStorage: ${cacheKey} = ${price}`);
           
           // Update the query cache with the latest fare data
           queryClient.setQueryData(
@@ -160,6 +212,21 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     queryKey: ['localPackageFare', currentCabIdRef.current || 'noVehicleSelected', hourlyPackage],
     queryFn: async () => {
       if (!currentCabIdRef.current) return 0;
+      
+      // Before fetching from the API, try to get from localStorage
+      const normalizedCabId = normalizeVehicleId(currentCabIdRef.current);
+      const cacheKey = `fare_local_${normalizedCabId}`;
+      const cachedFare = localStorage.getItem(cacheKey);
+      
+      if (cachedFare && !isNaN(Number(cachedFare))) {
+        const parsedFare = Number(cachedFare);
+        console.log(`Using cached local package price for ${normalizedCabId}: ${parsedFare}`);
+        
+        // If we're not forcing refresh, use the cached value
+        return parsedFare;
+      }
+      
+      // No valid cache found, fetch from API
       return fetchFare(currentCabIdRef.current, hourlyPackage);
     },
     enabled: !!currentCabIdRef.current,

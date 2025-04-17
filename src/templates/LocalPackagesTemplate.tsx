@@ -7,6 +7,7 @@ import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
 
 interface LocalPackagesTemplateProps {
   cabTypes: CabType[];
@@ -28,14 +29,14 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   const [currentFare, setCurrentFare] = useState<number>(0);
   const [currentCabId, setCurrentCabId] = useState<string | null>(null);
   const [fareRequestId, setFareRequestId] = useState<number>(0);
+  const [errorDetails, setErrorDetails] = useState<Error | null>(null);
   const { fare, isFetching, error, hourlyPackage, fetchFare, changePackage, clearFare } = useLocalPackageFare();
   const queryClient = useQueryClient();
-  const pendingFetchRef = useRef<boolean>(false);
-
+  
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
+    return id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   };
 
   // When cab selection changes, fetch new fare
@@ -49,7 +50,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
       setSelectionState('selecting');
       setCurrentFare(0);
       setCurrentCabId(normalizedSelectedCabId);
-      clearFare();
+      clearFare(); // This will purge all cached fares
       
       // Set state to fetching and initiate the fare fetch
       setSelectionState('fetching');
@@ -63,6 +64,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
             console.log(`Selection state transition: fetching -> ready (fare: ${newFare})`);
             setCurrentFare(newFare);
             setSelectionState('ready');
+            setErrorDetails(null);
             
             // Update the selected cab with the new fare
             setSelectedCab(prev => {
@@ -78,6 +80,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
           if (fareRequestId === newRequestId) {
             console.log(`Selection state transition: fetching -> error`);
             setSelectionState('error');
+            setErrorDetails(err instanceof Error ? err : new Error('Failed to retrieve fare'));
             toast.error(`Could not retrieve price for ${selectedCab.name}`);
           }
         });
@@ -89,6 +92,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
     console.log(`User selected cab: ${cab.name} (${normalizeVehicleId(cab.id)})`);
     clearFare();
     setCurrentFare(0);
+    setErrorDetails(null);
     
     // If selecting the same cab, re-fetch the fare with force refresh
     if (selectedCab?.id === cab.id) {
@@ -107,9 +111,10 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
             });
           }
         })
-        .catch(() => {
+        .catch((err) => {
           if (fareRequestId === newRequestId) {
             setSelectionState('error');
+            setErrorDetails(err instanceof Error ? err : new Error('Failed to retrieve fare'));
           }
         });
     } else {
@@ -124,6 +129,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
     clearFare();
     setCurrentFare(0);
     setSelectionState('selecting');
+    setErrorDetails(null);
     changePackage(packageId);
     
     if (selectedCab) {
@@ -142,12 +148,41 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
             });
           }
         })
-        .catch(() => {
+        .catch((err) => {
           if (fareRequestId === newRequestId) {
             setSelectionState('error');
+            setErrorDetails(err instanceof Error ? err : new Error('Failed to retrieve fare'));
           }
         });
     }
+  };
+
+  // Retry handler for error state
+  const handleRetryFetch = () => {
+    if (!selectedCab) return;
+    
+    setSelectionState('fetching');
+    setErrorDetails(null);
+    const newRequestId = Date.now();
+    setFareRequestId(newRequestId);
+    
+    fetchFare(selectedCab.id, hourlyPackage, true)
+      .then(newFare => {
+        if (fareRequestId === newRequestId) {
+          setCurrentFare(newFare);
+          setSelectionState('ready');
+          setSelectedCab(prev => {
+            if (!prev) return null;
+            return { ...prev, price: newFare };
+          });
+        }
+      })
+      .catch((err) => {
+        if (fareRequestId === newRequestId) {
+          setSelectionState('error');
+          setErrorDetails(err instanceof Error ? err : new Error('Failed to retrieve fare'));
+        }
+      });
   };
 
   // Cleanup on component unmount
@@ -175,23 +210,25 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
       </div>
       
       <div className="lg:col-span-1">
-        {selectedCab && (
-          <BookingSummary
-            selectedCab={selectedCab}
-            pickupLocation={pickupLocation?.name || ''}
-            pickupDate={pickupDate}
-            tripType="local"
-            distance={distance}
-            hourlyPackage={hourlyPackage}
-            isCalculatingFares={selectionState === 'fetching' || selectionState === 'selecting'}
-            fare={currentFare}
+        {errorDetails && selectionState === 'error' ? (
+          <FareUpdateError 
+            error={errorDetails}
+            onRetry={handleRetryFetch}
+            cabId={selectedCab?.id}
           />
-        )}
-        
-        {error && selectionState === 'error' && (
-          <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">
-            {error}
-          </div>
+        ) : (
+          selectedCab && (
+            <BookingSummary
+              selectedCab={selectedCab}
+              pickupLocation={pickupLocation?.name || ''}
+              pickupDate={pickupDate}
+              tripType="local"
+              distance={distance}
+              hourlyPackage={hourlyPackage}
+              isCalculatingFares={selectionState === 'fetching' || selectionState === 'selecting'}
+              fare={currentFare}
+            />
+          )
         )}
       </div>
     </div>
