@@ -38,7 +38,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   
   // State for the display fare (only updated when confirmed)
   const [displayFare, setDisplayFare] = useState<number>(0);
-
+  
   // Reset display fare when cab changes
   useEffect(() => {
     if (selectedCab?.id !== cabId) {

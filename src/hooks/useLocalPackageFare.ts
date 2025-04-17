@@ -1,7 +1,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -18,7 +18,10 @@ interface LocalPackageFareResult {
 
 export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): LocalPackageFareResult {
   const [hourlyPackage, setHourlyPackage] = useState<string>(initialPackage);
+  const [currentFare, setCurrentFare] = useState<number>(0);
   const queryClient = useQueryClient();
+  const requestIdRef = useRef<number>(0);
+  const currentCabIdRef = useRef<string>('');
 
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
@@ -30,6 +33,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
   const clearFare = useCallback(() => {
     // Invalidate all queries related to fares
     queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
+    setCurrentFare(0);
   }, [queryClient]);
 
   // Change package function
@@ -49,6 +53,11 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       return 0;
     }
 
+    // Generate a unique request ID
+    const requestId = ++requestIdRef.current;
+    // Store the current cab ID
+    currentCabIdRef.current = cabId;
+    
     const normalizedCabId = normalizeVehicleId(cabId);
     console.log(`Manually fetching local package fare for ${normalizedCabId}, package: ${packageId}`);
     
@@ -59,6 +68,12 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         headers: forceRefreshHeaders,
         timeout: 8000,
       });
+      
+      // If this is not the most recent request, discard the results
+      if (requestId !== requestIdRef.current || currentCabIdRef.current !== cabId) {
+        console.log(`Discarding stale fare response for ${normalizedCabId} (request ${requestId}, current ${requestIdRef.current})`);
+        return 0;
+      }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
@@ -76,11 +91,25 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         if (price > 0) {
           console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}`);
           
+          // Update the current fare state
+          setCurrentFare(price);
+          
           // Update the query cache
           queryClient.setQueryData(
             ['localPackageFare', normalizedCabId, packageId],
             price
           );
+          
+          // Dispatch a fare update event
+          window.dispatchEvent(new CustomEvent('fare-updated', {
+            detail: {
+              cabId: normalizedCabId,
+              fare: price,
+              packageId: packageId,
+              source: 'useLocalPackageFare.fetchFare',
+              requestId: requestId
+            }
+          }));
           
           return price;
         } else {
@@ -101,15 +130,15 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     }
   }, [hourlyPackage, queryClient]);
 
-  // Use React Query to fetch and cache fare data
+  // Use React Query to access cached fare data
   const { data: fare = 0, isFetching, error } = useQuery({
     queryKey: ['localPackageFare', 'current'],
-    queryFn: async () => 0,
-    enabled: false, // Don't fetch automatically
+    queryFn: async () => currentFare,
+    enabled: true, // Always enabled to track current fare
   });
 
   return {
-    fare,
+    fare: currentFare,
     isFetching,
     error: error ? (error instanceof Error ? error.message : String(error)) : null,
     hourlyPackage,
