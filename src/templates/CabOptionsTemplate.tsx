@@ -13,7 +13,7 @@ interface CabOptionsProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares?: boolean;
-  onPackageChange?: (packageId: string) => void;
+  onPackageChange?: (packageId: string) => void; // Added this line
 }
 
 export const CabOptionsTemplate: React.FC<CabOptionsProps> = ({
