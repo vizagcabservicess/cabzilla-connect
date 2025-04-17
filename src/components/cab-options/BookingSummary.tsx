@@ -34,7 +34,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   fare
 }) => {
   // State to track the cab ID to detect changes
-  const [cabId, setCabId] = useState<string>('');
+  const [currentCabId, setCurrentCabId] = useState<string>('');
   
   // State for the display fare (only updated when confirmed)
   const [displayFare, setDisplayFare] = useState<number>(0);
@@ -48,10 +48,23 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Track if we've received a fare for the current cab
   const hasFareForCurrentCab = useRef<boolean>(false);
   
+  // Track fare updates with a timestamp to prevent stale updates
+  const fareUpdateTimestampRef = useRef<number>(0);
+  
+  // Normalize vehicle ID to ensure consistency
+  const normalizeVehicleId = (id: string): string => {
+    if (!id) return '';
+    return id.toLowerCase().replace(/\s+/g, '_');
+  };
+  
   // Reset display fare and set loading state when cab changes
   useEffect(() => {
-    if (selectedCab?.id !== cabId) {
-      console.log(`BookingSummary: Selected cab changed from ${cabId} to ${selectedCab?.id}, resetting display fare`);
+    if (!selectedCab) return;
+    
+    const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
+    
+    if (normalizedSelectedCabId !== currentCabId) {
+      console.log(`BookingSummary: Selected cab changed from ${currentCabId} to ${normalizedSelectedCabId}, resetting display fare`);
       
       // Clear the display fare immediately on cab change
       setDisplayFare(0);
@@ -62,10 +75,13 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Reset the flag indicating we have a fare for this cab
       hasFareForCurrentCab.current = false;
       
+      // Update the timestamp to invalidate any pending updates
+      fareUpdateTimestampRef.current = Date.now();
+      
       // Update the stored cab ID
-      setCabId(selectedCab?.id || '');
+      setCurrentCabId(normalizedSelectedCabId);
     }
-  }, [selectedCab?.id, cabId]);
+  }, [selectedCab, currentCabId]);
 
   // Update display fare when fare changes and it matches the current cab
   useEffect(() => {
@@ -75,27 +91,44 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       return;
     }
     
+    if (!selectedCab) return;
+    
+    const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
+    
     // Only update display fare if:
     // 1. We have a valid fare
-    // 2. We have a selected cab
+    // 2. The current cab ID matches the selected cab
     // 3. The fare isn't zero (which would be our reset state)
     // 4. We're not in a loading/calculating state
     if (
       fare && 
       fare > 0 && 
-      selectedCab?.id === cabId && 
+      normalizedSelectedCabId === currentCabId && 
       !isCalculatingFares
     ) {
-      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} to ${fare}`);
-      setDisplayFare(fare);
+      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} (${normalizedSelectedCabId}) to ${fare}`);
       
-      // Mark that we have received a fare for the current cab
-      hasFareForCurrentCab.current = true;
+      // Create a timestamp for this update
+      const updateTimestamp = Date.now();
+      fareUpdateTimestampRef.current = updateTimestamp;
       
-      // Clear loading state once we have valid data
-      setIsLoading(false);
+      // Use a slight delay to allow any pending state updates to complete
+      setTimeout(() => {
+        // Only proceed if this is still the current update for the current cab
+        if (updateTimestamp === fareUpdateTimestampRef.current && normalizedSelectedCabId === currentCabId) {
+          setDisplayFare(fare);
+          
+          // Mark that we have received a fare for the current cab
+          hasFareForCurrentCab.current = true;
+          
+          // Clear loading state once we have valid data
+          setIsLoading(false);
+        } else {
+          console.log(`BookingSummary: Ignoring stale fare update for ${normalizedSelectedCabId}`);
+        }
+      }, 50);
     }
-  }, [fare, selectedCab, cabId, isCalculatingFares]);
+  }, [fare, selectedCab, currentCabId, isCalculatingFares]);
 
   // Clear loading state if calculation completes but we don't have a valid fare
   // This prevents indefinite loading states

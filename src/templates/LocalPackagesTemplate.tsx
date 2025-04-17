@@ -32,13 +32,23 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   const queryClient = useQueryClient();
   const pendingFetchRef = useRef<boolean>(false);
 
+  // Normalize vehicle ID to ensure consistency
+  const normalizeVehicleId = (id: string): string => {
+    if (!id) return '';
+    return id.toLowerCase().replace(/\s+/g, '_');
+  };
+
   // When cab selection changes, fetch new fare
   useEffect(() => {
-    if (selectedCab && currentCabId !== selectedCab.id) {
+    if (!selectedCab) return;
+    
+    const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
+    
+    if (currentCabId !== normalizedSelectedCabId) {
       console.log(`Selection state transition: ${selectionState} -> selecting (cab changed to ${selectedCab.name})`);
       setSelectionState('selecting');
       setCurrentFare(0);
-      setCurrentCabId(selectedCab.id);
+      setCurrentCabId(normalizedSelectedCabId);
       clearFare();
       
       // Set state to fetching and initiate the fare fetch
@@ -72,11 +82,11 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
           }
         });
     }
-  }, [selectedCab, currentCabId, hourlyPackage, clearFare, fetchFare, fareRequestId]);
+  }, [selectedCab, currentCabId, hourlyPackage, clearFare, fetchFare, fareRequestId, selectionState]);
 
   // Handle user selecting a cab
   const handleSelectCab = (cab: CabType) => {
-    console.log(`User selected cab: ${cab.name}`);
+    console.log(`User selected cab: ${cab.name} (${normalizeVehicleId(cab.id)})`);
     clearFare();
     setCurrentFare(0);
     
@@ -146,40 +156,6 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
       queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
     };
   }, [queryClient]);
-
-  // Listen for global fare updates
-  useEffect(() => {
-    const handleFareUpdate = (event: any) => {
-      const detail = event.detail;
-      if (detail && selectedCab && normalizeVehicleId(selectedCab.id) === detail.cabId) {
-        console.log(`LocalPackagesTemplate: Received fare update for ${selectedCab.id}: ${detail.fare}`);
-        
-        // Only update if we're not in the middle of our own fetch
-        if (selectionState !== 'fetching') {
-          setCurrentFare(detail.fare);
-          setSelectionState('ready');
-          
-          // Update the selected cab with the new fare
-          setSelectedCab(prev => {
-            if (!prev) return null;
-            return { ...prev, price: detail.fare };
-          });
-        }
-      }
-    };
-    
-    window.addEventListener('fare-updated', handleFareUpdate);
-    
-    return () => {
-      window.removeEventListener('fare-updated', handleFareUpdate);
-    };
-  }, [selectedCab, selectionState]);
-
-  // Helper function to normalize vehicle IDs
-  const normalizeVehicleId = (id: string): string => {
-    if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
-  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">

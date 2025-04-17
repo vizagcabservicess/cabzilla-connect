@@ -15,6 +15,7 @@ interface FareUpdateErrorProps {
   description?: string;
   fixDatabaseHandler?: () => void;
   directDatabaseAccess?: () => void;
+  cabId?: string; // Add cab ID to ensure errors are correctly scoped
 }
 
 export function FareUpdateError({
@@ -25,9 +26,16 @@ export function FareUpdateError({
   title = "Update Error",
   description = "There was an error updating the fare. This could be due to a temporary network issue or server maintenance.",
   fixDatabaseHandler,
-  directDatabaseAccess
+  directDatabaseAccess,
+  cabId
 }: FareUpdateErrorProps) {
   const errorMessage = message || error?.message || "Unknown error";
+  
+  // Normalize vehicle ID to ensure consistency
+  const normalizeVehicleId = (id: string): string => {
+    if (!id) return '';
+    return id.toLowerCase().replace(/\s+/g, '_');
+  };
   
   // Enhanced handler for database fixes with improved error handling
   const handleFixDatabase = async () => {
@@ -53,7 +61,10 @@ export function FareUpdateError({
         toast.success("Database tables fixed successfully");
         // Trigger event to refresh data everywhere
         window.dispatchEvent(new CustomEvent('database-fixed', { 
-          detail: { timestamp: Date.now() }
+          detail: { 
+            timestamp: Date.now(),
+            cabId: cabId ? normalizeVehicleId(cabId) : undefined
+          }
         }));
         
         if (onRetry) {
@@ -117,6 +128,7 @@ export function FareUpdateError({
         <p>{description}</p>
         <div className="bg-red-50 p-3 rounded text-red-900 text-sm overflow-x-auto">
           {errorMessage}
+          {cabId && <div className="text-xs text-gray-600 mt-1">Cab ID: {normalizeVehicleId(cabId)}</div>}
         </div>
         <div className="flex flex-wrap gap-2 mt-2">
           {onRetry && (
