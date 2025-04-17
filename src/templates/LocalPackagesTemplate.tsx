@@ -74,6 +74,15 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
     }
   }, [selectedCab, currentCabId, hourlyPackage, clearFare, fetchFare, fareRequestId]);
 
+  // Update current fare when the fare from the hook changes
+  useEffect(() => {
+    if (fare > 0 && selectedCab) {
+      console.log(`LocalPackagesTemplate: Received fare update from hook: ${fare} for ${selectedCab.id}`);
+      setCurrentFare(fare);
+      setSelectionState('ready');
+    }
+  }, [fare, selectedCab]);
+
   // Handle user selecting a cab
   const handleSelectCab = (cab: CabType) => {
     console.log(`User selected cab: ${cab.name}`);
@@ -193,7 +202,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
           tripMode="one-way"
           hourlyPackage={hourlyPackage}
           pickupDate={pickupDate}
-          isCalculatingFares={selectionState === 'fetching'}
+          isCalculatingFares={selectionState === 'fetching' || selectionState === 'selecting'}
           onPackageChange={handlePackageChange}
         />
       </div>
