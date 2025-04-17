@@ -54,7 +54,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
-    return id.toLowerCase().replace(/\s+/g, '_');
+    return id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   };
   
   // Reset display fare and set loading state when cab changes
