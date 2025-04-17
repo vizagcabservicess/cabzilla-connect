@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -118,8 +117,8 @@ export function LocalFareManagement() {
       formData.append('price4hrs40km', values.package4hr40km.toString());
       formData.append('price8hrs80km', values.package8hr80km.toString());
       formData.append('price10hrs100km', values.package10hr100km.toString());
-      formData.append('priceExtraKm', values.extraKmRate.toString());
-      formData.append('priceExtraHour', values.extraHourRate.toString());
+      formData.append('extraKmRate', values.extraKmRate.toString());
+      formData.append('extraHourRate', values.extraHourRate.toString());
       
       // Package names for compatibility with all endpoints
       formData.append('package4hr40km', values.package4hr40km.toString());

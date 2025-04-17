@@ -31,7 +31,6 @@ export default function AdminDatabasePage() {
       }
       params.append('verbose', 'true');
       
-      // Call initializeDatabase
       const result = await fareService.initializeDatabase();
       setResult(result);
       
@@ -55,13 +54,11 @@ export default function AdminDatabasePage() {
     setError(null);
     
     try {
-      // Use improved fixDatabaseTables function from apiHelper
       const success = await import('@/utils/apiHelper')
         .then(({ fixDatabaseTables }) => fixDatabaseTables());
       
       if (success) {
         toast.success('Database tables fixed successfully');
-        // Trigger diagnostics to see the results
         runDiagnostics();
       } else {
         toast.error('Database fix had issues');
@@ -81,7 +78,6 @@ export default function AdminDatabasePage() {
     setError(null);
     
     try {
-      // Call our new diagnostic endpoint
       const timestamp = Date.now();
       const response = await axios.get(`${apiBaseUrl}/api/admin/diagnose-database.php?_t=${timestamp}`, {
         headers: {
@@ -440,8 +436,9 @@ export default function AdminDatabasePage() {
         <div className="mt-4">
           <FareUpdateError 
             error={error} 
-            title="Operation Failed"
             onRetry={isInitializing ? initializeDatabase : fixDatabaseTables}
+            title="Operation Failed"
+            description="There was a problem completing the requested operation."
           />
         </div>
       )}
