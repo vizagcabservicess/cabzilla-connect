@@ -14,6 +14,18 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
   const cacheRef = useRef<Record<string, {price: number, timestamp: number}>>({});
   const lastRequestTimeRef = useRef<number>(0);
   const currentCabIdRef = useRef<string | undefined>(initialCabId);
+  const isMountedRef = useRef<boolean>(true);
+  
+  // Ensure we clean up on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
   
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
@@ -23,10 +35,15 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
 
   const clearFare = useCallback(() => {
     setFare(0);
+    // Also clear any in-progress requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   }, []);
 
   const fetchFare = useCallback(async (cabId: string, packageId: string = hourlyPackage, forceRefresh: boolean = false) => {
-    if (!cabId || !packageId) {
+    if (!cabId || !packageId || !isMountedRef.current) {
       return 0;
     }
     
@@ -50,6 +67,14 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
       abortControllerRef.current.abort();
     }
     
+    // Clear localStorage for this cab to prevent stale data
+    try {
+      const localStorageKey = `fare_local_${normalizeVehicleId(cabId)}`;
+      localStorage.removeItem(localStorageKey);
+    } catch (e) {
+      console.warn('Failed to clear localStorage:', e);
+    }
+    
     // Only check cache if we're not forcing a refresh and the cab ID matches current selection
     const normalizedCabId = normalizeVehicleId(cabId);
     const cacheKey = `${normalizedCabId}_${packageId}`;
@@ -57,12 +82,16 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
     
     if (!forceRefresh && cachedData && (now - cachedData.timestamp < 2 * 60 * 1000)) {
       console.log(`Using cached fare for ${normalizedCabId}: ₹${cachedData.price}`);
-      setFare(cachedData.price);
+      if (isMountedRef.current) {
+        setFare(cachedData.price);
+      }
       return cachedData.price;
     }
     
-    setIsFetching(true);
-    setError(null);
+    if (isMountedRef.current) {
+      setIsFetching(true);
+      setError(null);
+    }
     
     // Create new abort controller
     abortControllerRef.current = new AbortController();
@@ -77,6 +106,11 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
         timeout: 8000,
         signal: abortControllerRef.current.signal
       });
+      
+      if (!isMountedRef.current || currentCabIdRef.current !== cabId) {
+        console.log('Component unmounted or cab changed during request, ignoring response');
+        return 0;
+      }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
@@ -101,31 +135,35 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
           };
           
           // Only set the fare if this is still the current cab
-          if (currentCabIdRef.current === cabId) {
+          if (isMountedRef.current && currentCabIdRef.current === cabId) {
             setFare(price);
+            
+            // Store in localStorage for consistency - with cab ID in the key to prevent conflicts
+            try {
+              const localStorageKey = `fare_local_${normalizedCabId}`;
+              localStorage.setItem(localStorageKey, price.toString());
+            } catch (e) {
+              console.warn('Failed to store in localStorage:', e);
+            }
           } else {
             console.log(`Ignoring stale fare response for ${normalizedCabId} as current cab is now ${currentCabIdRef.current}`);
-          }
-          
-          // Store in localStorage for consistency - with cab ID in the key to prevent conflicts
-          try {
-            const localStorageKey = `fare_local_${normalizedCabId}`;
-            localStorage.setItem(localStorageKey, price.toString());
-          } catch (e) {
-            console.warn('Failed to store in localStorage:', e);
           }
           
           return price;
         } else {
           const errorMsg = `No valid price found for ${cabId} with package ${packageId}`;
           console.warn(errorMsg);
-          setError(errorMsg);
+          if (isMountedRef.current && currentCabIdRef.current === cabId) {
+            setError(errorMsg);
+          }
           return 0;
         }
       } else {
         const errorMsg = 'No fare data found from API';
         console.warn(errorMsg);
-        setError(errorMsg);
+        if (isMountedRef.current && currentCabIdRef.current === cabId) {
+          setError(errorMsg);
+        }
         return 0;
       }
     } catch (error) {
@@ -134,13 +172,15 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
       } else {
         console.error('Error fetching fare:', error);
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch fare';
-        setError(errorMsg);
-        toast.error('Failed to load fare. Please try again.');
+        if (isMountedRef.current && currentCabIdRef.current === cabId) {
+          setError(errorMsg);
+          toast.error('Failed to load fare. Please try again.');
+        }
       }
       return 0;
     } finally {
-      // Only update isFetching if this is still the current cab
-      if (currentCabIdRef.current === cabId) {
+      // Only update isFetching if this is still the current cab and component is mounted
+      if (isMountedRef.current && currentCabIdRef.current === cabId) {
         setIsFetching(false);
       }
     }
@@ -156,6 +196,7 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      isMountedRef.current = false;
     };
   }, []);
 

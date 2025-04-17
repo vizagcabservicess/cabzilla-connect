@@ -35,12 +35,14 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 }) => {
   const [displayFare, setDisplayFare] = useState<number>(0);
   const [prevCabId, setPrevCabId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Reset display fare when cab changes to prevent showing stale data
+  // Reset display fare and set loading when cab changes
   useEffect(() => {
     if (selectedCab?.id !== prevCabId) {
-      console.log(`BookingSummary: Selected cab changed from ${prevCabId} to ${selectedCab?.id}, resetting display fare`);
+      console.log(`BookingSummary: Selected cab changed from ${prevCabId} to ${selectedCab?.id}, resetting display fare and setting loading state`);
       setDisplayFare(0);
+      setIsLoading(true);
       setPrevCabId(selectedCab?.id);
     }
   }, [selectedCab?.id, prevCabId]);
@@ -50,11 +52,23 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     if (fare && fare > 0 && selectedCab?.id === prevCabId) {
       console.log(`BookingSummary: Setting display fare for ${selectedCab.name} to ${fare}`);
       setDisplayFare(fare);
+      setIsLoading(false);
     } else if (selectedCab?.price && selectedCab?.id === prevCabId) {
       console.log(`BookingSummary: Using cab price from prop for ${selectedCab.name}: ${selectedCab.price}`);
       setDisplayFare(selectedCab.price);
+      setIsLoading(false);
     }
   }, [fare, selectedCab, prevCabId]);
+
+  // Set loading to false after a timeout to prevent indefinite loading
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;
@@ -79,7 +93,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       <>
         <div className="flex justify-between items-center py-2 border-b">
           <div>{hourlyPackage?.replace(/-/g, ' ').replace('hrs', 'hrs ').toUpperCase()} Package</div>
-          {isCalculatingFares ? (
+          {isCalculatingFares || isLoading ? (
             <Skeleton className="h-6 w-24" />
           ) : (
             <div>{formatPrice(displayFare)}</div>
@@ -139,7 +153,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
       <div className="flex justify-between items-center py-4 border-t border-b font-semibold">
         <div>Total Amount</div>
-        {isCalculatingFares ? (
+        {isCalculatingFares || isLoading ? (
           <Skeleton className="h-7 w-28" />
         ) : (
           <div>{formatPrice(displayFare)}</div>

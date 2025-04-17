@@ -43,6 +43,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   // Handle changing hourly package
   const handlePackageChange = (packageId: string) => {
     console.log(`User changed package to: ${packageId}`);
+    clearFare(); // Clear fare first to prevent stale data
     changePackage(packageId);
   };
 
