@@ -23,23 +23,20 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   
   // Use our custom hook for fare fetching
-  const { fare, isFetching, error, hourlyPackage, fetchFare, changePackage } = useLocalPackageFare();
-
-  // Fetch fare when selected cab changes
-  useEffect(() => {
-    if (selectedCab) {
-      console.log(`Selected cab changed to ${selectedCab.name}, fetching fare...`);
-      fetchFare(selectedCab.id, hourlyPackage);
-    }
-  }, [selectedCab?.id, hourlyPackage, fetchFare]);
+  const { fare, isFetching, error, hourlyPackage, fetchFare, changePackage, clearFare } = useLocalPackageFare();
 
   // Handle selecting a cab
   const handleSelectCab = (cab: CabType) => {
     console.log(`User selected cab: ${cab.name}`);
+    
+    // First, clear the fare to prevent showing stale data
+    clearFare();
+    
+    // Update selected cab
     setSelectedCab(prevCab => {
       // If selecting the same cab, don't trigger a re-render
       if (prevCab?.id === cab.id) return prevCab;
-      return { ...cab, price: fare > 0 ? fare : cab.price };
+      return cab;
     });
   };
 
@@ -48,6 +45,14 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
     console.log(`User changed package to: ${packageId}`);
     changePackage(packageId);
   };
+
+  // Fetch fare when selected cab or package changes
+  useEffect(() => {
+    if (selectedCab) {
+      console.log(`Selected cab changed to ${selectedCab.name} or package changed to ${hourlyPackage}, fetching fare...`);
+      fetchFare(selectedCab.id, hourlyPackage, true);
+    }
+  }, [selectedCab?.id, hourlyPackage, fetchFare]);
 
   // Update cab price when fare changes
   useEffect(() => {

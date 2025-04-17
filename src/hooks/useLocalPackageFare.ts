@@ -13,6 +13,7 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
   const abortControllerRef = useRef<AbortController | null>(null);
   const cacheRef = useRef<Record<string, {price: number, timestamp: number}>>({});
   const lastRequestTimeRef = useRef<number>(0);
+  const currentCabIdRef = useRef<string | undefined>(initialCabId);
   
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
@@ -20,9 +21,19 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
     return id.toLowerCase().replace(/\s+/g, '_');
   };
 
+  const clearFare = useCallback(() => {
+    setFare(0);
+  }, []);
+
   const fetchFare = useCallback(async (cabId: string, packageId: string = hourlyPackage, forceRefresh: boolean = false) => {
     if (!cabId || !packageId) {
       return 0;
+    }
+    
+    // If cab has changed, immediately clear fare to prevent displaying stale data
+    if (currentCabIdRef.current !== cabId) {
+      currentCabIdRef.current = cabId;
+      clearFare();
     }
     
     // Throttle requests - no more than one request every 300ms
@@ -39,7 +50,7 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
       abortControllerRef.current.abort();
     }
     
-    // Check cache first (with 2-minute expiry) unless force refresh
+    // Only check cache if we're not forcing a refresh and the cab ID matches current selection
     const normalizedCabId = normalizeVehicleId(cabId);
     const cacheKey = `${normalizedCabId}_${packageId}`;
     const cachedData = cacheRef.current[cacheKey];
@@ -89,14 +100,21 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
             timestamp: now
           };
           
-          // Store in localStorage for consistency
+          // Only set the fare if this is still the current cab
+          if (currentCabIdRef.current === cabId) {
+            setFare(price);
+          } else {
+            console.log(`Ignoring stale fare response for ${normalizedCabId} as current cab is now ${currentCabIdRef.current}`);
+          }
+          
+          // Store in localStorage for consistency - with cab ID in the key to prevent conflicts
           try {
-            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+            const localStorageKey = `fare_local_${normalizedCabId}`;
+            localStorage.setItem(localStorageKey, price.toString());
           } catch (e) {
             console.warn('Failed to store in localStorage:', e);
           }
           
-          setFare(price);
           return price;
         } else {
           const errorMsg = `No valid price found for ${cabId} with package ${packageId}`;
@@ -121,9 +139,12 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
       }
       return 0;
     } finally {
-      setIsFetching(false);
+      // Only update isFetching if this is still the current cab
+      if (currentCabIdRef.current === cabId) {
+        setIsFetching(false);
+      }
     }
-  }, [hourlyPackage]);
+  }, [hourlyPackage, clearFare]);
 
   const changePackage = useCallback((packageId: string) => {
     setHourlyPackage(packageId);
@@ -144,6 +165,7 @@ export function useLocalPackageFare(initialCabId?: string, initialPackage: strin
     error,
     hourlyPackage,
     fetchFare,
-    changePackage
+    changePackage,
+    clearFare
   };
 }

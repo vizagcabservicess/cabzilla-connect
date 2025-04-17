@@ -34,15 +34,27 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   fare
 }) => {
   const [displayFare, setDisplayFare] = useState<number>(0);
+  const [prevCabId, setPrevCabId] = useState<string>('');
 
-  // Update display fare when selectedCab or fare changes
+  // Reset display fare when cab changes to prevent showing stale data
   useEffect(() => {
-    if (fare && fare > 0) {
+    if (selectedCab?.id !== prevCabId) {
+      console.log(`BookingSummary: Selected cab changed from ${prevCabId} to ${selectedCab?.id}, resetting display fare`);
+      setDisplayFare(0);
+      setPrevCabId(selectedCab?.id);
+    }
+  }, [selectedCab?.id, prevCabId]);
+
+  // Update display fare when fare changes and matches current cab
+  useEffect(() => {
+    if (fare && fare > 0 && selectedCab?.id === prevCabId) {
+      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} to ${fare}`);
       setDisplayFare(fare);
-    } else if (selectedCab?.price) {
+    } else if (selectedCab?.price && selectedCab?.id === prevCabId) {
+      console.log(`BookingSummary: Using cab price from prop for ${selectedCab.name}: ${selectedCab.price}`);
       setDisplayFare(selectedCab.price);
     }
-  }, [selectedCab, fare]);
+  }, [fare, selectedCab, prevCabId]);
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;
