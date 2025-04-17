@@ -94,10 +94,17 @@ export const hourlyPackages: HourlyPackage[] = [
   }
 ];
 
+// Define the type for our package price cache
+interface PackagePriceCache {
+  price: number;
+  timestamp: number;
+}
+
 // Create a window-level cache for package prices
+// Fix: Use a single consistent declaration for the Window interface extension
 declare global {
   interface Window {
-    localPackagePriceCache?: Record<string, { price: number; timestamp: number; }>;
+    localPackagePriceCache?: Record<string, PackagePriceCache>;
   }
 }
 
