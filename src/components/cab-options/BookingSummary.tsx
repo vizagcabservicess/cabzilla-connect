@@ -4,7 +4,7 @@ import { formatPrice } from '@/lib';
 import { BookingSummaryHelper } from './BookingSummaryHelper';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { getApiUrl } from '@/config/api';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 
 interface BookingSummaryProps {
   selectedCab: any;
@@ -37,6 +37,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [extraDistanceFare, setExtraDistanceFare] = useState<number>(0);
   const [totalAmount, setTotalAmount] = useState<number>(0);
   const [isFetchingFare, setIsFetchingFare] = useState<boolean>(false);
+  const [lastSelectedCabId, setLastSelectedCabId] = useState<string>("");
   const [lastUpdate, setLastUpdate] = useState<number>(0);
 
   // Generate a formatted date for display
@@ -59,21 +60,19 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const fetchDirectFare = async (vehicleId: string, packageId: string) => {
     if (!vehicleId || !packageId) return 0;
     
+    console.log(`BookingSummary: Fetching local fares for ${vehicleId} with package: ${packageId}, timestamp: ${Date.now()}`);
     setIsFetchingFare(true);
+    
     try {
       // Normalize vehicle ID for API request
       const normalizedVehicleId = vehicleId.toLowerCase().replace(/\s+/g, '_');
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`);
       
-      console.log(`BookingSummary: Fetching local fares for ${normalizedVehicleId}`);
+      console.log(`Fetching price from API: ${apiUrl}`);
       
       const response = await axios.get(apiUrl, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Force-Refresh': 'true'
-        }
+        headers: forceRefreshHeaders,
+        timeout: 8000
       });
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
@@ -82,11 +81,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
         
         // Extract the right price for the selected package
         let price = 0;
-        if (packageId.includes('4hrs-40km')) {
+        if (packageId.includes('4hrs-40km') && fareData.price4hrs40km) {
           price = Number(fareData.price4hrs40km);
-        } else if (packageId.includes('8hrs-80km')) {
+        } else if (packageId.includes('8hrs-80km') && fareData.price8hrs80km) {
           price = Number(fareData.price8hrs80km);
-        } else if (packageId.includes('10hrs-100km')) {
+        } else if (packageId.includes('10hrs-100km') && fareData.price10hrs100km) {
           price = Number(fareData.price10hrs100km);
         }
         
@@ -100,6 +99,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           });
           
           return price;
+        } else {
+          console.warn(`No valid price found for ${vehicleId} with package ${packageId}`);
+          return 0;
         }
       }
       
@@ -117,25 +119,40 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Calculate initial fare based on selected cab
   useEffect(() => {
     const calculateFare = async () => {
-      if (selectedCab && tripType === 'local' && hourlyPackage) {
+      if (!selectedCab) return;
+
+      // Only recalculate if cab ID changed to prevent unnecessary API calls
+      if (selectedCab.id === lastSelectedCabId && packageFare > 0) {
+        console.log(`BookingSummary: Using existing fare for ${selectedCab.id}: ${packageFare}`);
+        return;
+      }
+      
+      setLastSelectedCabId(selectedCab.id);
+      
+      if (tripType === 'local' && hourlyPackage) {
         const directFare = await fetchDirectFare(selectedCab.id, hourlyPackage);
         
         if (directFare > 0) {
           setPackageFare(directFare);
           setTotalAmount(directFare);
-          console.log(`Set fare for ${selectedCab.id}: ${directFare} (refreshed from database)`);
-        } else {
-          // If direct API fails, try to get from cab selection price
-          const normalizedCabId = selectedCab.id.toLowerCase().replace(/\s+/g, '_');
-          const fareFromSelection = selectedCab.price || 0;
+          setLastUpdate(Date.now());
+          console.log(`BookingSummary: Set fare for ${selectedCab.id}: ${directFare} (refreshed from database)`);
           
-          if (fareFromSelection > 0) {
-            setPackageFare(fareFromSelection);
-            setTotalAmount(fareFromSelection);
-            console.log(`Using fare from cab selection: ${fareFromSelection}`);
-          } else {
-            console.warn('Failed to get fare from both API and cab selection');
-          }
+          // Dispatch event to notify other components
+          window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+            detail: {
+              cabType: selectedCab.id,
+              cabId: selectedCab.id,
+              fare: directFare,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              timestamp: Date.now(),
+              source: 'direct-api-booking-summary'
+            }
+          }));
+        } else {
+          console.warn(`Failed to get fare for ${selectedCab.id} from API`);
+          // Don't use localStorage fallbacks as per requirements
         }
       }
     };
@@ -143,36 +160,31 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     calculateFare();
   }, [selectedCab, tripType, hourlyPackage]);
 
-  // Listen for booking summary update events
+  // Force refresh the fare when cab selection or package changes
   useEffect(() => {
-    const handleBookingSummaryUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent;
+    if (selectedCab && tripType === 'local' && hourlyPackage) {
+      // Reset fare state when cab or package changes
+      setPackageFare(0);
+      setTotalAmount(0);
+      setIsFetchingFare(true);
       
-      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
-        const { cabId, fare, tripType: eventTripType, packageId, timestamp } = customEvent.detail;
+      // Schedule a fresh API fetch
+      const fetchTimeout = setTimeout(async () => {
+        const directFare = await fetchDirectFare(selectedCab.id, hourlyPackage);
         
-        // Only update if this event is newer than our last update
-        if (!lastUpdate || timestamp > lastUpdate) {
-          // Make sure this event matches our current selection
-          if (selectedCab && cabId === selectedCab.id.toLowerCase().replace(/\s+/g, '_') && 
-              eventTripType === tripType && packageId === hourlyPackage) {
-            
-            setPackageFare(fare);
-            setTotalAmount(fare);
-            setLastUpdate(timestamp);
-            
-            console.log(`BookingSummary: Updated fare to ₹${fare} from ${customEvent.detail.source}`);
-          }
+        if (directFare > 0) {
+          setPackageFare(directFare);
+          setTotalAmount(directFare);
+          setLastUpdate(Date.now());
+          console.log(`BookingSummary: Refreshed fare for ${selectedCab.id}: ${directFare}`);
         }
-      }
-    };
-    
-    window.addEventListener('booking-summary-update', handleBookingSummaryUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('booking-summary-update', handleBookingSummaryUpdate as EventListener);
-    };
-  }, [selectedCab, tripType, hourlyPackage, lastUpdate]);
+        
+        setIsFetchingFare(false);
+      }, 100);
+      
+      return () => clearTimeout(fetchTimeout);
+    }
+  }, [selectedCab?.id, hourlyPackage]);
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;

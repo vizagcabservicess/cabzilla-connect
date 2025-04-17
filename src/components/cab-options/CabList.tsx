@@ -5,7 +5,7 @@ import { formatPrice } from '@/lib';
 import { RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { getApiUrl } from '@/config/api';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -53,13 +53,10 @@ export const CabList: React.FC<CabListProps> = ({
       console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp: ${Date.now()}`);
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${vehicleId}`);
       
+      console.log(`Fetching price from API: ${apiUrl}`);
       const response = await axios.get(apiUrl, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 5000
+        headers: forceRefreshHeaders,
+        timeout: 8000
       });
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
@@ -78,6 +75,20 @@ export const CabList: React.FC<CabListProps> = ({
         
         if (price > 0) {
           console.log(`Retrieved fare directly from database API: ₹${price}`);
+          
+          // Broadcast the update to ensure consistency
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: vehicleId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: price,
+              calculated: true,
+              source: 'direct-api-cablist',
+              timestamp: Date.now()
+            }
+          }));
+          
           return price;
         }
       }
@@ -94,10 +105,60 @@ export const CabList: React.FC<CabListProps> = ({
   };
 
   // Manually refresh prices
-  const handleRefreshPrices = () => {
+  const handleRefreshPrices = async () => {
     toast.info('Refreshing fares from database...');
     setRefreshTrigger(Date.now());
+    
+    // Refresh all vehicle fares in sequence
+    for (const cab of cabTypes) {
+      if (tripType === 'local' && hourlyPackage) {
+        await fetchLocalFare(cab.id);
+      }
+    }
+    
+    // Special handling to ensure the selected cab fare is propagated to booking summary
+    if (selectedCabId && tripType === 'local' && hourlyPackage) {
+      const selectedCab = cabTypes.find(cab => cab.id === selectedCabId);
+      if (selectedCab) {
+        const fare = await fetchLocalFare(selectedCabId);
+        if (fare > 0) {
+          // Explicitly notify booking summary
+          window.dispatchEvent(new CustomEvent('booking-summary-update', {
+            detail: {
+              cabId: selectedCabId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: fare,
+              source: 'refresh-button',
+              timestamp: Date.now()
+            }
+          }));
+        }
+      }
+    }
+    
+    toast.success('Fares refreshed successfully');
   };
+
+  // When a cab is selected, ensure its fare is up-to-date
+  useEffect(() => {
+    if (selectedCabId && tripType === 'local' && hourlyPackage) {
+      console.log(`CabList: Selected cab changed to ${selectedCabId}, refreshing fare`);
+      fetchLocalFare(selectedCabId);
+    }
+  }, [selectedCabId, hourlyPackage]);
+
+  // Refresh fares when tripType, hourlyPackage, or refreshTrigger changes
+  useEffect(() => {
+    if (tripType === 'local' && hourlyPackage) {
+      console.log(`CabList: Trip parameters changed, refreshing all fares`);
+      
+      // Refresh all cabs
+      cabTypes.forEach(cab => {
+        fetchLocalFare(cab.id);
+      });
+    }
+  }, [tripType, hourlyPackage, refreshTrigger]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
@@ -179,7 +240,13 @@ export const CabList: React.FC<CabListProps> = ({
                 ) : (
                   <button 
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded w-full"
-                    onClick={() => handleSelectCab ? handleSelectCab(cab) : onSelectCab(cab)}
+                    onClick={() => {
+                      if (handleSelectCab) {
+                        handleSelectCab(cab);
+                      } else {
+                        onSelectCab(cab);
+                      }
+                    }}
                   >
                     Select
                   </button>
