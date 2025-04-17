@@ -27,9 +27,25 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const lastHourlyPackageRef = useRef<string | undefined>(hourlyPackage);
   const currentFareRef = useRef<number>(totalPrice);
   const operationInProgressRef = useRef<boolean>(false);
+  const requestAbortControllerRef = useRef<AbortController | null>(null);
+  
+  // Map to track fare calculations in progress for specific vehicles
+  const fareCalculationInProgressMap = useRef<Record<string, boolean>>({});
 
   // Immediately update references when props change
   useEffect(() => {
+    // If the cab ID changed, abort any pending requests for the previous cab
+    if (selectedCabIdRef.current !== selectedCabId && requestAbortControllerRef.current) {
+      console.log(`BookingSummaryHelper: Aborting pending requests for previous cab ${selectedCabIdRef.current}`);
+      requestAbortControllerRef.current.abort();
+      requestAbortControllerRef.current = null;
+      
+      // Clear operation flag for the previous cab ID if it exists
+      if (selectedCabIdRef.current) {
+        fareCalculationInProgressMap.current[selectedCabIdRef.current] = false;
+      }
+    }
+    
     selectedCabIdRef.current = selectedCabId;
     lastHourlyPackageRef.current = hourlyPackage;
     currentFareRef.current = totalPrice;
@@ -52,17 +68,25 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       return 0;
     }
     
-    // Avoid concurrent operations
-    if (operationInProgressRef.current) {
-      console.log(`BookingSummaryHelper: Operation already in progress, skipping`);
+    // Use a vehicle-specific lock to prevent concurrent operations for the same vehicle
+    const normalizedCabId = normalizeVehicleId(selectedCabId);
+    if (fareCalculationInProgressMap.current[normalizedCabId]) {
+      console.log(`BookingSummaryHelper: Fare calculation already in progress for ${normalizedCabId}, skipping`);
       return 0;
     }
     
+    // Set the flag to indicate this vehicle's fare is being calculated
+    fareCalculationInProgressMap.current[normalizedCabId] = true;
     operationInProgressRef.current = true;
     setLastFetchAttempt(currentTime);
     
+    // Create an abort controller for this request
+    if (requestAbortControllerRef.current) {
+      requestAbortControllerRef.current.abort();
+    }
+    requestAbortControllerRef.current = new AbortController();
+    
     try {
-      const normalizedCabId = normalizeVehicleId(selectedCabId);
       console.log(`BookingSummaryHelper: Fetching local fares for vehicle ${normalizedCabId}, package: ${hourlyPackage}`);
       
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
@@ -70,12 +94,14 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
-        timeout: 8000
+        timeout: 8000,
+        signal: requestAbortControllerRef.current.signal
       });
       
       // Important: Verify the selectedCabId hasn't changed during the API call
       if (selectedCabIdRef.current !== selectedCabId || lastHourlyPackageRef.current !== hourlyPackage) {
         console.log('BookingSummaryHelper: Cab or package changed during API call, discarding result');
+        fareCalculationInProgressMap.current[normalizedCabId] = false;
         operationInProgressRef.current = false;
         return 0;
       }
@@ -106,6 +132,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
               console.warn('Failed to clear localStorage:', e);
             }
             
+            // Store the new fare in localStorage with clear vehicle identification
+            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+            console.log(`BookingSummaryHelper: Stored fare in localStorage for ${normalizedCabId}: ${price}`);
+            
             // Broadcast the update to ensure consistency
             window.dispatchEvent(new CustomEvent('booking-summary-update', {
               detail: {
@@ -120,25 +150,48 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
               }
             }));
             
+            // Also dispatch a more specific event for the booking summary
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
+              detail: {
+                cabId: normalizedCabId,
+                tripType: 'local',
+                packageId: hourlyPackage,
+                fare: price,
+                source: 'direct-api-helper-specific',
+                timestamp: currentTime,
+                selectedCabId: selectedCabId,
+                originalVehicleId: selectedCabId
+              }
+            }));
+            
+            fareCalculationInProgressMap.current[normalizedCabId] = false;
             operationInProgressRef.current = false;
             return price;
           } else {
             console.log('BookingSummaryHelper: Cab or package changed after API call, discarding result');
+            fareCalculationInProgressMap.current[normalizedCabId] = false;
             operationInProgressRef.current = false;
             return 0;
           }
         } else {
           console.warn(`No valid price found for ${normalizedCabId} with package ${hourlyPackage}`);
+          fareCalculationInProgressMap.current[normalizedCabId] = false;
           operationInProgressRef.current = false;
           return 0;
         }
       } else {
         console.warn(`No fare data returned for ${normalizedCabId}`);
+        fareCalculationInProgressMap.current[normalizedCabId] = false;
         operationInProgressRef.current = false;
         return 0;
       }
     } catch (error) {
-      console.error('Error fetching fare from direct API:', error);
+      if (axios.isCancel(error)) {
+        console.log(`BookingSummaryHelper: Request for ${normalizedCabId} was cancelled`);
+      } else {
+        console.error('Error fetching fare from direct API:', error);
+      }
+      fareCalculationInProgressMap.current[normalizedCabId] = false;
       operationInProgressRef.current = false;
       return 0;
     }
@@ -148,6 +201,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   useEffect(() => {
     if (selectedCabId && tripType === "local" && hourlyPackage) {
       const delay = setTimeout(() => {
+        // Clear any previous calculation flags for this vehicle
+        const normalizedCabId = normalizeVehicleId(selectedCabId);
+        fareCalculationInProgressMap.current[normalizedCabId] = false;
+        
+        // Then trigger a new fetch
         fetchCorrectFareForSelectedCab();
       }, 200); // Small delay to avoid race conditions
       
@@ -166,6 +224,10 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         // Only process if this event is relevant to our current state and matches the current cab
         if (selectedCabId === cabType && eventTripType === 'local' && cabType === selectedCabIdRef.current) {
           console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
+          
+          // Reset the calculation flag for this specific vehicle
+          const normalizedCabId = normalizeVehicleId(cabType);
+          fareCalculationInProgressMap.current[normalizedCabId] = false;
           
           // Add a small delay to allow other state changes to complete
           setTimeout(() => {
@@ -204,9 +266,28 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   // Execute fetch on retry counter change
   useEffect(() => {
     if (retryCount > 0 && selectedCabIdRef.current === selectedCabId) {
+      // Clear the calculation flag to allow retries
+      if (selectedCabId) {
+        const normalizedCabId = normalizeVehicleId(selectedCabId);
+        fareCalculationInProgressMap.current[normalizedCabId] = false;
+      }
+      
       fetchCorrectFareForSelectedCab();
     }
   }, [retryCount]);
+  
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any pending requests
+      if (requestAbortControllerRef.current) {
+        requestAbortControllerRef.current.abort();
+      }
+      
+      // Clear calculation flags
+      fareCalculationInProgressMap.current = {};
+    };
+  }, []);
   
   // This component doesn't render anything visible
   return null;

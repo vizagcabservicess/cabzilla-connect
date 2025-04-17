@@ -46,6 +46,7 @@ export const CabList: React.FC<CabListProps> = ({
   const selectedCabIdRef = useRef<string>(selectedCabId);
   const hourlyPackageRef = useRef<string | undefined>(hourlyPackage);
   const fareCache = useRef<Record<string, number>>({});
+  const pendingRequestsRef = useRef<Record<string, AbortController>>({});
 
   // Update refs when props change
   useEffect(() => {
@@ -58,9 +59,33 @@ export const CabList: React.FC<CabListProps> = ({
     return id.toLowerCase().replace(/\s+/g, '_');
   };
 
+  // Cancel pending requests for a specific vehicle or all vehicles
+  const cancelPendingRequests = (vehicleId?: string) => {
+    if (vehicleId) {
+      // Cancel only for a specific vehicle
+      if (pendingRequestsRef.current[vehicleId]) {
+        pendingRequestsRef.current[vehicleId].abort();
+        delete pendingRequestsRef.current[vehicleId];
+      }
+    } else {
+      // Cancel all pending requests
+      Object.values(pendingRequestsRef.current).forEach(controller => {
+        controller.abort();
+      });
+      pendingRequestsRef.current = {};
+    }
+  };
+
   // Fetch local package fares directly from the API
   const fetchLocalFare = async (vehicleId: string): Promise<number> => {
     try {
+      // Cancel any pending requests for this vehicle
+      cancelPendingRequests(vehicleId);
+      
+      // Create a new abort controller for this request
+      const abortController = new AbortController();
+      pendingRequestsRef.current[vehicleId] = abortController;
+      
       // Track which cab is currently loading
       setLoadingCabIds(prev => [...prev, vehicleId]);
       
@@ -73,8 +98,15 @@ export const CabList: React.FC<CabListProps> = ({
       console.log(`Fetching price from API: ${apiUrl}`);
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
-        timeout: 8000
+        timeout: 8000,
+        signal: abortController.signal
       });
+      
+      // Verify the cab ID is still what we're interested in
+      if (vehicleId !== selectedCabIdRef.current && vehicleId !== selectedCabId) {
+        console.log(`CabList: Vehicle ${vehicleId} is no longer selected, discarding results`);
+        return 0;
+      }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
@@ -128,11 +160,20 @@ export const CabList: React.FC<CabListProps> = ({
       console.warn(`No valid price found for ${normalizedVehicleId} with package ${hourlyPackage}`);
       return 0;
     } catch (error) {
-      console.error('Error fetching local fare:', error);
+      if (axios.isCancel(error)) {
+        console.log(`CabList: Request for ${vehicleId} was cancelled`);
+      } else {
+        console.error('Error fetching local fare:', error);
+      }
       return 0;
     } finally {
       // Remove cab from loading state
       setLoadingCabIds(prev => prev.filter(id => id !== vehicleId));
+      
+      // Clean up the abort controller reference
+      if (pendingRequestsRef.current[vehicleId]) {
+        delete pendingRequestsRef.current[vehicleId];
+      }
     }
   };
 
@@ -140,6 +181,9 @@ export const CabList: React.FC<CabListProps> = ({
   const handleRefreshPrices = async () => {
     toast.info('Refreshing fares from database...');
     setRefreshTrigger(Date.now());
+    
+    // Cancel all pending requests
+    cancelPendingRequests();
     
     // Clear any existing fare cache first
     fareCache.current = {};
@@ -195,6 +239,13 @@ export const CabList: React.FC<CabListProps> = ({
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
       console.log(`CabList: Selected cab changed to ${selectedCabId}, refreshing fare`);
       
+      // Cancel any pending requests that are not for the selected cab
+      Object.keys(pendingRequestsRef.current).forEach(vehicleId => {
+        if (vehicleId !== selectedCabId) {
+          cancelPendingRequests(vehicleId);
+        }
+      });
+      
       // Clear any previously stored fares for this specific vehicle to prevent confusion
       try {
         const normalizedCabId = normalizeVehicleId(selectedCabId);
@@ -212,6 +263,9 @@ export const CabList: React.FC<CabListProps> = ({
     if (tripType === 'local' && hourlyPackage) {
       console.log(`CabList: Trip parameters changed, refreshing all fares`);
       
+      // Cancel all pending requests
+      cancelPendingRequests();
+      
       // Clear any previously stored fares to prevent conflicts
       try {
         for (const cab of cabTypes) {
@@ -228,6 +282,13 @@ export const CabList: React.FC<CabListProps> = ({
       });
     }
   }, [tripType, hourlyPackage, refreshTrigger]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      cancelPendingRequests();
+    };
+  }, []);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
