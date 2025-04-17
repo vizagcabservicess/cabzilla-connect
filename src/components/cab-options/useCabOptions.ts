@@ -6,8 +6,8 @@ import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
 
 interface CabOptionsProps {
-  tripType: string;
-  tripMode?: string;
+  tripType: TripType;
+  tripMode?: TripMode;
   distance?: number;
 }
 
@@ -316,7 +316,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     }
   };
 
-  const filterVehiclesByTripType = (vehicles: CabType[], tripType: string): CabType[] => {
+  const filterVehiclesByTripType = (vehicles: CabType[], tripType: TripType): CabType[] => {
     if (isTourTripType(tripType)) {
       return vehicles.filter(v => v.capacity >= 4);
     } else if (isAdminTripType(tripType)) {

@@ -50,11 +50,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
   // Update display fare when fare changes and it matches the current cab
   useEffect(() => {
-    if (fare && fare > 0) {
-      console.log(`BookingSummary: Setting display fare for ${selectedCab?.name} to ${fare}`);
+    if (fare && fare > 0 && selectedCab?.id === cabId) {
+      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} to ${fare}`);
       setDisplayFare(fare);
     }
-  }, [fare, selectedCab]);
+  }, [fare, selectedCab, cabId]);
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;

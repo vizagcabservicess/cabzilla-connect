@@ -48,11 +48,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     
     selectedCabIdRef.current = selectedCabId;
     lastHourlyPackageRef.current = hourlyPackage;
-    
-    // Only update the fare reference if the total price is valid
-    if (totalPrice > 0) {
-      currentFareRef.current = totalPrice;
-    }
+    currentFareRef.current = totalPrice;
   }, [selectedCabId, hourlyPackage, totalPrice]);
 
   // Normalize vehicle ID to ensure consistency
@@ -128,6 +124,18 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
           
           // One more verification before dispatching the event
           if (selectedCabIdRef.current === selectedCabId && lastHourlyPackageRef.current === hourlyPackage) {
+            // Clear any previous stored fares to prevent confusion
+            try {
+              // Clear only the fare for this specific vehicle to avoid multiple selection conflicts
+              localStorage.removeItem(`fare_local_${normalizedCabId}`);
+            } catch (e) {
+              console.warn('Failed to clear localStorage:', e);
+            }
+            
+            // Store the new fare in localStorage with clear vehicle identification
+            localStorage.setItem(`fare_local_${normalizedCabId}`, price.toString());
+            console.log(`BookingSummaryHelper: Stored fare in localStorage for ${normalizedCabId}: ${price}`);
+            
             // Broadcast the update to ensure consistency
             window.dispatchEvent(new CustomEvent('booking-summary-update', {
               detail: {
@@ -142,15 +150,17 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
               }
             }));
             
-            // Also dispatch the fare-updated event for component consistency
-            window.dispatchEvent(new CustomEvent('fare-updated', {
+            // Also dispatch a more specific event for the booking summary
+            window.dispatchEvent(new CustomEvent('booking-summary-fare-updated', {
               detail: {
                 cabId: normalizedCabId,
                 tripType: 'local',
                 packageId: hourlyPackage,
                 fare: price,
-                source: 'booking-summary-helper',
-                timestamp: currentTime
+                source: 'direct-api-helper-specific',
+                timestamp: currentTime,
+                selectedCabId: selectedCabId,
+                originalVehicleId: selectedCabId
               }
             }));
             
@@ -202,6 +212,69 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       return () => clearTimeout(delay);
     }
   }, [selectedCabId, hourlyPackage, tripType]);
+  
+  // Setup listener for cab selection events
+  useEffect(() => {
+    const handleCabSelection = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      
+      if (customEvent.detail && customEvent.detail.cabType) {
+        const { cabType, tripType: eventTripType } = customEvent.detail;
+        
+        // Only process if this event is relevant to our current state and matches the current cab
+        if (selectedCabId === cabType && eventTripType === 'local' && cabType === selectedCabIdRef.current) {
+          console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
+          
+          // Reset the calculation flag for this specific vehicle
+          const normalizedCabId = normalizeVehicleId(cabType);
+          fareCalculationInProgressMap.current[normalizedCabId] = false;
+          
+          // Add a small delay to allow other state changes to complete
+          setTimeout(() => {
+            fetchCorrectFareForSelectedCab();
+          }, 200);
+        }
+      }
+    };
+    
+    window.addEventListener('cab-selected', handleCabSelection as EventListener);
+    
+    return () => {
+      window.removeEventListener('cab-selected', handleCabSelection as EventListener);
+    };
+  }, [selectedCabId, hourlyPackage]);
+  
+  // Setup regular retries to ensure correct fare
+  useEffect(() => {
+    // Only setup retry for local trips with valid cab selection
+    if (selectedCabId && tripType === "local" && hourlyPackage) {
+      // Check if we should trigger a retry (every 5 seconds)
+      const retryInterval = setInterval(() => {
+        // Only increment retry count if the selectedCabId hasn't changed
+        if (selectedCabIdRef.current === selectedCabId) {
+          setRetryCount(prev => prev + 1);
+        } else {
+          // Reset retry count for new cab ID
+          setRetryCount(0);
+        }
+      }, 5000);
+      
+      return () => clearInterval(retryInterval);
+    }
+  }, [selectedCabId, tripType, hourlyPackage]);
+  
+  // Execute fetch on retry counter change
+  useEffect(() => {
+    if (retryCount > 0 && selectedCabIdRef.current === selectedCabId) {
+      // Clear the calculation flag to allow retries
+      if (selectedCabId) {
+        const normalizedCabId = normalizeVehicleId(selectedCabId);
+        fareCalculationInProgressMap.current[normalizedCabId] = false;
+      }
+      
+      fetchCorrectFareForSelectedCab();
+    }
+  }, [retryCount]);
   
   // Clean up on unmount
   useEffect(() => {

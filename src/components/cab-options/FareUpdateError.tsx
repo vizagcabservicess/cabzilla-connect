@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -167,4 +168,3 @@ export function FareUpdateError({
     </Alert>
   );
 }
-

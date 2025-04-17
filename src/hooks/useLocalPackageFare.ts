@@ -100,12 +100,6 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
             price
           );
           
-          // Also update the 'current' fare cache
-          queryClient.setQueryData(
-            ['localPackageFare', 'current'],
-            price
-          );
-          
           // Dispatch a fare update event
           window.dispatchEvent(new CustomEvent('fare-updated', {
             detail: {
