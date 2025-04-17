@@ -18,6 +18,7 @@ export interface CabListProps {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
+  isCalculatingFares?: boolean;
 }
 
 interface CabOptionsProps {
@@ -30,6 +31,7 @@ interface CabOptionsProps {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
+  isCalculatingFares?: boolean;
 }
 
 export const CabOptions: React.FC<CabOptionsProps> = ({
@@ -42,11 +44,12 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   hourlyPackage,
   pickupDate,
   returnDate,
+  isCalculatingFares: externalIsCalculatingFares,
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState<boolean>(true);
+  const [isCalculatingFares, setIsCalculatingFares] = useState<boolean>(externalIsCalculatingFares || true);
   const [fareErrors, setFareErrors] = useState<Record<string, string>>({});
   const [lastFareUpdate, setLastFareUpdate] = useState<number>(Date.now());
   const [pendingBookingSummaryFareRequests, setPendingBookingSummaryFareRequests] = useState<Record<string, boolean>>({});
@@ -648,7 +651,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           hourlyPackage={hourlyPackage}
           pickupDate={pickupDate}
           returnDate={returnDate}
-          isCalculating={isCalculatingFares}
+          isCalculatingFares={isCalculatingFares}
           cabFares={cabFares}
           handleSelectCab={handleCabSelect}
           getFareDetails={getFareDetails}
@@ -668,7 +671,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       hourlyPackage={hourlyPackage}
       pickupDate={pickupDate}
       returnDate={returnDate}
-      isCalculating={isCalculatingFares}
+      isCalculatingFares={isCalculatingFares}
       cabFares={cabFares}
       cabErrors={fareErrors}
       handleSelectCab={handleCabSelect}
