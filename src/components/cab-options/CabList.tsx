@@ -45,6 +45,7 @@ export const CabList: React.FC<CabListProps> = ({
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const selectedCabIdRef = useRef<string>(selectedCabId);
   const hourlyPackageRef = useRef<string | undefined>(hourlyPackage);
+  const fareCache = useRef<Record<string, number>>({});
 
   // Update refs when props change
   useEffect(() => {
@@ -52,14 +53,22 @@ export const CabList: React.FC<CabListProps> = ({
     hourlyPackageRef.current = hourlyPackage;
   }, [selectedCabId, hourlyPackage]);
 
+  // Normalize vehicle ID to ensure consistency
+  const normalizeVehicleId = (id: string): string => {
+    return id.toLowerCase().replace(/\s+/g, '_');
+  };
+
   // Fetch local package fares directly from the API
   const fetchLocalFare = async (vehicleId: string): Promise<number> => {
     try {
       // Track which cab is currently loading
       setLoadingCabIds(prev => [...prev, vehicleId]);
       
-      console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp: ${Date.now()}`);
-      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${vehicleId}`);
+      // Normalize the vehicle ID
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
+      
+      console.log(`Fetching local fares for vehicle ${normalizedVehicleId} with timestamp: ${Date.now()}`);
+      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`);
       
       console.log(`Fetching price from API: ${apiUrl}`);
       const response = await axios.get(apiUrl, {
@@ -69,7 +78,7 @@ export const CabList: React.FC<CabListProps> = ({
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
-        console.log('Local fares for vehicle', vehicleId, ':', fareData);
+        console.log('Local fares for vehicle', normalizedVehicleId, ':', fareData);
         
         // Extract the correct price based on the package
         let price = 0;
@@ -84,17 +93,31 @@ export const CabList: React.FC<CabListProps> = ({
         if (price > 0) {
           console.log(`Retrieved fare directly from database API: ₹${price}`);
           
+          // Cache the fare locally
+          fareCache.current[normalizedVehicleId] = price;
+          
+          // Clear any previous stored fares for this vehicle to prevent conflicts
+          try {
+            localStorage.removeItem(`fare_local_${normalizedVehicleId}`);
+          } catch (e) {
+            console.warn('Failed to clear localStorage:', e);
+          }
+          
+          // Store in localStorage with clear vehicle-specific key
+          localStorage.setItem(`fare_local_${normalizedVehicleId}`, price.toString());
+          
           // Broadcast the update to ensure consistency
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
-              cabId: vehicleId,
+              cabId: normalizedVehicleId,
               tripType: 'local',
               packageId: hourlyPackage,
               fare: price,
               calculated: true,
               source: 'direct-api-cablist',
               timestamp: Date.now(),
-              selectedCabId: vehicleId // Include the original cab ID for verification
+              selectedCabId: vehicleId, // Include the original cab ID for verification
+              originalVehicleId: vehicleId // Extra verification field
             }
           }));
           
@@ -102,7 +125,7 @@ export const CabList: React.FC<CabListProps> = ({
         }
       }
       
-      console.warn(`No valid price found for ${vehicleId} with package ${hourlyPackage}`);
+      console.warn(`No valid price found for ${normalizedVehicleId} with package ${hourlyPackage}`);
       return 0;
     } catch (error) {
       console.error('Error fetching local fare:', error);
@@ -117,6 +140,22 @@ export const CabList: React.FC<CabListProps> = ({
   const handleRefreshPrices = async () => {
     toast.info('Refreshing fares from database...');
     setRefreshTrigger(Date.now());
+    
+    // Clear any existing fare cache first
+    fareCache.current = {};
+    
+    // Clear any stored fares in localStorage that could cause conflicts
+    if (tripType === 'local') {
+      try {
+        // Only clear fares for the current trip type to avoid affecting other bookings
+        for (const cab of cabTypes) {
+          const normalizedCabId = normalizeVehicleId(cab.id);
+          localStorage.removeItem(`fare_local_${normalizedCabId}`);
+        }
+      } catch (e) {
+        console.warn('Failed to clear localStorage:', e);
+      }
+    }
     
     // Refresh all vehicle fares in sequence
     for (const cab of cabTypes) {
@@ -134,13 +173,14 @@ export const CabList: React.FC<CabListProps> = ({
           // Explicitly notify booking summary
           window.dispatchEvent(new CustomEvent('booking-summary-update', {
             detail: {
-              cabId: selectedCabId,
+              cabId: normalizeVehicleId(selectedCabId),
               tripType: 'local',
               packageId: hourlyPackage,
               fare: fare,
               source: 'refresh-button',
               timestamp: Date.now(),
-              selectedCabId: selectedCabId
+              selectedCabId: selectedCabId,
+              originalVehicleId: selectedCabId
             }
           }));
         }
@@ -154,6 +194,15 @@ export const CabList: React.FC<CabListProps> = ({
   useEffect(() => {
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
       console.log(`CabList: Selected cab changed to ${selectedCabId}, refreshing fare`);
+      
+      // Clear any previously stored fares for this specific vehicle to prevent confusion
+      try {
+        const normalizedCabId = normalizeVehicleId(selectedCabId);
+        localStorage.removeItem(`fare_local_${normalizedCabId}`);
+      } catch (e) {
+        console.warn('Failed to clear localStorage:', e);
+      }
+      
       fetchLocalFare(selectedCabId);
     }
   }, [selectedCabId, hourlyPackage]);
@@ -162,6 +211,16 @@ export const CabList: React.FC<CabListProps> = ({
   useEffect(() => {
     if (tripType === 'local' && hourlyPackage) {
       console.log(`CabList: Trip parameters changed, refreshing all fares`);
+      
+      // Clear any previously stored fares to prevent conflicts
+      try {
+        for (const cab of cabTypes) {
+          const normalizedCabId = normalizeVehicleId(cab.id);
+          localStorage.removeItem(`fare_local_${normalizedCabId}`);
+        }
+      } catch (e) {
+        console.warn('Failed to clear localStorage:', e);
+      }
       
       // Refresh all cabs
       cabTypes.forEach(cab => {
