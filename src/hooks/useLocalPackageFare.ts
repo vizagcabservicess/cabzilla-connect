@@ -22,6 +22,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
   const queryClient = useQueryClient();
   const requestIdRef = useRef<number>(0);
   const currentCabIdRef = useRef<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
@@ -34,6 +35,12 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     // Invalidate all queries related to fares
     queryClient.invalidateQueries({ queryKey: ['localPackageFare'] });
     setCurrentFare(0);
+    
+    // Abort any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   }, [queryClient]);
 
   // Change package function
@@ -53,6 +60,14 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       return 0;
     }
 
+    // Abort any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create a new abort controller
+    abortControllerRef.current = new AbortController();
+    
     // Generate a unique request ID
     const requestId = ++requestIdRef.current;
     // Store the current cab ID
@@ -67,6 +82,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
         timeout: 8000,
+        signal: abortControllerRef.current.signal
       });
       
       // If this is not the most recent request, discard the results
@@ -91,14 +107,17 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         if (price > 0) {
           console.log(`Retrieved fare from API for ${normalizedCabId}: ₹${price}`);
           
-          // Update the current fare state
-          setCurrentFare(price);
-          
-          // Update the query cache
-          queryClient.setQueryData(
-            ['localPackageFare', normalizedCabId, packageId],
-            price
-          );
+          // Only update state if this cab ID is still current
+          if (currentCabIdRef.current === cabId) {
+            console.log(`Set fare for ${normalizedCabId}: ${price}`);
+            setCurrentFare(price);
+            
+            // Update the query cache
+            queryClient.setQueryData(
+              ['localPackageFare', normalizedCabId, packageId],
+              price
+            );
+          }
           
           // Dispatch a fare update event
           window.dispatchEvent(new CustomEvent('fare-updated', {
@@ -123,6 +142,12 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         throw new Error(errorMsg);
       }
     } catch (error) {
+      // Don't show error if it was from an aborted request
+      if (axios.isCancel(error)) {
+        console.log(`Request for ${normalizedCabId} was cancelled`);
+        return 0;
+      }
+      
       console.error('Error fetching fare:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to fetch fare';
       toast.error('Failed to load fare. Please try again.');
@@ -136,6 +161,15 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     queryFn: async () => currentFare,
     enabled: true, // Always enabled to track current fare
   });
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return {
     fare: currentFare,
