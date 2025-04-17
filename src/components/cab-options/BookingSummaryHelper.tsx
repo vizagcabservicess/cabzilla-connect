@@ -26,12 +26,30 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   const selectedCabIdRef = useRef<string | null>(selectedCabId);
   const lastHourlyPackageRef = useRef<string | undefined>(hourlyPackage);
   const currentFareRef = useRef<number>(totalPrice);
+  const lastFetchResultRef = useRef<{cabId?: string, fare?: number, timestamp?: number}>({});
+
+  // Normalize vehicle ID consistently across the application
+  const normalizeVehicleId = (id: string | null): string => {
+    if (!id) return '';
+    return id.toLowerCase().replace(/\s+/g, '_');
+  };
+
+  // Verify if two vehicle IDs match, using strict normalization
+  const doVehicleIdsMatch = (id1: string | null, id2: string | null): boolean => {
+    if (!id1 || !id2) return false;
+    return normalizeVehicleId(id1) === normalizeVehicleId(id2);
+  };
 
   // Immediately update references when props change
   useEffect(() => {
     selectedCabIdRef.current = selectedCabId;
     lastHourlyPackageRef.current = hourlyPackage;
     currentFareRef.current = totalPrice;
+    
+    // Reset retry count when cab changes
+    if (!doVehicleIdsMatch(selectedCabId, selectedCabIdRef.current)) {
+      setRetryCount(0);
+    }
   }, [selectedCabId, hourlyPackage, totalPrice]);
 
   // Ensures booking summary always has the correct fare
@@ -49,11 +67,11 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
     setLastFetchAttempt(currentTime);
     
     try {
-      const normalizedCabId = selectedCabId.toLowerCase().replace(/\s+/g, '_');
+      const normalizedCabId = normalizeVehicleId(selectedCabId);
       console.log(`BookingSummaryHelper: Fetching local fares for vehicle ${normalizedCabId}, package: ${hourlyPackage}`);
       
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
-      console.log(`Fetching price from API: ${apiUrl}`);
+      console.log(`BookingSummaryHelper: Fetching price from API: ${apiUrl}`);
       
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
@@ -61,7 +79,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       });
       
       // Important: Verify the selectedCabId hasn't changed during the API call
-      if (selectedCabIdRef.current !== selectedCabId || lastHourlyPackageRef.current !== hourlyPackage) {
+      if (!doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId) || lastHourlyPackageRef.current !== hourlyPackage) {
         console.log('BookingSummaryHelper: Cab or package changed during API call, discarding result');
         return 0;
       }
@@ -81,9 +99,14 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         
         if (price > 0) {
           console.log(`BookingSummaryHelper: Retrieved fare directly from database API: ₹${price}`);
+          lastFetchResultRef.current = {
+            cabId: normalizedCabId,
+            fare: price,
+            timestamp: currentTime
+          };
           
           // One more verification before dispatching the event
-          if (selectedCabIdRef.current === selectedCabId && lastHourlyPackageRef.current === hourlyPackage) {
+          if (doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId) && lastHourlyPackageRef.current === hourlyPackage) {
             // Broadcast the update to ensure consistency
             window.dispatchEvent(new CustomEvent('booking-summary-update', {
               detail: {
@@ -103,15 +126,15 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
             return 0;
           }
         } else {
-          console.warn(`No valid price found for ${normalizedCabId} with package ${hourlyPackage}`);
+          console.warn(`BookingSummaryHelper: No valid price found for ${normalizedCabId} with package ${hourlyPackage}`);
           return 0;
         }
       } else {
-        console.warn(`No fare data returned for ${normalizedCabId}`);
+        console.warn(`BookingSummaryHelper: No fare data returned for ${normalizedCabId}`);
         return 0;
       }
     } catch (error) {
-      console.error('Error fetching fare from direct API:', error);
+      console.error('BookingSummaryHelper: Error fetching fare from direct API:', error);
       return 0;
     }
   };
@@ -134,7 +157,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
         const { cabType, tripType: eventTripType } = customEvent.detail;
         
         // Only process if this event is relevant to our current state and matches the current cab
-        if (selectedCabId === cabType && eventTripType === 'local' && cabType === selectedCabIdRef.current) {
+        if (doVehicleIdsMatch(selectedCabId, cabType) && eventTripType === 'local' && doVehicleIdsMatch(cabType, selectedCabIdRef.current)) {
           console.log(`BookingSummaryHelper: Detected cab selection event for ${cabType}, scheduling fare fetch`);
           
           // Add a small delay to allow other state changes to complete
@@ -159,7 +182,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
       // Check if we should trigger a retry (every 5 seconds)
       const retryInterval = setInterval(() => {
         // Only increment retry count if the selectedCabId hasn't changed
-        if (selectedCabIdRef.current === selectedCabId) {
+        if (doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId)) {
           setRetryCount(prev => prev + 1);
         } else {
           // Reset retry count for new cab ID
@@ -173,7 +196,7 @@ export const BookingSummaryHelper: React.FC<BookingSummaryHelperProps> = ({
   
   // Execute fetch on retry counter change
   useEffect(() => {
-    if (retryCount > 0 && selectedCabIdRef.current === selectedCabId) {
+    if (retryCount > 0 && doVehicleIdsMatch(selectedCabIdRef.current, selectedCabId)) {
       fetchCorrectFareForSelectedCab();
     }
   }, [retryCount]);
