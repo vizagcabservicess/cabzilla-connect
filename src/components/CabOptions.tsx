@@ -32,6 +32,7 @@ interface CabOptionsProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares?: boolean;
+  onPackageChange?: (packageId: string) => void;
 }
 
 export const CabOptions: React.FC<CabOptionsProps> = ({
@@ -45,6 +46,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   pickupDate,
   returnDate,
   isCalculatingFares: externalIsCalculatingFares,
+  onPackageChange,
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
