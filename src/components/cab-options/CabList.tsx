@@ -156,11 +156,13 @@ export const CabList: React.FC<CabListProps> = ({
         console.warn('Failed to clear localStorage:', e);
       }
     }
-    cabTypes.forEach(cab => {
-      if (tripType === 'local' && hourlyPackage) {
+    
+    if (tripType === 'local' && hourlyPackage) {
+      for (const cab of cabTypes) {
         await fetchLocalFare(cab.id);
       }
-    });
+    }
+    
     if (selectedCabId && tripType === 'local' && hourlyPackage) {
       const selectedCab = cabTypes.find(cab => cab.id === selectedCabId);
       if (selectedCab) {
@@ -214,9 +216,8 @@ export const CabList: React.FC<CabListProps> = ({
       } catch (e) {
         console.warn('Failed to clear localStorage:', e);
       }
-      cabTypes.forEach(cab => {
-        fetchLocalFare(cab.id);
-      });
+      
+      Promise.all(cabTypes.map(cab => fetchLocalFare(cab.id)));
     }
   }, [tripType, hourlyPackage, refreshTrigger]);
 
