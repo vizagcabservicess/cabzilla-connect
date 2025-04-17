@@ -5,6 +5,8 @@ import { BookingSummaryHelper } from './BookingSummaryHelper';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FareUpdateError } from './FareUpdateError';
+import { useLocalPackageFare } from '@/hooks/useLocalPackageFare';
 
 interface BookingSummaryProps {
   selectedCab: any;
@@ -27,7 +29,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   returnDate,
   tripType,
   distance,
-  hourlyPackage,
+  hourlyPackage = '8hrs-80km',
   tripMode = 'one-way',
   dropLocation,
   isCalculatingFares = false,
@@ -45,12 +47,19 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Create a ref to track if this is the initial mount
   const isInitialMount = useRef<boolean>(true);
   
-  // Track if we've received a fare for the current cab
-  const hasFareForCurrentCab = useRef<boolean>(false);
-  
   // Track fare updates with a timestamp to prevent stale updates
   const fareUpdateTimestampRef = useRef<number>(0);
   
+  // Use our custom hook to fetch and manage fares
+  const {
+    fare: localPackageFare,
+    isFetching: isLocalPackageFareFetching,
+    error: localPackageFareError,
+    fetchFare: fetchLocalPackageFare,
+    hourlyPackage: currentPackage,
+    changePackage
+  } = useLocalPackageFare(hourlyPackage);
+
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
@@ -72,18 +81,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Mark that we're loading
       setIsLoading(true);
       
-      // Reset the flag indicating we have a fare for this cab
-      hasFareForCurrentCab.current = false;
-      
       // Update the timestamp to invalidate any pending updates
       fareUpdateTimestampRef.current = Date.now();
       
       // Update the stored cab ID
       setCurrentCabId(normalizedSelectedCabId);
+      
+      // Fetch the fare for the new cab
+      if (tripType === 'local') {
+        fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
+      }
     }
-  }, [selectedCab, currentCabId]);
+  }, [selectedCab, currentCabId, fetchLocalPackageFare, hourlyPackage, tripType]);
 
-  // Update display fare when fare changes and it matches the current cab
+  // Update display fare from props or from our local package fare hook
   useEffect(() => {
     // Skip on initial mount (we're still loading)
     if (isInitialMount.current) {
@@ -95,49 +106,48 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     
     const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
     
-    // Only update display fare if:
-    // 1. We have a valid fare
-    // 2. The current cab ID matches the selected cab
-    // 3. The fare isn't zero (which would be our reset state)
-    // 4. We're not in a loading/calculating state
+    // For local trips, use the fare from our hook
+    if (tripType === 'local' && localPackageFare > 0 && normalizedSelectedCabId === currentCabId) {
+      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from hook: ${localPackageFare}`);
+      setDisplayFare(localPackageFare);
+      setIsLoading(false);
+      return;
+    }
+    
+    // For other trip types, use the fare from props
     if (
       fare && 
       fare > 0 && 
       normalizedSelectedCabId === currentCabId && 
       !isCalculatingFares
     ) {
-      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} (${normalizedSelectedCabId}) to ${fare}`);
-      
-      // Create a timestamp for this update
-      const updateTimestamp = Date.now();
-      fareUpdateTimestampRef.current = updateTimestamp;
-      
-      // Use a slight delay to allow any pending state updates to complete
-      setTimeout(() => {
-        // Only proceed if this is still the current update for the current cab
-        if (updateTimestamp === fareUpdateTimestampRef.current && normalizedSelectedCabId === currentCabId) {
-          setDisplayFare(fare);
-          
-          // Mark that we have received a fare for the current cab
-          hasFareForCurrentCab.current = true;
-          
-          // Clear loading state once we have valid data
-          setIsLoading(false);
-        } else {
-          console.log(`BookingSummary: Ignoring stale fare update for ${normalizedSelectedCabId}`);
-        }
-      }, 50);
-    }
-  }, [fare, selectedCab, currentCabId, isCalculatingFares]);
-
-  // Clear loading state if calculation completes but we don't have a valid fare
-  // This prevents indefinite loading states
-  useEffect(() => {
-    if (!isCalculatingFares && isLoading && hasFareForCurrentCab.current) {
-      // If we're no longer calculating and have a fare for this cab, clear loading
+      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from props: ${fare}`);
+      setDisplayFare(fare);
       setIsLoading(false);
     }
-  }, [isCalculatingFares, isLoading]);
+  }, [fare, selectedCab, currentCabId, isCalculatingFares, localPackageFare, tripType]);
+
+  // When hourly package changes, update it in our hook
+  useEffect(() => {
+    if (hourlyPackage !== currentPackage) {
+      changePackage(hourlyPackage);
+    }
+  }, [hourlyPackage, currentPackage, changePackage]);
+
+  // Handle retry for fare fetch errors
+  const handleRetryFetch = () => {
+    if (!selectedCab) return;
+    
+    console.log(`BookingSummary: Retrying fare fetch for ${selectedCab.id}`);
+    
+    // Reset loading state
+    setIsLoading(true);
+    
+    // Fetch the fare again
+    if (tripType === 'local') {
+      fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
+    }
+  };
 
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;
@@ -157,9 +167,22 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Show error if we have one from local package fare fetching
+  if (localPackageFareError && tripType === 'local') {
+    return (
+      <FareUpdateError 
+        error={new Error(localPackageFareError)}
+        onRetry={handleRetryFetch}
+        cabId={selectedCab.id}
+        title="Fare Update Error"
+        description="There was a problem fetching the latest fare for this cab."
+      />
+    );
+  }
+
   const renderLocalPackageDetails = () => {
     // Check if we should show skeleton loading state
-    const shouldShowSkeleton = isLoading || isCalculatingFares || displayFare === 0;
+    const shouldShowSkeleton = isLoading || isLocalPackageFareFetching || isCalculatingFares || displayFare === 0;
     
     return (
       <>
@@ -175,13 +198,12 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     );
   };
 
-  // Determine when to show skeleton loaders - we're explicitly strict here
-  // to prevent ANY chance of showing stale data
+  // Determine when to show skeleton loaders
   const shouldShowSkeleton = 
     isLoading || 
+    isLocalPackageFareFetching ||
     isCalculatingFares || 
-    displayFare === 0 || 
-    !hasFareForCurrentCab.current;
+    displayFare === 0;
 
   return (
     <div className="bg-white rounded-lg p-5 shadow-sm mb-4">

@@ -29,13 +29,15 @@ export const FareUpdateError: React.FC<FareUpdateErrorProps> = ({
     <div className="bg-white rounded-lg p-5 shadow-sm mb-4">
       <Alert variant="destructive" className="mb-4">
         <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
+        <AlertTitle>
           {title}
+        </AlertTitle>
+        <AlertDescription>
+          {description}
         </AlertDescription>
       </Alert>
       
       <div className="text-sm text-gray-600 mb-4">
-        <p>{description}</p>
         {cabId && <p className="mt-2 text-xs text-gray-500">Vehicle ID: {cabId}</p>}
         {error.message && <p className="mt-2 text-xs text-gray-500">Error: {error.message}</p>}
       </div>
