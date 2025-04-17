@@ -45,7 +45,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Create a ref to track if this is the initial mount
   const isInitialMount = useRef<boolean>(true);
   
-  // Create a ref to track whether we've received a fare for the current cab
+  // Track if we've received a fare for the current cab
   const hasFareForCurrentCab = useRef<boolean>(false);
   
   // Reset display fare and set loading state when cab changes
