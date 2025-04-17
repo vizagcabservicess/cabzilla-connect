@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib';
 import { RefreshCcw } from 'lucide-react';
@@ -45,21 +45,6 @@ export const CabList: React.FC<CabListProps> = ({
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const selectedCabIdRef = useRef<string>(selectedCabId);
   const hourlyPackageRef = useRef<string | undefined>(hourlyPackage);
-  const abortControllersRef = useRef<Record<string, AbortController>>({});
-  const lastEventTimestampRef = useRef<Record<string, number>>({});
-
-  // Normalize vehicle ID consistently across the application with stricter rules
-  const normalizeVehicleId = (id: string): string => {
-    if (!id) return '';
-    // Convert to lowercase, remove any spaces, and replace any special characters
-    return id.toLowerCase().replace(/[\s.,-]+/g, '_').replace(/__+/g, '_');
-  };
-
-  // Verify if two vehicle IDs match, using strict normalization
-  const doVehicleIdsMatch = (id1: string, id2: string): boolean => {
-    if (!id1 || !id2) return false;
-    return normalizeVehicleId(id1) === normalizeVehicleId(id2);
-  };
 
   // Update refs when props change
   useEffect(() => {
@@ -68,39 +53,23 @@ export const CabList: React.FC<CabListProps> = ({
   }, [selectedCabId, hourlyPackage]);
 
   // Fetch local package fares directly from the API
-  const fetchLocalFare = useCallback(async (vehicleId: string): Promise<number> => {
+  const fetchLocalFare = async (vehicleId: string): Promise<number> => {
     try {
-      // Cancel any existing request for this cab
-      if (abortControllersRef.current[vehicleId]) {
-        abortControllersRef.current[vehicleId].abort();
-      }
-      
-      // Create a new abort controller
-      abortControllersRef.current[vehicleId] = new AbortController();
-      
       // Track which cab is currently loading
       setLoadingCabIds(prev => [...prev, vehicleId]);
       
-      const normalizedVehicleId = normalizeVehicleId(vehicleId);
-      const currentTimestamp = Date.now();
+      console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp: ${Date.now()}`);
+      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${vehicleId}`);
       
-      console.log(`CabList: Fetching local fares for vehicle ${normalizedVehicleId} with timestamp: ${currentTimestamp}`);
-      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedVehicleId}`);
-      
-      console.log(`CabList: Fetching price from API: ${apiUrl}`);
+      console.log(`Fetching price from API: ${apiUrl}`);
       const response = await axios.get(apiUrl, {
-        headers: {
-          ...forceRefreshHeaders,
-          'X-Request-ID': `fare-${normalizedVehicleId}-${currentTimestamp}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
-        timeout: 8000,
-        signal: abortControllersRef.current[vehicleId].signal
+        headers: forceRefreshHeaders,
+        timeout: 8000
       });
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
         const fareData = response.data.fares[0];
-        console.log('CabList: Local fares for vehicle', normalizedVehicleId, ':', fareData);
+        console.log('Local fares for vehicle', vehicleId, ':', fareData);
         
         // Extract the correct price based on the package
         let price = 0;
@@ -113,76 +82,36 @@ export const CabList: React.FC<CabListProps> = ({
         }
         
         if (price > 0) {
-          console.log(`CabList: Retrieved fare directly from database API: ₹${price} for ${normalizedVehicleId}`);
+          console.log(`Retrieved fare directly from database API: ₹${price}`);
           
-          // Only dispatch global events for the CURRENTLY SELECTED cab
-          if (doVehicleIdsMatch(vehicleId, selectedCabIdRef.current)) {
-            // Check if this event is newer than the last one for this cab
-            if (!lastEventTimestampRef.current[normalizedVehicleId] || 
-                currentTimestamp > lastEventTimestampRef.current[normalizedVehicleId]) {
-              
-              // Update timestamp tracking
-              lastEventTimestampRef.current[normalizedVehicleId] = currentTimestamp;
-              
-              console.log(`CabList: Broadcasting fare update for SELECTED cab ${vehicleId}`);
-              
-              // Broadcast the update to ensure consistency
-              window.dispatchEvent(new CustomEvent('fare-calculated', {
-                detail: {
-                  cabId: normalizedVehicleId,
-                  tripType: 'local',
-                  packageId: hourlyPackage,
-                  fare: price,
-                  calculated: true,
-                  source: 'direct-api-cablist',
-                  timestamp: currentTimestamp,
-                  originalCabId: vehicleId, // Include the original cab ID for verification
-                  vehicleName: fareData.vehicle_name // Include vehicle name for debugging
-                }
-              }));
-              
-              // If this is the selected cab, also dispatch a special event for the booking summary
-              window.dispatchEvent(new CustomEvent('booking-summary-update', {
-                detail: {
-                  cabId: normalizedVehicleId,
-                  tripType: 'local',
-                  packageId: hourlyPackage,
-                  fare: price,
-                  source: 'direct-api-cablist-selected',
-                  timestamp: currentTimestamp,
-                  originalCabId: vehicleId,
-                  vehicleName: fareData.vehicle_name
-                }
-              }));
-            } else {
-              console.log(`CabList: Skipping event dispatch - older than last event for ${normalizedVehicleId}`);
+          // Broadcast the update to ensure consistency
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: vehicleId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: price,
+              calculated: true,
+              source: 'direct-api-cablist',
+              timestamp: Date.now(),
+              selectedCabId: vehicleId // Include the original cab ID for verification
             }
-          } else {
-            // For non-selected cabs, don't broadcast global events
-            console.log(`CabList: Not broadcasting fare update for non-selected cab ${vehicleId}`);
-          }
+          }));
           
           return price;
         }
       }
       
-      console.warn(`CabList: No valid price found for ${vehicleId} with package ${hourlyPackage}`);
+      console.warn(`No valid price found for ${vehicleId} with package ${hourlyPackage}`);
       return 0;
     } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log(`CabList: Request for ${vehicleId} was cancelled`);
-      } else {
-        console.error('CabList: Error fetching local fare:', error);
-      }
+      console.error('Error fetching local fare:', error);
       return 0;
     } finally {
       // Remove cab from loading state
       setLoadingCabIds(prev => prev.filter(id => id !== vehicleId));
-      
-      // Clean up the abort controller
-      delete abortControllersRef.current[vehicleId];
     }
-  }, [hourlyPackage]);
+  };
 
   // Manually refresh prices
   const handleRefreshPrices = async () => {
@@ -203,29 +132,17 @@ export const CabList: React.FC<CabListProps> = ({
         const fare = await fetchLocalFare(selectedCabId);
         if (fare > 0) {
           // Explicitly notify booking summary
-          const normalizedCabId = normalizeVehicleId(selectedCabId);
-          const currentTimestamp = Date.now();
-          
-          // Check if this event is newer than the last one
-          if (!lastEventTimestampRef.current[normalizedCabId] || 
-              currentTimestamp > lastEventTimestampRef.current[normalizedCabId]) {
-            
-            // Update timestamp tracking
-            lastEventTimestampRef.current[normalizedCabId] = currentTimestamp;
-            
-            window.dispatchEvent(new CustomEvent('booking-summary-update', {
-              detail: {
-                cabId: normalizedCabId,
-                tripType: 'local',
-                packageId: hourlyPackage,
-                fare: fare,
-                source: 'refresh-button',
-                timestamp: currentTimestamp,
-                originalCabId: selectedCabId,
-                vehicleName: selectedCab.name
-              }
-            }));
-          }
+          window.dispatchEvent(new CustomEvent('booking-summary-update', {
+            detail: {
+              cabId: selectedCabId,
+              tripType: 'local',
+              packageId: hourlyPackage,
+              fare: fare,
+              source: 'refresh-button',
+              timestamp: Date.now(),
+              selectedCabId: selectedCabId
+            }
+          }));
         }
       }
     }
@@ -239,7 +156,7 @@ export const CabList: React.FC<CabListProps> = ({
       console.log(`CabList: Selected cab changed to ${selectedCabId}, refreshing fare`);
       fetchLocalFare(selectedCabId);
     }
-  }, [selectedCabId, hourlyPackage, fetchLocalFare]);
+  }, [selectedCabId, hourlyPackage]);
 
   // Refresh fares when tripType, hourlyPackage, or refreshTrigger changes
   useEffect(() => {
@@ -251,7 +168,7 @@ export const CabList: React.FC<CabListProps> = ({
         fetchLocalFare(cab.id);
       });
     }
-  }, [tripType, hourlyPackage, refreshTrigger, cabTypes, fetchLocalFare]);
+  }, [tripType, hourlyPackage, refreshTrigger]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
