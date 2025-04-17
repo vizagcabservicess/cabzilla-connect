@@ -8,15 +8,28 @@ export const apiBaseUrl = process.env.NODE_ENV === 'production'
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string = ''): string => {
+  // Check if path is already a complete URL
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  
+  // Determine if we should use Vizagup API for certain endpoints
+  const useVizagupApi = process.env.NODE_ENV === 'development' && 
+                        (path.includes('direct-local-fares.php') || 
+                         path.includes('direct-booking-data.php'));
+  
+  // Use vizagup.com API directly for certain endpoints even in development
+  const baseUrl = useVizagupApi ? 'https://vizagup.com' : apiBaseUrl;
+  
   // If no path is provided, return the base URL
   if (!path) {
-    return apiBaseUrl;
+    return baseUrl;
   }
   
   // Ensure path starts with a slash if it doesn't already
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   // Remove any duplicate slashes that might occur when joining
-  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
+  const fullUrl = `${baseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
   return fullUrl;
 };
 
