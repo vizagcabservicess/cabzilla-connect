@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CabType } from '@/types/cab';
 
@@ -94,3 +93,5 @@ export const CabOptionsTemplate: React.FC<CabOptionsProps> = ({
     </div>
   );
 };
+
+export default CabOptionsTemplate;
