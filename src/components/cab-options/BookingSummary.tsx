@@ -1,7 +1,10 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatPrice } from '@/lib';
 import { BookingSummaryHelper } from './BookingSummaryHelper';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface BookingSummaryProps {
   selectedCab: any;
@@ -14,6 +17,7 @@ interface BookingSummaryProps {
   tripMode?: string;
   dropLocation?: string;
   isCalculatingFares?: boolean;
+  fare?: number;
 }
 
 export const BookingSummary: React.FC<BookingSummaryProps> = ({
@@ -26,8 +30,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   hourlyPackage,
   tripMode = 'one-way',
   dropLocation,
-  isCalculatingFares = false
+  isCalculatingFares = false,
+  fare
 }) => {
+  const [displayFare, setDisplayFare] = useState<number>(0);
+
+  // Update display fare when selectedCab or fare changes
+  useEffect(() => {
+    if (fare && fare > 0) {
+      setDisplayFare(fare);
+    } else if (selectedCab?.price) {
+      setDisplayFare(selectedCab.price);
+    }
+  }, [selectedCab, fare]);
+
   if (!selectedCab) {
     return <div className="text-center py-8">Please select a cab to view booking summary</div>;
   }
@@ -51,7 +67,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       <>
         <div className="flex justify-between items-center py-2 border-b">
           <div>{hourlyPackage?.replace(/-/g, ' ').replace('hrs', 'hrs ').toUpperCase()} Package</div>
-          <div>{isCalculatingFares ? 'Loading...' : formatPrice(selectedCab.price || 0)}</div>
+          {isCalculatingFares ? (
+            <Skeleton className="h-6 w-24" />
+          ) : (
+            <div>{formatPrice(displayFare)}</div>
+          )}
         </div>
       </>
     );
@@ -107,13 +127,17 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
       <div className="flex justify-between items-center py-4 border-t border-b font-semibold">
         <div>Total Amount</div>
-        <div>{isCalculatingFares ? 'Calculating...' : formatPrice(selectedCab.price || 0)}</div>
+        {isCalculatingFares ? (
+          <Skeleton className="h-7 w-28" />
+        ) : (
+          <div>{formatPrice(displayFare)}</div>
+        )}
       </div>
 
       <BookingSummaryHelper 
         tripType={tripType} 
         selectedCabId={selectedCab?.id} 
-        totalPrice={selectedCab.price || 0}
+        totalPrice={displayFare || selectedCab.price || 0}
         hourlyPackage={hourlyPackage}
       />
     </div>

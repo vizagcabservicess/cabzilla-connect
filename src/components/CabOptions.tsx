@@ -325,6 +325,12 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     }
   };
 
+  const handlePackageChange = (packageId: string) => {
+    if (onPackageChange) {
+      onPackageChange(packageId);
+    }
+  };
+
   useEffect(() => {
     if (selectedCab && hasSelectedCab) {
       setTimeout(() => {

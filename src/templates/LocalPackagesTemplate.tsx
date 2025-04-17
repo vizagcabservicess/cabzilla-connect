@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CabOptions } from '@/components/CabOptions';
 import { BookingSummary } from '@/components/cab-options/BookingSummary';
-import { useFareFetching } from '@/hooks/useFareFetching';
+import { useLocalPackageFare } from '@/hooks/useLocalPackageFare';
 import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
 
@@ -19,40 +19,45 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
   pickupDate,
   distance
 }) => {
-  // State for the selected cab and package
+  // State for the selected cab
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
-  const [hourlyPackage, setHourlyPackage] = useState<string>('8hrs-80km');
-
+  
   // Use our custom hook for fare fetching
-  const { fetchFare, isFetching, currentFare, error } = useFareFetching();
+  const { fare, isFetching, error, hourlyPackage, fetchFare, changePackage } = useLocalPackageFare();
 
-  // Fetch fare when selected cab or hourly package changes
+  // Fetch fare when selected cab changes
   useEffect(() => {
     if (selectedCab) {
-      console.log(`Selected cab changed to ${selectedCab.name} or package changed to ${hourlyPackage}, fetching fare...`);
-      fetchFare(selectedCab.id, hourlyPackage).then(fare => {
-        if (fare > 0 && selectedCab) {
-          // Update the cab's price property for display
-          setSelectedCab(prevCab => {
-            if (!prevCab) return null;
-            return { ...prevCab, price: fare };
-          });
-        }
-      });
+      console.log(`Selected cab changed to ${selectedCab.name}, fetching fare...`);
+      fetchFare(selectedCab.id, hourlyPackage);
     }
   }, [selectedCab?.id, hourlyPackage, fetchFare]);
 
   // Handle selecting a cab
   const handleSelectCab = (cab: CabType) => {
     console.log(`User selected cab: ${cab.name}`);
-    setSelectedCab(cab);
+    setSelectedCab(prevCab => {
+      // If selecting the same cab, don't trigger a re-render
+      if (prevCab?.id === cab.id) return prevCab;
+      return { ...cab, price: fare > 0 ? fare : cab.price };
+    });
   };
 
   // Handle changing hourly package
   const handlePackageChange = (packageId: string) => {
     console.log(`User changed package to: ${packageId}`);
-    setHourlyPackage(packageId);
+    changePackage(packageId);
   };
+
+  // Update cab price when fare changes
+  useEffect(() => {
+    if (selectedCab && fare > 0) {
+      setSelectedCab(prevCab => {
+        if (!prevCab) return null;
+        return { ...prevCab, price: fare };
+      });
+    }
+  }, [fare]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
@@ -81,6 +86,7 @@ export const LocalPackagesTemplate: React.FC<LocalPackagesTemplateProps> = ({
             distance={distance}
             hourlyPackage={hourlyPackage}
             isCalculatingFares={isFetching}
+            fare={fare}
           />
         )}
         
