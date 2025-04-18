@@ -32,7 +32,7 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
 }
 
-// If still no vehicleId, return error - CRITICAL: Don't default to any vehicle
+// If still no vehicleId, return error - NEVER default to any vehicle
 if (!$vehicleId) {
     http_response_code(400);
     echo json_encode([
@@ -43,15 +43,14 @@ if (!$vehicleId) {
     exit;
 }
 
-// IMPORTANT: Additional normalization for common vehicle name variations
-// This ensures we catch all possible vehicle name formats
+// Normalize the vehicle ID for comparison
 function normalizeVehicleId($vehicleId) {
-    // Convert to lowercase and replace spaces with underscores
-    $result = strtolower(trim($vehicleId));
-    $result = preg_replace('/[^a-z0-9_]/', '', str_replace(' ', '_', $result));
+    // Convert to lowercase and replace spaces/special chars with underscores
+    $normalized = strtolower(trim($vehicleId));
+    $normalized = preg_replace('/[^a-z0-9_]/', '_', str_replace(' ', '_', $normalized));
     
-    // Handle common variations
-    $mappings = [
+    // Handle common vehicle name variations with an exact mapping table
+    $exactMappings = [
         'innovahycross' => 'innova_hycross',
         'innovacrystal' => 'innova_crysta',
         'innovacrista' => 'innova_crysta',
@@ -67,39 +66,30 @@ function normalizeVehicleId($vehicleId) {
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
-        'bus' => 'urbania',        // Map bus to Urbania
-        'urbana' => 'urbania'      // Fix potential typo
+        'mpv' => 'innova_hycross',
+        'bus' => 'urbania',
+        'urbana' => 'urbania'
     ];
     
-    foreach ($mappings as $search => $replace) {
-        if ($result === $search) {
-            return $replace;
-        }
+    // Return the mapped value if it exists
+    if (isset($exactMappings[$normalized])) {
+        return $exactMappings[$normalized];
     }
     
-    // Special handling for "innova hycross" which might come as "mpv"
-    if (strpos($result, 'innova') !== false && strpos($result, 'hycross') !== false) {
-        return 'innova_hycross';
-    }
-    
-    // Many systems use "MPV" to refer to Innova Hycross
-    if ($result === 'mpv') {
-        return 'innova_hycross';
-    }
-    
-    // Bus often refers to Urbania
-    if ($result === 'bus') {
-        return 'urbania';
-    }
-    
-    return $result;
+    return $normalized;
 }
 
 // Normalize vehicle ID for consistency
 $normalizedVehicleId = normalizeVehicleId($vehicleId);
 
-// First attempt to get data directly from database
+// Record the original request for debugging
+$originalRequest = [
+    'requestedVehicleId' => $vehicleId,
+    'normalizedVehicleId' => $normalizedVehicleId,
+    'timestamp' => time()
+];
+
+// Initialize empty fares array
 $localFares = [];
 $dbSuccess = false;
 
@@ -108,239 +98,98 @@ try {
     $conn = getDbConnection();
     
     if ($conn) {
-        // Query the local_package_fares table directly - try different variations of vehicle ID
-        $possibleVehicleIds = [
-            $normalizedVehicleId,
-            str_replace('_', '', $normalizedVehicleId),
-            // Add common variations for vehicle types
-            str_replace('dzire_cng', 'dzire', $normalizedVehicleId),
-            str_replace('dzire_cng', 'cng', $normalizedVehicleId),
-            str_replace('innova_hycross', 'innova', $normalizedVehicleId),
-            str_replace('innova_crysta', 'innova', $normalizedVehicleId),
-            str_replace('tempo_traveller', 'tempo', $normalizedVehicleId),
-            // Special handling for MPV which is often Innova Hycross
-            ($normalizedVehicleId === 'mpv' ? 'innova_hycross' : $normalizedVehicleId),
-            // Special handling for bus which is often Urbania
-            ($normalizedVehicleId === 'bus' ? 'urbania' : $normalizedVehicleId),
-            // Also try with the original format for max compatibility
-            $vehicleId
-        ];
+        // FIXED: Use prepared statement with DIRECT equality match only, never LIKE
+        $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("s", $normalizedVehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
         
-        // Try to find an exact match first
-        $exactMatch = false;
-        foreach ($possibleVehicleIds as $possibleId) {
-            if (empty($possibleId)) continue;
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
             
-            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("s", $possibleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result && $row = $result->fetch_assoc()) {
-                // Successfully found data in database
+            // CRITICAL: Verify that the fetched row actually matches our vehicle
+            $fetchedVehicleId = normalizeVehicleId($row['vehicle_id'] ?? '');
+            if ($fetchedVehicleId === $normalizedVehicleId) {
                 $localFares[] = [
-                    'vehicleId' => $possibleId, // Keep the matched vehicle ID
-                    'matchedWith' => $normalizedVehicleId, // Store what was matched
-                    'originalRequest' => $vehicleId, // Store the original request
-                    'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                    'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                    'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                    'priceExtraKm' => (float)$row['price_extra_km'],
-                    'priceExtraHour' => (float)$row['price_extra_hour'],
+                    'vehicleId' => $vehicleId, // Return the original vehicle ID for client reference
+                    'matchedWith' => $normalizedVehicleId,
+                    'price4hrs40km' => (float)($row['price_4hrs_40km'] ?? $row['price_4hr_40km'] ?? 0),
+                    'price8hrs80km' => (float)($row['price_8hrs_80km'] ?? $row['price_8hr_80km'] ?? 0),
+                    'price10hrs100km' => (float)($row['price_10hrs_100km'] ?? $row['price_10hr_100km'] ?? 0),
+                    'priceExtraKm' => (float)($row['price_extra_km'] ?? $row['extra_km_rate'] ?? 0),
+                    'priceExtraHour' => (float)($row['price_extra_hour'] ?? $row['extra_hour_rate'] ?? 0),
                     'source' => 'database',
                     'timestamp' => time()
                 ];
                 $dbSuccess = true;
-                $exactMatch = true;
-                break; // Found a match, exit the loop
+            } else {
+                // Log mismatch for debugging
+                error_log("Vehicle ID mismatch: requested {$normalizedVehicleId}, but found {$fetchedVehicleId}");
             }
         }
         
-        // If still not found, try checking for column name variations
-        if (!$exactMatch) {
-            // Try a more flexible query with alternate column names
-            $query = "SHOW COLUMNS FROM local_package_fares";
-            $stmt = $conn->prepare($query);
-            $stmt->execute();
-            $columnsResult = $stmt->get_result();
-            
-            $columnMap = [];
-            $possiblePriceColumns = [
-                'price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour',
-                'price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour',
-                'price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour',
-                'price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km',
-                'price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'
-            ];
-            
-            while ($column = $columnsResult->fetch_assoc()) {
-                $columnName = $column['Field'];
-                $normalizedName = strtolower(str_replace('_', '', $columnName));
+        // If no exact match was found for the normalized ID, try with special vehicle types
+        if (!$dbSuccess) {
+            // Special mapping for MPV/Innova Hycross
+            if ($normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false) {
+                $specialIds = ['innova_hycross', 'innovahycross', 'mpv'];
                 
-                // Map each column to a standardized name
-                foreach ($possiblePriceColumns as $standardColumn) {
-                    $normalizedStandard = strtolower(str_replace('_', '', $standardColumn));
-                    if ($normalizedName === $normalizedStandard) {
-                        $columnMap[$standardColumn] = $columnName;
+                foreach ($specialIds as $specialId) {
+                    $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("s", $specialId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    
+                    if ($result && $result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        
+                        $localFares[] = [
+                            'vehicleId' => $vehicleId,
+                            'matchedWith' => 'mpv/innova_hycross',
+                            'price4hrs40km' => (float)($row['price_4hrs_40km'] ?? $row['price_4hr_40km'] ?? 0),
+                            'price8hrs80km' => (float)($row['price_8hrs_80km'] ?? $row['price_8hr_80km'] ?? 0),
+                            'price10hrs100km' => (float)($row['price_10hrs_100km'] ?? $row['price_10hr_100km'] ?? 0),
+                            'priceExtraKm' => (float)($row['price_extra_km'] ?? $row['extra_km_rate'] ?? 0),
+                            'priceExtraHour' => (float)($row['price_extra_hour'] ?? $row['extra_hour_rate'] ?? 0),
+                            'source' => 'database_special_mapping',
+                            'timestamp' => time()
+                        ];
+                        $dbSuccess = true;
                         break;
                     }
                 }
             }
             
-            // Now try to query with the normalized vehicle ID and use the column map
-            $possibleId = $normalizedVehicleId;
-            
-            // CRITICAL FIX: Use LIKE only in a separate query, after exact match fails
-            // This prevents returning data for wrong vehicles
-            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("s", $possibleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if (!($result && $row = $result->fetch_assoc())) {
-                // Only try LIKE as a fallback
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ? LIMIT 1";
-                $likeParam = "%$possibleId%";
-                $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $likeParam);
-                $stmt->execute();
-                $result = $stmt->get_result();
-            }
-            
-            if ($result && $row = $result->fetch_assoc()) {
-                // Ensure this is actually the vehicle we're looking for
-                // CRITICAL FIX: Don't use a row for a different vehicle
-                $rowVehicleId = isset($row['vehicle_id']) ? normalizeVehicleId($row['vehicle_id']) : '';
+            // Special mapping for Bus/Urbania
+            else if ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania') {
+                $specialIds = ['urbania', 'bus', 'force_urbania'];
                 
-                // Only use this row if it's for the requested vehicle
-                if ($rowVehicleId === $normalizedVehicleId || 
-                    in_array($rowVehicleId, $possibleVehicleIds)) {
+                foreach ($specialIds as $specialId) {
+                    $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("s", $specialId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
                     
-                    // Find the appropriate column names using our map
-                    $price4hrs40km = 0;
-                    $price8hrs80km = 0;
-                    $price10hrs100km = 0;
-                    $priceExtraKm = 0;
-                    $priceExtraHour = 0;
-                    
-                    // Try to find the values using the column mapping
-                    foreach (['price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour'] as $colName) {
-                        if (isset($row[$colName]) && $row[$colName] > 0) {
-                            $price4hrs40km = (float)$row[$colName];
-                            break;
-                        }
+                    if ($result && $result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        
+                        $localFares[] = [
+                            'vehicleId' => $vehicleId,
+                            'matchedWith' => 'bus/urbania',
+                            'price4hrs40km' => (float)($row['price_4hrs_40km'] ?? $row['price_4hr_40km'] ?? 0),
+                            'price8hrs80km' => (float)($row['price_8hrs_80km'] ?? $row['price_8hr_80km'] ?? 0),
+                            'price10hrs100km' => (float)($row['price_10hrs_100km'] ?? $row['price_10hr_100km'] ?? 0),
+                            'priceExtraKm' => (float)($row['price_extra_km'] ?? $row['extra_km_rate'] ?? 0),
+                            'priceExtraHour' => (float)($row['price_extra_hour'] ?? $row['extra_hour_rate'] ?? 0),
+                            'source' => 'database_special_mapping',
+                            'timestamp' => time()
+                        ];
+                        $dbSuccess = true;
+                        break;
                     }
-                    
-                    foreach (['price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour'] as $colName) {
-                        if (isset($row[$colName]) && $row[$colName] > 0) {
-                            $price8hrs80km = (float)$row[$colName];
-                            break;
-                        }
-                    }
-                    
-                    foreach (['price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour'] as $colName) {
-                        if (isset($row[$colName]) && $row[$colName] > 0) {
-                            $price10hrs100km = (float)$row[$colName];
-                            break;
-                        }
-                    }
-                    
-                    foreach (['price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km'] as $colName) {
-                        if (isset($row[$colName]) && $row[$colName] > 0) {
-                            $priceExtraKm = (float)$row[$colName];
-                            break;
-                        }
-                    }
-                    
-                    foreach (['price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'] as $colName) {
-                        if (isset($row[$colName]) && $row[$colName] > 0) {
-                            $priceExtraHour = (float)$row[$colName];
-                            break;
-                        }
-                    }
-                    
-                    $localFares[] = [
-                        'vehicleId' => $row['vehicle_id'],
-                        'matchedWith' => $normalizedVehicleId,
-                        'originalRequest' => $vehicleId,
-                        'price4hrs40km' => $price4hrs40km,
-                        'price8hrs80km' => $price8hrs80km,
-                        'price10hrs100km' => $price10hrs100km,
-                        'priceExtraKm' => $priceExtraKm,
-                        'priceExtraHour' => $priceExtraHour,
-                        'source' => 'database',
-                        'timestamp' => time()
-                    ];
-                    $dbSuccess = true;
-                } else {
-                    // Critical: We matched a different vehicle - log this but don't use the data
-                    error_log("Discarding non-matching vehicle fare data: Found {$row['vehicle_id']} but requested {$vehicleId}");
-                }
-            }
-        }
-        
-        // CRITICAL FIX: Use consistent specific lookups for special vehicle types
-        
-        // Special vehicle-specific handling for 'bus' and 'urbania'
-        if (!$dbSuccess && ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania')) {
-            $possibleIds = ['urbania', 'bus', 'force_urbania'];
-            
-            foreach ($possibleIds as $possibleId) {
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-                $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $possibleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                
-                if ($result && $row = $result->fetch_assoc()) {
-                    // Successfully found data
-                    $localFares[] = [
-                        'vehicleId' => $vehicleId, // CRITICAL: Use the original requested vehicle ID
-                        'matchedWith' => 'bus/urbania',
-                        'originalRequest' => $vehicleId,
-                        'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                        'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                        'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                        'priceExtraKm' => (float)$row['price_extra_km'],
-                        'priceExtraHour' => (float)$row['price_extra_hour'],
-                        'source' => 'database',
-                        'timestamp' => time()
-                    ];
-                    $dbSuccess = true;
-                    break;
-                }
-            }
-        }
-        
-        // Special vehicle-specific handling for MPV and Innova Hycross
-        if (!$dbSuccess && ($normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false)) {
-            $possibleIds = ['innova_hycross', 'innovahycross', 'mpv', 'hycross'];
-            
-            foreach ($possibleIds as $possibleId) {
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
-                $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $possibleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                
-                if ($result && $row = $result->fetch_assoc()) {
-                    // Successfully found data
-                    $localFares[] = [
-                        'vehicleId' => $vehicleId, // CRITICAL: Use the original requested vehicle ID
-                        'matchedWith' => 'mpv/innova_hycross',
-                        'originalRequest' => $vehicleId,
-                        'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                        'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                        'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                        'priceExtraKm' => (float)$row['price_extra_km'],
-                        'priceExtraHour' => (float)$row['price_extra_hour'],
-                        'source' => 'database',
-                        'timestamp' => time()
-                    ];
-                    $dbSuccess = true;
-                    break;
                 }
             }
         }
@@ -349,13 +198,13 @@ try {
         $conn->close();
     }
 } catch (Exception $e) {
-    // Log error but continue to fallback calculation
-    error_log("Database error: " . $e->getMessage());
+    error_log("Database error in direct-local-fares.php: " . $e->getMessage());
+    // We'll fall back to dynamic calculation below
 }
 
 // If database query failed, generate dynamic prices based on the specific vehicle
 if (!$dbSuccess) {
-    // Helper function to calculate package prices based on vehicle category
+    // Generate dynamic prices based on vehicle type
     function calculateDynamicPrices($baseValue, $multiplier) {
         return [
             'price4hrs40km' => round($baseValue['4hr'] * $multiplier),
@@ -366,7 +215,7 @@ if (!$dbSuccess) {
         ];
     }
 
-    // Base price values that will be used for calculations
+    // Base price values
     $basePrices = [
         '4hr' => 1200,
         '8hr' => 2000,
@@ -377,54 +226,48 @@ if (!$dbSuccess) {
     $vehicleCategory = 'standard';
     $multiplier = 1.0;
 
-    // IMPORTANT: Add special case for bus/urbania with a higher price
+    // Apply specific multipliers based on normalized vehicle ID
     if ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania') {
         $vehicleCategory = 'bus';
-        $multiplier = 3.5;  // Higher multiplier for bus/Urbania
+        $multiplier = 3.5;
+    } else if ($normalizedVehicleId === 'tempo_traveller' || strpos($normalizedVehicleId, 'tempo') !== false) {
+        $vehicleCategory = 'tempo';
+        $multiplier = 2.0; // FIXED: Ensure Tempo Traveller has multiplier of 2.0
+    } else if ($normalizedVehicleId === 'innova_hycross' || $normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false) {
+        $vehicleCategory = 'innova_hycross';
+        $multiplier = 2.0; // FIXED: Ensure Innova Hycross has multiplier of 2.0
+    } else if (strpos($normalizedVehicleId, 'innova') !== false) {
+        $vehicleCategory = 'innova';
+        $multiplier = 1.5;
+    } else if (strpos($normalizedVehicleId, 'crysta') !== false) {
+        $vehicleCategory = 'innova_crysta';
+        $multiplier = 1.75;
+    } else if (strpos($normalizedVehicleId, 'ertiga') !== false || strpos($normalizedVehicleId, 'suv') !== false) {
+        $vehicleCategory = 'ertiga';
+        $multiplier = 1.25;
     } else if (strpos($normalizedVehicleId, 'sedan') !== false || 
-        strpos($normalizedVehicleId, 'swift') !== false || 
         strpos($normalizedVehicleId, 'dzire') !== false ||
-        strpos($normalizedVehicleId, 'amaze') !== false ||
         strpos($normalizedVehicleId, 'etios') !== false) {
         $vehicleCategory = 'sedan';
         $multiplier = 1.0;
-    } else if (strpos($normalizedVehicleId, 'ertiga') !== false || 
-        strpos($normalizedVehicleId, 'suv') !== false) {
-        $vehicleCategory = 'suv';
-        $multiplier = 1.25;
-    } else if (strpos($normalizedVehicleId, 'innova') !== false || 
-        strpos($normalizedVehicleId, 'mpv') !== false) {
-        $vehicleCategory = 'mpv';
-        if (strpos($normalizedVehicleId, 'hycross') !== false) {
-            $multiplier = 2.0; // CRITICAL FIX: Use correct multiplier for Innova Hycross (4000)
-        } else {
-            $multiplier = 1.5;
-        }
-    } else if (strpos($normalizedVehicleId, 'tempo') !== false || 
-        strpos($normalizedVehicleId, 'traveller') !== false) {
-        $vehicleCategory = 'tempo';
-        $multiplier = 2.0;
     } else if (strpos($normalizedVehicleId, 'cng') !== false) {
         $vehicleCategory = 'cng';
-        $multiplier = 1.0; // Same as sedan
-    } else if ($normalizedVehicleId === 'mpv') {
-        $vehicleCategory = 'innova_hycross';
-        $multiplier = 2.0; // CRITICAL FIX: Use correct multiplier for MPV/Innova Hycross
+        $multiplier = 1.0;
     } else {
-        // Default - use standard sedan pricing
-        $vehicleCategory = 'other';
+        // Default case
+        $vehicleCategory = 'sedan';
         $multiplier = 1.0;
     }
 
-    // Calculate prices dynamically
+    // Calculate prices
     $prices = calculateDynamicPrices($basePrices, $multiplier);
 
-    // Create the response object with the original vehicle ID preserved
+    // Create the response object
     $localFares[] = [
-        'vehicleId' => $vehicleId,  // CRITICAL: Return the exact requested vehicle ID
+        'vehicleId' => $vehicleId,
         'vehicleCategory' => $vehicleCategory,
+        'multiplier' => $multiplier,
         'matchedWith' => 'dynamic_calculation',
-        'originalRequest' => $vehicleId,
         'price4hrs40km' => $prices['price4hrs40km'],
         'price8hrs80km' => $prices['price8hrs80km'],
         'price10hrs100km' => $prices['price10hrs100km'],
@@ -435,13 +278,12 @@ if (!$dbSuccess) {
     ];
 }
 
-// Return JSON response
+// Return JSON response with debug info
 echo json_encode([
     'status' => 'success',
     'message' => $dbSuccess ? 'Local fares retrieved from database' : 'Local fares dynamically generated',
     'fares' => $localFares,
+    'requestInfo' => $originalRequest,
     'dynamicallyGenerated' => !$dbSuccess,
-    'requestedVehicleId' => $vehicleId,
-    'normalizedVehicleId' => $normalizedVehicleId,
     'timestamp' => time()
 ]);
