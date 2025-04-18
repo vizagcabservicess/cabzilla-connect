@@ -1,181 +1,137 @@
 
-import React, { useEffect, useState } from 'react';
-import { CabList } from './cab-options/CabList';
-import { CabType } from '@/types/cab';
-import { TripType, TripMode } from '@/lib/tripTypes';
-import { useIsMobile } from '@/hooks/use-mobile';
-
-export interface CabListProps {
-  cabTypes: CabType[];
-  selectedCabId?: string;
-  onSelectCab: (cab: CabType) => void;
-  distance: number;
-  tripType: TripType | string;
-  tripMode: TripMode | string;
-  hourlyPackage?: string;
-  pickupDate?: Date;
-  returnDate?: Date | null;
-}
+import { useState, useEffect } from "react";
+import { CabList } from "./cab-options/CabList";
+import { CabLoading } from "./cab-options/CabLoading";
+import { CabType } from "@/types/cab";
+import { calculateFare, clearFareCache } from "@/lib/fareCalculationService";
 
 interface CabOptionsProps {
   cabTypes: CabType[];
   selectedCab: CabType | null;
   onSelectCab: (cab: CabType) => void;
   distance: number;
-  tripType: TripType | string;
-  tripMode: TripMode | string;
-  hourlyPackage?: string;
+  tripType: string;
+  tripMode: string;
   pickupDate?: Date;
-  returnDate?: Date | null;
+  returnDate?: Date;
+  hourlyPackage?: string;
 }
 
-// This component adapts the properties from parent components to what CabList expects
-export const CabOptions: React.FC<CabOptionsProps> = ({
+export function CabOptions({
   cabTypes,
   selectedCab,
   onSelectCab,
   distance,
   tripType,
   tripMode,
-  hourlyPackage,
   pickupDate,
   returnDate,
-}) => {
-  const isMobile = useIsMobile();
-  const [hasSelectedCab, setHasSelectedCab] = useState(false);
-
-  const handleCabSelect = (cab: CabType) => {
-    onSelectCab(cab);
-    setHasSelectedCab(true);
-  };
-
-  // Scroll to booking summary when a cab is selected
-  useEffect(() => {
-    if (selectedCab && hasSelectedCab) {
-      // Wait a brief moment for UI to update before scrolling
-      setTimeout(() => {
-        const bookingSummaryElement = document.getElementById('booking-summary');
-        if (bookingSummaryElement) {
-          bookingSummaryElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          // If element not found, try to find any element with "summary" in the id or class
-          const alternativeSummaryElement = 
-            document.querySelector('[id*="summary" i], [class*="summary" i]') || 
-            document.querySelector('[id*="book" i], [class*="book" i]');
-          
-          if (alternativeSummaryElement) {
-            alternativeSummaryElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }
-        setHasSelectedCab(false); // Reset after scrolling
-      }, 100);
-    }
-  }, [selectedCab, hasSelectedCab]);
-
-  // Set up data for the CabList component with actual fares
+  hourlyPackage
+}: CabOptionsProps) {
+  const [isCalculatingFares, setIsCalculatingFares] = useState(false);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState(true);
-  
-  // Load actual fares from localStorage
+  const [loadingCabs, setLoadingCabs] = useState(true);
+  const [calculationAttempts, setCalculationAttempts] = useState(0);
+
   useEffect(() => {
-    setIsCalculatingFares(true);
+    setLoadingCabs(true);
     
-    try {
-      // Try to find actual fares from localStorage first
-      const loadActualFares = () => {
-        const fares: Record<string, number> = {};
+    const timer = setTimeout(() => {
+      setLoadingCabs(false);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const calculateFares = async () => {
+      if (distance <= 0 || cabTypes.length === 0) {
+        setIsCalculatingFares(false);
+        return;
+      }
+
+      setIsCalculatingFares(true);
+      
+      try {
+        // Clear the fare cache if we're recalculating
+        if (calculationAttempts > 0) {
+          clearFareCache();
+        }
         
-        // For each cab type, attempt to get the fare from localStorage
-        cabTypes.forEach(cab => {
+        // Calculate fares for each cab type
+        const farePromises = cabTypes.map(async (cab) => {
           try {
-            // For local packages, check for the specific package fare
-            if (tripType === 'local' && hourlyPackage) {
-              // Try to load from price matrix in localStorage
-              const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
-              if (priceMatrixStr) {
-                const priceMatrix = JSON.parse(priceMatrixStr);
-                
-                // Check if we have pricing for this specific package and cab
-                if (priceMatrix[hourlyPackage] && priceMatrix[hourlyPackage][cab.id.toLowerCase()]) {
-                  fares[cab.id] = priceMatrix[hourlyPackage][cab.id.toLowerCase()];
-                  console.log(`Found fare for ${cab.id} in price matrix: ${fares[cab.id]}`);
-                  return;
-                }
-              }
-            }
+            const fare = await calculateFare({
+              cabType: cab,
+              distance,
+              tripType,
+              tripMode,
+              hourlyPackage,
+              pickupDate,
+              returnDate,
+              forceRefresh: calculationAttempts > 0
+            });
             
-            // If not found in price matrix or not a local package, check vehicle-specific localStorage
-            const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-            const storedFare = localStorage.getItem(localStorageKey);
-            if (storedFare) {
-              fares[cab.id] = parseInt(storedFare, 10);
-              console.log(`Found fare for ${cab.id} in localStorage: ${fares[cab.id]}`);
-              return;
-            }
-            
-            // If still not found, use a reasonable default fare
-            if (!fares[cab.id]) {
-              // Fallback to cab's pre-defined price if available
-              if (cab.price && cab.price > 0) {
-                fares[cab.id] = cab.price;
-              } else {
-                // Last resort - calculate a reasonable fare based on type
-                const baseFare = distance * (
-                  cab.id.includes('luxury') ? 20 : 
-                  cab.id.includes('innova') ? 15 : 
-                  cab.id.includes('ertiga') ? 12 : 10
-                );
-                fares[cab.id] = Math.max(baseFare, 800); // Ensure minimum fare
-              }
-            }
+            return { cabId: cab.id, fare };
           } catch (error) {
-            console.error(`Error getting fare for ${cab.id}:`, error);
-            // Fallback calculation
-            fares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
+            console.error(`Error calculating fare for ${cab.name}:`, error);
+            return { cabId: cab.id, fare: 0 };
+          }
+        });
+
+        const results = await Promise.all(farePromises);
+        const newFares: Record<string, number> = {};
+        
+        results.forEach(({cabId, fare}) => {
+          if (fare > 0) {
+            newFares[cabId] = fare;
           }
         });
         
-        return fares;
-      };
-      
-      // Set the calculated fares
-      const actualFares = loadActualFares();
-      setCabFares(actualFares);
-    } catch (error) {
-      console.error('Error loading actual fares:', error);
-      // Fallback to simple calculation
-      const fallbackFares: Record<string, number> = {};
-      cabTypes.forEach(cab => {
-        fallbackFares[cab.id] = distance * (cab.id === 'luxury' ? 20 : cab.id === 'innova' ? 15 : 10);
-      });
-      setCabFares(fallbackFares);
-    } finally {
-      setIsCalculatingFares(false);
-    }
-  }, [cabTypes, distance, tripType, hourlyPackage]);
+        setCabFares(newFares);
+      } catch (error) {
+        console.error("Error calculating fares:", error);
+      } finally {
+        setIsCalculatingFares(false);
+        setCalculationAttempts(prev => prev + 1);
+      }
+    };
 
-  // Generate fare details string
-  const getFareDetails = (cab: CabType): string => {
-    if (tripType === 'local') {
-      return 'Local package';
-    } else if (tripType === 'airport') {
-      return 'Airport transfer';
-    } else {
-      return tripMode === 'round-trip' ? 'Round trip' : 'One way';
-    }
+    calculateFares();
+  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, calculationAttempts]);
+
+  const handleSelectCab = (cab: CabType) => {
+    onSelectCab(cab);
   };
 
-  return (
-    <CabList
-      cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id || null}
-      cabFares={cabFares}
-      isCalculatingFares={isCalculatingFares}
-      handleSelectCab={handleCabSelect}
-      getFareDetails={getFareDetails}
-    />
-  );
-};
+  const getFareDetails = (cab: CabType): string => {
+    // Return fare details based on trip type
+    if (tripType === "local") {
+      return `${hourlyPackage || "8hrs-80km"} package`;
+    } else if (tripType === "outstation") {
+      return `${tripMode === "round-trip" ? "Round trip" : "One way"} - ${distance} km`;
+    } else if (tripType === "airport") {
+      return "Airport transfer";
+    }
+    return "";
+  };
 
-// Add default export for backward compatibility
-export default CabOptions;
+  if (loadingCabs) {
+    return <CabLoading />;
+  }
+
+  return (
+    <div className="mt-6">
+      <h3 className="text-lg font-semibold mb-3">Available Cabs</h3>
+      <CabList
+        cabTypes={cabTypes}
+        selectedCabId={selectedCab?.id || null}
+        cabFares={cabFares}
+        isCalculatingFares={isCalculatingFares}
+        handleSelectCab={handleSelectCab}
+        getFareDetails={getFareDetails}
+        tripType={tripType}
+      />
+    </div>
+  );
+}

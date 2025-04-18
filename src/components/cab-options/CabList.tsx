@@ -1,7 +1,7 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
+import { useTripFare, TripFareType } from '@/hooks/useTripFare';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -10,6 +10,7 @@ interface CabListProps {
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType) => void;
   getFareDetails: (cab: CabType) => string;
+  tripType?: string;
 }
 
 export function CabList({
@@ -18,7 +19,8 @@ export function CabList({
   cabFares,
   isCalculatingFares,
   handleSelectCab,
-  getFareDetails
+  getFareDetails,
+  tripType = 'outstation'
 }: CabListProps) {
   const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
@@ -32,13 +34,24 @@ export function CabList({
   const updateTimeoutRef = useRef<number | null>(null);
   const directUpdateEnabledRef = useRef<boolean>(true);
   
-  // Initialize displayed fares from cabFares on first render or when cabTypes change
+  const mapTripType = (type: string): TripFareType => {
+    if (type === 'local') return 'local';
+    if (type === 'airport') return 'airport';
+    return 'outstation';
+  };
+  
+  const { 
+    fares: hookFares, 
+    isLoading: isLoadingFares, 
+    fetchFares,
+    fetchFare
+  } = useTripFare(mapTripType(tripType));
+  
   useEffect(() => {
     if (!initializedRef.current && Object.keys(cabFares).length > 0) {
       console.log('CabList: Initial fare setup', cabFares);
       setDisplayedFares({...cabFares});
       
-      // Initialize fare history for each cab
       const newFareHistory: Record<string, number[]> = {};
       Object.keys(cabFares).forEach(cabId => {
         if (cabFares[cabId] > 0) {
@@ -51,7 +64,13 @@ export function CabList({
     }
   }, [cabFares, cabTypes]);
   
-  // Process any pending updates
+  useEffect(() => {
+    if (cabTypes.length > 0) {
+      const vehicleIds = cabTypes.map(cab => cab.id);
+      fetchFares(vehicleIds, mapTripType(tripType), {}, false);
+    }
+  }, [cabTypes, tripType, fetchFares]);
+  
   const processPendingUpdates = () => {
     if (Object.keys(pendingUpdatesRef.current).length === 0 || isProcessingRef.current) {
       return;
@@ -64,19 +83,16 @@ export function CabList({
     const updatedFares: Record<string, number> = {...displayedFares};
     let hasChanges = false;
     
-    // Process all pending updates
     Object.entries(pendingUpdatesRef.current).forEach(([cabId, fare]) => {
       if (fare > 0 && fare !== displayedFares[cabId]) {
         newFadeIn[cabId] = true;
         updatedFares[cabId] = fare;
         
-        // Update fare history
         if (!fareHistoryRef.current[cabId]) {
           fareHistoryRef.current[cabId] = [];
         }
         fareHistoryRef.current[cabId].push(fare);
         
-        // Keep history limited to last 5 fares
         if (fareHistoryRef.current[cabId].length > 5) {
           fareHistoryRef.current[cabId] = fareHistoryRef.current[cabId].slice(-5);
         }
@@ -84,7 +100,6 @@ export function CabList({
         hasChanges = true;
         console.log(`CabList: Updating fare for ${cabId} to ${fare}`);
         
-        // Immediately dispatch event for this fare update
         window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
           detail: {
             cabType: cabId,
@@ -96,24 +111,19 @@ export function CabList({
       }
     });
     
-    // Clear pending updates
     pendingUpdatesRef.current = {};
     
-    // Apply updates if any valid changes were detected
     if (hasChanges) {
       setFadeIn(newFadeIn);
       refreshCountRef.current += 1;
       
-      // Set a timestamp for this update
       const updateTime = Date.now();
       setLastUpdateTimestamp(updateTime);
       localStorage.setItem('lastFareUpdateTimestamp', updateTime.toString());
       
-      // After a short delay, update the displayed fares
       setTimeout(() => {
         setDisplayedFares(updatedFares);
         
-        // After animation completes, remove the fade-in effect
         setTimeout(() => {
           setFadeIn({});
           isProcessingRef.current = false;
@@ -124,7 +134,6 @@ export function CabList({
     }
   };
   
-  // Schedule processing of updates
   const scheduleUpdate = () => {
     if (updateTimeoutRef.current !== null) {
       window.clearTimeout(updateTimeoutRef.current);
@@ -136,30 +145,6 @@ export function CabList({
     }, 50) as unknown as number;
   };
   
-  // Update displayed fares when cabFares changes
-  useEffect(() => {
-    // Skip if still initializing or no fares are available
-    if (!initializedRef.current || Object.keys(cabFares).length === 0) return;
-    
-    // Check each cab for fare updates
-    Object.keys(cabFares).forEach(cabId => {
-      // Only process valid fares
-      if (cabFares[cabId] === undefined || cabFares[cabId] === null || cabFares[cabId] <= 0) return;
-      
-      // Compare new fare with current displayed fare
-      if (cabFares[cabId] !== displayedFares[cabId]) {
-        console.log(`CabList: Adding pending update for ${cabId}, fare: ${cabFares[cabId]}`);
-        pendingUpdatesRef.current[cabId] = cabFares[cabId];
-      }
-    });
-    
-    // Schedule an update if we have pending updates
-    if (Object.keys(pendingUpdatesRef.current).length > 0) {
-      scheduleUpdate();
-    }
-  }, [cabFares, displayedFares]);
-  
-  // Reset refresh counter periodically (every 2 minutes instead of 5)
   useEffect(() => {
     const resetInterval = setInterval(() => {
       refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
@@ -168,7 +153,6 @@ export function CabList({
     return () => clearInterval(resetInterval);
   }, []);
   
-  // Listen for direct cab selection with fare events
   useEffect(() => {
     const handleCabSelectedWithFare = (event: Event) => {
       if (!directUpdateEnabledRef.current) return;
@@ -179,7 +163,6 @@ export function CabList({
       if (customEvent.detail && customEvent.detail.cabType && customEvent.detail.fare) {
         const { cabType, fare } = customEvent.detail;
         
-        // Add to pending updates
         if (fare > 0) {
           pendingUpdatesRef.current[cabType] = fare;
           scheduleUpdate();
@@ -196,7 +179,6 @@ export function CabList({
       if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
         const { cabId, fare } = customEvent.detail;
         
-        // Add to pending updates
         if (fare > 0) {
           pendingUpdatesRef.current[cabId] = fare;
           scheduleUpdate();
@@ -204,19 +186,16 @@ export function CabList({
       }
     };
     
-    // Process any immediate updates when a cab is selected
     const handleCabSelected = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail && customEvent.detail.cabType) {
         console.log('CabList: Received cab-selected event', customEvent.detail);
         
-        // Update fadeIn effect for the selected cab
         setFadeIn(prev => ({
           ...prev,
           [customEvent.detail.cabType]: true
         }));
         
-        // Schedule clearing the effect
         setTimeout(() => {
           setFadeIn(prev => ({
             ...prev,
@@ -226,12 +205,10 @@ export function CabList({
       }
     };
     
-    // Handle trip type changes as well
     const handleTripTypeChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('CabList: Received trip-type-changed event', customEvent.detail);
       
-      // Force reset display and pending updates
       initializedRef.current = false;
       pendingUpdatesRef.current = {};
       isProcessingRef.current = false;
@@ -239,13 +216,11 @@ export function CabList({
       if (customEvent.detail && customEvent.detail.tripType) {
         const tripType = customEvent.detail.tripType;
         
-        // Reset fares when changing trip types
         setDisplayedFares({});
         fareHistoryRef.current = {};
       }
     };
     
-    // Enable throttled direct updates after a short delay to prevent initial loops
     setTimeout(() => {
       directUpdateEnabledRef.current = true;
     }, 1000);
@@ -273,26 +248,24 @@ export function CabList({
     };
   }, [cabTypes]);
   
-  // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    // First try the displayed fare
+    if (hookFares[cab.id] && hookFares[cab.id] > 0) {
+      return hookFares[cab.id];
+    }
+    
     if (displayedFares[cab.id] && displayedFares[cab.id] > 0) {
       return displayedFares[cab.id];
     }
     
-    // Then try the latest fare
     if (cabFares[cab.id] && cabFares[cab.id] > 0) {
       return cabFares[cab.id];
     }
     
-    // Then try the price from the cab object itself
     if (cab.price && cab.price > 0) {
       return cab.price;
     }
     
-    // Finally try the fare history
     if (fareHistoryRef.current[cab.id] && fareHistoryRef.current[cab.id].length > 0) {
-      // Get the most recent non-zero fare
       for (let i = fareHistoryRef.current[cab.id].length - 1; i >= 0; i--) {
         if (fareHistoryRef.current[cab.id][i] > 0) {
           return fareHistoryRef.current[cab.id][i];
@@ -300,7 +273,6 @@ export function CabList({
       }
     }
     
-    // If all else fails, return a fallback value based on vehicle type
     const fallbackPrices: Record<string, number> = {
       'sedan': 1500,
       'ertiga': 2000,
@@ -314,21 +286,37 @@ export function CabList({
     return fallbackPrices[vehicleType] || 2000;
   };
   
-  // Helper to create a more smooth cab selection and ensure fare updates
   const enhancedSelectCab = (cab: CabType) => {
-    // Call the parent handler
+    fetchFare(cab.id, mapTripType(tripType), {}, true)
+      .then(freshFare => {
+        if (freshFare > 0) {
+          pendingUpdatesRef.current[cab.id] = freshFare;
+          scheduleUpdate();
+          
+          window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+            bubbles: true,
+            detail: {
+              cabType: cab.id,
+              cabName: cab.name,
+              fare: freshFare,
+              timestamp: Date.now()
+            }
+          }));
+        }
+      })
+      .catch(err => {
+        console.error(`Error fetching fresh fare for ${cab.id}:`, err);
+      });
+    
     handleSelectCab(cab);
     
-    // Provide immediate visual feedback
     setFadeIn(prev => ({
       ...prev,
       [cab.id]: true
     }));
     
-    // Get the current fare for this cab
     const currentFare = getDisplayFare(cab);
     
-    // Dispatch custom event with selected cab and fare
     window.dispatchEvent(new CustomEvent('cab-selected', {
       bubbles: true,
       detail: {
@@ -339,20 +327,6 @@ export function CabList({
       }
     }));
     
-    // If we have a valid fare, also dispatch a fare event
-    if (currentFare > 0) {
-      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-        bubbles: true,
-        detail: {
-          cabType: cab.id,
-          cabName: cab.name,
-          fare: currentFare,
-          timestamp: Date.now()
-        }
-      }));
-    }
-    
-    // Clear the highlight after animation
     setTimeout(() => {
       setFadeIn(prev => ({
         ...prev,
@@ -388,7 +362,7 @@ export function CabList({
               isSelected={selectedCabId === cab.id}
               onSelect={() => enhancedSelectCab(cab)}
               fareDetails={getFareDetails(cab)}
-              isCalculating={isCalculatingFares}
+              isCalculating={isCalculatingFares || (isLoadingFares && displayedFares[cab.id] === undefined)}
             />
           </div>
         ))
