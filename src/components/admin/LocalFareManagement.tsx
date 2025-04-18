@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -88,7 +89,7 @@ export function LocalFareManagement() {
         toast.error("Failed to sync tables, will try database initialization");
       }
       
-      const result = await fareService.initializeDatabase();
+      const result = await fareService.initializeDatabase(true);
       console.log('Database initialization response:', result);
       
       toast.success("Database tables initialized successfully");

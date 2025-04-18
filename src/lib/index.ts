@@ -9,6 +9,7 @@ export * from './tourData';
 // Export fare calculation functions
 export { 
   calculateFare, 
+  calculateAirportFare,
   clearFareCache
 } from './fareCalculationService';
 
@@ -33,6 +34,7 @@ export {
 export { 
   directFareUpdate,  
   initializeDatabase,
+  forceSyncOutstationFares,
   syncOutstationFares,
   getOutstationFares,
   getLocalFares,
@@ -44,11 +46,10 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  syncAirportFares,
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions
+// Export vehicle service functions (use only what's available)
 export { 
   addVehicle as createVehicle,
   updateVehicle,
@@ -60,27 +61,11 @@ export {
 
 // Export fare update service functions
 export {
-  updateLocalFare,
-  updateAirportFare,
-  syncLocalFares,
-  initializeLocalFareTables,
-  initializeAirportFareTables,
-  initializeAllFareTables,
-  fareManagementService,
-  fetchLocalFares,
-  fetchAirportFares,
   updateLocalFares,
   updateAirportFares,
-  initializeDatabaseTables
+  syncLocalFares,
+  syncAirportFares
 } from '@/services/fareManagementService';
-
-// Export outstation fare service functions
-export {
-  updateOutstationFare,
-  syncOutstationFareTables,
-  initializeOutstationFareTables,
-  fetchOutstationFare
-} from '@/services/outstationFareService';
 
 // Export getData function from vehicleDataService
 export { 
@@ -89,7 +74,7 @@ export {
   getVehicleTypes
 } from '@/services/vehicleDataService';
 
-// Export types from cab.ts directly
+// Re-export CabType from the types directly
 export type { 
   CabType, 
   HourlyPackage, 
@@ -102,11 +87,7 @@ export type {
   VehiclePricing,
   OutstationFare,
   LocalFare,
-  AirportFare,
-  FareData,
-  LocalFareData,
-  AirportFareData,
-  OutstationFareData
+  AirportFare
 } from '@/types/cab';
 
 // Add formatPrice export from cabData

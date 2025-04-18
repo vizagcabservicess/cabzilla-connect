@@ -1,43 +1,38 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
-// Define a set of hourly packages for local trips
+// Define standard hourly packages
 export const hourlyPackages: HourlyPackage[] = [
   {
-    id: '4hr40km',
-    name: '4 Hours 40 KM',
+    id: '4hrs-40km',
+    name: '4 Hours / 40 KM',
     hours: 4,
     kilometers: 40,
-    basePrice: 0,
-    description: 'Ideal for short trips and shopping',
-    multiplier: 1 // This is now added to the interface
+    basePrice: 1200,
+    multiplier: 0.6
   },
   {
-    id: '8hr80km',
-    name: '8 Hours 80 KM',
+    id: '04hrs-40km',
+    name: '4 Hours / 40 KM',
+    hours: 4,
+    kilometers: 40,
+    basePrice: 1200,
+    multiplier: 0.6
+  },
+  {
+    id: '8hrs-80km',
+    name: '8 Hours / 80 KM',
     hours: 8,
     kilometers: 80,
-    basePrice: 0,
-    description: 'Perfect for a full day outing',
-    multiplier: 1.5
+    basePrice: 2500,
+    multiplier: 1
   },
   {
-    id: '10hr100km',
-    name: '10 Hours 100 KM',
+    id: '10hrs-100km',
+    name: '10 Hours / 100 KM',
     hours: 10,
     kilometers: 100,
-    basePrice: 0,
-    description: 'Extended day package for longer trips',
-    multiplier: 2
-  },
-  {
-    id: '12hr120km',
-    name: '12 Hours 120 KM',
-    hours: 12,
-    kilometers: 120,
-    basePrice: 0,
-    description: 'Long day package for extensive city exploration',
-    multiplier: 2.5
+    basePrice: 3000,
+    multiplier: 1.2
   }
 ];
 

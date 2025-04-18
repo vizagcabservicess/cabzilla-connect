@@ -9,12 +9,12 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { 
-  updateLocalFare, 
-  updateAirportFare,
+  updateLocalFares, 
+  updateAirportFares,
   syncLocalFares,
-  syncAirportFares
+  syncAirportFares,
+  FareData
 } from "@/services/fareManagementService";
-import { LocalFareData, AirportFareData } from '@/types/cab';
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from 'sonner';
@@ -412,16 +412,14 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        const localFareData: LocalFareData = {
+        await updateLocalFares({
           vehicleId: selectedVehicle,
           price4hrs40km: package4hr40km,
           price8hrs80km: package8hr80km,
           price10hrs100km: package12hr120km,
           priceExtraHour: extraHourRate,
-          priceExtraKm: extraKmRate
-        };
-        
-        await updateLocalFare(localFareData);
+          extraKmCharge: extraKmRate
+        });
         
         toast.success(`Updated local fares for ${selectedVehicle}`);
       } else if (tripType === 'airport') {
@@ -431,20 +429,15 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        const airportFareData: AirportFareData = {
+        await updateAirportFares({
           vehicleId: selectedVehicle,
-          basePrice: 0,
-          pricePerKm: 0,
           pickupPrice: pickupPrice,
           dropPrice: dropPrice,
           tier1Price: tier1Price,
           tier2Price: tier2Price,
           tier3Price: tier3Price,
-          tier4Price: tier4Price,
-          extraKmCharge: 0
-        };
-        
-        await updateAirportFare(airportFareData);
+          tier4Price: tier4Price
+        });
         
         toast.success(`Updated airport fares for ${selectedVehicle}`);
       }

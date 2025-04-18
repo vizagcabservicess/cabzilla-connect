@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,8 @@ import { AlertCircle, RefreshCw, Save, Database, ChevronDown } from "lucide-reac
 import { 
   fetchLocalFares, 
   fetchAirportFares, 
-  updateLocalFare, 
-  updateAirportFare, 
+  updateLocalFares, 
+  updateAirportFares, 
   syncLocalFares, 
   syncAirportFares, 
   initializeDatabaseTables 
@@ -24,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LocalFareData, AirportFareData } from '@/types/cab';
 
 interface FareManagementProps {
   vehicleId: string;
@@ -227,36 +227,18 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      console.log(`Saving ${fareType} fare data for vehicle ID: ${effectiveVehicleId}`);
-    
+      const dataToSave = {
+        ...fareData,
+        vehicleId: effectiveVehicleId,
+        vehicle_id: effectiveVehicleId
+      };
+      
+      console.log(`Saving ${fareType} fare data:`, dataToSave);
+      
       if (fareType === 'local') {
-        // Create a properly typed LocalFareData object with required fields
-        const localFareData: LocalFareData = {
-          vehicleId: effectiveVehicleId,
-          vehicle_id: effectiveVehicleId,
-          price4hrs40km: Number(fareData.price4hrs40km || 0),
-          price8hrs80km: Number(fareData.price8hrs80km || 0),
-          price10hrs100km: Number(fareData.price10hrs100km || 0),
-          priceExtraKm: Number(fareData.priceExtraKm || 0),
-          priceExtraHour: Number(fareData.priceExtraHour || 0)
-        };
-        await updateLocalFare(localFareData);
+        await updateLocalFares(dataToSave);
       } else if (fareType === 'airport') {
-        // Create a properly typed AirportFareData object with required fields
-        const airportFareData: AirportFareData = {
-          vehicleId: effectiveVehicleId,
-          vehicle_id: effectiveVehicleId,
-          basePrice: Number(fareData.basePrice || 0),
-          pricePerKm: Number(fareData.pricePerKm || 0),
-          pickupPrice: Number(fareData.pickupPrice || 0),
-          dropPrice: Number(fareData.dropPrice || 0),
-          tier1Price: Number(fareData.tier1Price || 0),
-          tier2Price: Number(fareData.tier2Price || 0),
-          tier3Price: Number(fareData.tier3Price || 0),
-          tier4Price: Number(fareData.tier4Price || 0),
-          extraKmCharge: Number(fareData.extraKmCharge || 0)
-        };
-        await updateAirportFare(airportFareData);
+        await updateAirportFares(dataToSave);
       }
       
       toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);

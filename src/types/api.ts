@@ -193,7 +193,6 @@ export interface BookingRequest {
   passengerEmail?: string;
   hourlyPackage?: string | null;
   tourId?: string;
-  userId?: number; // Added this property to fix the TypeScript error
 }
 
 export interface TourFare {
