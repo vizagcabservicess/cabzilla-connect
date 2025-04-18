@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
-import { getLocalPackagePrice } from '@/lib/packageData';
-import { hourlyPackages } from '@/lib/packageData';
 import { TripType, TripMode } from '@/lib/tripTypes';
-import { calculateFare, clearFareCache } from '@/lib/fareCalculationService';
+import { useFare, FareType } from '@/hooks/useFare';
 import { toast } from 'sonner';
 
 interface BookingSummaryProps {
@@ -35,27 +34,57 @@ export function BookingSummary({
   hourlyPackage,
   isPreview = false
 }: BookingSummaryProps) {
-  const [isCalculatingFare, setIsCalculatingFare] = useState<boolean>(false);
   const [displayPrice, setDisplayPrice] = useState<number>(totalPrice);
   const [lastCalculationTime, setLastCalculationTime] = useState<number>(0);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [initialized, setInitialized] = useState<boolean>(false);
-
-  const calculateAndUpdateFare = async () => {
+  const [fareBreakdown, setFareBreakdown] = useState<Record<string, number | string>>({});
+  
+  // Initialize the fare hook
+  const { 
+    fetchFare, 
+    clearCache,
+    loading,
+    isFareLoading
+  } = useFare();
+  
+  // Map trip type to FareType
+  const mapTripType = (type: TripType): FareType => {
+    if (type === 'local') return 'local';
+    if (type === 'airport') return 'airport';
+    if (type === 'tour') return 'tour';
+    return 'outstation';
+  };
+  
+  // Get the package details for local trips
+  const getLocalPackageDetails = () => {
+    if (tripType === 'local' && hourlyPackage) {
+      const packageMap: Record<string, string> = {
+        '4hrs-40km': '4hrs-40km package',
+        '8hrs-80km': '8hrs-80km package',
+        '10hrs-100km': '10hrs-100km package'
+      };
+      return packageMap[hourlyPackage] || `${hourlyPackage} package`;
+    }
+    return '';
+  };
+  
+  // Calculate and update fare
+  const calculateAndUpdateFare = useCallback(async (forceRefresh = false) => {
     if (!selectedCab || !pickupLocation || (tripType !== 'local' && !dropLocation) || distance <= 0) {
       return;
     }
-
+    
     const now = Date.now();
-    if (now - lastCalculationTime < 5000) {
+    if (!forceRefresh && now - lastCalculationTime < 5000) {
       console.log('Throttling fare calculation in BookingSummary');
       return;
     }
-
+    
+    setLastCalculationTime(now);
+    
     try {
-      setIsCalculatingFare(true);
-      setLastCalculationTime(now);
-
+      // Check if fare is cached in localStorage first
       let cachedFare = 0;
       if (tripType === 'local' && hourlyPackage) {
         const localStorageKey = `local_fare_${selectedCab.id}_${hourlyPackage}`;
@@ -70,79 +99,129 @@ export function BookingSummary({
           cachedFare = parseInt(storedFare, 10);
         }
       }
-
-      if (cachedFare > 0) {
+      
+      if (!forceRefresh && cachedFare > 0) {
         setDisplayPrice(cachedFare);
         console.log(`Using cached fare from localStorage: ₹${cachedFare}`);
+        
+        // Set simple breakdown for cached fare
+        if (tripType === 'local') {
+          setFareBreakdown({
+            [hourlyPackage || '8hrs-80km']: cachedFare
+          });
+        } else if (tripType === 'outstation') {
+          setFareBreakdown({
+            [`${tripMode === 'round-trip' ? 'Round trip' : 'One way'} - ${distance} km`]: cachedFare
+          });
+        } else {
+          setFareBreakdown({
+            'Total fare': cachedFare
+          });
+        }
+        
         return;
       }
-
-      const calculatedFare = await calculateFare({
-        cabType: selectedCab,
+      
+      // Fetch fresh fare from API
+      const fareDetails = await fetchFare({
+        vehicleId: selectedCab.id,
+        tripType: mapTripType(tripType),
         distance,
-        tripType,
-        tripMode,
-        hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
+        tripMode: tripMode as 'one-way' | 'round-trip',
+        packageId: hourlyPackage,
         pickupDate,
-        returnDate,
-        forceRefresh: retryCount > 0
-      });
-
-      if (calculatedFare > 0) {
-        setDisplayPrice(calculatedFare);
+        returnDate
+      }, forceRefresh);
+      
+      if (fareDetails.totalPrice > 0) {
+        setDisplayPrice(fareDetails.totalPrice);
         
+        // Update breakdown from fare details
+        if (fareDetails.breakdown) {
+          setFareBreakdown(fareDetails.breakdown);
+        } else {
+          // Set simple breakdown
+          if (tripType === 'local') {
+            setFareBreakdown({
+              [hourlyPackage || '8hrs-80km']: fareDetails.totalPrice
+            });
+          } else if (tripType === 'outstation') {
+            setFareBreakdown({
+              [`${tripMode === 'round-trip' ? 'Round trip' : 'One way'} - ${distance} km`]: fareDetails.totalPrice
+            });
+          } else {
+            setFareBreakdown({
+              'Total fare': fareDetails.totalPrice
+            });
+          }
+        }
+        
+        // Cache to localStorage for consistent display
         if (tripType === 'local' && hourlyPackage) {
-          localStorage.setItem(`local_fare_${selectedCab.id}_${hourlyPackage}`, calculatedFare.toString());
+          localStorage.setItem(`local_fare_${selectedCab.id}_${hourlyPackage}`, fareDetails.totalPrice.toString());
         } else if (tripType === 'outstation') {
           const outstationKey = `outstation_${selectedCab.id}_${distance}_${tripMode}`;
-          localStorage.setItem(outstationKey, calculatedFare.toString());
+          localStorage.setItem(outstationKey, fareDetails.totalPrice.toString());
         }
       } else if (totalPrice > 0) {
         setDisplayPrice(totalPrice);
+        setFareBreakdown({
+          'Total fare': totalPrice
+        });
       }
     } catch (error) {
       console.error('Error calculating fare in BookingSummary:', error);
       
       if (totalPrice > 0) {
         setDisplayPrice(totalPrice);
+        setFareBreakdown({
+          'Total fare': totalPrice
+        });
       }
-    } finally {
-      setIsCalculatingFare(false);
     }
-  };
-
+  }, [selectedCab, pickupLocation, dropLocation, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, totalPrice, lastCalculationTime, fetchFare]);
+  
+  // Initialize the fare on component mount and when cab/trip details change
   useEffect(() => {
-    if (!initialized && selectedCab && distance > 0) {
-      setInitialized(true);
-      calculateAndUpdateFare();
+    if (selectedCab && distance > 0) {
+      if (!initialized) {
+        setInitialized(true);
+        calculateAndUpdateFare(false);
+      } else if (
+        Math.abs(totalPrice - displayPrice) > 100 || 
+        totalPrice <= 0 && displayPrice <= 0
+      ) {
+        calculateAndUpdateFare(false);
+      }
     }
-  }, [selectedCab, distance, initialized]);
-
+  }, [selectedCab, distance, totalPrice, displayPrice, initialized, calculateAndUpdateFare]);
+  
+  // Reset state when cab changes
   useEffect(() => {
-    if (selectedCab && distance > 0 && (
-      Math.abs(totalPrice - displayPrice) > 100 || 
-      totalPrice <= 0 && displayPrice <= 0
-    )) {
-      calculateAndUpdateFare();
+    if (selectedCab) {
+      // Reset state for new cab
+      setRetryCount(0);
     }
-  }, [selectedCab, totalPrice, tripType, tripMode, hourlyPackage, distance]);
-
+  }, [selectedCab]);
+  
+  // Retry calculation if fare is zero
   useEffect(() => {
     if (initialized && displayPrice <= 0 && selectedCab && distance > 0 && retryCount < 3) {
       const retryTimer = setTimeout(() => {
         console.log(`Retrying fare calculation (attempt ${retryCount + 1})`);
         setRetryCount(prev => prev + 1);
-        calculateAndUpdateFare();
+        calculateAndUpdateFare(true);
       }, 2000 * (retryCount + 1));
       
       return () => clearTimeout(retryTimer);
     }
-  }, [displayPrice, initialized, retryCount, selectedCab, distance]);
-
+  }, [displayPrice, initialized, retryCount, selectedCab, distance, calculateAndUpdateFare]);
+  
+  // Handle refresh price button click
   const handleRefreshPrice = () => {
-    if (isCalculatingFare) return;
+    if (isFareLoading(selectedCab?.id || '')) return;
     
-    clearFareCache();
+    clearCache();
     setRetryCount(0);
     setDisplayPrice(0);
     setInitialized(false);
@@ -150,20 +229,13 @@ export function BookingSummary({
     toast.info("Refreshing fare calculation...");
     
     setTimeout(() => {
-      calculateAndUpdateFare();
+      calculateAndUpdateFare(true);
     }, 500);
   };
-
-  const getLocalPackageDetails = () => {
-    if (tripType === 'local' && hourlyPackage) {
-      const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackage);
-      if (selectedPackage) {
-        return `${selectedPackage.name} package`;
-      }
-    }
-    return '';
-  };
-
+  
+  // Determine if fare is loading
+  const isCalculatingFare = isFareLoading(selectedCab?.id || '');
+  
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-bold mb-6">Booking Summary</h2>
@@ -300,35 +372,18 @@ export function BookingSummary({
           </button>
         </h3>
         
-        {tripType === 'local' && (
-          <div className="flex justify-between items-center py-2">
-            <span>{hourlyPackage || '8hrs-80km'} package</span>
+        {Object.entries(fareBreakdown).map(([label, value]) => (
+          <div key={label} className="flex justify-between items-center py-2">
+            <span>{label}</span>
             <span className="font-semibold">
               {isCalculatingFare ? (
                 <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
               ) : (
-                formatPrice(displayPrice)
+                typeof value === 'number' ? formatPrice(value) : value
               )}
             </span>
           </div>
-        )}
-        
-        {(tripType === 'outstation' || tripType === 'airport') && (
-          <div className="flex justify-between items-center py-2">
-            <span>
-              {tripType === 'outstation' 
-                ? `${tripMode === 'round-trip' ? 'Round trip' : 'One way'} - ${distance} km`
-                : 'Airport transfer'}
-            </span>
-            <span className="font-semibold">
-              {isCalculatingFare ? (
-                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-              ) : (
-                formatPrice(displayPrice)
-              )}
-            </span>
-          </div>
-        )}
+        ))}
         
         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
           <span className="text-lg font-bold">Total</span>

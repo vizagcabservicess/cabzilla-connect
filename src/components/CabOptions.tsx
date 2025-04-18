@@ -1,9 +1,9 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { CabList } from "./cab-options/CabList";
 import { CabLoading } from "./cab-options/CabLoading";
 import { CabType } from "@/types/cab";
-import { calculateFare, clearFareCache } from "@/lib/fareCalculationService";
+import { useFare } from "@/hooks/useFare";
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -28,24 +28,16 @@ export function CabOptions({
   returnDate,
   hourlyPackage
 }: CabOptionsProps) {
-  const [isCalculatingFares, setIsCalculatingFares] = useState(false);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [loadingCabs, setLoadingCabs] = useState(true);
-  const [calculationAttempts, setCalculationAttempts] = useState(0);
+  
+  // Initialize the fare hook
+  const { fetchFares, clearCacheForTripType } = useFare();
   
   // Add refs to prevent unnecessary recalculations
-  const calculationInProgressRef = useRef(false);
   const lastCalculationRef = useRef<number>(0);
   const calculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fareParamsRef = useRef({
-    distance,
-    tripType,
-    tripMode,
-    hourlyPackage,
-    pickupDate,
-    returnDate
-  });
-
+  
   // Initial loading animation
   useEffect(() => {
     setLoadingCabs(true);
@@ -56,151 +48,76 @@ export function CabOptions({
     
     return () => clearTimeout(timer);
   }, []);
-
-  // Update params ref when dependencies change
+  
+  // Clear fare cache when trip type or mode changes
   useEffect(() => {
-    fareParamsRef.current = {
-      distance,
-      tripType,
-      tripMode,
-      hourlyPackage,
-      pickupDate, 
-      returnDate
-    };
-  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
-
-  // Fare calculation with debouncing and throttling
+    clearCacheForTripType(tripType as any);
+  }, [tripType, clearCacheForTripType]);
+  
+  // Fetch fares for all cabs when component mounts or parameters change
   useEffect(() => {
     // Skip if no distance or no cabs
     if (distance <= 0 || cabTypes.length === 0) {
-      setIsCalculatingFares(false);
       return;
     }
-
+    
     // Clear any pending timeout
     if (calculationTimeoutRef.current) {
       clearTimeout(calculationTimeoutRef.current);
     }
-
+    
     // Debounce the calculation by 500ms
-    calculationTimeoutRef.current = setTimeout(() => {
-      // Don't recalculate if another calculation is in progress
-      if (calculationInProgressRef.current) {
-        console.log("Skipping fare calculation - another calculation in progress");
-        return;
-      }
-
+    calculationTimeoutRef.current = setTimeout(async () => {
       // Throttle calculations - don't recalculate more frequently than every 3 seconds
       const now = Date.now();
-      if (now - lastCalculationRef.current < 3000 && calculationAttempts > 0) {
+      if (now - lastCalculationRef.current < 3000) {
         console.log(`Throttling fare calculation - last calculation was ${now - lastCalculationRef.current}ms ago`);
         return;
       }
-
-      // Check for cached fares in localStorage
-      let hasCachedFares = false;
-      const cachedFares: Record<string, number> = {};
       
-      if (tripType === 'local' && hourlyPackage) {
-        cabTypes.forEach(cab => {
-          const localStorageKey = `local_fare_${cab.id}_${hourlyPackage}`;
-          const storedPrice = localStorage.getItem(localStorageKey);
-          if (storedPrice) {
-            const price = parseInt(storedPrice, 10);
-            if (price > 0) {
-              cachedFares[cab.id] = price;
-              hasCachedFares = true;
-            }
-          }
-        });
-      } else if (tripType === 'outstation') {
-        cabTypes.forEach(cab => {
-          const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
-          const storedFare = localStorage.getItem(outstationKey);
-          if (storedFare) {
-            const price = parseInt(storedFare, 10);
-            if (price > 0) {
-              cachedFares[cab.id] = price;
-              hasCachedFares = true;
-            }
-          }
-        });
-      }
+      lastCalculationRef.current = now;
       
-      // If we have cached fares, use them first and then calculate in background
-      if (hasCachedFares && Object.keys(cachedFares).length > 0) {
-        console.log('Using cached fares from localStorage:', cachedFares);
-        setCabFares(prev => ({...prev, ...cachedFares}));
-      }
-
-      const calculateFares = async () => {
-        setIsCalculatingFares(true);
-        calculationInProgressRef.current = true;
-        lastCalculationRef.current = Date.now();
+      try {
+        const fareRequests = cabTypes.map(cab => ({
+          vehicleId: cab.id,
+          tripType: tripType as any,
+          distance,
+          tripMode: tripMode as any,
+          packageId: hourlyPackage,
+          pickupDate,
+          returnDate
+        }));
         
-        try {
-          // Calculate fares for each cab type in sequence to prevent API overload
-          const results: Record<string, number> = {};
-          
-          for (const cab of cabTypes) {
-            try {
-              const fare = await calculateFare({
-                cabType: cab,
-                distance,
-                tripType,
-                tripMode,
-                hourlyPackage,
-                pickupDate,
-                returnDate,
-                forceRefresh: calculationAttempts > 0
-              });
-              
-              if (fare > 0) {
-                results[cab.id] = fare;
-                
-                // Also cache in localStorage
-                if (tripType === 'local' && hourlyPackage) {
-                  localStorage.setItem(`local_fare_${cab.id}_${hourlyPackage}`, fare.toString());
-                } else if (tripType === 'outstation') {
-                  const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
-                  localStorage.setItem(outstationKey, fare.toString());
-                }
-              }
-              
-              // Update fares incrementally as they're calculated
-              if (fare > 0) {
-                setCabFares(prev => ({...prev, [cab.id]: fare}));
-              }
-              
-              // Small delay between calculations to prevent API overload
-              await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (error) {
-              console.error(`Error calculating fare for ${cab.name}:`, error);
-            }
+        const results = await fetchFares(fareRequests);
+        
+        // Build fare map
+        const fares: Record<string, number> = {};
+        Object.entries(results).forEach(([cabId, fareDetails]) => {
+          if (fareDetails.totalPrice > 0) {
+            fares[cabId] = fareDetails.totalPrice;
           }
-        } catch (error) {
-          console.error("Error calculating fares:", error);
-        } finally {
-          setIsCalculatingFares(false);
-          calculationInProgressRef.current = false;
-          setCalculationAttempts(prev => prev + 1);
+        });
+        
+        if (Object.keys(fares).length > 0) {
+          setCabFares(fares);
+          console.log("CabList: Initial fare setup", fares);
         }
-      };
-
-      calculateFares();
+      } catch (error) {
+        console.error("Error fetching initial fares:", error);
+      }
     }, 500);
-
+    
     return () => {
       if (calculationTimeoutRef.current) {
         clearTimeout(calculationTimeoutRef.current);
       }
     };
-  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, calculationAttempts]);
-
-  const handleSelectCab = (cab: CabType) => {
+  }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, fetchFares]);
+  
+  const handleSelectCab = useCallback((cab: CabType) => {
     if (cab.id === selectedCab?.id) return; // Prevent unnecessary re-renders
     
-    // Get the most accurate fare when selecting
+    // Get the most accurate fare
     let fareToUse = cabFares[cab.id];
     
     // Check localStorage for cached fare
@@ -231,8 +148,8 @@ export function CabOptions({
     }
     
     onSelectCab(cab);
-  };
-
+  }, [selectedCab, cabFares, tripType, tripMode, distance, hourlyPackage, onSelectCab]);
+  
   const getFareDetails = (cab: CabType): string => {
     // Return fare details based on trip type
     if (tripType === "local") {
@@ -241,14 +158,16 @@ export function CabOptions({
       return `${tripMode === "round-trip" ? "Round trip" : "One way"} - ${distance} km`;
     } else if (tripType === "airport") {
       return "Airport transfer";
+    } else if (tripType === "tour") {
+      return "Tour package";
     }
     return "";
   };
-
+  
   if (loadingCabs) {
     return <CabLoading />;
   }
-
+  
   return (
     <div className="mt-6">
       <h3 className="text-lg font-semibold mb-3">Available Cabs</h3>
@@ -256,10 +175,13 @@ export function CabOptions({
         cabTypes={cabTypes}
         selectedCabId={selectedCab?.id || null}
         cabFares={cabFares}
-        isCalculatingFares={isCalculatingFares}
+        isCalculatingFares={false}
         handleSelectCab={handleSelectCab}
         getFareDetails={getFareDetails}
         tripType={tripType}
+        tripMode={tripMode as any}
+        distance={distance}
+        hourlyPackage={hourlyPackage}
       />
     </div>
   );

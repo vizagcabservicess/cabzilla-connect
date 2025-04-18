@@ -12,9 +12,11 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
     'Pragma': 'no-cache',
     'Expires': '0',
-    // Remove Origin header to prevent CORS issues
+    'Accept': '*/*',
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': '*/*'
+    // Add CORS-safe headers
+    'Access-Control-Request-Method': 'GET, POST, OPTIONS',
+    'Access-Control-Request-Headers': 'Content-Type, Authorization, X-Requested-With'
   };
 };
 
@@ -94,25 +96,72 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
   // Use direct URL to API without proxy
   const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
+  // Add timestamp to prevent caching
+  const urlWithTimestamp = url.includes('?') 
+    ? `${url}&_t=${Date.now()}` 
+    : `${url}?_t=${Date.now()}`;
+  
   // Try up to 3 times
   let lastError: Error | null = null;
+  
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const result = await fetch(url, enhancedOptions);
+      const result = await fetch(urlWithTimestamp, enhancedOptions);
       
       if (result.status === 0) {
         throw new Error('Network error - status 0 received');
+      }
+      
+      // Create a modified response to handle CORS errors gracefully
+      if (result.status === 403 || result.status === 401) {
+        // For 403/401 errors, try to create a fallback JSON response
+        console.warn(`Received ${result.status} from API, attempting to create a fallback response`);
+        
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: `API returned ${result.status} status code`,
+          error: `Request failed with status ${result.status}`,
+          fallback: true
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      
+      // Check for CORS or OPTIONS preflight issues
+      if (result.status === 0 || result.type === 'opaque' || result.type === 'error') {
+        console.warn(`Potential CORS issue: Response type: ${result.type}, status: ${result.status}`);
+        throw new Error(`CORS issue: ${result.type} response with status ${result.status}`);
       }
       
       return result;
     } catch (error: any) {
       lastError = error;
       console.warn(`Fetch attempt ${attempt} failed:`, error);
+      
       // Wait a bit longer between retries
       if (attempt < 3) {
         await new Promise(resolve => setTimeout(resolve, attempt * 1000));
       }
     }
+  }
+  
+  // If all attempts failed, create a fallback response
+  if (endpoint.includes('fares') || endpoint.includes('fare')) {
+    console.error(`All fetch attempts failed for ${endpoint}. Creating fallback response.`);
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: 'Failed to fetch fare data after multiple attempts',
+      error: lastError?.message || 'Unknown error',
+      fallback: true
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
   
   // If we got here, all attempts failed
