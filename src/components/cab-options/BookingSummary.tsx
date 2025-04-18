@@ -8,19 +8,15 @@ interface BookingSummaryProps {
   selectedCab: any;
   tripType: string;
   hourlyPackage?: string;
-  pickupLocation?: string;  // Add pickupLocation as optional prop
-  pickupDate?: Date;        // Add pickupDate as optional prop
-  distance?: number;        // Add distance as optional prop
-  isCalculatingFares?: boolean; // Add isCalculatingFares as optional prop
-  fare?: number;            // Add fare as optional prop
+  distance?: number;        
+  isCalculatingFares?: boolean; 
+  fare?: number;           
 }
 
 export const BookingSummary: React.FC<BookingSummaryProps> = ({
   selectedCab,
   tripType,
   hourlyPackage = '8hrs-80km',
-  pickupLocation,
-  pickupDate,
   distance,
   isCalculatingFares: externalIsLoading,
   fare: externalFare
@@ -116,14 +112,6 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           <span>Package</span>
           <span className="font-medium">{hourlyPackage}</span>
         </div>
-
-        {/* Pickup details - only show if provided */}
-        {pickupLocation && (
-          <div className="flex justify-between items-center">
-            <span>Pickup</span>
-            <span className="font-medium">{pickupLocation}</span>
-          </div>
-        )}
 
         {/* Distance - only show if provided */}
         {distance && (

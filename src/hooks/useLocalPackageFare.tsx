@@ -1,23 +1,10 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
 
-interface LocalPackageFareResult {
-  fare: number;
-  isFetching: boolean;
-  error: string | null;
-  hourlyPackage: string;
-  fetchFare: (vehicleId: string, packageId?: string, forceRefresh?: boolean) => Promise<number>;
-  changePackage: (newPackage: string) => void;
-  clearFare: () => void;
-}
-
-export function useLocalPackageFare(
-  defaultPackage: string = '8hrs-80km'
-): LocalPackageFareResult {
-  const [hourlyPackage, setHourlyPackage] = useState<string>(defaultPackage);
+export function useLocalPackageFare(defaultPackage: string = '8hrs-80km') {
   const [fare, setFare] = useState<number>(0);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,29 +17,9 @@ export function useLocalPackageFare(
     return id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   };
 
-  // Clear all fare cache entries
-  const clearFare = useCallback(() => {
-    // Get all localStorage keys
-    const allKeys = Object.keys(localStorage);
-    
-    // Filter fare-related keys and remove them
-    const fareKeys = allKeys.filter(key => key.startsWith('fare_local_'));
-    
-    console.log(`Purging ${fareKeys.length} cached fare entries from localStorage`);
-    fareKeys.forEach(key => localStorage.removeItem(key));
-    
-    // Reset current vehicle ID reference
-    currentVehicleIdRef.current = null;
-    
-    // Abort any in-flight requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  }, []);
-
   const fetchFare = useCallback(async (
     vehicleId: string, 
-    packageId: string = hourlyPackage,
+    packageId: string = defaultPackage,
     forceRefresh: boolean = false
   ): Promise<number> => {
     if (!vehicleId) {
@@ -72,21 +39,14 @@ export function useLocalPackageFare(
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
     currentVehicleIdRef.current = normalizedVehicleId;
 
-    // Clear all other vehicle fare caches to prevent cross-contamination
-    const allKeys = Object.keys(localStorage);
-    const currentKey = `fare_local_${normalizedVehicleId}`;
-    const fareKeysToRemove = allKeys.filter(key => 
-      key.startsWith('fare_local_') && key !== currentKey
-    );
-    fareKeysToRemove.forEach(key => localStorage.removeItem(key));
-
     try {
       setIsFetching(true);
       setError(null);
 
-      // Try cache first unless forcing refresh
+      // Try getting from cache unless forcing refresh
+      const cacheKey = `fare_local_${normalizedVehicleId}`;
       if (!forceRefresh) {
-        const cachedFare = localStorage.getItem(currentKey);
+        const cachedFare = localStorage.getItem(cacheKey);
         if (cachedFare && !isNaN(Number(cachedFare))) {
           const parsedFare = Number(cachedFare);
           if (parsedFare > 0) {
@@ -96,9 +56,11 @@ export function useLocalPackageFare(
             return parsedFare;
           }
         }
+      } else {
+        // Clear old cache on force refresh
+        localStorage.removeItem(cacheKey);
       }
 
-      // Fetch from API
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}`);
       
       const response = await axios.get(apiUrl, {
@@ -145,7 +107,7 @@ export function useLocalPackageFare(
           
           // ✅ Write to localStorage only after ID match
           if (normalizedVehicleId === currentVehicleIdRef.current) {
-            localStorage.setItem(currentKey, String(price));
+            localStorage.setItem(cacheKey, String(price));
             setFare(price);
           } else {
             console.log(`Skipping localStorage update: vehicle ID mismatch`);
@@ -171,28 +133,12 @@ export function useLocalPackageFare(
     } finally {
       setIsFetching(false);
     }
-  }, [hourlyPackage]);
-
-  const changePackage = useCallback((newPackage: string) => {
-    setHourlyPackage(newPackage);
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+  }, [defaultPackage]);
 
   return {
     fare,
     isFetching,
     error,
-    hourlyPackage,
-    fetchFare,
-    changePackage,
-    clearFare
+    fetchFare
   };
 }
