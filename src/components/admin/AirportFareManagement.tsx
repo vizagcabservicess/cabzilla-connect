@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
-import { FareData, updateAirportFares, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
+import { updateAirportFare, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
+import { FareData, AirportFareData } from '@/types/cab';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
@@ -259,8 +260,7 @@ const AirportFareManagement: React.FC = () => {
       return;
     }
 
-    const fareToSave: FareData = {
-      ...fares,
+    const fareToSave: AirportFareData = {
       vehicleId: selectedVehicleId,
       vehicle_id: selectedVehicleId,
       basePrice: parseFloat(String(fares.basePrice ?? 0)),
@@ -278,7 +278,7 @@ const AirportFareManagement: React.FC = () => {
     
     setLoading(true);
     try {
-      await updateAirportFares(fareToSave);
+      await updateAirportFare(fareToSave);
       toast({
         title: "Success",
         description: "Airport fares saved successfully.",

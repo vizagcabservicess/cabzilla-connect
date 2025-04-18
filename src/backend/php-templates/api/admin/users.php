@@ -148,9 +148,9 @@ try {
         $newRole = $requestData['role'];
         
         // Validate role
-        if (!in_array($newRole, ['user', 'admin', 'driver'])) {
+        if (!in_array($newRole, ['user', 'admin'])) {
             error_log("Invalid role: $newRole");
-            sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be "user", "admin", or "driver"'], 400);
+            sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be either "user" or "admin"'], 400);
             exit;
         }
         

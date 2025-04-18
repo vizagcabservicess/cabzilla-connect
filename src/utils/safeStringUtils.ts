@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for safely handling string operations
  */
@@ -38,59 +37,62 @@ export function safeLowerCase(value: any): string {
 }
 
 /**
- * Parse a value to a number, handling various input types
- * @param value Any value that might be convertible to a number
- * @param defaultValue Optional default value if parsing fails (defaults to 0)
- * @returns Numeric value or defaultValue if parsing fails
+ * Safely parse a numeric value from a string or other input
+ * Returns a number or 0 if the input is not a valid number
  */
-export function parseNumericValue(value: any, defaultValue: number = 0): number {
-  // If value is null, undefined, or empty string, return defaultValue
+export const parseNumericValue = (value: any): number => {
   if (value === null || value === undefined || value === '') {
-    return defaultValue;
+    return 0;
   }
   
-  // Handle case where value is already a number
-  if (typeof value === 'number') {
-    return isNaN(value) ? defaultValue : value;
+  // If it's already a number, return it
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value;
   }
   
-  // Handle case where value is a string representing a number
-  if (typeof value === 'string') {
-    const parsedValue = parseFloat(value);
-    return isNaN(parsedValue) ? defaultValue : parsedValue;
+  // Otherwise try to parse it as a string
+  try {
+    const stringValue = String(value);
+    // Remove all non-numeric characters except decimal points and minus signs
+    const cleanedValue = stringValue.replace(/[^\d.-]/g, '');
+    const parsedValue = parseFloat(cleanedValue);
+    
+    return isNaN(parsedValue) ? 0 : parsedValue;
+  } catch (e) {
+    console.error('Error parsing numeric value:', e);
+    return 0;
   }
-  
-  // Try to convert to number as a last resort
-  const attemptNumber = Number(value);
-  return isNaN(attemptNumber) ? defaultValue : attemptNumber;
-}
+};
 
 /**
- * Safely gets a property from an object
- * @param obj The object to get the property from
- * @param prop The property name
- * @returns The property value or undefined
+ * Format a number as currency
  */
-export function safeGet(obj: any, prop: string): any {
-  if (obj === null || obj === undefined || typeof obj !== 'object') {
-    return undefined;
-  }
-  return obj[prop];
-}
+export const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(value);
+};
 
 /**
- * Safely extracts a string property from an object
- * @param obj The object to get the property from
- * @param prop The property name
- * @returns The property value as string or empty string
+ * Format a numeric value for display in an input field
  */
-export function safeGetString(obj: any, prop: string): string {
-  const value = safeGet(obj, prop);
-  if (value === null || value === undefined || typeof value !== 'string') {
+export const formatNumericInput = (value: number): string => {
+  if (value === 0) return '';
+  return String(value);
+};
+
+/**
+ * Ensure a value is a string
+ */
+export const ensureString = (value: any): string => {
+  if (value === null || value === undefined) {
     return '';
   }
-  return value;
-}
+  
+  return String(value);
+};
 
 /**
  * Parse amenities from various input formats into a standardized array
@@ -119,4 +121,31 @@ export function parseAmenities(amenities: any): string[] {
   
   // For any other case, return empty array
   return [];
+};
+
+/**
+ * Safely gets a property from an object
+ * @param obj The object to get the property from
+ * @param prop The property name
+ * @returns The property value or undefined
+ */
+export function safeGet(obj: any, prop: string): any {
+  if (obj === null || obj === undefined || typeof obj !== 'object') {
+    return undefined;
+  }
+  return obj[prop];
+}
+
+/**
+ * Safely extracts a string property from an object
+ * @param obj The object to get the property from
+ * @param prop The property name
+ * @returns The property value as string or empty string
+ */
+export function safeGetString(obj: any, prop: string): string {
+  const value = safeGet(obj, prop);
+  if (value === null || value === undefined || typeof value !== 'string') {
+    return '';
+  }
+  return value;
 }

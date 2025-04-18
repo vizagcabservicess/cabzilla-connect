@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -166,12 +167,12 @@ export function AdminBookingsList() {
           try {
             setApiAttempt(3);
             // Fallback to using the bookingAPI service
-            console.log('Attempting to fetch via bookingAPI.getBookings()');
-            data = await bookingAPI.getBookings();
+            console.log('Attempting to fetch via bookingAPI.getAllBookings()');
+            data = await bookingAPI.getAllBookings();
             console.log('Admin: Bookings received from admin API:', data);
             responseSource = 'booking_api';
           } catch (adminError) {
-            console.warn('getBookings admin API failed:', adminError);
+            console.warn('getAllBookings admin API failed:', adminError);
             
             try {
               setApiAttempt(4);
@@ -259,7 +260,7 @@ export function AdminBookingsList() {
       if (bookings.length === 0) {
         const sampleBookings: Booking[] = [
           {
-            id: "1",
+            id: 1,
             bookingNumber: 'DEMO1234',
             pickupLocation: 'Demo Airport',
             dropLocation: 'Demo Hotel',
@@ -277,7 +278,7 @@ export function AdminBookingsList() {
             updatedAt: new Date().toISOString()
           },
           {
-            id: "2",
+            id: 2,
             bookingNumber: 'DEMO1235',
             pickupLocation: 'Demo Hotel',
             dropLocation: 'Demo Beach',
@@ -383,14 +384,14 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleAssignDriver = (bookingId: string | number) => {
+  const handleAssignDriver = (bookingId: number) => {
     uiToast({
       title: "Feature Coming Soon",
       description: "Driver assignment functionality will be available soon.",
     });
   };
 
-  const handleCancelBooking = (bookingId: string | number) => {
+  const handleCancelBooking = (bookingId: number) => {
     uiToast({
       title: "Feature Coming Soon",
       description: "Booking cancellation functionality will be available soon.",
@@ -557,7 +558,7 @@ export function AdminBookingsList() {
               </TableHeader>
               <TableBody>
                 {filteredBookings.map((booking) => (
-                  <TableRow key={String(booking.id)}>
+                  <TableRow key={booking.id}>
                     <TableCell className="font-medium">{booking.bookingNumber}</TableCell>
                     <TableCell>
                       <div className="font-medium">{booking.passengerName}</div>

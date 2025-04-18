@@ -1,55 +1,58 @@
 
 // API configuration
 
-// Base API URL - auto-detect between development and production
-export const apiBaseUrl = process.env.NODE_ENV === 'production' 
-  ? 'https://vizagup.com' 
-  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
+// Get base API URL from environment or fallback to empty string (relative URLs)
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
-// Helper function to get full API URL
-export const getApiUrl = (path: string = ''): string => {
-  // Check if path is already a complete URL
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path;
-  }
-  
-  // Determine if we should use Vizagup API for certain endpoints
-  const useVizagupApi = process.env.NODE_ENV === 'development' && 
-                        (path.includes('direct-local-fares.php') || 
-                         path.includes('direct-booking-data.php'));
-  
-  // Use vizagup.com API directly for certain endpoints even in development
-  const baseUrl = useVizagupApi ? 'https://vizagup.com' : apiBaseUrl;
-  
-  // If no path is provided, return the base URL
-  if (!path) {
-    return baseUrl;
-  }
-  
-  // Ensure path starts with a slash if it doesn't already
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  // Remove any duplicate slashes that might occur when joining
-  const fullUrl = `${baseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
-  return fullUrl;
-};
-
-// Force refresh headers for API requests to bypass cache
-export const forceRefreshHeaders = {
-  'X-Force-Refresh': 'true',
-  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-};
-
-// Default headers for API requests
+// Default headers for all API requests
 export const defaultHeaders = {
   'Content-Type': 'application/json',
   'X-Requested-With': 'XMLHttpRequest'
 };
 
-// Export configuration options
-export default {
-  baseUrl: apiBaseUrl,
-  defaultHeaders,
-  forceRefreshHeaders
+// Function to generate full API URL
+export const getApiUrl = (path: string): string => {
+  // If the path already starts with http(s), return it as is
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  
+  // If path already starts with a slash, don't add another one
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  
+  // Return the full URL
+  return `${apiBaseUrl}${normalizedPath}`;
 };
+
+// Headers for forcing API refresh (no caching)
+export const forceRefreshHeaders = {
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
+// Headers for administrative actions
+export const adminHeaders = {
+  ...forceRefreshHeaders,
+  'X-Admin-Mode': 'true'
+};
+
+// Function to get request config with force refresh
+export const getForcedRequestConfig = () => ({
+  headers: forceRefreshHeaders,
+  cache: 'no-store' as const
+});
+
+// Function to get admin request config
+export const getAdminRequestConfig = () => ({
+  headers: adminHeaders,
+  cache: 'no-store' as const
+});
+
+// Function to get bypass headers for API requests
+export const getBypassHeaders = () => ({
+  ...forceRefreshHeaders,
+  'X-Admin-Mode': 'true',
+  'X-Debug': 'true'
+});

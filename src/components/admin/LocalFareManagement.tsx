@@ -88,7 +88,7 @@ export function LocalFareManagement() {
         toast.error("Failed to sync tables, will try database initialization");
       }
       
-      const result = await fareService.initializeDatabase(true);
+      const result = await fareService.initializeDatabase();
       console.log('Database initialization response:', result);
       
       toast.success("Database tables initialized successfully");
@@ -117,8 +117,8 @@ export function LocalFareManagement() {
       formData.append('price4hrs40km', values.package4hr40km.toString());
       formData.append('price8hrs80km', values.package8hr80km.toString());
       formData.append('price10hrs100km', values.package10hr100km.toString());
-      formData.append('extraKmRate', values.extraKmRate.toString());
-      formData.append('extraHourRate', values.extraHourRate.toString());
+      formData.append('priceExtraKm', values.extraKmRate.toString());
+      formData.append('priceExtraHour', values.extraHourRate.toString());
       
       // Package names for compatibility with all endpoints
       formData.append('package4hr40km', values.package4hr40km.toString());

@@ -1,24 +1,13 @@
 
 <?php
-/**
- * direct-outstation-fares.php - Direct API endpoint for outstation fare updates
- * Uses vehicle_id exclusively to prevent duplicate vehicle creation
- */
+// Mock PHP file for direct-outstation-fares.php
+// Note: This file won't actually be executed in the Lovable preview environment,
+// but it helps document the expected API structure and responses.
 
-// Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
-
-// Create log directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -26,492 +15,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Function to get database connection
-function getDbConnection() {
-    try {
-        $host = 'localhost';
-        $dbname = 'u644605165_db_be'; 
-        $username = 'u644605165_usr_be';
-        $password = 'Vizag@1213';
-        
-        $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $conn;
-    } catch (Exception $e) {
-        throw new Exception("Database connection error: " . $e->getMessage());
-    }
+// Get vehicle ID from query string
+$vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+
+// If vehicle ID is not in query string, check for it in JSON body for POST requests
+if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : (isset($data['vehicle_id']) ? $data['vehicle_id'] : null);
 }
 
-// Log message to file
-function logMessage($message) {
-    $timestamp = date('Y-m-d H:i:s');
-    $logMessage = "[$timestamp] $message\n";
-    error_log($logMessage, 3, __DIR__ . '/../../logs/direct-outstation-fares.log');
+// If vehicle ID is not in JSON body, check POST data
+if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
 }
 
-// ENHANCED: More comprehensive ID mapping with all known numeric IDs
-$numericIdMapExtended = [
-    '1' => 'sedan',
-    '2' => 'ertiga',
-    '3' => 'innova',
-    '4' => 'crysta',
-    '5' => 'tempo',
-    '6' => 'bus',
-    '7' => 'van',
-    '8' => 'suv',
-    '9' => 'traveller',
-    '10' => 'luxury',
-    '180' => 'etios',
-    '592' => 'urbania',
-    '1266' => 'mpv',
-    '1270' => 'mpv',
-    '1271' => 'etios',
-    '1272' => 'etios',
-    '1273' => 'etios',
-    '1274' => 'etios',
-    '1275' => 'etios',
-    '1276' => 'etios',
-    '1277' => 'etios',
-    '1278' => 'etios',
-    '1279' => 'etios',
-    '1280' => 'etios',
-    '1281' => 'mpv',
-    '1282' => 'sedan',
-    '1283' => 'sedan',
-    '1284' => 'etios',
-    '1285' => 'etios',
-    '1286' => 'etios',
-    '1287' => 'etios',
-    '1288' => 'etios',
-    '1289' => 'etios',
-    '1290' => 'etios',
-    '100' => 'sedan',
-    '101' => 'sedan',
-    '102' => 'sedan',
-    '103' => 'sedan',
-    '200' => 'ertiga',
-    '201' => 'ertiga',
-    '202' => 'ertiga',
-    '300' => 'innova',
-    '301' => 'innova',
-    '302' => 'innova',
-    '400' => 'crysta',
-    '401' => 'crysta',
-    '402' => 'crysta',
-    '500' => 'tempo',
-    '501' => 'tempo',
-    '502' => 'tempo'
-];
-
-try {
-    // Connect to database
-    $conn = getDbConnection();
-    
-    // First, check if the outstation_fares table exists
-    $checkTableQuery = "SHOW TABLES LIKE 'outstation_fares'";
-    $checkTableStmt = $conn->prepare($checkTableQuery);
-    $checkTableStmt->execute();
-    $tableExists = ($checkTableStmt->rowCount() > 0);
-    
-    if (!$tableExists) {
-        // Create the outstation_fares table if it doesn't exist
-        $createTableQuery = "
-            CREATE TABLE outstation_fares (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
-                roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        $conn->exec($createTableQuery);
-        logMessage("Created outstation_fares table");
-    }
-    
-    // Handle GET request to retrieve outstation fares
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // Get all vehicles with their outstation fares
-        $query = "
-            SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.image, 
-                   v.is_active, of.* 
-            FROM vehicles v
-            LEFT JOIN outstation_fares of ON v.vehicle_id = of.vehicle_id
-            WHERE v.is_active = 1 OR :includeInactive = 'true'
-            ORDER BY v.name
-        ";
-        
-        $includeInactive = isset($_GET['includeInactive']) ? $_GET['includeInactive'] : 'false';
-        $stmt = $conn->prepare($query);
-        $stmt->bindParam(':includeInactive', $includeInactive);
-        $stmt->execute();
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $fares = [];
-        foreach ($results as $row) {
-            // Always use vehicle_id as the primary identifier
-            $vehicleId = $row['vehicle_id'] ?? $row['id'];
-            
-            // Skip if we somehow have a numeric vehicle_id (shouldn't happen)
-            if (is_numeric($vehicleId)) {
-                logMessage("Warning: Found numeric vehicle_id: $vehicleId - skipping");
-                continue;
-            }
-            
-            // Check if this vehicle already exists in our results (avoid duplicates)
-            if (isset($fares[$vehicleId])) {
-                logMessage("Skipping duplicate vehicle entry for: $vehicleId");
-                continue;
-            }
-            
-            // Create a standardized fare object
-            $fares[$vehicleId] = [
-                'id' => $vehicleId,
-                'vehicleId' => $vehicleId,
-                'name' => $row['name'] ?? ucfirst($vehicleId),
-                'capacity' => isset($row['capacity']) ? intval($row['capacity']) : 4,
-                'luggageCapacity' => isset($row['luggage_capacity']) ? intval($row['luggage_capacity']) : 2,
-                'image' => $row['image'] ?? '/cars/sedan.png',
-                'isActive' => isset($row['is_active']) ? (bool)$row['is_active'] : true,
-                'oneWayBasePrice' => isset($row['base_price']) ? floatval($row['base_price']) : 0,
-                'oneWayPricePerKm' => isset($row['price_per_km']) ? floatval($row['price_per_km']) : 0,
-                'driverAllowance' => isset($row['driver_allowance']) ? floatval($row['driver_allowance']) : 300,
-                'nightHaltCharge' => isset($row['night_halt_charge']) ? floatval($row['night_halt_charge']) : 700,
-                'roundTripBasePrice' => isset($row['roundtrip_base_price']) ? floatval($row['roundtrip_base_price']) : 0,
-                'roundTripPricePerKm' => isset($row['roundtrip_price_per_km']) ? floatval($row['roundtrip_price_per_km']) : 0
-            ];
-        }
-        
-        echo json_encode([
-            'status' => 'success',
-            'fares' => $fares,
-            'count' => count($fares)
-        ]);
-        exit;
-    }
-    
-    // Handle POST request to update outstation fares
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Get vehicle ID from various possible sources
-        $rawVehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : 
-                    (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : 
-                    (isset($_POST['id']) ? $_POST['id'] : null));
-        
-        logMessage("Original vehicle ID received: " . $rawVehicleId);
-        
-        // CRITICAL: Never use pure numeric IDs - convert them to proper vehicle_id values
-        $vehicleId = $rawVehicleId;
-        
-        // Remove 'item-' prefix if it exists
-        if (strpos($vehicleId, 'item-') === 0) {
-            $vehicleId = substr($vehicleId, 5);
-            logMessage("Removed 'item-' prefix: " . $vehicleId);
-        }
-        
-        // Handle comma-separated lists and extract first ID
-        if (strpos($vehicleId, ',') !== false) {
-            $idParts = explode(',', $vehicleId);
-            $oldId = $vehicleId;
-            $vehicleId = trim($idParts[0]);
-            logMessage("Found comma-separated list, using first ID: $vehicleId");
-            
-            // Check if first ID needs mapping
-            if (is_numeric($vehicleId) && isset($numericIdMapExtended[$vehicleId])) {
-                $vehicleId = $numericIdMapExtended[$vehicleId];
-                logMessage("Mapped first ID from list to: $vehicleId");
-            }
-        }
-        
-        // Handle numeric IDs by mapping to proper vehicle_id
-        if (is_numeric($vehicleId)) {
-            if (isset($numericIdMapExtended[$vehicleId])) {
-                $originalId = $vehicleId;
-                $vehicleId = $numericIdMapExtended[$vehicleId];
-                logMessage("Mapped numeric ID $originalId to vehicle_id: $vehicleId");
-            } else {
-                logMessage("REJECTED: Unmapped numeric ID not allowed: " . $vehicleId);
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', etc."
-                ]);
-                exit;
-            }
-        }
-        
-        // Validate vehicle ID
-        if (empty($vehicleId) || $vehicleId === 'undefined' || $vehicleId === 'null') {
-            $vehicleId = 'sedan'; // Default fallback
-            logMessage("Empty or invalid vehicle ID - using default: sedan");
-        }
-        
-        // Final check to reject any numeric IDs that slipped through
-        if (is_numeric($vehicleId)) {
-            logMessage("FINAL REJECTION: ID is still numeric after processing: " . $vehicleId);
-            echo json_encode([
-                'status' => 'error', 
-                'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id."
-            ]);
-            exit;
-        }
-        
-        // Normalize vehicle ID to lowercase to prevent duplicates with different case
-        $vehicleId = strtolower($vehicleId);
-        logMessage("Normalized vehicle ID to lowercase: $vehicleId");
-        
-        // Get outstation fare values with fallbacks
-        $oneWayBasePrice = isset($_POST['oneWayBasePrice']) && is_numeric($_POST['oneWayBasePrice']) ? 
-                          floatval($_POST['oneWayBasePrice']) : 
-                          (isset($_POST['basePrice']) && is_numeric($_POST['basePrice']) ? 
-                          floatval($_POST['basePrice']) : 0);
-                          
-        $oneWayPricePerKm = isset($_POST['oneWayPricePerKm']) && is_numeric($_POST['oneWayPricePerKm']) ? 
-                           floatval($_POST['oneWayPricePerKm']) : 
-                           (isset($_POST['pricePerKm']) && is_numeric($_POST['pricePerKm']) ? 
-                           floatval($_POST['pricePerKm']) : 0);
-                          
-        $roundTripBasePrice = isset($_POST['roundTripBasePrice']) && is_numeric($_POST['roundTripBasePrice']) ? 
-                             floatval($_POST['roundTripBasePrice']) : 
-                             (isset($_POST['roundtrip_base_price']) && is_numeric($_POST['roundtrip_base_price']) ? 
-                             floatval($_POST['roundtrip_base_price']) : $oneWayBasePrice * 0.9);
-                             
-        $roundTripPricePerKm = isset($_POST['roundTripPricePerKm']) && is_numeric($_POST['roundTripPricePerKm']) ? 
-                              floatval($_POST['roundTripPricePerKm']) : 
-                              (isset($_POST['roundtrip_price_per_km']) && is_numeric($_POST['roundtrip_price_per_km']) ? 
-                              floatval($_POST['roundtrip_price_per_km']) : $oneWayPricePerKm * 0.85);
-                     
-        $driverAllowance = isset($_POST['driverAllowance']) && is_numeric($_POST['driverAllowance']) ? 
-                          floatval($_POST['driverAllowance']) : 
-                          (isset($_POST['driver_allowance']) && is_numeric($_POST['driver_allowance']) ? 
-                          floatval($_POST['driver_allowance']) : 300);
-                          
-        $nightHaltCharge = isset($_POST['nightHaltCharge']) && is_numeric($_POST['nightHaltCharge']) ? 
-                          floatval($_POST['nightHaltCharge']) : 
-                          (isset($_POST['night_halt_charge']) && is_numeric($_POST['night_halt_charge']) ? 
-                          floatval($_POST['night_halt_charge']) : 700);
-        
-        // Begin transaction
-        $conn->beginTransaction();
-        
-        try {
-            // First ensure vehicle exists in vehicles table - ALWAYS USE vehicle_id
-            $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ?";
-            $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
-            $checkVehicleStmt->execute([$vehicleId]);
-            $vehicleExists = $checkVehicleStmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$vehicleExists) {
-                // Try a case-insensitive search before creating a new vehicle
-                $checkCaseInsensitiveQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
-                $checkCaseStmt = $conn->prepare($checkCaseInsensitiveQuery);
-                $checkCaseStmt->execute([$vehicleId]);
-                $caseResult = $checkCaseStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($caseResult) {
-                    // Found a vehicle with case-insensitive match
-                    $vehicleExists = $caseResult;
-                    $vehicleId = $caseResult['vehicle_id']; // Use the existing case
-                    logMessage("Found vehicle with case-insensitive match. Using: " . $vehicleId);
-                } else {
-                    // Vehicle doesn't exist, create it
-                    $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
-                    
-                    $insertVehicleQuery = "
-                        INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
-                        VALUES (?, ?, 1, NOW(), NOW())
-                    ";
-                    
-                    $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
-                    $insertVehicleStmt->execute([$vehicleId, $vehicleName]);
-                    
-                    logMessage("Created new vehicle: " . $vehicleId);
-                }
-            } else {
-                logMessage("Vehicle exists: " . json_encode($vehicleExists));
-                // Use the exact vehicle_id from the database to maintain case consistency
-                $vehicleId = $vehicleExists['vehicle_id'];
-            }
-            
-            // Check if fare record exists for this vehicle
-            $checkFareQuery = "SELECT id FROM outstation_fares WHERE vehicle_id = ?";
-            $checkFareStmt = $conn->prepare($checkFareQuery);
-            $checkFareStmt->execute([$vehicleId]);
-            $fareExists = $checkFareStmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$fareExists) {
-                // Try case-insensitive search
-                $checkCaseFareQuery = "SELECT id, vehicle_id FROM outstation_fares WHERE LOWER(vehicle_id) = LOWER(?)";
-                $checkCaseFareStmt = $conn->prepare($checkCaseFareQuery);
-                $checkCaseFareStmt->execute([$vehicleId]);
-                $caseFareExists = $checkCaseFareStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($caseFareExists) {
-                    $fareExists = $caseFareExists;
-                    // Use existing vehicle_id from fare record for consistency
-                    $vehicleId = $caseFareExists['vehicle_id'];
-                    logMessage("Found fare with case-insensitive match. Using: " . $vehicleId);
-                }
-            }
-            
-            if ($fareExists) {
-                // Update existing record
-                $updateQuery = "
-                    UPDATE outstation_fares
-                    SET base_price = ?,
-                        price_per_km = ?,
-                        driver_allowance = ?,
-                        night_halt_charge = ?,
-                        roundtrip_base_price = ?,
-                        roundtrip_price_per_km = ?,
-                        updated_at = NOW()
-                    WHERE vehicle_id = ?
-                ";
-                
-                $updateStmt = $conn->prepare($updateQuery);
-                $updateStmt->execute([
-                    $oneWayBasePrice,
-                    $oneWayPricePerKm,
-                    $driverAllowance,
-                    $nightHaltCharge,
-                    $roundTripBasePrice,
-                    $roundTripPricePerKm,
-                    $vehicleId
-                ]);
-                
-                logMessage("Updated outstation fare for vehicle: " . $vehicleId);
-            } else {
-                // Insert new record
-                $insertQuery = "
-                    INSERT INTO outstation_fares (
-                        vehicle_id,
-                        base_price,
-                        price_per_km,
-                        driver_allowance,
-                        night_halt_charge,
-                        roundtrip_base_price,
-                        roundtrip_price_per_km,
-                        created_at,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-                ";
-                
-                $insertStmt = $conn->prepare($insertQuery);
-                $insertStmt->execute([
-                    $vehicleId,
-                    $oneWayBasePrice,
-                    $oneWayPricePerKm,
-                    $driverAllowance,
-                    $nightHaltCharge,
-                    $roundTripBasePrice,
-                    $roundTripPricePerKm
-                ]);
-                
-                logMessage("Inserted new outstation fare for vehicle: " . $vehicleId);
-            }
-            
-            // Also update vehicle_pricing table for compatibility
-            $oneWayTripType = 'outstation-one-way';
-            $roundTripTripType = 'outstation-round-trip';
-            
-            // Check if the vehicle_pricing table exists
-            $checkPricingTableQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
-            $checkPricingTableStmt = $conn->prepare($checkPricingTableQuery);
-            $checkPricingTableStmt->execute();
-            $pricingTableExists = ($checkPricingTableStmt->rowCount() > 0);
-            
-            if ($pricingTableExists) {
-                // Update one-way pricing
-                $upsertOneWayQuery = "
-                    INSERT INTO vehicle_pricing (
-                        vehicle_id, 
-                        trip_type, 
-                        base_fare, 
-                        price_per_km, 
-                        driver_allowance, 
-                        night_halt_charge, 
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-                    ON DUPLICATE KEY UPDATE 
-                        base_fare = VALUES(base_fare),
-                        price_per_km = VALUES(price_per_km),
-                        driver_allowance = VALUES(driver_allowance),
-                        night_halt_charge = VALUES(night_halt_charge),
-                        updated_at = NOW()
-                ";
-                
-                $upsertOneWayStmt = $conn->prepare($upsertOneWayQuery);
-                $upsertOneWayStmt->execute([
-                    $vehicleId,
-                    $oneWayTripType,
-                    $oneWayBasePrice,
-                    $oneWayPricePerKm,
-                    $driverAllowance,
-                    $nightHaltCharge
-                ]);
-                
-                // Update round-trip pricing
-                $upsertRoundTripStmt = $conn->prepare($upsertOneWayQuery);
-                $upsertRoundTripStmt->execute([
-                    $vehicleId,
-                    $roundTripTripType,
-                    $roundTripBasePrice,
-                    $roundTripPricePerKm,
-                    $driverAllowance,
-                    $nightHaltCharge
-                ]);
-                
-                logMessage("Updated vehicle_pricing table for both trip types");
-            }
-            
-            // Commit the transaction
-            $conn->commit();
-            
-            // Send success response
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Outstation fare updated successfully',
-                'data' => [
-                    'vehicleId' => $vehicleId,
-                    'vehicle_id' => $vehicleId,
-                    'oneWayBasePrice' => $oneWayBasePrice,
-                    'oneWayPricePerKm' => $oneWayPricePerKm,
-                    'roundTripBasePrice' => $roundTripBasePrice,
-                    'roundTripPricePerKm' => $roundTripPricePerKm,
-                    'driverAllowance' => $driverAllowance,
-                    'nightHaltCharge' => $nightHaltCharge
-                ]
-            ]);
-        } catch (Exception $e) {
-            // Rollback the transaction on error
-            $conn->rollBack();
-            
-            logMessage("Error updating outstation fare: " . $e->getMessage());
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Failed to update outstation fare: ' . $e->getMessage(),
-                'error' => $e->getMessage()
-            ]);
-        }
-    } else {
-        // Handle unsupported HTTP methods
-        if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'OPTIONS') {
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Unsupported HTTP method: ' . $_SERVER['REQUEST_METHOD']
-            ]);
-        }
-    }
-} catch (Exception $e) {
-    logMessage("Critical error in direct-outstation-fares.php: " . $e->getMessage());
+if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => 'An error occurred: ' . $e->getMessage(),
-        'error' => $e->getMessage()
+        'message' => 'Vehicle ID is required for updates'
     ]);
+    exit;
 }
+
+// Sample fare data
+$fares = [
+    'sedan' => [
+        'basePrice' => 3000,
+        'pricePerKm' => 15,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'roundTripBasePrice' => 2850,
+        'roundTripPricePerKm' => 12.75
+    ],
+    'ertiga' => [
+        'basePrice' => 3500,
+        'pricePerKm' => 18,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'roundTripBasePrice' => 3325,
+        'roundTripPricePerKm' => 15.3
+    ],
+    'innova_crysta' => [
+        'basePrice' => 4000,
+        'pricePerKm' => 20,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 300,
+        'roundTripBasePrice' => 3800,
+        'roundTripPricePerKm' => 17
+    ],
+    'tempo_traveller' => [
+        'basePrice' => 6000,
+        'pricePerKm' => 30,
+        'nightHaltCharge' => 1200,
+        'driverAllowance' => 300,
+        'roundTripBasePrice' => 5700,
+        'roundTripPricePerKm' => 25.5
+    ]
+];
+
+// Handle GET request - Return fare data
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if ($vehicleId && isset($fares[$vehicleId])) {
+        // Return data for the specific vehicle
+        $response = [
+            'status' => 'success',
+            'message' => "Outstation fares retrieved for $vehicleId",
+            'fares' => [$vehicleId => $fares[$vehicleId]]
+        ];
+    } else {
+        // Return all fares
+        $response = [
+            'status' => 'success',
+            'message' => 'All outstation fares retrieved',
+            'fares' => $fares
+        ];
+    }
+}
+// Handle POST request - Update fare data
+else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Mock updating the fare data
+    $response = [
+        'status' => 'success',
+        'message' => "Outstation fares updated for $vehicleId",
+        'vehicle_id' => $vehicleId
+    ];
+}
+// Handle unsupported methods
+else {
+    http_response_code(405);
+    $response = [
+        'status' => 'error',
+        'message' => 'Method not allowed'
+    ];
+}
+
+// Return JSON response
+echo json_encode($response);

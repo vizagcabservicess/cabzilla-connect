@@ -96,8 +96,6 @@ export function Hero() {
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
-  const [totalPrice, setTotalPrice] = useState<number>(0);
-  const [localPackagePrice, setLocalPackagePrice] = useState<number>(0);
 
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
@@ -226,44 +224,6 @@ export function Hero() {
     }
   }, [tripType, hourlyPackage]);
 
-  useEffect(() => {
-    const loadLocalPackagePrice = async () => {
-      if (tripType === 'local' && selectedCab) {
-        try {
-          // Check if we have a cached price in the window cache
-          const cacheKey = `${selectedCab.name.toLowerCase().replace(/\s+/g, '_')}_${hourlyPackage}`;
-          if (window.localPackagePriceCache && window.localPackagePriceCache[cacheKey] && window.localPackagePriceCache[cacheKey].price > 0) {
-            console.log(`Using cached local package price for ${selectedCab.name}: ${window.localPackagePriceCache[cacheKey].price}`);
-            setLocalPackagePrice(window.localPackagePriceCache[cacheKey].price);
-            return;
-          }
-          
-          // If not in cache, fetch from API
-          const price = await getLocalPackagePrice(hourlyPackage, selectedCab.name);
-          console.log(`Fetched local package price for ${selectedCab.name}: ${price}`);
-          setLocalPackagePrice(price);
-        } catch (error) {
-          console.error('Error loading local package price:', error);
-          // Use the cab's default price as fallback
-          setLocalPackagePrice(selectedCab.price);
-        }
-      }
-    };
-    
-    loadLocalPackagePrice();
-  }, [selectedCab, hourlyPackage, tripType]);
-
-  useEffect(() => {
-    const updatePrice = async () => {
-      if (selectedCab) {
-        const price = await calculatePrice();
-        setTotalPrice(price);
-      }
-    };
-    
-    updatePrice();
-  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, localPackagePrice]);
-
   function handleContinue() {
     if (!isFormValid) {
       toast({
@@ -290,19 +250,19 @@ export function Hero() {
     }
   };
 
-  async function calculatePrice() {
+  function calculatePrice() {
     if (!selectedCab) return 0;
     
     let totalPrice = 0;
     
     if (tripType === 'airport') {
-      totalPrice = await calculateAirportFare(selectedCab.name, distance);
+      totalPrice = calculateAirportFare(selectedCab.name, distance);
     } else if (tripType === 'local') {
-      // For local trips, use the price that we've separately fetched
-      totalPrice = localPackagePrice > 0 ? localPackagePrice : selectedCab.price;
-      
       // Get the local package kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
+      
+      // For local trips, use the exact package km for price calculation
+      totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
       
       // Only add extra distance if it's specifically calculated for local trips
       // and is greater than the package limit
@@ -312,12 +272,6 @@ export function Hero() {
         totalPrice += extraKm * extraKmRate;
         console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
       }
-      
-      // Store calculated fare for consistency
-      const fareKey = `fare_local_${selectedCab.name.toLowerCase().replace(/\s+/g, '')}`;
-      localStorage.setItem(fareKey, totalPrice.toString());
-      console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
-      console.log(`BookingSummary: Stored fare in localStorage: ${fareKey} = ${totalPrice}`);
     } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
       
@@ -369,6 +323,8 @@ export function Hero() {
     
     return Math.ceil(totalPrice / 10) * 10;
   };
+
+  let totalPrice = calculatePrice();
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
@@ -550,7 +506,7 @@ export function Hero() {
                     disabled={!isFormValid || isCalculatingDistance}
                     className={`px-10 py-6 rounded-md ${
                       isFormValid && !isCalculatingDistance
-                        ? "bg-blue-500 text-white hover:bg-blue-600"
+                        ? "bg-blue-500 text-white"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                   >

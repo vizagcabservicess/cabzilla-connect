@@ -1,46 +1,5 @@
-
-// API response types for the application
-
-export interface ApiResponse {
-  status: 'success' | 'error';
-  message?: string;
-  timestamp?: number;
-  token?: string;
-  user?: User;
-  updatedAt?: string;
-}
-
-export interface LocalPackageFare {
-  id?: string;
-  vehicleId?: string;
-  name?: string;
-  price4hrs40km: number;
-  price8hrs80km: number;
-  price10hrs100km: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  // Alternative property names for compatibility
-  price_4hr_40km?: number;
-  price_8hr_80km?: number;
-  price_10hr_100km?: number;
-  price_extra_km?: number;
-  price_extra_hour?: number;
-  // More aliases
-  package4hr40km?: number;
-  package8hr80km?: number;
-  package10hr100km?: number;
-  extraKmRate?: number;
-  extraHourRate?: number;
-}
-
-export interface LocalPackageFaresResponse extends ApiResponse {
-  fares: Record<string, LocalPackageFare>;
-  source?: string;
-  count?: number;
-}
-
-// Booking status type
-export type BookingStatus = 
+// src/types/api.ts
+export type BookingStatus =
   | 'pending'
   | 'confirmed'
   | 'assigned'
@@ -48,184 +7,274 @@ export type BookingStatus =
   | 'payment_pending'
   | 'completed'
   | 'continued'
-  | 'cancelled'
-  | 'success' // Added for API compatibility
-  | 'error';  // Added for API compatibility
+  | 'cancelled';
 
-// Location interface - making lat/lng optional to fix type errors
-export interface Location {
-  id: string;
+export interface Booking {
+  id: number;
+  user_id?: number;
+  bookingNumber: string;
+  tripType: string;
+  tripMode: string;
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  returnDate?: string;
+  cabType: string;
+  distance: number; // Added this property to fix the error
+  passengers?: number;
+  days?: number;
+  hours?: number;
+  kms?: number;
+  status: BookingStatus;
+  totalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+  passengerName?: string;
+  passengerEmail?: string;
+  passengerPhone?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+  driverComments?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  adminNotes?: string;
+}
+
+export interface User {
+  id: number;
   name: string;
+  email: string;
+  phone: string | null;
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
+export interface DashboardData {
+  userDetails: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  recentBookings: Booking[];
+  upcomingBookings: Booking[];
+}
+
+export interface DashboardMetrics {
+  totalBookings: number;
+  activeRides: number;
+  totalRevenue: number;
+  availableDrivers: number;
+  busyDrivers: number;
+  avgRating: number;
+  upcomingRides: number;
+  availableStatuses?: string[];
+  currentFilter?: string;
+}
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  phone?: string;
+  createdAt: string;
+}
+
+export interface FareData {
+  id: number;
+  tourName: string;
+  description?: string;
+  oneWayPrice: number;
+  roundTripPrice: number;
+  distanceKm?: number;
+  isActive: boolean;
+  tourType?: string;
+  tourDuration?: string;
+  vehiclePrices?: {
+    [key: string]: {
+      oneWayPrice: number;
+      roundTripPrice: number;
+    };
+  };
+}
+
+export interface VehiclePricingData {
+  id: number;
+  vehicleType: string;
+  vehicleId?: string;  // Added to support both column names
+  basePrice: number;
+  pricePerKm: number;
+  hourlyPrice?: number;
+  isActive: boolean;
+  capacity?: number;
+  acType?: string;
+  description?: string;
+  imageUrl?: string;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+}
+
+// New interfaces for different fare types
+export interface OutstationFareData {
+  basePrice: number;
+  pricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+export interface LocalPackageFareData {
+  package4hr40km: number;
+  package8hr80km: number;
+  package10hr100km: number;
+  extraKmRate: number;
+  extraHourRate: number;
+  // Alternative field names for flexibility
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+}
+
+export interface AirportFareData {
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
+
+export interface Location {
+  id?: string;
+  name?: string;
   address: string;
   lat?: number;
   lng?: number;
   isInVizag?: boolean;
   type?: string;
-  city?: string;
-  state?: string;
 }
 
-// Booking request interface
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface SignupRequest {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
 export interface BookingRequest {
   pickupLocation: string;
   dropLocation?: string;
   pickupDate: string;
   returnDate?: string | null;
   cabType: string;
-  distance: number;
+  distance?: number;
   tripType: string;
   tripMode: string;
   totalAmount: number;
-  passengerName: string;
-  passengerPhone: string;
+  passengerName?: string;
+  passengerPhone?: string;
   passengerEmail?: string;
   hourlyPackage?: string | null;
-  notes?: string;
-  tourId?: string; // Added for tour bookings
-  userId?: string | number; // Added for user association
-}
-
-// Booking interface - adding bookingNumber field
-export interface Booking {
-  id: string | number; // Allow both string and number types
-  bookingId?: string;
-  bookingNumber?: string; // Added to fix errors
-  pickupLocation: string;
-  dropLocation?: string;
-  pickupDate: string;
-  returnDate?: string | null;
-  cabType: string;
-  distance: number;
-  tripType: string;
-  tripMode: string;
-  totalAmount: number;
-  passengerName: string;
-  passengerPhone: string;
-  passengerEmail?: string;
-  status: BookingStatus;
-  hourlyPackage?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  driverId?: string;
-  driverName?: string;
-  driverPhone?: string;
-  vehicleNumber?: string;
-  notes?: string;
-  paymentStatus?: string;
-  paymentMethod?: string;
-  amountPaid?: number;
-  transactionId?: string;
-  tourId?: string; // Added for tour bookings
-  userId?: string | number; // Added for user association
-}
-
-// Dashboard metrics interface
-export interface DashboardMetrics {
-  totalBookings: number;
-  activeRides: number;
-  totalRevenue: number;
-  upcomingRides: number;
-  availableDrivers: number;
-  busyDrivers: number;
-  avgRating: number;
-  availableStatuses?: BookingStatus[] | Record<string, BookingStatus> | string;
-}
-
-// Extended Tour fare interface with additional properties used in components
-export interface TourFare {
-  id: string | number; // Support both string and number types
-  tourId?: string; // Required in some components
-  tourName?: string; // Required in some components
-  name: string;
-  description?: string;
-  price: number;
-  cabType: string;
-  duration: number;
-  distance: number;
-  isActive: boolean;
-  // Vehicle-specific prices
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
-}
-
-// Fare update request interface
-export interface FareUpdateRequest {
-  cabType?: string;
-  price?: number;
-  tripType?: string;
-  fromLocation?: string;
-  toLocation?: string;
-  packageId?: string;
-  // Add properties needed for tour fares
   tourId?: string;
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
+  userId?: number; // Added this property to fix the TypeScript error
 }
 
-// User interface - make ID accept both string and number
-export interface User {
-  id?: string | number; // Allow both string and number types, make optional for creation
-  name: string;
-  email: string;
-  phone: string;
-  role: 'admin' | 'user' | 'driver';
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  lastLogin?: string;
-  avatar?: string;
+export interface TourFare {
+  id: number;
+  tourId: string;
+  tourName: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
 }
 
-// Extended Vehicle pricing interface with additional properties
-export interface VehiclePricing {
-  id: string | number; // Allow both string and number types
-  vehicleId: string;
-  vehicleType?: string; // Added to fix errors
-  name?: string;
+export interface FareUpdateRequest {
+  tourId: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
+}
+
+export type VehiclePricing = VehiclePricingData;
+
+export interface VehiclePricingUpdateRequest {
+  vehicleType: string;
+  vehicleId?: string;  // Added to support both column names
   basePrice: number;
   pricePerKm: number;
-  pricePerHour?: number;
-  airportPickupPrice?: number;
-  airportDropPrice?: number;
-  minHours?: number;
-  minKm?: number;
-  isActive: boolean;
-  nightHaltCharge?: number; // Added to fix errors
-  driverAllowance?: number; // Added to fix errors
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
-// Vehicle pricing update request
-export interface VehiclePricingUpdateRequest {
+// Outstation fare update request
+export interface OutstationFareUpdateRequest {
   vehicleId: string;
-  vehicleType?: string; // Added to match field in VehiclePricing
-  basePrice?: number;
-  pricePerKm?: number;
-  pricePerHour?: number;
-  airportPickupPrice?: number;
-  airportDropPrice?: number;
-  minHours?: number;
-  minKm?: number;
-  isActive?: boolean;
-  nightHaltCharge?: number; // Added to match field in VehiclePricing
-  driverAllowance?: number; // Added to match field in VehiclePricing
+  basePrice: number;
+  pricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
 }
 
-// Login request interface
-export interface LoginRequest {
-  email: string;
-  password: string;
+// Local package fare update request
+export interface LocalPackageFareUpdateRequest {
+  vehicleId: string;
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  // Alternative field names for flexibility
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
 }
 
-// Signup request interface
-export interface SignupRequest {
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
+// Airport fare update request
+export interface AirportFareUpdateRequest {
+  vehicleId: string;
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
+
+// Booking update request
+export interface BookingUpdateRequest {
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupDate?: string;
+  status?: BookingStatus;
 }

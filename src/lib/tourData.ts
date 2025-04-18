@@ -6,15 +6,13 @@ export const availableTours: TourInfo[] = [
   {
     id: 'araku_valley',
     name: 'Araku Valley Tour',
-    description: 'A beautiful valley tour',
     distance: 120,
-    days: 1,
+    days: 1, // This is now added to the interface
     image: '/tours/araku_valley.jpg'
   },
   {
     id: 'yarada_beach',
     name: 'Yarada Beach Tour',
-    description: 'Scenic beach tour',
     distance: 40,
     days: 1,
     image: '/tours/yarada_beach.jpg'
@@ -22,7 +20,6 @@ export const availableTours: TourInfo[] = [
   {
     id: 'rushikonda',
     name: 'Rushikonda Beach Tour',
-    description: 'Popular beach destination',
     distance: 25,
     days: 1,
     image: '/tours/rushikonda.jpg'

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -62,13 +61,7 @@ export default function BookingEditPage() {
           throw new Error('Booking not found');
         }
         
-        // Make sure the response is treated as a Booking type
-        const bookingData: Booking = {
-          ...response,
-          status: response.status as BookingStatus // Cast the status to BookingStatus type
-        };
-        
-        setBooking(bookingData);
+        setBooking(response);
         
         if (response.pickupLocation) {
           setPickupLocation({ 
@@ -125,18 +118,12 @@ export default function BookingEditPage() {
       
       const response = await bookingAPI.updateBookingStatus(bookingIdNumber, newStatus);
       
-      if (response && response.status === 'success') {
-        const updatedBooking: Booking = {
+      if (response) {
+        setBooking({
           ...booking,
-          status: newStatus
-        };
-        
-        if (response.updatedAt) {
-          updatedBooking.updatedAt = response.updatedAt;
-        }
-        
-        setBooking(updatedBooking);
-        
+          status: newStatus,
+          updatedAt: response.updatedAt || booking.updatedAt
+        });
         toast({
           title: "Status Updated",
           description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
@@ -193,15 +180,10 @@ export default function BookingEditPage() {
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
       
       if (result) {
-        // Make sure we properly cast the response to a Booking with the correct status type
-        const updatedBooking: Booking = {
+        setBooking({
           ...booking,
-          ...result,
-          status: booking.status // Preserve the existing booking status
-        };
-        
-        setBooking(updatedBooking);
-        
+          ...result
+        });
         toast({
           title: "Booking Updated",
           description: "Your booking has been updated successfully!",

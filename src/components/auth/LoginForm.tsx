@@ -136,7 +136,7 @@ export function LoginForm() {
       // Use HTTP-only cookies to store authentication token
       const response = await authAPI.login(values);
       
-      if (response.status === 'success' && response.token) {
+      if (response.token) {
         // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
@@ -148,12 +148,6 @@ export function LoginForm() {
           tokenParts: response.token.split('.').length,
           user: response.user?.id
         });
-        
-        // Store the token and user info
-        localStorage.setItem('authToken', response.token);
-        if (response.user) {
-          localStorage.setItem('userData', JSON.stringify(response.user));
-        }
         
         // Force a page reload to ensure fresh state
         setTimeout(() => {

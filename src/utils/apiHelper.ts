@@ -99,38 +99,6 @@ export const fixDatabaseTables = async () => {
 };
 
 /**
- * Fetch direct local fares from the API
- * @param vehicleId - Vehicle ID to fetch fares for
- * @returns Promise with local fares
- */
-export const fetchDirectLocalFares = async (vehicleId: string) => {
-  try {
-    // Always use vizagup.com for direct fare fetching
-    const apiUrl = `https://vizagup.com/api/admin/direct-local-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
-    console.log(`Fetching direct local fares from: ${apiUrl}`);
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        ...forceRefreshHeaders,
-        'X-Database-First': 'true'
-      },
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch local fares: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching direct local fares:', error);
-    throw error;
-  }
-};
-
-/**
  * Determine if the app is running in preview mode
  * @returns boolean - true if in preview mode
  */
