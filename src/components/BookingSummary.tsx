@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -58,14 +57,15 @@ export const BookingSummary = ({
   const calculationTimeoutRef = useRef<any>(null);
   const requestIdRef = useRef<number>(0);
 
-  // Map trip type to fare hook type
+  const DEFAULT_DRIVER_ALLOWANCE = 250;
+  const MINIMUM_KM = 300;
+
   const mapTripType = (type: string): TripFareType => {
     if (type === 'local') return 'local';
     if (type === 'airport') return 'airport';
     return 'outstation';
   };
 
-  // Use our new fare hook
   const { 
     fetchFare, 
     isLoading: isLoadingFare 
@@ -88,7 +88,6 @@ export const BookingSummary = ({
       
       selectedCabIdRef.current = selectedCab.id;
       
-      // Clear previous fare and show loading state immediately
       setCalculatedFare(0);
       setBaseFare(0);
       setDriverAllowance(250);
@@ -102,12 +101,10 @@ export const BookingSummary = ({
       lastUpdateTimeRef.current = 0;
       pendingCalculationRef.current = true;
       
-      // Increment request ID
-      const requestId = ++requestIdRef.current;
+      requestIdRef.current = ++requestIdRef.current;
       
-      // Fetch fresh fare with a slight delay to allow UI to update
       calculationTimeoutRef.current = setTimeout(() => {
-        recalculateFareDetails(requestId);
+        recalculateFareDetails(requestIdRef.current);
       }, 100);
     }
   }, [selectedCab]);
@@ -130,15 +127,13 @@ export const BookingSummary = ({
         clearTimeout(calculationTimeoutRef.current);
       }
       
-      // Clear previous fare and show loading state
       setCalculatedFare(0);
       setShowDetailsLoading(true);
       
-      // Increment request ID
-      const requestId = ++requestIdRef.current;
+      requestIdRef.current = ++requestIdRef.current;
       
       calculationTimeoutRef.current = setTimeout(() => {
-        recalculateFareDetails(requestId);
+        recalculateFareDetails(requestIdRef.current);
       }, 100);
     }
   }, [distance, tripMode]);
@@ -150,7 +145,6 @@ export const BookingSummary = ({
       return;
     }
     
-    // If this is not the latest request, ignore it
     if (requestId !== requestIdRef.current) {
       console.log(`BookingSummary: Ignoring stale calculation request ${requestId} (current: ${requestIdRef.current})`);
       return;
@@ -178,7 +172,6 @@ export const BookingSummary = ({
     console.log(`BookingSummary: Calculating fare details for ${selectedCab.name} (attempt ${calculationAttemptsRef.current}/${maxCalculationAttempts})`);
     
     try {
-      // Prepare additional params based on trip type
       let additionalParams: Record<string, string> = {};
       
       if (tripType === 'local' && hourlyPackage) {
@@ -190,76 +183,64 @@ export const BookingSummary = ({
         additionalParams.distance = String(distance);
       }
       
-      // Fetch the fare from our hook
       const fare = await fetchFare(
         selectedCab.id,
         mapTripType(tripType),
         additionalParams,
-        true // force refresh
+        true
       );
       
-      // If this is not the latest request, ignore the result
       if (requestId !== requestIdRef.current) {
         console.log(`BookingSummary: Ignoring stale calculation result for request ${requestId}`);
         return;
       }
       
-      // Calculate fare details based on trip type
       let newBaseFare = 0;
-      let newDriverAllowance = 250;
+      let newDriverAllowance = DEFAULT_DRIVER_ALLOWANCE;
       let newNightCharges = 0;
       let newExtraDistance = 0;
       let newExtraDistanceFare = 0;
       let newPerKmRate = 0;
       let newEffectiveDistance = distance;
-      const minimumKm = 300;
       
       if (tripType === 'outstation') {
-        // For outstation, calculate base fare, driver allowance, and extra distance
         if (tripMode === 'one-way') {
-          // Use per km rate from the cab's outstation fares if available
           newPerKmRate = selectedCab.outstationFares?.pricePerKm || 15;
-          newBaseFare = selectedCab.outstationFares?.basePrice || (minimumKm * newPerKmRate);
+          newBaseFare = selectedCab.outstationFares?.basePrice || (MINIMUM_KM * newPerKmRate);
           
-          // For one-way trips, effective distance is doubled for driver return
           newEffectiveDistance = distance * 2;
           
-          if (newEffectiveDistance > minimumKm) {
-            newExtraDistance = newEffectiveDistance - minimumKm;
+          if (newEffectiveDistance > MINIMUM_KM) {
+            newExtraDistance = newEffectiveDistance - MINIMUM_KM;
             newExtraDistanceFare = newExtraDistance * newPerKmRate;
           }
           
-          newDriverAllowance = selectedCab.outstationFares?.driverAllowance || 250;
+          newDriverAllowance = selectedCab.outstationFares?.driverAllowance || DEFAULT_DRIVER_ALLOWANCE;
           
-          // Add night charges if pickup is during night hours
           if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
             newNightCharges = Math.round(newBaseFare * 0.1);
           }
         } else {
-          // For round trips
           newPerKmRate = selectedCab.outstationFares?.roundTripPricePerKm || 
                          (selectedCab.outstationFares?.pricePerKm ? selectedCab.outstationFares.pricePerKm * 0.85 : 12);
           
-          newDriverAllowance = selectedCab.outstationFares?.driverAllowance || 250;
+          newDriverAllowance = selectedCab.outstationFares?.driverAllowance || DEFAULT_DRIVER_ALLOWANCE;
           
-          // For round trips, effective distance is also doubled
           newEffectiveDistance = distance * 2;
           
           newBaseFare = selectedCab.outstationFares?.roundTripBasePrice || 
-                        (selectedCab.outstationFares?.basePrice ? selectedCab.outstationFares.basePrice * 0.9 : minimumKm * newPerKmRate);
+                        (selectedCab.outstationFares?.basePrice ? selectedCab.outstationFares.basePrice * 0.9 : MINIMUM_KM * newPerKmRate);
           
-          if (newEffectiveDistance > minimumKm) {
-            newExtraDistance = newEffectiveDistance - minimumKm;
+          if (newEffectiveDistance > MINIMUM_KM) {
+            newExtraDistance = newEffectiveDistance - MINIMUM_KM;
             newExtraDistanceFare = newExtraDistance * newPerKmRate;
           }
           
-          // Add night charges if pickup is during night hours
           if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
             newNightCharges = Math.round(newBaseFare * 0.1);
           }
         }
       } else if (tripType === 'airport') {
-        // For airport transfers, use tiered pricing
         if (selectedCab.airportFares) {
           if (distance <= 10) {
             newBaseFare = selectedCab.airportFares.tier1Price || selectedCab.airportFares.basePrice;
@@ -270,13 +251,11 @@ export const BookingSummary = ({
           } else {
             newBaseFare = selectedCab.airportFares.tier4Price || selectedCab.airportFares.basePrice;
             
-            // Add extra distance charges for distances beyond 30km
             newExtraDistance = distance - 30;
             newPerKmRate = selectedCab.airportFares.extraKmCharge;
             newExtraDistanceFare = newExtraDistance * newPerKmRate;
           }
         } else {
-          // Default airport fares if not available in cab
           if (distance <= 10) {
             newBaseFare = 800;
           } else if (distance <= 20) {
@@ -286,7 +265,6 @@ export const BookingSummary = ({
           } else {
             newBaseFare = 2500;
             
-            // Add extra distance charges for distances beyond 30km
             newExtraDistance = distance - 30;
             newPerKmRate = 14;
             newExtraDistanceFare = newExtraDistance * newPerKmRate;
@@ -295,7 +273,6 @@ export const BookingSummary = ({
         
         newDriverAllowance = 250;
       } else if (tripType === 'local') {
-        // For local packages, the fare is the package price
         newBaseFare = fare;
         newDriverAllowance = 0;
       }
@@ -311,7 +288,6 @@ export const BookingSummary = ({
         totalFare: newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare
       });
       
-      // Update state with calculated values
       setBaseFare(newBaseFare);
       setDriverAllowance(newDriverAllowance);
       setNightCharges(newNightCharges);
@@ -320,14 +296,11 @@ export const BookingSummary = ({
       setPerKmRate(newPerKmRate);
       setEffectiveDistance(newEffectiveDistance);
       
-      // Calculate total fare
       const newCalculatedFare = fare > 0 ? fare : (newBaseFare + newDriverAllowance + newNightCharges + newExtraDistanceFare);
       setCalculatedFare(newCalculatedFare);
       
-      // Update total price ref
       totalPriceRef.current = newCalculatedFare;
       
-      // Dispatch fare calculated event if there's a significant difference
       if (Math.abs(newCalculatedFare - totalPrice) > 10) {
         window.dispatchEvent(new CustomEvent('fare-calculated', {
           detail: {
@@ -343,7 +316,6 @@ export const BookingSummary = ({
       console.error('Error calculating fare details:', error);
       setCalculatedFare(totalPrice > 0 ? totalPrice : totalPriceRef.current);
     } finally {
-      // Only update states if this is still the latest request
       if (requestId === requestIdRef.current) {
         setIsRefreshing(false);
         setShowDetailsLoading(false);
@@ -375,7 +347,6 @@ export const BookingSummary = ({
         return;
       }
       
-      // Clear previous fare and show loading
       setCalculatedFare(0);
       setShowDetailsLoading(true);
       
@@ -390,7 +361,6 @@ export const BookingSummary = ({
         totalPriceRef.current = customEvent.detail.fare;
         setShowDetailsLoading(false);
       } else {
-        // Increment request ID
         const requestId = ++requestIdRef.current;
         
         if (calculationTimeoutRef.current) {
@@ -426,7 +396,6 @@ export const BookingSummary = ({
       pendingCalculationRef.current = true;
       setShowDetailsLoading(true);
       
-      // Increment request ID
       const requestId = ++requestIdRef.current;
       
       if (calculationTimeoutRef.current) {
@@ -439,7 +408,6 @@ export const BookingSummary = ({
     };
     
     const initialLoadTimer = setTimeout(() => {
-      // Increment request ID
       const requestId = ++requestIdRef.current;
       
       if (totalPrice > 0) {
@@ -478,7 +446,6 @@ export const BookingSummary = ({
       if (pendingCalculationRef.current && !calculationInProgressRef.current && calculationAttemptsRef.current < maxCalculationAttempts) {
         console.log('BookingSummary: Processing pending calculation...');
         
-        // Increment request ID
         const requestId = ++requestIdRef.current;
         
         if (calculationTimeoutRef.current) {
@@ -705,7 +672,7 @@ export const BookingSummary = ({
               {tripType === 'outstation' && (
                 <>
                   <li>Toll charges, state permit fees will be charged extra as applicable.</li>
-                  <li>Minimum billable distance is {minimumKm} km.</li>
+                  <li>Minimum billable distance is {MINIMUM_KM} km.</li>
                 </>
               )}
               {tripType === 'airport' && (
