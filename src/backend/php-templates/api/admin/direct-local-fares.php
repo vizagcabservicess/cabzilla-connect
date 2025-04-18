@@ -32,9 +32,15 @@ if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
 }
 
-// If still no vehicleId, set a default for the mock data
+// If still no vehicleId, return error - CRITICAL: Don't default to any vehicle
 if (!$vehicleId) {
-    $vehicleId = 'sedan';
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Vehicle ID is required',
+        'timestamp' => time()
+    ]);
+    exit;
 }
 
 // IMPORTANT: Additional normalization for common vehicle name variations
@@ -184,12 +190,24 @@ try {
             
             // Now try to query with the normalized vehicle ID and use the column map
             $possibleId = $normalizedVehicleId;
-            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
-            $likeParam = "%$possibleId%";
+            
+            // CRITICAL FIX: Use LIKE only in a separate query, after exact match fails
+            // This prevents returning data for wrong vehicles
+            $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
             $stmt = $conn->prepare($query);
-            $stmt->bind_param("ss", $possibleId, $likeParam);
+            $stmt->bind_param("s", $possibleId);
             $stmt->execute();
             $result = $stmt->get_result();
+            
+            if (!($result && $row = $result->fetch_assoc())) {
+                // Only try LIKE as a fallback
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ? LIMIT 1";
+                $likeParam = "%$possibleId%";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("s", $likeParam);
+                $stmt->execute();
+                $result = $stmt->get_result();
+            }
             
             if ($result && $row = $result->fetch_assoc()) {
                 // Ensure this is actually the vehicle we're looking for
@@ -263,22 +281,23 @@ try {
             }
         }
         
+        // CRITICAL FIX: Use consistent specific lookups for special vehicle types
+        
         // Special vehicle-specific handling for 'bus' and 'urbania'
         if (!$dbSuccess && ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania')) {
             $possibleIds = ['urbania', 'bus', 'force_urbania'];
             
             foreach ($possibleIds as $possibleId) {
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
-                $likeParam = "%$possibleId%";
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ss", $possibleId, $likeParam);
+                $stmt->bind_param("s", $possibleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
                 if ($result && $row = $result->fetch_assoc()) {
                     // Successfully found data
                     $localFares[] = [
-                        'vehicleId' => $row['vehicle_id'],
+                        'vehicleId' => $vehicleId, // CRITICAL: Use the original requested vehicle ID
                         'matchedWith' => 'bus/urbania',
                         'originalRequest' => $vehicleId,
                         'price4hrs40km' => (float)$row['price_4hrs_40km'],
@@ -295,22 +314,21 @@ try {
             }
         }
         
-        // Special vehicle-specific handling - always look for MPV as Innova Hycross
+        // Special vehicle-specific handling for MPV and Innova Hycross
         if (!$dbSuccess && ($normalizedVehicleId === 'mpv' || strpos($normalizedVehicleId, 'hycross') !== false)) {
             $possibleIds = ['innova_hycross', 'innovahycross', 'mpv', 'hycross'];
             
             foreach ($possibleIds as $possibleId) {
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
-                $likeParam = "%$possibleId%";
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? LIMIT 1";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ss", $possibleId, $likeParam);
+                $stmt->bind_param("s", $possibleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
                 if ($result && $row = $result->fetch_assoc()) {
                     // Successfully found data
                     $localFares[] = [
-                        'vehicleId' => $row['vehicle_id'],
+                        'vehicleId' => $vehicleId, // CRITICAL: Use the original requested vehicle ID
                         'matchedWith' => 'mpv/innova_hycross',
                         'originalRequest' => $vehicleId,
                         'price4hrs40km' => (float)$row['price_4hrs_40km'],
@@ -378,7 +396,7 @@ if (!$dbSuccess) {
         strpos($normalizedVehicleId, 'mpv') !== false) {
         $vehicleCategory = 'mpv';
         if (strpos($normalizedVehicleId, 'hycross') !== false) {
-            $multiplier = 1.6;
+            $multiplier = 2.0; // CRITICAL FIX: Use correct multiplier for Innova Hycross (4000)
         } else {
             $multiplier = 1.5;
         }
@@ -391,7 +409,7 @@ if (!$dbSuccess) {
         $multiplier = 1.0; // Same as sedan
     } else if ($normalizedVehicleId === 'mpv') {
         $vehicleCategory = 'innova_hycross';
-        $multiplier = 1.6; // Same as Innova Hycross
+        $multiplier = 2.0; // CRITICAL FIX: Use correct multiplier for MPV/Innova Hycross
     } else {
         // Default - use standard sedan pricing
         $vehicleCategory = 'other';

@@ -58,7 +58,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     fetchFare: fetchLocalPackageFare,
     hourlyPackage: currentPackage,
     changePackage
-  } = useLocalPackageFare(hourlyPackage);
+  } = useLocalPackageFare();
   
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {

@@ -148,8 +148,9 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         return 0;
       }
       
+      // CRITICAL: Check if we have fare data AND that it's for the right vehicle
       if (response.data && response.data.fares && response.data.fares.length > 0) {
-        // CRITICAL FIX: Strictly match vehicle ID to ensure we don't use wrong vehicle's fares
+        // Get all fares that match the requested vehicle ID
         const vehicleFares = response.data.fares.filter((fare: any) => {
           const fareVehicleId = fare.vehicleId || '';
           const normalizedFareVehicleId = normalizeVehicleId(fareVehicleId);
@@ -163,11 +164,13 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
         });
         
         if (vehicleFares.length === 0) {
-          console.log(`No matching fare found for ${normalizedCabId} in API response, falling back to direct database`);
+          console.warn(`No matching fare found for ${normalizedCabId} in API response, falling back to direct database`);
           throw new Error(`No matching fare found for ${cabId}`);
         }
         
+        // Use the first matching fare data
         const fareData = vehicleFares[0];
+        console.log(`Local fares for vehicle ${fareData.vehicleId}:`, fareData);
         
         // Extract the correct price for the selected package
         let price = 0;
@@ -215,7 +218,6 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       }
       
       console.error('Error fetching fare:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to fetch fare';
       toast.error('Failed to load fare. Please try again.');
       throw error;
     }
