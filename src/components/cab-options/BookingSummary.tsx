@@ -51,7 +51,6 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const fareUpdateTimestampRef = useRef<number>(0);
   
   // Use our custom hook to fetch and manage fares with strict vehicle ID validation
-  // Fix: Remove the second argument (validateVehicleMatch=true) as it's not in the function signature
   const {
     fare: localPackageFare,
     isFetching: isLocalPackageFareFetching,

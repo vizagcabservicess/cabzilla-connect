@@ -134,7 +134,7 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
     console.log(`Fetching local package fare for ${normalizedCabId}, package: ${packageId}, timestamp: ${requestTimestamp}`);
     
     try {
-      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${normalizedCabId}`);
+      const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${encodeURIComponent(normalizedCabId)}`);
       
       const response = await axios.get(apiUrl, {
         headers: forceRefreshHeaders,
@@ -149,7 +149,25 @@ export function useLocalPackageFare(initialPackage: string = '8hrs-80km'): Local
       }
       
       if (response.data && response.data.fares && response.data.fares.length > 0) {
-        const fareData = response.data.fares[0];
+        // CRITICAL FIX: Strictly match vehicle ID to ensure we don't use wrong vehicle's fares
+        const vehicleFares = response.data.fares.filter((fare: any) => {
+          const fareVehicleId = fare.vehicleId || '';
+          const normalizedFareVehicleId = normalizeVehicleId(fareVehicleId);
+          const isMatch = normalizedFareVehicleId === normalizedCabId;
+          
+          if (!isMatch) {
+            console.log(`Skipping non-matching fare data for ${fareVehicleId}, requested: ${normalizedCabId}`);
+          }
+          
+          return isMatch;
+        });
+        
+        if (vehicleFares.length === 0) {
+          console.log(`No matching fare found for ${normalizedCabId} in API response, falling back to direct database`);
+          throw new Error(`No matching fare found for ${cabId}`);
+        }
+        
+        const fareData = vehicleFares[0];
         
         // Extract the correct price for the selected package
         let price = 0;

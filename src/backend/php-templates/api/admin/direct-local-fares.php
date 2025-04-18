@@ -61,7 +61,9 @@ function normalizeVehicleId($vehicleId) {
         'swiftdzire' => 'dzire',
         'swift_dzire' => 'dzire',
         'innovaold' => 'innova_crysta',
-        'mpv' => 'innova_hycross' // Map MPV to Innova Hycross
+        'mpv' => 'innova_hycross', // Map MPV to Innova Hycross
+        'bus' => 'urbania',        // Map bus to Urbania
+        'urbana' => 'urbania'      // Fix potential typo
     ];
     
     foreach ($mappings as $search => $replace) {
@@ -78,6 +80,11 @@ function normalizeVehicleId($vehicleId) {
     // Many systems use "MPV" to refer to Innova Hycross
     if ($result === 'mpv') {
         return 'innova_hycross';
+    }
+    
+    // Bus often refers to Urbania
+    if ($result === 'bus') {
+        return 'urbania';
     }
     
     return $result;
@@ -107,6 +114,8 @@ try {
             str_replace('tempo_traveller', 'tempo', $normalizedVehicleId),
             // Special handling for MPV which is often Innova Hycross
             ($normalizedVehicleId === 'mpv' ? 'innova_hycross' : $normalizedVehicleId),
+            // Special handling for bus which is often Urbania
+            ($normalizedVehicleId === 'bus' ? 'urbania' : $normalizedVehicleId),
             // Also try with the original format for max compatibility
             $vehicleId
         ];
@@ -183,89 +192,106 @@ try {
             $result = $stmt->get_result();
             
             if ($result && $row = $result->fetch_assoc()) {
-                // Find the appropriate column names using our map
-                $price4hrs40km = 0;
-                $price8hrs80km = 0;
-                $price10hrs100km = 0;
-                $priceExtraKm = 0;
-                $priceExtraHour = 0;
+                // Ensure this is actually the vehicle we're looking for
+                // CRITICAL FIX: Don't use a row for a different vehicle
+                $rowVehicleId = isset($row['vehicle_id']) ? normalizeVehicleId($row['vehicle_id']) : '';
                 
-                // Try to find the values using the column mapping
-                foreach (['price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour'] as $colName) {
-                    if (isset($row[$colName]) && $row[$colName] > 0) {
-                        $price4hrs40km = (float)$row[$colName];
-                        break;
+                // Only use this row if it's for the requested vehicle
+                if ($rowVehicleId === $normalizedVehicleId || 
+                    in_array($rowVehicleId, $possibleVehicleIds)) {
+                    
+                    // Find the appropriate column names using our map
+                    $price4hrs40km = 0;
+                    $price8hrs80km = 0;
+                    $price10hrs100km = 0;
+                    $priceExtraKm = 0;
+                    $priceExtraHour = 0;
+                    
+                    // Try to find the values using the column mapping
+                    foreach (['price_4hrs_40km', 'price4hrs40km', 'price_4hr_40km', 'price4hr40km', 'price_4_hour'] as $colName) {
+                        if (isset($row[$colName]) && $row[$colName] > 0) {
+                            $price4hrs40km = (float)$row[$colName];
+                            break;
+                        }
                     }
-                }
-                
-                foreach (['price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour'] as $colName) {
-                    if (isset($row[$colName]) && $row[$colName] > 0) {
-                        $price8hrs80km = (float)$row[$colName];
-                        break;
+                    
+                    foreach (['price_8hrs_80km', 'price8hrs80km', 'price_8hr_80km', 'price8hr80km', 'price_8_hour'] as $colName) {
+                        if (isset($row[$colName]) && $row[$colName] > 0) {
+                            $price8hrs80km = (float)$row[$colName];
+                            break;
+                        }
                     }
-                }
-                
-                foreach (['price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour'] as $colName) {
-                    if (isset($row[$colName]) && $row[$colName] > 0) {
-                        $price10hrs100km = (float)$row[$colName];
-                        break;
+                    
+                    foreach (['price_10hrs_100km', 'price10hrs100km', 'price_10hr_100km', 'price10hr100km', 'price_10_hour'] as $colName) {
+                        if (isset($row[$colName]) && $row[$colName] > 0) {
+                            $price10hrs100km = (float)$row[$colName];
+                            break;
+                        }
                     }
-                }
-                
-                foreach (['price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km'] as $colName) {
-                    if (isset($row[$colName]) && $row[$colName] > 0) {
-                        $priceExtraKm = (float)$row[$colName];
-                        break;
+                    
+                    foreach (['price_extra_km', 'priceextrakm', 'extra_km_rate', 'extra_km'] as $colName) {
+                        if (isset($row[$colName]) && $row[$colName] > 0) {
+                            $priceExtraKm = (float)$row[$colName];
+                            break;
+                        }
                     }
-                }
-                
-                foreach (['price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'] as $colName) {
-                    if (isset($row[$colName]) && $row[$colName] > 0) {
-                        $priceExtraHour = (float)$row[$colName];
-                        break;
+                    
+                    foreach (['price_extra_hour', 'priceextrahour', 'extra_hour_rate', 'extra_hour'] as $colName) {
+                        if (isset($row[$colName]) && $row[$colName] > 0) {
+                            $priceExtraHour = (float)$row[$colName];
+                            break;
+                        }
                     }
+                    
+                    $localFares[] = [
+                        'vehicleId' => $row['vehicle_id'],
+                        'matchedWith' => $normalizedVehicleId,
+                        'originalRequest' => $vehicleId,
+                        'price4hrs40km' => $price4hrs40km,
+                        'price8hrs80km' => $price8hrs80km,
+                        'price10hrs100km' => $price10hrs100km,
+                        'priceExtraKm' => $priceExtraKm,
+                        'priceExtraHour' => $priceExtraHour,
+                        'source' => 'database',
+                        'timestamp' => time()
+                    ];
+                    $dbSuccess = true;
+                } else {
+                    // Critical: We matched a different vehicle - log this but don't use the data
+                    error_log("Discarding non-matching vehicle fare data: Found {$row['vehicle_id']} but requested {$vehicleId}");
                 }
-                
-                $localFares[] = [
-                    'vehicleId' => $row['vehicle_id'],
-                    'matchedWith' => $normalizedVehicleId,
-                    'originalRequest' => $vehicleId,
-                    'price4hrs40km' => $price4hrs40km,
-                    'price8hrs80km' => $price8hrs80km,
-                    'price10hrs100km' => $price10hrs100km,
-                    'priceExtraKm' => $priceExtraKm,
-                    'priceExtraHour' => $priceExtraHour,
-                    'source' => 'database',
-                    'timestamp' => time()
-                ];
-                $dbSuccess = true;
             }
         }
         
-        // If still not found, try a more flexible query using LIKE
-        if (!$dbSuccess) {
-            $likePattern = '%' . str_replace('_', '%', $normalizedVehicleId) . '%';
-            $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ? LIMIT 1";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("s", $likePattern);
-            $stmt->execute();
-            $result = $stmt->get_result();
+        // Special vehicle-specific handling for 'bus' and 'urbania'
+        if (!$dbSuccess && ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania')) {
+            $possibleIds = ['urbania', 'bus', 'force_urbania'];
             
-            if ($result && $row = $result->fetch_assoc()) {
-                // Successfully found data with LIKE query
-                $localFares[] = [
-                    'vehicleId' => $row['vehicle_id'],
-                    'matchedWith' => $normalizedVehicleId,
-                    'originalRequest' => $vehicleId,
-                    'price4hrs40km' => (float)$row['price_4hrs_40km'],
-                    'price8hrs80km' => (float)$row['price_8hrs_80km'],
-                    'price10hrs100km' => (float)$row['price_10hrs_100km'],
-                    'priceExtraKm' => (float)$row['price_extra_km'],
-                    'priceExtraHour' => (float)$row['price_extra_hour'],
-                    'source' => 'database',
-                    'timestamp' => time()
-                ];
-                $dbSuccess = true;
+            foreach ($possibleIds as $possibleId) {
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ? OR vehicle_id LIKE ? LIMIT 1";
+                $likeParam = "%$possibleId%";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ss", $possibleId, $likeParam);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result && $row = $result->fetch_assoc()) {
+                    // Successfully found data
+                    $localFares[] = [
+                        'vehicleId' => $row['vehicle_id'],
+                        'matchedWith' => 'bus/urbania',
+                        'originalRequest' => $vehicleId,
+                        'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                        'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                        'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                        'priceExtraKm' => (float)$row['price_extra_km'],
+                        'priceExtraHour' => (float)$row['price_extra_hour'],
+                        'source' => 'database',
+                        'timestamp' => time()
+                    ];
+                    $dbSuccess = true;
+                    break;
+                }
             }
         }
         
@@ -309,7 +335,7 @@ try {
     error_log("Database error: " . $e->getMessage());
 }
 
-// If database query failed, generate dynamic prices as fallback
+// If database query failed, generate dynamic prices based on the specific vehicle
 if (!$dbSuccess) {
     // Helper function to calculate package prices based on vehicle category
     function calculateDynamicPrices($baseValue, $multiplier) {
@@ -333,7 +359,11 @@ if (!$dbSuccess) {
     $vehicleCategory = 'standard';
     $multiplier = 1.0;
 
-    if (strpos($normalizedVehicleId, 'sedan') !== false || 
+    // IMPORTANT: Add special case for bus/urbania with a higher price
+    if ($normalizedVehicleId === 'bus' || $normalizedVehicleId === 'urbania') {
+        $vehicleCategory = 'bus';
+        $multiplier = 3.5;  // Higher multiplier for bus/Urbania
+    } else if (strpos($normalizedVehicleId, 'sedan') !== false || 
         strpos($normalizedVehicleId, 'swift') !== false || 
         strpos($normalizedVehicleId, 'dzire') !== false ||
         strpos($normalizedVehicleId, 'amaze') !== false ||
@@ -371,11 +401,11 @@ if (!$dbSuccess) {
     // Calculate prices dynamically
     $prices = calculateDynamicPrices($basePrices, $multiplier);
 
-    // Create the response object
+    // Create the response object with the original vehicle ID preserved
     $localFares[] = [
-        'vehicleId' => $vehicleId,
+        'vehicleId' => $vehicleId,  // CRITICAL: Return the exact requested vehicle ID
         'vehicleCategory' => $vehicleCategory,
-        'matchedWith' => 'none',
+        'matchedWith' => 'dynamic_calculation',
         'originalRequest' => $vehicleId,
         'price4hrs40km' => $prices['price4hrs40km'],
         'price8hrs80km' => $prices['price8hrs80km'],
