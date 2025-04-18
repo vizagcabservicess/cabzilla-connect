@@ -50,7 +50,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Track fare updates with a timestamp to prevent stale updates
   const fareUpdateTimestampRef = useRef<number>(0);
   
-  // Use our custom hook to fetch and manage fares
+  // Use our custom hook to fetch and manage fares with strict vehicle ID validation
   const {
     fare: localPackageFare,
     isFetching: isLocalPackageFareFetching,
@@ -58,8 +58,8 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     fetchFare: fetchLocalPackageFare,
     hourlyPackage: currentPackage,
     changePackage
-  } = useLocalPackageFare(hourlyPackage);
-
+  } = useLocalPackageFare(hourlyPackage, true); // Set validateVehicleMatch=true
+  
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
     if (!id) return '';
@@ -87,7 +87,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Update the stored cab ID
       setCurrentCabId(normalizedSelectedCabId);
       
-      // Fetch the fare for the new cab
+      // Fetch the fare for the new cab with strict validation enabled
       if (tripType === 'local') {
         fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
       }

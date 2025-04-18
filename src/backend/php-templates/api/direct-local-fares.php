@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Direct Local Fares Endpoint 
@@ -32,6 +31,12 @@ function logMessage($message) {
     error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/direct-local-fares.log');
 }
 
+// Normalize vehicle ID consistently to prevent mismatches
+function normalizeVehicleId($vehicleId) {
+    if (!$vehicleId) return '';
+    return strtolower(preg_replace('/[^a-z0-9_]/', '_', str_replace(' ', '_', $vehicleId)));
+}
+
 // Log basic request information
 logMessage("Request received: " . $_SERVER['REQUEST_METHOD']);
 logMessage("Query string: " . $_SERVER['QUERY_STRING']);
@@ -57,6 +62,14 @@ $initialize = isset($_GET['initialize']) && $_GET['initialize'] === 'true';
 if ($initialize) {
     logMessage("Initialize mode activated");
     $response['debug'][] = "Initialize mode activated";
+}
+
+// Get vehicle ID from request
+$requestedVehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+if ($requestedVehicleId) {
+    $normalizedRequestedVehicleId = normalizeVehicleId($requestedVehicleId);
+    logMessage("Requested vehicle ID: $requestedVehicleId (normalized: $normalizedRequestedVehicleId)");
+    $response['debug'][] = "Requested vehicle: $requestedVehicleId (normalized: $normalizedRequestedVehicleId)";
 }
 
 // Get database connection
@@ -184,24 +197,62 @@ try {
     exit;
 }
 
-// If it's a GET request but not initialize, return list of fares
+// If it's a GET request but not initialize, return list of fares or specific vehicle fares
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$initialize) {
     try {
-        // Query against local_package_fares, not vehicle_pricing to avoid the column issue
         $query = "SELECT * FROM local_package_fares";
-        $result = $conn->query($query);
+        $params = [];
+        
+        // Add vehicle_id filter if provided
+        if ($requestedVehicleId) {
+            // Strict matching for vehicle_id
+            $query .= " WHERE vehicle_id = ?";
+            $params[] = $requestedVehicleId;
+            logMessage("Filtering fares for vehicle_id: $requestedVehicleId");
+        }
+        
+        $stmt = $conn->prepare($query);
+        
+        // Bind parameters if we have any
+        if (!empty($params)) {
+            $types = str_repeat('s', count($params));
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
         
         $fares = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $fares[] = $row;
+                // Add vehicle ID normalization check
+                $rowVehicleId = $row['vehicle_id'];
+                $normalizedRowVehicleId = normalizeVehicleId($rowVehicleId);
+                
+                // Only include fare if it's a real match with the requested vehicle
+                if (!$requestedVehicleId || $normalizedRowVehicleId === $normalizedRequestedVehicleId) {
+                    $fares[] = [
+                        'vehicleId' => $rowVehicleId,
+                        'normalizedVehicleId' => $normalizedRowVehicleId,
+                        'price4hrs40km' => (float)$row['price_4hrs_40km'],
+                        'price8hrs80km' => (float)$row['price_8hrs_80km'],
+                        'price10hrs100km' => (float)$row['price_10hrs_100km'],
+                        'priceExtraKm' => (float)$row['price_extra_km'],
+                        'priceExtraHour' => (float)$row['price_extra_hour']
+                    ];
+                    logMessage("Found matching fare for vehicle: $rowVehicleId");
+                } else {
+                    logMessage("Skipping non-matching vehicle: $rowVehicleId (normalized: $normalizedRowVehicleId) != requested: $normalizedRequestedVehicleId");
+                }
             }
         }
         
         $response['status'] = 'success';
-        $response['message'] = 'Local package fares retrieved successfully';
+        $response['message'] = count($fares) > 0 ? 'Local package fares retrieved successfully' : 'No matching fares found';
         $response['fares'] = $fares;
         $response['count'] = count($fares);
+        $response['requestedVehicle'] = $requestedVehicleId;
+        $response['normalizedRequestedVehicle'] = $normalizedRequestedVehicleId;
         
         echo json_encode($response);
         exit;
