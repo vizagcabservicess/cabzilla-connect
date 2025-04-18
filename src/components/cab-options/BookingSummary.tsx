@@ -8,12 +8,22 @@ interface BookingSummaryProps {
   selectedCab: any;
   tripType: string;
   hourlyPackage?: string;
+  pickupLocation?: string;  // Add pickupLocation as optional prop
+  pickupDate?: Date;        // Add pickupDate as optional prop
+  distance?: number;        // Add distance as optional prop
+  isCalculatingFares?: boolean; // Add isCalculatingFares as optional prop
+  fare?: number;            // Add fare as optional prop
 }
 
 export const BookingSummary: React.FC<BookingSummaryProps> = ({
   selectedCab,
   tripType,
-  hourlyPackage = '8hrs-80km'
+  hourlyPackage = '8hrs-80km',
+  pickupLocation,
+  pickupDate,
+  distance,
+  isCalculatingFares: externalIsLoading,
+  fare: externalFare
 }) => {
   const [displayFare, setDisplayFare] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -24,7 +34,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     fetchFare,
     isFetching,
     error
-  } = useLocalPackageFare(hourlyPackage, true);
+  } = useLocalPackageFare(hourlyPackage);  // Remove the second argument here
 
   // Normalize vehicle ID consistently
   const normalizeVehicleId = (id: string): string => {
@@ -55,7 +65,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       const currentToken = requestTokenRef.current;
       
       // Fetch fare for new cab
-      fetchFare(selectedCab.id, hourlyPackage, true).then(fare => {
+      fetchFare(selectedCab.id, hourlyPackage).then(fare => {
         // 🚫 Ignore stale response if token mismatches
         if (currentToken === requestTokenRef.current && normalizedCabId === currentCabIdRef.current) {
           console.log(`BookingSummary: Setting fare for ${selectedCab.name}: ${fare}`);
@@ -71,6 +81,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       });
     }
   }, [selectedCab, hourlyPackage, fetchFare]);
+
+  // Use external fare if provided
+  useEffect(() => {
+    if (externalFare && externalFare > 0 && !isLoading) {
+      setDisplayFare(externalFare);
+    }
+  }, [externalFare, isLoading]);
+
+  // Use external loading state if provided
+  useEffect(() => {
+    if (externalIsLoading !== undefined) {
+      setIsLoading(externalIsLoading);
+    }
+  }, [externalIsLoading]);
 
   if (!selectedCab) {
     return <div className="p-4">Please select a cab to view pricing</div>;
@@ -92,6 +116,22 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           <span>Package</span>
           <span className="font-medium">{hourlyPackage}</span>
         </div>
+
+        {/* Pickup details - only show if provided */}
+        {pickupLocation && (
+          <div className="flex justify-between items-center">
+            <span>Pickup</span>
+            <span className="font-medium">{pickupLocation}</span>
+          </div>
+        )}
+
+        {/* Distance - only show if provided */}
+        {distance && (
+          <div className="flex justify-between items-center">
+            <span>Distance</span>
+            <span className="font-medium">{distance} km</span>
+          </div>
+        )}
 
         {/* Fare display */}
         <div className="flex justify-between items-center pt-2 border-t">

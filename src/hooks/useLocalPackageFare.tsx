@@ -11,11 +11,11 @@ interface LocalPackageFareResult {
   hourlyPackage: string;
   fetchFare: (vehicleId: string, packageId?: string, forceRefresh?: boolean) => Promise<number>;
   changePackage: (newPackage: string) => void;
+  clearFare: () => void;
 }
 
 export function useLocalPackageFare(
-  defaultPackage: string = '8hrs-80km',
-  validateVehicleMatch: boolean = true
+  defaultPackage: string = '8hrs-80km'
 ): LocalPackageFareResult {
   const [hourlyPackage, setHourlyPackage] = useState<string>(defaultPackage);
   const [fare, setFare] = useState<number>(0);
@@ -29,6 +29,26 @@ export function useLocalPackageFare(
     if (!id) return '';
     return id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
   };
+
+  // Clear all fare cache entries
+  const clearFare = useCallback(() => {
+    // Get all localStorage keys
+    const allKeys = Object.keys(localStorage);
+    
+    // Filter fare-related keys and remove them
+    const fareKeys = allKeys.filter(key => key.startsWith('fare_local_'));
+    
+    console.log(`Purging ${fareKeys.length} cached fare entries from localStorage`);
+    fareKeys.forEach(key => localStorage.removeItem(key));
+    
+    // Reset current vehicle ID reference
+    currentVehicleIdRef.current = null;
+    
+    // Abort any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   const fetchFare = useCallback(async (
     vehicleId: string, 
@@ -105,10 +125,7 @@ export function useLocalPackageFare(
         });
 
         if (matchingFares.length === 0) {
-          if (validateVehicleMatch) {
-            throw new Error(`No matching fare found for ${vehicleId}`);
-          }
-          return 0;
+          throw new Error(`No matching fare found for ${vehicleId}`);
         }
 
         const farePricing = matchingFares[0];
@@ -154,7 +171,7 @@ export function useLocalPackageFare(
     } finally {
       setIsFetching(false);
     }
-  }, [hourlyPackage, validateVehicleMatch]);
+  }, [hourlyPackage]);
 
   const changePackage = useCallback((newPackage: string) => {
     setHourlyPackage(newPackage);
@@ -175,6 +192,7 @@ export function useLocalPackageFare(
     error,
     hourlyPackage,
     fetchFare,
-    changePackage
+    changePackage,
+    clearFare
   };
 }
