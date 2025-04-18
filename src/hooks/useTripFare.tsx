@@ -13,6 +13,7 @@ interface UseTripFareOptions {
 }
 
 const DEFAULT_CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+const REQUEST_THROTTLE_TIME = 10 * 1000; // 10 seconds
 
 // Helper to normalize IDs for consistent comparison
 const normalizeId = (id: string): string => {
@@ -27,8 +28,14 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
   const [fares, setFares] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use refs to reduce re-renders and better manage state
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef<number>(0);
+  const lastRequestTimesRef = useRef<Record<string, number>>({});
+  const fareRequestQueueRef = useRef<Set<string>>(new Set());
+  const processingRef = useRef<boolean>(false);
+  const loadingRef = useRef<boolean>(false);
 
   // Map trip type to API endpoint
   const getEndpointForTripType = (type: TripFareType): string => {
@@ -70,6 +77,39 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
     return Date.now() - timestamp < cacheTime;
   };
 
+  // Process the queue of fare requests with throttling
+  const processQueue = useCallback(() => {
+    if (processingRef.current || fareRequestQueueRef.current.size === 0) {
+      return;
+    }
+    
+    processingRef.current = true;
+    
+    // Take the first item from the queue
+    const vehicleId = Array.from(fareRequestQueueRef.current)[0];
+    fareRequestQueueRef.current.delete(vehicleId);
+    
+    // Process this request
+    const doFetchFare = async () => {
+      try {
+        await fetchFare(vehicleId, tripType, {}, false);
+      } catch (e) {
+        console.error(`Error processing queued fare request for ${vehicleId}:`, e);
+      } finally {
+        processingRef.current = false;
+        
+        // Schedule the next queue item with a small delay
+        if (fareRequestQueueRef.current.size > 0) {
+          setTimeout(() => {
+            processQueue();
+          }, 300);
+        }
+      }
+    };
+    
+    doFetchFare();
+  }, [tripType]);
+
   // Fetch fare for a specific vehicle
   const fetchFare = useCallback(async (
     vehicleId: string,
@@ -77,6 +117,27 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
     additionalParams: Record<string, string> = {},
     forceRefresh: boolean = false
   ): Promise<number> => {
+    // Track request time for throttling
+    const now = Date.now();
+    const requestKey = `${tripType}_${vehicleId}`;
+    const lastRequestTime = lastRequestTimesRef.current[requestKey] || 0;
+    
+    // Throttle requests to the same endpoint
+    if (!forceRefresh && now - lastRequestTime < REQUEST_THROTTLE_TIME) {
+      console.log(`Throttling fare request for ${vehicleId} (${tripType}): last request was ${Math.round((now - lastRequestTime)/1000)}s ago`);
+      
+      // Queue this request for later processing if not already in queue
+      if (!fareRequestQueueRef.current.has(vehicleId)) {
+        fareRequestQueueRef.current.add(vehicleId);
+        setTimeout(() => {
+          processQueue();
+        }, REQUEST_THROTTLE_TIME - (now - lastRequestTime));
+      }
+      
+      // Return current fare if available
+      return fares[vehicleId] || 0;
+    }
+    
     // Cancel any in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -88,6 +149,9 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
 
     // Increment request ID to track the latest request
     const requestId = ++requestIdRef.current;
+    
+    // Update request timestamp
+    lastRequestTimesRef.current[requestKey] = now;
 
     // Generate cache key
     const cacheKey = generateCacheKey(tripType, vehicleId);
@@ -105,6 +169,15 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
           const { timestamp, price } = JSON.parse(cached);
           if (isCacheValid(timestamp)) {
             console.log(`Using cached ${tripType} fare for vehicle ${vehicleId}: ₹${price}`);
+            
+            // Update state with cached fare
+            if (price > 0 && (!fares[vehicleId] || fares[vehicleId] !== price)) {
+              setFares(prev => ({
+                ...prev,
+                [vehicleId]: price
+              }));
+            }
+            
             return price;
           }
         }
@@ -114,8 +187,12 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
       }
     }
 
-    // Set loading state
-    setIsLoading(true);
+    // Only set loading if we don't have a cached value
+    if (!fares[vehicleId]) {
+      setIsLoading(true);
+      loadingRef.current = true;
+    }
+    
     setError(null);
 
     try {
@@ -200,9 +277,10 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
       // Only update loading state if this is the latest request
       if (requestId === requestIdRef.current) {
         setIsLoading(false);
+        loadingRef.current = false;
       }
     }
-  }, [options.cacheTime]);
+  }, [fares, isCacheValid, options.cacheTime, processQueue, tripType]);
 
   // Fetch fares for multiple vehicles
   const fetchFares = useCallback(async (
@@ -211,28 +289,30 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
     additionalParams: Record<string, string> = {},
     forceRefresh: boolean = false
   ): Promise<Record<string, number>> => {
+    if (vehicleIds.length === 0) {
+      return {};
+    }
+    
     setIsLoading(true);
     setError(null);
 
     const results: Record<string, number> = {};
     
     try {
-      // Fetch fares in parallel
-      const promises = vehicleIds.map(id => 
-        fetchFare(id, tripType, additionalParams, forceRefresh)
-          .then(price => {
+      // Fetch fares sequentially to prevent API overload
+      for (const id of vehicleIds) {
+        try {
+          const price = await fetchFare(id, tripType, additionalParams, forceRefresh);
+          if (price > 0) {
             results[id] = price;
-            return { id, price };
-          })
-      );
-      
-      await Promise.all(promises);
-      
-      // Update state with all fares
-      setFares(prev => ({
-        ...prev,
-        ...results
-      }));
+          }
+        } catch (e) {
+          console.error(`Error fetching fare for ${id}:`, e);
+        }
+        
+        // Small delay between requests to prevent overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
       
       return results;
     } catch (e) {

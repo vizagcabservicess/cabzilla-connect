@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -13,6 +12,7 @@ let lastCacheClearTime = Date.now();
 let lastEventDispatchTime = Date.now();
 let eventDispatchCount = 0;
 const MAX_EVENTS_PER_MINUTE = 5;
+const eventDispatchThrottleRef: Record<string, number> = {};
 
 // Clear the fare cache
 export const clearFareCache = () => {
@@ -581,16 +581,36 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
-    // Dispatch fare calculation event to update UI components
-    window.dispatchEvent(new CustomEvent('fare-calculated', {
-      detail: {
-        cabId: cabType.id,
-        tripType,
-        tripMode,
-        fare: calculatedFare,
-        timestamp: Date.now()
+    // Throttle event dispatching to prevent excessive refreshes
+    const dispatchFareCalculatedEvent = (cabId: string, fare: number) => {
+      const now = Date.now();
+      const eventKey = `fare_${cabId}_${tripType}`;
+      const lastDispatch = eventDispatchThrottleRef[eventKey] || 0;
+      
+      // Limit to one event per cab per 3 seconds
+      if (now - lastDispatch < 3000) {
+        console.log(`Throttling fare-calculated event for ${cabId} (${tripType})`);
+        return;
       }
-    }));
+      
+      eventDispatchThrottleRef[eventKey] = now;
+      
+      // Dispatch with minimal data to reduce overhead
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId,
+          tripType,
+          tripMode,
+          fare,
+          timestamp: now
+        }
+      }));
+    };
+    
+    // Only dispatch the event if the fare is valid
+    if (calculatedFare > 0) {
+      dispatchFareCalculatedEvent(cabType.id, calculatedFare);
+    }
     
     // Cache the calculated fare
     fareCache.set(cacheKey, {

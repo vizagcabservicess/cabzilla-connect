@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CabList } from "./cab-options/CabList";
 import { CabLoading } from "./cab-options/CabLoading";
 import { CabType } from "@/types/cab";
@@ -32,7 +32,21 @@ export function CabOptions({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [loadingCabs, setLoadingCabs] = useState(true);
   const [calculationAttempts, setCalculationAttempts] = useState(0);
+  
+  // Add refs to prevent unnecessary recalculations
+  const calculationInProgressRef = useRef(false);
+  const lastCalculationRef = useRef<number>(0);
+  const calculationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fareParamsRef = useRef({
+    distance,
+    tripType,
+    tripMode,
+    hourlyPackage,
+    pickupDate,
+    returnDate
+  });
 
+  // Initial loading animation
   useEffect(() => {
     setLoadingCabs(true);
     
@@ -43,61 +57,105 @@ export function CabOptions({
     return () => clearTimeout(timer);
   }, []);
 
+  // Update params ref when dependencies change
   useEffect(() => {
-    const calculateFares = async () => {
-      if (distance <= 0 || cabTypes.length === 0) {
-        setIsCalculatingFares(false);
+    fareParamsRef.current = {
+      distance,
+      tripType,
+      tripMode,
+      hourlyPackage,
+      pickupDate, 
+      returnDate
+    };
+  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+
+  // Fare calculation with debouncing and throttling
+  useEffect(() => {
+    // Skip if no distance or no cabs
+    if (distance <= 0 || cabTypes.length === 0) {
+      setIsCalculatingFares(false);
+      return;
+    }
+
+    // Clear any pending timeout
+    if (calculationTimeoutRef.current) {
+      clearTimeout(calculationTimeoutRef.current);
+    }
+
+    // Debounce the calculation by 300ms
+    calculationTimeoutRef.current = setTimeout(() => {
+      // Don't recalculate if another calculation is in progress
+      if (calculationInProgressRef.current) {
+        console.log("Skipping fare calculation - another calculation in progress");
         return;
       }
 
-      setIsCalculatingFares(true);
-      
-      try {
-        // Clear the fare cache if we're recalculating
-        if (calculationAttempts > 0) {
-          clearFareCache();
-        }
-        
-        // Calculate fares for each cab type
-        const farePromises = cabTypes.map(async (cab) => {
-          try {
-            const fare = await calculateFare({
-              cabType: cab,
-              distance,
-              tripType,
-              tripMode,
-              hourlyPackage,
-              pickupDate,
-              returnDate,
-              forceRefresh: calculationAttempts > 0
-            });
-            
-            return { cabId: cab.id, fare };
-          } catch (error) {
-            console.error(`Error calculating fare for ${cab.name}:`, error);
-            return { cabId: cab.id, fare: 0 };
-          }
-        });
+      // Throttle calculations - don't recalculate more frequently than every 2 seconds
+      const now = Date.now();
+      if (now - lastCalculationRef.current < 2000 && calculationAttempts > 0) {
+        console.log(`Throttling fare calculation - last calculation was ${now - lastCalculationRef.current}ms ago`);
+        return;
+      }
 
-        const results = await Promise.all(farePromises);
-        const newFares: Record<string, number> = {};
+      const calculateFares = async () => {
+        setIsCalculatingFares(true);
+        calculationInProgressRef.current = true;
+        lastCalculationRef.current = Date.now();
         
-        results.forEach(({cabId, fare}) => {
-          if (fare > 0) {
-            newFares[cabId] = fare;
+        try {
+          // Clear the fare cache if we're recalculating
+          if (calculationAttempts > 0) {
+            clearFareCache();
           }
-        });
-        
-        setCabFares(newFares);
-      } catch (error) {
-        console.error("Error calculating fares:", error);
-      } finally {
-        setIsCalculatingFares(false);
-        setCalculationAttempts(prev => prev + 1);
+          
+          // Calculate fares for each cab type
+          const farePromises = cabTypes.map(async (cab) => {
+            try {
+              const fare = await calculateFare({
+                cabType: cab,
+                distance,
+                tripType,
+                tripMode,
+                hourlyPackage,
+                pickupDate,
+                returnDate,
+                forceRefresh: calculationAttempts > 0
+              });
+              
+              return { cabId: cab.id, fare };
+            } catch (error) {
+              console.error(`Error calculating fare for ${cab.name}:`, error);
+              return { cabId: cab.id, fare: 0 };
+            }
+          });
+
+          const results = await Promise.all(farePromises);
+          const newFares: Record<string, number> = {};
+          
+          results.forEach(({cabId, fare}) => {
+            if (fare > 0) {
+              newFares[cabId] = fare;
+            }
+          });
+          
+          setCabFares(newFares);
+        } catch (error) {
+          console.error("Error calculating fares:", error);
+        } finally {
+          setIsCalculatingFares(false);
+          calculationInProgressRef.current = false;
+          setCalculationAttempts(prev => prev + 1);
+        }
+      };
+
+      calculateFares();
+    }, 300);
+
+    return () => {
+      if (calculationTimeoutRef.current) {
+        clearTimeout(calculationTimeoutRef.current);
       }
     };
-
-    calculateFares();
   }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, calculationAttempts]);
 
   const handleSelectCab = (cab: CabType) => {
