@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FareUpdateError } from './FareUpdateError';
-import { useLocalPackageFare } from '@/hooks/useLocalPackageFare';
+import { useLocalPackageFareQuery } from '@/hooks/useLocalPackageFareQuery';
 
 interface BookingSummaryProps {
   selectedCab: any;
@@ -47,15 +47,19 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   // Track if this is the initial mount
   const isInitialMount = useRef<boolean>(true);
   
+  // Request token to prevent race conditions
+  const requestTokenRef = useRef<number>(0);
+  
   // Use the improved local package fare hook with built-in caching
   const {
     fare: localPackageFare,
     isFetching: isLocalPackageFareFetching,
     error: localPackageFareError,
-    fetchFare: fetchLocalPackageFare,
+    refetchFare: fetchLocalPackageFare,
     hourlyPackage: currentPackage,
-    changePackage
-  } = useLocalPackageFare(hourlyPackage);
+    changePackage,
+    setVehicleId
+  } = useLocalPackageFareQuery(hourlyPackage);
   
   // Normalize vehicle ID consistently
   const normalizeVehicleId = (id: string): string => {
@@ -72,21 +76,20 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     if (normalizedCabId !== currentCabId) {
       console.log(`BookingSummary: Cab changed from ${currentCabId} to ${normalizedCabId}`);
       
-      // Reset display fare immediately on cab change
+      // ⏳ Clear fare + start skeleton here
       setDisplayFare(0);
-      
-      // Mark as loading until we get updated fare
       setIsLoading(true);
+      
+      // Increment request token to invalidate any in-flight responses
+      requestTokenRef.current++;
       
       // Update the stored cab ID
       setCurrentCabId(normalizedCabId);
       
-      // Fetch fare for the new cab if it's a local trip
-      if (tripType === 'local') {
-        fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
-      }
+      // Set the vehicle ID in our hook
+      setVehicleId(selectedCab.id);
     }
-  }, [selectedCab, currentCabId, fetchLocalPackageFare, hourlyPackage, tripType]);
+  }, [selectedCab, currentCabId, setVehicleId]);
   
   // Update display fare when local package fare or prop fare changes
   useEffect(() => {
@@ -101,17 +104,30 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     // Get normalized ID for the currently selected cab
     const normalizedSelectedCabId = normalizeVehicleId(selectedCab.id);
     
+    // Capture the current request token
+    const currentToken = requestTokenRef.current;
+    
     // For local trips, use the fare from our hook
-    if (tripType === 'local' && localPackageFare > 0 && normalizedSelectedCabId === currentCabId) {
-      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from hook: ${localPackageFare}`);
-      setDisplayFare(localPackageFare);
-      setIsLoading(false);
+    if (tripType === 'local' && localPackageFare > 0) {
+      // 🚫 Ignore stale response if token mismatches
+      if (normalizedSelectedCabId === currentCabId) {
+        console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from hook: ${localPackageFare}`);
+        setDisplayFare(localPackageFare);
+        setIsLoading(false);
+      } else {
+        console.log(`BookingSummary: Ignoring stale fare update for ${normalizedSelectedCabId}, current is ${currentCabId}`);
+      }
     } 
     // For other trip types, use the fare from props
-    else if (fare && fare > 0 && normalizedSelectedCabId === currentCabId && !isCalculatingFares) {
-      console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from props: ${fare}`);
-      setDisplayFare(fare);
-      setIsLoading(false);
+    else if (fare && fare > 0 && !isCalculatingFares) {
+      // 🚫 Ignore stale response if token mismatches
+      if (normalizedSelectedCabId === currentCabId) {
+        console.log(`BookingSummary: Setting display fare for ${selectedCab.name} from props: ${fare}`);
+        setDisplayFare(fare);
+        setIsLoading(false);
+      } else {
+        console.log(`BookingSummary: Ignoring stale fare update from props, IDs don't match`);
+      }
     }
   }, [fare, selectedCab, currentCabId, isCalculatingFares, localPackageFare, tripType]);
   
@@ -131,10 +147,11 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     // Reset loading state
     setIsLoading(true);
     
+    // Increment request token to invalidate any in-flight responses
+    requestTokenRef.current++;
+    
     // Fetch the fare again with force refresh
-    if (tripType === 'local') {
-      fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
-    }
+    fetchLocalPackageFare();
   };
   
   // Show placeholder if no cab is selected

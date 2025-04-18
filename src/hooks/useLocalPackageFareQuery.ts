@@ -153,8 +153,13 @@ export function useLocalPackageFareQuery(
           if (price > 0) {
             console.log(`Retrieved valid fare for ${vehicleId}: ₹${price}`);
             
-            // Store in localStorage
-            localStorage.setItem(cacheKey, String(price));
+            // ✅ Write to localStorage only after ID match
+            // Verify the vehicle ID is still the current one before caching
+            if (normalizedVehicleIdRef.current === normalizedVehicleId) {
+              localStorage.setItem(cacheKey, String(price));
+            } else {
+              console.log(`Skipping localStorage update: current vehicle is now ${normalizedVehicleIdRef.current}`);
+            }
             
             return price;
           }
