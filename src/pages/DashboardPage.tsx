@@ -104,7 +104,7 @@ export default function DashboardPage() {
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      const data = await bookingAPI.getAdminDashboardMetrics('week');
+      const data = await bookingAPI.getAdminDashboardMetrics();
       setAdminMetrics(data);
     } catch (error) {
       console.error('Error fetching admin metrics:', error);

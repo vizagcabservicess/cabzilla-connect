@@ -1,3 +1,4 @@
+
 import axios, { AxiosRequestConfig } from 'axios';
 import { apiBaseUrl, forceRefreshHeaders, defaultHeaders } from '@/config/api';
 import { getForcedRequestConfig } from '@/config/requestConfig';
@@ -67,6 +68,28 @@ export const authAPI = {
   
   getToken: () => {
     return localStorage.getItem('authToken');
+  },
+  
+  // Add getCurrentUser method
+  getCurrentUser: async () => {
+    try {
+      // Check if we have user data in localStorage first
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        return JSON.parse(userData);
+      }
+      
+      // If not, fetch from API
+      const response = await api.get('/api/get-current-user.php');
+      if (response.data) {
+        // Cache the user data
+        localStorage.setItem('user', JSON.stringify(response.data));
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+      throw error;
+    }
   }
 };
 
@@ -181,6 +204,58 @@ export const fareAPI = {
     
     const response = await api.get('/api/tour-fares.php', config);
     return response.data;
+  },
+  
+  // Add the missing methods for the tourAPI
+  updateTourFares: async (tourData: any) => {
+    try {
+      const response = await api.put('/api/update-tour-fares.php', tourData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating tour fares:', error);
+      throw error;
+    }
+  },
+  
+  addTourFare: async (tourData: any) => {
+    try {
+      const response = await api.post('/api/add-tour-fare.php', tourData);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding tour fare:', error);
+      throw error;
+    }
+  },
+  
+  deleteTourFare: async (tourId: string) => {
+    try {
+      const response = await api.delete(`/api/delete-tour-fare.php?id=${tourId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting tour fare:', error);
+      throw error;
+    }
+  },
+  
+  // Add vehicle pricing methods
+  getVehiclePricing: async (vehicleId: string) => {
+    try {
+      const response = await api.get(`/api/get-vehicle-pricing.php?id=${vehicleId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting vehicle pricing:', error);
+      throw error;
+    }
+  },
+  
+  updateVehiclePricing: async (vehicleId: string, pricingData: any) => {
+    try {
+      const response = await api.put(`/api/update-vehicle-pricing.php?id=${vehicleId}`, pricingData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating vehicle pricing:', error);
+      throw error;
+    }
   }
 };
 
