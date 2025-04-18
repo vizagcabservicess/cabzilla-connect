@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { CabList } from "./cab-options/CabList";
 import { CabLoading } from "./cab-options/CabLoading";
 import { CabType } from "@/types/cab";
-import { useFare } from "@/hooks/useFare";
+import { useFare, FareType } from "@/hooks/useFare";
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -32,7 +32,7 @@ export function CabOptions({
   const [loadingCabs, setLoadingCabs] = useState(true);
   
   // Initialize the fare hook
-  const { fetchFares, clearCacheForTripType } = useFare();
+  const { fetchFare, fetchFares, clearCacheForTripType } = useFare();
   
   // Add refs to prevent unnecessary recalculations
   const lastCalculationRef = useRef<number>(0);
@@ -51,7 +51,7 @@ export function CabOptions({
   
   // Clear fare cache when trip type or mode changes
   useEffect(() => {
-    clearCacheForTripType(tripType as any);
+    clearCacheForTripType(tripType as FareType);
   }, [tripType, clearCacheForTripType]);
   
   // Fetch fares for all cabs when component mounts or parameters change
@@ -80,7 +80,7 @@ export function CabOptions({
       try {
         const fareRequests = cabTypes.map(cab => ({
           vehicleId: cab.id,
-          tripType: tripType as any,
+          tripType: tripType as FareType,
           distance,
           tripMode: tripMode as any,
           packageId: hourlyPackage,
@@ -93,7 +93,7 @@ export function CabOptions({
         // Build fare map
         const fares: Record<string, number> = {};
         Object.entries(results).forEach(([cabId, fareDetails]) => {
-          if (fareDetails.totalPrice > 0) {
+          if (fareDetails && fareDetails.totalPrice > 0) {
             fares[cabId] = fareDetails.totalPrice;
           }
         });
@@ -174,8 +174,6 @@ export function CabOptions({
       <CabList
         cabTypes={cabTypes}
         selectedCabId={selectedCab?.id || null}
-        cabFares={cabFares}
-        isCalculatingFares={false}
         handleSelectCab={handleSelectCab}
         getFareDetails={getFareDetails}
         tripType={tripType}

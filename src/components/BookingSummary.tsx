@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -18,6 +19,20 @@ interface BookingSummaryProps {
   hourlyPackage?: string;
   isPreview?: boolean;
 }
+
+// Helper function to get local package details
+const getLocalPackageDetails = (hourlyPackage?: string): string => {
+  switch (hourlyPackage) {
+    case '4hrs-40km':
+      return '4 Hours / 40 KM Package';
+    case '8hrs-80km':
+      return '8 Hours / 80 KM Package';
+    case '10hrs-100km':
+      return '10 Hours / 100 KM Package';
+    default:
+      return '8 Hours / 80 KM Package';
+  }
+};
 
 export function BookingSummary({
   pickupLocation,

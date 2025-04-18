@@ -26,6 +26,7 @@ export interface FareDetails {
 export function useFare() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const abortControllersRef = useRef<Record<string, AbortController>>({});
+  const fareCache = useRef<Record<string, FareDetails>>({});
   
   const getEndpoint = (tripType: FareType): string => {
     switch (tripType) {
@@ -39,6 +40,15 @@ export function useFare() {
         return '/api/direct-local-fares.php';
     }
   };
+  
+  // Clear cache for a specific trip type
+  const clearCacheForTripType = useCallback((tripType: FareType) => {
+    Object.keys(fareCache.current).forEach(key => {
+      if (key.includes(tripType)) {
+        delete fareCache.current[key];
+      }
+    });
+  }, []);
   
   const fetchFare = useCallback(async (params: FareParams): Promise<FareDetails> => {
     const { vehicleId, tripType, distance = 0, tripMode = 'one-way', packageId } = params;
@@ -119,6 +129,10 @@ export function useFare() {
         }
       }
       
+      // Store in cache
+      const cacheKey = `${tripType}_${vehicleId}_${distance}_${tripMode}_${packageId}`;
+      fareCache.current[cacheKey] = fareDetails;
+      
       return fareDetails;
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -130,8 +144,30 @@ export function useFare() {
     }
   }, []);
   
+  // Fetch fares for multiple vehicle IDs
+  const fetchFares = useCallback(async (
+    paramsArray: FareParams[]
+  ): Promise<Record<string, FareDetails>> => {
+    const results: Record<string, FareDetails> = {};
+    
+    // Fetch fares concurrently
+    const promises = paramsArray.map(async (params) => {
+      try {
+        const fare = await fetchFare(params);
+        results[params.vehicleId] = fare;
+      } catch (error) {
+        console.error(`Error fetching fare for ${params.vehicleId}:`, error);
+      }
+    });
+    
+    await Promise.all(promises);
+    return results;
+  }, [fetchFare]);
+  
   return {
     fetchFare,
+    fetchFares,
+    clearCacheForTripType,
     isLoading: (vehicleId: string) => loading[vehicleId] || false
   };
 }
