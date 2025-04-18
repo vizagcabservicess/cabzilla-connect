@@ -82,7 +82,7 @@ export function CabOptions({
       clearTimeout(calculationTimeoutRef.current);
     }
 
-    // Debounce the calculation by 300ms
+    // Debounce the calculation by 500ms
     calculationTimeoutRef.current = setTimeout(() => {
       // Don't recalculate if another calculation is in progress
       if (calculationInProgressRef.current) {
@@ -90,11 +90,47 @@ export function CabOptions({
         return;
       }
 
-      // Throttle calculations - don't recalculate more frequently than every 2 seconds
+      // Throttle calculations - don't recalculate more frequently than every 3 seconds
       const now = Date.now();
-      if (now - lastCalculationRef.current < 2000 && calculationAttempts > 0) {
+      if (now - lastCalculationRef.current < 3000 && calculationAttempts > 0) {
         console.log(`Throttling fare calculation - last calculation was ${now - lastCalculationRef.current}ms ago`);
         return;
+      }
+
+      // Check for cached fares in localStorage
+      let hasCachedFares = false;
+      const cachedFares: Record<string, number> = {};
+      
+      if (tripType === 'local' && hourlyPackage) {
+        cabTypes.forEach(cab => {
+          const localStorageKey = `local_fare_${cab.id}_${hourlyPackage}`;
+          const storedPrice = localStorage.getItem(localStorageKey);
+          if (storedPrice) {
+            const price = parseInt(storedPrice, 10);
+            if (price > 0) {
+              cachedFares[cab.id] = price;
+              hasCachedFares = true;
+            }
+          }
+        });
+      } else if (tripType === 'outstation') {
+        cabTypes.forEach(cab => {
+          const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
+          const storedFare = localStorage.getItem(outstationKey);
+          if (storedFare) {
+            const price = parseInt(storedFare, 10);
+            if (price > 0) {
+              cachedFares[cab.id] = price;
+              hasCachedFares = true;
+            }
+          }
+        });
+      }
+      
+      // If we have cached fares, use them first and then calculate in background
+      if (hasCachedFares && Object.keys(cachedFares).length > 0) {
+        console.log('Using cached fares from localStorage:', cachedFares);
+        setCabFares(prev => ({...prev, ...cachedFares}));
       }
 
       const calculateFares = async () => {
@@ -103,13 +139,10 @@ export function CabOptions({
         lastCalculationRef.current = Date.now();
         
         try {
-          // Clear the fare cache if we're recalculating
-          if (calculationAttempts > 0) {
-            clearFareCache();
-          }
+          // Calculate fares for each cab type in sequence to prevent API overload
+          const results: Record<string, number> = {};
           
-          // Calculate fares for each cab type
-          const farePromises = cabTypes.map(async (cab) => {
+          for (const cab of cabTypes) {
             try {
               const fare = await calculateFare({
                 cabType: cab,
@@ -122,23 +155,29 @@ export function CabOptions({
                 forceRefresh: calculationAttempts > 0
               });
               
-              return { cabId: cab.id, fare };
+              if (fare > 0) {
+                results[cab.id] = fare;
+                
+                // Also cache in localStorage
+                if (tripType === 'local' && hourlyPackage) {
+                  localStorage.setItem(`local_fare_${cab.id}_${hourlyPackage}`, fare.toString());
+                } else if (tripType === 'outstation') {
+                  const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
+                  localStorage.setItem(outstationKey, fare.toString());
+                }
+              }
+              
+              // Update fares incrementally as they're calculated
+              if (fare > 0) {
+                setCabFares(prev => ({...prev, [cab.id]: fare}));
+              }
+              
+              // Small delay between calculations to prevent API overload
+              await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
               console.error(`Error calculating fare for ${cab.name}:`, error);
-              return { cabId: cab.id, fare: 0 };
             }
-          });
-
-          const results = await Promise.all(farePromises);
-          const newFares: Record<string, number> = {};
-          
-          results.forEach(({cabId, fare}) => {
-            if (fare > 0) {
-              newFares[cabId] = fare;
-            }
-          });
-          
-          setCabFares(newFares);
+          }
         } catch (error) {
           console.error("Error calculating fares:", error);
         } finally {
@@ -149,7 +188,7 @@ export function CabOptions({
       };
 
       calculateFares();
-    }, 300);
+    }, 500);
 
     return () => {
       if (calculationTimeoutRef.current) {
@@ -159,6 +198,38 @@ export function CabOptions({
   }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, calculationAttempts]);
 
   const handleSelectCab = (cab: CabType) => {
+    if (cab.id === selectedCab?.id) return; // Prevent unnecessary re-renders
+    
+    // Get the most accurate fare when selecting
+    let fareToUse = cabFares[cab.id];
+    
+    // Check localStorage for cached fare
+    if (tripType === 'local' && hourlyPackage) {
+      const localStorageKey = `local_fare_${cab.id}_${hourlyPackage}`;
+      const storedPrice = localStorage.getItem(localStorageKey);
+      if (storedPrice) {
+        const price = parseInt(storedPrice, 10);
+        if (price > 0) {
+          fareToUse = price;
+        }
+      }
+    } else if (tripType === 'outstation') {
+      const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
+      const storedFare = localStorage.getItem(outstationKey);
+      if (storedFare) {
+        const price = parseInt(storedFare, 10);
+        if (price > 0) {
+          fareToUse = price;
+        }
+      }
+    }
+    
+    // If we have a fare, update it in localStorage with the cab selection
+    if (fareToUse > 0) {
+      localStorage.setItem('lastSelectedFare', fareToUse.toString());
+      localStorage.setItem('lastSelectedCabId', cab.id);
+    }
+    
     onSelectCab(cab);
   };
 

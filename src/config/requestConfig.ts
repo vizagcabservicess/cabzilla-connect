@@ -12,7 +12,7 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
     'Pragma': 'no-cache',
     'Expires': '0',
-    'Origin': window.location.origin,
+    // Remove Origin header to prevent CORS issues
     'X-Requested-With': 'XMLHttpRequest',
     'Accept': '*/*'
   };
@@ -81,6 +81,15 @@ export const safeFetch = async (endpoint: string, options: RequestInit = {}): Pr
       ...(options.headers || {})
     }
   };
+  
+  // Remove unsafe headers that could trigger CORS errors
+  if (enhancedOptions.headers) {
+    const headers = enhancedOptions.headers as Record<string, string>;
+    // Remove headers that can't be set by JavaScript
+    delete headers['Origin'];
+    delete headers['Referer'];
+    delete headers['Host'];
+  }
   
   // Use direct URL to API without proxy
   const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
