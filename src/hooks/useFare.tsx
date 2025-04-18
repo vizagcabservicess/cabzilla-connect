@@ -97,7 +97,7 @@ export function useFare() {
       let fareDetails: FareDetails = { basePrice: 0, totalPrice: 0 };
       
       if (data.status === 'success') {
-        if (tripType === 'local' && data.fares?.[0]) {
+        if (tripType === 'local' && data.fares && data.fares.length > 0) {
           const localFare = data.fares[0];
           const packagePrice = packageId === '4hrs-40km' ? localFare.price4hrs40km :
                              packageId === '8hrs-80km' ? localFare.price8hrs80km :
