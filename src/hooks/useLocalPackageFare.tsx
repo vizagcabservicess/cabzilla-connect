@@ -39,12 +39,19 @@ export function useLocalPackageFare(defaultPackage: string = '8hrs-80km') {
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
     currentVehicleIdRef.current = normalizedVehicleId;
 
+    // Cache key based on normalized vehicle ID
+    const cacheKey = `fare_local_${normalizedVehicleId}`;
+    
+    // If force refresh, clear existing cache for this vehicle
+    if (forceRefresh) {
+      localStorage.removeItem(cacheKey);
+    }
+
     try {
       setIsFetching(true);
       setError(null);
 
       // Try getting from cache unless forcing refresh
-      const cacheKey = `fare_local_${normalizedVehicleId}`;
       if (!forceRefresh) {
         const cachedFare = localStorage.getItem(cacheKey);
         if (cachedFare && !isNaN(Number(cachedFare))) {
@@ -56,9 +63,6 @@ export function useLocalPackageFare(defaultPackage: string = '8hrs-80km') {
             return parsedFare;
           }
         }
-      } else {
-        // Clear old cache on force refresh
-        localStorage.removeItem(cacheKey);
       }
 
       const apiUrl = getApiUrl(`api/admin/direct-local-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}`);

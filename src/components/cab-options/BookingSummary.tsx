@@ -10,7 +10,9 @@ interface BookingSummaryProps {
   hourlyPackage?: string;
   distance?: number;        
   isCalculatingFares?: boolean; 
-  fare?: number;           
+  fare?: number;
+  pickupLocation?: string;
+  pickupDate?: Date;
 }
 
 export const BookingSummary: React.FC<BookingSummaryProps> = ({
@@ -19,7 +21,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   hourlyPackage = '8hrs-80km',
   distance,
   isCalculatingFares: externalIsLoading,
-  fare: externalFare
+  fare: externalFare,
+  pickupLocation,
+  pickupDate
 }) => {
   const [displayFare, setDisplayFare] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -30,7 +34,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     fetchFare,
     isFetching,
     error
-  } = useLocalPackageFare(hourlyPackage);  // Remove the second argument here
+  } = useLocalPackageFare();  // Remove the second argument here
 
   // Normalize vehicle ID consistently
   const normalizeVehicleId = (id: string): string => {
