@@ -51,6 +51,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const fareUpdateTimestampRef = useRef<number>(0);
   
   // Use our custom hook to fetch and manage fares with strict vehicle ID validation
+  // Fix: Remove the second argument (validateVehicleMatch=true) as it's not in the function signature
   const {
     fare: localPackageFare,
     isFetching: isLocalPackageFareFetching,
@@ -58,7 +59,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     fetchFare: fetchLocalPackageFare,
     hourlyPackage: currentPackage,
     changePackage
-  } = useLocalPackageFare(hourlyPackage, true); // Set validateVehicleMatch=true
+  } = useLocalPackageFare(hourlyPackage);
   
   // Normalize vehicle ID to ensure consistency
   const normalizeVehicleId = (id: string): string => {
@@ -89,6 +90,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       
       // Fetch the fare for the new cab with strict validation enabled
       if (tripType === 'local') {
+        // Pass true for forceRefresh parameter to ensure we get latest data
         fetchLocalPackageFare(selectedCab.id, hourlyPackage, true);
       }
     }
