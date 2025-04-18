@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { CabList } from "./cab-options/CabList";
 import { CabLoading } from "./cab-options/CabLoading";
 import { CabType } from "@/types/cab";
-import { useFare, FareType } from "@/hooks/useFare";
+import { useFare, FareType, TripDirectionType } from "@/hooks/useFare";
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -82,7 +82,7 @@ export function CabOptions({
           vehicleId: cab.id,
           tripType: tripType as FareType,
           distance,
-          tripMode: tripMode as any,
+          tripMode: tripMode as TripDirectionType,
           packageId: hourlyPackage,
           pickupDate,
           returnDate
@@ -177,7 +177,7 @@ export function CabOptions({
         handleSelectCab={handleSelectCab}
         getFareDetails={getFareDetails}
         tripType={tripType}
-        tripMode={tripMode as any}
+        tripMode={tripMode as TripDirectionType}
         distance={distance}
         hourlyPackage={hourlyPackage}
       />

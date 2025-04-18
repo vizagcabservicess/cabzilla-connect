@@ -31,6 +31,8 @@ export function CabList({
   
   useEffect(() => {
     const loadFares = async () => {
+      console.log(`CabList: Loading fares for ${cabTypes.length} vehicles with type ${tripType}`);
+      
       const promises = cabTypes.map(async (cab) => {
         try {
           const fareDetails = await fetchFare({
@@ -46,6 +48,7 @@ export function CabList({
               ...prev,
               [cab.id]: fareDetails.totalPrice
             }));
+            console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice}`);
           }
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);

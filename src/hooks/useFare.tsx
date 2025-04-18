@@ -43,6 +43,7 @@ export function useFare() {
   
   // Clear cache for a specific trip type
   const clearCacheForTripType = useCallback((tripType: FareType) => {
+    console.log(`Clearing cache for trip type: ${tripType}`);
     Object.keys(fareCache.current).forEach(key => {
       if (key.includes(tripType)) {
         delete fareCache.current[key];
@@ -55,6 +56,7 @@ export function useFare() {
     
     // Cancel any existing request for this vehicle
     if (abortControllersRef.current[vehicleId]) {
+      console.log(`Aborting previous fare request for ${vehicleId}`);
       abortControllersRef.current[vehicleId].abort();
     }
     
@@ -67,10 +69,12 @@ export function useFare() {
       const endpoint = getEndpoint(tripType);
       const apiUrl = getApiUrl(endpoint);
       
+      console.log(`Fetching fare from ${apiUrl} for vehicle ${vehicleId}, tripType ${tripType}`);
+      
       // Build query params
       const query = new URLSearchParams({
         vehicle_id: vehicleId,
-        _t: Date.now().toString(),
+        _t: Date.now().toString(), // Add timestamp to prevent caching
         forceRefresh: 'true'
       });
       
@@ -79,10 +83,16 @@ export function useFare() {
       if (packageId) query.append('package_id', packageId);
       
       const response = await safeFetch(`${apiUrl}?${query.toString()}`, {
-        signal: abortControllersRef.current[vehicleId].signal
+        signal: abortControllersRef.current[vehicleId].signal,
+        headers: {
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
       
       const data = await response.json();
+      console.log(`Fare response for ${vehicleId}:`, data);
       
       let fareDetails: FareDetails = { basePrice: 0, totalPrice: 0 };
       
@@ -99,6 +109,8 @@ export function useFare() {
             totalPrice: packagePrice,
             breakdown: { [packageId || '8hrs-80km']: packagePrice }
           };
+          
+          console.log(`Local package fare for ${vehicleId}:`, fareDetails);
         } else if (tripType === 'outstation' && data.fare) {
           const baseFare = data.fare.basePrice || 0;
           const perKm = data.fare.pricePerKm || 0;
@@ -116,6 +128,8 @@ export function useFare() {
               'Driver allowance': driverAllowance
             }
           };
+          
+          console.log(`Outstation fare for ${vehicleId}:`, fareDetails);
         } else if (tripType === 'airport' && data.fare) {
           const airportFare = data.fare;
           fareDetails = {
@@ -126,7 +140,11 @@ export function useFare() {
               'Airport fee': airportFare.airportFee || 0
             }
           };
+          
+          console.log(`Airport fare for ${vehicleId}:`, fareDetails);
         }
+      } else {
+        console.warn(`Failed to fetch fare for ${vehicleId}, status: ${data.status}`);
       }
       
       // Store in cache
@@ -136,8 +154,10 @@ export function useFare() {
       return fareDetails;
     } catch (error: any) {
       if (error.name === 'AbortError') {
+        console.log(`Fare request for ${vehicleId} was aborted`);
         return { basePrice: 0, totalPrice: 0 };
       }
+      console.error(`Error fetching fare for ${vehicleId}:`, error);
       throw error;
     } finally {
       setLoading(prev => ({ ...prev, [vehicleId]: false }));
@@ -150,6 +170,8 @@ export function useFare() {
   ): Promise<Record<string, FareDetails>> => {
     const results: Record<string, FareDetails> = {};
     
+    console.log(`Fetching fares for ${paramsArray.length} vehicles`);
+    
     // Fetch fares concurrently
     const promises = paramsArray.map(async (params) => {
       try {
@@ -161,6 +183,7 @@ export function useFare() {
     });
     
     await Promise.all(promises);
+    console.log('All fares fetched:', results);
     return results;
   }, [fetchFare]);
   

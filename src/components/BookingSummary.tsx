@@ -4,7 +4,7 @@ import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
 import { TripType, TripMode } from '@/lib/tripTypes';
-import { useFare, FareType } from '@/hooks/useFare';
+import { useFare, FareType, TripDirectionType } from '@/hooks/useFare';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -54,16 +54,19 @@ export function BookingSummary({
       if (!selectedCab) return;
       
       try {
+        console.log(`BookingSummary: Loading fare for ${selectedCab.id}, type ${tripType}, distance ${distance}`);
+        
         const result = await fetchFare({
           vehicleId: selectedCab.id,
           tripType: tripType as FareType,
           distance,
-          tripMode: tripMode as 'one-way' | 'round-trip',
+          tripMode: tripMode as TripDirectionType,
           packageId: hourlyPackage,
           pickupDate,
           returnDate
         });
         
+        console.log(`BookingSummary: Received fare details for ${selectedCab.id}:`, result);
         setFareDetails(result.breakdown || { 'Total fare': result.totalPrice });
       } catch (error) {
         console.error('Error fetching fare details:', error);
@@ -178,7 +181,7 @@ export function BookingSummary({
             <p className="font-medium">
               {tripType.charAt(0).toUpperCase() + tripType.slice(1)}
               {tripType === 'outstation' && ` - ${tripMode === 'round-trip' ? 'Round Trip' : 'One Way'}`}
-              {tripType === 'local' && ` - ${getLocalPackageDetails()}`}
+              {tripType === 'local' && ` - ${getLocalPackageDetails(hourlyPackage)}`}
             </p>
             <p className="text-sm">Distance: {distance} km</p>
           </div>
