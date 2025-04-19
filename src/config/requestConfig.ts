@@ -96,9 +96,25 @@ export const getForcedRequestConfig = (): AxiosRequestConfig => {
       ...forceRefreshHeaders,
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
-    } as RawAxiosRequestHeaders,
-    cache: 'no-store'
+    } as RawAxiosRequestHeaders
+    // Removed 'cache' property as it doesn't exist in AxiosRequestConfig
   };
+};
+
+/**
+ * Get the fetch-compatible headers from axios config
+ * @returns Record of header keys and values compatible with fetch API
+ */
+export const getForcedRequestHeaders = (): Record<string, string> => {
+  const axiosHeaders = {
+    ...forceRefreshHeaders,
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest'
+  };
+  // Convert to plain Record<string, string> for fetch API
+  return Object.fromEntries(
+    Object.entries(axiosHeaders).map(([key, value]) => [key, String(value)])
+  );
 };
 
 /**

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -35,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { getForcedRequestConfig } from '@/config/requestConfig';
+import { getForcedRequestConfig, getForcedRequestHeaders } from '@/config/requestConfig';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -72,6 +71,7 @@ export function AdminBookingsList() {
         const requestUrl = `/api/admin/booking.php?_t=${timestamp}`;
         console.log(`Attempting direct fetch from: ${requestUrl}`);
         
+        // Use standard headers for fetch API - not Axios headers
         const directResponse = await fetch(requestUrl, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : '',
@@ -123,10 +123,10 @@ export function AdminBookingsList() {
           const requestUrl = `/api/admin/bookings?_t=${timestamp}`;
           console.log(`Attempting alternative fetch from: ${requestUrl}`);
           
+          // Use the new getForcedRequestHeaders instead of getForcedRequestConfig for fetch API
           const altDirectResponse = await fetch(requestUrl, {
-            ...getForcedRequestConfig(),
             headers: {
-              ...getForcedRequestConfig().headers,
+              ...getForcedRequestHeaders(),
               'Authorization': token ? `Bearer ${token}` : '',
               'Accept': 'application/json',
               'X-Admin-Mode': 'true',
