@@ -172,12 +172,18 @@ export function useFare() {
           if (localFare) {
             // Determine the price based on the package
             let basePrice = 0;
+            let packageLabel = '';
+            
             if (packageId === '4hrs-40km' && localFare.price4hrs40km !== undefined) {
               basePrice = parseFloat(localFare.price4hrs40km);
+              packageLabel = '4 Hours / 40 KM Package';
             } else if (packageId === '10hrs-100km' && localFare.price10hrs100km !== undefined) {
               basePrice = parseFloat(localFare.price10hrs100km);
-            } else if (localFare.price8hrs80km !== undefined) {
+              packageLabel = '10 Hours / 100 KM Package';
+            } else {
+              // Default to 8hrs-80km package
               basePrice = parseFloat(localFare.price8hrs80km);
+              packageLabel = '8 Hours / 80 KM Package';
             }
             
             // Handle case where basePrice and totalPrice are directly provided
@@ -186,7 +192,7 @@ export function useFare() {
                 basePrice: parseFloat(localFare.basePrice),
                 totalPrice: parseFloat(localFare.totalPrice),
                 breakdown: localFare.breakdown || { 
-                  [packageId || '8hrs-80km']: parseFloat(localFare.basePrice) 
+                  [packageLabel]: parseFloat(localFare.basePrice) 
                 }
               };
             } else {
@@ -197,7 +203,7 @@ export function useFare() {
                 pricePerKm: parseFloat(localFare.priceExtraKm || 0),
                 extraHourCharge: parseFloat(localFare.priceExtraHour || 0),
                 breakdown: { 
-                  [packageId || '8hrs-80km package']: basePrice 
+                  [packageLabel]: basePrice 
                 }
               };
             }

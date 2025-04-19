@@ -135,23 +135,56 @@ try {
         // No result found for this vehicle ID, log this
         file_put_contents($logFile, "[$timestamp] No outstation fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
-        // Return empty fare structure with zeros
+        // Set sample prices based on vehicle ID
+        $basePrice = 0;
+        $pricePerKm = 0;
+        $driverAllowance = 250;
+        
+        if ($vehicleId == 'sedan') {
+            $basePrice = 2000;
+            $pricePerKm = 13;
+        } else if ($vehicleId == 'ertiga') {
+            $basePrice = 2500;
+            $pricePerKm = 16;
+        } else if ($vehicleId == 'innova_crysta') {
+            $basePrice = 3000;
+            $pricePerKm = 18;
+        } else {
+            $basePrice = 2200;
+            $pricePerKm = 15;
+        }
+        
+        // Adjust for round trip
+        if ($tripMode === 'round-trip') {
+            $basePrice *= 0.8; // 20% discount on base price for round trips
+        }
+        
+        // Calculate distance fare (ensure minimum distance of 300 km for outstation)
+        $effectiveDistance = max($distance, 300);
+        $distanceFare = $effectiveDistance * $pricePerKm;
+        
+        // Calculate total fare
+        $totalFare = $basePrice + $distanceFare + $driverAllowance;
+        
+        // Build sample fare object
+        $fare = [
+            'vehicleId' => $vehicleId,
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'driverAllowance' => $driverAllowance,
+            'nightHaltCharge' => 1000,
+            'totalPrice' => $totalFare,
+            'breakdown' => [
+                'Base fare' => $basePrice,
+                'Distance charge' => $distanceFare,
+                'Driver allowance' => $driverAllowance
+            ]
+        ];
+        
         echo json_encode([
             'status' => 'success',
-            'message' => 'No outstation fare data found for this vehicle',
-            'fare' => [
-                'vehicleId' => $vehicleId,
-                'basePrice' => 0,
-                'pricePerKm' => 0,
-                'driverAllowance' => 0,
-                'nightHaltCharge' => 0,
-                'totalPrice' => 0,
-                'breakdown' => [
-                    'Base fare' => 0,
-                    'Distance charge' => 0,
-                    'Driver allowance' => 0
-                ]
-            ]
+            'message' => 'Using sample outstation fare data (no database record found)',
+            'fare' => $fare
         ]);
     }
     
