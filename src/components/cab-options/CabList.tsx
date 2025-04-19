@@ -27,6 +27,7 @@ export function CabList({
   getFareDetails
 }: CabListProps) {
   const [fares, setFares] = useState<Record<string, number>>({});
+  const [loadingFares, setLoadingFares] = useState<Record<string, boolean>>({});
   const { fetchFare, isLoading } = useFare();
   
   useEffect(() => {
@@ -34,6 +35,13 @@ export function CabList({
       console.log(`CabList: Loading fares for ${cabTypes.length} vehicles with type ${tripType}`);
       
       const faresMap: Record<string, number> = {};
+      const loadingMap: Record<string, boolean> = {};
+      
+      // Initialize loading state for all cabs
+      cabTypes.forEach(cab => {
+        loadingMap[cab.id] = true;
+      });
+      setLoadingFares(loadingMap);
       
       // Load fares for each cab type
       for (const cab of cabTypes) {
@@ -49,17 +57,73 @@ export function CabList({
             packageId: hourlyPackage
           });
           
-          // Store the totalPrice from the API directly
+          // Store the totalPrice from the API
           if (fareDetails && fareDetails.totalPrice !== undefined) {
             faresMap[cabId] = Number(fareDetails.totalPrice);
             console.log(`CabList: Set fare for ${cabId} to ${fareDetails.totalPrice} (from API)`);
           } else {
             console.warn(`CabList: Received invalid fare details for ${cabId}`, fareDetails);
-            faresMap[cabId] = 0;
+            
+            // Fallback pricing based on distance and vehicle
+            let fallbackPrice = 0;
+            if (tripType === 'outstation') {
+              // Basic outstation pricing
+              const baseRates = {
+                'sedan': 14,
+                'ertiga': 18,
+                'innova_crysta': 20,
+                'luxury': 25,
+                'tempo': 22
+              };
+              const rate = baseRates[cabId as keyof typeof baseRates] || 15;
+              fallbackPrice = Math.max(3000, distance * rate);
+            } else if (tripType === 'airport') {
+              // Basic airport pricing
+              const baseRates = {
+                'sedan': 800,
+                'ertiga': 1000,
+                'innova_crysta': 1200,
+                'luxury': 1500,
+                'tempo': 2000
+              };
+              fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
+              if (distance > 10) fallbackPrice += (distance - 10) * 15;
+            } else {
+              // Local package pricing
+              const baseRates = {
+                'sedan': 800,
+                'ertiga': 1000,
+                'innova_crysta': 1200,
+                'luxury': 1500,
+                'tempo': 2000
+              };
+              fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
+            }
+            
+            // Round to nearest 10
+            fallbackPrice = Math.ceil(fallbackPrice / 10) * 10;
+            faresMap[cabId] = fallbackPrice;
+            console.log(`CabList: Using fallback price for ${cabId}: ${fallbackPrice}`);
           }
+          
+          // Update loading state for this cab
+          loadingMap[cabId] = false;
+          setLoadingFares({...loadingMap});
+          
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);
-          faresMap[cab.id] = 0;
+          loadingMap[cab.id] = false;
+          setLoadingFares({...loadingMap});
+          
+          // Ensure we at least have a non-zero price
+          if (!faresMap[cab.id] || faresMap[cab.id] <= 0) {
+            const fallbackPrice = cab.id === 'sedan' ? 3500 : 
+                                 cab.id === 'ertiga' ? 4500 : 
+                                 cab.id === 'innova_crysta' ? 5500 : 
+                                 cab.id === 'luxury' ? 6500 : 7500;
+            faresMap[cab.id] = fallbackPrice;
+            console.log(`CabList: Using error fallback price for ${cab.id}: ${fallbackPrice}`);
+          }
         }
       }
       
@@ -70,6 +134,13 @@ export function CabList({
       loadFares();
     } else {
       console.log('CabList: Not loading fares - cabTypes empty or distance is 0');
+      
+      // Reset loading states if we're not loading fares
+      const loadingMap: Record<string, boolean> = {};
+      cabTypes.forEach(cab => {
+        loadingMap[cab.id] = false;
+      });
+      setLoadingFares(loadingMap);
     }
     
     // Clear all fare state when trip parameters change
@@ -78,6 +149,10 @@ export function CabList({
       setFares({});
     };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
+  
+  const isCabLoading = (cabId: string): boolean => {
+    return loadingFares[cabId] || isLoading(cabId);
+  };
   
   if (!cabTypes || cabTypes.length === 0) {
     return (
@@ -98,7 +173,7 @@ export function CabList({
             isSelected={selectedCabId === cab.id}
             onSelect={() => handleSelectCab(cab)}
             fareDetails={getFareDetails(cab)}
-            isCalculating={isLoading(cab.id)}
+            isCalculating={isCabLoading(cab.id)}
           />
         </div>
       ))}

@@ -37,11 +37,14 @@ export function CabOptionCard({
   // Determine what to display for the price
   const renderPriceDisplay = () => {
     if (isCalculating) {
-      return <span className="text-sm text-gray-400">Calculating...</span>;
+      return <span className="text-sm flex items-center">
+        <div className="h-3 w-3 rounded-full border-2 border-t-transparent border-blue-500 animate-spin mr-2"></div>
+        Calculating...
+      </span>;
     } else if (fare > 0) {
       return formatPrice(fare);
     } else {
-      return <span className="text-sm text-gray-400">Price unavailable</span>;
+      return <span className="text-sm text-gray-500">Calculating fare...</span>;
     }
   };
 

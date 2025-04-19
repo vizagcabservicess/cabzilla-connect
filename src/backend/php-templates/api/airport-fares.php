@@ -51,7 +51,33 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
 // Normalize vehicle ID - remove spaces and convert to lowercase
 if ($vehicleId) {
     $originalVehicleId = $vehicleId;
-    $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+    
+    // Map specific vehicles
+    $mappings = [
+        'innova hyrcoss' => 'innova_crysta',
+        'innova hycross' => 'innova_crysta',
+        'innovacrystal' => 'innova_crysta',
+        'innova crystal' => 'innova_crysta',
+        'innovacrystal 7seater' => 'innova_crysta',
+        'crysta' => 'innova_crysta',
+        'suzuki ertiga' => 'ertiga',
+        'maruti ertiga' => 'ertiga',
+        'ertigaac' => 'ertiga',
+        'dzire' => 'sedan',
+        'swift dzire' => 'sedan',
+        'etios' => 'sedan',
+        'toyota etios' => 'sedan',
+        'honda amaze' => 'sedan',
+        'amaze' => 'sedan'
+    ];
+    
+    $vehicleLower = strtolower($vehicleId);
+    if (isset($mappings[$vehicleLower])) {
+        $vehicleId = $mappings[$vehicleLower];
+    } else {
+        $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+    }
+    
     file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
 }
 
