@@ -48,8 +48,9 @@ export function CabOptionCard({
         <span className="text-lg font-bold">{formatPrice(fare)}</span>
       );
     } else {
+      // If fare is still 0 after calculation, show error state
       return (
-        <span className="text-orange-500 text-sm">Calculating fare...</span>
+        <span className="text-orange-500 text-sm font-medium">Contact for price</span>
       );
     }
   };

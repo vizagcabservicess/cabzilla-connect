@@ -48,6 +48,69 @@ function normalizeVehicleId($vehicleId) {
     return strtolower(str_replace(' ', '_', trim($vehicleId)));
 }
 
+// Get default package pricing for a vehicle type
+function getDefaultPackagePricing($vehicleId) {
+    $defaultPricing = [
+        'sedan' => [
+            'price_4hrs_40km' => 1400,
+            'price_8hrs_80km' => 2400, 
+            'price_10hrs_100km' => 3000,
+            'price_extra_km' => 14,
+            'price_extra_hour' => 250
+        ],
+        'ertiga' => [
+            'price_4hrs_40km' => 1800,
+            'price_8hrs_80km' => 3000,
+            'price_10hrs_100km' => 3800,
+            'price_extra_km' => 18,
+            'price_extra_hour' => 300
+        ],
+        'innova_crysta' => [
+            'price_4hrs_40km' => 2200,
+            'price_8hrs_80km' => 3500,
+            'price_10hrs_100km' => 4200,
+            'price_extra_km' => 20,
+            'price_extra_hour' => 350
+        ],
+        'luxury' => [
+            'price_4hrs_40km' => 3000,
+            'price_8hrs_80km' => 4500,
+            'price_10hrs_100km' => 5500,
+            'price_extra_km' => 25,
+            'price_extra_hour' => 400
+        ],
+        'tempo' => [
+            'price_4hrs_40km' => 3500,
+            'price_8hrs_80km' => 5500,
+            'price_10hrs_100km' => 6500,
+            'price_extra_km' => 22,
+            'price_extra_hour' => 350
+        ],
+        'bus' => [
+            'price_4hrs_40km' => 4000,
+            'price_8hrs_80km' => 6000,
+            'price_10hrs_100km' => 7500,
+            'price_extra_km' => 28,
+            'price_extra_hour' => 400
+        ]
+    ];
+    
+    // Check if we have a direct match
+    if (isset($defaultPricing[$vehicleId])) {
+        return $defaultPricing[$vehicleId];
+    }
+    
+    // Check for partial match
+    foreach ($defaultPricing as $key => $pricing) {
+        if (strpos($vehicleId, $key) !== false) {
+            return $pricing;
+        }
+    }
+    
+    // Return sedan pricing as default
+    return $defaultPricing['sedan'];
+}
+
 try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
@@ -63,113 +126,107 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Connect to database
-    $conn = getDbConnection();
+    // Variables to store pricing information
+    $useDefaultPricing = false;
+    $price4hrs40km = 0;
+    $price8hrs80km = 0;
+    $price10hrs100km = 0;
+    $priceExtraKm = 0;
+    $priceExtraHour = 0;
     
-    // Query local_package_fares by normalized vehicle_id
-    $query = "SELECT vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour 
-              FROM local_package_fares 
-              WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bindParam(':vehicle_id', $vehicleId);
-    
-    // Log the query and parameters
-    file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
-    
-    $stmt->execute();
-    
-    // Fetch result
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // Log query result
-    file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
-    
-    if ($result) {
-        // Determine base price based on package ID
-        $basePrice = 0;
-        switch ($packageId) {
-            case '4hrs-40km':
-                $basePrice = (float)$result['price_4hrs_40km'];
-                break;
-            case '8hrs-80km':
-                $basePrice = (float)$result['price_8hrs_80km'];
-                break;
-            case '10hrs-100km':
-                $basePrice = (float)$result['price_10hrs_100km'];
-                break;
-            default:
-                $basePrice = (float)$result['price_8hrs_80km']; // Default to 8hrs-80km
-                break;
-        }
+    try {
+        // Connect to database
+        $conn = getDbConnection();
         
-        // Create standardized fare object
-        $fare = [
-            'vehicleId' => $result['vehicle_id'],
-            'price4hrs40km' => (float)$result['price_4hrs_40km'],
-            'price8hrs80km' => (float)$result['price_8hrs_80km'],
-            'price10hrs100km' => (float)$result['price_10hrs_100km'],
-            'priceExtraKm' => (float)$result['price_extra_km'],
-            'priceExtraHour' => (float)$result['price_extra_hour'],
-            'basePrice' => $basePrice,
-            'totalPrice' => $basePrice,
-            'breakdown' => [
-                $packageId => $basePrice
-            ]
-        ];
+        // Query local_package_fares by normalized vehicle_id
+        $query = "SELECT vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour 
+                  FROM local_package_fares 
+                  WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
         
-        // Return success response with fare data
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Local fares retrieved successfully',
-            'fares' => [$fare]
-        ]);
+        $stmt = $conn->prepare($query);
+        $stmt->bindParam(':vehicle_id', $vehicleId);
         
-    } else {
-        // No result found for this vehicle ID, log this
-        file_put_contents($logFile, "[$timestamp] No local fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
+        // Log the query and parameters
+        file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
         
-        // Try to find a matching vehicle with similar name (fuzzy match)
-        $fuzzyQuery = "SELECT vehicle_id FROM local_package_fares LIMIT 1";
-        $fuzzyStmt = $conn->prepare($fuzzyQuery);
-        $fuzzyStmt->execute();
-        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute();
         
-        if ($anyVehicle) {
-            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
+        // Fetch result
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Log query result
+        file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
+        
+        if ($result) {
+            // Use database values
+            $price4hrs40km = (float)$result['price_4hrs_40km'] ?? 0;
+            $price8hrs80km = (float)$result['price_8hrs_80km'] ?? 0;
+            $price10hrs100km = (float)$result['price_10hrs_100km'] ?? 0;
+            $priceExtraKm = (float)$result['price_extra_km'] ?? 0;
+            $priceExtraHour = (float)$result['price_extra_hour'] ?? 0;
             
-            // Get all vehicles for debugging
-            $allVehiclesQuery = "SELECT vehicle_id FROM local_package_fares";
-            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
-            $allVehiclesStmt->execute();
-            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Using database pricing: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
         }
-        
-        // Return minimal fallback data with empty prices
-        $fare = [
-            'vehicleId' => $vehicleId,
-            'price4hrs40km' => 0,
-            'price8hrs80km' => 0,
-            'price10hrs100km' => 0,
-            'priceExtraKm' => 0,
-            'priceExtraHour' => 0,
-            'basePrice' => 0,
-            'totalPrice' => 0,
-            'breakdown' => [
-                $packageId => 0
-            ]
-        ];
-        
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'No fare data found for this vehicle',
-            'fares' => [$fare]
-        ]);
+    } catch (Exception $e) {
+        // Log database error but continue with default pricing
+        file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . " - Using default pricing\n", FILE_APPEND);
     }
+    
+    // Check if we got valid pricing from the database
+    if ($price4hrs40km <= 0 || $price8hrs80km <= 0 || $price10hrs100km <= 0) {
+        $useDefaultPricing = true;
+        
+        // Get default pricing for the vehicle type
+        $defaultPackagePricing = getDefaultPackagePricing($vehicleId);
+        $price4hrs40km = $defaultPackagePricing['price_4hrs_40km'];
+        $price8hrs80km = $defaultPackagePricing['price_8hrs_80km'];
+        $price10hrs100km = $defaultPackagePricing['price_10hrs_100km'];
+        $priceExtraKm = $defaultPackagePricing['price_extra_km'];
+        $priceExtraHour = $defaultPackagePricing['price_extra_hour'];
+        
+        file_put_contents($logFile, "[$timestamp] Using default package pricing for $vehicleId: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+    }
+    
+    // Determine base price based on package ID
+    $basePrice = 0;
+    switch ($packageId) {
+        case '4hrs-40km':
+            $basePrice = (float)$price4hrs40km;
+            break;
+        case '8hrs-80km':
+            $basePrice = (float)$price8hrs80km;
+            break;
+        case '10hrs-100km':
+            $basePrice = (float)$price10hrs100km;
+            break;
+        default:
+            $basePrice = (float)$price8hrs80km; // Default to 8hrs-80km
+            break;
+    }
+    
+    // Create standardized fare object
+    $fare = [
+        'vehicleId' => $vehicleId,
+        'price4hrs40km' => (float)$price4hrs40km,
+        'price8hrs80km' => (float)$price8hrs80km,
+        'price10hrs100km' => (float)$price10hrs100km,
+        'priceExtraKm' => (float)$priceExtraKm,
+        'priceExtraHour' => (float)$priceExtraHour,
+        'basePrice' => $basePrice,
+        'totalPrice' => $basePrice,
+        'breakdown' => [
+            $packageId => $basePrice
+        ],
+        'isDefaultPricing' => $useDefaultPricing
+    ];
+    
+    // Return success response with fare data
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Local fares retrieved successfully',
+        'fares' => [$fare]
+    ]);
     
 } catch (Exception $e) {
     // Log error

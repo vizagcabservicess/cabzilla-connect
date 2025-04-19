@@ -69,11 +69,12 @@ export function CabList({
           } else {
             console.warn(`CabList: Received invalid fare details for ${cabId}`, fareDetails);
             
-            // Fallback pricing based on distance and vehicle
+            // Fallback pricing based on trip type, distance and vehicle
             let fallbackPrice = 0;
+            
             if (tripType === 'outstation') {
               // Basic outstation pricing
-              const baseRates = {
+              const baseRates: Record<string, number> = {
                 'sedan': 14,
                 'ertiga': 18,
                 'innova_crysta': 20,
@@ -81,31 +82,33 @@ export function CabList({
                 'tempo': 22,
                 'bus': 28
               };
-              const rate = baseRates[cabId as keyof typeof baseRates] || 15;
+              const rate = baseRates[cabId] || 15;
               fallbackPrice = Math.max(3000, distance * rate);
             } else if (tripType === 'airport') {
               // Basic airport pricing
-              const baseRates = {
-                'sedan': 800,
-                'ertiga': 1000,
-                'innova_crysta': 1200,
-                'luxury': 1500,
-                'tempo': 2000,
-                'bus': 2500
+              const baseRates: Record<string, number> = {
+                'sedan': 1000,
+                'ertiga': 1200,
+                'innova_crysta': 1500,
+                'luxury': 2000,
+                'tempo': 2500,
+                'bus': 3000
               };
-              fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
+              fallbackPrice = baseRates[cabId] || 1000;
               if (distance > 10) fallbackPrice += (distance - 10) * 15;
             } else {
               // Local package pricing
-              const baseRates = {
-                'sedan': 800,
-                'ertiga': 1000,
-                'innova_crysta': 1200,
-                'luxury': 1500,
-                'tempo': 2000,
-                'bus': 2500
+              const packageRates: Record<string, Record<string, number>> = {
+                'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
+                'ertiga': { '4hrs-40km': 1800, '8hrs-80km': 3000, '10hrs-100km': 3800 },
+                'innova_crysta': { '4hrs-40km': 2200, '8hrs-80km': 3500, '10hrs-100km': 4200 },
+                'luxury': { '4hrs-40km': 3000, '8hrs-80km': 4500, '10hrs-100km': 5500 },
+                'tempo': { '4hrs-40km': 3500, '8hrs-80km': 5500, '10hrs-100km': 6500 },
+                'bus': { '4hrs-40km': 4000, '8hrs-80km': 6000, '10hrs-100km': 7500 }
               };
-              fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
+              
+              const defaultPackage = hourlyPackage || '8hrs-80km';
+              fallbackPrice = packageRates[cabId]?.[defaultPackage] || packageRates['sedan'][defaultPackage];
             }
             
             // Round to nearest 10
@@ -126,20 +129,13 @@ export function CabList({
           loadingMap[cab.id] = false;
           setLoadingFares({...loadingMap});
           
-          // Ensure we at least have a non-zero price
-          if (!faresMap[cab.id] || faresMap[cab.id] <= 0) {
-            const fallbackPrice = cab.id === 'sedan' ? 3500 : 
-                                 cab.id === 'ertiga' ? 4500 : 
-                                 cab.id === 'innova_crysta' ? 5500 : 
-                                 cab.id === 'luxury' ? 6500 : 
-                                 cab.id === 'tempo' ? 7500 : 5000;
-                                 
-            faresMap[cab.id] = fallbackPrice;
-            console.log(`CabList: Using error fallback price for ${cab.id}: ${fallbackPrice}`);
-            
-            // Update fares for this cab
-            setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
-          }
+          // Calculate a fallback price based on cab and trip type
+          const fallbackPrice = calculateFallbackPrice(cab, tripType, distance, hourlyPackage);
+          faresMap[cab.id] = fallbackPrice;
+          console.log(`CabList: Using error fallback price for ${cab.id}: ${fallbackPrice}`);
+          
+          // Update fares for this cab
+          setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
         }
       }
     };
@@ -163,6 +159,48 @@ export function CabList({
       setFares({});
     };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
+  
+  const calculateFallbackPrice = (cab: CabType, tripType: string, distance: number, hourlyPackage?: string): number => {
+    if (tripType === 'outstation') {
+      // Basic outstation pricing
+      const baseRates: Record<string, number> = {
+        'sedan': 14,
+        'ertiga': 18,
+        'innova_crysta': 20,
+        'luxury': 25,
+        'tempo': 22,
+        'bus': 28
+      };
+      const rate = baseRates[cab.id] || 15;
+      return Math.max(3000, distance * rate);
+    } else if (tripType === 'airport') {
+      // Basic airport pricing
+      const baseRates: Record<string, number> = {
+        'sedan': 1000,
+        'ertiga': 1200,
+        'innova_crysta': 1500,
+        'luxury': 2000,
+        'tempo': 2500,
+        'bus': 3000
+      };
+      let price = baseRates[cab.id] || 1000;
+      if (distance > 10) price += (distance - 10) * 15;
+      return price;
+    } else {
+      // Local package pricing
+      const packageRates: Record<string, Record<string, number>> = {
+        'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
+        'ertiga': { '4hrs-40km': 1800, '8hrs-80km': 3000, '10hrs-100km': 3800 },
+        'innova_crysta': { '4hrs-40km': 2200, '8hrs-80km': 3500, '10hrs-100km': 4200 },
+        'luxury': { '4hrs-40km': 3000, '8hrs-80km': 4500, '10hrs-100km': 5500 },
+        'tempo': { '4hrs-40km': 3500, '8hrs-80km': 5500, '10hrs-100km': 6500 },
+        'bus': { '4hrs-40km': 4000, '8hrs-80km': 6000, '10hrs-100km': 7500 }
+      };
+      
+      const defaultPackage = hourlyPackage || '8hrs-80km';
+      return packageRates[cab.id]?.[defaultPackage] || packageRates['sedan'][defaultPackage];
+    }
+  };
   
   const isCabLoading = (cabId: string): boolean => {
     return loadingFares[cabId] || isLoading(cabId);

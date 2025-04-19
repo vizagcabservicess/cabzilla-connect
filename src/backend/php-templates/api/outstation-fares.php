@@ -74,14 +74,28 @@ if ($vehicleId) {
         'etios' => 'sedan',
         'toyota etios' => 'sedan',
         'honda amaze' => 'sedan',
-        'amaze' => 'sedan'
+        'amaze' => 'sedan',
+        'toyota' => 'innova_crysta',
+        'mpv' => 'tempo',
+        'tempo_traveller' => 'tempo',
     ];
     
     $vehicleLower = strtolower($vehicleId);
     if (isset($mappings[$vehicleLower])) {
         $vehicleId = $mappings[$vehicleLower];
     } else {
-        $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+        // Check for partial matches
+        foreach ($mappings as $key => $value) {
+            if (strpos($vehicleLower, $key) !== false) {
+                $vehicleId = $value;
+                break;
+            }
+        }
+        
+        if ($vehicleId === $originalVehicleId) {
+            // If no mapping was applied, normalize the string
+            $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+        }
     }
     
     file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);

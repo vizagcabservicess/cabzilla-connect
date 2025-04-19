@@ -204,12 +204,16 @@ try {
         }
     } else {
         // For one-way trips, calculate with driver's return journey
-        $effectiveDistance = $distance * 2;
+        $effectiveDistance = max($distance, $minimumKm / 2);
         
-        if ($effectiveDistance > $minimumKm) {
-            $extraDistance = $effectiveDistance - $minimumKm;
-            $extraDistanceFare = $extraDistance * $pricePerKm;
-            $calculatedPrice = $basePrice + $extraDistanceFare + $driverAllowance;
+        if ($effectiveDistance > $minimumKm / 2) {
+            $extraDistance = ($effectiveDistance * 2) - $minimumKm;
+            if ($extraDistance > 0) {
+                $extraDistanceFare = $extraDistance * $pricePerKm;
+                $calculatedPrice = $basePrice + $extraDistanceFare + $driverAllowance;
+            } else {
+                $calculatedPrice = $basePrice + $driverAllowance;
+            }
         } else {
             $calculatedPrice = $basePrice + $driverAllowance;
         }

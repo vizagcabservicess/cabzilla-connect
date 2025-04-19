@@ -313,12 +313,14 @@ try {
         'isDefaultPricing' => $useDefaultPricing
     ];
     
-    // Return success response
-    echo json_encode([
+    // Format response to match expected response format in CabList.tsx
+    $response = [
         'status' => 'success',
         'message' => 'Airport fares retrieved successfully',
         'fare' => $fare
-    ]);
+    ];
+
+    echo json_encode($response);
     
 } catch (Exception $e) {
     // Log error
