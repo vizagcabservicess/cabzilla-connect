@@ -17,7 +17,7 @@ interface BookingSummaryProps {
   tripMode: TripMode;
   hourlyPackage?: string;
   isPreview?: boolean;
-  totalPrice?: number; // Added totalPrice as an optional prop
+  totalPrice?: number; // Optional prop to set a fixed price
 }
 
 // Helper function to get local package details
@@ -229,17 +229,20 @@ export function BookingSummary({
             <span>Total fare</span>
             <span className="font-semibold">{formatPrice(propTotalPrice)}</span>
           </div>
+        ) : isCalculating ? (
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex justify-between items-center py-2">
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            ))}
+          </div>
         ) : (
           Object.entries(fareDetails).map(([label, amount]) => (
             <div key={label} className="flex justify-between items-center py-2">
               <span>{label}</span>
-              <span className="font-semibold">
-                {isCalculating ? (
-                  <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
-                ) : (
-                  formatPrice(amount)
-                )}
-              </span>
+              <span className="font-semibold">{formatPrice(amount)}</span>
             </div>
           ))
         )}

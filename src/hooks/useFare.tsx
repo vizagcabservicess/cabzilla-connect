@@ -102,74 +102,124 @@ export function useFare() {
       });
       
       const data = await response.json();
-      console.log(`Fare response for ${vehicleId}:`, data);
+      console.log(`Fare response for ${vehicleId} (${tripType}):`, data);
       
       let fareDetails: FareDetails = { basePrice: 0, totalPrice: 0 };
       
       if (data.status === 'success') {
-        if (tripType === 'local' && data.fares && data.fares.length > 0) {
-          const localFare = data.fares[0];
-          
-          // Use the fare object directly if it contains basePrice and totalPrice
-          if (localFare.basePrice !== undefined && localFare.totalPrice !== undefined) {
-            fareDetails = {
-              basePrice: parseFloat(localFare.basePrice),
-              totalPrice: parseFloat(localFare.totalPrice),
-              breakdown: localFare.breakdown || { [packageId || '8hrs-80km']: localFare.basePrice }
-            };
-          } else {
-            // Find the correct package price
-            let packagePrice = 0;
-            if (packageId === '4hrs-40km' && localFare.price4hrs40km) {
-              packagePrice = localFare.price4hrs40km;
-            } else if (packageId === '10hrs-100km' && localFare.price10hrs100km) {
-              packagePrice = localFare.price10hrs100km;
-            } else if (localFare.price8hrs80km) {
-              // Default to 8hrs-80km package
-              packagePrice = localFare.price8hrs80km;
-            }
-            
-            fareDetails = {
-              basePrice: packagePrice,
-              totalPrice: packagePrice,
-              breakdown: { [packageId || '8hrs-80km']: packagePrice }
-            };
-          }
-          
-          console.log(`Local package fare for ${vehicleId}:`, fareDetails);
-        } else if (tripType === 'outstation' && data.fare) {
-          // Use the fare object directly from the API response
-          const outstationFare = data.fare;
-          fareDetails = {
-            basePrice: outstationFare.basePrice || 0,
-            totalPrice: outstationFare.totalPrice || 0,
-            breakdown: outstationFare.breakdown || {
-              'Base fare': outstationFare.basePrice || 0,
-              'Distance charge': (outstationFare.pricePerKm || 0) * Math.max(distance, 300),
-              'Driver allowance': outstationFare.driverAllowance || 0
-            }
-          };
-          
-          console.log(`Outstation fare for ${vehicleId}:`, fareDetails);
-        } else if (tripType === 'airport' && data.fare) {
-          // Use the fare object directly from the API response
+        // AIRPORT FARE HANDLING
+        if (tripType === 'airport' && data.fare) {
+          // Handle direct-airport-fares.php response format
           const airportFare = data.fare;
+          
+          // Ensure we have numeric values
+          const basePrice = parseFloat(airportFare.basePrice) || 0;
+          const pickupPrice = parseFloat(airportFare.pickupPrice) || 0;
+          const dropPrice = parseFloat(airportFare.dropPrice) || 0;
+          const totalPrice = parseFloat(airportFare.totalPrice) || (basePrice + pickupPrice + dropPrice);
+          
           fareDetails = {
-            basePrice: airportFare.basePrice || 0,
-            totalPrice: airportFare.totalPrice || 0,
+            basePrice: basePrice,
+            totalPrice: totalPrice,
             breakdown: airportFare.breakdown || {
-              'Base fare': airportFare.basePrice || 0,
-              'Airport pickup fee': airportFare.pickupPrice || 0,
-              'Airport drop fee': airportFare.dropPrice || 0
+              'Base fare': basePrice,
+              'Airport pickup fee': pickupPrice,
+              'Airport drop fee': dropPrice
             }
           };
           
           console.log(`Airport fare for ${vehicleId}:`, fareDetails);
-        } else if (tripType === 'tour' && data.fare) {
+        }
+        // LOCAL FARE HANDLING
+        else if (tripType === 'local' && data.fares && data.fares.length > 0) {
+          // Find the matching fare by vehicle ID (case insensitive)
+          const normalizedRequestedId = normalizeVehicleId(vehicleId);
+          
+          let localFare = null;
+          
+          // Try to find an exact match first
+          for (const fare of data.fares) {
+            const fareVehicleId = normalizeVehicleId(fare.vehicleId || '');
+            if (fareVehicleId === normalizedRequestedId) {
+              localFare = fare;
+              break;
+            }
+          }
+          
+          // If no exact match found, just use the first fare
+          if (!localFare && data.fares.length > 0) {
+            localFare = data.fares[0];
+          }
+          
+          if (localFare) {
+            // Determine the price based on the package
+            let basePrice = 0;
+            if (packageId === '4hrs-40km' && localFare.price4hrs40km !== undefined) {
+              basePrice = parseFloat(localFare.price4hrs40km);
+            } else if (packageId === '10hrs-100km' && localFare.price10hrs100km !== undefined) {
+              basePrice = parseFloat(localFare.price10hrs100km);
+            } else if (localFare.price8hrs80km !== undefined) {
+              basePrice = parseFloat(localFare.price8hrs80km);
+            }
+            
+            // Handle case where basePrice and totalPrice are directly provided
+            if (localFare.basePrice !== undefined && localFare.totalPrice !== undefined) {
+              fareDetails = {
+                basePrice: parseFloat(localFare.basePrice),
+                totalPrice: parseFloat(localFare.totalPrice),
+                breakdown: localFare.breakdown || { 
+                  [packageId || '8hrs-80km']: parseFloat(localFare.basePrice) 
+                }
+              };
+            } else {
+              // Construct from package prices
+              fareDetails = {
+                basePrice: basePrice,
+                totalPrice: basePrice,
+                breakdown: { 
+                  [packageId || '8hrs-80km']: basePrice 
+                }
+              };
+            }
+            
+            console.log(`Local fare for ${vehicleId}:`, fareDetails);
+          }
+        }
+        // OUTSTATION FARE HANDLING
+        else if (tripType === 'outstation' && data.fare) {
+          // Use the fare object directly from the API response
+          const outstationFare = data.fare;
+          
+          const basePrice = parseFloat(outstationFare.basePrice) || 0;
+          const distanceCharge = distance * (parseFloat(outstationFare.pricePerKm) || 0);
+          const driverAllowance = parseFloat(outstationFare.driverAllowance) || 0;
+          const totalPrice = parseFloat(outstationFare.totalPrice) || (basePrice + distanceCharge + driverAllowance);
+          
           fareDetails = {
-            basePrice: data.fare.basePrice || 0,
-            totalPrice: data.fare.totalPrice || 0,
-            breakdown: data.fare.breakdown || { 'Tour package': data.fare.basePrice || 0 }
+            basePrice: basePrice,
+            totalPrice: totalPrice,
+            breakdown: outstationFare.breakdown || {
+              'Base fare': basePrice,
+              'Distance charge': distanceCharge,
+              'Driver allowance': driverAllowance
+            }
+          };
+          
+          console.log(`Outstation fare for ${vehicleId}:`, fareDetails);
+        }
+        // TOUR FARE HANDLING
+        else if (tripType === 'tour' && data.fare) {
+          const tourFare = data.fare;
+          
+          const basePrice = parseFloat(tourFare.basePrice) || 0;
+          const totalPrice = parseFloat(tourFare.totalPrice) || basePrice;
+          
+          fareDetails = {
+            basePrice: basePrice,
+            totalPrice: totalPrice,
+            breakdown: tourFare.breakdown || { 
+              'Tour package': basePrice 
+            }
           };
           
           console.log(`Tour fare for ${vehicleId}:`, fareDetails);

@@ -49,9 +49,20 @@ export function CabList({
               [cab.id]: fareDetails.totalPrice
             }));
             console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice}`);
+          } else {
+            console.warn(`CabList: Received invalid fare details for ${cab.id}`, fareDetails);
+            setFares(prev => ({
+              ...prev,
+              [cab.id]: 0
+            }));
           }
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);
+          // Set fare to 0 on error
+          setFares(prev => ({
+            ...prev,
+            [cab.id]: 0
+          }));
         }
       });
       

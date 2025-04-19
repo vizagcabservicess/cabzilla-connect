@@ -91,7 +91,7 @@ try {
         
         // Create fare object with complete breakdown
         $fare = [
-            'vehicleId' => $vehicleId,
+            'vehicleId' => $result['vehicle_id'],
             'basePrice' => $basePrice,
             'pickupPrice' => $pickupPrice,
             'dropPrice' => $dropPrice,
