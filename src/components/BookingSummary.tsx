@@ -20,6 +20,7 @@ interface BookingSummaryProps {
   totalPrice: number;
   tripType: TripType;
   tripMode?: 'one-way' | 'round-trip';
+  hourlyPackage?: string;
 }
 
 export const BookingSummary = ({
@@ -31,7 +32,8 @@ export const BookingSummary = ({
   distance,
   totalPrice,
   tripType,
-  tripMode = 'one-way'
+  tripMode = 'one-way',
+  hourlyPackage
 }: BookingSummaryProps) => {
   const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
   const [baseFare, setBaseFare] = useState<number>(0);

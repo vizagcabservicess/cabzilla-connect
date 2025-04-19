@@ -585,15 +585,16 @@ export function Hero() {
                 <div className="lg:col-span-1">
                   <div ref={bookingSummaryRef} id="booking-summary">
                     <BookingSummary 
-                      pickupLocation={pickupLocation!} 
-                      dropLocation={dropLocation} 
-                      pickupDate={pickupDate} 
-                      returnDate={returnDate} 
-                      selectedCab={selectedCab!} 
-                      distance={distance} 
-                      tripType={tripType} 
-                      tripMode={tripMode} 
+                      pickupLocation={pickupLocation}
+                      dropLocation={dropLocation}
+                      pickupDate={pickupDate}
+                      returnDate={returnDate}
+                      selectedCab={selectedCab}
+                      distance={distance}
                       totalPrice={totalPrice}
+                      tripType={ensureCustomerTripType(tripType)}
+                      tripMode={tripMode}
+                      hourlyPackage={tripType === 'local' ? hourlyPackage : undefined}
                     />
                   </div>
                   
@@ -633,7 +634,7 @@ export function Hero() {
                 selectedCab={selectedCab!}
                 distance={distance}
                 totalPrice={totalPrice}
-                tripType={tripType}
+                tripType={ensureCustomerTripType(tripType)}
                 tripMode={tripMode}
               />
             </div>
