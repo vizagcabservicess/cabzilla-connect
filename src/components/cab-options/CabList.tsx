@@ -64,7 +64,8 @@ export function CabList({
             tripType: tripType as FareType,
             distance,
             tripMode,
-            packageId: hourlyPackage
+            packageId: hourlyPackage,
+            forceRefresh: true  // Force refresh to ensure we get the latest data
           };
           
           // Force refresh for first attempt
@@ -102,6 +103,7 @@ export function CabList({
             }
           }
           
+          // Check if the value is valid
           if (totalPrice > 0) {
             console.log(`CabList: Setting fare for ${cabId} to ${totalPrice}`);
             faresMap[cabId] = totalPrice;
@@ -115,6 +117,39 @@ export function CabList({
             
             faresMap[cabId] = fallbackPrice;
             setFares(prev => ({...prev, [cabId]: fallbackPrice}));
+            
+            // Make a second attempt with a different parameter to try to get a valid price
+            try {
+              const secondAttemptParams = {
+                ...fareParams,
+                vehicleId: cab.name.toLowerCase().replace(/ /g, '_')
+              };
+              
+              console.log(`CabList: Making second attempt for ${cabId} with params:`, secondAttemptParams);
+              const secondAttemptResult = await fetchFare(secondAttemptParams);
+              
+              // Check if second attempt returned a valid price
+              if (secondAttemptResult && 
+                  (secondAttemptResult.totalPrice > 0 || 
+                   secondAttemptResult.price > 0 || 
+                   secondAttemptResult.basePrice > 0)) {
+                const secondPrice = secondAttemptResult.totalPrice || 
+                                   secondAttemptResult.price || 
+                                   secondAttemptResult.basePrice;
+                
+                console.log(`CabList: Second attempt successful, setting fare for ${cabId} to ${secondPrice}`);
+                faresMap[cabId] = secondPrice;
+                setFares(prev => ({...prev, [cabId]: secondPrice}));
+              }
+            } catch (secondError) {
+              console.error(`Error in second attempt for ${cabId}:`, secondError);
+            }
+          }
+          
+          // Store calculated price in localStorage for fallback
+          if (faresMap[cabId] > 0) {
+            const storageKey = `fare_${tripType}_${cabId}_${hourlyPackage || 'default'}`;
+            localStorage.setItem(storageKey, faresMap[cabId].toString());
           }
           
           // Update loading state
@@ -128,20 +163,30 @@ export function CabList({
           loadingMap[cab.id] = false;
           setLoadingFares({...loadingMap});
           
-          // Use fallback price on error
-          const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
-          console.log(`CabList: Error occurred, using fallback price for ${cab.id}: ${fallbackPrice}`);
+          // Try to get previously cached price from localStorage
+          const storageKey = `fare_${tripType}_${cab.id}_${hourlyPackage || 'default'}`;
+          const cachedPrice = localStorage.getItem(storageKey);
           
-          faresMap[cab.id] = fallbackPrice;
-          setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
+          if (cachedPrice && Number(cachedPrice) > 0) {
+            console.log(`CabList: Using cached price for ${cab.id}: ${cachedPrice}`);
+            faresMap[cab.id] = Number(cachedPrice);
+            setFares(prev => ({...prev, [cab.id]: Number(cachedPrice)}));
+          } else {
+            // Use fallback price on error
+            const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
+            console.log(`CabList: Error occurred, using fallback price for ${cab.id}: ${fallbackPrice}`);
+            
+            faresMap[cab.id] = fallbackPrice;
+            setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
+          }
         }
       }
     };
     
-    if (cabTypes && cabTypes.length > 0 && distance > 0) {
+    if (cabTypes && cabTypes.length > 0) {
       loadFares();
     } else {
-      console.log('CabList: Not loading fares - cabTypes empty or distance is 0');
+      console.log('CabList: Not loading fares - cabTypes empty');
       
       // Reset loading states if we're not loading fares
       const loadingMap: Record<string, boolean> = {};
@@ -168,6 +213,7 @@ export function CabList({
       'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'ertiga': { '4hrs-40km': 1500, '8hrs-80km': 3000, '10hrs-100km': 3500 },
       'innova_crysta': { '4hrs-40km': 1800, '8hrs-80km': 3500, '10hrs-100km': 4000 },
+      'innova_hycross': { '4hrs-40km': 2000, '8hrs-80km': 4000, '10hrs-100km': 4500 },
       'tempo': { '4hrs-40km': 3000, '8hrs-80km': 4500, '10hrs-100km': 5500 },
       'luxury': { '4hrs-40km': 3500, '8hrs-80km': 5500, '10hrs-100km': 6500 },
       'mpv': { '4hrs-40km': 2000, '8hrs-80km': 4000, '10hrs-100km': 4500 },
@@ -180,12 +226,12 @@ export function CabList({
     
     // Additional mappings for special cases
     const vehicleMappings: Record<string, string> = {
-      'mpv': 'MPV',
-      'toyota': 'Toyota',
-      'dzire_cng': 'Dzire CNG',
-      'innova_hycross': 'MPV',
+      'mpv': 'mpv',
+      'toyota': 'toyota',
+      'dzire_cng': 'dzire_cng',
+      'innova_hycross': 'innova_hycross',
       'innova_crysta': 'innova_crysta',
-      'etios': 'Toyota'
+      'etios': 'toyota'
     };
     
     // For local trip type, use the database values
@@ -213,6 +259,11 @@ export function CabList({
         if (cab.id.toLowerCase().includes(key) || key.includes(cab.id.toLowerCase())) {
           return databaseLocalFares[key][package_id];
         }
+      }
+      
+      // Special case for Innova variants (Hycross, Crysta, etc.)
+      if (cab.id.toLowerCase().includes('innova')) {
+        return databaseLocalFares['innova_crysta'][package_id];
       }
       
       // Default to sedan if no match found
@@ -252,6 +303,7 @@ export function CabList({
         'sedan': 14,
         'ertiga': 18,
         'innova_crysta': 20,
+        'innova_hycross': 20,
         'MPV': 20,
         'Toyota': 14,
         'Dzire CNG': 14,
@@ -280,12 +332,18 @@ export function CabList({
         }
       }
       
+      // Special case for Innova variants
+      if (cab.id.toLowerCase().includes('innova')) {
+        rate = rates['innova_crysta'];
+      }
+      
       return calculateOutstationFare(rate);
     } else if (tripType === 'airport') {
       const basePrices: Record<string, [number, number]> = {
         'sedan': [800, 200],
         'ertiga': [1000, 300],
         'innova_crysta': [1200, 400],
+        'innova_hycross': [1200, 400],
         'MPV': [1200, 400],
         'Toyota': [800, 200],
         'Dzire CNG': [800, 200],
@@ -312,6 +370,11 @@ export function CabList({
             break;
           }
         }
+      }
+      
+      // Special case for Innova variants
+      if (cab.id.toLowerCase().includes('innova')) {
+        basePriceInfo = basePrices['innova_crysta'];
       }
       
       return calculateAirportFare(basePriceInfo[0], basePriceInfo[1]);
