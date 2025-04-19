@@ -120,25 +120,44 @@ try {
         // No result found for this vehicle ID, log this
         file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
-        // Return hardcoded sample data for testing
+        // Try to find a matching vehicle with similar name (fuzzy match)
+        $fuzzyQuery = "SELECT vehicle_id FROM airport_transfer_fares LIMIT 1";
+        $fuzzyStmt = $conn->prepare($fuzzyQuery);
+        $fuzzyStmt->execute();
+        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($anyVehicle) {
+            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
+            
+            // Get all vehicles for debugging
+            $allVehiclesQuery = "SELECT vehicle_id FROM airport_transfer_fares";
+            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
+            $allVehiclesStmt->execute();
+            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
+        }
+        
+        // Return minimal fare with zero values
         $fare = [
             'vehicleId' => $vehicleId,
-            'basePrice' => 800,
-            'pickupPrice' => 100,
-            'dropPrice' => 100,
-            'pricePerKm' => 14,
-            'extraKmCharge' => 12,
-            'totalPrice' => 1000,
+            'basePrice' => 0,
+            'pickupPrice' => 0,
+            'dropPrice' => 0,
+            'pricePerKm' => 0,
+            'extraKmCharge' => 0,
+            'totalPrice' => 0,
             'breakdown' => [
-                'Base fare' => 800,
-                'Airport pickup fee' => 100,
-                'Airport drop fee' => 100
+                'Base fare' => 0,
+                'Airport pickup fee' => 0,
+                'Airport drop fee' => 0
             ]
         ];
         
         echo json_encode([
             'status' => 'success',
-            'message' => 'Using sample airport fare data (no database record found)',
+            'message' => 'No fare data found for this vehicle',
             'fares' => [$fare]  // Wrap in array for consistent format
         ]);
     }

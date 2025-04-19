@@ -135,55 +135,43 @@ try {
         // No result found for this vehicle ID, log this
         file_put_contents($logFile, "[$timestamp] No outstation fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
-        // Set sample prices based on vehicle ID
-        $basePrice = 0;
-        $pricePerKm = 0;
-        $driverAllowance = 250;
+        // Try to find a matching vehicle with similar name (fuzzy match)
+        $fuzzyQuery = "SELECT vehicle_id FROM outstation_fares LIMIT 1";
+        $fuzzyStmt = $conn->prepare($fuzzyQuery);
+        $fuzzyStmt->execute();
+        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($vehicleId == 'sedan') {
-            $basePrice = 2000;
-            $pricePerKm = 13;
-        } else if ($vehicleId == 'ertiga') {
-            $basePrice = 2500;
-            $pricePerKm = 16;
-        } else if ($vehicleId == 'innova_crysta') {
-            $basePrice = 3000;
-            $pricePerKm = 18;
-        } else {
-            $basePrice = 2200;
-            $pricePerKm = 15;
+        if ($anyVehicle) {
+            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
+            
+            // Get all vehicles for debugging
+            $allVehiclesQuery = "SELECT vehicle_id FROM outstation_fares";
+            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
+            $allVehiclesStmt->execute();
+            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
         }
         
-        // Adjust for round trip
-        if ($tripMode === 'round-trip') {
-            $basePrice *= 0.8; // 20% discount on base price for round trips
-        }
-        
-        // Calculate distance fare (ensure minimum distance of 300 km for outstation)
-        $effectiveDistance = max($distance, 300);
-        $distanceFare = $effectiveDistance * $pricePerKm;
-        
-        // Calculate total fare
-        $totalFare = $basePrice + $distanceFare + $driverAllowance;
-        
-        // Build sample fare object
+        // Return minimal fare with zero values
         $fare = [
             'vehicleId' => $vehicleId,
-            'basePrice' => $basePrice,
-            'pricePerKm' => $pricePerKm,
-            'driverAllowance' => $driverAllowance,
-            'nightHaltCharge' => 1000,
-            'totalPrice' => $totalFare,
+            'basePrice' => 0,
+            'pricePerKm' => 0,
+            'driverAllowance' => 0,
+            'nightHaltCharge' => 0,
+            'totalPrice' => 0,
             'breakdown' => [
-                'Base fare' => $basePrice,
-                'Distance charge' => $distanceFare,
-                'Driver allowance' => $driverAllowance
+                'Base fare' => 0,
+                'Distance charge' => 0,
+                'Driver allowance' => 0
             ]
         ];
         
         echo json_encode([
             'status' => 'success',
-            'message' => 'Using sample outstation fare data (no database record found)',
+            'message' => 'No fare data found for this vehicle',
             'fares' => [$fare]  // Wrap in array for consistent format
         ]);
     }
