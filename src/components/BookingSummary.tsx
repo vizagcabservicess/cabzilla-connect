@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -78,42 +77,25 @@ export function BookingSummary({
         
         console.log(`BookingSummary: Received fare details for ${selectedCab.id}:`, result);
         
+        // Use API-provided breakdown if available
         if (result.breakdown && Object.keys(result.breakdown).length > 0) {
           setFareDetails(result.breakdown);
-          // Calculate total from breakdown
-          const total = Object.values(result.breakdown).reduce((sum, value) => sum + value, 0);
-          setTotalCalculatedPrice(total);
-        } else {
-          // Use totalPrice if breakdown isn't available
-          setTotalCalculatedPrice(result.totalPrice);
           
-          // Construct a basic breakdown if one wasn't provided
-          const breakdown: Record<string, number> = {};
-          
-          if (tripType === 'local') {
-            breakdown[getLocalPackageDetails(hourlyPackage)] = result.basePrice;
-          } else if (tripType === 'outstation') {
-            breakdown['Base fare'] = result.basePrice;
-            if (distance > 0) {
-              const distanceCharge = result.totalPrice - result.basePrice - (result.driverAllowance || 0);
-              breakdown['Distance charge'] = distanceCharge;
-            }
-            if (result.driverAllowance) {
-              breakdown['Driver allowance'] = result.driverAllowance;
-            }
-          } else if (tripType === 'airport') {
-            breakdown['Base fare'] = result.basePrice || 0;
-            breakdown['Airport pickup fee'] = result.pickupPrice || 0;
-            breakdown['Airport drop fee'] = result.dropPrice || 0;
-          } else if (tripType === 'tour') {
-            breakdown['Tour package'] = result.totalPrice;
+          // Use provided totalPrice or calculate from breakdown
+          if (result.totalPrice > 0) {
+            setTotalCalculatedPrice(result.totalPrice);
+          } else {
+            const total = Object.values(result.breakdown).reduce((sum, value) => sum + value, 0);
+            setTotalCalculatedPrice(total);
           }
-          
-          setFareDetails(breakdown);
+        } else {
+          // If no breakdown, create a simple one based on totalPrice
+          setTotalCalculatedPrice(result.totalPrice);
+          setFareDetails({ 'Total fare': result.totalPrice });
         }
       } catch (error) {
         console.error('Error fetching fare details:', error);
-        setFareDetails({ 'Error': 0 });
+        setFareDetails({});
         setTotalCalculatedPrice(0);
       }
     };

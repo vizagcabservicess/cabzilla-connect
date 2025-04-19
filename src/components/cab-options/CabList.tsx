@@ -46,9 +46,10 @@ export function CabList({
             packageId: hourlyPackage
           });
           
+          // Store the totalPrice from the API directly
           if (fareDetails && fareDetails.totalPrice !== undefined) {
             faresMap[cab.id] = fareDetails.totalPrice;
-            console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice}`);
+            console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice} (from API)`);
           } else {
             console.warn(`CabList: Received invalid fare details for ${cab.id}`, fareDetails);
             faresMap[cab.id] = 0;
@@ -65,6 +66,12 @@ export function CabList({
     if (cabTypes && cabTypes.length > 0) {
       loadFares();
     }
+    
+    // Clear all fare state when trip parameters change
+    return () => {
+      console.log('CabList: Clearing fare state due to parameter change');
+      setFares({});
+    };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
   
   if (!cabTypes || cabTypes.length === 0) {
