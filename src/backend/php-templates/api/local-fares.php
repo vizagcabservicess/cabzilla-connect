@@ -5,7 +5,7 @@ require_once '../config.php';
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: local-fares.php');
-header('X-API-Version: 1.0.3');
+header('X-API-Version: 1.0.4');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -35,7 +35,8 @@ try {
     
     // Log the request parameters
     error_log("Local fares request: " . json_encode([
-        'vehicle_id' => $vehicleId
+        'vehicle_id' => $vehicleId,
+        'request_uri' => $_SERVER['REQUEST_URI']
     ]));
     
     // First check if local_package_fares table exists
@@ -91,29 +92,80 @@ try {
     
     // Try to fetch from local_package_fares first (preferred source)
     if ($localFaresTableExists) {
-        $query = "
-            SELECT 
-                vehicle_id,
-                price_4hrs_40km,
-                price_8hrs_80km,
-                price_10hrs_100km,
-                price_extra_km,
-                price_extra_hour
-            FROM 
-                local_package_fares
-        ";
-        
-        // If vehicle_id parameter is provided, filter by it
+        // If vehicle ID is provided, build a query that tries multiple match strategies
         if ($vehicleId) {
-            $query .= " WHERE vehicle_id = '$vehicleId'";
+            $query = "
+                SELECT 
+                    vehicle_id,
+                    price_4hrs_40km,
+                    price_8hrs_80km,
+                    price_10hrs_100km,
+                    price_extra_km,
+                    price_extra_hour
+                FROM 
+                    local_package_fares
+                WHERE 
+                    vehicle_id = ?
+            ";
+            
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("s", $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            // If exact match fails, try a normalized match
+            if ($result->num_rows === 0) {
+                $normalizedVehicleId = strtolower(str_replace(' ', '_', $vehicleId));
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("s", $normalizedVehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                // If normalized match fails, try a LIKE match
+                if ($result->num_rows === 0) {
+                    $query = "
+                        SELECT 
+                            vehicle_id,
+                            price_4hrs_40km,
+                            price_8hrs_80km,
+                            price_10hrs_100km,
+                            price_extra_km,
+                            price_extra_hour
+                        FROM 
+                            local_package_fares
+                        WHERE 
+                            vehicle_id LIKE ? OR ? LIKE CONCAT('%', vehicle_id, '%')
+                    ";
+                    
+                    $likePattern = '%' . $vehicleId . '%';
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("ss", $likePattern, $vehicleId);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                }
+            }
+        } else {
+            // If no vehicle ID is provided, get all fares
+            $query = "
+                SELECT 
+                    vehicle_id,
+                    price_4hrs_40km,
+                    price_8hrs_80km,
+                    price_10hrs_100km,
+                    price_extra_km,
+                    price_extra_hour
+                FROM 
+                    local_package_fares
+            ";
+            
+            $result = $conn->query($query);
         }
         
-        error_log("Using local_package_fares table with query: $query");
-        
-        $result = $conn->query($query);
+        error_log("Executing query for local_package_fares table: " . ($vehicleId ? "For $vehicleId" : "All vehicles"));
         
         if ($result && $result->num_rows > 0) {
             $sourceTable = 'local_package_fares';
+            error_log("Found " . $result->num_rows . " records in $sourceTable");
             
             while ($row = $result->fetch_assoc()) {
                 $id = $row['vehicle_id'] ?? null;
@@ -123,37 +175,18 @@ try {
                 
                 error_log("Processing local_package_fares row for vehicle: $id");
                 
-                // Map to standardized properties with all naming variants
-                $fares[$id] = [
-                    // Standard API property names
+                // Create standardized objects in the format expected by the frontend
+                $fares[] = [
+                    'vehicleId' => $id,
                     'price4hrs40km' => floatval($row['price_4hrs_40km'] ?? 0),
                     'price8hrs80km' => floatval($row['price_8hrs_80km'] ?? 0),
                     'price10hrs100km' => floatval($row['price_10hrs_100km'] ?? 0),
                     'priceExtraKm' => floatval($row['price_extra_km'] ?? 0),
-                    'priceExtraHour' => floatval($row['price_extra_hour'] ?? 0),
-                    
-                    // Include original column names for direct mapping
-                    'price_4hrs_40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'price_8hrs_80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'price_10hrs_100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'price_extra_km' => floatval($row['price_extra_km'] ?? 0),
-                    'price_extra_hour' => floatval($row['price_extra_hour'] ?? 0),
-                    
-                    // Include alias properties for compatibility
-                    'package4hr40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'package8hr80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'package10hr100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'extraKmRate' => floatval($row['price_extra_km'] ?? 0),
-                    'extraHourRate' => floatval($row['price_extra_hour'] ?? 0),
-                    
-                    // Vehicle pricing table names for compatibility
-                    'local_package_4hr' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'local_package_8hr' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'local_package_10hr' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'extra_km_charge' => floatval($row['price_extra_km'] ?? 0),
-                    'extra_hour_charge' => floatval($row['price_extra_hour'] ?? 0)
+                    'priceExtraHour' => floatval($row['price_extra_hour'] ?? 0)
                 ];
             }
+        } else {
+            error_log("No records found in local_package_fares table" . ($vehicleId ? " for $vehicleId" : ""));
         }
     }
     
@@ -173,17 +206,24 @@ try {
                 trip_type = 'local'
         ";
         
-        // If vehicle_id parameter is provided, filter by it
+        // If vehicle_id parameter is provided, add filtering
         if ($vehicleId) {
-            $query .= " AND vehicle_type = '$vehicleId'";
+            $query .= " AND (vehicle_type = ? OR vehicle_type LIKE ? OR ? LIKE CONCAT('%', vehicle_type, '%'))";
+            
+            $stmt = $conn->prepare($query);
+            $likePattern = '%' . $vehicleId . '%';
+            $stmt->bind_param("sss", $vehicleId, $likePattern, $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+        } else {
+            $result = $conn->query($query);
         }
         
-        error_log("Using vehicle_pricing table with query: $query");
-        
-        $result = $conn->query($query);
+        error_log("Executing query for vehicle_pricing table: " . ($vehicleId ? "For $vehicleId" : "All vehicles"));
         
         if ($result && $result->num_rows > 0) {
             $sourceTable = 'vehicle_pricing';
+            error_log("Found " . $result->num_rows . " records in $sourceTable");
             
             while ($row = $result->fetch_assoc()) {
                 $id = $row['vehicle_id'] ?? null;
@@ -193,49 +233,40 @@ try {
                 
                 error_log("Processing vehicle_pricing row for vehicle: $id");
                 
-                // Map to standardized properties with all naming variants
-                $fares[$id] = [
-                    // Standard API property names
+                // Create standardized objects in the format expected by the frontend
+                $fares[] = [
+                    'vehicleId' => $id,
                     'price4hrs40km' => floatval($row['local_package_4hr'] ?? 0),
                     'price8hrs80km' => floatval($row['local_package_8hr'] ?? 0),
                     'price10hrs100km' => floatval($row['local_package_10hr'] ?? 0),
                     'priceExtraKm' => floatval($row['extra_km_charge'] ?? 0),
-                    'priceExtraHour' => floatval($row['extra_hour_charge'] ?? 0),
-                    
-                    // Include original column names for direct mapping
-                    'local_package_4hr' => floatval($row['local_package_4hr'] ?? 0),
-                    'local_package_8hr' => floatval($row['local_package_8hr'] ?? 0),
-                    'local_package_10hr' => floatval($row['local_package_10hr'] ?? 0),
-                    'extra_km_charge' => floatval($row['extra_km_charge'] ?? 0),
-                    'extra_hour_charge' => floatval($row['extra_hour_charge'] ?? 0),
-                    
-                    // Include alias properties for compatibility
-                    'package4hr40km' => floatval($row['local_package_4hr'] ?? 0),
-                    'package8hr80km' => floatval($row['local_package_8hr'] ?? 0),
-                    'package10hr100km' => floatval($row['local_package_10hr'] ?? 0),
-                    'extraKmRate' => floatval($row['extra_km_charge'] ?? 0),
-                    'extraHourRate' => floatval($row['extra_hour_charge'] ?? 0),
-                    
-                    // Local package fares column names for compatibility
-                    'price_4hrs_40km' => floatval($row['local_package_4hr'] ?? 0),
-                    'price_8hrs_80km' => floatval($row['local_package_8hr'] ?? 0),
-                    'price_10hrs_100km' => floatval($row['local_package_10hr'] ?? 0),
-                    'price_extra_km' => floatval($row['extra_km_charge'] ?? 0),
-                    'price_extra_hour' => floatval($row['extra_hour_charge'] ?? 0)
+                    'priceExtraHour' => floatval($row['extra_hour_charge'] ?? 0)
                 ];
             }
+        } else {
+            error_log("No records found in vehicle_pricing table" . ($vehicleId ? " for $vehicleId" : ""));
         }
     }
     
     error_log("Total fares found: " . count($fares));
     
-    // Return response
+    // If vehicle_id was specified but no fares found, add a diagnostic message
+    $diagnosticMessage = "";
+    if ($vehicleId && empty($fares)) {
+        error_log("No fares found for vehicle_id: $vehicleId");
+        $diagnosticMessage = "No fares found for vehicle_id: $vehicleId. Check database or vehicle ID spelling.";
+    }
+    
+    // Return response in the format expected by the frontend
     echo json_encode([
+        'status' => 'success',
+        'message' => empty($fares) ? "No fares found" : "Local fares retrieved successfully",
         'fares' => $fares,
         'timestamp' => time(),
         'sourceTable' => $sourceTable,
         'fareCount' => count($fares),
         'vehicleId' => $vehicleId,
+        'diagnosticMessage' => $diagnosticMessage,
         'tablesChecked' => [
             'local_package_fares' => $localFaresTableExists,
             'vehicle_pricing' => $vehiclePricingTableExists
@@ -246,7 +277,8 @@ try {
     error_log("Error in local-fares.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
-        'error' => $e->getMessage(),
+        'status' => 'error',
+        'message' => $e->getMessage(),
         'timestamp' => time()
     ]);
 }
