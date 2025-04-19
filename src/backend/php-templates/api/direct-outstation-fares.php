@@ -170,6 +170,27 @@ try {
             $driverAllowance = (float)$result['driver_allowance'] ?? 250;
             
             file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, driverAllowance=$driverAllowance\n", FILE_APPEND);
+        } else {
+            // Try with partial match
+            $query = "SELECT * FROM outstation_fares WHERE LOWER(vehicle_id) LIKE :vehicle_id_like LIMIT 1";
+            $likeParam = "%" . str_replace('_', '%', $vehicleId) . "%";
+            
+            $stmt = $conn->prepare($query);
+            $stmt->bindParam(':vehicle_id_like', $likeParam);
+            
+            file_put_contents($logFile, "[$timestamp] Trying partial match SQL Query: $query with $likeParam\n", FILE_APPEND);
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result) {
+                // Use partial match values
+                $basePrice = (float)$result['base_price'] ?? 0;
+                $pricePerKm = (float)$result['price_per_km'] ?? 0;
+                $driverAllowance = (float)$result['driver_allowance'] ?? 250;
+                
+                file_put_contents($logFile, "[$timestamp] Using partial match database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm\n", FILE_APPEND);
+            }
         }
     } catch (Exception $e) {
         // Log database error but continue with default pricing

@@ -59,39 +59,74 @@ function getDefaultPackagePricing($vehicleId) {
             'price_extra_hour' => 250
         ],
         'ertiga' => [
-            'price_4hrs_40km' => 1800,
+            'price_4hrs_40km' => 1500,
             'price_8hrs_80km' => 3000,
-            'price_10hrs_100km' => 3800,
+            'price_10hrs_100km' => 3500,
             'price_extra_km' => 18,
             'price_extra_hour' => 300
         ],
         'innova_crysta' => [
-            'price_4hrs_40km' => 2200,
+            'price_4hrs_40km' => 1800,
             'price_8hrs_80km' => 3500,
-            'price_10hrs_100km' => 4200,
+            'price_10hrs_100km' => 4000,
             'price_extra_km' => 20,
             'price_extra_hour' => 350
         ],
         'luxury' => [
-            'price_4hrs_40km' => 3000,
-            'price_8hrs_80km' => 4500,
-            'price_10hrs_100km' => 5500,
+            'price_4hrs_40km' => 3500,
+            'price_8hrs_80km' => 5500,
+            'price_10hrs_100km' => 6500,
             'price_extra_km' => 25,
             'price_extra_hour' => 400
         ],
         'tempo' => [
-            'price_4hrs_40km' => 3500,
-            'price_8hrs_80km' => 5500,
-            'price_10hrs_100km' => 6500,
+            'price_4hrs_40km' => 3000,
+            'price_8hrs_80km' => 4500,
+            'price_10hrs_100km' => 5500,
             'price_extra_km' => 22,
             'price_extra_hour' => 350
         ],
         'bus' => [
-            'price_4hrs_40km' => 4000,
-            'price_8hrs_80km' => 6000,
-            'price_10hrs_100km' => 7500,
+            'price_4hrs_40km' => 3000,
+            'price_8hrs_80km' => 7000,
+            'price_10hrs_100km' => 9000,
             'price_extra_km' => 28,
             'price_extra_hour' => 400
+        ],
+        'mpv' => [
+            'price_4hrs_40km' => 2000,
+            'price_8hrs_80km' => 4000,
+            'price_10hrs_100km' => 4500,
+            'price_extra_km' => 22,
+            'price_extra_hour' => 450
+        ],
+        'toyota' => [
+            'price_4hrs_40km' => 1400,
+            'price_8hrs_80km' => 2400,
+            'price_10hrs_100km' => 3000,
+            'price_extra_km' => 14,
+            'price_extra_hour' => 300
+        ],
+        'dzire_cng' => [
+            'price_4hrs_40km' => 1400,
+            'price_8hrs_80km' => 2400,
+            'price_10hrs_100km' => 3000,
+            'price_extra_km' => 14,
+            'price_extra_hour' => 300
+        ],
+        'tempo_traveller' => [
+            'price_4hrs_40km' => 6500,
+            'price_8hrs_80km' => 6500,
+            'price_10hrs_100km' => 7500,
+            'price_extra_km' => 35,
+            'price_extra_hour' => 750
+        ],
+        'amaze' => [
+            'price_4hrs_40km' => 1400,
+            'price_8hrs_80km' => 2400,
+            'price_10hrs_100km' => 3000,
+            'price_extra_km' => 14,
+            'price_extra_hour' => 300
         ]
     ];
     
@@ -139,9 +174,7 @@ try {
         $conn = getDbConnection();
         
         // Query local_package_fares by normalized vehicle_id
-        $query = "SELECT vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour 
-                  FROM local_package_fares 
-                  WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
+        $query = "SELECT * FROM local_package_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
         
         $stmt = $conn->prepare($query);
         $stmt->bindParam(':vehicle_id', $vehicleId);
@@ -167,6 +200,29 @@ try {
             $priceExtraHour = (float)$result['price_extra_hour'] ?? 0;
             
             file_put_contents($logFile, "[$timestamp] Using database pricing: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+        } else {
+            // If no direct match, try partial match in database
+            $query = "SELECT * FROM local_package_fares WHERE LOWER(vehicle_id) LIKE :vehicle_id_like LIMIT 1";
+            $likeParam = "%" . str_replace('_', '%', $vehicleId) . "%";
+            
+            $stmt = $conn->prepare($query);
+            $stmt->bindParam(':vehicle_id_like', $likeParam);
+            
+            file_put_contents($logFile, "[$timestamp] Trying partial match SQL Query: $query with parameter $likeParam\n", FILE_APPEND);
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result) {
+                // Use partial match values
+                $price4hrs40km = (float)$result['price_4hrs_40km'] ?? 0;
+                $price8hrs80km = (float)$result['price_8hrs_80km'] ?? 0;
+                $price10hrs100km = (float)$result['price_10hrs_100km'] ?? 0;
+                $priceExtraKm = (float)$result['price_extra_km'] ?? 0;
+                $priceExtraHour = (float)$result['price_extra_hour'] ?? 0;
+                
+                file_put_contents($logFile, "[$timestamp] Using partial match database pricing: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+            }
         }
     } catch (Exception $e) {
         // Log database error but continue with default pricing
@@ -215,6 +271,7 @@ try {
         'priceExtraHour' => (float)$priceExtraHour,
         'basePrice' => $basePrice,
         'totalPrice' => $basePrice,
+        'price' => $basePrice, // Add price field for consistency
         'breakdown' => [
             $packageId => $basePrice
         ],
@@ -225,7 +282,8 @@ try {
     echo json_encode([
         'status' => 'success',
         'message' => 'Local fares retrieved successfully',
-        'fares' => [$fare]
+        'fare' => $fare, // Include single fare object for consistency
+        'fares' => [$fare] // Include fares array for backward compatibility
     ]);
     
 } catch (Exception $e) {

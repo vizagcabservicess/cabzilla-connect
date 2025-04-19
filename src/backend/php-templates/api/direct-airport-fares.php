@@ -230,6 +230,32 @@ try {
             $extraKmCharge = (float)$result['extra_km_charge'] ?? $pricePerKm;
             
             file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, airportFee=$airportFee\n", FILE_APPEND);
+        } else {
+            // Try with partial match
+            $query = "SELECT * FROM airport_transfer_fares WHERE LOWER(vehicle_id) LIKE :vehicle_id_like LIMIT 1";
+            $likeParam = "%" . str_replace('_', '%', $vehicleId) . "%";
+            
+            $stmt = $conn->prepare($query);
+            $stmt->bindParam(':vehicle_id_like', $likeParam);
+            
+            file_put_contents($logFile, "[$timestamp] Trying partial match SQL Query: $query with $likeParam\n", FILE_APPEND);
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result) {
+                // Use partial match values
+                $basePrice = (float)$result['base_price'] ?? 0;
+                $pricePerKm = (float)$result['price_per_km'] ?? 0;
+                $airportFee = (float)$result['pickup_price'] ?? 0;
+                $tier1Price = (float)$result['tier1_price'] ?? 800;
+                $tier2Price = (float)$result['tier2_price'] ?? 1200;
+                $tier3Price = (float)$result['tier3_price'] ?? 1800;
+                $tier4Price = (float)$result['tier4_price'] ?? 2500;
+                $extraKmCharge = (float)$result['extra_km_charge'] ?? $pricePerKm;
+                
+                file_put_contents($logFile, "[$timestamp] Using partial match database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm\n", FILE_APPEND);
+            }
         }
     } catch (Exception $e) {
         // Log database error but continue with default pricing
@@ -317,7 +343,7 @@ try {
         'isDefaultPricing' => $useDefaultPricing
     ];
     
-    // Format response to match expected response format in CabList.tsx
+    // Format response to match expected format
     $response = [
         'status' => 'success',
         'message' => 'Airport fares retrieved successfully',

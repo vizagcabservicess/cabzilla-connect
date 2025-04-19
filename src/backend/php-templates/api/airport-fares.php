@@ -45,12 +45,14 @@ foreach ($possibleKeys as $key) {
 // If no vehicle ID found, use a default
 if (!$vehicleId) {
     $vehicleId = 'sedan';  // Default to sedan if no vehicle ID provided
+    $_GET['vehicle_id'] = $vehicleId;
     file_put_contents($logFile, "[$timestamp] No vehicle ID found, using default: sedan\n", FILE_APPEND);
 }
 
 // Clean up vehicle ID if it has a prefix like 'item-'
 if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
+    $_GET['vehicle_id'] = $vehicleId;
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
@@ -121,5 +123,29 @@ if (isset($_GET['distance']) && !empty($_GET['distance'])) {
     file_put_contents($logFile, "[$timestamp] No distance parameter, setting default: 15\n", FILE_APPEND);
 }
 
+// Buffer the output so we can modify it before sending to client
+ob_start();
+
 // Forward this request to the direct endpoint
 require_once __DIR__ . '/direct-airport-fares.php';
+
+// Get the output and decode it
+$output = ob_get_clean();
+$response = json_decode($output, true);
+
+// Log the response
+file_put_contents($logFile, "[$timestamp] Raw response from direct-airport-fares.php: " . $output . "\n", FILE_APPEND);
+
+// Ensure the response format is consistent
+if ($response && isset($response['fare']) && !isset($response['fares'])) {
+    $response['fares'] = [$response['fare']];
+    $output = json_encode($response);
+    file_put_contents($logFile, "[$timestamp] Added 'fares' array to response for consistency\n", FILE_APPEND);
+} else if ($response && isset($response['fares']) && !isset($response['fare']) && !empty($response['fares'])) {
+    $response['fare'] = $response['fares'][0];
+    $output = json_encode($response);
+    file_put_contents($logFile, "[$timestamp] Added 'fare' object to response for consistency\n", FILE_APPEND);
+}
+
+// Output the modified response
+echo $output;
