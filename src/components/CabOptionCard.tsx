@@ -30,32 +30,8 @@ export function CabOptionCard({
   };
 
   const handleCardClick = () => {
-    console.log('Card clicked, selecting cab:', cab.name, 'with fare:', fare);
+    console.log('Card clicked, selecting cab:', cab.name);
     onSelect(cab);
-  };
-
-  // Determine what to display for the price
-  const renderPriceDisplay = () => {
-    if (isCalculating) {
-      return (
-        <div className="flex items-center">
-          <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-500 animate-spin mr-2"></div>
-          <span className="text-gray-500">Calculating...</span>
-        </div>
-      );
-    } else if (fare > 0) {
-      return (
-        <div className="text-lg font-bold">
-          {formatPrice(fare)}
-          <span className="block text-xs text-gray-500 font-normal">{fareDetails}</span>
-        </div>
-      );
-    } else {
-      // If fare is still 0 after calculation, show contact for price
-      return (
-        <span className="text-orange-500 text-sm font-medium">Contact for price</span>
-      );
-    }
   };
 
   return (
@@ -92,12 +68,26 @@ export function CabOptionCard({
             </div>
             <div>
               <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
-              <p className="text-xs text-gray-500">{cab.description || ''}</p>
+              <p className="text-xs text-gray-500">{cab.description}</p>
             </div>
           </div>
           <div className="flex flex-col items-end">
-            {renderPriceDisplay()}
-            <div className="flex items-center text-xs text-gray-400 mt-1">
+            <div className={cn(
+              "text-lg font-bold",
+              isSelected ? "text-blue-600" : "text-gray-800"
+            )}>
+              {isCalculating ? (
+                <span className="text-sm text-gray-400">Calculating...</span>
+              ) : fare > 0 ? (
+                formatPrice(fare)
+              ) : (
+                <span className="text-sm text-gray-400">Price unavailable</span>
+              )}
+            </div>
+            <div className="text-xs text-blue-600">
+              {fareDetails}
+            </div>
+            <div className="flex items-center text-xs text-gray-400">
               <span className="text-green-600 mr-1 text-[10px]">✓</span>
               Includes taxes & fees (Tolls & Permits Extra)
             </div>
@@ -121,7 +111,7 @@ export function CabOptionCard({
           )}
           {cab.amenities && cab.amenities.length > 0 && (
             <div 
-              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded cursor-pointer" 
+              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
               onClick={(e) => {
                 e.stopPropagation();  // Prevent card selection when clicking this button
                 toggleExpand(e);

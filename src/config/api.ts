@@ -4,7 +4,7 @@
 // Base API URL - auto-detect between development and production
 export const apiBaseUrl = process.env.NODE_ENV === 'production' 
   ? 'https://vizagup.com' 
-  : window.location.origin; // Use current origin for development
+  : 'https://43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com';
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {

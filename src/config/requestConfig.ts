@@ -1,168 +1,148 @@
 
-/**
- * Configuration for API requests with fallback mechanisms
- */
-
-import { forceRefreshHeaders } from './api';
-import axios, { AxiosRequestConfig, RawAxiosRequestHeaders } from 'axios';
+// Helper functions for making API requests
+import { apiBaseUrl, defaultHeaders } from './api';
 
 /**
- * Safe fetch implementation with timeout and error handling
- * @param url The URL to fetch
- * @param options Fetch options
- * @param timeout Timeout in milliseconds (default: 10000)
- * @returns Promise with the fetch response
+ * Get headers that bypass common API restrictions
  */
-export const safeFetch = async (
-  url: string, 
-  options: RequestInit = {}, 
-  timeout: number = 10000
-): Promise<Response> => {
-  // Add a timeout to the fetch request
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    // Ensure headers exist
-    if (!options.headers) {
-      options.headers = {};
-    }
-    
-    // Add force refresh headers if not present
-    Object.entries(forceRefreshHeaders).forEach(([key, value]) => {
-      if (!options.headers[key]) {
-        options.headers[key] = value;
-      }
-    });
-    
-    // Add signal from abort controller
-    options.signal = controller.signal;
-    
-    // Make the request
-    const response = await fetch(url, options);
-    
-    // Check if the response is ok
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+export const getBypassHeaders = (): Record<string, string> => {
+  return {
+    'X-Bypass-Cache': 'true',
+    'X-Force-Refresh': 'true',
+    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Origin': window.location.origin,
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': '*/*'
+  };
 };
 
 /**
- * Fetch with retry logic for unreliable connections
- * @param url The URL to fetch
- * @param options Fetch options
- * @param retries Number of retries (default: 3)
- * @param delayMs Delay between retries in milliseconds (default: 1000)
- * @returns Promise with the fetch response
+ * Get forced request configuration with bypass headers and cache settings
  */
-export const fetchWithRetry = async (
-  url: string,
-  options: RequestInit = {},
-  retries: number = 3,
-  delayMs: number = 1000
-): Promise<Response> => {
-  let lastError: Error;
+export const getForcedRequestConfig = () => {
+  const token = localStorage.getItem('authToken');
+  const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
   
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await safeFetch(url, options);
-    } catch (error) {
-      console.warn(`Attempt ${i + 1}/${retries} failed for ${url}:`, error);
-      lastError = error as Error;
-      
-      // If this is not the last retry, wait before trying again
-      if (i < retries - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-  }
-  
-  throw lastError;
-};
-
-/**
- * Get request configuration with force refresh headers
- * This ensures the server doesn't return cached responses
- * @returns AxiosRequestConfig object with appropriate headers
- */
-export const getForcedRequestConfig = (): AxiosRequestConfig => {
   return {
     headers: {
-      ...forceRefreshHeaders,
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest'
-    } as RawAxiosRequestHeaders
-    // Removed 'cache' property as it doesn't exist in AxiosRequestConfig
+      ...getBypassHeaders(),
+      ...authHeader
+    },
+    timeout: 60000, // Increased timeout for maximum reliability
+    cache: 'no-store' as const,
+    mode: 'cors' as const,
+    credentials: 'omit' as const, // Don't send credentials for CORS
+    keepalive: true, // Keep connection alive
+    redirect: 'follow' as const, // Follow redirects
+    referrerPolicy: 'no-referrer' as const // Don't send referrer for CORS
   };
-};
-
-/**
- * Get the fetch-compatible headers from axios config
- * @returns Record of header keys and values compatible with fetch API
- */
-export const getForcedRequestHeaders = (): Record<string, string> => {
-  const axiosHeaders = {
-    ...forceRefreshHeaders,
-    'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest'
-  };
-  // Convert to plain Record<string, string> for fetch API
-  return Object.fromEntries(
-    Object.entries(axiosHeaders).map(([key, value]) => [key, String(value)])
-  );
-};
-
-/**
- * Get bypass headers for authentication and security mechanisms
- * @param token Optional authentication token
- * @returns Record of header keys and values
- */
-export const getBypassHeaders = (token?: string): RawAxiosRequestHeaders => {
-  const headers: RawAxiosRequestHeaders = {
-    ...forceRefreshHeaders,
-    'X-Bypass-Cache': 'true',
-    'X-Direct-Access': 'true'
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
 };
 
 /**
  * Format data for multipart form submission
- * @param data Object containing form data
- * @returns FormData object ready for submission
+ * This is more reliable for PHP endpoints than JSON
  */
 export const formatDataForMultipart = (data: Record<string, any>): FormData => {
   const formData = new FormData();
   
   Object.entries(data).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      if (value instanceof File) {
-        formData.append(key, value);
-      } else if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-          if (item instanceof File) {
-            formData.append(`${key}[${index}]`, item);
-          } else {
-            formData.append(`${key}[${index}]`, String(item));
-          }
-        });
-      } else if (typeof value === 'object' && !(value instanceof File)) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, String(value));
-      }
+    // Handle arrays and objects
+    if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      // Convert other values to string
+      formData.append(key, String(value ?? ''));
     }
   });
   
   return formData;
+};
+
+/**
+ * Check if online before making API requests
+ */
+export const isOnline = (): boolean => {
+  return navigator.onLine;
+};
+
+/**
+ * Universal function to perform CORS-safe fetch with retry logic
+ * Use this for critical API calls
+ */
+export const safeFetch = async (endpoint: string, options: RequestInit = {}): Promise<Response> => {
+  // Check if online
+  if (!isOnline()) {
+    throw new Error('No internet connection');
+  }
+  
+  // Get auth token
+  const token = localStorage.getItem('authToken');
+  
+  // Prepare enhanced options with CORS headers
+  const enhancedOptions: RequestInit = {
+    ...options,
+    mode: 'cors',
+    credentials: 'omit',
+    headers: {
+      ...getBypassHeaders(),
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    }
+  };
+  
+  // Use direct URL to API without proxy
+  const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  
+  // Add timestamp to prevent caching
+  const urlWithTimestamp = url.includes('?') 
+    ? `${url}&_t=${Date.now()}` 
+    : `${url}?_t=${Date.now()}`;
+  
+  // Try up to 3 times
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const result = await fetch(urlWithTimestamp, enhancedOptions);
+      
+      if (result.status === 0) {
+        throw new Error('Network error - status 0 received');
+      }
+      
+      // If we get a 401, try once more without auth header for fallback behavior
+      if (result.status === 401 && token && attempt === 1) {
+        console.warn('Auth request failed, trying without Authorization header');
+        
+        const noAuthOptions = { ...enhancedOptions };
+        if (noAuthOptions.headers) {
+          // Remove Authorization header
+          delete (noAuthOptions.headers as any).Authorization;
+        }
+        
+        try {
+          const fallbackResult = await fetch(urlWithTimestamp, noAuthOptions);
+          if (fallbackResult.status !== 401) {
+            return fallbackResult;
+          } else {
+            console.error('Fallback request also failed:', fallbackResult.status);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback request error:', fallbackError);
+        }
+      }
+      
+      return result;
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`Fetch attempt ${attempt} failed:`, error);
+      // Wait a bit longer between retries
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+  
+  // If we got here, all attempts failed
+  throw lastError || new Error('Failed to fetch after multiple attempts');
 };

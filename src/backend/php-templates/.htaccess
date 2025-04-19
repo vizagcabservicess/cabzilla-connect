@@ -1,18 +1,9 @@
 
 # Enable URL rewriting
 RewriteEngine On
+
+# Set the base directory
 RewriteBase /
-
-# CRITICAL: Prevent duplicate /api/ prefix - enhanced rules with highest priority
-RewriteCond %{THE_REQUEST} /api/api/
-RewriteRule ^api/api/(.*)$ /api/$1 [R=301,L]
-
-# Additional rule to prevent nested api paths with global pattern matching
-RewriteCond %{REQUEST_URI} ^/api/(.*/)?api/
-RewriteRule ^(api/.*)api/(.*)$ $1$2 [R=301,L]
-
-# Final sanity check for api/api pattern anywhere in the URL
-RewriteRule (.*)api/api/(.*)$ $1api/$2 [R=301,L]
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
 RewriteCond %{REQUEST_METHOD} OPTIONS
@@ -48,11 +39,6 @@ RewriteRule ^test-booking-api$ /api/admin/test-booking-api.php [L,QSA]
 RewriteRule ^api/user/bookings$ /api/user/bookings.php [L,QSA]
 RewriteRule ^api/bookings$ /api/bookings.php [L,QSA]
 
-# CRITICAL: Add direct route to API diagnostics tool
-RewriteRule ^api/check-routing$ /api/check-api-routing.php [L,QSA]
-RewriteRule ^check-api-routing$ /api/check-api-routing.php [L,QSA]
-RewriteRule ^api/test-routing$ /api/check-api-routing.php [L,QSA]
-
 # Other admin API endpoints
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,QSA]
 RewriteRule ^api/admin/(.*)$ /api/admin/$1 [L,QSA]
@@ -84,13 +70,6 @@ RewriteCond %{REQUEST_FILENAME} !-d
 # Send all other requests to index.html for React to handle
 RewriteRule ^(.*)$ /index.html [L]
 
-# Explicitly set PHP handler
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-    # Allow all PHP files to be accessible
-    Require all granted
-</FilesMatch>
-
 # Set PHP settings for this directory
 <IfModule mod_php7.c>
     php_flag display_errors Off
@@ -115,11 +94,3 @@ AddType application/x-httpd-php .php
     # Set JSON content type for API responses
     Header always set Content-Type "application/json"
 </FilesMatch>
-
-# CRITICAL: Allow API directory access
-<Directory "/api">
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Require all granted
-</Directory>
-

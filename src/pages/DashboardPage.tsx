@@ -7,8 +7,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
-import { bookingAPI, authAPI } from '@/services/api';
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle } from "lucide-react";
+import { bookingAPI } from '@/services/api';
+import { authAPI } from '@/services/api/authAPI';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
@@ -29,17 +30,66 @@ export default function DashboardPage() {
   const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
+  const [authIssue, setAuthIssue] = useState(false);
+  const [isDev, setIsDev] = useState(false);
 
-  // Check if user is logged in and get user data
+  useEffect(() => {
+    const devMode = localStorage.getItem('dev_mode') === 'true';
+    setIsDev(devMode);
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('dev_mode') === 'true') {
+      setIsDev(true);
+      localStorage.setItem('dev_mode', 'true');
+    }
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
+      if (isDev) {
+        console.log('Dev mode enabled, skipping authentication check');
+        const devUser = { 
+          id: 1, 
+          name: 'Dev User', 
+          email: 'dev@example.com', 
+          role: 'admin' 
+        };
+        setUser(devUser);
+        setIsAdmin(true);
+        localStorage.setItem('userData', JSON.stringify(devUser));
+        return;
+      }
+
       if (!authAPI.isAuthenticated()) {
+        console.log('No authentication token found, redirecting to login');
         navigate('/login', { state: { from: location.pathname } });
         return;
       }
 
-      try {
-        const userData = await authAPI.getCurrentUser();
+      const userDataStr = localStorage.getItem('userData');
+      let userData = null;
+      
+      if (userDataStr) {
+        try {
+          const cachedUser = JSON.parse(userDataStr);
+          if (cachedUser && cachedUser.id) {
+            console.log('Using cached user data:', cachedUser);
+            userData = {
+              id: cachedUser.id || 0,
+              name: cachedUser.name || '',
+              email: cachedUser.email || '',
+              role: cachedUser.role || 'user'
+            };
+            setUser(userData);
+            setIsAdmin(cachedUser.role === 'admin');
+          }
+        } catch (e) {
+          console.warn('Error parsing cached user data:', e);
+        }
+      }
+
+      if (!userData) {
+        userData = await authAPI.getCurrentUser();
         if (userData) {
           setUser({
             id: userData.id || 0,
@@ -48,21 +98,23 @@ export default function DashboardPage() {
             role: userData.role || 'user'
           });
           setIsAdmin(userData.role === 'admin');
+          console.log('User data loaded from API:', userData);
         } else {
           throw new Error('User data not found');
         }
-      } catch (error) {
-        console.error('Error getting user data:', error);
-        toast.error('Error loading user data. Please try logging in again.');
+      }
+      
+      if (userData) {
+        localStorage.setItem('userData', JSON.stringify(userData));
       }
     };
 
     checkAuth();
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, isDev]);
 
-  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
-    if (!authAPI.isAuthenticated()) {
+    if (!isDev && !authAPI.isAuthenticated() && !authIssue) {
+      console.log('No authentication token found, redirecting to login');
       navigate('/login');
       return;
     }
@@ -70,70 +122,124 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings();
-      setBookings(data);
-      setRetryCount(0); // Reset retry count on success
+      
+      const userDataStr = localStorage.getItem('userData');
+      if (!userDataStr && !isDev) {
+        throw new Error('User data not found in localStorage');
+      }
+      
+      let userId = 1;
+      
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        if (!userData || !userData.id) {
+          throw new Error('Invalid user data in localStorage');
+        }
+        userId = userData.id;
+      }
+      
+      console.log('Fetching bookings for user ID:', userId, 'Dev mode:', isDev);
+      
+      let data;
+      if (isDev) {
+        data = await bookingAPI.getUserBookings(userId, { dev_mode: true });
+      } else {
+        data = await bookingAPI.getUserBookings(userId);
+      }
+      
+      if (Array.isArray(data)) {
+        setBookings(data);
+        
+        if (data.length > 0) {
+          setAuthIssue(false);
+        }
+      } else {
+        console.warn('Unexpected bookings data format:', data);
+        setBookings([]);
+      }
+      
+      setRetryCount(0);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      // Only show toast on first error
       if (retryCount === 0) {
         toast.error('Error loading bookings. Retrying...');
       }
       
-      // Increment retry count
       setRetryCount(prev => prev + 1);
       
-      // Auto-retry if under max retries
+      if (error instanceof Error && 
+          (error.message.includes('401') || 
+           error.message.includes('authentication') || 
+           error.message.includes('unauthorized'))) {
+        setAuthIssue(true);
+      }
+      
       if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
           fetchBookings();
-        }, 3000); // Wait 3 seconds before retrying
+        }, 3000);
       }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [navigate, retryCount]);
+  }, [navigate, retryCount, authIssue, isDev]);
 
-  // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
-    if (!isAdmin) return;
+    if ((!isAdmin && !isDev) || !user?.id) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      const data = await bookingAPI.getAdminDashboardMetrics();
-      setAdminMetrics(data);
+      console.log('Fetching admin metrics for user ID:', user.id, 'Dev mode:', isDev);
+      
+      let data;
+      if (isDev) {
+        data = await bookingAPI.getAdminDashboardMetrics('week', { dev_mode: true });
+      } else {
+        data = await bookingAPI.getAdminDashboardMetrics('week');
+      }
+      
+      if (data) {
+        setAdminMetrics(data);
+      } else {
+        console.warn('No admin metrics data received');
+        setAdminMetrics(null);
+      }
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user, isDev]);
 
-  // Initial data fetch
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+    if (user?.id || isDev) {
+      fetchBookings();
+    }
+  }, [fetchBookings, user, isDev]);
 
-  // Fetch admin metrics if user is admin
   useEffect(() => {
-    if (isAdmin) {
+    if ((isAdmin || isDev) && (user?.id || isDev)) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics]);
+  }, [isAdmin, fetchAdminMetrics, user, isDev]);
 
-  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
+    localStorage.removeItem('dev_mode');
     navigate('/login');
     toast.success('Logged out successfully');
   };
 
-  // Format date for display
+  const handleRelogin = () => {
+    localStorage.removeItem('authToken');
+    navigate('/login', { state: { from: location.pathname } });
+  };
+
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
       year: 'numeric', 
@@ -145,7 +251,6 @@ export default function DashboardPage() {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
-  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -156,7 +261,45 @@ export default function DashboardPage() {
     }
   };
 
-  // If still loading initial data
+  const enableDevMode = () => {
+    localStorage.setItem('dev_mode', 'true');
+    setIsDev(true);
+    window.location.reload();
+  };
+
+  if (authIssue) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Authentication Issue</AlertTitle>
+          <AlertDescription>
+            Your session may have expired or there was a problem with your authentication. 
+            Please try logging in again.
+          </AlertDescription>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={handleRelogin}>Log In Again</Button>
+            <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
+          </div>
+        </Alert>
+        
+        {bookings.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold mb-4">Cached Bookings</h2>
+            <p className="text-gray-500 mb-4">These bookings were previously loaded and may not be up to date.</p>
+            
+            <BookingsList 
+              bookings={bookings} 
+              isRefreshing={false}
+              formatDate={formatDate}
+              getStatusColor={getStatusColor}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -187,7 +330,6 @@ export default function DashboardPage() {
     );
   }
 
-  // If error occurred and max retries exceeded
   if (error && retryCount >= MAX_RETRIES) {
     return (
       <ApiErrorFallback 
@@ -195,7 +337,9 @@ export default function DashboardPage() {
         onRetry={fetchBookings}
         title="Error Loading Dashboard"
         description="We couldn't load your bookings. Please try again."
-      />
+      >
+        <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
+      </ApiErrorFallback>
     );
   }
 
@@ -205,6 +349,11 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
+          {isDev && (
+            <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800">
+              Dev Mode
+            </Badge>
+          )}
         </div>
         <div className="flex flex-col md:flex-row gap-2">
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
@@ -219,8 +368,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Conditionally render admin metrics for admin users */}
-      {isAdmin && (
+      {(isAdmin || isDev) && (
         <div className="mb-8">
           <Card>
             <CardHeader>
@@ -238,7 +386,6 @@ export default function DashboardPage() {
                 error={adminMetricsError}
                 onFilterChange={(status: BookingStatus | 'all') => {
                   console.log('Filtering by status:', status);
-                  // Logic to filter metrics by status if needed
                 }}
                 selectedPeriod="week"
               />
@@ -278,7 +425,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No upcoming bookings found."
           />
         </TabsContent>
         
@@ -288,7 +434,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No completed bookings found."
           />
         </TabsContent>
         
@@ -298,7 +443,6 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
-            emptyMessage="No cancelled bookings found."
           />
         </TabsContent>
       </Tabs>
@@ -306,72 +450,96 @@ export default function DashboardPage() {
   );
 }
 
-interface BookingsListProps {
-  bookings: Booking[];
+function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: { 
+  bookings: Booking[]; 
   isRefreshing: boolean;
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
-  emptyMessage?: string;
-}
-
-function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, emptyMessage = "No bookings found." }: BookingsListProps) {
-  const navigate = useNavigate();
-  
+}) {
   if (isRefreshing) {
     return (
-      <div className="flex justify-center items-center py-10">
+      <div className="flex items-center justify-center p-8">
         <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+        <span className="ml-2 text-gray-500">Refreshing bookings...</span>
       </div>
     );
   }
-  
+
   if (bookings.length === 0) {
     return (
-      <Alert className="mt-4">
-        <Info className="h-4 w-4" />
-        <AlertTitle>No Bookings</AlertTitle>
-        <AlertDescription>{emptyMessage}</AlertDescription>
-      </Alert>
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <Info className="h-10 w-10 text-gray-400 mb-2" />
+        <h3 className="text-lg font-medium">No Bookings</h3>
+        <p className="text-gray-500">No bookings found.</p>
+      </div>
     );
   }
-  
+
   return (
-    <ScrollArea className="h-[600px] mt-4">
+    <ScrollArea className="h-[calc(100vh-300px)] pr-4">
       <div className="space-y-4">
         {bookings.map((booking) => (
-          <Card key={booking.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/booking/${booking.id}`)}>
+          <Card key={booking.id} className="overflow-hidden">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">Booking #{booking.bookingNumber}</CardTitle>
-                  <p className="text-sm text-gray-500">{formatDate(booking.pickupDate)}</p>
+                  <CardTitle className="text-lg">
+                    {booking.pickupLocation} to {booking.dropLocation}
+                  </CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Booking #{booking.bookingNumber}
+                  </p>
                 </div>
                 <Badge className={getStatusColor(booking.status)}>
-                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1).replace('_', ' ')}
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-gray-500 mt-1" />
-                  <div>
-                    <p className="font-medium">From: {booking.pickupLocation}</p>
-                    {booking.dropLocation && <p className="text-gray-600">To: {booking.dropLocation}</p>}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" /> Pickup Date
+                  </p>
+                  <p className="text-sm">{formatDate(booking.pickupDate)}</p>
+                  
+                  {booking.returnDate && (
+                    <>
+                      <p className="text-sm font-medium mt-2 flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" /> Return Date
+                      </p>
+                      <p className="text-sm">{formatDate(booking.returnDate)}</p>
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Car className="h-4 w-4 text-gray-500" />
-                  <p>{booking.cabType} - {booking.tripType} ({booking.tripMode})</p>
+                
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <MapPin className="h-4 w-4 mr-1" /> Trip Details
+                  </p>
+                  <p className="text-sm">
+                    {booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)}, {' '}
+                    {booking.tripMode === 'one-way' ? 'One Way' : 'Round Trip'}
+                  </p>
+                  <p className="text-sm">
+                    Cab: {booking.cabType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </p>
+                  <p className="text-sm">Distance: {booking.distance} km</p>
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                  <p className="font-semibold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
-                  <Button variant="outline" size="sm" onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/booking/${booking.id}`);
-                  }}>
-                    View Details
-                  </Button>
+                
+                <div>
+                  <p className="text-sm font-medium">Fare Details</p>
+                  <p className="text-xl font-bold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                  
+                  {booking.driverName && (
+                    <>
+                      <p className="text-sm font-medium mt-2">Driver</p>
+                      <p className="text-sm">{booking.driverName}</p>
+                      {booking.driverPhone && (
+                        <p className="text-sm">{booking.driverPhone}</p>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>

@@ -124,8 +124,7 @@ export function VehicleFareManagement() {
   const fetchVehiclePricing = async () => {
     try {
       console.log("Fetching vehicle pricing...");
-      // Fix: Pass an empty string as the vehicleId parameter - this will fetch all vehicle pricing
-      const data = await fareAPI.getVehiclePricing("");
+      const data = await fareAPI.getVehiclePricing();
       
       if (Array.isArray(data) && data.length > 0) {
         console.log("Fetched vehicle pricing:", data);
@@ -194,8 +193,7 @@ export function VehicleFareManagement() {
         driverAllowance: values.driverAllowance
       };
       
-      // Fix: Pass both vehicleId and pricingData as required by the API
-      const data = await fareAPI.updateVehiclePricing(values.vehicleType, updateData);
+      const data = await fareAPI.updateVehiclePricing(updateData);
       console.log("Vehicle pricing update response:", data);
       
       toast.success("Vehicle pricing updated successfully");

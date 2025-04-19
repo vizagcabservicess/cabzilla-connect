@@ -3,11 +3,6 @@
 RewriteEngine On
 RewriteBase /api/admin/
 
-# CRITICAL: Prevent any api/api confusion in admin directory
-RewriteCond %{THE_REQUEST} /api/api/admin [OR]
-RewriteCond %{REQUEST_URI} ^/api/api/admin
-RewriteRule ^(.*)$ /$1 [R=301,L]
-
 # Set PHP handler (critical)
 AddHandler application/x-httpd-php .php
 
@@ -33,14 +28,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
-    # CRITICAL: Allow all access to PHP files
-    Require all granted
 </FilesMatch>
-
-# Add direct access to the diagnostic tools
-RewriteRule ^check-routing$ ../check-api-routing.php [L,QSA]
-RewriteRule ^test-api-routing$ ../check-api-routing.php [L,QSA]
-RewriteRule ^fix-cors$ fix-cors.php [L,QSA]
 
 # Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api$ test-booking-api.php [L,QSA]
@@ -54,10 +42,6 @@ RewriteRule ^bookings/([0-9]+)$ booking.php?id=$1 [L,QSA]
 # Critical: Don't apply rewriting to actual PHP files
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.+)\.php$ $1.php [L,QSA]
-
-# Admin users endpoint for user management
-RewriteRule ^users$ users.php [L,QSA]
-RewriteRule ^users/([0-9]+)$ users.php?id=$1 [L,QSA]
 
 # CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
 # Make sure these are at the top, before any other rules
@@ -78,10 +62,3 @@ RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
-
-# Permissions for this directory
-<Directory "/api/admin">
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Require all granted
-</Directory>
