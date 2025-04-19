@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -30,6 +31,7 @@ export function CabList({
   const [loadingSources, setLoadingSources] = useState<Record<string, string>>({});
   const { fetchFare, isLoading } = useFare();
   
+  // Enhanced useEffect to debug and log the fare fetching process
   useEffect(() => {
     const loadFares = async () => {
       if (!cabTypes || cabTypes.length === 0) {
@@ -51,6 +53,7 @@ export function CabList({
       setLoadingFares(loadingMap);
       setLoadingSources(sourcesMap);
       
+      // Force refresh - clear cache
       localStorage.removeItem('fare_cache_timestamp');
       Object.keys(localStorage).forEach(key => {
         if (key.startsWith(`fare_${tripType}_`)) {
@@ -79,10 +82,14 @@ export function CabList({
           console.log(`CabList: Making API request for ${cabId} with params:`, fareParams);
           const fareDetails = await fetchFare(fareParams);
           
+          // Log the full response for debugging
+          console.log(`Full fare response for ${cabId}:`, fareDetails);
+          
           let totalPrice = 0;
           let dataSource = 'unknown';
           
           if (tripType === 'local') {
+            // Enhanced logic for local package pricing
             if (hourlyPackage === '4hrs-40km' && fareDetails && fareDetails.price4hrs40km > 0) {
               totalPrice = fareDetails.price4hrs40km;
               dataSource = 'api-package-4hrs';
@@ -103,6 +110,7 @@ export function CabList({
               dataSource = 'api-base-price';
             }
           } else {
+            // Standard pricing logic for non-local trips
             if (fareDetails && fareDetails.totalPrice > 0) {
               totalPrice = fareDetails.totalPrice;
               dataSource = 'api-total-price';
@@ -125,11 +133,16 @@ export function CabList({
             let extractedPrice = 0;
             
             if (fareDetails && typeof fareDetails === 'object') {
+              // Try to extract from fares array if present
               if (fareDetails.fares && Array.isArray(fareDetails.fares) && fareDetails.fares.length > 0) {
+                console.log(`CabList: Checking fares array for ${cabId}:`, fareDetails.fares);
+                
+                // Find the matching fare for this vehicle
                 const matchingFare = fareDetails.fares.find((f: any) => 
                   (f.vehicleId === cabId || f.vehicle_id === cabId));
                 
                 const fare = matchingFare || fareDetails.fares[0];
+                console.log(`CabList: Found fare in array for ${cabId}:`, fare);
                 
                 if (hourlyPackage === '4hrs-40km' && fare.price4hrs40km) {
                   extractedPrice = parseFloat(fare.price4hrs40km);
@@ -141,11 +154,13 @@ export function CabList({
                   extractedPrice = parseFloat(fare.price10hrs100km);
                   dataSource = 'direct-fares-array-10hrs';
                 }
+                
+                console.log(`CabList: Extracted price from fares array for ${cabId}: ${extractedPrice}`);
               }
             }
             
             if (extractedPrice > 0) {
-              console.log(`CabList: Extracted price ${extractedPrice} for ${cabId} from response`);
+              console.log(`CabList: Setting extracted price ${extractedPrice} for ${cabId} from response`);
               faresMap[cabId] = extractedPrice;
               sourcesMap[cabId] = dataSource;
             } else {
@@ -205,9 +220,11 @@ export function CabList({
     };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
   
+  // Get database fallback prices if needed
   const getDatabaseFallbackPrice = (cab: CabType, tripType: string, hourlyPackage?: string): number => {
     const normalizedId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
+    // Updated database values to match what's in the actual database
     const databaseLocalFares: Record<string, Record<string, number>> = {
       'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'ertiga': { '4hrs-40km': 1500, '8hrs-80km': 3000, '10hrs-100km': 3500 },
@@ -225,20 +242,24 @@ export function CabList({
     if (tripType === 'local') {
       const package_id = hourlyPackage || '8hrs-80km';
       
+      // Try exact match first
       if (databaseLocalFares[cab.id] && databaseLocalFares[cab.id][package_id]) {
         return databaseLocalFares[cab.id][package_id];
       }
       
+      // Try normalized ID
       if (databaseLocalFares[normalizedId] && databaseLocalFares[normalizedId][package_id]) {
         return databaseLocalFares[normalizedId][package_id];
       }
       
+      // Try partial matches
       for (const key in databaseLocalFares) {
         if (cab.id.toLowerCase().includes(key) || key.includes(cab.id.toLowerCase())) {
           return databaseLocalFares[key][package_id];
         }
       }
       
+      // Default to sedan prices if no match
       return databaseLocalFares['sedan'][package_id];
     }
     

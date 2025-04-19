@@ -8,8 +8,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
-header('X-API-Version: 1.0.8');
+header('X-API-Version: 1.0.9');
 header('X-Debug-File: direct-local-fares.php');
+
+// Add error logging
+error_log("Direct local fares API called");
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -44,19 +47,56 @@ if (!$vehicleId) {
 error_log("Local fare request for vehicle: $vehicleId");
 
 try {
-    // If we're not in a mock environment, try to connect to the database
+    // Try to get database connection
     $conn = null;
     $usingDatabase = false;
     $usingMockData = true;
+    $databaseError = null;
     
+    // First try to use the getDbConnection from database.php
     if (function_exists('getDbConnection')) {
         try {
+            error_log("Attempting to connect using getDbConnection()");
             $conn = getDbConnection();
-            error_log("Database connection successful");
-            $usingDatabase = true;
-            $usingMockData = false;
+            if ($conn && !$conn->connect_error) {
+                error_log("Database connection successful using getDbConnection()");
+                $usingDatabase = true;
+                $usingMockData = false;
+            } else {
+                error_log("getDbConnection() failed to connect properly");
+                $databaseError = "Connection failed with getDbConnection()";
+            }
         } catch (Exception $e) {
-            error_log("Database connection failed: " . $e->getMessage());
+            error_log("Database connection failed with getDbConnection(): " . $e->getMessage());
+            $databaseError = $e->getMessage();
+        }
+    } else {
+        error_log("getDbConnection function not found, trying direct connection");
+    }
+    
+    // If first method failed, try direct connection
+    if (!$conn || $conn->connect_error) {
+        try {
+            error_log("Attempting direct database connection");
+            // Hard-coded database credentials for maximum reliability
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if (!$conn->connect_error) {
+                error_log("Direct database connection successful");
+                $usingDatabase = true;
+                $usingMockData = false;
+            } else {
+                error_log("Direct database connection failed: " . $conn->connect_error);
+                $databaseError = $conn->connect_error;
+            }
+        } catch (Exception $e) {
+            error_log("Direct database connection exception: " . $e->getMessage());
+            $databaseError = $e->getMessage();
         }
     }
     
@@ -67,7 +107,10 @@ try {
     if ($conn && $usingDatabase) {
         $normalizedVehicleId = strtolower(str_replace(' ', '_', $vehicleId));
         
-        // First try exact match
+        // Log the query attempt
+        error_log("Attempting to query database for vehicle_id: $vehicleId or normalized as: $normalizedVehicleId");
+        
+        // First try exact match with original ID
         $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
         $stmt = $conn->prepare($query);
         $stmt->bind_param("s", $vehicleId);
@@ -75,6 +118,7 @@ try {
         $result = $stmt->get_result();
         
         if (!$result || $result->num_rows === 0) {
+            error_log("No exact match found for vehicle_id: $vehicleId, trying normalized ID");
             // Try with normalized ID
             $stmt = $conn->prepare($query);
             $stmt->bind_param("s", $normalizedVehicleId);
@@ -83,6 +127,7 @@ try {
         }
         
         if (!$result || $result->num_rows === 0) {
+            error_log("No exact or normalized match found, trying partial match");
             // Try partial match using LIKE
             $likePattern = '%' . str_replace('_', '%', $normalizedVehicleId) . '%';
             $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ?";
@@ -111,6 +156,8 @@ try {
             error_log("No database records found for $vehicleId, falling back to mock data");
             $usingMockData = true;
         }
+    } else {
+        error_log("No valid database connection available. Error: " . ($databaseError ?: "Unknown"));
     }
     
     // If we don't have database data, use mock data
@@ -206,7 +253,8 @@ try {
             'vehicleId' => $vehicleId,
             'normalizedId' => strtolower(str_replace(' ', '_', $vehicleId)),
             'usingDatabase' => $usingDatabase,
-            'usingMockData' => $usingMockData
+            'usingMockData' => $usingMockData,
+            'databaseError' => $databaseError
         ]
     ]);
     
