@@ -3,6 +3,11 @@
 RewriteEngine On
 RewriteBase /api/admin/
 
+# CRITICAL: Prevent any api/api confusion in admin directory
+RewriteCond %{THE_REQUEST} /api/api/admin [OR]
+RewriteCond %{REQUEST_URI} ^/api/api/admin
+RewriteRule ^(.*)$ /$1 [R=301,L]
+
 # Set PHP handler (critical)
 AddHandler application/x-httpd-php .php
 
@@ -29,6 +34,11 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Pragma "no-cache"
     Header set Expires "0"
 </FilesMatch>
+
+# Add direct access to the diagnostic tools
+RewriteRule ^check-routing$ ../check-api-routing.php [L,QSA]
+RewriteRule ^test-api-routing$ ../check-api-routing.php [L,QSA]
+RewriteRule ^fix-cors$ fix-cors.php [L,QSA]
 
 # Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api$ test-booking-api.php [L,QSA]

@@ -1,50 +1,38 @@
-# Enable URL rewriting
+# Enable URL rewriting - CRITICAL FOR API ROUTING
 RewriteEngine On
 RewriteBase /api/
 
-# Prevent duplicate /api/ prefix - multiple rules to catch all variants
+# CRITICAL: Very high priority rules to fix duplicate API prefixes
+# These rules must execute before any other rewrites
+RewriteCond %{THE_REQUEST} /api/api/ [OR]
 RewriteCond %{REQUEST_URI} ^/api/api/
-RewriteRule ^api/(.*)$ /$1 [L,R=301]
+RewriteRule ^api/(.*)$ /$1 [R=301,L]
 
-# Additional rule to prevent nested api paths
-RewriteCond %{REQUEST_URI} ^/api/(.*/)?api/
-RewriteRule ^api/(.*)$ /$1 [L,R=301]
+# Handle nested api segments with pattern matching - high priority
+RewriteRule ^.*api/api/(.*)$ api/$1 [R=301,L]
 
-# Rule to fix api/api case specifically within this directory
-RewriteRule ^api/(.*)$ $1 [L,R=301]
+# Additional rules to catch edge cases
+RewriteRule ^api/(.*)$ $1 [R=301,L]
 
-# CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
+# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
+
+# CRITICAL: Force PHP processing for all .php files
 <FilesMatch "\.php$">
-    # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
     Header always set Content-Type "application/json"
-    # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
 </FilesMatch>
 
-# Add explicit rule for users.php and direct-user-data.php
-<Files "users.php">
+# Add explicit rule for check-api-routing.php
+<Files "check-api-routing.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
 </Files>
-
-<Files "direct-user-data.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-    Header always set Access-Control-Allow-Origin "*" 
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
-
-# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
@@ -57,32 +45,24 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Direct access to admin endpoints - highest priority
-RewriteRule ^admin/users$ admin/users.php [L,QSA]
-RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
-RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
-RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
-
 # Diagnostic endpoints - highest priority
+RewriteRule ^check-api-routing$ check-api-routing.php [L,QSA]
+RewriteRule ^check-routing$ check-api-routing.php [L,QSA]
+RewriteRule ^test-routing$ check-api-routing.php [L,QSA]
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
-RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
 
-# ADD: Test email endpoints - high priority with multiple URLs
+# ADD: Test email endpoints - high priority
 RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
 RewriteRule ^test-email$ test-email-sending.php [L,QSA]
 
 # HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]
-RewriteRule ^book\.php$ book.php [L,QSA]
 RewriteRule ^book/$ book.php [L,QSA]
 RewriteRule ^create-booking$ book.php [L,QSA]
-RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
 # HIGHEST PRIORITY: Email confirmation endpoints
 RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
 RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
 
 # CRITICAL: Force direct PHP for critical files - ensure JSON content type
@@ -90,15 +70,24 @@ RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
+
 <Files "test-connection.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
+
 <Files "send-booking-confirmation.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
+
 <Files "test-email-sending.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+# Admin endpoints - preserve all these rules
+<Files "direct-connection.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
