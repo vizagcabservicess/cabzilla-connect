@@ -1,12 +1,11 @@
-
-import axios, { AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig, RawAxiosRequestHeaders } from 'axios';
 import { apiBaseUrl, forceRefreshHeaders, defaultHeaders } from '@/config/api';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 
 // Create an Axios instance with default config
 const api = axios.create({
   baseURL: apiBaseUrl,
-  headers: defaultHeaders,
+  headers: defaultHeaders as RawAxiosRequestHeaders,
   timeout: 30000
 });
 
@@ -70,7 +69,6 @@ export const authAPI = {
     return localStorage.getItem('authToken');
   },
   
-  // Add getCurrentUser method
   getCurrentUser: async () => {
     try {
       // Check if we have user data in localStorage first
@@ -95,57 +93,65 @@ export const authAPI = {
 
 // Fare API endpoints
 export const fareAPI = {
-  // Local fares
   getLocalFares: async (forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const response = await api.get('/api/direct-local-fares.php', config);
     return response.data;
   },
   
-  // Local fares for a specific vehicle
   getLocalFaresForVehicle: async (vehicleId: string, forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const response = await api.get(`/api/direct-local-fares.php?vehicle_id=${vehicleId}`, config);
     return response.data;
   },
   
-  // Outstation fares
   getOutstationFares: async (forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const response = await api.get('/api/outstation-fares.php', config);
     return response.data;
   },
   
-  // Outstation fares for a specific vehicle
   getOutstationFaresForVehicle: async (vehicleId: string, tripMode = 'one-way', distance = 0, forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const params = new URLSearchParams();
     params.append('vehicle_id', vehicleId);
@@ -158,29 +164,33 @@ export const fareAPI = {
     return response.data;
   },
   
-  // Airport fares
   getAirportFares: async (forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const response = await api.get('/api/airport-fares.php', config);
     return response.data;
   },
   
-  // Airport fares for a specific vehicle
   getAirportFaresForVehicle: async (vehicleId: string, distance = 0, forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const params = new URLSearchParams();
     params.append('vehicle_id', vehicleId);
@@ -192,21 +202,22 @@ export const fareAPI = {
     return response.data;
   },
   
-  // Tour fares
   getTourFares: async (forceRefresh = false) => {
     const config: AxiosRequestConfig = {
-      ...getForcedRequestConfig(),
-      headers: {
-        ...getForcedRequestConfig().headers,
-        ...(forceRefresh ? forceRefreshHeaders : {})
-      }
+      ...getForcedRequestConfig()
     };
+    
+    if (forceRefresh) {
+      config.headers = {
+        ...config.headers,
+        ...forceRefreshHeaders
+      } as RawAxiosRequestHeaders;
+    }
     
     const response = await api.get('/api/tour-fares.php', config);
     return response.data;
   },
   
-  // Add the missing methods for the tourAPI
   updateTourFares: async (tourData: any) => {
     try {
       const response = await api.put('/api/update-tour-fares.php', tourData);
@@ -237,7 +248,6 @@ export const fareAPI = {
     }
   },
   
-  // Add vehicle pricing methods
   getVehiclePricing: async (vehicleId: string) => {
     try {
       const response = await api.get(`/api/get-vehicle-pricing.php?id=${vehicleId}`);

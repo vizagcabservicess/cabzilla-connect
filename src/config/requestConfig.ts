@@ -4,6 +4,7 @@
  */
 
 import { forceRefreshHeaders } from './api';
+import axios, { AxiosRequestConfig, RawAxiosRequestHeaders } from 'axios';
 
 /**
  * Safe fetch implementation with timeout and error handling
@@ -87,15 +88,15 @@ export const fetchWithRetry = async (
 /**
  * Get request configuration with force refresh headers
  * This ensures the server doesn't return cached responses
- * @returns RequestInit object with appropriate headers
+ * @returns AxiosRequestConfig object with appropriate headers
  */
-export const getForcedRequestConfig = (): RequestInit => {
+export const getForcedRequestConfig = (): AxiosRequestConfig => {
   return {
     headers: {
       ...forceRefreshHeaders,
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
-    },
+    } as RawAxiosRequestHeaders,
     cache: 'no-store'
   };
 };
@@ -105,8 +106,8 @@ export const getForcedRequestConfig = (): RequestInit => {
  * @param token Optional authentication token
  * @returns Record of header keys and values
  */
-export const getBypassHeaders = (token?: string): Record<string, string> => {
-  const headers: Record<string, string> = {
+export const getBypassHeaders = (token?: string): RawAxiosRequestHeaders => {
+  const headers: RawAxiosRequestHeaders = {
     ...forceRefreshHeaders,
     'X-Bypass-Cache': 'true',
     'X-Direct-Access': 'true'

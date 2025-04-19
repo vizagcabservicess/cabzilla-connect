@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+import axios, { AxiosRequestConfig, RawAxiosRequestHeaders } from 'axios';
 import { CabType } from '@/types/cab';
 import { getApiUrl } from '@/config/api';
 import { getForcedRequestConfig } from '@/config/requestConfig';
@@ -206,14 +206,20 @@ export function useTripFare(tripType: TripFareType, options: UseTripFareOptions 
         ...additionalParams
       });
 
+      // Get base config
+      const requestConfig = getForcedRequestConfig();
+      
+      // Update headers for force refresh
+      const headers = { 
+        ...requestConfig.headers,
+        'X-Force-Refresh': forceRefresh ? 'true' : 'false' 
+      } as RawAxiosRequestHeaders;
+
       // Fetch from API
       const response = await axios.get(`${apiUrl}?${params.toString()}`, {
         signal,
-        ...getForcedRequestConfig(),
-        headers: {
-          ...getForcedRequestConfig().headers,
-          'X-Force-Refresh': forceRefresh ? 'true' : 'false'
-        }
+        ...requestConfig,
+        headers
       });
 
       // Exit if this is not the latest request
