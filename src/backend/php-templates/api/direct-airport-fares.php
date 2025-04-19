@@ -76,27 +76,8 @@ function normalizeVehicleId($vehicleId) {
     return $normalized;
 }
 
-try {
-    // Get parameters from query string
-    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
-                (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
-    $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
-    
-    // Log original vehicle ID before normalization
-    $originalVehicleId = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Original vehicle ID: $originalVehicleId\n", FILE_APPEND);
-    
-    // Normalize vehicle ID
-    $vehicleId = normalizeVehicleId($vehicleId);
-    
-    // Log request with normalized ID
-    file_put_contents($logFile, "[$timestamp] Airport fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId, distance=$distance\n", FILE_APPEND);
-    
-    if (!$vehicleId) {
-        throw new Exception("Vehicle ID is required");
-    }
-    
-    // Default pricing by vehicle type
+// Get default airport pricing by vehicle type
+function getDefaultAirportPricing($vehicleId) {
     $defaultPricing = [
         'sedan' => [
             'basePrice' => 1000, 
@@ -147,28 +128,59 @@ try {
             'tier3Price' => 3800,  // 21-30 KM
             'tier4Price' => 5000,  // 31+ KM
             'extraKmCharge' => 22
+        ],
+        'bus' => [
+            'basePrice' => 3500, 
+            'pricePerKm' => 28,
+            'airportFee' => 800,
+            'tier1Price' => 3000,  // 0-10 KM
+            'tier2Price' => 4000,  // 11-20 KM
+            'tier3Price' => 5000,  // 21-30 KM
+            'tier4Price' => 6000,  // 31+ KM
+            'extraKmCharge' => 28
         ]
     ];
     
-    // Connect to database
-    $conn = getDbConnection();
+    // Check if we have a direct match
+    if (isset($defaultPricing[$vehicleId])) {
+        return $defaultPricing[$vehicleId];
+    }
     
-    // Query airport_transfer_fares by normalized vehicle_id
-    $query = "SELECT * FROM airport_transfer_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = LOWER(:vehicle_id)";
-    $stmt = $conn->prepare($query);
-    $stmt->bindParam(':vehicle_id', $vehicleId);
+    // Check for partial match
+    foreach ($defaultPricing as $key => $pricing) {
+        if (strpos($vehicleId, $key) !== false) {
+            return $pricing;
+        }
+    }
     
-    // Log the query
-    file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+    // Return sedan pricing as default
+    return $defaultPricing['sedan'];
+}
+
+try {
+    // Get parameters from query string
+    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
+                (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
     
-    $stmt->execute();
+    // Ensure we have a minimum distance
+    if ($distance <= 0) {
+        $distance = 15; // Default airport distance
+    }
     
-    // Fetch result
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Log original vehicle ID before normalization
+    $originalVehicleId = $vehicleId;
+    file_put_contents($logFile, "[$timestamp] Original vehicle ID: $originalVehicleId\n", FILE_APPEND);
     
-    // Log query result
-    file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
+    // Normalize vehicle ID
+    $vehicleId = normalizeVehicleId($vehicleId);
+    
+    // Log request with normalized ID
+    file_put_contents($logFile, "[$timestamp] Airport fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId, distance=$distance\n", FILE_APPEND);
+    
+    if (!$vehicleId) {
+        throw new Exception("Vehicle ID is required");
+    }
     
     // Variables to store pricing information
     $useDefaultPricing = false;
@@ -181,36 +193,61 @@ try {
     $tier4Price = 0;
     $extraKmCharge = 0;
     
-    if ($result) {
-        // Use database values
-        $basePrice = (float)$result['base_price'] ?? 0;
-        $pricePerKm = (float)$result['price_per_km'] ?? 0;
-        $airportFee = (float)$result['pickup_price'] ?? 0;
-        $tier1Price = (float)$result['tier1_price'] ?? 800;
-        $tier2Price = (float)$result['tier2_price'] ?? 1200;
-        $tier3Price = (float)$result['tier3_price'] ?? 1800;
-        $tier4Price = (float)$result['tier4_price'] ?? 2500;
-        $extraKmCharge = (float)$result['extra_km_charge'] ?? $pricePerKm;
+    try {
+        // Connect to database
+        $conn = getDbConnection();
         
-        file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, airportFee=$airportFee\n", FILE_APPEND);
-    } else {
-        // Use default pricing based on vehicle type
+        // Query airport_transfer_fares by normalized vehicle_id
+        $query = "SELECT * FROM airport_transfer_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = LOWER(:vehicle_id)";
+        $stmt = $conn->prepare($query);
+        $stmt->bindParam(':vehicle_id', $vehicleId);
+        
+        // Log the query
+        file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+        
+        $stmt->execute();
+        
+        // Fetch result
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Log query result
+        file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
+        
+        if ($result) {
+            // Use database values
+            $basePrice = (float)$result['base_price'] ?? 0;
+            $pricePerKm = (float)$result['price_per_km'] ?? 0;
+            $airportFee = (float)$result['pickup_price'] ?? 0;
+            $tier1Price = (float)$result['tier1_price'] ?? 800;
+            $tier2Price = (float)$result['tier2_price'] ?? 1200;
+            $tier3Price = (float)$result['tier3_price'] ?? 1800;
+            $tier4Price = (float)$result['tier4_price'] ?? 2500;
+            $extraKmCharge = (float)$result['extra_km_charge'] ?? $pricePerKm;
+            
+            file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, airportFee=$airportFee\n", FILE_APPEND);
+        }
+    } catch (Exception $e) {
+        // Log database error but continue with default pricing
+        file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . " - Using default pricing\n", FILE_APPEND);
+    }
+    
+    // Check if we have valid pricing from the database
+    if ($basePrice <= 0 || $pricePerKm <= 0 || $tier1Price <= 0) {
         $useDefaultPricing = true;
         
-        // Get default pricing for vehicle type if available, otherwise use sedan
-        $vehicleType = isset($defaultPricing[$vehicleId]) ? $vehicleId : 'sedan';
-        $pricing = $defaultPricing[$vehicleType];
+        // Get default pricing for the vehicle type
+        $defaultAirportPricing = getDefaultAirportPricing($vehicleId);
+        $basePrice = $defaultAirportPricing['basePrice'];
+        $pricePerKm = $defaultAirportPricing['pricePerKm'];
+        $airportFee = $defaultAirportPricing['airportFee'];
+        $tier1Price = $defaultAirportPricing['tier1Price'];
+        $tier2Price = $defaultAirportPricing['tier2Price'];
+        $tier3Price = $defaultAirportPricing['tier3Price'];
+        $tier4Price = $defaultAirportPricing['tier4Price'];
+        $extraKmCharge = $defaultAirportPricing['extraKmCharge'];
         
-        $basePrice = $pricing['basePrice'];
-        $pricePerKm = $pricing['pricePerKm'];
-        $airportFee = $pricing['airportFee'];
-        $tier1Price = $pricing['tier1Price'];
-        $tier2Price = $pricing['tier2Price'];
-        $tier3Price = $pricing['tier3Price'];
-        $tier4Price = $pricing['tier4Price'];
-        $extraKmCharge = $pricing['extraKmCharge'];
-        
-        file_put_contents($logFile, "[$timestamp] Using default pricing for $vehicleType: basePrice=$basePrice, pricePerKm=$pricePerKm, airportFee=$airportFee\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Using default airport pricing for $vehicleId: basePrice=$basePrice, tier1Price=$tier1Price\n", FILE_APPEND);
     }
     
     // Calculate total price based on distance tiers
@@ -246,6 +283,12 @@ try {
     
     // Round the price to nearest 10
     $calculatedFare = ceil($calculatedFare / 10) * 10;
+    
+    // Ensure we have a minimum price
+    if ($calculatedFare < 800) {
+        $calculatedFare = $tier1Price > 800 ? $tier1Price : 800;
+        file_put_contents($logFile, "[$timestamp] Calculated price was too low, using minimum price: $calculatedFare\n", FILE_APPEND);
+    }
     
     // Log the final calculation
     file_put_contents($logFile, "[$timestamp] Final calculated price: $calculatedFare\n", FILE_APPEND);

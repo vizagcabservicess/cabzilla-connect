@@ -43,11 +43,16 @@ export function CabList({
       });
       setLoadingFares(loadingMap);
       
-      // Load fares for each cab type
-      for (const cab of cabTypes) {
+      // Load fares for each cab type with a small delay to prevent overwhelming the server
+      for (const [index, cab] of cabTypes.entries()) {
         try {
           const cabId = cab.id;
           console.log(`CabList: Fetching fare for vehicle ${cabId} with trip type ${tripType}`);
+          
+          // Add a small delay between requests
+          if (index > 0) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
           
           const fareDetails = await fetchFare({
             vehicleId: cabId,
@@ -73,7 +78,8 @@ export function CabList({
                 'ertiga': 18,
                 'innova_crysta': 20,
                 'luxury': 25,
-                'tempo': 22
+                'tempo': 22,
+                'bus': 28
               };
               const rate = baseRates[cabId as keyof typeof baseRates] || 15;
               fallbackPrice = Math.max(3000, distance * rate);
@@ -84,7 +90,8 @@ export function CabList({
                 'ertiga': 1000,
                 'innova_crysta': 1200,
                 'luxury': 1500,
-                'tempo': 2000
+                'tempo': 2000,
+                'bus': 2500
               };
               fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
               if (distance > 10) fallbackPrice += (distance - 10) * 15;
@@ -95,7 +102,8 @@ export function CabList({
                 'ertiga': 1000,
                 'innova_crysta': 1200,
                 'luxury': 1500,
-                'tempo': 2000
+                'tempo': 2000,
+                'bus': 2500
               };
               fallbackPrice = baseRates[cabId as keyof typeof baseRates] || 1000;
             }
@@ -105,6 +113,9 @@ export function CabList({
             faresMap[cabId] = fallbackPrice;
             console.log(`CabList: Using fallback price for ${cabId}: ${fallbackPrice}`);
           }
+          
+          // Update fares immediately for this cab
+          setFares(prev => ({...prev, [cabId]: faresMap[cabId]}));
           
           // Update loading state for this cab
           loadingMap[cabId] = false;
@@ -120,14 +131,17 @@ export function CabList({
             const fallbackPrice = cab.id === 'sedan' ? 3500 : 
                                  cab.id === 'ertiga' ? 4500 : 
                                  cab.id === 'innova_crysta' ? 5500 : 
-                                 cab.id === 'luxury' ? 6500 : 7500;
+                                 cab.id === 'luxury' ? 6500 : 
+                                 cab.id === 'tempo' ? 7500 : 5000;
+                                 
             faresMap[cab.id] = fallbackPrice;
             console.log(`CabList: Using error fallback price for ${cab.id}: ${fallbackPrice}`);
+            
+            // Update fares for this cab
+            setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
           }
         }
       }
-      
-      setFares(faresMap);
     };
     
     if (cabTypes && cabTypes.length > 0 && distance > 0) {

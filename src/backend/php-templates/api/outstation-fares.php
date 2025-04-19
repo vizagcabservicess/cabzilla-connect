@@ -42,6 +42,12 @@ foreach ($possibleKeys as $key) {
     }
 }
 
+// If no vehicle ID found, use a default
+if (!$vehicleId) {
+    $vehicleId = 'sedan';  // Default to sedan if no vehicle ID provided
+    file_put_contents($logFile, "[$timestamp] No vehicle ID found, using default: sedan\n", FILE_APPEND);
+}
+
 // Clean up vehicle ID if it has a prefix like 'item-'
 if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
@@ -91,6 +97,12 @@ if ($vehicleId) {
 $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 
            (isset($_GET['tripMode']) ? $_GET['tripMode'] : 'one-way');
 $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
+
+// Set default distance if none provided or too small
+if ($distance <= 0) {
+    $distance = 150; // Default distance if none specified
+    file_put_contents($logFile, "[$timestamp] No valid distance parameter, setting default: 150\n", FILE_APPEND);
+}
 
 // Save values to $_GET
 $_GET['trip_mode'] = $tripMode;

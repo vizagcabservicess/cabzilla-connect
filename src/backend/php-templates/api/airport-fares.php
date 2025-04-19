@@ -42,6 +42,12 @@ foreach ($possibleKeys as $key) {
     }
 }
 
+// If no vehicle ID found, use a default
+if (!$vehicleId) {
+    $vehicleId = 'sedan';  // Default to sedan if no vehicle ID provided
+    file_put_contents($logFile, "[$timestamp] No vehicle ID found, using default: sedan\n", FILE_APPEND);
+}
+
 // Clean up vehicle ID if it has a prefix like 'item-'
 if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
@@ -91,6 +97,10 @@ if ($vehicleId) {
 if (isset($_GET['distance']) && !empty($_GET['distance'])) {
     $distance = (float)$_GET['distance'];
     file_put_contents($logFile, "[$timestamp] Found distance parameter: $distance\n", FILE_APPEND);
+} else {
+    // Set a default distance if none provided
+    $_GET['distance'] = 15;
+    file_put_contents($logFile, "[$timestamp] No distance parameter, setting default: 15\n", FILE_APPEND);
 }
 
 // Forward this request to the direct endpoint

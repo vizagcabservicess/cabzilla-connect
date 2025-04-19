@@ -76,6 +76,35 @@ function normalizeVehicleId($vehicleId) {
     return $normalized;
 }
 
+// Get default pricing function
+function getDefaultPricing($vehicleId) {
+    // Default pricing by vehicle type (used if not in database)
+    $defaultPricing = [
+        'sedan' => ['basePrice' => 4200, 'pricePerKm' => 14, 'driverAllowance' => 250],
+        'ertiga' => ['basePrice' => 5400, 'pricePerKm' => 18, 'driverAllowance' => 250],
+        'innova_crysta' => ['basePrice' => 6000, 'pricePerKm' => 20, 'driverAllowance' => 250],
+        'luxury' => ['basePrice' => 8000, 'pricePerKm' => 25, 'driverAllowance' => 300],
+        'tempo' => ['basePrice' => 9000, 'pricePerKm' => 22, 'driverAllowance' => 300],
+        'bus' => ['basePrice' => 12000, 'pricePerKm' => 28, 'driverAllowance' => 350],
+        'van' => ['basePrice' => 7000, 'pricePerKm' => 20, 'driverAllowance' => 300]
+    ];
+    
+    // Check if we have a direct match
+    if (isset($defaultPricing[$vehicleId])) {
+        return $defaultPricing[$vehicleId];
+    }
+    
+    // Check for partial match
+    foreach ($defaultPricing as $key => $pricing) {
+        if (strpos($vehicleId, $key) !== false) {
+            return $pricing;
+        }
+    }
+    
+    // Return sedan pricing as default
+    return $defaultPricing['sedan'];
+}
+
 try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
@@ -83,6 +112,11 @@ try {
     $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 
                (isset($_GET['tripMode']) ? $_GET['tripMode'] : 'one-way');
     $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
+    
+    // Ensure we have a minimum distance
+    if ($distance <= 0) {
+        $distance = 150; // Default distance if none specified
+    }
     
     // Log original vehicle ID before normalization
     $originalVehicleId = $vehicleId;
@@ -98,59 +132,57 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Default pricing by vehicle type (used if not in database)
-    $defaultPricing = [
-        'sedan' => ['basePrice' => 4200, 'pricePerKm' => 14, 'driverAllowance' => 250],
-        'ertiga' => ['basePrice' => 5400, 'pricePerKm' => 18, 'driverAllowance' => 250],
-        'innova_crysta' => ['basePrice' => 6000, 'pricePerKm' => 20, 'driverAllowance' => 250],
-        'luxury' => ['basePrice' => 8000, 'pricePerKm' => 25, 'driverAllowance' => 300],
-        'tempo' => ['basePrice' => 9000, 'pricePerKm' => 22, 'driverAllowance' => 300]
-    ];
-    
-    // Connect to database
-    $conn = getDbConnection();
-    
-    // Query outstation_fares by normalized vehicle_id
-    $query = "SELECT * FROM outstation_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = LOWER(:vehicle_id)";
-    $stmt = $conn->prepare($query);
-    $stmt->bindParam(':vehicle_id', $vehicleId);
-    
-    // Log the query
-    file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
-    file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
-    
-    $stmt->execute();
-    
-    // Fetch result
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // Log query result
-    file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
-    
     // Variables to store pricing information
     $useDefaultPricing = false;
     $basePrice = 0;
     $pricePerKm = 0;
     $driverAllowance = 250;
     
-    if ($result) {
-        // Use database values
-        $basePrice = (float)$result['base_price'] ?? 0;
-        $pricePerKm = (float)$result['price_per_km'] ?? 0;
-        $driverAllowance = (float)$result['driver_allowance'] ?? 250;
+    try {
+        // Connect to database
+        $conn = getDbConnection();
         
-        file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, driverAllowance=$driverAllowance\n", FILE_APPEND);
-    } else {
-        // Use default pricing based on vehicle type
+        // Query outstation_fares by normalized vehicle_id
+        $query = "SELECT * FROM outstation_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = LOWER(:vehicle_id)";
+        $stmt = $conn->prepare($query);
+        $stmt->bindParam(':vehicle_id', $vehicleId);
+        
+        // Log the query
+        file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+        
+        $stmt->execute();
+        
+        // Fetch result
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Log query result
+        file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
+        
+        if ($result) {
+            // Use database values
+            $basePrice = (float)$result['base_price'] ?? 0;
+            $pricePerKm = (float)$result['price_per_km'] ?? 0;
+            $driverAllowance = (float)$result['driver_allowance'] ?? 250;
+            
+            file_put_contents($logFile, "[$timestamp] Using database pricing: basePrice=$basePrice, pricePerKm=$pricePerKm, driverAllowance=$driverAllowance\n", FILE_APPEND);
+        }
+    } catch (Exception $e) {
+        // Log database error but continue with default pricing
+        file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . " - Using default pricing\n", FILE_APPEND);
+    }
+    
+    // Check if we got valid pricing from the database
+    if ($basePrice <= 0 || $pricePerKm <= 0) {
         $useDefaultPricing = true;
         
-        // Get default pricing for vehicle type if available, otherwise use sedan
-        $vehicleType = isset($defaultPricing[$vehicleId]) ? $vehicleId : 'sedan';
-        $basePrice = $defaultPricing[$vehicleType]['basePrice'];
-        $pricePerKm = $defaultPricing[$vehicleType]['pricePerKm'];
-        $driverAllowance = $defaultPricing[$vehicleType]['driverAllowance'];
+        // Get default pricing based on vehicle type
+        $defaultPricing = getDefaultPricing($vehicleId);
+        $basePrice = $defaultPricing['basePrice'];
+        $pricePerKm = $defaultPricing['pricePerKm'];
+        $driverAllowance = $defaultPricing['driverAllowance'];
         
-        file_put_contents($logFile, "[$timestamp] Using default pricing for $vehicleType: basePrice=$basePrice, pricePerKm=$pricePerKm, driverAllowance=$driverAllowance\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Using default pricing for $vehicleId: basePrice=$basePrice, pricePerKm=$pricePerKm, driverAllowance=$driverAllowance\n", FILE_APPEND);
     }
     
     // Calculate total price
@@ -171,7 +203,7 @@ try {
             $calculatedPrice = $roundTripBase + $extraDistanceFare + $driverAllowance;
         }
     } else {
-        // For one-way trips, calculate with double distance (for driver's return)
+        // For one-way trips, calculate with driver's return journey
         $effectiveDistance = $distance * 2;
         
         if ($effectiveDistance > $minimumKm) {
@@ -185,6 +217,12 @@ try {
     
     // Round the price to nearest 10
     $calculatedPrice = ceil($calculatedPrice / 10) * 10;
+    
+    // Ensure we have a minimum price
+    if ($calculatedPrice < 1000) {
+        $calculatedPrice = $basePrice > 1000 ? $basePrice : 3000;
+        file_put_contents($logFile, "[$timestamp] Calculated price was too low, using minimum price: $calculatedPrice\n", FILE_APPEND);
+    }
     
     // Log the final calculation
     file_put_contents($logFile, "[$timestamp] Final calculated price: $calculatedPrice\n", FILE_APPEND);
