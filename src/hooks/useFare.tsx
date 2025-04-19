@@ -20,7 +20,13 @@ export interface FareParams {
 export interface FareDetails {
   basePrice: number;
   totalPrice: number;
+  price?: number;
   breakdown?: Record<string, number>;
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
   [key: string]: any; // Allow additional properties
 }
 
@@ -50,9 +56,9 @@ export function useFare() {
       case 'local':
         return '/api/direct-local-fares.php';
       case 'outstation':
-        return '/api/direct-outstation-fares.php';
+        return '/api/outstation-fares.php';
       case 'airport':
-        return '/api/direct-airport-fares.php';
+        return '/api/airport-fares.php';
       case 'tour':
         return '/api/direct-tour-fares.php';
       default:
@@ -79,17 +85,6 @@ export function useFare() {
       return { basePrice: 0, totalPrice: 0 };
     }
     
-    // Normalize the vehicle ID for consistent matching with PHP backend
-    const normalizedVehicleId = normalizeVehicleId(vehicleId);
-    console.log(`Normalized vehicle ID: ${normalizedVehicleId} (original: ${vehicleId})`);
-    
-    // Check if we have a cached result
-    const cacheKey = generateCacheKey({...params, vehicleId: normalizedVehicleId});
-    if (fareCache.current[cacheKey]) {
-      console.log(`Using cached fare for ${normalizedVehicleId}, tripType ${tripType}`, fareCache.current[cacheKey]);
-      return fareCache.current[cacheKey];
-    }
-    
     // Cancel any existing request for this vehicle
     if (abortControllersRef.current[vehicleId]) {
       console.log(`Aborting previous fare request for ${vehicleId}`);
@@ -105,11 +100,11 @@ export function useFare() {
       const endpoint = getEndpoint(tripType);
       const apiUrl = getApiUrl(endpoint);
       
-      console.log(`Fetching fare from ${apiUrl} for vehicle ${normalizedVehicleId}, tripType ${tripType}`);
+      console.log(`Fetching fare from ${apiUrl} for vehicle ${vehicleId}, tripType ${tripType}`);
       
       // Build query params based on trip type
       const query = new URLSearchParams({
-        vehicle_id: normalizedVehicleId,
+        vehicle_id: vehicleId,
         _t: Date.now().toString(), // Add timestamp to prevent caching
       });
       
@@ -144,119 +139,91 @@ export function useFare() {
       let fareDetails: FareDetails = { basePrice: 0, totalPrice: 0 };
       
       if (data.status === 'success') {
+        // First try to get fare from the 'fare' property
+        if (data.fare) {
+          const fare = data.fare;
+          
+          // Extract all relevant fields
+          fareDetails = {
+            basePrice: parseFloat(fare.basePrice) || 0,
+            totalPrice: parseFloat(fare.totalPrice) || parseFloat(fare.price) || 0,
+            price: parseFloat(fare.price) || parseFloat(fare.totalPrice) || 0,
+            breakdown: fare.breakdown || {},
+            pricePerKm: parseFloat(fare.pricePerKm) || 0,
+            driverAllowance: parseFloat(fare.driverAllowance) || 0,
+            price4hrs40km: parseFloat(fare.price4hrs40km) || 0,
+            price8hrs80km: parseFloat(fare.price8hrs80km) || 0,
+            price10hrs100km: parseFloat(fare.price10hrs100km) || 0,
+            priceExtraKm: parseFloat(fare.priceExtraKm) || 0,
+            priceExtraHour: parseFloat(fare.priceExtraHour) || 0,
+            extraKmCharge: parseFloat(fare.extraKmCharge) || 0,
+            pickupPrice: parseFloat(fare.pickupPrice) || 0,
+            dropPrice: parseFloat(fare.dropPrice) || 0
+          };
+          
+          console.log(`Extracted fare details from 'fare' property:`, fareDetails);
+        } 
+        // If no fare, try the 'fares' array
+        else if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
+          const fare = data.fares[0];
+          
+          fareDetails = {
+            basePrice: parseFloat(fare.basePrice) || 0,
+            totalPrice: parseFloat(fare.totalPrice) || parseFloat(fare.price) || 0,
+            price: parseFloat(fare.price) || parseFloat(fare.totalPrice) || 0,
+            breakdown: fare.breakdown || {},
+            pricePerKm: parseFloat(fare.pricePerKm) || 0,
+            driverAllowance: parseFloat(fare.driverAllowance) || 0,
+            price4hrs40km: parseFloat(fare.price4hrs40km) || 0,
+            price8hrs80km: parseFloat(fare.price8hrs80km) || 0,
+            price10hrs100km: parseFloat(fare.price10hrs100km) || 0,
+            priceExtraKm: parseFloat(fare.priceExtraKm) || 0,
+            priceExtraHour: parseFloat(fare.priceExtraHour) || 0,
+            extraKmCharge: parseFloat(fare.extraKmCharge) || 0,
+            pickupPrice: parseFloat(fare.pickupPrice) || 0,
+            dropPrice: parseFloat(fare.dropPrice) || 0
+          };
+          
+          console.log(`Extracted fare details from 'fares' array:`, fareDetails);
+        }
+        
+        // Ensure we have totalPrice and price set correctly
         if (tripType === 'local') {
-          // Process local fare - look for the matching vehicle in fares array
-          if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-            // Find the fare for this vehicle
-            const vehicleFare = data.fares.find((fare: any) => 
-              normalizeVehicleId(fare.vehicleId) === normalizedVehicleId
-            ) || data.fares[0]; // Fallback to first fare if no match
-            
-            console.log(`Found vehicle fare for ${normalizedVehicleId}:`, vehicleFare);
-            
-            // Get the right package price
-            let basePrice = vehicleFare.basePrice;
-            if (!basePrice && packageId) {
-              if (packageId === '4hrs-40km' && vehicleFare.price4hrs40km) {
-                basePrice = parseFloat(vehicleFare.price4hrs40km);
-              } else if (packageId === '8hrs-80km' && vehicleFare.price8hrs80km) {
-                basePrice = parseFloat(vehicleFare.price8hrs80km);
-              } else if (packageId === '10hrs-100km' && vehicleFare.price10hrs100km) {
-                basePrice = parseFloat(vehicleFare.price10hrs100km);
-              }
-            }
-            
-            // Get total price (use provided total or base as fallback)
-            const totalPrice = vehicleFare.totalPrice ? parseFloat(vehicleFare.totalPrice) : basePrice;
-            
-            // Use provided breakdown or create a simple one
-            const breakdown = vehicleFare.breakdown || 
-              { [packageId || '8hrs-80km']: basePrice };
-            
-            fareDetails = {
-              basePrice,
-              totalPrice,
-              breakdown,
-              price4hrs40km: parseFloat(vehicleFare.price4hrs40km) || 0,
-              price8hrs80km: parseFloat(vehicleFare.price8hrs80km) || 0,
-              price10hrs100km: parseFloat(vehicleFare.price10hrs100km) || 0,
-              priceExtraKm: parseFloat(vehicleFare.priceExtraKm) || 0,
-              priceExtraHour: parseFloat(vehicleFare.priceExtraHour) || 0
-            };
-          }
-        } else if (tripType === 'outstation') {
-          // Process outstation fare - use fares array (new format) or fare object (legacy)
-          if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-            const fare = data.fares[0]; // Use first fare in array
-            
-            // Parse base price and components
-            const basePrice = parseFloat(fare.basePrice) || 0;
-            const pricePerKm = parseFloat(fare.pricePerKm) || 0;
-            const driverAllowance = parseFloat(fare.driverAllowance) || 0;
-            
-            // Use provided total or calculate
-            let totalPrice = parseFloat(fare.totalPrice) || 0;
-            if (!totalPrice && basePrice > 0) {
-              // Calculate total if not provided
-              const distanceCost = distance * pricePerKm;
-              totalPrice = basePrice + distanceCost + driverAllowance;
-            }
-            
-            // Use provided breakdown or create one
-            const breakdown = fare.breakdown || {
-              'Base fare': basePrice,
-              'Distance charge': distance * pricePerKm,
-              'Driver allowance': driverAllowance
-            };
-            
-            fareDetails = {
-              basePrice,
-              totalPrice,
-              breakdown,
-              pricePerKm,
-              driverAllowance,
-              nightHaltCharge: parseFloat(fare.nightHaltCharge) || 0
-            };
-          }
-        } else if (tripType === 'airport') {
-          // Process airport fare - use fares array
-          if (data.fares && Array.isArray(data.fares) && data.fares.length > 0) {
-            const fare = data.fares[0]; // Use first fare in array
-            
-            // Parse base components
-            const basePrice = parseFloat(fare.basePrice) || 0;
-            const pickupPrice = parseFloat(fare.pickupPrice) || 0;
-            const dropPrice = parseFloat(fare.dropPrice) || 0;
-            
-            // Use provided total or calculate
-            let totalPrice = parseFloat(fare.totalPrice) || 0;
-            if (!totalPrice && basePrice >= 0) {
-              totalPrice = basePrice + pickupPrice + dropPrice;
-            }
-            
-            // Use provided breakdown or create one
-            const breakdown = fare.breakdown || {
-              'Base fare': basePrice,
-              'Airport pickup fee': pickupPrice,
-              'Airport drop fee': dropPrice
-            };
-            
-            fareDetails = {
-              basePrice,
-              totalPrice,
-              breakdown,
-              pickupPrice,
-              dropPrice,
-              pricePerKm: parseFloat(fare.pricePerKm) || 0,
-              extraKmCharge: parseFloat(fare.extraKmCharge) || 0
-            };
+          // For local, set totalPrice based on the package
+          if (packageId === '4hrs-40km' && fareDetails.price4hrs40km) {
+            fareDetails.totalPrice = fareDetails.price4hrs40km;
+            fareDetails.price = fareDetails.price4hrs40km;
+          } else if (packageId === '8hrs-80km' && fareDetails.price8hrs80km) {
+            fareDetails.totalPrice = fareDetails.price8hrs80km;
+            fareDetails.price = fareDetails.price8hrs80km;
+          } else if (packageId === '10hrs-100km' && fareDetails.price10hrs100km) {
+            fareDetails.totalPrice = fareDetails.price10hrs100km;
+            fareDetails.price = fareDetails.price10hrs100km;
           }
         }
+        
+        // Set basePrice from totalPrice if not present
+        if (!fareDetails.basePrice && fareDetails.totalPrice) {
+          fareDetails.basePrice = fareDetails.totalPrice;
+        }
+        
+        // Make sure totalPrice exists
+        if (!fareDetails.totalPrice && fareDetails.price) {
+          fareDetails.totalPrice = fareDetails.price;
+        } else if (!fareDetails.totalPrice && fareDetails.basePrice) {
+          fareDetails.totalPrice = fareDetails.basePrice;
+        }
+        
+        // Make sure price exists
+        if (!fareDetails.price && fareDetails.totalPrice) {
+          fareDetails.price = fareDetails.totalPrice;
+        }
+        
+        console.log(`Final processed fare details for ${vehicleId}:`, fareDetails);
       }
       
-      console.log(`Final fare details for ${vehicleId}:`, fareDetails);
-      
-      // Store in cache using normalized vehicle ID
+      // Cache the result using normalized vehicle ID
+      const cacheKey = generateCacheKey({...params, vehicleId: normalizeVehicleId(vehicleId)});
       fareCache.current[cacheKey] = fareDetails;
       
       return fareDetails;
@@ -280,17 +247,19 @@ export function useFare() {
     
     console.log(`Fetching fares for ${paramsArray.length} vehicles`);
     
-    // Fetch fares concurrently
-    const promises = paramsArray.map(async (params) => {
+    // Fetch fares sequentially to prevent overwhelming the server
+    for (const params of paramsArray) {
       try {
         const fare = await fetchFare(params);
         results[params.vehicleId] = fare;
+        
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
         console.error(`Error fetching fare for ${params.vehicleId}:`, error);
       }
-    });
+    }
     
-    await Promise.all(promises);
     console.log('All fares fetched:', results);
     return results;
   }, [fetchFare]);

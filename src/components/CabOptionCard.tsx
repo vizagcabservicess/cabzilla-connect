@@ -45,7 +45,10 @@ export function CabOptionCard({
       );
     } else if (fare > 0) {
       return (
-        <span className="text-lg font-bold">{formatPrice(fare)}</span>
+        <div className="text-lg font-bold">
+          {formatPrice(fare)}
+          <span className="block text-xs text-gray-500 font-normal">{fareDetails}</span>
+        </div>
       );
     } else {
       // If fare is still 0 after calculation, show contact for price
@@ -93,16 +96,8 @@ export function CabOptionCard({
             </div>
           </div>
           <div className="flex flex-col items-end">
-            <div className={cn(
-              "font-bold",
-              isSelected ? "text-blue-600" : "text-gray-800"
-            )}>
-              {renderPriceDisplay()}
-            </div>
-            <div className="text-xs text-blue-600">
-              {fareDetails}
-            </div>
-            <div className="flex items-center text-xs text-gray-400">
+            {renderPriceDisplay()}
+            <div className="flex items-center text-xs text-gray-400 mt-1">
               <span className="text-green-600 mr-1 text-[10px]">✓</span>
               Includes taxes & fees (Tolls & Permits Extra)
             </div>

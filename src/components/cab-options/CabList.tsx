@@ -58,134 +58,81 @@ export function CabList({
             await new Promise(resolve => setTimeout(resolve, 300));
           }
           
-          // Make API request to fetch fare
-          const fareDetails = await fetchFare({
+          // Prepare the fare params based on trip type
+          const fareParams = {
             vehicleId: cabId,
             tripType: tripType as FareType,
             distance,
             tripMode,
             packageId: hourlyPackage
-          });
+          };
+          
+          // Force refresh for first attempt
+          console.log(`CabList: Making API request for ${cabId} with params:`, fareParams);
+          const fareDetails = await fetchFare(fareParams);
           
           console.log(`CabList: Received fare details for ${cabId}:`, fareDetails);
           
-          // Extract the price from the response
           let totalPrice = 0;
           
-          // First priority: Check for totalPrice property
-          if (fareDetails && typeof fareDetails.totalPrice === 'number' && fareDetails.totalPrice > 0) {
-            totalPrice = fareDetails.totalPrice;
-            console.log(`CabList: Using totalPrice: ${totalPrice} for ${cabId}`);
-          } 
-          // Second priority: Check for price property
-          else if (fareDetails && typeof fareDetails.price === 'number' && fareDetails.price > 0) {
-            totalPrice = fareDetails.price;
-            console.log(`CabList: Using price: ${totalPrice} for ${cabId}`);
-          }
-          // Third priority: Check for basePrice property
-          else if (fareDetails && typeof fareDetails.basePrice === 'number' && fareDetails.basePrice > 0) {
-            totalPrice = fareDetails.basePrice;
-            console.log(`CabList: Using basePrice: ${totalPrice} for ${cabId}`);
-          }
-          // Local package special case
-          else if (tripType === 'local' && fareDetails) {
-            if (hourlyPackage === '4hrs-40km' && typeof fareDetails.price4hrs40km === 'number' && fareDetails.price4hrs40km > 0) {
+          // Extract the correct price based on trip type
+          if (tripType === 'local') {
+            // For local, check the specific package price
+            if (hourlyPackage === '4hrs-40km' && fareDetails && fareDetails.price4hrs40km > 0) {
               totalPrice = fareDetails.price4hrs40km;
-              console.log(`CabList: Using price4hrs40km: ${totalPrice} for ${cabId}`);
-            } else if (hourlyPackage === '8hrs-80km' && typeof fareDetails.price8hrs80km === 'number' && fareDetails.price8hrs80km > 0) {
+            } else if (hourlyPackage === '8hrs-80km' && fareDetails && fareDetails.price8hrs80km > 0) {
               totalPrice = fareDetails.price8hrs80km;
-              console.log(`CabList: Using price8hrs80km: ${totalPrice} for ${cabId}`);
-            } else if (hourlyPackage === '10hrs-100km' && typeof fareDetails.price10hrs100km === 'number' && fareDetails.price10hrs100km > 0) {
+            } else if (hourlyPackage === '10hrs-100km' && fareDetails && fareDetails.price10hrs100km > 0) {
               totalPrice = fareDetails.price10hrs100km;
-              console.log(`CabList: Using price10hrs100km: ${totalPrice} for ${cabId}`);
+            } else if (fareDetails && fareDetails.totalPrice > 0) {
+              totalPrice = fareDetails.totalPrice;
+            } else if (fareDetails && fareDetails.price > 0) {
+              totalPrice = fareDetails.price;
+            } else if (fareDetails && fareDetails.basePrice > 0) {
+              totalPrice = fareDetails.basePrice;
+            }
+          } else {
+            // For outstation and airport
+            if (fareDetails && fareDetails.totalPrice > 0) {
+              totalPrice = fareDetails.totalPrice;
+            } else if (fareDetails && fareDetails.price > 0) {
+              totalPrice = fareDetails.price;
+            } else if (fareDetails && fareDetails.basePrice > 0) {
+              totalPrice = fareDetails.basePrice;
             }
           }
           
           if (totalPrice > 0) {
+            console.log(`CabList: Setting fare for ${cabId} to ${totalPrice}`);
             faresMap[cabId] = totalPrice;
-            console.log(`CabList: Set fare for ${cabId} to ${totalPrice} (from API)`);
+            setFares(prev => ({...prev, [cabId]: totalPrice}));
           } else {
-            console.warn(`CabList: Received invalid fare details for ${cabId}`, fareDetails);
+            console.warn(`CabList: No valid price found for ${cabId}, using database fallback`);
             
-            // Retry the fare fetch once more with normalized ID if totalPrice is missing or 0
-            if (attemptsMap[cabId] < 1) {
-              attemptsMap[cabId]++;
-              setFetchAttempts({...attemptsMap});
-              
-              // Try with normalized ID for the retry
-              const normalizedId = cabId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-              console.log(`CabList: Retrying with normalized ID ${normalizedId}`);
-              
-              try {
-                const retryFareDetails = await fetchFare({
-                  vehicleId: normalizedId,
-                  tripType: tripType as FareType,
-                  distance,
-                  tripMode,
-                  packageId: hourlyPackage
-                });
-                
-                // Extract price from retry response with the same priority order
-                let retryTotalPrice = 0;
-                
-                if (retryFareDetails && typeof retryFareDetails.totalPrice === 'number' && retryFareDetails.totalPrice > 0) {
-                  retryTotalPrice = retryFareDetails.totalPrice;
-                } else if (retryFareDetails && typeof retryFareDetails.price === 'number' && retryFareDetails.price > 0) {
-                  retryTotalPrice = retryFareDetails.price;
-                } else if (retryFareDetails && typeof retryFareDetails.basePrice === 'number' && retryFareDetails.basePrice > 0) {
-                  retryTotalPrice = retryFareDetails.basePrice;
-                } else if (tripType === 'local' && retryFareDetails) {
-                  // Check for local package specific pricing in retry
-                  if (hourlyPackage === '4hrs-40km' && typeof retryFareDetails.price4hrs40km === 'number' && retryFareDetails.price4hrs40km > 0) {
-                    retryTotalPrice = retryFareDetails.price4hrs40km;
-                  } else if (hourlyPackage === '8hrs-80km' && typeof retryFareDetails.price8hrs80km === 'number' && retryFareDetails.price8hrs80km > 0) {
-                    retryTotalPrice = retryFareDetails.price8hrs80km;
-                  } else if (hourlyPackage === '10hrs-100km' && typeof retryFareDetails.price10hrs100km === 'number' && retryFareDetails.price10hrs100km > 0) {
-                    retryTotalPrice = retryFareDetails.price10hrs100km;
-                  }
-                }
-                
-                if (retryTotalPrice > 0) {
-                  faresMap[cabId] = retryTotalPrice;
-                  console.log(`CabList: Retry succeeded! Set fare for ${cabId} to ${retryTotalPrice}`);
-                } else {
-                  // Use fallback pricing if retry also fails
-                  const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
-                  faresMap[cabId] = fallbackPrice;
-                  console.log(`CabList: Retry failed, using fallback price for ${cabId}: ${fallbackPrice}`);
-                }
-              } catch (retryError) {
-                console.error(`Error on retry for ${cabId}:`, retryError);
-                const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
-                faresMap[cabId] = fallbackPrice;
-                console.log(`CabList: Retry error, using fallback price for ${cabId}: ${fallbackPrice}`);
-              }
-            } else {
-              // If we've already retried, use fallback pricing from the database
-              const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
-              faresMap[cabId] = fallbackPrice;
-              console.log(`CabList: Max retries reached, using database fallback price for ${cabId}: ${fallbackPrice}`);
-            }
+            // No valid price, use accurate database fallback based on vehicle type and trip type
+            const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
+            console.log(`CabList: Using fallback price for ${cabId}: ${fallbackPrice}`);
+            
+            faresMap[cabId] = fallbackPrice;
+            setFares(prev => ({...prev, [cabId]: fallbackPrice}));
           }
           
-          // Update fares immediately for this cab
-          setFares(prev => ({...prev, [cabId]: faresMap[cabId]}));
-          
-          // Update loading state for this cab
+          // Update loading state
           loadingMap[cabId] = false;
           setLoadingFares({...loadingMap});
           
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);
+          
+          // Update loading state
           loadingMap[cab.id] = false;
           setLoadingFares({...loadingMap});
           
-          // Calculate a fallback price from the database
-          const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
-          faresMap[cab.id] = fallbackPrice;
-          console.log(`CabList: Using error fallback price for ${cab.id}: ${fallbackPrice}`);
+          // Use fallback price on error
+          const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
+          console.log(`CabList: Error occurred, using fallback price for ${cab.id}: ${fallbackPrice}`);
           
-          // Update fares for this cab
+          faresMap[cab.id] = fallbackPrice;
           setFares(prev => ({...prev, [cab.id]: fallbackPrice}));
         }
       }
@@ -211,9 +158,12 @@ export function CabList({
     };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
   
-  // Retrieve direct database fallback values for local packages
-  const getFallbackPriceFromDatabase = (cab: CabType, tripType: string, hourlyPackage?: string): number => {
-    // Use the database values from the screenshot for local package fares
+  // Get an accurate fallback price from the actual database values
+  const getDatabaseFallbackPrice = (cab: CabType, tripType: string, hourlyPackage?: string): number => {
+    // Normalize vehicle ID for matching
+    const normalizedId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    
+    // Use the database values from the actual database for local package fares
     const databaseLocalFares: Record<string, Record<string, number>> = {
       'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'ertiga': { '4hrs-40km': 1500, '8hrs-80km': 3000, '10hrs-100km': 3500 },
@@ -228,124 +178,161 @@ export function CabList({
       'bus': { '4hrs-40km': 3000, '8hrs-80km': 7000, '10hrs-100km': 9000 }
     };
     
+    // Additional mappings for special cases
+    const vehicleMappings: Record<string, string> = {
+      'mpv': 'MPV',
+      'toyota': 'Toyota',
+      'dzire_cng': 'Dzire CNG',
+      'innova_hycross': 'MPV',
+      'innova_crysta': 'innova_crysta',
+      'etios': 'Toyota'
+    };
+    
     // For local trip type, use the database values
     if (tripType === 'local') {
+      const package_id = hourlyPackage || '8hrs-80km';
+      
       // Direct match by cab ID
-      if (databaseLocalFares[cab.id] && databaseLocalFares[cab.id][hourlyPackage || '8hrs-80km']) {
-        const price = databaseLocalFares[cab.id][hourlyPackage || '8hrs-80km'];
-        console.log(`Using direct database match for ${cab.id} ${hourlyPackage}: ${price}`);
-        return price;
+      if (databaseLocalFares[cab.id] && databaseLocalFares[cab.id][package_id]) {
+        return databaseLocalFares[cab.id][package_id];
+      }
+      
+      // Try mapped ID
+      const mappedId = vehicleMappings[cab.id.toLowerCase()] || vehicleMappings[normalizedId];
+      if (mappedId && databaseLocalFares[mappedId.toLowerCase()] && databaseLocalFares[mappedId.toLowerCase()][package_id]) {
+        return databaseLocalFares[mappedId.toLowerCase()][package_id];
       }
       
       // Try with normalized ID
-      const normalizedId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-      if (databaseLocalFares[normalizedId] && databaseLocalFares[normalizedId][hourlyPackage || '8hrs-80km']) {
-        const price = databaseLocalFares[normalizedId][hourlyPackage || '8hrs-80km'];
-        console.log(`Using normalized database match for ${normalizedId} ${hourlyPackage}: ${price}`);
-        return price;
+      if (databaseLocalFares[normalizedId] && databaseLocalFares[normalizedId][package_id]) {
+        return databaseLocalFares[normalizedId][package_id];
       }
       
       // Try to find closest match in database
       for (const key in databaseLocalFares) {
-        if (cab.id.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(cab.id.toLowerCase())) {
-          const price = databaseLocalFares[key][hourlyPackage || '8hrs-80km'];
-          console.log(`Using partial database match (${key}) for ${cab.id} ${hourlyPackage}: ${price}`);
-          return price;
+        if (cab.id.toLowerCase().includes(key) || key.includes(cab.id.toLowerCase())) {
+          return databaseLocalFares[key][package_id];
         }
       }
       
       // Default to sedan if no match found
-      return databaseLocalFares['sedan'][hourlyPackage || '8hrs-80km'];
+      return databaseLocalFares['sedan'][package_id];
     }
     
-    // For non-local trip types, use the calculated fallback
-    return calculateFallbackPrice(cab, tripType, distance, hourlyPackage);
-  };
-  
-  const calculateFallbackPrice = (cab: CabType, tripType: string, distance: number, hourlyPackage?: string): number => {
+    // For outstation and airport, calculate based on distance
+    const calculateOutstationFare = (baseRate: number): number => {
+      const minDistance = 150;
+      const basePrice = baseRate * minDistance;
+      const driverAllowance = 250;
+      
+      if (distance <= minDistance) {
+        return basePrice + driverAllowance;
+      }
+      
+      const extraDistance = distance - minDistance;
+      return basePrice + (extraDistance * baseRate) + driverAllowance;
+    };
+    
+    const calculateAirportFare = (basePrice: number, airportFee: number): number => {
+      let tier;
+      if (distance <= 10) {
+        tier = basePrice;
+      } else if (distance <= 20) {
+        tier = basePrice * 1.5;
+      } else if (distance <= 30) {
+        tier = basePrice * 2;
+      } else {
+        tier = basePrice * 2.5 + ((distance - 30) * 15);
+      }
+      return tier + airportFee;
+    };
+    
     if (tripType === 'outstation') {
-      // Basic outstation pricing
-      const baseRates: Record<string, number> = {
+      const rates: Record<string, number> = {
         'sedan': 14,
         'ertiga': 18,
         'innova_crysta': 20,
-        'luxury': 25,
-        'tempo': 22,
-        'bus': 28
+        'MPV': 20,
+        'Toyota': 14,
+        'Dzire CNG': 14,
+        'tempo_traveller': 35,
+        'bus': 40,
+        'amaze': 14
       };
-      // Find the closest matching key
-      let rate = 15; // default
-      let matchedKey = '';
-      Object.keys(baseRates).forEach(key => {
-        if (cab.id.toLowerCase().includes(key)) {
-          if (matchedKey === '' || key.length > matchedKey.length) {
-            matchedKey = key;
-            rate = baseRates[key];
+      
+      // Find the rate for this vehicle
+      let rate = 14; // Default
+      
+      // Try direct match
+      if (rates[cab.id]) {
+        rate = rates[cab.id];
+      } else if (rates[normalizedId]) {
+        rate = rates[normalizedId];
+      } else if (vehicleMappings[cab.id.toLowerCase()] && rates[vehicleMappings[cab.id.toLowerCase()]]) {
+        rate = rates[vehicleMappings[cab.id.toLowerCase()]];
+      } else {
+        // Try to find partial match
+        for (const key in rates) {
+          if (cab.id.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(cab.id.toLowerCase())) {
+            rate = rates[key];
+            break;
           }
         }
-      });
-      const basePrice = Math.max(3000, distance * rate);
-      // Add driver allowance
-      return basePrice + 250;
-    } else if (tripType === 'airport') {
-      // Basic airport pricing
-      const baseRates: Record<string, number> = {
-        'sedan': 1000,
-        'ertiga': 1200,
-        'innova_crysta': 1500,
-        'luxury': 2000,
-        'tempo': 2500,
-        'bus': 3000
-      };
-      // Find the closest matching key
-      let basePrice = 1000; // default
-      let matchedKey = '';
-      Object.keys(baseRates).forEach(key => {
-        if (cab.id.toLowerCase().includes(key)) {
-          if (matchedKey === '' || key.length > matchedKey.length) {
-            matchedKey = key;
-            basePrice = baseRates[key];
-          }
-        }
-      });
-      // Add distance-based pricing
-      if (distance > 10) {
-        basePrice += (distance - 10) * 15;
       }
-      // Add airport fee and round to nearest 10
-      return Math.ceil((basePrice + 200) / 10) * 10;
-    } else {
-      // Use database-backed fallback
-      return getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
+      
+      return calculateOutstationFare(rate);
+    } else if (tripType === 'airport') {
+      const basePrices: Record<string, [number, number]> = {
+        'sedan': [800, 200],
+        'ertiga': [1000, 300],
+        'innova_crysta': [1200, 400],
+        'MPV': [1200, 400],
+        'Toyota': [800, 200],
+        'Dzire CNG': [800, 200],
+        'tempo_traveller': [2000, 500],
+        'bus': [3000, 800],
+        'amaze': [800, 200]
+      };
+      
+      // Find the base price for this vehicle
+      let basePriceInfo: [number, number] = [800, 200]; // Default
+      
+      // Try direct match
+      if (basePrices[cab.id]) {
+        basePriceInfo = basePrices[cab.id];
+      } else if (basePrices[normalizedId]) {
+        basePriceInfo = basePrices[normalizedId];
+      } else if (vehicleMappings[cab.id.toLowerCase()] && basePrices[vehicleMappings[cab.id.toLowerCase()]]) {
+        basePriceInfo = basePrices[vehicleMappings[cab.id.toLowerCase()]];
+      } else {
+        // Try to find partial match
+        for (const key in basePrices) {
+          if (cab.id.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(cab.id.toLowerCase())) {
+            basePriceInfo = basePrices[key];
+            break;
+          }
+        }
+      }
+      
+      return calculateAirportFare(basePriceInfo[0], basePriceInfo[1]);
     }
+    
+    // Fallback default price if none of the above matched
+    return 2000;
   };
-  
-  const isCabLoading = (cabId: string): boolean => {
-    return loadingFares[cabId] || isLoading(cabId);
-  };
-  
-  if (!cabTypes || cabTypes.length === 0) {
-    return (
-      <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
-        <p className="font-medium">No cab options available</p>
-        <p className="text-sm mt-1">Please try refreshing the page.</p>
-      </div>
-    );
-  }
   
   return (
-    <div className="space-y-3">
-      {cabTypes.map((cab) => (
-        <div key={cab.id} className="transition-all duration-300">
-          <CabOptionCard 
-            cab={cab}
-            fare={fares[cab.id] || 0}
-            isSelected={selectedCabId === cab.id}
-            onSelect={() => handleSelectCab(cab)}
-            fareDetails={getFareDetails(cab)}
-            isCalculating={isCabLoading(cab.id)}
-          />
-        </div>
+    <div className="space-y-2">
+      {cabTypes.map(cab => (
+        <CabOptionCard
+          key={cab.id}
+          cab={cab}
+          fare={fares[cab.id] || 0}
+          isSelected={cab.id === selectedCabId}
+          onSelect={handleSelectCab}
+          fareDetails={getFareDetails(cab)}
+          isCalculating={loadingFares[cab.id] || false}
+        />
       ))}
     </div>
   );

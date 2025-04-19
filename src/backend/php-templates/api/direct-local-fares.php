@@ -44,106 +44,34 @@ function getDbConnection() {
 // Normalize vehicle ID function
 function normalizeVehicleId($vehicleId) {
     if (!$vehicleId) return null;
+    
     // Convert to lowercase and replace spaces with underscores
-    return strtolower(str_replace(' ', '_', trim($vehicleId)));
-}
-
-// Get default package pricing for a vehicle type
-function getDefaultPackagePricing($vehicleId) {
-    $defaultPricing = [
-        'sedan' => [
-            'price_4hrs_40km' => 1400,
-            'price_8hrs_80km' => 2400, 
-            'price_10hrs_100km' => 3000,
-            'price_extra_km' => 14,
-            'price_extra_hour' => 250
-        ],
-        'ertiga' => [
-            'price_4hrs_40km' => 1500,
-            'price_8hrs_80km' => 3000,
-            'price_10hrs_100km' => 3500,
-            'price_extra_km' => 18,
-            'price_extra_hour' => 300
-        ],
-        'innova_crysta' => [
-            'price_4hrs_40km' => 1800,
-            'price_8hrs_80km' => 3500,
-            'price_10hrs_100km' => 4000,
-            'price_extra_km' => 20,
-            'price_extra_hour' => 350
-        ],
-        'luxury' => [
-            'price_4hrs_40km' => 3500,
-            'price_8hrs_80km' => 5500,
-            'price_10hrs_100km' => 6500,
-            'price_extra_km' => 25,
-            'price_extra_hour' => 400
-        ],
-        'tempo' => [
-            'price_4hrs_40km' => 3000,
-            'price_8hrs_80km' => 4500,
-            'price_10hrs_100km' => 5500,
-            'price_extra_km' => 22,
-            'price_extra_hour' => 350
-        ],
-        'bus' => [
-            'price_4hrs_40km' => 3000,
-            'price_8hrs_80km' => 7000,
-            'price_10hrs_100km' => 9000,
-            'price_extra_km' => 28,
-            'price_extra_hour' => 400
-        ],
-        'mpv' => [
-            'price_4hrs_40km' => 2000,
-            'price_8hrs_80km' => 4000,
-            'price_10hrs_100km' => 4500,
-            'price_extra_km' => 22,
-            'price_extra_hour' => 450
-        ],
-        'toyota' => [
-            'price_4hrs_40km' => 1400,
-            'price_8hrs_80km' => 2400,
-            'price_10hrs_100km' => 3000,
-            'price_extra_km' => 14,
-            'price_extra_hour' => 300
-        ],
-        'dzire_cng' => [
-            'price_4hrs_40km' => 1400,
-            'price_8hrs_80km' => 2400,
-            'price_10hrs_100km' => 3000,
-            'price_extra_km' => 14,
-            'price_extra_hour' => 300
-        ],
-        'tempo_traveller' => [
-            'price_4hrs_40km' => 6500,
-            'price_8hrs_80km' => 6500,
-            'price_10hrs_100km' => 7500,
-            'price_extra_km' => 35,
-            'price_extra_hour' => 750
-        ],
-        'amaze' => [
-            'price_4hrs_40km' => 1400,
-            'price_8hrs_80km' => 2400,
-            'price_10hrs_100km' => 3000,
-            'price_extra_km' => 14,
-            'price_extra_hour' => 300
-        ]
+    $normalized = strtolower(str_replace(' ', '_', trim($vehicleId)));
+    
+    // Additional manual mappings
+    $mappings = [
+        'innova_hyrcoss' => 'innova_crysta',
+        'innova_hycross' => 'innova_crysta',
+        'innovacrystal' => 'innova_crysta',
+        'innova_crystal' => 'innova_crysta',
+        'innovacrystal_7seater' => 'innova_crysta',
+        'innova' => 'innova_crysta',
+        'crysta' => 'innova_crysta',
+        'toyota_innova' => 'innova_crysta',
+        'mpv' => 'MPV',
+        'toyota' => 'Toyota',
+        'dzire_cng' => 'Dzire CNG',
+        'tempo_traveller' => 'tempo_traveller',
+        'amaze' => 'amaze',
+        'bus' => 'bus'
     ];
     
-    // Check if we have a direct match
-    if (isset($defaultPricing[$vehicleId])) {
-        return $defaultPricing[$vehicleId];
+    // Direct replacements
+    if (isset($mappings[$normalized])) {
+        return $mappings[$normalized];
     }
     
-    // Check for partial match
-    foreach ($defaultPricing as $key => $pricing) {
-        if (strpos($vehicleId, $key) !== false) {
-            return $pricing;
-        }
-    }
-    
-    // Return sedan pricing as default
-    return $defaultPricing['sedan'];
+    return $normalized;
 }
 
 try {
@@ -166,102 +94,142 @@ try {
     }
     
     // Variables to store pricing information
-    $useDefaultPricing = false;
     $price4hrs40km = 0;
     $price8hrs80km = 0;
     $price10hrs100km = 0;
     $priceExtraKm = 0;
     $priceExtraHour = 0;
+    $isDefaultPricing = false;
     
     try {
         // Connect to database
         $conn = getDbConnection();
         
-        // Query local_package_fares by normalized vehicle_id
-        $query = "SELECT * FROM local_package_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
-        
+        // Query local_package_fares by vehicle_id (exact match first)
+        $query = "SELECT * FROM local_package_fares WHERE vehicle_id = :vehicle_id";
         $stmt = $conn->prepare($query);
         $stmt->bindParam(':vehicle_id', $vehicleId);
         
-        // Log the query and parameters
-        file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
-        file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+        // Log the query
+        file_put_contents($logFile, "[$timestamp] SQL Query: $query with param: $vehicleId\n", FILE_APPEND);
         
         $stmt->execute();
-        
-        // Fetch result
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // Log query result
-        file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
-        
-        if ($result) {
-            // Use database values
-            $price4hrs40km = (float)$result['price_4hrs_40km'] ?? 0;
-            $price8hrs80km = (float)$result['price_8hrs_80km'] ?? 0;
-            $price10hrs100km = (float)$result['price_10hrs_100km'] ?? 0;
-            $priceExtraKm = (float)$result['price_extra_km'] ?? 0;
-            $priceExtraHour = (float)$result['price_extra_hour'] ?? 0;
+        if (!$result) {
+            // No exact match, try with lowercase
+            $vehicleIdLower = strtolower($vehicleId);
             
-            file_put_contents($logFile, "[$timestamp] Using database pricing: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
-        } else {
-            // If no direct match, try partial match in database
-            $query = "SELECT * FROM local_package_fares WHERE LOWER(vehicle_id) LIKE :vehicle_id_like LIMIT 1";
-            $likeParam = "%" . str_replace('_', '%', $vehicleId) . "%";
-            
+            $query = "SELECT * FROM local_package_fares WHERE LOWER(vehicle_id) = :vehicle_id_lower";
             $stmt = $conn->prepare($query);
-            $stmt->bindParam(':vehicle_id_like', $likeParam);
+            $stmt->bindParam(':vehicle_id_lower', $vehicleIdLower);
             
-            file_put_contents($logFile, "[$timestamp] Trying partial match SQL Query: $query with parameter $likeParam\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Trying lowercase SQL Query: $query with param: $vehicleIdLower\n", FILE_APPEND);
             
             $stmt->execute();
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+        
+        if (!$result) {
+            // Still no match, try partial match
+            $query = "SELECT * FROM local_package_fares WHERE 
+                     LOWER(vehicle_id) LIKE :vehicle_id_like OR 
+                     :vehicle_id_like LIKE CONCAT('%', LOWER(vehicle_id), '%')
+                     LIMIT 1";
             
-            if ($result) {
-                // Use partial match values
-                $price4hrs40km = (float)$result['price_4hrs_40km'] ?? 0;
-                $price8hrs80km = (float)$result['price_8hrs_80km'] ?? 0;
-                $price10hrs100km = (float)$result['price_10hrs_100km'] ?? 0;
-                $priceExtraKm = (float)$result['price_extra_km'] ?? 0;
-                $priceExtraHour = (float)$result['price_extra_hour'] ?? 0;
-                
-                file_put_contents($logFile, "[$timestamp] Using partial match database pricing: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+            $likeParam = "%$vehicleIdLower%";
+            $stmt = $conn->prepare($query);
+            $stmt->bindParam(':vehicle_id_like', $likeParam);
+            
+            file_put_contents($logFile, "[$timestamp] Trying partial match SQL Query: $query with param: $likeParam\n", FILE_APPEND);
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+        
+        // Log query result
+        file_put_contents($logFile, "[$timestamp] Final query result: " . json_encode($result) . "\n", FILE_APPEND);
+        
+        if ($result) {
+            // Use database values
+            $price4hrs40km = (float)$result['price_4hrs_40km'];
+            $price8hrs80km = (float)$result['price_8hrs_80km'];
+            $price10hrs100km = (float)$result['price_10hrs_100km'];
+            $priceExtraKm = (float)$result['price_extra_km'];
+            $priceExtraHour = (float)$result['price_extra_hour'];
+            
+            file_put_contents($logFile, "[$timestamp] Using database pricing for $vehicleId: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+        } else {
+            // If no match in database, use fallback
+            $isDefaultPricing = true;
+            
+            // Define fallback pricing based on database values
+            $fallbackPricing = [
+                'sedan' => ['price_4hrs_40km' => 1400, 'price_8hrs_80km' => 2400, 'price_10hrs_100km' => 3000, 'price_extra_km' => 13, 'price_extra_hour' => 300],
+                'ertiga' => ['price_4hrs_40km' => 1500, 'price_8hrs_80km' => 3000, 'price_10hrs_100km' => 3500, 'price_extra_km' => 18, 'price_extra_hour' => 250],
+                'innova_crysta' => ['price_4hrs_40km' => 1800, 'price_8hrs_80km' => 3500, 'price_10hrs_100km' => 4000, 'price_extra_km' => 20, 'price_extra_hour' => 400],
+                'MPV' => ['price_4hrs_40km' => 2000, 'price_8hrs_80km' => 4000, 'price_10hrs_100km' => 4500, 'price_extra_km' => 22, 'price_extra_hour' => 450],
+                'Toyota' => ['price_4hrs_40km' => 1400, 'price_8hrs_80km' => 2400, 'price_10hrs_100km' => 3000, 'price_extra_km' => 14, 'price_extra_hour' => 300],
+                'Dzire CNG' => ['price_4hrs_40km' => 1400, 'price_8hrs_80km' => 2400, 'price_10hrs_100km' => 3000, 'price_extra_km' => 14, 'price_extra_hour' => 300],
+                'tempo_traveller' => ['price_4hrs_40km' => 6500, 'price_8hrs_80km' => 6500, 'price_10hrs_100km' => 7500, 'price_extra_km' => 35, 'price_extra_hour' => 750],
+                'tempo' => ['price_4hrs_40km' => 3000, 'price_8hrs_80km' => 4500, 'price_10hrs_100km' => 5500, 'price_extra_km' => 22, 'price_extra_hour' => 300],
+                'luxury' => ['price_4hrs_40km' => 3500, 'price_8hrs_80km' => 5500, 'price_10hrs_100km' => 6500, 'price_extra_km' => 25, 'price_extra_hour' => 300],
+                'amaze' => ['price_4hrs_40km' => 1400, 'price_8hrs_80km' => 2400, 'price_10hrs_100km' => 3000, 'price_extra_km' => 14, 'price_extra_hour' => 300],
+                'bus' => ['price_4hrs_40km' => 3000, 'price_8hrs_80km' => 7000, 'price_10hrs_100km' => 9000, 'price_extra_km' => 40, 'price_extra_hour' => 900]
+            ];
+            
+            // Try exact match first
+            if (isset($fallbackPricing[$vehicleId])) {
+                $price4hrs40km = $fallbackPricing[$vehicleId]['price_4hrs_40km'];
+                $price8hrs80km = $fallbackPricing[$vehicleId]['price_8hrs_80km'];
+                $price10hrs100km = $fallbackPricing[$vehicleId]['price_10hrs_100km'];
+                $priceExtraKm = $fallbackPricing[$vehicleId]['price_extra_km'];
+                $priceExtraHour = $fallbackPricing[$vehicleId]['price_extra_hour'];
+            } else {
+                // Try to find partial match in fallback
+                foreach ($fallbackPricing as $key => $values) {
+                    if (stripos($vehicleId, $key) !== false || stripos($key, $vehicleId) !== false) {
+                        $price4hrs40km = $values['price_4hrs_40km'];
+                        $price8hrs80km = $values['price_8hrs_80km'];
+                        $price10hrs100km = $values['price_10hrs_100km'];
+                        $priceExtraKm = $values['price_extra_km'];
+                        $priceExtraHour = $values['price_extra_hour'];
+                        break;
+                    }
+                }
             }
+            
+            // If still no pricing, use sedan as default
+            if ($price4hrs40km === 0) {
+                $price4hrs40km = $fallbackPricing['sedan']['price_4hrs_40km'];
+                $price8hrs80km = $fallbackPricing['sedan']['price_8hrs_80km'];
+                $price10hrs100km = $fallbackPricing['sedan']['price_10hrs_100km'];
+                $priceExtraKm = $fallbackPricing['sedan']['price_extra_km'];
+                $priceExtraHour = $fallbackPricing['sedan']['price_extra_hour'];
+            }
+            
+            file_put_contents($logFile, "[$timestamp] Using fallback pricing for $vehicleId: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
         }
     } catch (Exception $e) {
-        // Log database error but continue with default pricing
-        file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . " - Using default pricing\n", FILE_APPEND);
-    }
-    
-    // Check if we got valid pricing from the database
-    if ($price4hrs40km <= 0 || $price8hrs80km <= 0 || $price10hrs100km <= 0) {
-        $useDefaultPricing = true;
-        
-        // Get default pricing for the vehicle type
-        $defaultPackagePricing = getDefaultPackagePricing($vehicleId);
-        $price4hrs40km = $defaultPackagePricing['price_4hrs_40km'];
-        $price8hrs80km = $defaultPackagePricing['price_8hrs_80km'];
-        $price10hrs100km = $defaultPackagePricing['price_10hrs_100km'];
-        $priceExtraKm = $defaultPackagePricing['price_extra_km'];
-        $priceExtraHour = $defaultPackagePricing['price_extra_hour'];
-        
-        file_put_contents($logFile, "[$timestamp] Using default package pricing for $vehicleId: price4hrs40km=$price4hrs40km, price8hrs80km=$price8hrs80km\n", FILE_APPEND);
+        // Log database error
+        file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . "\n", FILE_APPEND);
+        throw $e;
     }
     
     // Determine base price based on package ID
     $basePrice = 0;
     switch ($packageId) {
         case '4hrs-40km':
-            $basePrice = (float)$price4hrs40km;
+            $basePrice = $price4hrs40km;
             break;
         case '8hrs-80km':
-            $basePrice = (float)$price8hrs80km;
+            $basePrice = $price8hrs80km;
             break;
         case '10hrs-100km':
-            $basePrice = (float)$price10hrs100km;
+            $basePrice = $price10hrs100km;
             break;
         default:
-            $basePrice = (float)$price8hrs80km; // Default to 8hrs-80km
+            $basePrice = $price8hrs80km; // Default to 8hrs-80km
             break;
     }
     
@@ -273,13 +241,13 @@ try {
         'price10hrs100km' => (float)$price10hrs100km,
         'priceExtraKm' => (float)$priceExtraKm,
         'priceExtraHour' => (float)$priceExtraHour,
-        'basePrice' => $basePrice,
-        'totalPrice' => $basePrice,
-        'price' => $basePrice, // Add price field for consistency
+        'basePrice' => (float)$basePrice,
+        'totalPrice' => (float)$basePrice,
+        'price' => (float)$basePrice, // Add price field for consistency
         'breakdown' => [
             $packageId => $basePrice
         ],
-        'isDefaultPricing' => $useDefaultPricing
+        'isDefaultPricing' => $isDefaultPricing
     ];
     
     // Return success response with fare data
