@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -301,11 +302,13 @@ export function CabList({
     const tripType = localStorage.getItem('tripType');
     const currentPackage = localStorage.getItem('currentHourlyPackage');
     
+    // FIX: Force the correct price of 4000 for MPV/Innova Hycross with 8hrs package
     if (tripType === 'local' && 
-        (cabId === 'mpv' || cabId === 'innova_hycross' || cabId.toLowerCase().includes('hycross')) && 
+        (cabId === 'mpv' || cabId === 'innova_hycross' || 
+         cab.name.toLowerCase().includes('hycross')) && 
         (currentPackage?.includes('8hrs') || currentPackage?.includes('8hr') || 
          currentPackage?.includes('08hrs') || currentPackage?.includes('08hr'))) {
-      console.log(`CabList: Special handling for MPV/${cabId} with 8hrs package - using fixed price 4000`);
+      console.log(`CabList: Special handling for ${cab.name} (${cabId}) with 8hrs package - using fixed price 4000`);
       return 4000;
     }
     
