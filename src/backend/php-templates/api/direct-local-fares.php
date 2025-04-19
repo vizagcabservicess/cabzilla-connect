@@ -247,7 +247,8 @@ try {
         'breakdown' => [
             $packageId => $basePrice
         ],
-        'isDefaultPricing' => $isDefaultPricing
+        'isDefaultPricing' => $isDefaultPricing,
+        'dataSource' => 'database' // Add data source information for debugging
     ];
     
     // Return success response with fare data
