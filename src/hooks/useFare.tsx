@@ -21,7 +21,19 @@ export interface FareDetails {
   basePrice: number;
   totalPrice: number;
   breakdown?: Record<string, number>;
+  [key: string]: any; // Allow additional properties
 }
+
+// Helper function to normalize vehicle ID
+const normalizeVehicleId = (vehicleId: string): string => {
+  return vehicleId.toLowerCase().replace(/\s+/g, '_');
+};
+
+// Cache key generator
+const generateCacheKey = (params: FareParams): string => {
+  const { vehicleId, tripType, distance = 0, tripMode = 'one-way', packageId = '' } = params;
+  return `fare_${tripType}_${vehicleId}_${distance}_${tripMode}_${packageId}`;
+};
 
 export function useFare() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -43,11 +55,6 @@ export function useFare() {
     }
   };
   
-  // Function to normalize vehicle ID
-  const normalizeVehicleId = (vehicleId: string): string => {
-    return vehicleId.toLowerCase().replace(/\s+/g, '_');
-  };
-  
   // Clear cache for a specific trip type
   const clearCacheForTripType = useCallback((tripType: FareType) => {
     console.log(`Clearing cache for trip type: ${tripType}`);
@@ -63,6 +70,13 @@ export function useFare() {
     
     // Normalize the vehicle ID for consistent matching
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    
+    // Check if we have a cached result
+    const cacheKey = generateCacheKey(params);
+    if (fareCache.current[cacheKey]) {
+      console.log(`Using cached fare for ${normalizedVehicleId}, tripType ${tripType}`);
+      return fareCache.current[cacheKey];
+    }
     
     // Cancel any existing request for this vehicle
     if (abortControllersRef.current[vehicleId]) {
@@ -121,6 +135,10 @@ export function useFare() {
           fareDetails = {
             basePrice: basePrice,
             totalPrice: totalPrice,
+            pickupPrice: pickupPrice,
+            dropPrice: dropPrice,
+            pricePerKm: parseFloat(airportFare.pricePerKm) || 0,
+            extraKmCharge: parseFloat(airportFare.extraKmCharge) || 0,
             breakdown: airportFare.breakdown || {
               'Base fare': basePrice,
               'Airport pickup fee': pickupPrice,
@@ -176,8 +194,10 @@ export function useFare() {
               fareDetails = {
                 basePrice: basePrice,
                 totalPrice: basePrice,
+                pricePerKm: parseFloat(localFare.priceExtraKm || 0),
+                extraHourCharge: parseFloat(localFare.priceExtraHour || 0),
                 breakdown: { 
-                  [packageId || '8hrs-80km']: basePrice 
+                  [packageId || '8hrs-80km package']: basePrice 
                 }
               };
             }
@@ -198,6 +218,9 @@ export function useFare() {
           fareDetails = {
             basePrice: basePrice,
             totalPrice: totalPrice,
+            pricePerKm: parseFloat(outstationFare.pricePerKm) || 0,
+            driverAllowance: driverAllowance,
+            nightHaltCharge: parseFloat(outstationFare.nightHaltCharge) || 0,
             breakdown: outstationFare.breakdown || {
               'Base fare': basePrice,
               'Distance charge': distanceCharge,
@@ -229,7 +252,6 @@ export function useFare() {
       }
       
       // Store in cache
-      const cacheKey = `${tripType}_${vehicleId}_${distance}_${tripMode}_${packageId}`;
       fareCache.current[cacheKey] = fareDetails;
       
       return fareDetails;

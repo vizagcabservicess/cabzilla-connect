@@ -5,6 +5,7 @@ import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useFare, FareType, TripDirectionType } from '@/hooks/useFare';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -91,7 +92,9 @@ export function BookingSummary({
               breakdown[`Distance (${effectiveDistance} km)`] = effectiveDistance * perKmCharge;
             }
           } else if (tripType === 'airport') {
-            breakdown['Airport transfer'] = result.totalPrice;
+            breakdown['Base fare'] = result.basePrice || 0;
+            breakdown['Airport pickup fee'] = result.pickupPrice || 0;
+            breakdown['Airport drop fee'] = result.dropPrice || 0;
           } else if (tripType === 'tour') {
             breakdown['Tour package'] = result.totalPrice;
           }
@@ -233,27 +236,34 @@ export function BookingSummary({
           <div className="space-y-2">
             {[1, 2].map((i) => (
               <div key={i} className="flex justify-between items-center py-2">
-                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-20" />
               </div>
             ))}
           </div>
-        ) : (
+        ) : Object.keys(fareDetails).length > 0 ? (
           Object.entries(fareDetails).map(([label, amount]) => (
             <div key={label} className="flex justify-between items-center py-2">
               <span>{label}</span>
               <span className="font-semibold">{formatPrice(amount)}</span>
             </div>
           ))
+        ) : (
+          <div className="flex justify-between items-center py-2">
+            <span>Price unavailable</span>
+            <span className="font-semibold">-</span>
+          </div>
         )}
         
         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
           <span className="text-lg font-bold">Total</span>
           <span className="text-lg font-bold">
             {isCalculating ? (
-              <div className="h-7 w-24 bg-gray-200 rounded animate-pulse" />
-            ) : (
+              <Skeleton className="h-7 w-24" />
+            ) : totalFare > 0 ? (
               formatPrice(totalFare)
+            ) : (
+              "Price unavailable"
             )}
           </span>
         </div>

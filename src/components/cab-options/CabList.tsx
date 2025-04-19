@@ -4,6 +4,7 @@ import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { useFare, FareType, TripDirectionType } from '@/hooks/useFare';
 import { useState, useEffect } from 'react';
+import { formatPrice } from '@/lib/cabData';
 
 interface CabListProps {
   cabTypes: CabType[];
