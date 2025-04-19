@@ -41,10 +41,20 @@ function getDbConnection() {
     }
 }
 
+// Normalize vehicle ID function
+function normalizeVehicleId($vehicleId) {
+    if (!$vehicleId) return null;
+    // Convert to lowercase and replace spaces with underscores
+    return strtolower(str_replace(' ', '_', trim($vehicleId)));
+}
+
 try {
-    // Get vehicle ID from query string
+    // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
     $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : '8hrs-80km'; // Default package
+    
+    // Normalize vehicle ID
+    $vehicleId = normalizeVehicleId($vehicleId);
     
     // Log request
     file_put_contents($logFile, "[$timestamp] Local fares request: vehicleId=$vehicleId, packageId=$packageId\n", FILE_APPEND);
@@ -56,11 +66,18 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // Query local_package_fares by vehicle_id (exact match)
-    $stmt = $conn->prepare("SELECT vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour 
-                           FROM local_package_fares 
-                           WHERE vehicle_id = :vehicle_id");
+    // Query local_package_fares by normalized vehicle_id
+    $query = "SELECT vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour 
+              FROM local_package_fares 
+              WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
+    
+    $stmt = $conn->prepare($query);
     $stmt->bindParam(':vehicle_id', $vehicleId);
+    
+    // Log the query and parameters
+    file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+    
     $stmt->execute();
     
     // Fetch result
@@ -70,48 +87,43 @@ try {
     file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
     
     if ($result) {
-        // Map database column names to API field names
+        // Determine base price based on package ID
+        $basePrice = 0;
+        switch ($packageId) {
+            case '4hrs-40km':
+                $basePrice = (float)$result['price_4hrs_40km'];
+                break;
+            case '8hrs-80km':
+                $basePrice = (float)$result['price_8hrs_80km'];
+                break;
+            case '10hrs-100km':
+                $basePrice = (float)$result['price_10hrs_100km'];
+                break;
+            default:
+                $basePrice = (float)$result['price_8hrs_80km']; // Default to 8hrs-80km
+                break;
+        }
+        
+        // Create standardized fare object
         $fare = [
             'vehicleId' => $result['vehicle_id'],
             'price4hrs40km' => (float)$result['price_4hrs_40km'],
             'price8hrs80km' => (float)$result['price_8hrs_80km'],
             'price10hrs100km' => (float)$result['price_10hrs_100km'],
             'priceExtraKm' => (float)$result['price_extra_km'],
-            'priceExtraHour' => (float)$result['price_extra_hour']
-        ];
-        
-        // Determine base price and total price based on package ID
-        $basePrice = 0;
-        switch ($packageId) {
-            case '4hrs-40km':
-                $basePrice = $fare['price4hrs40km'];
-                break;
-            case '8hrs-80km':
-                $basePrice = $fare['price8hrs80km'];
-                break;
-            case '10hrs-100km':
-                $basePrice = $fare['price10hrs100km'];
-                break;
-            default:
-                $basePrice = $fare['price8hrs80km']; // Default to 8hrs-80km
-                break;
-        }
-        
-        // Set total price equal to base price for now
-        $totalPrice = $basePrice;
-        
-        // Add breakdown information to the fare
-        $fare['basePrice'] = $basePrice;
-        $fare['totalPrice'] = $totalPrice;
-        $fare['breakdown'] = [
-            $packageId => $basePrice
+            'priceExtraHour' => (float)$result['price_extra_hour'],
+            'basePrice' => $basePrice,
+            'totalPrice' => $basePrice,
+            'breakdown' => [
+                $packageId => $basePrice
+            ]
         ];
         
         // Return success response with fare data
         echo json_encode([
             'status' => 'success',
             'message' => 'Local fares retrieved successfully',
-            'fares' => [$fare] // Return as array to maintain API compatibility
+            'fares' => [$fare]
         ]);
         
     } else {

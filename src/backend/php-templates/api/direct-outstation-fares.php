@@ -41,11 +41,21 @@ function getDbConnection() {
     }
 }
 
+// Normalize vehicle ID function
+function normalizeVehicleId($vehicleId) {
+    if (!$vehicleId) return null;
+    // Convert to lowercase and replace spaces with underscores
+    return strtolower(str_replace(' ', '_', trim($vehicleId)));
+}
+
 try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
     $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 'one-way'; // Default to one-way
     $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
+    
+    // Normalize vehicle ID
+    $vehicleId = normalizeVehicleId($vehicleId);
     
     // Log request
     file_put_contents($logFile, "[$timestamp] Outstation fares request: vehicleId=$vehicleId, tripMode=$tripMode, distance=$distance\n", FILE_APPEND);
@@ -57,9 +67,15 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // Query outstation_fares by vehicle_id (exact match)
-    $stmt = $conn->prepare("SELECT * FROM outstation_fares WHERE vehicle_id = :vehicle_id");
+    // Query outstation_fares by normalized vehicle_id
+    $query = "SELECT * FROM outstation_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :vehicle_id";
+    $stmt = $conn->prepare($query);
     $stmt->bindParam(':vehicle_id', $vehicleId);
+    
+    // Log the query and parameters
+    file_put_contents($logFile, "[$timestamp] SQL Query: $query\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Parameters: vehicleId=$vehicleId\n", FILE_APPEND);
+    
     $stmt->execute();
     
     // Fetch result
@@ -95,7 +111,7 @@ try {
         
         // Create fare object with complete breakdown
         $fare = [
-            'vehicleId' => $vehicleId,
+            'vehicleId' => $result['vehicle_id'],
             'basePrice' => $basePrice,
             'pricePerKm' => $pricePerKm,
             'driverAllowance' => $driverAllowance,

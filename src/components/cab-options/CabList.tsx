@@ -43,7 +43,7 @@ export function CabList({
             packageId: hourlyPackage
           });
           
-          if (fareDetails.totalPrice > 0) {
+          if (fareDetails && fareDetails.totalPrice !== undefined) {
             setFares(prev => ({
               ...prev,
               [cab.id]: fareDetails.totalPrice

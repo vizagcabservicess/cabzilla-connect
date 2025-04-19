@@ -74,9 +74,33 @@ export function BookingSummary({
         });
         
         console.log(`BookingSummary: Received fare details for ${selectedCab.id}:`, result);
-        setFareDetails(result.breakdown || { 'Total fare': result.totalPrice });
+        
+        if (result.breakdown) {
+          setFareDetails(result.breakdown);
+        } else {
+          // Construct a basic breakdown if one wasn't provided
+          const breakdown: Record<string, number> = {};
+          
+          if (tripType === 'local') {
+            breakdown[getLocalPackageDetails(hourlyPackage)] = result.basePrice;
+          } else if (tripType === 'outstation') {
+            breakdown['Base fare'] = result.basePrice;
+            if (distance > 0) {
+              const effectiveDistance = Math.max(distance, 300); // Minimum 300km for outstation
+              const perKmCharge = (result.totalPrice - result.basePrice) / effectiveDistance;
+              breakdown[`Distance (${effectiveDistance} km)`] = effectiveDistance * perKmCharge;
+            }
+          } else if (tripType === 'airport') {
+            breakdown['Airport transfer'] = result.totalPrice;
+          } else if (tripType === 'tour') {
+            breakdown['Tour package'] = result.totalPrice;
+          }
+          
+          setFareDetails(breakdown);
+        }
       } catch (error) {
         console.error('Error fetching fare details:', error);
+        setFareDetails({ 'Error': 0 });
       }
     };
     
