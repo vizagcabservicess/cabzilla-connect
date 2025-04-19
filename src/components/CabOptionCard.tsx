@@ -30,7 +30,7 @@ export function CabOptionCard({
   };
 
   const handleCardClick = () => {
-    console.log('Card clicked, selecting cab:', cab.name);
+    console.log('Card clicked, selecting cab:', cab.name, 'with fare:', fare);
     onSelect(cab);
   };
 
@@ -68,7 +68,7 @@ export function CabOptionCard({
             </div>
             <div>
               <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
-              <p className="text-xs text-gray-500">{cab.description}</p>
+              <p className="text-xs text-gray-500">{cab.description || ''}</p>
             </div>
           </div>
           <div className="flex flex-col items-end">
@@ -111,7 +111,7 @@ export function CabOptionCard({
           )}
           {cab.amenities && cab.amenities.length > 0 && (
             <div 
-              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
+              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded cursor-pointer" 
               onClick={(e) => {
                 e.stopPropagation();  // Prevent card selection when clicking this button
                 toggleExpand(e);

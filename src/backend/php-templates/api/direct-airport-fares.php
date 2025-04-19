@@ -44,19 +44,30 @@ function getDbConnection() {
 // Normalize vehicle ID function
 function normalizeVehicleId($vehicleId) {
     if (!$vehicleId) return null;
-    // Convert to lowercase and replace spaces with underscores
-    return strtolower(str_replace(' ', '_', trim($vehicleId)));
+    // Convert to lowercase and replace spaces and special chars with underscores
+    $normalized = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', trim($vehicleId)));
+    
+    // If it's "innova_crysta" or similar variations, standardize it
+    if (strpos($normalized, 'innova') !== false) {
+        return 'innova_crysta';
+    }
+    
+    return $normalized;
 }
 
 try {
     // Get parameters from query string
-    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
+                (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    
+    // Log the original vehicle ID
+    $originalVehicleId = $vehicleId;
     
     // Normalize vehicle ID
     $vehicleId = normalizeVehicleId($vehicleId);
     
     // Log request
-    file_put_contents($logFile, "[$timestamp] Airport fares request: vehicleId=$vehicleId\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Airport fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId\n", FILE_APPEND);
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
@@ -118,7 +129,7 @@ try {
         
     } else {
         // No result found for this vehicle ID, log this
-        file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
         
         // Try to find a matching vehicle with similar name (fuzzy match)
         $fuzzyQuery = "SELECT vehicle_id FROM airport_transfer_fares LIMIT 1";
@@ -136,12 +147,30 @@ try {
             $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
             
             file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
+            
+            // Try alternate normalization approach as fallback
+            $alternateNormalizedId = strtolower(str_replace(' ', '_', trim($originalVehicleId)));
+            if ($alternateNormalizedId !== $vehicleId) {
+                file_put_contents($logFile, "[$timestamp] Trying alternate normalization: $alternateNormalizedId\n", FILE_APPEND);
+                
+                $altQuery = "SELECT * FROM airport_transfer_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :alt_id";
+                $altStmt = $conn->prepare($altQuery);
+                $altStmt->bindParam(':alt_id', $alternateNormalizedId);
+                $altStmt->execute();
+                $altResult = $altStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($altResult) {
+                    file_put_contents($logFile, "[$timestamp] Found match with alternate normalization: " . $altResult['vehicle_id'] . "\n", FILE_APPEND);
+                    // Process this result using the same logic as above
+                    // (This is a fallback that might help in some cases)
+                }
+            }
         }
         
         // Return minimal fare with zero values
         $fare = [
-            'vehicleId' => $vehicleId,
+            'vehicleId' => $originalVehicleId,
             'basePrice' => 0,
             'pickupPrice' => 0,
             'dropPrice' => 0,

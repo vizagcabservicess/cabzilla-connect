@@ -38,9 +38,11 @@ export function CabList({
       // Load fares for each cab type
       for (const cab of cabTypes) {
         try {
-          console.log(`CabList: Fetching fare for vehicle ${cab.id}`);
+          const cabId = cab.id;
+          console.log(`CabList: Fetching fare for vehicle ${cabId} with trip type ${tripType}`);
+          
           const fareDetails = await fetchFare({
-            vehicleId: cab.id,
+            vehicleId: cabId,
             tripType: tripType as FareType,
             distance,
             tripMode,
@@ -49,11 +51,11 @@ export function CabList({
           
           // Store the totalPrice from the API directly
           if (fareDetails && fareDetails.totalPrice !== undefined) {
-            faresMap[cab.id] = fareDetails.totalPrice;
-            console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice} (from API)`);
+            faresMap[cabId] = fareDetails.totalPrice;
+            console.log(`CabList: Set fare for ${cabId} to ${fareDetails.totalPrice} (from API)`);
           } else {
-            console.warn(`CabList: Received invalid fare details for ${cab.id}`, fareDetails);
-            faresMap[cab.id] = 0;
+            console.warn(`CabList: Received invalid fare details for ${cabId}`, fareDetails);
+            faresMap[cabId] = 0;
           }
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);
@@ -64,8 +66,10 @@ export function CabList({
       setFares(faresMap);
     };
     
-    if (cabTypes && cabTypes.length > 0) {
+    if (cabTypes && cabTypes.length > 0 && distance > 0) {
       loadFares();
+    } else {
+      console.log('CabList: Not loading fares - cabTypes empty or distance is 0');
     }
     
     // Clear all fare state when trip parameters change

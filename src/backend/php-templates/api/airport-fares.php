@@ -48,6 +48,13 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
+// Normalize vehicle ID - remove spaces and convert to lowercase
+if ($vehicleId) {
+    $originalVehicleId = $vehicleId;
+    $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+    file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
+}
+
 // If we found a vehicle ID, add it to $_GET for the forwarded request
 if ($vehicleId) {
     $_GET['vehicle_id'] = $vehicleId;

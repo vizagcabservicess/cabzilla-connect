@@ -44,21 +44,31 @@ function getDbConnection() {
 // Normalize vehicle ID function
 function normalizeVehicleId($vehicleId) {
     if (!$vehicleId) return null;
-    // Convert to lowercase and replace spaces with underscores
-    return strtolower(str_replace(' ', '_', trim($vehicleId)));
+    // Convert to lowercase and replace spaces and special chars with underscores
+    $normalized = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '_', trim($vehicleId)));
+    
+    // If it's "innova_crysta" or similar variations, standardize it
+    if (strpos($normalized, 'innova') !== false) {
+        return 'innova_crysta';
+    }
+    
+    return $normalized;
 }
 
 try {
     // Get parameters from query string
-    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
-    $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 'one-way'; // Default to one-way
+    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
+                (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 
+               (isset($_GET['tripMode']) ? $_GET['tripMode'] : 'one-way');
     $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
     
     // Normalize vehicle ID
+    $originalVehicleId = $vehicleId;
     $vehicleId = normalizeVehicleId($vehicleId);
     
     // Log request
-    file_put_contents($logFile, "[$timestamp] Outstation fares request: vehicleId=$vehicleId, tripMode=$tripMode, distance=$distance\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Outstation fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId, tripMode=$tripMode, distance=$distance\n", FILE_APPEND);
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
@@ -85,50 +95,62 @@ try {
     file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
     
     if ($result) {
-        // Initialize fare structure
-        $fare = [];
+        // Determine pricing variables
+        $basePrice = (float)$result['base_price'] ?? 0;
+        $pricePerKm = (float)$result['price_per_km'] ?? 0;
+        $driverAllowance = (float)$result['driver_allowance'] ?? 0;
         
-        // Calculate fare based on trip mode
+        // Calculate total price with minimums
+        $minimumKm = 300; // minimum distance covered
+        $calculatedPrice = 0;
+        
         if ($tripMode === 'round-trip') {
-            // Use round-trip pricing
-            $basePrice = (float)$result['roundtrip_base_price'];
-            $pricePerKm = (float)$result['roundtrip_price_per_km'];
+            // For round-trip, calculate with the provided distance * 2
+            $effectiveDistance = $distance * 2;
+            $roundTripPerKm = $pricePerKm * 0.85; // 15% discount for round trip
+            $roundTripBase = $basePrice * 0.9; // 10% discount on base price
+            
+            if ($effectiveDistance < $minimumKm) {
+                $calculatedPrice = $roundTripBase + $driverAllowance;
+            } else {
+                $extraDistance = $effectiveDistance - $minimumKm;
+                $extraDistanceFare = $extraDistance * $roundTripPerKm;
+                $calculatedPrice = $roundTripBase + $extraDistanceFare + $driverAllowance;
+            }
         } else {
-            // Use one-way pricing
-            $basePrice = (float)$result['base_price'];
-            $pricePerKm = (float)$result['price_per_km'];
+            // For one-way trips, calculate with the distance * 2 (for driver's return)
+            $effectiveDistance = $distance * 2;
+            
+            if ($effectiveDistance > $minimumKm) {
+                $extraDistance = $effectiveDistance - $minimumKm;
+                $extraDistanceFare = $extraDistance * $pricePerKm;
+                $calculatedPrice = $basePrice + $extraDistanceFare + $driverAllowance;
+            } else {
+                $calculatedPrice = $basePrice + $driverAllowance;
+            }
         }
         
-        $driverAllowance = (float)$result['driver_allowance'];
-        $nightHaltCharge = (float)$result['night_halt_charge'];
-        
-        // Calculate distance fare (ensure minimum distance of 300 km for outstation)
-        $effectiveDistance = max($distance, 300);
-        $distanceFare = $effectiveDistance * $pricePerKm;
-        
-        // Calculate total fare
-        $totalFare = $basePrice + $distanceFare + $driverAllowance;
-        
-        // Create fare object with complete breakdown
+        // Format fare breakdown
         $fare = [
             'vehicleId' => $result['vehicle_id'],
             'basePrice' => $basePrice,
             'pricePerKm' => $pricePerKm,
             'driverAllowance' => $driverAllowance,
-            'nightHaltCharge' => $nightHaltCharge,
-            'totalPrice' => $totalFare,
+            'totalPrice' => $calculatedPrice,
+            'tripMode' => $tripMode,
+            'distance' => $distance,
             'breakdown' => [
                 'Base fare' => $basePrice,
-                'Distance charge' => $distanceFare,
+                'Distance charge' => $calculatedPrice - $basePrice - $driverAllowance,
                 'Driver allowance' => $driverAllowance
             ]
         ];
         
-        // Return success response with fare data in a consistent format
+        // Return success response with fare data
         echo json_encode([
             'status' => 'success',
             'message' => 'Outstation fares retrieved successfully',
-            'fares' => [$fare]  // Wrap in array for consistent format across all endpoints
+            'fare' => $fare
         ]);
         
     } else {
@@ -151,17 +173,36 @@ try {
             $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
             
             file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
+            
+            // Try another normalization approach as fallback
+            $alternateNormalizedId = strtolower(str_replace(' ', '_', trim($originalVehicleId)));
+            if ($alternateNormalizedId !== $vehicleId) {
+                file_put_contents($logFile, "[$timestamp] Trying alternate normalization: $alternateNormalizedId\n", FILE_APPEND);
+                
+                $altQuery = "SELECT * FROM outstation_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :alt_id";
+                $altStmt = $conn->prepare($altQuery);
+                $altStmt->bindParam(':alt_id', $alternateNormalizedId);
+                $altStmt->execute();
+                $altResult = $altStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($altResult) {
+                    file_put_contents($logFile, "[$timestamp] Found match with alternate normalization: " . $altResult['vehicle_id'] . "\n", FILE_APPEND);
+                    // Process this result using the same logic as above
+                    // (This is a fallback that might help in some cases)
+                }
+            }
         }
         
-        // Return minimal fare with zero values
+        // If no match found after all attempts, return a default structure with empty values
         $fare = [
-            'vehicleId' => $vehicleId,
+            'vehicleId' => $originalVehicleId,
             'basePrice' => 0,
             'pricePerKm' => 0,
             'driverAllowance' => 0,
-            'nightHaltCharge' => 0,
             'totalPrice' => 0,
+            'tripMode' => $tripMode,
+            'distance' => $distance,
             'breakdown' => [
                 'Base fare' => 0,
                 'Distance charge' => 0,
@@ -172,7 +213,7 @@ try {
         echo json_encode([
             'status' => 'success',
             'message' => 'No fare data found for this vehicle',
-            'fares' => [$fare]  // Wrap in array for consistent format
+            'fare' => $fare
         ]);
     }
     
