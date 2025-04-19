@@ -123,61 +123,53 @@ export function CabList({
             }
           }
           
+          // If we still don't have a valid price, try extracting from fares array
+          if (totalPrice <= 0 && fareDetails && fareDetails.fares && Array.isArray(fareDetails.fares) && fareDetails.fares.length > 0) {
+            console.log(`CabList: Checking fares array for ${cabId}:`, fareDetails.fares);
+            
+            // Find the matching fare for this vehicle
+            const matchingFare = fareDetails.fares.find((f: any) => 
+              (f.vehicleId === cabId || f.vehicle_id === cabId));
+            
+            const fare = matchingFare || fareDetails.fares[0];
+            console.log(`CabList: Found fare in array for ${cabId}:`, fare);
+            
+            if (hourlyPackage === '4hrs-40km' && fare.price4hrs40km) {
+              totalPrice = parseFloat(fare.price4hrs40km);
+              dataSource = 'direct-fares-array-4hrs';
+            } else if (hourlyPackage === '8hrs-80km' && fare.price8hrs80km) {
+              totalPrice = parseFloat(fare.price8hrs80km);
+              dataSource = 'direct-fares-array-8hrs';
+            } else if (hourlyPackage === '10hrs-100km' && fare.price10hrs100km) {
+              totalPrice = parseFloat(fare.price10hrs100km);
+              dataSource = 'direct-fares-array-10hrs';
+            }
+            
+            console.log(`CabList: Extracted price from fares array for ${cabId}: ${totalPrice}`);
+          }
+          
           if (totalPrice > 0) {
             console.log(`CabList: Setting fare for ${cabId} to ${totalPrice} (source: ${dataSource})`);
             faresMap[cabId] = totalPrice;
             sourcesMap[cabId] = dataSource;
-          } else {
-            console.warn(`CabList: No valid price found for ${cabId}, attempting to extract from response`);
             
-            let extractedPrice = 0;
-            
-            if (fareDetails && typeof fareDetails === 'object') {
-              // Try to extract from fares array if present
-              if (fareDetails.fares && Array.isArray(fareDetails.fares) && fareDetails.fares.length > 0) {
-                console.log(`CabList: Checking fares array for ${cabId}:`, fareDetails.fares);
-                
-                // Find the matching fare for this vehicle
-                const matchingFare = fareDetails.fares.find((f: any) => 
-                  (f.vehicleId === cabId || f.vehicle_id === cabId));
-                
-                const fare = matchingFare || fareDetails.fares[0];
-                console.log(`CabList: Found fare in array for ${cabId}:`, fare);
-                
-                if (hourlyPackage === '4hrs-40km' && fare.price4hrs40km) {
-                  extractedPrice = parseFloat(fare.price4hrs40km);
-                  dataSource = 'direct-fares-array-4hrs';
-                } else if (hourlyPackage === '8hrs-80km' && fare.price8hrs80km) {
-                  extractedPrice = parseFloat(fare.price8hrs80km);
-                  dataSource = 'direct-fares-array-8hrs';
-                } else if (hourlyPackage === '10hrs-100km' && fare.price10hrs100km) {
-                  extractedPrice = parseFloat(fare.price10hrs100km);
-                  dataSource = 'direct-fares-array-10hrs';
-                }
-                
-                console.log(`CabList: Extracted price from fares array for ${cabId}: ${extractedPrice}`);
-              }
-            }
-            
-            if (extractedPrice > 0) {
-              console.log(`CabList: Setting extracted price ${extractedPrice} for ${cabId} from response`);
-              faresMap[cabId] = extractedPrice;
-              sourcesMap[cabId] = dataSource;
-            } else {
-              console.warn(`CabList: Still no valid price for ${cabId}, using database fallback`);
-              
-              const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
-              console.log(`CabList: Using fallback price for ${cabId}: ${fallbackPrice}`);
-              
-              faresMap[cabId] = fallbackPrice;
-              sourcesMap[cabId] = 'database-fallback';
-            }
-          }
-          
-          if (faresMap[cabId] > 0) {
+            // Save to local cache
             const storageKey = `fare_${tripType}_${cabId}_${hourlyPackage || 'default'}`;
-            localStorage.setItem(storageKey, faresMap[cabId].toString());
-            localStorage.setItem(`${storageKey}_source`, sourcesMap[cabId]);
+            localStorage.setItem(storageKey, totalPrice.toString());
+            localStorage.setItem(`${storageKey}_source`, dataSource);
+          } else {
+            console.warn(`CabList: No valid price found for ${cabId}, using database fallback`);
+            
+            const fallbackPrice = getDatabaseFallbackPrice(cab, tripType as string, hourlyPackage);
+            console.log(`CabList: Using fallback price for ${cabId}: ${fallbackPrice}`);
+            
+            faresMap[cabId] = fallbackPrice;
+            sourcesMap[cabId] = 'database-fallback';
+            
+            // Save to local cache
+            const storageKey = `fare_${tripType}_${cabId}_${hourlyPackage || 'default'}`;
+            localStorage.setItem(storageKey, fallbackPrice.toString());
+            localStorage.setItem(`${storageKey}_source`, 'database-fallback');
           }
           
           setFares(prev => ({ ...prev, [cabId]: faresMap[cabId] }));
