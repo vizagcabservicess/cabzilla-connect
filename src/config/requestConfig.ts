@@ -83,3 +83,69 @@ export const fetchWithRetry = async (
   
   throw lastError;
 };
+
+/**
+ * Get request configuration with force refresh headers
+ * This ensures the server doesn't return cached responses
+ * @returns RequestInit object with appropriate headers
+ */
+export const getForcedRequestConfig = (): RequestInit => {
+  return {
+    headers: {
+      ...forceRefreshHeaders,
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    cache: 'no-store'
+  };
+};
+
+/**
+ * Get bypass headers for authentication and security mechanisms
+ * @param token Optional authentication token
+ * @returns Record of header keys and values
+ */
+export const getBypassHeaders = (token?: string): Record<string, string> => {
+  const headers: Record<string, string> = {
+    ...forceRefreshHeaders,
+    'X-Bypass-Cache': 'true',
+    'X-Direct-Access': 'true'
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
+/**
+ * Format data for multipart form submission
+ * @param data Object containing form data
+ * @returns FormData object ready for submission
+ */
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      if (value instanceof File) {
+        formData.append(key, value);
+      } else if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          if (item instanceof File) {
+            formData.append(`${key}[${index}]`, item);
+          } else {
+            formData.append(`${key}[${index}]`, String(item));
+          }
+        });
+      } else if (typeof value === 'object' && !(value instanceof File)) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, String(value));
+      }
+    }
+  });
+  
+  return formData;
+};
