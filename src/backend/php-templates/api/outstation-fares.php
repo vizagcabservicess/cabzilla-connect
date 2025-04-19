@@ -154,5 +154,36 @@ if ($response && isset($response['fare']) && !isset($response['fares'])) {
     file_put_contents($logFile, "[$timestamp] Added 'fare' object to response for consistency\n", FILE_APPEND);
 }
 
+// Make sure totalPrice is properly set for every fare
+if ($response && isset($response['fares']) && is_array($response['fares'])) {
+    foreach ($response['fares'] as &$fare) {
+        // Ensure totalPrice is set and is a number
+        if (!isset($fare['totalPrice']) || !is_numeric($fare['totalPrice'])) {
+            if (isset($fare['price']) && is_numeric($fare['price'])) {
+                $fare['totalPrice'] = (float)$fare['price'];
+                file_put_contents($logFile, "[$timestamp] Set totalPrice from price: {$fare['totalPrice']}\n", FILE_APPEND);
+            } else if (isset($fare['basePrice']) && is_numeric($fare['basePrice'])) {
+                $fare['totalPrice'] = (float)$fare['basePrice'];
+                file_put_contents($logFile, "[$timestamp] Set totalPrice from basePrice: {$fare['totalPrice']}\n", FILE_APPEND);
+            }
+        }
+        
+        // Also ensure price is set
+        if (!isset($fare['price']) || !is_numeric($fare['price'])) {
+            if (isset($fare['totalPrice']) && is_numeric($fare['totalPrice'])) {
+                $fare['price'] = (float)$fare['totalPrice'];
+                file_put_contents($logFile, "[$timestamp] Set price from totalPrice: {$fare['price']}\n", FILE_APPEND);
+            }
+        }
+    }
+    
+    if (isset($response['fare'])) {
+        $response['fare'] = $response['fares'][0];
+    }
+    
+    $output = json_encode($response);
+    file_put_contents($logFile, "[$timestamp] Updated fare objects with totalPrice/price for consistency\n", FILE_APPEND);
+}
+
 // Output the modified response
 echo $output;

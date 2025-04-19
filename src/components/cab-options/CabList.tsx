@@ -72,26 +72,31 @@ export function CabList({
           // Extract the price from the response
           let totalPrice = 0;
           
-          // Check various properties where the price might be found
-          if (fareDetails && fareDetails.totalPrice !== undefined && fareDetails.totalPrice > 0) {
-            totalPrice = Number(fareDetails.totalPrice);
+          // First priority: Check for totalPrice property
+          if (fareDetails && typeof fareDetails.totalPrice === 'number' && fareDetails.totalPrice > 0) {
+            totalPrice = fareDetails.totalPrice;
             console.log(`CabList: Using totalPrice: ${totalPrice} for ${cabId}`);
-          } else if (fareDetails && fareDetails.price !== undefined && fareDetails.price > 0) {
-            totalPrice = Number(fareDetails.price);
+          } 
+          // Second priority: Check for price property
+          else if (fareDetails && typeof fareDetails.price === 'number' && fareDetails.price > 0) {
+            totalPrice = fareDetails.price;
             console.log(`CabList: Using price: ${totalPrice} for ${cabId}`);
-          } else if (fareDetails && fareDetails.basePrice !== undefined && fareDetails.basePrice > 0) {
-            totalPrice = Number(fareDetails.basePrice);
+          }
+          // Third priority: Check for basePrice property
+          else if (fareDetails && typeof fareDetails.basePrice === 'number' && fareDetails.basePrice > 0) {
+            totalPrice = fareDetails.basePrice;
             console.log(`CabList: Using basePrice: ${totalPrice} for ${cabId}`);
-          } else if (tripType === 'local' && fareDetails) {
-            // Check for local package specific pricing
-            if (hourlyPackage === '4hrs-40km' && fareDetails.price4hrs40km > 0) {
-              totalPrice = Number(fareDetails.price4hrs40km);
+          }
+          // Local package special case
+          else if (tripType === 'local' && fareDetails) {
+            if (hourlyPackage === '4hrs-40km' && typeof fareDetails.price4hrs40km === 'number' && fareDetails.price4hrs40km > 0) {
+              totalPrice = fareDetails.price4hrs40km;
               console.log(`CabList: Using price4hrs40km: ${totalPrice} for ${cabId}`);
-            } else if (hourlyPackage === '8hrs-80km' && fareDetails.price8hrs80km > 0) {
-              totalPrice = Number(fareDetails.price8hrs80km);
+            } else if (hourlyPackage === '8hrs-80km' && typeof fareDetails.price8hrs80km === 'number' && fareDetails.price8hrs80km > 0) {
+              totalPrice = fareDetails.price8hrs80km;
               console.log(`CabList: Using price8hrs80km: ${totalPrice} for ${cabId}`);
-            } else if (hourlyPackage === '10hrs-100km' && fareDetails.price10hrs100km > 0) {
-              totalPrice = Number(fareDetails.price10hrs100km);
+            } else if (hourlyPackage === '10hrs-100km' && typeof fareDetails.price10hrs100km === 'number' && fareDetails.price10hrs100km > 0) {
+              totalPrice = fareDetails.price10hrs100km;
               console.log(`CabList: Using price10hrs100km: ${totalPrice} for ${cabId}`);
             }
           }
@@ -120,23 +125,23 @@ export function CabList({
                   packageId: hourlyPackage
                 });
                 
-                // Extract price from retry response
+                // Extract price from retry response with the same priority order
                 let retryTotalPrice = 0;
                 
-                if (retryFareDetails && retryFareDetails.totalPrice > 0) {
-                  retryTotalPrice = Number(retryFareDetails.totalPrice);
-                } else if (retryFareDetails && retryFareDetails.price > 0) {
-                  retryTotalPrice = Number(retryFareDetails.price);
-                } else if (retryFareDetails && retryFareDetails.basePrice > 0) {
-                  retryTotalPrice = Number(retryFareDetails.basePrice);
+                if (retryFareDetails && typeof retryFareDetails.totalPrice === 'number' && retryFareDetails.totalPrice > 0) {
+                  retryTotalPrice = retryFareDetails.totalPrice;
+                } else if (retryFareDetails && typeof retryFareDetails.price === 'number' && retryFareDetails.price > 0) {
+                  retryTotalPrice = retryFareDetails.price;
+                } else if (retryFareDetails && typeof retryFareDetails.basePrice === 'number' && retryFareDetails.basePrice > 0) {
+                  retryTotalPrice = retryFareDetails.basePrice;
                 } else if (tripType === 'local' && retryFareDetails) {
                   // Check for local package specific pricing in retry
-                  if (hourlyPackage === '4hrs-40km' && retryFareDetails.price4hrs40km > 0) {
-                    retryTotalPrice = Number(retryFareDetails.price4hrs40km);
-                  } else if (hourlyPackage === '8hrs-80km' && retryFareDetails.price8hrs80km > 0) {
-                    retryTotalPrice = Number(retryFareDetails.price8hrs80km);
-                  } else if (hourlyPackage === '10hrs-100km' && retryFareDetails.price10hrs100km > 0) {
-                    retryTotalPrice = Number(retryFareDetails.price10hrs100km);
+                  if (hourlyPackage === '4hrs-40km' && typeof retryFareDetails.price4hrs40km === 'number' && retryFareDetails.price4hrs40km > 0) {
+                    retryTotalPrice = retryFareDetails.price4hrs40km;
+                  } else if (hourlyPackage === '8hrs-80km' && typeof retryFareDetails.price8hrs80km === 'number' && retryFareDetails.price8hrs80km > 0) {
+                    retryTotalPrice = retryFareDetails.price8hrs80km;
+                  } else if (hourlyPackage === '10hrs-100km' && typeof retryFareDetails.price10hrs100km === 'number' && retryFareDetails.price10hrs100km > 0) {
+                    retryTotalPrice = retryFareDetails.price10hrs100km;
                   }
                 }
                 
@@ -145,13 +150,13 @@ export function CabList({
                   console.log(`CabList: Retry succeeded! Set fare for ${cabId} to ${retryTotalPrice}`);
                 } else {
                   // Use fallback pricing if retry also fails
-                  const fallbackPrice = calculateFallbackPrice(cab, tripType, distance, hourlyPackage);
+                  const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
                   faresMap[cabId] = fallbackPrice;
                   console.log(`CabList: Retry failed, using fallback price for ${cabId}: ${fallbackPrice}`);
                 }
               } catch (retryError) {
                 console.error(`Error on retry for ${cabId}:`, retryError);
-                const fallbackPrice = calculateFallbackPrice(cab, tripType, distance, hourlyPackage);
+                const fallbackPrice = getFallbackPriceFromDatabase(cab, tripType, hourlyPackage);
                 faresMap[cabId] = fallbackPrice;
                 console.log(`CabList: Retry error, using fallback price for ${cabId}: ${fallbackPrice}`);
               }
@@ -215,9 +220,9 @@ export function CabList({
       'innova_crysta': { '4hrs-40km': 1800, '8hrs-80km': 3500, '10hrs-100km': 4000 },
       'tempo': { '4hrs-40km': 3000, '8hrs-80km': 4500, '10hrs-100km': 5500 },
       'luxury': { '4hrs-40km': 3500, '8hrs-80km': 5500, '10hrs-100km': 6500 },
-      'MPV': { '4hrs-40km': 2000, '8hrs-80km': 4000, '10hrs-100km': 4500 },
-      'Toyota': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
-      'Dzire CNG': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
+      'mpv': { '4hrs-40km': 2000, '8hrs-80km': 4000, '10hrs-100km': 4500 },
+      'toyota': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
+      'dzire_cng': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'tempo_traveller': { '4hrs-40km': 6500, '8hrs-80km': 6500, '10hrs-100km': 7500 },
       'amaze': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'bus': { '4hrs-40km': 3000, '8hrs-80km': 7000, '10hrs-100km': 9000 }

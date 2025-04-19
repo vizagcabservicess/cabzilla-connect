@@ -151,11 +151,15 @@ try {
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
     $packageId = isset($_GET['package_id']) ? $_GET['package_id'] : '8hrs-80km'; // Default package
     
+    // Log original vehicle ID before normalization
+    file_put_contents($logFile, "[$timestamp] Original vehicle ID: $vehicleId\n", FILE_APPEND);
+    
     // Normalize vehicle ID
+    $originalVehicleId = $vehicleId;
     $vehicleId = normalizeVehicleId($vehicleId);
     
-    // Log request
-    file_put_contents($logFile, "[$timestamp] Local fares request: vehicleId=$vehicleId, packageId=$packageId\n", FILE_APPEND);
+    // Log request with normalized ID
+    file_put_contents($logFile, "[$timestamp] Local fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId, packageId=$packageId\n", FILE_APPEND);
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
@@ -263,7 +267,7 @@ try {
     
     // Create standardized fare object
     $fare = [
-        'vehicleId' => $vehicleId,
+        'vehicleId' => $originalVehicleId,
         'price4hrs40km' => (float)$price4hrs40km,
         'price8hrs80km' => (float)$price8hrs80km,
         'price10hrs100km' => (float)$price10hrs100km,
