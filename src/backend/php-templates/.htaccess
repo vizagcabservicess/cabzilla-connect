@@ -87,6 +87,8 @@ RewriteRule ^(.*)$ /index.html [L]
 # Explicitly set PHP handler
 <FilesMatch "\.php$">
     SetHandler application/x-httpd-php
+    # Allow all PHP files to be accessible
+    Require all granted
 </FilesMatch>
 
 # Set PHP settings for this directory
@@ -113,3 +115,11 @@ AddType application/x-httpd-php .php
     # Set JSON content type for API responses
     Header always set Content-Type "application/json"
 </FilesMatch>
+
+# CRITICAL: Allow API directory access
+<Directory "/api">
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+

@@ -25,6 +25,8 @@ RewriteRule .* - [R=200,L]
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
+    # CRITICAL: Allow access to all PHP files
+    Require all granted
 </FilesMatch>
 
 # Add explicit rule for check-api-routing.php
@@ -32,6 +34,7 @@ RewriteRule .* - [R=200,L]
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
+    Require all granted
 </Files>
 
 # Set access headers for all responses
@@ -51,6 +54,7 @@ RewriteRule ^check-routing$ check-api-routing.php [L,QSA]
 RewriteRule ^test-routing$ check-api-routing.php [L,QSA]
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
+RewriteRule ^fix-cors$ fix-cors.php [L,QSA]
 
 # ADD: Test email endpoints - high priority
 RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
@@ -69,28 +73,46 @@ RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
 <Files "book.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
+    Require all granted
 </Files>
 
 <Files "test-connection.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
+    Require all granted
+</Files>
+
+<Files "fix-cors.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Require all granted
 </Files>
 
 <Files "send-booking-confirmation.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
+    Require all granted
 </Files>
 
 <Files "test-email-sending.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
+    Require all granted
 </Files>
 
 # Admin endpoints - preserve all these rules
 <Files "direct-connection.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
+    Require all granted
 </Files>
+
+# Set directory permissions for API folder
+<Directory "/api">
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
 
 # Keep existing routes
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
@@ -217,3 +239,10 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
     Require all granted
 </Files>
 Options -Indexes
+
+# CRITICAL: Add directory permissions for this folder
+<Directory "api">
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>

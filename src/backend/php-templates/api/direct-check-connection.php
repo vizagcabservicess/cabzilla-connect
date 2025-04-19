@@ -1,148 +1,87 @@
 
 <?php
 /**
- * Enhanced routing and connection diagnostic tool
- * This script provides detailed information about the current request
- * and server configuration to help diagnose routing issues.
+ * Direct connection diagnostic tool for API
+ * This script provides immediate feedback on API connectivity and permissions
  */
 
-// Set CORS headers for all responses
+// Set headers for CORS and JSON output
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, OPTIONS, POST');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Log function
-function logDiagnosticInfo($message, $data = []) {
-    $logDir = __DIR__ . '/../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    
-    $logFile = $logDir . '/api_diagnostics_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message";
-    
-    if (!empty($data)) {
-        $logEntry .= " - " . json_encode($data, JSON_UNESCAPED_SLASHES);
-    }
-    
-    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
+// Handle OPTIONS preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
 }
 
-// Get server information
+// Get basic server and request info
 $serverInfo = [
-    'request' => [
-        'method' => $_SERVER['REQUEST_METHOD'] ?? 'undefined',
-        'uri' => $_SERVER['REQUEST_URI'] ?? 'undefined',
-        'query_string' => $_SERVER['QUERY_STRING'] ?? 'undefined',
-        'path_info' => $_SERVER['PATH_INFO'] ?? 'undefined',
-        'script_name' => $_SERVER['SCRIPT_NAME'] ?? 'undefined',
-        'php_self' => $_SERVER['PHP_SELF'] ?? 'undefined'
-    ],
-    'server' => [
-        'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'undefined',
-        'name' => $_SERVER['SERVER_NAME'] ?? 'undefined',
-        'protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'undefined',
-        'port' => $_SERVER['SERVER_PORT'] ?? 'undefined',
-        'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'undefined'
-    ],
-    'client' => [
-        'address' => $_SERVER['REMOTE_ADDR'] ?? 'undefined',
-        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'undefined',
-        'accept' => $_SERVER['HTTP_ACCEPT'] ?? 'undefined'
-    ],
-    'routing' => [
-        'redirect_url' => $_SERVER['REDIRECT_URL'] ?? 'none',
-        'redirect_status' => $_SERVER['REDIRECT_STATUS'] ?? 'none',
-        'https' => isset($_SERVER['HTTPS']) ? 'on' : 'off',
-        'url_scheme' => isset($_SERVER['REQUEST_SCHEME']) ? $_SERVER['REQUEST_SCHEME'] : 'http'
-    ],
-    'php' => [
-        'version' => PHP_VERSION,
-        'sapi' => php_sapi_name(),
-        'extensions' => get_loaded_extensions(),
-        'config' => [
-            'max_execution_time' => ini_get('max_execution_time'),
-            'memory_limit' => ini_get('memory_limit'),
-            'display_errors' => ini_get('display_errors'),
-            'error_reporting' => ini_get('error_reporting')
-        ]
-    ],
-    'apache' => [
-        'modules' => function_exists('apache_get_modules') ? apache_get_modules() : ['function_not_available'],
-        'mod_rewrite' => function_exists('apache_get_modules') ? in_array('mod_rewrite', apache_get_modules()) : 'unknown'
-    ]
+    'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+    'server_name' => $_SERVER['SERVER_NAME'] ?? 'unknown',
+    'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'unknown',
+    'script_filename' => $_SERVER['SCRIPT_FILENAME'] ?? 'unknown',
+    'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+    'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
 ];
 
-// Analyze URI for routing issues
-$uri = $_SERVER['REQUEST_URI'] ?? '';
-$uriAnalysis = [
-    'original' => $uri,
-    'has_double_api' => strpos($uri, '/api/api/') !== false,
-    'api_prefix_count' => substr_count($uri, '/api/'),
-    'segments' => explode('/', trim($uri, '/')),
-    'problems' => []
+// Check permissions for API directories
+$dirPermissions = [
+    'api_dir' => is_readable(__DIR__) ? 'readable' : 'not readable',
+    'admin_dir' => is_readable(__DIR__ . '/admin') ? 'readable' : 'not readable',
+    'root_dir' => is_readable($_SERVER['DOCUMENT_ROOT']) ? 'readable' : 'not readable',
 ];
 
-if ($uriAnalysis['has_double_api']) {
-    $uriAnalysis['problems'][] = "URL contains '/api/api/' which indicates a routing misconfiguration";
-}
-
-if ($uriAnalysis['api_prefix_count'] > 1) {
-    $uriAnalysis['problems'][] = "URL contains multiple '/api/' segments which may cause routing issues";
-}
-
-// Check .htaccess files
-$htaccessFiles = [
-    'root' => $_SERVER['DOCUMENT_ROOT'] . '/.htaccess',
-    'api' => __DIR__ . '/.htaccess',
-    'admin' => __DIR__ . '/admin/.htaccess'
+// Check for critical API files
+$apiFiles = [
+    'check_api_routing' => file_exists(__DIR__ . '/check-api-routing.php') ? 'exists' : 'missing',
+    'fix_cors' => file_exists(__DIR__ . '/fix-cors.php') ? 'exists' : 'missing',
+    'book' => file_exists(__DIR__ . '/book.php') ? 'exists' : 'missing',
+    'admin_booking' => file_exists(__DIR__ . '/admin/booking.php') ? 'exists' : 'missing',
+    'admin_test_booking' => file_exists(__DIR__ . '/admin/test-booking-api.php') ? 'exists' : 'missing',
 ];
 
-$htaccessStatus = [];
-foreach ($htaccessFiles as $key => $path) {
-    $htaccessStatus[$key] = [
-        'exists' => file_exists($path),
-        'readable' => is_readable($path),
-        'size' => file_exists($path) ? filesize($path) : 0
-    ];
-}
-
-// Log the diagnostics
-logDiagnosticInfo("API Routing Diagnostic", [
-    'uri' => $uri,
-    'server' => $serverInfo['server'],
-    'routing' => $serverInfo['routing'],
-    'uri_analysis' => $uriAnalysis
-]);
-
-// Prepare the response
+// Construct response
 $response = [
     'status' => 'success',
-    'message' => 'API Routing and Connection Diagnostic',
+    'message' => 'Direct API connection successful',
     'timestamp' => time(),
     'server_info' => $serverInfo,
-    'uri_analysis' => $uriAnalysis,
-    'htaccess_status' => $htaccessStatus,
+    'directory_permissions' => $dirPermissions,
+    'api_files' => $apiFiles,
+    'php_version' => PHP_VERSION,
+    'php_sapi' => php_sapi_name(),
+    'current_file' => __FILE__,
     'suggestions' => []
 ];
 
-// Add suggestions based on analysis
-if ($uriAnalysis['has_double_api']) {
-    $response['suggestions'][] = "Fix .htaccess files to properly handle and redirect '/api/api/' URLs";
+// Add suggestions based on diagnostics
+if ($dirPermissions['api_dir'] !== 'readable' || $dirPermissions['admin_dir'] !== 'readable') {
+    $response['suggestions'][] = "Fix directory permissions for API folders. Use 'chmod 755' on the API directories.";
 }
 
-if ($serverInfo['apache']['mod_rewrite'] !== true) {
-    $response['suggestions'][] = "Ensure mod_rewrite is enabled on your server";
+if (in_array('missing', $apiFiles)) {
+    $response['suggestions'][] = "One or more critical API files are missing. Check your installation.";
 }
 
-if (!empty($uriAnalysis['problems'])) {
-    $response['suggestions'][] = "Use direct endpoint URLs without nested '/api/' segments";
+// Check if we have permission errors
+$hasPermissionIssue = false;
+foreach ($dirPermissions as $dir => $status) {
+    if ($status !== 'readable') {
+        $hasPermissionIssue = true;
+        break;
+    }
 }
 
-// Return the response
+if ($hasPermissionIssue) {
+    $response['warnings'] = "Directory permission issues detected. The web server may not have sufficient access to API directories.";
+    $response['status'] = 'warning';
+}
+
+// Output response
 echo json_encode($response, JSON_PRETTY_PRINT);

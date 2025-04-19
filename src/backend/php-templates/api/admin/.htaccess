@@ -33,6 +33,8 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
+    # CRITICAL: Allow all access to PHP files
+    Require all granted
 </FilesMatch>
 
 # Add direct access to the diagnostic tools
@@ -53,6 +55,10 @@ RewriteRule ^bookings/([0-9]+)$ booking.php?id=$1 [L,QSA]
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.+)\.php$ $1.php [L,QSA]
 
+# Admin users endpoint for user management
+RewriteRule ^users$ users.php [L,QSA]
+RewriteRule ^users/([0-9]+)$ users.php?id=$1 [L,QSA]
+
 # CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
 # Make sure these are at the top, before any other rules
 RewriteRule ^vehicles/create$ direct-vehicle-create.php [L,QSA]
@@ -72,3 +78,10 @@ RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
+
+# Permissions for this directory
+<Directory "/api/admin">
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
