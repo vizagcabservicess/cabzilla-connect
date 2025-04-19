@@ -1,14 +1,13 @@
 
 <?php
-// Mock PHP file for direct-local-fares.php
-// Note: This file won't actually be executed in the Lovable preview environment,
-// but it helps document the expected API structure and responses.
+// Enhanced direct-local-fares.php with improved dynamic vehicle support
+// This file provides improved database connectivity and dynamic fare calculation
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
-header('X-API-Version: 1.0.10');
+header('X-API-Version: 1.1.0');
 header('X-Debug-File: direct-local-fares.php');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
@@ -130,37 +129,51 @@ try {
         // 1. First try exact match with original ID
         $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
         $stmt = $conn->prepare($query);
-        $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result && $result->num_rows > 0) {
-            $vehicleFound = true;
-            error_log("Found exact match for vehicle_id: $vehicleId");
+        if (!$stmt) {
+            error_log("Failed to prepare statement: " . $conn->error);
         } else {
-            // 2. Try with normalized ID
-            error_log("No exact match found for vehicle_id: $vehicleId, trying normalized ID");
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("s", $normalizedVehicleId);
+            $stmt->bind_param("s", $vehicleId);
             $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result && $result->num_rows > 0) {
                 $vehicleFound = true;
-                error_log("Found match using normalized ID: $normalizedVehicleId");
+                error_log("Found exact match for vehicle_id: $vehicleId");
             } else {
-                // 3. Try partial match using LIKE
-                error_log("No exact or normalized match found, trying partial match");
-                $likePattern = '%' . str_replace('_', '%', $normalizedVehicleId) . '%';
-                $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ?";
+                // 2. Try with normalized ID
+                error_log("No exact match found for vehicle_id: $vehicleId, trying normalized ID");
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("s", $likePattern);
+                $stmt->bind_param("s", $normalizedVehicleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
                 if ($result && $result->num_rows > 0) {
                     $vehicleFound = true;
-                    error_log("Found match using LIKE pattern: $likePattern");
+                    error_log("Found match using normalized ID: $normalizedVehicleId");
+                } else {
+                    // 3. Try partial match using LIKE
+                    error_log("No exact or normalized match found, trying partial match");
+                    $likePattern = '%' . str_replace('_', '%', $normalizedVehicleId) . '%';
+                    $query = "SELECT * FROM local_package_fares WHERE vehicle_id LIKE ?";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("s", $likePattern);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    
+                    if ($result && $result->num_rows > 0) {
+                        $vehicleFound = true;
+                        error_log("Found match using LIKE pattern: $likePattern");
+                    } else {
+                        // 4. If still not found, try to get default pricing data
+                        error_log("No matches found with any method, looking for default pricing");
+                        $query = "SELECT * FROM default_pricing WHERE 1";
+                        $result = $conn->query($query);
+                        
+                        if ($result && $result->num_rows > 0) {
+                            $vehicleFound = true;
+                            error_log("Using default pricing data");
+                        }
+                    }
                 }
             }
         }
@@ -273,6 +286,14 @@ try {
                 'price10hrs100km' => 9000,
                 'priceExtraKm' => 40,
                 'priceExtraHour' => 900
+            ],
+            // Default fallback
+            'default' => [
+                'price4hrs40km' => 2000,
+                'price8hrs80km' => 3500,
+                'price10hrs100km' => 4000,
+                'priceExtraKm' => 20,
+                'priceExtraHour' => 300
             ]
         ];
         
@@ -294,10 +315,10 @@ try {
                 }
             }
             
-            // If no match found, use sedan as default
+            // If no match found, use default data
             if (!$matched) {
-                error_log("No match found in mock data, using sedan as default for: $normalizedId");
-                $localFares[] = array_merge(['vehicleId' => $vehicleId], $mockFares['sedan']);
+                error_log("No match found in mock data, using default fares for: $normalizedId");
+                $localFares[] = array_merge(['vehicleId' => $vehicleId], $mockFares['default']);
             }
         }
     }

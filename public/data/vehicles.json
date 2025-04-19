@@ -74,5 +74,20 @@
     "nightHaltCharge": 1200,
     "driverAllowance": 300,
     "isActive": true
+  },
+  {
+    "id": "swift_dzire",
+    "name": "Swift Dzire",
+    "capacity": 4,
+    "luggageCapacity": 2,
+    "price": 2200,
+    "pricePerKm": 13,
+    "image": "/cars/sedan.png",
+    "amenities": ["AC", "Bottle Water", "Music System"],
+    "description": "Compact sedan with excellent fuel efficiency.",
+    "ac": true,
+    "nightHaltCharge": 600,
+    "driverAllowance": 200,
+    "isActive": true
   }
 ]

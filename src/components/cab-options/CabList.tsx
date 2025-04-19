@@ -212,11 +212,12 @@ export function CabList({
     };
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
   
-  // Get database fallback prices if needed
+  // Get database fallback prices if needed - now more dynamic
   const getDatabaseFallbackPrice = (cab: CabType, tripType: string, hourlyPackage?: string): number => {
     const normalizedId = cab.id.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
     // Updated database values to match what's in the actual database
+    // Added more vehicle types to support dynamic vehicle addition
     const databaseLocalFares: Record<string, Record<string, number>> = {
       'sedan': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'ertiga': { '4hrs-40km': 1500, '8hrs-80km': 3000, '10hrs-100km': 3500 },
@@ -228,7 +229,9 @@ export function CabList({
       'dzire_cng': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
       'tempo_traveller': { '4hrs-40km': 6500, '8hrs-80km': 6500, '10hrs-100km': 7500 },
       'amaze': { '4hrs-40km': 1400, '8hrs-80km': 2400, '10hrs-100km': 3000 },
-      'bus': { '4hrs-40km': 3000, '8hrs-80km': 7000, '10hrs-100km': 9000 }
+      'bus': { '4hrs-40km': 3000, '8hrs-80km': 7000, '10hrs-100km': 9000 },
+      // Default pricing for any new vehicle not listed above
+      'default': { '4hrs-40km': 2000, '8hrs-80km': 3500, '10hrs-100km': 4000 }
     };
     
     if (tripType === 'local') {
@@ -251,11 +254,18 @@ export function CabList({
         }
       }
       
-      // Default to sedan prices if no match
-      return databaseLocalFares['sedan'][package_id];
+      // Use default prices if no match found
+      return databaseLocalFares['default'][package_id];
     }
     
-    return 0;
+    // For non-local trip types, calculate based on distance and vehicle type
+    if (tripType === 'outstation') {
+      const basePricePerKm = cab.pricePerKm || 15; // Default to 15 if not specified
+      return Math.max(1500, Math.round(distance * basePricePerKm));
+    }
+    
+    // For other trip types
+    return cab.price || cab.basePrice || 2500; // Default to 2500 if no price info available
   };
   
   return (

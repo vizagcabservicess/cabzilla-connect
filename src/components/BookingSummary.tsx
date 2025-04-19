@@ -1,38 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Location } from '@/lib/locationData';
-import { CabType } from '@/types/cab';
-import { formatPrice } from '@/lib/cabData';
-import { TripType, TripMode } from '@/lib/tripTypes';
+import React, { useEffect, useState } from 'react';
+import { Separator } from "@/components/ui/separator";
+import { MapPin, Calendar, Route, CarFront, IndianRupee } from "lucide-react";
+import { formatDate, formatTime } from "@/lib/dateUtils";
+import { CabType } from "@/types/cab";
+import { Location } from "@/lib/locationData";
+import { formatPrice } from "@/lib/cabData";
 import { useFare, FareType, TripDirectionType } from '@/hooks/useFare';
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
   dropLocation: Location | null;
-  pickupDate?: Date;
-  returnDate?: Date;
+  pickupDate: Date | null;
+  returnDate?: Date | null;
   selectedCab: CabType | null;
   distance: number;
-  tripType: TripType;
-  tripMode: TripMode;
+  tripType: string;
+  tripMode: TripDirectionType;
+  totalPrice?: number;
   hourlyPackage?: string;
-  isPreview?: boolean;
-  totalPrice?: number; // Optional prop to set a fixed price
 }
-
-// Helper function to get local package details
-const getLocalPackageDetails = (hourlyPackage?: string): string => {
-  switch (hourlyPackage) {
-    case '4hrs-40km':
-      return '4 Hours / 40 KM Package';
-    case '8hrs-80km':
-      return '8 Hours / 80 KM Package';
-    case '10hrs-100km':
-      return '10 Hours / 100 KM Package';
-    default:
-      return '8 Hours / 80 KM Package';
-  }
-};
 
 export function BookingSummary({
   pickupLocation,
@@ -43,225 +29,164 @@ export function BookingSummary({
   distance,
   tripType,
   tripMode,
-  hourlyPackage,
-  isPreview = false,
-  totalPrice: propTotalPrice
+  totalPrice: staticTotalPrice,
+  hourlyPackage
 }: BookingSummaryProps) {
-  const [fareDetails, setFareDetails] = useState<Record<string, number>>({});
-  const [totalCalculatedPrice, setTotalCalculatedPrice] = useState<number>(0);
-  const { fetchFare, isLoading } = useFare();
-  
+  // Added state for dynamic fare
+  const [dynamicTotalPrice, setDynamicTotalPrice] = useState<number | null>(null);
+  const [isLoadingFare, setIsLoadingFare] = useState(false);
+  const { fetchFare } = useFare();
+
+  // Effect to fetch dynamic fare when component loads or inputs change
   useEffect(() => {
-    const loadFare = async () => {
+    const fetchDynamicFare = async () => {
       if (!selectedCab) return;
       
-      // If a totalPrice was provided via props, use that instead of fetching
-      if (propTotalPrice !== undefined) {
-        setFareDetails({ 'Total fare': propTotalPrice });
-        setTotalCalculatedPrice(propTotalPrice);
-        return;
-      }
-      
+      setIsLoadingFare(true);
       try {
-        console.log(`BookingSummary: Loading fare for ${selectedCab.id}, type ${tripType}, distance ${distance}`);
-        
-        const result = await fetchFare({
+        console.log("BookingSummary: Fetching dynamic fare for", selectedCab.id);
+        const fareDetails = await fetchFare({
           vehicleId: selectedCab.id,
           tripType: tripType as FareType,
           distance,
-          tripMode: tripMode as TripDirectionType,
+          tripMode,
           packageId: hourlyPackage,
-          pickupDate,
-          returnDate
+          pickupDate: pickupDate || undefined,
+          returnDate: returnDate || undefined
         });
         
-        console.log(`BookingSummary: Received fare details for ${selectedCab.id}:`, result);
+        console.log("BookingSummary: Received dynamic fare:", fareDetails);
         
-        // Use API-provided breakdown if available
-        if (result.breakdown && Object.keys(result.breakdown).length > 0) {
-          setFareDetails(result.breakdown);
-          
-          // Use provided totalPrice or calculate from breakdown
-          if (result.totalPrice > 0) {
-            setTotalCalculatedPrice(result.totalPrice);
+        // Process the fare based on trip type
+        let calculatedFare = 0;
+        
+        if (tripType === 'local' && hourlyPackage) {
+          // Local trips with hourly packages
+          if (hourlyPackage === '4hrs-40km' && fareDetails.price4hrs40km) {
+            calculatedFare = fareDetails.price4hrs40km;
+          } else if (hourlyPackage === '8hrs-80km' && fareDetails.price8hrs80km) {
+            calculatedFare = fareDetails.price8hrs80km;
+          } else if (hourlyPackage === '10hrs-100km' && fareDetails.price10hrs100km) {
+            calculatedFare = fareDetails.price10hrs100km;
           } else {
-            const total = Object.values(result.breakdown).reduce((sum, value) => sum + value, 0);
-            setTotalCalculatedPrice(total);
+            calculatedFare = fareDetails.totalPrice || fareDetails.price || fareDetails.basePrice || 0;
           }
         } else {
-          // If no breakdown, create a simple one based on totalPrice
-          setTotalCalculatedPrice(result.totalPrice);
-          setFareDetails({ 'Total fare': result.totalPrice });
+          // Other trip types
+          calculatedFare = fareDetails.totalPrice || fareDetails.price || fareDetails.basePrice || 0;
+        }
+        
+        if (calculatedFare > 0) {
+          setDynamicTotalPrice(calculatedFare);
         }
       } catch (error) {
-        console.error('Error fetching fare details:', error);
-        setFareDetails({});
-        setTotalCalculatedPrice(0);
+        console.error("Error fetching dynamic fare:", error);
+      } finally {
+        setIsLoadingFare(false);
       }
     };
     
-    loadFare();
-  }, [selectedCab, tripType, tripMode, distance, hourlyPackage, pickupDate, returnDate, fetchFare, propTotalPrice]);
+    fetchDynamicFare();
+  }, [selectedCab, tripType, distance, tripMode, hourlyPackage, fetchFare, pickupDate, returnDate]);
+
+  // Use dynamic price if available, otherwise fall back to static price
+  const displayPrice = dynamicTotalPrice || staticTotalPrice || 0;
   
-  const isCalculating = selectedCab ? isLoading(selectedCab.id) : false;
-  const finalTotalPrice = propTotalPrice !== undefined ? propTotalPrice : totalCalculatedPrice;
-  
+  // Generate details based on trip type
+  const getTripDetails = () => {
+    if (tripType === 'local') {
+      const packageDisplay = hourlyPackage ? hourlyPackage.replace('-', ' / ') : '8hrs / 80km';
+      return `Local package (${packageDisplay})`;
+    } else if (tripType === 'outstation') {
+      return `${tripMode === 'round-trip' ? 'Round trip' : 'One way'} - ${distance} km`;
+    } else if (tripType === 'airport') {
+      return `Airport transfer - ${distance} km`;
+    } else if (tripType === 'tour') {
+      return `Guided tour - ${distance} km`;
+    }
+    return `${distance} km journey`;
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-bold mb-6">Booking Summary</h2>
+    <div className="bg-white rounded-lg shadow-sm border p-6">
+      <h2 className="font-semibold text-lg mb-4">Booking Summary</h2>
       
       <div className="space-y-4">
-        <div className="flex items-start">
-          <div className="mt-1 text-blue-500 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-gray-500">PICKUP LOCATION</p>
-            <p className="font-medium">{pickupLocation?.name || pickupLocation?.address || 'Not specified'}</p>
-          </div>
-        </div>
-        
-        {tripType !== 'local' && (
-          <div className="flex items-start">
-            <div className="mt-1 text-blue-500 flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-500">DROP LOCATION</p>
-              <p className="font-medium">{dropLocation?.name || dropLocation?.address || 'Not specified'}</p>
+        {pickupLocation && (
+          <div className="flex items-start gap-3">
+            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">PICKUP LOCATION</p>
+              <p className="font-medium">{pickupLocation.name}</p>
             </div>
           </div>
         )}
         
-        <div className="flex items-start">
-          <div className="mt-1 text-blue-500 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
+        {dropLocation && (
+          <div className="flex items-start gap-3">
+            <MapPin className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">DROP LOCATION</p>
+              <p className="font-medium">{dropLocation.name}</p>
+            </div>
           </div>
-          <div className="ml-3">
-            <p className="text-sm text-gray-500">PICKUP DATE & TIME</p>
-            <p className="font-medium">
-              {pickupDate ? new Intl.DateTimeFormat('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true
-              }).format(pickupDate) : 'Not specified'}
-            </p>
+        )}
+        
+        {pickupDate && (
+          <div className="flex items-start gap-3">
+            <Calendar className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">PICKUP DATE & TIME</p>
+              <p className="font-medium">{formatDate(pickupDate)} at {formatTime(pickupDate)}</p>
+            </div>
+          </div>
+        )}
+        
+        {returnDate && (
+          <div className="flex items-start gap-3">
+            <Calendar className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">RETURN DATE & TIME</p>
+              <p className="font-medium">{formatDate(returnDate)} at {formatTime(returnDate)}</p>
+            </div>
+          </div>
+        )}
+        
+        <div className="flex items-start gap-3">
+          <Route className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm text-gray-500">TRIP DETAILS</p>
+            <p className="font-medium">{getTripDetails()}</p>
           </div>
         </div>
         
-        {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
-          <div className="flex items-start">
-            <div className="mt-1 text-blue-500 flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-gray-500">RETURN DATE & TIME</p>
-              <p className="font-medium">
-                {new Intl.DateTimeFormat('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: 'numeric',
-                  minute: 'numeric',
-                  hour12: true
-                }).format(returnDate)}
+        {selectedCab && (
+          <div className="flex items-start gap-3">
+            <CarFront className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">SELECTED CAB</p>
+              <p className="font-medium">{selectedCab.name}</p>
+              <p className="text-xs text-gray-500">
+                {selectedCab.capacity} seater • {selectedCab.luggageCapacity} luggage
               </p>
             </div>
           </div>
         )}
-        
-        <div className="flex items-start">
-          <div className="mt-1 text-blue-500 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-gray-500">SELECTED CAB</p>
-            <p className="font-medium">{selectedCab?.name || 'Not selected'}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-start">
-          <div className="mt-1 text-blue-500 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-gray-500">TRIP DETAILS</p>
-            <p className="font-medium">
-              {tripType.charAt(0).toUpperCase() + tripType.slice(1)}
-              {tripType === 'outstation' && ` - ${tripMode === 'round-trip' ? 'Round Trip' : 'One Way'}`}
-              {tripType === 'local' && ` - ${getLocalPackageDetails(hourlyPackage)}`}
-            </p>
-            <p className="text-sm">Distance: {distance} km</p>
-          </div>
-        </div>
       </div>
       
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <h3 className="text-lg font-semibold mb-4">Fare Breakdown</h3>
-        
-        {propTotalPrice !== undefined ? (
-          <div className="flex justify-between items-center py-2">
-            <span>Total fare</span>
-            <span className="font-semibold">{formatPrice(propTotalPrice)}</span>
+      <Separator className="my-4" />
+      
+      <div className="flex justify-between items-center">
+        <div>
+          <p className="text-sm text-gray-500">TOTAL FARE</p>
+          <div className="flex items-center">
+            <IndianRupee className="h-4 w-4 mr-1" />
+            <p className="text-xl font-bold">
+              {isLoadingFare ? 'Calculating...' : formatPrice(displayPrice)}
+            </p>
           </div>
-        ) : isCalculating ? (
-          <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <div key={i} className="flex justify-between items-center py-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ))}
-          </div>
-        ) : Object.keys(fareDetails).length > 0 ? (
-          Object.entries(fareDetails).map(([label, amount]) => (
-            <div key={label} className="flex justify-between items-center py-2">
-              <span>{label}</span>
-              <span className="font-semibold">{formatPrice(amount)}</span>
-            </div>
-          ))
-        ) : (
-          <div className="flex justify-between items-center py-2">
-            <span>Price unavailable</span>
-            <span className="font-semibold">-</span>
-          </div>
-        )}
-        
-        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-          <span className="text-lg font-bold">Total</span>
-          <span className="text-lg font-bold">
-            {isCalculating ? (
-              <Skeleton className="h-7 w-24" />
-            ) : finalTotalPrice > 0 ? (
-              formatPrice(finalTotalPrice)
-            ) : (
-              "Price unavailable"
-            )}
-          </span>
+          <p className="text-xs text-gray-500">All inclusive</p>
         </div>
-        
-        <p className="text-xs text-gray-500 mt-2">
-          Inclusive of all taxes. No hidden charges.
-        </p>
       </div>
     </div>
   );
