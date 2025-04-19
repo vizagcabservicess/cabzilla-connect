@@ -20,7 +20,6 @@ interface BookingSummaryProps {
   totalPrice: number;
   tripType: TripType;
   tripMode?: 'one-way' | 'round-trip';
-  hourlyPackage?: string;
 }
 
 export const BookingSummary = ({
@@ -32,8 +31,7 @@ export const BookingSummary = ({
   distance,
   totalPrice,
   tripType,
-  tripMode = 'one-way',
-  hourlyPackage
+  tripMode = 'one-way'
 }: BookingSummaryProps) => {
   const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
   const [baseFare, setBaseFare] = useState<number>(0);
@@ -199,60 +197,6 @@ export const BookingSummary = ({
       }, 100);
     }
   }, [distance, tripMode, totalPrice]);
-
-  useEffect(() => {
-    const checkPendingInterval = setInterval(() => {
-      if (pendingCalculationRef.current && !calculationInProgressRef.current && calculationAttemptsRef.current < maxCalculationAttempts) {
-        console.log('BookingSummary: Processing pending calculation...');
-        
-        if (calculationTimeoutRef.current) {
-          clearTimeout(calculationTimeoutRef.current);
-        }
-        
-        calculationTimeoutRef.current = setTimeout(() => {
-          recalculateFareDetails();
-        }, 10);
-      }
-    }, 1000);
-    
-    return () => clearInterval(checkPendingInterval);
-  }, []);
-
-  useEffect(() => {
-    if (selectedCab && (
-        selectedCab.id === 'mpv' || 
-        selectedCab.id === 'innova_hycross' || 
-        selectedCab.name.toLowerCase().includes('hycross')
-      )) {
-      
-      // For local 8hrs-80km package, force the fare to be 4000
-      if (tripType === 'local' && 
-          (hourlyPackage?.includes('8hrs') || hourlyPackage?.includes('8hr') || 
-           hourlyPackage?.includes('08hrs') || hourlyPackage?.includes('08hr'))) {
-        
-        console.log(`BookingSummary: Enforcing 4000 fare for MPV/Innova Hycross with 8hrs package`);
-        
-        // Store the correct fare in localStorage
-        localStorage.setItem(`fare_local_${selectedCab.id.toLowerCase()}`, '4000');
-        
-        // If the component still has an incorrect fare, update it
-        if (calculatedFare !== 4000) {
-          setCalculatedFare(4000);
-          setBaseFare(4000);
-          
-          // Dispatch an event to notify other components of the correct fare
-          window.dispatchEvent(new CustomEvent('significant-fare-difference', {
-            detail: {
-              calculatedFare: 4000,
-              parentFare: calculatedFare,
-              cabId: selectedCab.id,
-              tripType: 'local'
-            }
-          }));
-        }
-      }
-    }
-  }, [selectedCab, hourlyPackage, tripType, calculatedFare]);
 
   const recalculateFareDetails = async () => {
     if (!selectedCab) {
@@ -654,6 +598,24 @@ export const BookingSummary = ({
       window.removeEventListener('cab-selected', handleCabSelected);
     };
   }, [totalPrice, selectedCab, tripType, tripMode]);
+
+  useEffect(() => {
+    const checkPendingInterval = setInterval(() => {
+      if (pendingCalculationRef.current && !calculationInProgressRef.current && calculationAttemptsRef.current < maxCalculationAttempts) {
+        console.log('BookingSummary: Processing pending calculation...');
+        
+        if (calculationTimeoutRef.current) {
+          clearTimeout(calculationTimeoutRef.current);
+        }
+        
+        calculationTimeoutRef.current = setTimeout(() => {
+          recalculateFareDetails();
+        }, 10);
+      }
+    }, 1000);
+    
+    return () => clearInterval(checkPendingInterval);
+  }, []);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;

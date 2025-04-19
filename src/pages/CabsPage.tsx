@@ -609,7 +609,6 @@ const CabsPage = () => {
                   totalPrice={totalPrice}
                   tripType={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
-                  hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
                 />
               </div>
             </div>

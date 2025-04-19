@@ -73,7 +73,6 @@ switch ($vehicleId) {
         ];
         break;
     case 'tempo_traveller':
-    case 'tempo':
         $localFares[] = [
             'vehicleId' => 'tempo_traveller',
             'price4hrs40km' => 2000,
@@ -81,18 +80,6 @@ switch ($vehicleId) {
             'price10hrs100km' => 4000,
             'priceExtraKm' => 25,
             'priceExtraHour' => 200
-        ];
-        break;
-    case 'mpv':
-    case 'innova_hycross':
-    case 'hycross':
-        $localFares[] = [
-            'vehicleId' => $vehicleId,
-            'price4hrs40km' => 1500,
-            'price8hrs80km' => 4000, // Ensure consistent pricing
-            'price10hrs100km' => 4800,
-            'priceExtraKm' => 20,
-            'priceExtraHour' => 180
         ];
         break;
     default:
