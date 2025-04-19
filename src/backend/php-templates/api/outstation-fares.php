@@ -54,18 +54,20 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
-// Normalize vehicle ID - remove spaces and convert to lowercase
+// Normalize vehicle ID - important for matching in database
 if ($vehicleId) {
     $originalVehicleId = $vehicleId;
     
-    // Map specific vehicles
+    // Map specific vehicles - expanded mapping for more accuracy
     $mappings = [
         'innova hyrcoss' => 'innova_crysta',
         'innova hycross' => 'innova_crysta',
         'innovacrystal' => 'innova_crysta',
         'innova crystal' => 'innova_crysta',
         'innovacrystal 7seater' => 'innova_crysta',
+        'innova' => 'innova_crysta',
         'crysta' => 'innova_crysta',
+        'toyota innova' => 'innova_crysta',
         'suzuki ertiga' => 'ertiga',
         'maruti ertiga' => 'ertiga',
         'ertigaac' => 'ertiga',
@@ -78,16 +80,20 @@ if ($vehicleId) {
         'toyota' => 'innova_crysta',
         'mpv' => 'tempo',
         'tempo_traveller' => 'tempo',
+        'dzire cng' => 'sedan',
+        'bus' => 'bus'
     ];
     
     $vehicleLower = strtolower($vehicleId);
     if (isset($mappings[$vehicleLower])) {
         $vehicleId = $mappings[$vehicleLower];
+        file_put_contents($logFile, "[$timestamp] Mapped vehicle ID from '$originalVehicleId' to '$vehicleId' using direct mapping\n", FILE_APPEND);
     } else {
         // Check for partial matches
         foreach ($mappings as $key => $value) {
             if (strpos($vehicleLower, $key) !== false) {
                 $vehicleId = $value;
+                file_put_contents($logFile, "[$timestamp] Mapped vehicle ID from '$originalVehicleId' to '$vehicleId' using partial match on '$key'\n", FILE_APPEND);
                 break;
             }
         }
@@ -95,21 +101,22 @@ if ($vehicleId) {
         if ($vehicleId === $originalVehicleId) {
             // If no mapping was applied, normalize the string
             $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+            file_put_contents($logFile, "[$timestamp] Normalized vehicle ID format: '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
         }
     }
-    
-    file_put_contents($logFile, "[$timestamp] Normalized vehicle ID from '$originalVehicleId' to '$vehicleId'\n", FILE_APPEND);
 }
 
-// If we found a vehicle ID, add it to $_GET for the forwarded request
-if ($vehicleId) {
-    $_GET['vehicle_id'] = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Using normalized vehicle_id: " . $vehicleId . "\n", FILE_APPEND);
-}
+// Store both original and normalized vehicle IDs in GET params
+$_GET['vehicle_id'] = $vehicleId;
+$_GET['original_vehicle_id'] = $originalVehicleId ?? $vehicleId;
+file_put_contents($logFile, "[$timestamp] Using normalized vehicle_id: " . $vehicleId . "\n", FILE_APPEND);
 
-// Get other params
+// Get trip mode parameter
 $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 
            (isset($_GET['tripMode']) ? $_GET['tripMode'] : 'one-way');
+$_GET['trip_mode'] = $tripMode;
+
+// Get distance parameter
 $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
 
 // Set default distance if none provided or too small
@@ -117,9 +124,6 @@ if ($distance <= 0) {
     $distance = 150; // Default distance if none specified
     file_put_contents($logFile, "[$timestamp] No valid distance parameter, setting default: 150\n", FILE_APPEND);
 }
-
-// Save values to $_GET
-$_GET['trip_mode'] = $tripMode;
 $_GET['distance'] = $distance;
 
 file_put_contents($logFile, "[$timestamp] Forwarding with trip_mode=$tripMode, distance=$distance\n", FILE_APPEND);

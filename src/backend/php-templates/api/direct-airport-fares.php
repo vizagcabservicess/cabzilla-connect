@@ -64,11 +64,15 @@ function normalizeVehicleId($vehicleId) {
         'etios' => 'sedan',
         'toyota_etios' => 'sedan',
         'honda_amaze' => 'sedan',
-        'amaze' => 'sedan'
+        'amaze' => 'sedan',
+        'dzire_cng' => 'sedan',
+        'mpv' => 'tempo',
+        'tempo_traveller' => 'tempo'
     ];
     
     foreach ($mappings as $key => $value) {
-        if (strpos($normalized, $key) !== false) {
+        if (strpos($normalized, $key) !== false || $normalized === $key) {
+            file_put_contents($GLOBALS['logFile'], "[$timestamp] Airport: Mapped vehicle ID from '$normalized' to '$value'\n", FILE_APPEND);
             return $value;
         }
     }
@@ -161,6 +165,7 @@ try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
                 (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    $originalVehicleId = isset($_GET['original_vehicle_id']) ? $_GET['original_vehicle_id'] : $vehicleId;
     $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
     
     // Ensure we have a minimum distance
@@ -169,7 +174,6 @@ try {
     }
     
     // Log original vehicle ID before normalization
-    $originalVehicleId = $vehicleId;
     file_put_contents($logFile, "[$timestamp] Original vehicle ID: $originalVehicleId\n", FILE_APPEND);
     
     // Normalize vehicle ID
@@ -317,7 +321,8 @@ try {
     $response = [
         'status' => 'success',
         'message' => 'Airport fares retrieved successfully',
-        'fare' => $fare
+        'fare' => $fare,
+        'fares' => [$fare] // Add fares array for consistency with CabList expectations
     ];
 
     echo json_encode($response);
