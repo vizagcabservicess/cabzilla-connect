@@ -124,11 +124,11 @@ try {
             ]
         ];
         
-        // Return success response with fare data
+        // Return success response with fare data in a consistent format
         echo json_encode([
             'status' => 'success',
             'message' => 'Outstation fares retrieved successfully',
-            'fare' => $fare
+            'fares' => [$fare]  // Wrap in array for consistent format across all endpoints
         ]);
         
     } else {
@@ -184,7 +184,7 @@ try {
         echo json_encode([
             'status' => 'success',
             'message' => 'Using sample outstation fare data (no database record found)',
-            'fare' => $fare
+            'fares' => [$fare]  // Wrap in array for consistent format
         ]);
     }
     

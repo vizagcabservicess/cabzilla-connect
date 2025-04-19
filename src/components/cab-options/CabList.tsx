@@ -33,7 +33,10 @@ export function CabList({
     const loadFares = async () => {
       console.log(`CabList: Loading fares for ${cabTypes.length} vehicles with type ${tripType}`);
       
-      const promises = cabTypes.map(async (cab) => {
+      const faresMap: Record<string, number> = {};
+      
+      // Load fares for each cab type
+      for (const cab of cabTypes) {
         try {
           const fareDetails = await fetchFare({
             vehicleId: cab.id,
@@ -44,32 +47,24 @@ export function CabList({
           });
           
           if (fareDetails && fareDetails.totalPrice !== undefined) {
-            setFares(prev => ({
-              ...prev,
-              [cab.id]: fareDetails.totalPrice
-            }));
+            faresMap[cab.id] = fareDetails.totalPrice;
             console.log(`CabList: Set fare for ${cab.id} to ${fareDetails.totalPrice}`);
           } else {
             console.warn(`CabList: Received invalid fare details for ${cab.id}`, fareDetails);
-            setFares(prev => ({
-              ...prev,
-              [cab.id]: 0
-            }));
+            faresMap[cab.id] = 0;
           }
         } catch (error) {
           console.error(`Error fetching fare for ${cab.id}:`, error);
-          // Set fare to 0 on error
-          setFares(prev => ({
-            ...prev,
-            [cab.id]: 0
-          }));
+          faresMap[cab.id] = 0;
         }
-      });
+      }
       
-      await Promise.all(promises);
+      setFares(faresMap);
     };
     
-    loadFares();
+    if (cabTypes && cabTypes.length > 0) {
+      loadFares();
+    }
   }, [cabTypes, tripType, tripMode, distance, hourlyPackage, fetchFare]);
   
   if (!cabTypes || cabTypes.length === 0) {

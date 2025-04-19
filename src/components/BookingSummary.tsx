@@ -49,6 +49,7 @@ export function BookingSummary({
   totalPrice: propTotalPrice
 }: BookingSummaryProps) {
   const [fareDetails, setFareDetails] = useState<Record<string, number>>({});
+  const [totalCalculatedPrice, setTotalCalculatedPrice] = useState<number>(0);
   const { fetchFare, isLoading } = useFare();
   
   useEffect(() => {
@@ -58,6 +59,7 @@ export function BookingSummary({
       // If a totalPrice was provided via props, use that instead of fetching
       if (propTotalPrice !== undefined) {
         setFareDetails({ 'Total fare': propTotalPrice });
+        setTotalCalculatedPrice(propTotalPrice);
         return;
       }
       
@@ -76,9 +78,15 @@ export function BookingSummary({
         
         console.log(`BookingSummary: Received fare details for ${selectedCab.id}:`, result);
         
-        if (result.breakdown) {
+        if (result.breakdown && Object.keys(result.breakdown).length > 0) {
           setFareDetails(result.breakdown);
+          // Calculate total from breakdown
+          const total = Object.values(result.breakdown).reduce((sum, value) => sum + value, 0);
+          setTotalCalculatedPrice(total);
         } else {
+          // Use totalPrice if breakdown isn't available
+          setTotalCalculatedPrice(result.totalPrice);
+          
           // Construct a basic breakdown if one wasn't provided
           const breakdown: Record<string, number> = {};
           
@@ -87,9 +95,11 @@ export function BookingSummary({
           } else if (tripType === 'outstation') {
             breakdown['Base fare'] = result.basePrice;
             if (distance > 0) {
-              const effectiveDistance = Math.max(distance, 300); // Minimum 300km for outstation
-              const perKmCharge = (result.totalPrice - result.basePrice) / effectiveDistance;
-              breakdown[`Distance (${effectiveDistance} km)`] = effectiveDistance * perKmCharge;
+              const distanceCharge = result.totalPrice - result.basePrice - (result.driverAllowance || 0);
+              breakdown['Distance charge'] = distanceCharge;
+            }
+            if (result.driverAllowance) {
+              breakdown['Driver allowance'] = result.driverAllowance;
             }
           } else if (tripType === 'airport') {
             breakdown['Base fare'] = result.basePrice || 0;
@@ -104,6 +114,7 @@ export function BookingSummary({
       } catch (error) {
         console.error('Error fetching fare details:', error);
         setFareDetails({ 'Error': 0 });
+        setTotalCalculatedPrice(0);
       }
     };
     
@@ -111,9 +122,7 @@ export function BookingSummary({
   }, [selectedCab, tripType, tripMode, distance, hourlyPackage, pickupDate, returnDate, fetchFare, propTotalPrice]);
   
   const isCalculating = selectedCab ? isLoading(selectedCab.id) : false;
-  const totalFare = propTotalPrice !== undefined 
-    ? propTotalPrice 
-    : Object.values(fareDetails).reduce((sum, value) => sum + value, 0);
+  const finalTotalPrice = propTotalPrice !== undefined ? propTotalPrice : totalCalculatedPrice;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -260,8 +269,8 @@ export function BookingSummary({
           <span className="text-lg font-bold">
             {isCalculating ? (
               <Skeleton className="h-7 w-24" />
-            ) : totalFare > 0 ? (
-              formatPrice(totalFare)
+            ) : finalTotalPrice > 0 ? (
+              formatPrice(finalTotalPrice)
             ) : (
               "Price unavailable"
             )}
