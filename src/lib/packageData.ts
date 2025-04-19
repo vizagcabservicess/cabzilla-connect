@@ -190,6 +190,17 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   const lowerCabType = cabType.toLowerCase();
   console.log(`Looking for price with lowercase cab type: ${lowerCabType}`);
   
+  // Special case for MPV/Innova Hycross to ensure price consistency
+  if (lowerCabType === 'mpv' || lowerCabType === 'innova hycross' || 
+      cabType.toLowerCase().includes('hycross')) {
+    // Check for the 8hrs-80km package specifically
+    if (packageId.includes('8hrs') || packageId.includes('8hr') || 
+        packageId.includes('08hrs') || packageId.includes('08hr')) {
+      console.log('Using fixed price of 4000 for MPV/Innova Hycross 8hrs package');
+      return 4000;
+    }
+  }
+  
   // Normalize packageId to make sure it matches our standard format
   const normalizedPackageId = normalizePackageId(packageId);
   

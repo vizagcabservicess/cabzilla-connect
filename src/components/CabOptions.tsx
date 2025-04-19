@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -44,6 +43,23 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
 
+  // Special helper function to ensure accurate pricing for specific vehicle types
+  const enforceCorrectPricing = (cabId: string, fare: number): number => {
+    // For MPV/Innova Hycross with 8hr package, enforce the correct price
+    if ((cabId === 'mpv' || cabId === 'innova_hycross' || cabId.toLowerCase().includes('hycross')) && 
+        tripType === 'local' && 
+        (hourlyPackage?.includes('8hrs') || hourlyPackage?.includes('8hr'))) {
+      console.log(`CabOptions: Enforcing correct fare for ${cabId} with 8hrs package: 4000`);
+      
+      // Store the 8hrs package selection in localStorage for other components
+      localStorage.setItem('currentHourlyPackage', hourlyPackage || '8hrs-80km');
+      
+      return 4000;
+    }
+    
+    return fare;
+  };
+
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
@@ -51,8 +67,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     // Store the current trip type in localStorage for better fare syncing
     localStorage.setItem('tripType', tripType.toString());
     
+    // Get correct fare with price enforcement for special cases
+    const cabFare = enforceCorrectPricing(cab.id, cabFares[cab.id] || 0);
+    
     // Emit event when a cab is selected, which BookingSummary will listen for
-    const cabFare = cabFares[cab.id] || 0;
     try {
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {

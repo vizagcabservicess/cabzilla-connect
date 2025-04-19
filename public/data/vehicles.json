@@ -74,5 +74,20 @@
     "nightHaltCharge": 1200,
     "driverAllowance": 300,
     "isActive": true
+  },
+  {
+    "id": "mpv",
+    "name": "Innova Hycross",
+    "capacity": 6,
+    "luggageCapacity": 4,
+    "price": 4000,
+    "pricePerKm": 20,
+    "image": "/cars/innova.png",
+    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Premium Fabric"],
+    "description": "The Toyota Innova Hycross is known for its comfort, offering a spacious and luxurious interior with features like premium fabric seats, rear AC vents, and a spacious cabin with comfortable 3rd-row seats, making it ideal for families and long journeys.",
+    "ac": true,
+    "nightHaltCharge": 1000,
+    "driverAllowance": 250,
+    "isActive": true
   }
 ]
