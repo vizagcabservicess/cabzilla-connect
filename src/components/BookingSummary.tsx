@@ -17,6 +17,7 @@ interface BookingSummaryProps {
   tripMode: TripMode;
   hourlyPackage?: string;
   isPreview?: boolean;
+  totalPrice?: number; // Added totalPrice as an optional prop
 }
 
 // Helper function to get local package details
@@ -43,7 +44,8 @@ export function BookingSummary({
   tripType,
   tripMode,
   hourlyPackage,
-  isPreview = false
+  isPreview = false,
+  totalPrice: propTotalPrice
 }: BookingSummaryProps) {
   const [fareDetails, setFareDetails] = useState<Record<string, number>>({});
   const { fetchFare, isLoading } = useFare();
@@ -51,6 +53,12 @@ export function BookingSummary({
   useEffect(() => {
     const loadFare = async () => {
       if (!selectedCab) return;
+      
+      // If a totalPrice was provided via props, use that instead of fetching
+      if (propTotalPrice !== undefined) {
+        setFareDetails({ 'Total fare': propTotalPrice });
+        return;
+      }
       
       try {
         console.log(`BookingSummary: Loading fare for ${selectedCab.id}, type ${tripType}, distance ${distance}`);
@@ -73,10 +81,12 @@ export function BookingSummary({
     };
     
     loadFare();
-  }, [selectedCab, tripType, tripMode, distance, hourlyPackage, pickupDate, returnDate, fetchFare]);
+  }, [selectedCab, tripType, tripMode, distance, hourlyPackage, pickupDate, returnDate, fetchFare, propTotalPrice]);
   
   const isCalculating = selectedCab ? isLoading(selectedCab.id) : false;
-  const totalFare = Object.values(fareDetails).reduce((sum, value) => sum + value, 0);
+  const totalFare = propTotalPrice !== undefined 
+    ? propTotalPrice 
+    : Object.values(fareDetails).reduce((sum, value) => sum + value, 0);
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -190,18 +200,25 @@ export function BookingSummary({
       <div className="mt-6 pt-6 border-t border-gray-200">
         <h3 className="text-lg font-semibold mb-4">Fare Breakdown</h3>
         
-        {Object.entries(fareDetails).map(([label, amount]) => (
-          <div key={label} className="flex justify-between items-center py-2">
-            <span>{label}</span>
-            <span className="font-semibold">
-              {isCalculating ? (
-                <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
-              ) : (
-                formatPrice(amount)
-              )}
-            </span>
+        {propTotalPrice !== undefined ? (
+          <div className="flex justify-between items-center py-2">
+            <span>Total fare</span>
+            <span className="font-semibold">{formatPrice(propTotalPrice)}</span>
           </div>
-        ))}
+        ) : (
+          Object.entries(fareDetails).map(([label, amount]) => (
+            <div key={label} className="flex justify-between items-center py-2">
+              <span>{label}</span>
+              <span className="font-semibold">
+                {isCalculating ? (
+                  <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  formatPrice(amount)
+                )}
+              </span>
+            </div>
+          ))
+        )}
         
         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
           <span className="text-lg font-bold">Total</span>
