@@ -51,7 +51,7 @@ export function CabList({
           
           // Store the totalPrice from the API directly
           if (fareDetails && fareDetails.totalPrice !== undefined) {
-            faresMap[cabId] = fareDetails.totalPrice;
+            faresMap[cabId] = Number(fareDetails.totalPrice);
             console.log(`CabList: Set fare for ${cabId} to ${fareDetails.totalPrice} (from API)`);
           } else {
             console.warn(`CabList: Received invalid fare details for ${cabId}`, fareDetails);

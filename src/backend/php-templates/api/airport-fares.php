@@ -61,5 +61,11 @@ if ($vehicleId) {
     file_put_contents($logFile, "[$timestamp] Using normalized vehicle_id: " . $vehicleId . "\n", FILE_APPEND);
 }
 
+// Get distance parameter if present
+if (isset($_GET['distance']) && !empty($_GET['distance'])) {
+    $distance = (float)$_GET['distance'];
+    file_put_contents($logFile, "[$timestamp] Found distance parameter: $distance\n", FILE_APPEND);
+}
+
 // Forward this request to the direct endpoint
 require_once __DIR__ . '/direct-airport-fares.php';

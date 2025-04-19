@@ -59,6 +59,7 @@ try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : 
                 (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
     
     // Log the original vehicle ID
     $originalVehicleId = $vehicleId;
@@ -67,7 +68,7 @@ try {
     $vehicleId = normalizeVehicleId($vehicleId);
     
     // Log request
-    file_put_contents($logFile, "[$timestamp] Airport fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Airport fares request: originalVehicleId=$originalVehicleId, normalizedVehicleId=$vehicleId, distance=$distance\n", FILE_APPEND);
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
@@ -94,100 +95,167 @@ try {
     file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
     
     if ($result) {
-        // Calculate total price
+        // Determine pricing based on distance tiers
         $basePrice = (float)$result['base_price'];
         $pickupPrice = (float)$result['pickup_price'];
         $dropPrice = (float)$result['drop_price'];
-        $totalPrice = $basePrice + $pickupPrice + $dropPrice;
+        $pricePerKm = (float)$result['price_per_km'];
+        $extraKmCharge = (float)$result['extra_km_charge'] ?: $pricePerKm;
+        
+        // Get tier prices
+        $tier1Price = (float)$result['tier1_price'] ?: 800;
+        $tier2Price = (float)$result['tier2_price'] ?: 1200;
+        $tier3Price = (float)$result['tier3_price'] ?: 1800;
+        $tier4Price = (float)$result['tier4_price'] ?: 2500;
+        
+        // Calculate total price based on distance tiers
+        $calculatedFare = 0;
+        
+        if ($distance <= 10) {
+            $calculatedFare = $tier1Price;
+        } else if ($distance <= 20) {
+            $calculatedFare = $tier2Price;
+        } else if ($distance <= 30) {
+            $calculatedFare = $tier3Price;
+        } else {
+            $calculatedFare = $tier4Price;
+            
+            // Add extra km costs if distance exceeds 30 km
+            if ($distance > 30) {
+                $extraKm = $distance - 30;
+                $extraKmCost = $extraKm * $extraKmCharge;
+                $calculatedFare += $extraKmCost;
+            }
+        }
+        
+        // Add airport fees
+        $calculatedFare += $dropPrice > 0 ? $dropPrice : $pickupPrice;
+        
+        // Add driver allowance if applicable
+        $driverAllowance = 250;
+        $calculatedFare += $driverAllowance;
         
         // Create fare object with complete breakdown
         $fare = [
             'vehicleId' => $result['vehicle_id'],
             'basePrice' => $basePrice,
+            'totalPrice' => $calculatedFare,
             'pickupPrice' => $pickupPrice,
             'dropPrice' => $dropPrice,
-            'pricePerKm' => (float)$result['price_per_km'],
-            'tier1Price' => (float)$result['tier1_price'],
-            'tier2Price' => (float)$result['tier2_price'],
-            'tier3Price' => (float)$result['tier3_price'],
-            'tier4Price' => (float)$result['tier4_price'],
-            'extraKmCharge' => (float)$result['extra_km_charge'],
-            'totalPrice' => $totalPrice,
+            'pricePerKm' => $pricePerKm,
+            'extraKmCharge' => $extraKmCharge,
+            'distance' => $distance,
             'breakdown' => [
                 'Base fare' => $basePrice,
-                'Airport pickup fee' => $pickupPrice,
-                'Airport drop fee' => $dropPrice
+                'Airport fees' => ($dropPrice > 0 ? $dropPrice : $pickupPrice),
+                'Driver allowance' => $driverAllowance,
+                'Extra distance charge' => ($distance > 30) ? ($distance - 30) * $extraKmCharge : 0
             ]
         ];
         
-        // Return success response with fare data in a consistent format
+        // Return success response
         echo json_encode([
             'status' => 'success',
             'message' => 'Airport fares retrieved successfully',
-            'fares' => [$fare]  // Wrap in array for consistent format across all endpoints
+            'fare' => $fare
         ]);
         
     } else {
         // No result found for this vehicle ID, log this
-        file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
-        // Try to find a matching vehicle with similar name (fuzzy match)
-        $fuzzyQuery = "SELECT vehicle_id FROM airport_transfer_fares LIMIT 1";
-        $fuzzyStmt = $conn->prepare($fuzzyQuery);
-        $fuzzyStmt->execute();
-        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
+        // Try to find any matching vehicle in database for debugging
+        $allVehiclesQuery = "SELECT vehicle_id FROM airport_transfer_fares";
+        $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
+        $allVehiclesStmt->execute();
+        $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
         
-        if ($anyVehicle) {
-            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
-            
-            // Get all vehicles for debugging
-            $allVehiclesQuery = "SELECT vehicle_id FROM airport_transfer_fares";
-            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
-            $allVehiclesStmt->execute();
-            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
-            
-            // Try alternate normalization approach as fallback
-            $alternateNormalizedId = strtolower(str_replace(' ', '_', trim($originalVehicleId)));
-            if ($alternateNormalizedId !== $vehicleId) {
-                file_put_contents($logFile, "[$timestamp] Trying alternate normalization: $alternateNormalizedId\n", FILE_APPEND);
-                
-                $altQuery = "SELECT * FROM airport_transfer_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :alt_id";
-                $altStmt = $conn->prepare($altQuery);
-                $altStmt->bindParam(':alt_id', $alternateNormalizedId);
-                $altStmt->execute();
-                $altResult = $altStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($altResult) {
-                    file_put_contents($logFile, "[$timestamp] Found match with alternate normalization: " . $altResult['vehicle_id'] . "\n", FILE_APPEND);
-                    // Process this result using the same logic as above
-                    // (This is a fallback that might help in some cases)
-                }
-            }
+        file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
+        
+        // Default pricing based on vehicle type
+        $defaultPricing = [];
+        switch ($vehicleId) {
+            case 'sedan':
+                $defaultPricing = [
+                    'basePrice' => 800, 
+                    'pickupPrice' => 200, 
+                    'dropPrice' => 200,
+                    'pricePerKm' => 14
+                ];
+                break;
+            case 'ertiga':
+                $defaultPricing = [
+                    'basePrice' => 1200, 
+                    'pickupPrice' => 300, 
+                    'dropPrice' => 300,
+                    'pricePerKm' => 18
+                ];
+                break;
+            case 'innova_crysta':
+                $defaultPricing = [
+                    'basePrice' => 1500, 
+                    'pickupPrice' => 400, 
+                    'dropPrice' => 400,
+                    'pricePerKm' => 20
+                ];
+                break;
+            default:
+                $defaultPricing = [
+                    'basePrice' => 1000, 
+                    'pickupPrice' => 250, 
+                    'dropPrice' => 250,
+                    'pricePerKm' => 15
+                ];
         }
         
-        // Return minimal fare with zero values
+        // Calculate fare with default pricing
+        $basePrice = $defaultPricing['basePrice'];
+        $pickupPrice = $defaultPricing['pickupPrice'];
+        $dropPrice = $defaultPricing['dropPrice'];
+        $pricePerKm = $defaultPricing['pricePerKm'];
+        
+        $calculatedFare = $basePrice;
+        
+        // Add extra km charge if distance exceeds 15 km
+        if ($distance > 15) {
+            $extraKm = $distance - 15;
+            $extraKmCost = $extraKm * $pricePerKm;
+            $calculatedFare += $extraKmCost;
+        }
+        
+        // Add airport fees
+        $calculatedFare += $pickupPrice;
+        
+        // Add driver allowance
+        $driverAllowance = 250;
+        $calculatedFare += $driverAllowance;
+        
+        // Log the default pricing calculation
+        file_put_contents($logFile, "[$timestamp] Using default pricing for $vehicleId: " . json_encode($defaultPricing) . "\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Calculated default price: $calculatedFare\n", FILE_APPEND);
+        
+        // Return fare with default pricing
         $fare = [
             'vehicleId' => $originalVehicleId,
-            'basePrice' => 0,
-            'pickupPrice' => 0,
-            'dropPrice' => 0,
-            'pricePerKm' => 0,
-            'extraKmCharge' => 0,
-            'totalPrice' => 0,
+            'basePrice' => $basePrice,
+            'totalPrice' => $calculatedFare,
+            'pickupPrice' => $pickupPrice,
+            'dropPrice' => $dropPrice,
+            'pricePerKm' => $pricePerKm,
+            'distance' => $distance,
             'breakdown' => [
-                'Base fare' => 0,
-                'Airport pickup fee' => 0,
-                'Airport drop fee' => 0
-            ]
+                'Base fare' => $basePrice,
+                'Airport fees' => $pickupPrice,
+                'Driver allowance' => $driverAllowance,
+                'Extra distance charge' => ($distance > 15) ? ($distance - 15) * $pricePerKm : 0
+            ],
+            'isDefaultPricing' => true
         ];
         
         echo json_encode([
             'status' => 'success',
-            'message' => 'No fare data found for this vehicle',
-            'fares' => [$fare]  // Wrap in array for consistent format
+            'message' => 'Using default airport fares for this vehicle',
+            'fare' => $fare
         ]);
     }
     

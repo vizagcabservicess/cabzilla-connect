@@ -34,6 +34,17 @@ export function CabOptionCard({
     onSelect(cab);
   };
 
+  // Determine what to display for the price
+  const renderPriceDisplay = () => {
+    if (isCalculating) {
+      return <span className="text-sm text-gray-400">Calculating...</span>;
+    } else if (fare > 0) {
+      return formatPrice(fare);
+    } else {
+      return <span className="text-sm text-gray-400">Price unavailable</span>;
+    }
+  };
+
   return (
     <div 
       className={cn(
@@ -76,13 +87,7 @@ export function CabOptionCard({
               "text-lg font-bold",
               isSelected ? "text-blue-600" : "text-gray-800"
             )}>
-              {isCalculating ? (
-                <span className="text-sm text-gray-400">Calculating...</span>
-              ) : fare > 0 ? (
-                formatPrice(fare)
-              ) : (
-                <span className="text-sm text-gray-400">Price unavailable</span>
-              )}
+              {renderPriceDisplay()}
             </div>
             <div className="text-xs text-blue-600">
               {fareDetails}

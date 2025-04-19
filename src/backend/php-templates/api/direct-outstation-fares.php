@@ -134,9 +134,9 @@ try {
         $fare = [
             'vehicleId' => $result['vehicle_id'],
             'basePrice' => $basePrice,
+            'totalPrice' => $calculatedPrice,
             'pricePerKm' => $pricePerKm,
             'driverAllowance' => $driverAllowance,
-            'totalPrice' => $calculatedPrice,
             'tripMode' => $tripMode,
             'distance' => $distance,
             'breakdown' => [
@@ -157,62 +157,97 @@ try {
         // No result found for this vehicle ID, log this
         file_put_contents($logFile, "[$timestamp] No outstation fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
-        // Try to find a matching vehicle with similar name (fuzzy match)
-        $fuzzyQuery = "SELECT vehicle_id FROM outstation_fares LIMIT 1";
+        // Try to find any matching vehicle with the requested ID pattern
+        $likePattern = '%' . str_replace('_', '%', $vehicleId) . '%';
+        $fuzzyQuery = "SELECT vehicle_id FROM outstation_fares WHERE vehicle_id LIKE :pattern LIMIT 1";
         $fuzzyStmt = $conn->prepare($fuzzyQuery);
+        $fuzzyStmt->bindParam(':pattern', $likePattern);
         $fuzzyStmt->execute();
-        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
+        $fuzzyMatch = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($anyVehicle) {
-            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
+        if ($fuzzyMatch) {
+            // Found a similar vehicle ID
+            file_put_contents($logFile, "[$timestamp] Found similar vehicle: " . $fuzzyMatch['vehicle_id'] . ", but not exact match\n", FILE_APPEND);
+        }
+        
+        // For debugging: Get all vehicle IDs in the database
+        $allVehiclesQuery = "SELECT vehicle_id FROM outstation_fares";
+        $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
+        $allVehiclesStmt->execute();
+        $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
+        
+        // Try to fetch default pricing for this vehicle type
+        $defaultPricing = [];
+        switch ($vehicleId) {
+            case 'sedan':
+                $defaultPricing = ['basePrice' => 4200, 'pricePerKm' => 14, 'driverAllowance' => 250];
+                break;
+            case 'ertiga':
+                $defaultPricing = ['basePrice' => 5400, 'pricePerKm' => 18, 'driverAllowance' => 250];
+                break;
+            case 'innova_crysta':
+                $defaultPricing = ['basePrice' => 6000, 'pricePerKm' => 20, 'driverAllowance' => 250];
+                break;
+            default:
+                $defaultPricing = ['basePrice' => 4200, 'pricePerKm' => 14, 'driverAllowance' => 250];
+        }
+        
+        // Calculate fare with default pricing
+        $basePrice = $defaultPricing['basePrice'];
+        $pricePerKm = $defaultPricing['pricePerKm'];
+        $driverAllowance = $defaultPricing['driverAllowance'];
+        $calculatedPrice = 0;
+        
+        if ($tripMode === 'round-trip') {
+            $effectiveDistance = $distance * 2;
+            $roundTripPerKm = $pricePerKm * 0.85;
+            $roundTripBase = $basePrice * 0.9;
             
-            // Get all vehicles for debugging
-            $allVehiclesQuery = "SELECT vehicle_id FROM outstation_fares";
-            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
-            $allVehiclesStmt->execute();
-            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
+            if ($effectiveDistance < 300) {
+                $calculatedPrice = $roundTripBase + $driverAllowance;
+            } else {
+                $extraDistance = $effectiveDistance - 300;
+                $extraDistanceFare = $extraDistance * $roundTripPerKm;
+                $calculatedPrice = $roundTripBase + $extraDistanceFare + $driverAllowance;
+            }
+        } else {
+            $effectiveDistance = $distance * 2;
             
-            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
-            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId (original: $originalVehicleId)\n", FILE_APPEND);
-            
-            // Try another normalization approach as fallback
-            $alternateNormalizedId = strtolower(str_replace(' ', '_', trim($originalVehicleId)));
-            if ($alternateNormalizedId !== $vehicleId) {
-                file_put_contents($logFile, "[$timestamp] Trying alternate normalization: $alternateNormalizedId\n", FILE_APPEND);
-                
-                $altQuery = "SELECT * FROM outstation_fares WHERE LOWER(REPLACE(vehicle_id, ' ', '_')) = :alt_id";
-                $altStmt = $conn->prepare($altQuery);
-                $altStmt->bindParam(':alt_id', $alternateNormalizedId);
-                $altStmt->execute();
-                $altResult = $altStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($altResult) {
-                    file_put_contents($logFile, "[$timestamp] Found match with alternate normalization: " . $altResult['vehicle_id'] . "\n", FILE_APPEND);
-                    // Process this result using the same logic as above
-                    // (This is a fallback that might help in some cases)
-                }
+            if ($effectiveDistance > 300) {
+                $extraDistance = $effectiveDistance - 300;
+                $extraDistanceFare = $extraDistance * $pricePerKm;
+                $calculatedPrice = $basePrice + $extraDistanceFare + $driverAllowance;
+            } else {
+                $calculatedPrice = $basePrice + $driverAllowance;
             }
         }
         
-        // If no match found after all attempts, return a default structure with empty values
+        // Log the default pricing calculation
+        file_put_contents($logFile, "[$timestamp] Using default pricing for $vehicleId: " . json_encode($defaultPricing) . "\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Calculated default price: $calculatedPrice\n", FILE_APPEND);
+        
+        // Create fare object with default pricing
         $fare = [
             'vehicleId' => $originalVehicleId,
-            'basePrice' => 0,
-            'pricePerKm' => 0,
-            'driverAllowance' => 0,
-            'totalPrice' => 0,
+            'basePrice' => $basePrice,
+            'totalPrice' => $calculatedPrice,
+            'pricePerKm' => $pricePerKm,
+            'driverAllowance' => $driverAllowance,
             'tripMode' => $tripMode,
             'distance' => $distance,
             'breakdown' => [
-                'Base fare' => 0,
-                'Distance charge' => 0,
-                'Driver allowance' => 0
-            ]
+                'Base fare' => $basePrice,
+                'Distance charge' => $calculatedPrice - $basePrice - $driverAllowance,
+                'Driver allowance' => $driverAllowance
+            ],
+            'isDefaultPricing' => true
         ];
         
         echo json_encode([
             'status' => 'success',
-            'message' => 'No fare data found for this vehicle',
+            'message' => 'Using default fares for this vehicle',
             'fare' => $fare
         ]);
     }

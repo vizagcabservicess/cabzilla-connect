@@ -62,8 +62,15 @@ if ($vehicleId) {
 }
 
 // Get other params
-$tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : null;
-$distance = isset($_GET['distance']) ? $_GET['distance'] : null;
+$tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 
+           (isset($_GET['tripMode']) ? $_GET['tripMode'] : 'one-way');
+$distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
+
+// Save values to $_GET
+$_GET['trip_mode'] = $tripMode;
+$_GET['distance'] = $distance;
+
+file_put_contents($logFile, "[$timestamp] Forwarding with trip_mode=$tripMode, distance=$distance\n", FILE_APPEND);
 
 // Forward this request to the direct endpoint
 require_once __DIR__ . '/direct-outstation-fares.php';
