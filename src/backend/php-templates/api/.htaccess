@@ -2,9 +2,16 @@
 RewriteEngine On
 RewriteBase /api/
 
-# Prevent duplicate /api/ prefix
+# Prevent duplicate /api/ prefix - multiple rules to catch all variants
 RewriteCond %{REQUEST_URI} ^/api/api/
 RewriteRule ^api/(.*)$ /$1 [L,R=301]
+
+# Additional rule to prevent nested api paths
+RewriteCond %{REQUEST_URI} ^/api/(.*/)?api/
+RewriteRule ^api/(.*)$ /$1 [L,R=301]
+
+# Rule to fix api/api case specifically within this directory
+RewriteRule ^api/(.*)$ $1 [L,R=301]
 
 # CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
 <FilesMatch "\.php$">

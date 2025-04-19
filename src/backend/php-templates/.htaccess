@@ -2,9 +2,13 @@
 RewriteEngine On
 RewriteBase /
 
-# Prevent duplicate /api/ prefix
+# Prevent duplicate /api/ prefix - enhanced rules
 RewriteCond %{REQUEST_URI} ^/api/api/
-RewriteRule ^api/(.*)$ /$1 [L,R=301]
+RewriteRule ^api/api/(.*)$ /api/$1 [L,R=301]
+
+# Additional rule to prevent nested api paths
+RewriteCond %{REQUEST_URI} ^/api/(.*/)?api/
+RewriteRule ^(api/.*)api/(.*)$ $1$2 [L,R=301]
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
 RewriteCond %{REQUEST_METHOD} OPTIONS
