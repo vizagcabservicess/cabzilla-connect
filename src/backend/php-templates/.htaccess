@@ -1,9 +1,10 @@
-
 # Enable URL rewriting
 RewriteEngine On
-
-# Set the base directory
 RewriteBase /
+
+# Prevent duplicate /api/ prefix
+RewriteCond %{REQUEST_URI} ^/api/api/
+RewriteRule ^api/(.*)$ /$1 [L,R=301]
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
 RewriteCond %{REQUEST_METHOD} OPTIONS

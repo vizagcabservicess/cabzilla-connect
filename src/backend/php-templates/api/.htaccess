@@ -1,7 +1,10 @@
-
-# Enable URL rewriting with aggressive CORS configuration
+# Enable URL rewriting
 RewriteEngine On
 RewriteBase /api/
+
+# Prevent duplicate /api/ prefix
+RewriteCond %{REQUEST_URI} ^/api/api/
+RewriteRule ^api/(.*)$ /$1 [L,R=301]
 
 # CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
 <FilesMatch "\.php$">
