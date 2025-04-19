@@ -33,7 +33,7 @@ export function useFare() {
       case 'local':
         return '/api/direct-local-fares.php';
       case 'outstation':
-        return '/api/outstation-fares.php';
+        return '/api/direct-outstation-fares.php';
       case 'airport':
         return '/api/direct-airport-fares.php';
       default:
@@ -99,10 +99,16 @@ export function useFare() {
       if (data.status === 'success') {
         if (tripType === 'local' && data.fares && data.fares.length > 0) {
           const localFare = data.fares[0];
-          const packagePrice = packageId === '4hrs-40km' ? localFare.price4hrs40km :
-                             packageId === '8hrs-80km' ? localFare.price8hrs80km :
-                             packageId === '10hrs-100km' ? localFare.price10hrs100km : 
-                             localFare.price8hrs80km;
+          // Find the correct package price
+          let packagePrice = 0;
+          if (packageId === '4hrs-40km' && localFare.price4hrs40km) {
+            packagePrice = localFare.price4hrs40km;
+          } else if (packageId === '10hrs-100km' && localFare.price10hrs100km) {
+            packagePrice = localFare.price10hrs100km;
+          } else if (localFare.price8hrs80km) {
+            // Default to 8hrs-80km package
+            packagePrice = localFare.price8hrs80km;
+          }
           
           fareDetails = {
             basePrice: packagePrice,
@@ -110,34 +116,40 @@ export function useFare() {
             breakdown: { [packageId || '8hrs-80km']: packagePrice }
           };
           
+          // If the API already returned a breakdown, use it
+          if (localFare.breakdown) {
+            fareDetails.breakdown = localFare.breakdown;
+          }
+          
+          // If the API already calculated totalPrice, use it
+          if (localFare.totalPrice) {
+            fareDetails.totalPrice = localFare.totalPrice;
+          }
+          
           console.log(`Local package fare for ${vehicleId}:`, fareDetails);
         } else if (tripType === 'outstation' && data.fare) {
-          const baseFare = data.fare.basePrice || 0;
-          const perKm = data.fare.pricePerKm || 0;
-          const driverAllowance = data.fare.driverAllowance || 0;
-          
-          const distanceFare = Math.max(distance, 300) * perKm;
-          const totalFare = baseFare + distanceFare + driverAllowance;
-          
+          // Use the fare object directly from the API response
+          const outstationFare = data.fare;
           fareDetails = {
-            basePrice: baseFare,
-            totalPrice: totalFare,
-            breakdown: {
-              'Base fare': baseFare,
-              'Distance charge': distanceFare,
-              'Driver allowance': driverAllowance
+            basePrice: outstationFare.basePrice || 0,
+            totalPrice: outstationFare.totalPrice || 0,
+            breakdown: outstationFare.breakdown || {
+              'Base fare': outstationFare.basePrice || 0,
+              'Distance charge': (outstationFare.pricePerKm || 0) * Math.max(distance, 300),
+              'Driver allowance': outstationFare.driverAllowance || 0
             }
           };
           
           console.log(`Outstation fare for ${vehicleId}:`, fareDetails);
         } else if (tripType === 'airport' && data.fare) {
+          // Use the fare object directly from the API response
           const airportFare = data.fare;
           fareDetails = {
-            basePrice: airportFare.price || 0,
+            basePrice: airportFare.basePrice || 0,
             totalPrice: airportFare.totalPrice || 0,
-            breakdown: {
-              'Base fare': airportFare.price || 0,
-              'Airport fee': airportFare.airportFee || 0
+            breakdown: airportFare.breakdown || {
+              'Base fare': airportFare.basePrice || 0,
+              'Airport fee': airportFare.pickupPrice + airportFare.dropPrice || 0
             }
           };
           

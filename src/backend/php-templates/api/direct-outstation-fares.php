@@ -21,7 +21,7 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
 
-$logFile = $logDir . '/direct-airport-fares.log';
+$logFile = $logDir . '/direct-outstation-fares.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Function to get database connection
@@ -44,9 +44,11 @@ function getDbConnection() {
 try {
     // Get parameters from query string
     $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+    $tripMode = isset($_GET['trip_mode']) ? $_GET['trip_mode'] : 'one-way'; // Default to one-way
+    $distance = isset($_GET['distance']) ? (float)$_GET['distance'] : 0;
     
     // Log request
-    file_put_contents($logFile, "[$timestamp] Airport fares request: vehicleId=$vehicleId\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Outstation fares request: vehicleId=$vehicleId, tripMode=$tripMode, distance=$distance\n", FILE_APPEND);
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
@@ -55,8 +57,8 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // Query airport_transfer_fares by vehicle_id (exact match)
-    $stmt = $conn->prepare("SELECT * FROM airport_transfer_fares WHERE vehicle_id = :vehicle_id");
+    // Query outstation_fares by vehicle_id (exact match)
+    $stmt = $conn->prepare("SELECT * FROM outstation_fares WHERE vehicle_id = :vehicle_id");
     $stmt->bindParam(':vehicle_id', $vehicleId);
     $stmt->execute();
     
@@ -67,63 +69,71 @@ try {
     file_put_contents($logFile, "[$timestamp] Query result: " . json_encode($result) . "\n", FILE_APPEND);
     
     if ($result) {
-        // Calculate total price
-        $basePrice = (float)$result['base_price'];
-        $pickupPrice = (float)$result['pickup_price'];
-        $dropPrice = (float)$result['drop_price'];
-        $totalPrice = $basePrice + $pickupPrice + $dropPrice;
+        // Initialize fare structure
+        $fare = [];
+        
+        // Calculate fare based on trip mode
+        if ($tripMode === 'round-trip') {
+            // Use round-trip pricing
+            $basePrice = (float)$result['roundtrip_base_price'];
+            $pricePerKm = (float)$result['roundtrip_price_per_km'];
+        } else {
+            // Use one-way pricing
+            $basePrice = (float)$result['base_price'];
+            $pricePerKm = (float)$result['price_per_km'];
+        }
+        
+        $driverAllowance = (float)$result['driver_allowance'];
+        $nightHaltCharge = (float)$result['night_halt_charge'];
+        
+        // Calculate distance fare (ensure minimum distance of 300 km for outstation)
+        $effectiveDistance = max($distance, 300);
+        $distanceFare = $effectiveDistance * $pricePerKm;
+        
+        // Calculate total fare
+        $totalFare = $basePrice + $distanceFare + $driverAllowance;
         
         // Create fare object with complete breakdown
         $fare = [
             'vehicleId' => $vehicleId,
             'basePrice' => $basePrice,
-            'pickupPrice' => $pickupPrice,
-            'dropPrice' => $dropPrice,
-            'pricePerKm' => (float)$result['price_per_km'],
-            'tier1Price' => (float)$result['tier1_price'],
-            'tier2Price' => (float)$result['tier2_price'],
-            'tier3Price' => (float)$result['tier3_price'],
-            'tier4Price' => (float)$result['tier4_price'],
-            'extraKmCharge' => (float)$result['extra_km_charge'],
-            'totalPrice' => $totalPrice,
+            'pricePerKm' => $pricePerKm,
+            'driverAllowance' => $driverAllowance,
+            'nightHaltCharge' => $nightHaltCharge,
+            'totalPrice' => $totalFare,
             'breakdown' => [
                 'Base fare' => $basePrice,
-                'Airport pickup fee' => $pickupPrice,
-                'Airport drop fee' => $dropPrice
+                'Distance charge' => $distanceFare,
+                'Driver allowance' => $driverAllowance
             ]
         ];
         
         // Return success response with fare data
         echo json_encode([
             'status' => 'success',
-            'message' => 'Airport fares retrieved successfully',
+            'message' => 'Outstation fares retrieved successfully',
             'fare' => $fare
         ]);
         
     } else {
         // No result found for this vehicle ID, log this
-        file_put_contents($logFile, "[$timestamp] No airport fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] No outstation fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
         // Return empty fare structure with zeros
         echo json_encode([
             'status' => 'success',
-            'message' => 'No airport fare data found for this vehicle',
+            'message' => 'No outstation fare data found for this vehicle',
             'fare' => [
                 'vehicleId' => $vehicleId,
                 'basePrice' => 0,
-                'pickupPrice' => 0,
-                'dropPrice' => 0,
                 'pricePerKm' => 0,
-                'tier1Price' => 0,
-                'tier2Price' => 0,
-                'tier3Price' => 0,
-                'tier4Price' => 0,
-                'extraKmCharge' => 0,
+                'driverAllowance' => 0,
+                'nightHaltCharge' => 0,
                 'totalPrice' => 0,
                 'breakdown' => [
                     'Base fare' => 0,
-                    'Airport pickup fee' => 0,
-                    'Airport drop fee' => 0
+                    'Distance charge' => 0,
+                    'Driver allowance' => 0
                 ]
             ]
         ]);

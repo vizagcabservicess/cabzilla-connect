@@ -13,7 +13,6 @@ interface BookingSummaryProps {
   returnDate?: Date;
   selectedCab: CabType | null;
   distance: number;
-  totalPrice: number;
   tripType: TripType;
   tripMode: TripMode;
   hourlyPackage?: string;

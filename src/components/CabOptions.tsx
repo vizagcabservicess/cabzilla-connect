@@ -28,7 +28,6 @@ export function CabOptions({
   returnDate,
   hourlyPackage
 }: CabOptionsProps) {
-  const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [loadingCabs, setLoadingCabs] = useState(true);
   
   // Initialize the fare hook
@@ -88,20 +87,8 @@ export function CabOptions({
           returnDate
         }));
         
-        const results = await fetchFares(fareRequests);
-        
-        // Build fare map
-        const fares: Record<string, number> = {};
-        Object.entries(results).forEach(([cabId, fareDetails]) => {
-          if (fareDetails && fareDetails.totalPrice > 0) {
-            fares[cabId] = fareDetails.totalPrice;
-          }
-        });
-        
-        if (Object.keys(fares).length > 0) {
-          setCabFares(fares);
-          console.log("CabList: Initial fare setup", fares);
-        }
+        await fetchFares(fareRequests);
+        console.log("CabOptions: Initial fares fetched");
       } catch (error) {
         console.error("Error fetching initial fares:", error);
       }
@@ -116,39 +103,8 @@ export function CabOptions({
   
   const handleSelectCab = useCallback((cab: CabType) => {
     if (cab.id === selectedCab?.id) return; // Prevent unnecessary re-renders
-    
-    // Get the most accurate fare
-    let fareToUse = cabFares[cab.id];
-    
-    // Check localStorage for cached fare
-    if (tripType === 'local' && hourlyPackage) {
-      const localStorageKey = `local_fare_${cab.id}_${hourlyPackage}`;
-      const storedPrice = localStorage.getItem(localStorageKey);
-      if (storedPrice) {
-        const price = parseInt(storedPrice, 10);
-        if (price > 0) {
-          fareToUse = price;
-        }
-      }
-    } else if (tripType === 'outstation') {
-      const outstationKey = `outstation_${cab.id}_${distance}_${tripMode}`;
-      const storedFare = localStorage.getItem(outstationKey);
-      if (storedFare) {
-        const price = parseInt(storedFare, 10);
-        if (price > 0) {
-          fareToUse = price;
-        }
-      }
-    }
-    
-    // If we have a fare, update it in localStorage with the cab selection
-    if (fareToUse > 0) {
-      localStorage.setItem('lastSelectedFare', fareToUse.toString());
-      localStorage.setItem('lastSelectedCabId', cab.id);
-    }
-    
     onSelectCab(cab);
-  }, [selectedCab, cabFares, tripType, tripMode, distance, hourlyPackage, onSelectCab]);
+  }, [selectedCab, onSelectCab]);
   
   const getFareDetails = (cab: CabType): string => {
     // Return fare details based on trip type
