@@ -130,6 +130,25 @@ try {
         // No result found for this vehicle ID, log this
         file_put_contents($logFile, "[$timestamp] No local fare found for vehicle ID: $vehicleId\n", FILE_APPEND);
         
+        // Try to find a matching vehicle with similar name (fuzzy match)
+        $fuzzyQuery = "SELECT vehicle_id FROM local_package_fares LIMIT 1";
+        $fuzzyStmt = $conn->prepare($fuzzyQuery);
+        $fuzzyStmt->execute();
+        $anyVehicle = $fuzzyStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($anyVehicle) {
+            file_put_contents($logFile, "[$timestamp] Found at least one vehicle in database: " . $anyVehicle['vehicle_id'] . "\n", FILE_APPEND);
+            
+            // Get all vehicles for debugging
+            $allVehiclesQuery = "SELECT vehicle_id FROM local_package_fares";
+            $allVehiclesStmt = $conn->prepare($allVehiclesQuery);
+            $allVehiclesStmt->execute();
+            $allVehicles = $allVehiclesStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            file_put_contents($logFile, "[$timestamp] All vehicles in database: " . implode(", ", $allVehicles) . "\n", FILE_APPEND);
+            file_put_contents($logFile, "[$timestamp] Looking for vehicle_id: $vehicleId\n", FILE_APPEND);
+        }
+        
         // Return minimal fallback data with empty prices
         $fare = [
             'vehicleId' => $vehicleId,

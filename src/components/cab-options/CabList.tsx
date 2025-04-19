@@ -38,6 +38,7 @@ export function CabList({
       // Load fares for each cab type
       for (const cab of cabTypes) {
         try {
+          console.log(`CabList: Fetching fare for vehicle ${cab.id}`);
           const fareDetails = await fetchFare({
             vehicleId: cab.id,
             tripType: tripType as FareType,

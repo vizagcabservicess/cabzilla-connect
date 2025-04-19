@@ -81,6 +81,7 @@ export function useFare() {
     
     // Normalize the vehicle ID for consistent matching with PHP backend
     const normalizedVehicleId = normalizeVehicleId(vehicleId);
+    console.log(`Normalized vehicle ID: ${normalizedVehicleId} (original: ${vehicleId})`);
     
     // Check if we have a cached result
     const cacheKey = generateCacheKey({...params, vehicleId: normalizedVehicleId});
@@ -124,7 +125,10 @@ export function useFare() {
         query.append('package_id', packageId);
       }
       
-      const response = await safeFetch(`${apiUrl}?${query.toString()}`, {
+      const fullUrl = `${apiUrl}?${query.toString()}`;
+      console.log(`Full request URL: ${fullUrl}`);
+      
+      const response = await safeFetch(fullUrl, {
         signal: abortControllersRef.current[vehicleId].signal,
         headers: {
           'X-Force-Refresh': 'true',
@@ -147,6 +151,8 @@ export function useFare() {
             const vehicleFare = data.fares.find((fare: any) => 
               normalizeVehicleId(fare.vehicleId) === normalizedVehicleId
             ) || data.fares[0]; // Fallback to first fare if no match
+            
+            console.log(`Found vehicle fare for ${normalizedVehicleId}:`, vehicleFare);
             
             // Get the right package price
             let basePrice = vehicleFare.basePrice;
@@ -247,6 +253,8 @@ export function useFare() {
           }
         }
       }
+      
+      console.log(`Final fare details for ${vehicleId}:`, fareDetails);
       
       // Store in cache using normalized vehicle ID
       fareCache.current[cacheKey] = fareDetails;
