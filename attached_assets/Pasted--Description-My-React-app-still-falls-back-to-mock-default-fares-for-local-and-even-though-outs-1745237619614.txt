@@ -1,0 +1,32 @@
+
+Description  
+My React app still falls back to mock/default fares for local, and even though outstation & airport requests are hitting the right endpoints, CabList and BookingSummary never show the real API numbers. I need one cohesive patch that:
+
+1. `useFare.tsx`  
+   - Always call `/api/direct-local-fares.php`, `/api/direct-outstation-fares.php` and `/api/direct-airport-fares.php` – remove any mock or localStorage fallbacks.  
+   - Normalize `vehicle_id` exactly to the DB (`toLowerCase() + replace non‑alnum with “_”)`.  
+   - Parse each JSON shape correctly:  
+     - Local: `data.fares: Array<{ vehicleId, price4hrs40km, price8hrs80km, price10hrs100km, basePrice?, totalPrice? }>` → pick the matching `vehicleId`, read `totalPrice` if present; else use the right package field, then set `basePrice`, `totalPrice` and a `{ packageLabel: basePrice }` breakdown.  
+     - Outstation: `data.fare: { base_price, price_per_km, driver_allowance, total_price? }` → use `total_price` if present; else compute `base_price + distance * price_per_km + driver_allowance`.  
+     - Airport: `data.fare: { base_price, pickup_price, drop_price, total_price? }` → same logic: prefer `total_price`, else sum the parts.  
+   - Expose `{ basePrice, totalPrice, breakdown }` on every call, no zeros unless the API truly returns zeros.
+
+2. `CabList.tsx`  
+   - After `fetchFare`, store only the API’s `totalPrice` in state.  
+   - Pass that raw number into each `CabOptionCard` so it shows the real fare.
+
+3. `BookingSummary.tsx`  
+   - When a cab is selected, call `fetchFare` exactly once for that vehicle + tripType + distance + package.  
+   - Consume the returned `breakdown` object, list every line item, then sum for the final total.  
+   - Remove any hard‑coded or mock fallbacks.
+
+4. `CabOptionCard.tsx`  
+   - Show `formatPrice(fare)` when `fare > 0`, else “Price unavailable”.  
+   - Don’t swallow the API’s number with defaults.
+
+5. General  
+   - Invalidate any stale caches on tripType, distance or package change.  
+   - Remove all references to local “mock” matrices or default 0 values.  
+   - Ensure one source of truth: the PHP APIs.
+
+Please produce a single unified patch touching only those four files—no scaffolding or unrelated changes—that restores real, per‑vehicle fares everywhere.
