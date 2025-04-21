@@ -1,0 +1,206 @@
+[plugin:vite:react-swc] × await isn't allowed in non-async function
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:263:1]
+ 260 │       
+ 261 │       if (tripType === 'outstation') {
+ 262 │         try {
+ 263 │           const outstationFares = await getOutstationFaresForVehicle(selectedCab.id);
+     ·                                         ────────────────────────────
+ 264 │           console.log('BookingSummary: Retrieved outstation fares:', outstationFares);
+ 265 │           
+ 266 │           if (tripMode === 'one-way') {
+     ╰────
+  × await isn't allowed in non-async function
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:328:1]
+ 325 │           newDriverAllowance = 250;
+ 326 │         }
+ 327 │       } else if (tripType === 'airport') {
+ 328 │         const airportFares = await getAirportFaresForVehicle(selectedCab.id);
+     ·                                    ─────────────────────────
+ 329 │         console.log('BookingSummary: Retrieved airport fares:', airportFares);
+ 330 │         
+ 331 │         if (distance <= 10) {
+     ╰────
+  × await isn't allowed in non-async function
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:347:1]
+ 344 │         
+ 345 │         newDriverAllowance = 250;
+ 346 │       } else if (tripType === 'local') {
+ 347 │         const localFares = await getLocalFaresForVehicle(selectedCab.id);
+     ·                                  ───────────────────────
+ 348 │         console.log('BookingSummary: Retrieved local fares:', localFares);
+ 349 │         
+ 350 │         if (localFares.price8hrs80km > 0) {
+     ╰────
+  × Return statement is not allowed here
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:639:1]
+ 636 │   }, []);
+ 637 │ 
+ 638 │   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
+ 639 │     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
+     ·     ───────────────────────────────────────────────────────────────────────────────────────────
+ 640 │   }
+ 641 │ 
+ 642 │   let finalTotal = totalPrice > 0 ? totalPrice : calculatedFare;
+     ╰────
+  × Return statement is not allowed here
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:672:1]
+ 669 │         }
+ 670 │       }
+ 671 │     
+ 672 │ ╭─▶   return (
+ 673 │ │       <div className="bg-white rounded-lg shadow-md p-6 relative">
+ 674 │ │         <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
+ 675 │ │         
+ 676 │ │         <div className="space-y-4">
+ 677 │ │           <div className="border-b pb-4">
+ 678 │ │             <div className="flex items-start gap-2 mb-3">
+ 679 │ │               <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+ 680 │ │               <div>
+ 681 │ │                 <p className="text-sm text-gray-500">PICKUP</p>
+ 682 │ │                 <p className="font-medium">{pickupLocation.address || pickupLocation.name}</p>
+ 683 │ │               </div>
+ 684 │ │             </div>
+ 685 │ │             
+ 686 │ │             {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
+ 687 │ │               <div className="flex items-start gap-2 mb-3">
+ 688 │ │                 <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+ 689 │ │                 <div>
+ 690 │ │                   <p className="text-sm text-gray-500">DROP-OFF</p>
+ 691 │ │                   <p className="font-medium">{dropLocation.address || dropLocation.name}</p>
+ 692 │ │                 </div>
+ 693 │ │               </div>
+ 694 │ │             )}
+ 695 │ │             
+ 696 │ │             <div className="flex items-start gap-2 mb-3">
+ 697 │ │               <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+ 698 │ │               <div>
+ 699 │ │                 <p className="text-sm text-gray-500">PICKUP DATE & TIME</p>
+ 700 │ │                 <p className="font-medium">
+ 701 │ │                   {pickupDate ? format(pickupDate, 'EEEE, MMMM d, yyyy') : 'Not specified'}
+ 702 │ │                   <br/>
+ 703 │ │                   {pickupDate ? format(pickupDate, 'h:mm a') : ''}
+ 704 │ │                 </p>
+ 705 │ │               </div>
+ 706 │ │             </div>
+ 707 │ │             
+ 708 │ │             <div className="flex items-start gap-2">
+ 709 │ │               <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+ 710 │ │               <div>
+ 711 │ │                 <p className="text-sm text-gray-500">CAB TYPE</p>
+ 712 │ │                 <p className="font-medium">
+ 713 │ │                   {selectedCab.name}
+ 714 │ │                   <span className="text-sm text-gray-500"> • {selectedCab.capacity} persons • {selectedCab.luggageCapacity} bags</span>
+ 715 │ │                 </p>
+ 716 │ │               </div>
+ 717 │ │             </div>
+ 718 │ │           </div>
+ 719 │ │           
+ 720 │ │           <div>
+ 721 │ │             <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
+ 722 │ │               {tripType === 'outstation' && (
+ 723 │ │                 <>
+ 724 │ │                   <div className="flex justify-between">
+ 725 │ │                     <span className="text-gray-700">Base fare (300 km included)</span>
+ 726 │ │                     <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+ 727 │ │                   </div>
+ 728 │ │                   
+ 729 │ │                   <div className="text-gray-600 text-sm ml-1">
+ 730 │ │                     {tripMode === 'one-way' ? (
+ 731 │ │                       <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
+ 732 │ │                     ) : (
+ 733 │ │                       <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
+ 734 │ │                     )}
+ 735 │ │                   </div>
+ 736 │ │                   
+ 737 │ │                   {extraDistance > 0 && extraDistanceFare > 0 && (
+ 738 │ │                     <div className="flex justify-between">
+ 739 │ │                       <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+ 740 │ │                       <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+ 741 │ │                     </div>
+ 742 │ │                   )}
+ 743 │ │                   
+ 744 │ │                   <div className="flex justify-between">
+ 745 │ │                     <span className="text-gray-700">Driver allowance</span>
+ 746 │ │                     <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+ 747 │ │                   </div>
+ 748 │ │                   
+ 749 │ │                   {nightCharges > 0 && (
+ 750 │ │                     <div className="flex justify-between">
+ 751 │ │                       <span className="text-gray-700">Night charges</span>
+ 752 │ │                       <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
+ 753 │ │                     </div>
+ 754 │ │                   )}
+ 755 │ │                 </>
+ 756 │ │               )}
+ 757 │ │               
+ 758 │ │               {tripType === 'local' && (
+ 759 │ │                 <div className="flex justify-between">
+ 760 │ │                   <span className="text-gray-700">08hrs 80KM Package</span>
+ 761 │ │                   <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+ 762 │ │                 </div>
+ 763 │ │               )}
+ 764 │ │               
+ 765 │ │               {(tripType === 'airport' || tripType === 'tour') && (
+ 766 │ │                 <>
+ 767 │ │                   <div className="flex justify-between">
+ 768 │ │                     <span className="text-gray-700">Base fare</span>
+ 769 │ │                     <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+ 770 │ │                   </div>
+ 771 │ │                   
+ 772 │ │                   {extraDistance > 0 && tripType === 'airport' && (
+ 773 │ │                     <div className="flex justify-between">
+ 774 │ │                       <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+ 775 │ │                       <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+ 776 │ │                     </div>
+ 777 │ │                   )}
+ 778 │ │                   
+ 779 │ │                   {tripType === 'airport' && (
+ 780 │ │                     <div className="flex justify-between">
+ 781 │ │                       <span className="text-gray-700">Driver allowance</span>
+ 782 │ │                       <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+ 783 │ │                     </div>
+ 784 │ │                   )}
+ 785 │ │                 </>
+ 786 │ │               )}
+ 787 │ │               
+ 788 │ │               <Separator />
+ 789 │ │               
+ 790 │ │               <div className="flex justify-between text-lg font-bold pt-2">
+ 791 │ │                 <span>Total Amount</span>
+ 792 │ │                 <span>
+ 793 │ │                   {isLoading ? (
+ 794 │ │                     <span className="text-gray-400">Calculating...</span>
+ 795 │ │                   ) : (
+ 796 │ │                     `₹${(fareData?.totalPrice || 0).toLocaleString()}`
+ 797 │ │                   )}
+ 798 │ │                 </span>
+ 799 │ │               </div>
+ 800 │ │             </div>
+ 801 │ │           </div>
+ 802 │ │         </div>
+ 803 │ │         
+ 804 │ │         {(isRefreshing || showDetailsLoading) && (
+ 805 │ │           <div className="absolute inset-0 bg-white/5 flex items-center justify-center rounded-lg pointer-events-none">
+ 806 │ │             <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+ 807 │ │           </div>
+ 808 │ │         )}
+ 809 │ │       </div>
+ 810 │ ╰─▶   );
+ 811 │     };
+ 812 │     
+ 813 │     export default BookingSummary;
+     ╰────
+  × Expression expected
+     ╭─[/home/runner/workspace/src/components/BookingSummary.tsx:811:1]
+ 808 │       )}
+ 809 │     </div>
+ 810 │   );
+ 811 │ };
+     · ─
+ 812 │ 
+ 813 │ export default BookingSummary;
+     ╰────
+
+
+Caused by:
+    Syntax Error
