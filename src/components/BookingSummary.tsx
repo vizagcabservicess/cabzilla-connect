@@ -812,16 +812,11 @@ export const BookingSummary = ({
 };
 
 useEffect(() => {
-    const calculateFares = async () => {
-      try {
-        await recalculateFareDetails();
-      } catch (error) {
-        console.error('Error calculating fares:', error);
-      }
-    };
-    
     if (selectedCab) {
-      calculateFares();
+      recalculateFareDetails()
+        .catch(error => {
+          console.error('Error calculating fares:', error);
+        });
     }
   }, [selectedCab, distance, tripType, tripMode]);
 
