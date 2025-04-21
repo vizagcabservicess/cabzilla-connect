@@ -76,15 +76,44 @@ export const CabList: React.FC<CabListProps> = ({
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
-          } else if (fareData?.totalPrice) {
+          } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
+            // Use the API totalPrice if available and valid
             fare = fareData.totalPrice;
             fareText = `₹${fare}`;
-          } else if (fareData?.basePrice) {
-            fare = fareData.basePrice;
-            fareText = `₹${fare}`;
-          } else if (cab.price) {
-            fare = cab.price;
-            fareText = `₹${fare}`;
+          } else {
+            // Fallback to default pricing based on vehicle type
+            switch (normalizedId) {
+              case 'sedan':
+                fare = 1500;
+                break;
+              case 'ertiga':
+                fare = 1800;
+                break;
+              case 'innova_crysta':
+                fare = 2200;
+                break;
+              case 'innova_hycross':
+              case 'mpv':
+                fare = 6000;
+                break;
+              case 'tempo_traveller':
+                fare = 3500;
+                break;
+              case 'etios':
+              case 'toyota':
+              case 'amaze':
+                fare = 4200;
+                break;
+              case 'dzire_cng':
+                fare = 5000;
+                break;
+              case 'bus':
+                fare = 12000;
+                break;
+              default:
+                fare = 0;
+            }
+            fareText = fare > 0 ? `₹${fare}` : 'Price unavailable';
           }
           
           // Debug logging
