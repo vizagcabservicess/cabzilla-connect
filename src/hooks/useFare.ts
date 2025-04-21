@@ -20,7 +20,18 @@ interface FareData {
 }
 
 const normalizeVehicleId = (id: string): string => {
-  return id.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  // Convert uppercase vehicle names like MPV, SUV to lowercase
+  const normalizedId = id.toLowerCase()
+    // Replace spaces and special chars with underscore
+    .replace(/[^a-z0-9]+/g, '_')
+    // Remove trailing underscores
+    .replace(/_+$/, '')
+    // Handle special cases
+    .replace(/^mpv$/, 'mpv')
+    .replace(/^innova_hycross$/, 'mpv')
+    .replace(/^innova$/, 'mpv');
+    
+  return normalizedId;
 };
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
