@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
+import { useFare } from '@/hooks/useFare';
+import { TripType, TripMode } from '@/lib/tripTypes';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -9,25 +11,38 @@ interface CabListProps {
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType) => void;
   getFareDetails: (cab: CabType) => string;
-  isAirportTransfer?: boolean; // Added isAirportTransfer prop
+  isAirportTransfer?: boolean;
+  tripType?: TripType;
+  distance?: number;
+  packageType?: string;
 }
 
-export function CabList({
+export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
   cabFares,
   isCalculatingFares,
   handleSelectCab,
   getFareDetails,
-  isAirportTransfer, // Added isAirportTransfer prop
-}: CabListProps) {
+  isAirportTransfer,
+  tripType = 'local',
+  distance = 0,
+  packageType
+}) => {
   const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
+  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const { fareData } = useFare(selectedCabId || '', tripType, distance, packageType);
   const updateTimeoutRef = useRef<number | null>(null);
   const directUpdateEnabledRef = useRef<boolean>(true);
   const fareCalculatedTimestampsRef = useRef<Record<string, number>>({});
   const calculatedFaresRef = useRef<Record<string, {fare: number, timestamp: number}>>({});
+  const pendingUpdatesRef = useRef<Record<string, number>>({});
+  const isProcessingRef = useRef<boolean>(false);
+  const refreshCountRef = useRef<number>(0);
+  const fareHistoryRef = useRef<Record<string, number[]>>({});
+  const initializedRef = useRef<boolean>(false);
+
 
   // Initialize displayed fares from cabFares on first render or when cabTypes change
   useEffect(() => {
@@ -333,7 +348,7 @@ export function CabList({
         window.clearTimeout(updateTimeoutRef.current);
       }
     };
-  }, [cabTypes, selectedCabId, isAirportTransfer]); // Added isAirportTransfer to dependency array
+  }, [cabTypes, selectedCabId, isAirportTransfer]);
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
@@ -501,7 +516,7 @@ export function CabList({
           >
             <CabOptionCard 
               cab={cab}
-              fare={getDisplayFare(cab)}
+              fare={fareData?.totalPrice || getDisplayFare(cab)}
               isSelected={selectedCabId === cab.id}
               onSelect={() => enhancedSelectCab(cab)}
               fareDetails={getFareDetails(cab)}
