@@ -19,16 +19,23 @@ interface FareData {
 }
 
 const normalizeVehicleId = (id: string): string => {
-  // Convert uppercase vehicle names like MPV, SUV to lowercase
-  const normalizedId = id.toLowerCase()
-    // Replace spaces and special chars with underscore
-    .replace(/[^a-z0-9]+/g, '_')
-    // Remove trailing underscores
-    .replace(/_+$/, '')
-    // Handle special cases
-    .replace(/^mpv$/, 'mpv')
-    .replace(/^innova_hycross$/, 'mpv')
-    .replace(/^innova$/, 'mpv');
+  // First convert to lowercase and trim
+  let normalizedId = id.toLowerCase().trim();
+  
+  // Map specific vehicle types to their database IDs
+  const vehicleMapping: Record<string, string> = {
+    'innova_hycross': 'innova_crysta',
+    'innova': 'innova_crysta',
+    'mpv': 'MPV',
+    'etios': 'sedan',
+    'dzire_cng': 'Dzire CNG',
+    'dzire': 'Dzire CNG'
+  };
+
+  // Apply specific mappings first
+  if (vehicleMapping[normalizedId]) {
+    return vehicleMapping[normalizedId];
+  }
 
   return normalizedId;
 };
@@ -57,9 +64,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             if (localFares) {
               // Map package type to fare property
               const fareMap: Record<string, string> = {
-                '4hrs-40km': 'price4hrs40km',
-                '8hrs-80km': 'price8hrs80km',
-                '10hrs-100km': 'price10hrs100km'
+                '4hrs-40km': 'price_4hrs_40km',
+                '8hrs-80km': 'price_8hrs_80km',
+                '10hrs-100km': 'price_10hrs_100km'
               };
 
               const fareProp = fareMap[packageType];
@@ -68,11 +75,20 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 return 0;
               }
 
-              // Try multiple property variations
+              // Try different property name variations
               fare = localFares[fareProp] || 
-                    localFares[`package${fareProp.slice(5)}`] || 
-                    localFares[`local_package_${fareProp.slice(5, 6)}`] || 
+                    localFares[fareProp.replace(/_/g, '')] ||
+                    localFares[fareProp.replace('price_', '')] ||
+                    localFares[`package_${fareProp.slice(6)}`] || 
                     0;
+
+              // Log the fare lookup attempt
+              console.log(`Looking up fare for ${cabType.id} with package ${packageType}:`, {
+                normalizedId: normalizeVehicleId(cabType.id),
+                fareProp,
+                fareFound: fare,
+                availableFares: localFares
+              });
 
               if (fare > 0) {
                 breakdown = {
