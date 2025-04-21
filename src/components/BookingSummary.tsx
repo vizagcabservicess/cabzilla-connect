@@ -811,13 +811,22 @@ export const BookingSummary = ({
   );
 };
 
+// Safe access to selectedCab through props
 useEffect(() => {
-    if (selectedCab) {
-      recalculateFareDetails()
-        .catch(error => {
-          console.error('Error calculating fares:', error);
-        });
+  const calculateFares = async () => {
+    if (!selectedCab?.id) {
+      console.log('BookingSummary: No cab selected, skipping fare calculation');
+      return;
     }
-  }, [selectedCab, distance, tripType, tripMode]);
+
+    try {
+      await recalculateFareDetails();
+    } catch (error) {
+      console.error('BookingSummary: Error calculating fares:', error);
+    }
+  };
+
+  calculateFares();
+}, [selectedCab?.id, distance, tripType, tripMode]);
 
 export default BookingSummary;
