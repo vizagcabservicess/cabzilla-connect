@@ -223,7 +223,7 @@ export const BookingSummary = ({
     }
   }, [fareData, selectedCab, tripType]);
 
-  const recalculateFareDetails = async () => {
+  const recalculateFareDetails = async (): Promise<void> => {
     if (calculationInProgressRef.current) {
       console.log('BookingSummary: Calculation already in progress, marking for retry');
       pendingCalculationRef.current = true;
@@ -813,9 +813,16 @@ export const BookingSummary = ({
 
 useEffect(() => {
     if (!selectedCab) return;
-    (async () => {
-      await recalculateFareDetails();
-    })();
+    
+    const calculateFares = async () => {
+      try {
+        await recalculateFareDetails();
+      } catch (error) {
+        console.error('Error calculating fares:', error);
+      }
+    };
+    
+    calculateFares();
   }, [selectedCab, distance, tripType, tripMode]);
 
 export default BookingSummary;
