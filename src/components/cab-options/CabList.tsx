@@ -1,16 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
-import { TripType, TripMode } from '@/lib/tripTypes';
+import { TripType } from '@/lib/tripTypes';
 
 interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
-  cabFares: Record<string, number>;
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType) => void;
-  getFareDetails: (cab: CabType) => string;
   isAirportTransfer?: boolean;
   tripType?: TripType;
   distance?: number;
@@ -22,13 +20,11 @@ export const CabList: React.FC<CabListProps> = ({
   selectedCabId,
   isCalculatingFares,
   handleSelectCab,
-  getFareDetails,
   isAirportTransfer,
   tripType = 'local',
   distance = 0,
   packageType = '8hrs-80km'
 }) => {
-  const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
 
   // Enhanced cab selection handler
@@ -36,7 +32,6 @@ export const CabList: React.FC<CabListProps> = ({
     handleSelectCab(cab);
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
 
-    // Clear fade effect after animation
     setTimeout(() => {
       setFadeIn(prev => ({ ...prev, [cab.id]: false }));
     }, 500);
@@ -45,29 +40,6 @@ export const CabList: React.FC<CabListProps> = ({
   // Normalize cab ID for API calls
   const normalizeCabId = (id: string): string => {
     return id.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  };
-
-  // Get fare for each cab using the same hook as BookingSummary
-  const getFareForCab = (cab: CabType) => {
-    const normalizedId = normalizeCabId(cab.id);
-    const { fareData, isLoading } = useFare(
-      normalizedId,
-      tripType,
-      distance,
-      packageType
-    );
-
-    useEffect(() => {
-      if (fareData?.totalPrice) {
-        console.log(`CabList: Received fare for ${cab.id}:`, fareData);
-        setDisplayedFares(prev => ({
-          ...prev,
-          [cab.id]: fareData.totalPrice
-        }));
-      }
-    }, [fareData, cab.id]);
-
-    return { fare: fareData?.totalPrice, isLoading };
   };
 
   return (
@@ -86,8 +58,13 @@ export const CabList: React.FC<CabListProps> = ({
         </div>
       ) : (
         cabTypes.map((cab) => {
-          const { fare, isLoading } = getFareForCab(cab);
-          const displayFare = fare || 0;
+          const normalizedId = normalizeCabId(cab.id);
+          const { fareData, isLoading } = useFare(
+            normalizedId,
+            tripType,
+            distance,
+            packageType
+          );
 
           return (
             <div 
@@ -96,10 +73,9 @@ export const CabList: React.FC<CabListProps> = ({
             >
               <CabOptionCard 
                 cab={cab}
-                fare={displayFare}
+                fare={fareData?.totalPrice || 0}
                 isSelected={selectedCabId === cab.id}
                 onSelect={() => enhancedSelectCab(cab)}
-                fareDetails={getFareDetails(cab)}
                 isCalculating={isLoading}
               />
             </div>

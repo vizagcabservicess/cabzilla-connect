@@ -50,6 +50,10 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         }
 
         const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`);
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Invalid content type returned from API');
+        }
         const data = await response.json();
 
         if (!response.ok) {

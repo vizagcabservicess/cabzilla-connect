@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -23,7 +22,7 @@ export function CabOptionCard({
   isCalculating
 }: CabOptionCardProps) {
   const [expandedDetails, setExpandedDetails] = useState(false);
-  
+
   const toggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedDetails(!expandedDetails);
@@ -53,7 +52,7 @@ export function CabOptionCard({
             <Check size={16} />
           </div>
         )}
-        
+
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className={cn(
@@ -76,22 +75,22 @@ export function CabOptionCard({
               "text-lg font-bold",
               isSelected ? "text-blue-600" : "text-gray-800"
             )}>
-              {fare > 0 ? (
-                formatPrice(fare)
+              {isCalculating ? (
+                <div className="text-sm text-gray-500">Calculating...</div>
+              ) : fare > 0 ? (
+                <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
               ) : (
-                <span className="text-sm text-gray-400">Price unavailable</span>
+                <div className="text-sm text-gray-500">Price unavailable</div>
               )}
             </div>
-            <div className="text-xs text-blue-600">
-              {fareDetails}
-            </div>
+            <div className="text-xs text-gray-400">Local package</div>
             <div className="flex items-center text-xs text-gray-400">
               <span className="text-green-600 mr-1 text-[10px]">✓</span>
               Includes taxes & fees (Tolls & Permits Extra)
             </div>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap gap-2 mt-2">
           <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
             <Users size={12} className="mr-1" />
@@ -120,7 +119,7 @@ export function CabOptionCard({
             </div>
           )}
         </div>
-        
+
         {expandedDetails && cab.amenities && cab.amenities.length > 0 && (
           <div className="mt-3 pt-3 border-t text-sm text-gray-600">
             <div className="font-medium mb-1">Amenities:</div>
