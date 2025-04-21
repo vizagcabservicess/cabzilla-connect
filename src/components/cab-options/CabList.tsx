@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
-import { useFare } from '@/hooks/useFare';
 import { TripType, TripMode } from '@/lib/tripTypes';
 
 interface CabListProps {
