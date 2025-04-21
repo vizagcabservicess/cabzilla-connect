@@ -354,13 +354,6 @@ export function CabList({
       }
     }
 
-    if (displayedFares[cabId] && displayedFares[cabId] > 0) {
-      return displayedFares[cabId];
-    }
-
-    return cabFares[cabId] || cab.price || 0;
-  };
-
     // For airport transfers, first check if we have a calculated fare from BookingSummary
     const isAirportTransferFromProps = isAirportTransfer; // Use prop if available
     const isAirportTransferToUse = isAirportTransferFromProps !== undefined ? isAirportTransferFromProps : (tripType === 'airport' || localStorage.getItem('tripType') === 'airport');
@@ -368,20 +361,6 @@ export function CabList({
     if (isAirportTransferToUse && calculatedFaresRef.current[cabId] && calculatedFaresRef.current[cabId].fare > 0) {
       console.log(`CabList: Using calculated fare for ${cabId}: ${calculatedFaresRef.current[cabId].fare}`);
       return calculatedFaresRef.current[cabId].fare;
-    }
-
-    // Check if we have a very recent fare calculation from BookingSummary
-    if (isSelected && isAirportTransferToUse) {
-      // Try to get fare from localStorage (which BookingSummary updates)
-      const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-      const storedFare = localStorage.getItem(localStorageKey);
-      if (storedFare) {
-        const parsedFare = parseInt(storedFare, 10);
-        if (parsedFare > 0) {
-          console.log(`CabList: Using localStorage fare for ${cabId}: ${parsedFare}`);
-          return parsedFare;
-        }
-      }
     }
 
     // Otherwise use the displayed fare if available
