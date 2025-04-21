@@ -28,13 +28,15 @@ const normalizeVehicleId = (id: string): string => {
 
   // Map specific vehicle types to their database IDs
   const vehicleMapping: Record<string, string> = {
-    'innova_hycross': 'innova_crysta',
-    'innova': 'innova_crysta',
+    'innova_hycross': 'Innova_Crysta',
+    'innova': 'Innova_Crysta',
     'mpv': 'MPV',
-    'etios': 'sedan',
-    'dzire_cng': 'dzire_cng',
-    'dzire': 'dzire_cng',
-    'sedan': 'sedan'
+    'etios': 'Sedan',
+    'dzire_cng': 'Dzire_CNG',
+    'dzire': 'Dzire_CNG',
+    'sedan': 'Sedan',
+    'ertiga': 'Ertiga',
+    'tempo': 'Tempo'
   };
 
   // Apply specific mappings first
@@ -42,12 +44,18 @@ const normalizeVehicleId = (id: string): string => {
     return vehicleMapping[normalizedId];
   }
 
-  // Handle special cases
-  if (normalizedId.includes('sedan')) return 'sedan';
-  if (normalizedId.includes('dzire')) return 'dzire_cng';
-  if (normalizedId.includes('innova')) return 'innova_crysta';
+  // Handle special cases with proper casing
+  if (normalizedId.includes('sedan')) return 'Sedan';
+  if (normalizedId.includes('dzire')) return 'Dzire_CNG';
+  if (normalizedId.includes('innova')) return 'Innova_Crysta';
+  if (normalizedId.includes('ertiga')) return 'Ertiga';
+  if (normalizedId.includes('tempo')) return 'Tempo';
+  if (normalizedId.includes('mpv')) return 'MPV';
 
-  return normalizedId;
+  // Capitalize first letter of each word for other cases
+  return normalizedId.split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('_');
 };
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
