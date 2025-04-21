@@ -629,7 +629,4 @@ export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
   tryLoadFromLocalStorage();
 })();
 
-//safeStringUtils.ts
-export const normalizeVehicleId = (vehicleId: string): string => {
-    return vehicleId.toLowerCase();
-};
+// End of file
