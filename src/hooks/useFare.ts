@@ -52,16 +52,14 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`);
         let data;
         try {
-          const text = await response.text();
-          // Check if response is HTML instead of JSON
-          if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-            throw new Error('Received HTML instead of JSON');
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('text/html')) {
+            throw new Error('Received HTML response');
           }
-          data = JSON.parse(text);
+          data = await response.json();
         } catch (e) {
           console.error('Failed to parse response:', e);
-          console.error('Raw response:', text);
-          throw new Error('Invalid response format from API');
+          throw new Error('Invalid API response format');
         }
 
         if (!response.ok) {

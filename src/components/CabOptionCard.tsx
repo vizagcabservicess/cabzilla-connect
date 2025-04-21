@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface CabOptionCardProps {
   cab: CabType;
-  fare: number;
+  fare: number | string; // Updated to handle string fare
   isSelected: boolean;
   onSelect: (cab: CabType) => void;
   fareDetails: string;
@@ -77,7 +77,7 @@ export function CabOptionCard({
             )}>
               {isCalculating ? (
                 <div className="text-sm text-gray-500">Calculating...</div>
-              ) : fare > 0 ? (
+              ) : typeof fare === 'number' ? ( //Added type check here
                 <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
               ) : fareDetails ? (
                 <div className="text-sm text-red-500">{fareDetails}</div>
