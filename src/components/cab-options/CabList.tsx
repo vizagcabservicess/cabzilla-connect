@@ -357,25 +357,34 @@ export const CabList: React.FC<CabListProps> = ({
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    return displayedFares[cab.id] || 0;
+    // First check localStorage for any saved fare
+    const tripTypeStr = tripType || 'local';
+    const localStorageKey = `fare_${tripTypeStr}_${cab.id.toLowerCase()}`;
+    const savedFare = localStorage.getItem(localStorageKey);
 
-    // For airport transfers, first check if we have a calculated fare from BookingSummary
-    const isAirportTransferFromProps = isAirportTransfer; // Use prop if available
-    const isAirportTransferToUse = isAirportTransferFromProps !== undefined ? isAirportTransferFromProps : (tripType === 'airport' || localStorage.getItem('tripType') === 'airport');
-
-    if (isAirportTransferToUse && calculatedFaresRef.current[cabId] && calculatedFaresRef.current[cabId].fare > 0) {
-      console.log(`CabList: Using calculated fare for ${cabId}: ${calculatedFaresRef.current[cabId].fare}`);
-      return calculatedFaresRef.current[cabId].fare;
+    if (savedFare) {
+      const parsedFare = parseInt(savedFare, 10);
+      if (parsedFare > 0) {
+        return parsedFare;
+      }
     }
 
+    // Then check cabFares
+    if (cabFares[cab.id] > 0) {
+      return cabFares[cab.id];
+    }
+
+
     // Otherwise use the displayed fare if available
-    if (displayedFares[cabId] && displayedFares[cabId] > 0) {
-      return displayedFares[cabId];
+    if (displayedFares[cab.id] && displayedFares[cab.id] > 0) {
+      return displayedFares[cab.id];
     }
 
     // For airport transfers, check if there's a cached fare from the fare calculation service
+    const isAirportTransferFromProps = isAirportTransfer; // Use prop if available
+    const isAirportTransferToUse = isAirportTransferFromProps !== undefined ? isAirportTransferFromProps : (tripType === 'airport' || localStorage.getItem('tripType') === 'airport');
     if (isAirportTransferToUse) {
-      const airportFareKey = `fare_airport_${cabId.toLowerCase()}`;
+      const airportFareKey = `fare_airport_${cab.id.toLowerCase()}`;
       const airportFare = localStorage.getItem(airportFareKey);
       if (airportFare) {
         const parsedFare = parseInt(airportFare, 10);
@@ -385,22 +394,17 @@ export const CabList: React.FC<CabListProps> = ({
       }
     }
 
-    // Then try the latest fare from cabFares
-    if (cabFares[cabId] && cabFares[cabId] > 0) {
-      return cabFares[cabId];
-    }
-
     // Then try the price from the cab object itself
     if (cab.price && cab.price > 0) {
       return cab.price;
     }
 
     // Finally try the fare history
-    if (fareHistoryRef.current[cabId] && fareHistoryRef.current[cabId].length > 0) {
+    if (fareHistoryRef.current[cab.id] && fareHistoryRef.current[cab.id].length > 0) {
       // Get the most recent non-zero fare
-      for (let i = fareHistoryRef.current[cabId].length - 1; i >= 0; i--) {
-        if (fareHistoryRef.current[cabId][i] > 0) {
-          return fareHistoryRef.current[cabId][i];
+      for (let i = fareHistoryRef.current[cab.id].length - 1; i >= 0; i--) {
+        if (fareHistoryRef.current[cab.id][i] > 0) {
+          return fareHistoryRef.current[cab.id][i];
         }
       }
     }
@@ -415,7 +419,7 @@ export const CabList: React.FC<CabListProps> = ({
       'tempo': 4000
     };
 
-    const vehicleType = cabId.toLowerCase();
+    const vehicleType = cab.id.toLowerCase();
     return fallbackPrices[vehicleType] || 2000;
   };
 

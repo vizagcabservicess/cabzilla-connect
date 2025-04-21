@@ -33,4 +33,4 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev -- --host 0.0.0.0 --port 5000 --force --watch.usePolling"
+args = "vite --host 0.0.0.0 --port 5000 --force"
