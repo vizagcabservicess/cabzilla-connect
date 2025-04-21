@@ -55,10 +55,11 @@ export const CabList: React.FC<CabListProps> = ({
       if (!initializedRef.current) {
         try {
           const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-          const response = await fetch(`${baseUrl}/api/local-fares.php`, {
+          const response = await fetch(`${baseUrl}/api/direct-local-fares.php`, {
             headers: {
               'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
             }
           });
           
@@ -67,17 +68,43 @@ export const CabList: React.FC<CabListProps> = ({
           }
 
           const data = await response.json();
-          if (data && data.fares) {
-            console.log('CabList: Initial fare setup from API', data.fares);
-            setDisplayedFares(data.fares);
+          if (data && (data.fares || data.prices)) {
+            const fares = data.fares || data.prices;
+            console.log('CabList: Initial fare setup from API', fares);
             
-            const newFareHistory: Record<string, number[]> = {};
-            Object.entries(data.fares).forEach(([cabId, fare]) => {
+            // Normalize fare data
+            const normalizedFares: Record<string, number> = {};
+            Object.entries(fares).forEach(([cabId, fare]) => {
+              const normalizedId = cabId.toLowerCase();
               if (typeof fare === 'number' && fare > 0) {
+                normalizedFares[normalizedId] = fare;
+              } else if (typeof fare === 'object' && (fare as any).price) {
+                normalizedFares[normalizedId] = (fare as any).price;
+              }
+            });
+
+            setDisplayedFares(normalizedFares);
+            
+            // Update fare history
+            const newFareHistory: Record<string, number[]> = {};
+            Object.entries(normalizedFares).forEach(([cabId, fare]) => {
+              if (fare > 0) {
                 newFareHistory[cabId] = [fare];
               }
             });
             fareHistoryRef.current = newFareHistory;
+
+            // Dispatch events for any selected cab
+            if (selectedCabId && normalizedFares[selectedCabId.toLowerCase()]) {
+              window.dispatchEvent(new CustomEvent('fare-calculated', {
+                detail: {
+                  cabId: selectedCabId,
+                  fare: normalizedFares[selectedCabId.toLowerCase()],
+                  calculated: true,
+                  timestamp: Date.now()
+                }
+              }));
+            }
           }
         } catch (error) {
           console.error('Error fetching fares:', error);
@@ -88,7 +115,7 @@ export const CabList: React.FC<CabListProps> = ({
     };
 
     fetchFares();
-  }, [cabTypes]);
+  }, [cabTypes, selectedCabId]);
 
   // Process any pending updates
   const processPendingUpdates = () => {
