@@ -28,10 +28,7 @@ export const CabList: React.FC<CabListProps> = ({
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
 
-  // Normalize cab ID for API calls
-  const normalizeCabId = (id: string): string => {
-    return id.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  };
+  import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
   // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
@@ -59,7 +56,7 @@ export const CabList: React.FC<CabListProps> = ({
         </div>
       ) : (
         cabTypes.map((cab) => {
-          const normalizedId = normalizeCabId(cab.id);
+          const normalizedId = normalizeVehicleId(cab.id);
           const { fareData, isLoading, error } = useFare(
             normalizedId,
             tripType,

@@ -120,3 +120,7 @@ export function parseAmenities(amenities: any): string[] {
   // For any other case, return empty array
   return [];
 }
+export function normalizeVehicleId(vehicleId: string | undefined | null): string {
+  if (!vehicleId) return '';
+  return vehicleId.toLowerCase().trim();
+}

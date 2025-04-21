@@ -3,6 +3,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { getLocalFaresForVehicle } from '@/services/fareService';
+import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -20,43 +21,6 @@ interface FareData {
   breakdown: FareBreakdown;
 }
 
-const normalizeVehicleId = (id: string): string => {
-  if (!id) return '';
-  
-  // First convert to lowercase and trim
-  let normalizedId = id.toLowerCase().trim();
-
-  // Map specific vehicle types to their database IDs
-  const vehicleMapping: Record<string, string> = {
-    'innova_hycross': 'Innova_Crysta',
-    'innova': 'Innova_Crysta',
-    'mpv': 'MPV',
-    'etios': 'Sedan',
-    'dzire_cng': 'Dzire_CNG',
-    'dzire': 'Dzire_CNG',
-    'sedan': 'Sedan',
-    'ertiga': 'Ertiga',
-    'tempo': 'Tempo'
-  };
-
-  // Apply specific mappings first
-  if (vehicleMapping[normalizedId]) {
-    return vehicleMapping[normalizedId];
-  }
-
-  // Handle special cases with proper casing
-  if (normalizedId.includes('sedan')) return 'Sedan';
-  if (normalizedId.includes('dzire')) return 'Dzire_CNG';
-  if (normalizedId.includes('innova')) return 'Innova_Crysta';
-  if (normalizedId.includes('ertiga')) return 'Ertiga';
-  if (normalizedId.includes('tempo')) return 'Tempo';
-  if (normalizedId.includes('mpv')) return 'MPV';
-
-  // Capitalize first letter of each word for other cases
-  return normalizedId.split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('_');
-};
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
   const [fareData, setFareData] = useState<FareData | null>(null);
@@ -76,11 +40,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let breakdown: FareBreakdown = {};
 
         if (tripType === 'local') {
-          // For local trips, first try to get real-time fares
           try {
-            const localFares = await getLocalFaresForVehicle(cabId);
+            const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
             if (localFares) {
-              // Map package type to all possible property variations
               const packageMap: Record<string, string> = {
                 '4hrs-40km': 'price4hrs40km',
                 '8hrs-80km': 'price8hrs80km',
@@ -93,22 +55,13 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 return 0;
               }
 
-              // Try to get fare using the property name or fallback variations
               fare = localFares[propertyName] || 
                      localFares[propertyName.replace('price', 'package')] ||
                      localFares[`${propertyName.slice(0, -2)}_${propertyName.slice(-2)}`] || 0;
 
-              console.log(`Looking up fare for ${cabType.name} with package ${packageType}:`, {
-                normalizedId: normalizeVehicleId(cabType.id),
-                propertyName,
-                fareFound: fare,
-                availableFares: localFares
-              });
-
-              // Log the fare lookup attempt
               console.log(`Looking up fare for ${cabId} with package ${packageType}:`, {
                 normalizedId: normalizeVehicleId(cabId),
-                possibleProps,
+                propertyName,
                 fareFound: fare,
                 availableFares: localFares
               });
@@ -127,22 +80,19 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             console.error('Error fetching real-time local fares:', e);
           }
 
-          // Fallback to package data if real-time fare fetch failed
           if (fare === 0) {
-            fare = await getLocalPackagePrice(packageType, cabId);
+            fare = await getLocalPackagePrice(packageType, normalizeVehicleId(cabId));
             breakdown = {
               basePrice: fare,
               packageLabel: packageType
             };
           }
         } else {
-          // For other trip types, calculate using main calculation service
-          const result = await calculateFare(cabId, tripType, distance);
+          const result = await calculateFare(normalizeVehicleId(cabId), tripType, distance);
           fare = result.totalFare;
           breakdown = result.breakdown;
         }
 
-        // Store fare in localStorage for consistency
         const fareKey = `fare_${tripType}_${normalizeVehicleId(cabId)}`;
         localStorage.setItem(fareKey, fare.toString());
 
@@ -155,7 +105,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
 
-        // Get cached fare from localStorage as fallback
         const cachedFare = localStorage.getItem(`fare_${tripType}_${normalizeVehicleId(cabId)}`);
         if (cachedFare) {
           const fare = parseInt(cachedFare, 10);

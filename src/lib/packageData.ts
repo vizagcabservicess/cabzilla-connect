@@ -138,16 +138,16 @@ let normalizedMatrix: Record<string, Record<string, number>> = {};
  */
 function findMatchingCabType(inputCabType: string): string | null {
   if (!inputCabType) return null;
-  
+
   const lowerCabType = inputCabType.toLowerCase();
-  
+
   // Direct match
   for (const packageId in localPackagePriceMatrix) {
     if (localPackagePriceMatrix[packageId][lowerCabType] !== undefined) {
       return lowerCabType;
     }
   }
-  
+
   // Try to match using synonyms
   for (const [baseCabType, synonyms] of Object.entries(cabTypeSynonyms)) {
     if (synonyms.some(syn => lowerCabType.includes(syn))) {
@@ -157,7 +157,7 @@ function findMatchingCabType(inputCabType: string): string | null {
           return baseCabType;
         }
       }
-      
+
       // Otherwise return the first synonym that exists in our matrix
       for (const syn of synonyms) {
         for (const packageId in localPackagePriceMatrix) {
@@ -168,7 +168,7 @@ function findMatchingCabType(inputCabType: string): string | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -177,41 +177,42 @@ function findMatchingCabType(inputCabType: string): string | null {
  */
 export function getLocalPackagePrice(packageId: string, cabType: string): number {
   console.log(`Getting local package price for: package=${packageId}, cab=${cabType}`);
-  
+
   // Load most recent prices from localStorage
   tryLoadFromLocalStorage();
-  
+
   // Handle undefined or null cabType
   if (!cabType) {
     console.warn('cabType is undefined or null, using default sedan');
     cabType = 'sedan';
   }
-  
-  const lowerCabType = cabType.toLowerCase();
-  console.log(`Looking for price with lowercase cab type: ${lowerCabType}`);
-  
+
+  import { normalizeVehicleId } from '@/utils/safeStringUtils';
+  const normalizedCabType = normalizeVehicleId(cabType);
+  console.log(`Looking for price with normalized cab type: ${normalizedCabType}`);
+
   // Normalize packageId to make sure it matches our standard format
   const normalizedPackageId = normalizePackageId(packageId);
-  
+
   // Check if we have a price in the matrix
   if (localPackagePriceMatrix[normalizedPackageId] && 
-      localPackagePriceMatrix[normalizedPackageId][lowerCabType] !== undefined) {
-    console.log(`Found direct price match for ${normalizedPackageId} and ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId][lowerCabType]}`);
-    const price = localPackagePriceMatrix[normalizedPackageId][lowerCabType];
-    return price > 0 ? price : getFallbackPrice(normalizedPackageId, lowerCabType);
+      localPackagePriceMatrix[normalizedPackageId][normalizedCabType] !== undefined) {
+    console.log(`Found direct price match for ${normalizedPackageId} and ${normalizedCabType}: ${localPackagePriceMatrix[normalizedPackageId][normalizedCabType]}`);
+    const price = localPackagePriceMatrix[normalizedPackageId][normalizedCabType];
+    return price > 0 ? price : getFallbackPrice(normalizedPackageId, normalizedCabType);
   }
-  
+
   // Try to find a matching cab type
-  const matchedCabType = findMatchingCabType(lowerCabType);
+  const matchedCabType = findMatchingCabType(normalizedCabType);
   if (matchedCabType && localPackagePriceMatrix[normalizedPackageId] && 
       localPackagePriceMatrix[normalizedPackageId][matchedCabType] !== undefined) {
     console.log(`Found price match using synonym lookup for ${normalizedPackageId} and ${matchedCabType}: ${localPackagePriceMatrix[normalizedPackageId][matchedCabType]}`);
     const price = localPackagePriceMatrix[normalizedPackageId][matchedCabType];
-    return price > 0 ? price : getFallbackPrice(normalizedPackageId, lowerCabType);
+    return price > 0 ? price : getFallbackPrice(normalizedPackageId, normalizedCabType);
   }
-  
+
   // Fallback - calculate based on base package and apply multiplier for cab types
-  return getFallbackPrice(normalizedPackageId, lowerCabType);
+  return getFallbackPrice(normalizedPackageId, normalizedCabType);
 }
 
 /**
@@ -223,16 +224,16 @@ function getFallbackPrice(packageId: string, cabType: string): number {
     console.warn(`Package ${packageId} not found or has no basePrice, using default price`);
     return 2500; // Default fallback
   }
-  
+
   let multiplier = 1;
   if (cabType.includes('ertiga')) multiplier = 1.2;
   if (cabType.includes('innova')) multiplier = 1.5;
   if (cabType.includes('tempo')) multiplier = 1.8;
   if (cabType.includes('luxury')) multiplier = 2.2;
-  
+
   const calculatedPrice = Math.ceil(basePackage.basePrice * multiplier);
   console.log(`Calculated fallback price for ${packageId} and ${cabType}: ${calculatedPrice}`);
-  
+
   return calculatedPrice;
 }
 
@@ -245,10 +246,10 @@ function normalizePackageId(packageId: string): string {
     console.warn('Missing packageId, defaulting to 8hrs-80km');
     return '8hrs-80km';
   }
-  
+
   // Convert to lowercase for more reliable matching
   const lowerPackageId = packageId.toLowerCase();
-  
+
   // Handle common variations of package IDs
   if (lowerPackageId.includes('8hrs') || lowerPackageId.includes('8hr') || 
       lowerPackageId.includes('8 hr') || lowerPackageId.includes('8 hrs') || 
@@ -260,7 +261,7 @@ function normalizePackageId(packageId: string): string {
       lowerPackageId === '8hrs_80km' || lowerPackageId === '08hrs_80km') {
     return '8hrs-80km';
   }
-  
+
   if (lowerPackageId.includes('4hrs') || lowerPackageId.includes('4hr') || 
       lowerPackageId.includes('4 hr') || lowerPackageId.includes('4 hrs') || 
       lowerPackageId.includes('04hrs') || lowerPackageId.includes('04hr') || 
@@ -271,7 +272,7 @@ function normalizePackageId(packageId: string): string {
       lowerPackageId === '4hrs_40km' || lowerPackageId === '04hrs_40km') {
     return '4hrs-40km';
   }
-  
+
   if (lowerPackageId.includes('10hrs') || lowerPackageId.includes('10hr') || 
       lowerPackageId.includes('10 hr') || lowerPackageId.includes('10 hrs') || 
       lowerPackageId.includes('10hours') || lowerPackageId.includes('10 hours') || 
@@ -279,7 +280,7 @@ function normalizePackageId(packageId: string): string {
       lowerPackageId === '10hrs_100km') {
     return '10hrs-100km';
   }
-  
+
   // If we can't determine the package, default to 8hrs-80km
   console.warn(`Unrecognized package ID "${packageId}", defaulting to 8hrs-80km`);
   return '8hrs-80km';
@@ -294,12 +295,12 @@ function tryLoadFromLocalStorage(): void {
     if (savedMatrix) {
       console.log('Loading local package price matrix from localStorage');
       const parsed = JSON.parse(savedMatrix);
-      
+
       // Only update if we have valid data
       if (parsed && typeof parsed === 'object') {
         localPackagePriceMatrix = parsed;
         console.log('Successfully loaded price matrix from localStorage');
-        
+
         // Also update normalized matrix for quick lookups
         updateNormalizedMatrix();
       }
@@ -322,10 +323,10 @@ function tryLoadFromLocalStorage(): void {
  */
 function updateNormalizedMatrix(): void {
   normalizedMatrix = {};
-  
+
   for (const packageId in localPackagePriceMatrix) {
     normalizedMatrix[packageId.toLowerCase()] = {};
-    
+
     for (const cabType in localPackagePriceMatrix[packageId]) {
       normalizedMatrix[packageId.toLowerCase()][cabType.toLowerCase()] = 
         localPackagePriceMatrix[packageId][cabType];
@@ -340,53 +341,54 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
     console.warn('cabType is undefined or null for updateLocalPackagePrice, using default sedan');
     cabType = 'sedan';
   }
-  
-  const lowerCabType = cabType.toLowerCase();
-  
-  console.log(`Updating local package price: package=${packageId}, cab=${lowerCabType}, price=${price}`);
-  
+
+  import { normalizeVehicleId } from '@/utils/safeStringUtils';
+  const normalizedCabType = normalizeVehicleId(cabType);
+
+  console.log(`Updating local package price: package=${packageId}, cab=${normalizedCabType}, price=${price}`);
+
   // Normalize packageId
   const normalizedPackageId = normalizePackageId(packageId);
-  
+
   // Throttle updates to prevent event cascade
   const now = Date.now();
-  
+
   // Reset counter if it's been more than a minute
   if (now - lastMatrixUpdateTime > 60000) {
     matrixUpdateCount = 0;
     lastMatrixUpdateTime = now;
   }
-  
+
   // Increment the counter
   matrixUpdateCount++;
-  
+
   // Ensure the package exists in the matrix
   if (!localPackagePriceMatrix[normalizedPackageId]) {
     localPackagePriceMatrix[normalizedPackageId] = {};
   }
-  
+
   // Update the price for the specified cab type
-  localPackagePriceMatrix[normalizedPackageId][lowerCabType] = price;
-  
+  localPackagePriceMatrix[normalizedPackageId][normalizedCabType] = price;
+
   // Also update the 04hrs-40km entry if we're updating 4hrs-40km
   if (normalizedPackageId === '4hrs-40km') {
     if (!localPackagePriceMatrix['04hrs-40km']) {
       localPackagePriceMatrix['04hrs-40km'] = {};
     }
-    localPackagePriceMatrix['04hrs-40km'][lowerCabType] = price;
-    console.log(`Also updated 04hrs-40km variant for ${lowerCabType} with price ${price}`);
+    localPackagePriceMatrix['04hrs-40km'][normalizedCabType] = price;
+    console.log(`Also updated 04hrs-40km variant for ${normalizedCabType} with price ${price}`);
   }
-  
+
   // Update normalized matrix
   updateNormalizedMatrix();
-  
+
   // Save to localStorage for persistence
   try {
     const savedMatrix = JSON.stringify(localPackagePriceMatrix);
     localStorage.setItem('localPackagePriceMatrix', savedMatrix);
     localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
     console.log(`Updated and saved local price matrix to localStorage`);
-    
+
     // Only dispatch events if we haven't exceeded the throttle limit
     if (matrixUpdateCount <= MAX_UPDATES_PER_MINUTE) {
       // Dispatch an event to notify other components
@@ -394,33 +396,33 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
         detail: { 
           timestamp: Date.now(),
           packageId: normalizedPackageId,
-          cabType: lowerCabType,
+          cabType: normalizedCabType,
           price
         }
       }));
-      
+
       console.log('Dispatched local-fares-updated event');
     } else {
       console.log(`Skipped local-fares-updated event (throttled: ${matrixUpdateCount}/${MAX_UPDATES_PER_MINUTE})`);
     }
-    
+
     // Avoid dispatching multiple cache clear events - this causes infinite loops
     if (matrixUpdateCount <= 1) {
       // Only clear cache on the first update within a time window
       localStorage.setItem('forceCacheRefresh', 'true');
-      
+
       // Remove specific caches but not everything
       localStorage.removeItem('fareCache');
       localStorage.removeItem('calculatedFares');
-      
+
       // Schedule removal of the force refresh flag
       setTimeout(() => {
         localStorage.removeItem('forceCacheRefresh');
       }, 5000);
-      
+
       // Try to update fares on backend server
       try {
-        updateLocalPackagePriceOnServer(normalizedPackageId, lowerCabType, price)
+        updateLocalPackagePriceOnServer(normalizedPackageId, normalizedCabType, price)
           .then(result => {
             console.log('Server update result:', result);
           })
@@ -440,7 +442,7 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
 async function updateLocalPackagePriceOnServer(packageId: string, cabType: string, price: number): Promise<any> {
   try {
     console.log(`Sending local fare update to server for ${cabType}, package ${packageId}, price ${price}`);
-    
+
     // Prepare the package data to match different server naming conventions
     const packageData: Record<string, any> = {
       vehicleId: cabType,
@@ -454,7 +456,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       local_package_8hr: 0,
       local_package_10hr: 0
     };
-    
+
     // Set the price for the specific package
     if (packageId === '4hrs-40km' || packageId === '04hrs-40km') {
       packageData.price4hrs40km = price;
@@ -472,7 +474,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       packageData.local_package_10hr = price;
       packageData.package10hr100km = price;
     }
-    
+
     // Add packages object for React-style clients
     packageData.packages = {
       '4hrs-40km': packageId === '4hrs-40km' || packageId === '04hrs-40km' ? price : 0,
@@ -480,19 +482,19 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       '8hrs-80km': packageId === '8hrs-80km' ? price : 0,
       '10hrs-100km': packageId === '10hrs-100km' ? price : 0
     };
-    
+
     // Add fares object for alternative format
     packageData.fares = { ...packageData.packages };
-    
+
     // Try the new direct local package fares endpoint first
     const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const timestamp = Date.now();
-    
+
     // Try local-package-fares.php endpoint first
     try {
       console.log('Trying local-package-fares.php endpoint...');
       const localPackageEndpoint = `${domain}/api/local-package-fares.php?_t=${timestamp}`;
-      
+
       const response = await fetch(localPackageEndpoint, {
         method: 'POST',
         headers: {
@@ -504,7 +506,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
         },
         body: JSON.stringify(packageData)
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using local-package-fares.php`);
@@ -516,12 +518,12 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     } catch (error) {
       console.error(`Error using local-package-fares.php endpoint:`, error);
     }
-    
+
     // Try admin/local-fares-update.php endpoint next
     try {
       console.log('Trying admin/local-fares-update.php endpoint...');
       const simplifiedEndpoint = `${domain}/api/admin/local-fares-update.php?_t=${timestamp}`;
-      
+
       const response = await fetch(simplifiedEndpoint, {
         method: 'POST',
         headers: {
@@ -533,7 +535,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
         },
         body: JSON.stringify(packageData)
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using admin/local-fares-update.php`);
@@ -545,12 +547,12 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     } catch (error) {
       console.error(`Error using admin/local-fares-update.php endpoint:`, error);
     }
-    
+
     // Try admin/direct-local-fares.php endpoint next
     try {
       console.log('Trying admin/direct-local-fares.php endpoint...');
       const directLocalEndpoint = `${domain}/api/admin/direct-local-fares.php?_t=${timestamp}`;
-      
+
       const response = await fetch(directLocalEndpoint, {
         method: 'POST',
         headers: {
@@ -562,7 +564,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
         },
         body: JSON.stringify(packageData)
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using admin/direct-local-fares.php`);
@@ -574,12 +576,12 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     } catch (error) {
       console.error(`Error using admin/direct-local-fares.php endpoint:`, error);
     }
-    
+
     // Try universal fare update endpoint as last resort
     try {
       console.log('Trying admin/direct-fare-update.php as last resort...');
       const universalUrl = `${domain}/api/admin/direct-fare-update.php?tripType=local&_t=${timestamp}`;
-      
+
       const response = await fetch(universalUrl, {
         method: 'POST',
         headers: {
@@ -595,7 +597,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
           trip_type: 'local'
         })
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on universal endpoint`);
@@ -607,7 +609,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     } catch (error) {
       console.error(`Error using universal fare update endpoint:`, error);
     }
-    
+
     throw new Error('All server update attempts failed');
   } catch (error) {
     console.error('Error updating local package price on server:', error);
@@ -619,7 +621,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
 export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
   // Try to load from localStorage first
   tryLoadFromLocalStorage();
-  
+
   return localPackagePriceMatrix;
 }
 
@@ -627,3 +629,8 @@ export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
 (function initializePackageData() {
   tryLoadFromLocalStorage();
 })();
+
+//safeStringUtils.ts
+export const normalizeVehicleId = (vehicleId: string): string => {
+    return vehicleId.toLowerCase();
+};
