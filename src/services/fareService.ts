@@ -85,7 +85,8 @@ function getBypassHeaders() {
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
-    'X-API-Version': '1.0.55'
+    'X-API-Version': '1.0.55',
+    'Accept': 'application/json' // Added Accept header for better error handling
   };
 }
 
@@ -834,7 +835,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
     if (fare) {
       console.log(`Processed airport fare for ${vehicleId}:`, fare);
 
-      // Cache this specific vehicle fare
+            // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('airport_fares');
       const fares = cachedFares ? JSON.parse(cachedFares) : {};
       fares[vehicleId] = fare;

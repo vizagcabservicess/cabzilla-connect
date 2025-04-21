@@ -53,13 +53,18 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let data;
         try {
           const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('text/html')) {
-            throw new Error('Received HTML response');
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          if (!contentType || !contentType.includes('application/json')) {
+            console.error('Invalid content type:', contentType);
+            throw new Error('API returned non-JSON response');
           }
           data = await response.json();
         } catch (e) {
           console.error('Failed to parse response:', e);
-          throw new Error('Invalid API response format');
+          setFareData(null);
+          throw new Error(`Fare API error: ${e.message}`);
         }
 
         if (!response.ok) {
