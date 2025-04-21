@@ -102,10 +102,10 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               parsedFare.basePrice = vehicleFare.basePrice || vehicleFare.base_price || parsedFare.totalPrice;
             } else {
               const packagePrice = packageType === '8hrs-80km' ? 
-                (vehicleFare.price8hrs80km || vehicleFare.package8hr80km) :
+                (vehicleFare.price_8hrs_80km || vehicleFare.price8hrs80km) :
                 packageType === '10hrs-100km' ?
-                (vehicleFare.price10hrs100km || vehicleFare.package10hr100km) :
-                (vehicleFare.price4hrs40km || vehicleFare.package4hr40km);
+                (vehicleFare.price_10hrs_100km || vehicleFare.price10hrs100km) :
+                (vehicleFare.price_4hrs_40km || vehicleFare.price4hrs40km);
 
               if (typeof packagePrice === 'number') {
                 parsedFare.totalPrice = packagePrice;
