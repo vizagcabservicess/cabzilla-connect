@@ -54,8 +54,8 @@ export const CabList: React.FC<CabListProps> = ({
     const fetchFares = async () => {
       if (!initializedRef.current) {
         try {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
-          const response = await fetch(`${baseUrl}/api/local-package-fares.php`, {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+          const response = await fetch(`${baseUrl}/api/local-fares.php`, {
             headers: {
               'Cache-Control': 'no-cache',
               'Pragma': 'no-cache'
