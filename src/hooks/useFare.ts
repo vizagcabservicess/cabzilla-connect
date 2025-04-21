@@ -97,25 +97,35 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           }
 
           if (vehicleFare) {
-            if (vehicleFare.totalPrice || vehicleFare.total_price) {
-              parsedFare.totalPrice = vehicleFare.totalPrice || vehicleFare.total_price;
-              parsedFare.basePrice = vehicleFare.basePrice || vehicleFare.base_price || parsedFare.totalPrice;
+            let packagePrice = 0;
+            
+            // Try all possible property names for package prices
+            if (packageType === '8hrs-80km') {
+              packagePrice = vehicleFare.price_8hrs_80km || 
+                           vehicleFare.price8hrs80km ||
+                           vehicleFare.package8hr80km ||
+                           vehicleFare.local_package_8hr ||
+                           0;
+            } else if (packageType === '10hrs-100km') {
+              packagePrice = vehicleFare.price_10hrs_100km ||
+                           vehicleFare.price10hrs100km ||
+                           vehicleFare.package10hr100km ||
+                           vehicleFare.local_package_10hr ||
+                           0;
             } else {
-              const packagePrice = packageType === '8hrs-80km' ? 
-                (vehicleFare.price_8hrs_80km || vehicleFare.price8hrs80km) :
-                packageType === '10hrs-100km' ?
-                (vehicleFare.price_10hrs_100km || vehicleFare.price10hrs100km) :
-                (vehicleFare.price_4hrs_40km || vehicleFare.price4hrs40km);
-
-              if (typeof packagePrice === 'number') {
-                parsedFare.totalPrice = packagePrice;
-                parsedFare.basePrice = packagePrice;
-                parsedFare.breakdown = {
-                  packageLabel: packageType,
-                  basePrice: packagePrice
-                };
-              }
+              packagePrice = vehicleFare.price_4hrs_40km ||
+                           vehicleFare.price4hrs40km ||
+                           vehicleFare.package4hr40km ||
+                           vehicleFare.local_package_4hr ||
+                           0;
             }
+
+            parsedFare.totalPrice = packagePrice;
+            parsedFare.basePrice = packagePrice;
+            parsedFare.breakdown = {
+              packageLabel: packageType,
+              basePrice: packagePrice
+            };
           }
         } else if (tripType === 'outstation') {
           const fare = data.fares?.[normalizedCabId];
