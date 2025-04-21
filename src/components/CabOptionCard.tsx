@@ -76,9 +76,7 @@ export function CabOptionCard({
               "text-lg font-bold",
               isSelected ? "text-blue-600" : "text-gray-800"
             )}>
-              {isCalculating ? (
-                <span className="text-sm text-gray-400">Calculating...</span>
-              ) : fare > 0 ? (
+              {fare > 0 ? (
                 formatPrice(fare)
               ) : (
                 <span className="text-sm text-gray-400">Price unavailable</span>

@@ -23,13 +23,7 @@ export function CabList({
 }: CabListProps) {
   const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
-  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
-  const refreshCountRef = useRef(0);
-  const isProcessingRef = useRef(false);
-  const maxRefreshesRef = useRef(5);
-  const initializedRef = useRef(false);
-  const fareHistoryRef = useRef<Record<string, number[]>>({});
-  const pendingUpdatesRef = useRef<Record<string, number>>({});
+  const { fareData } = useFare(selectedCabId || '', tripType, distance, packageType);
   const updateTimeoutRef = useRef<number | null>(null);
   const directUpdateEnabledRef = useRef<boolean>(true);
   const fareCalculatedTimestampsRef = useRef<Record<string, number>>({});
@@ -343,13 +337,11 @@ export function CabList({
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    const cabId = cab.id;
-    const isSelected = selectedCabId === cabId;
-
-    // First check if we have a valid fare in cabFares
-    if (cabFares[cabId] && cabFares[cabId] > 0) {
-      return cabFares[cabId];
+    if (selectedCabId === cab.id && fareData) {
+      return fareData.totalPrice;
     }
+    return cabFares[cab.id] || 0;
+  };
 
     // Then check localStorage for persistence
     const tripType = localStorage.getItem('tripType');

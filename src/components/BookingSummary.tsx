@@ -33,14 +33,20 @@ export const BookingSummary = ({
   tripType,
   tripMode = 'one-way'
 }: BookingSummaryProps) => {
-  const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
-  const [baseFare, setBaseFare] = useState<number>(0);
-  const [driverAllowance, setDriverAllowance] = useState<number>(250);
-  const [nightCharges, setNightCharges] = useState<number>(0);
-  const [extraDistance, setExtraDistance] = useState<number>(0);
-  const [extraDistanceFare, setExtraDistanceFare] = useState<number>(0);
-  const [perKmRate, setPerKmRate] = useState<number>(0);
-  const [effectiveDistance, setEffectiveDistance] = useState<number>(distance);
+  const { fareData, isLoading } = useFare(
+    selectedCab?.id || '',
+    tripType,
+    distance,
+    tripType === 'local' ? '8hrs-80km' : undefined
+  );
+
+  const breakdown = fareData?.breakdown || {
+    basePrice: 0,
+    extraCharges: 0,
+    driverAllowance: 0,
+    nightCharges: 0,
+    extraDistanceFare: 0
+  };
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
   
@@ -771,7 +777,13 @@ export const BookingSummary = ({
             
             <div className="flex justify-between text-lg font-bold pt-2">
               <span>Total Amount</span>
-              <span>₹{finalTotal.toLocaleString()}</span>
+              <span>
+                {isLoading ? (
+                  <span className="text-gray-400">Calculating...</span>
+                ) : (
+                  `₹${(fareData?.totalPrice || 0).toLocaleString()}`
+                )}
+              </span>
             </div>
           </div>
         </div>
