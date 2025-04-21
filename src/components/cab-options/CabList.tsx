@@ -337,14 +337,14 @@ export function CabList({
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    if (selectedCabId === cab.id && fareData) {
+    const cabId = cab.id;
+    const tripType = localStorage.getItem('tripType');
+    const isSelected = selectedCabId === cabId;
+
+    if (isSelected && fareData) {
       return fareData.totalPrice;
     }
-    return cabFares[cab.id] || 0;
-  };
 
-    // Then check localStorage for persistence
-    const tripType = localStorage.getItem('tripType');
     const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
     const storedFare = localStorage.getItem(localStorageKey);
     if (storedFare) {
@@ -353,6 +353,13 @@ export function CabList({
         return parsedFare;
       }
     }
+
+    if (displayedFares[cabId] && displayedFares[cabId] > 0) {
+      return displayedFares[cabId];
+    }
+
+    return cabFares[cabId] || cab.price || 0;
+  };
 
     // For airport transfers, first check if we have a calculated fare from BookingSummary
     const isAirportTransferFromProps = isAirportTransfer; // Use prop if available
