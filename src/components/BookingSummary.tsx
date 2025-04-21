@@ -812,8 +812,6 @@ export const BookingSummary = ({
 };
 
 useEffect(() => {
-    if (!selectedCab) return;
-    
     const calculateFares = async () => {
       try {
         await recalculateFareDetails();
@@ -822,7 +820,9 @@ useEffect(() => {
       }
     };
     
-    calculateFares();
+    if (selectedCab) {
+      calculateFares();
+    }
   }, [selectedCab, distance, tripType, tripMode]);
 
 export default BookingSummary;
