@@ -50,7 +50,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             throw new Error('Invalid trip type');
         }
 
-        const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`, {
+        const response = await fetch(`/api/admin/direct-${tripType}-fares.php?vehicle_id=${normalizedCabId}`, {
           headers: {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
@@ -80,12 +80,19 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           let vehicleFare;
           
           // Handle both array and object response formats
-          if (Array.isArray(data.fares)) {
-            vehicleFare = data.fares.find((f: any) => 
+          if (Array.isArray(data)) {
+            vehicleFare = data.find((f: any) => 
               normalizeVehicleId(f.vehicleId || f.vehicle_id) === normalizedCabId
             );
-          } else if (data.fares && typeof data.fares === 'object') {
-            vehicleFare = data.fares[normalizedCabId];
+          } else if (data && typeof data === 'object') {
+            if (data.fares) {
+              vehicleFare = Array.isArray(data.fares) 
+                ? data.fares.find((f: any) => normalizeVehicleId(f.vehicleId || f.vehicle_id) === normalizedCabId)
+                : data.fares[normalizedCabId];
+            } else {
+              // Direct object response
+              vehicleFare = data[normalizedCabId];
+            }
           }
 
           if (vehicleFare) {

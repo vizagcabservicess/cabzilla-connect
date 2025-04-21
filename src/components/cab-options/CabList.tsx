@@ -74,9 +74,13 @@ export const CabList: React.FC<CabListProps> = ({
           if (isLoading) {
             fareText = 'Calculating...';
           } else if (error) {
+            console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
           } else if (fareData?.totalPrice) {
             fare = fareData.totalPrice;
+            fareText = `₹${fare}`;
+          } else if (fareData?.basePrice) {
+            fare = fareData.basePrice;
             fareText = `₹${fare}`;
           } else if (cab.price) {
             fare = cab.price;
