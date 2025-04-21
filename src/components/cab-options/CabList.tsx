@@ -60,12 +60,15 @@ export const CabList: React.FC<CabListProps> = ({
       ) : (
         cabTypes.map((cab) => {
           const normalizedId = normalizeCabId(cab.id);
-          const { fareData, isLoading } = useFare(
+          const { fareData, isLoading, error } = useFare(
             normalizedId,
             tripType,
             distance,
             packageType
           );
+
+          const fare = fareData?.totalPrice || (cab.price || 0);
+          console.log(`Fare for ${cab.name}:`, { fareData, calculatedFare: fare });
 
           return (
             <div 
@@ -74,10 +77,11 @@ export const CabList: React.FC<CabListProps> = ({
             >
               <CabOptionCard 
                 cab={cab}
-                fare={fareData?.totalPrice || 0}
+                fare={fare}
                 isSelected={selectedCabId === cab.id}
                 onSelect={() => enhancedSelectCab(cab)}
                 isCalculating={isLoading}
+                fareDetails={error ? "Error fetching fare" : undefined}
               />
             </div>
           );

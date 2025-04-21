@@ -50,11 +50,13 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         }
 
         const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`);
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Invalid content type returned from API');
+        let data;
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.error('Failed to parse JSON response:', e);
+          throw new Error('Invalid response format from API');
         }
-        const data = await response.json();
 
         if (!response.ok) {
           //Improved error handling: Check for specific error codes or messages if needed.

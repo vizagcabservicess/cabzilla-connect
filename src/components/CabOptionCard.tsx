@@ -79,6 +79,8 @@ export function CabOptionCard({
                 <div className="text-sm text-gray-500">Calculating...</div>
               ) : fare > 0 ? (
                 <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
+              ) : fareDetails ? (
+                <div className="text-sm text-red-500">{fareDetails}</div>
               ) : (
                 <div className="text-sm text-gray-500">Price unavailable</div>
               )}
