@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => ({
       '.pike.replit.dev'
       // OR simply: 'all'  // to allow every host (dev only)
     ],
+    watch: {
+      usePolling: true,
+      interval: 1000,
+    },
   },
   plugins: [
     react(),

@@ -33,4 +33,8 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev -- --host 0.0.0.0 --port 5000"
+args = "echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev -- --host 0.0.0.0 --port 5000 --force"

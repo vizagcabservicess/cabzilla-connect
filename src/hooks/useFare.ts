@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -29,7 +28,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
   useEffect(() => {
     const fetchFare = async () => {
       if (!cabId) return;
-      
+
       setIsLoading(true);
       setError(null);
       const normalizedCabId = normalizeVehicleId(cabId);
@@ -54,7 +53,8 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch fare');
+          //Improved error handling: Check for specific error codes or messages if needed.
+          throw new Error(data.message || `Failed to fetch fare: ${response.status}`);
         }
 
         let parsedFare: FareData = {
@@ -67,7 +67,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           const vehicleFare = data.fares?.find((f: any) => 
             normalizeVehicleId(f.vehicleId) === normalizedCabId
           );
-          
+
           if (vehicleFare) {
             if (vehicleFare.totalPrice) {
               parsedFare.totalPrice = vehicleFare.totalPrice;
