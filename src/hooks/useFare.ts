@@ -50,7 +50,8 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             throw new Error('Invalid trip type');
         }
 
-        const response = await fetch(`/api/admin/direct-${tripType}-fares.php?vehicle_id=${normalizedCabId}`, {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.host}`;
+        const response = await fetch(`${baseUrl}/api/direct-${tripType}-fares.php?vehicle_id=${normalizedCabId}`, {
           headers: {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
