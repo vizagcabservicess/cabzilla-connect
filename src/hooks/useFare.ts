@@ -8,7 +8,7 @@ interface FareData {
   extraCharges?: Record<string, number>;
 }
 
-export const useFare = (cabId: string, tripType: string, distance: number, packageType: string) => {
+export function useFare(cabId: string, tripType: string, distance: number, packageType: string) {
   const [fareData, setFareData] = useState<FareData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);

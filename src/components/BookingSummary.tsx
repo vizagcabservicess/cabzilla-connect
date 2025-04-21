@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
-import { useFare } from '@/hooks/useFare';
+import { useFare } from '../hooks/useFare';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
