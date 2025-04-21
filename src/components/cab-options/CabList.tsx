@@ -492,6 +492,7 @@ export function CabList({
     }, 500);
   };
 
+  // Render component
   return (
     <div className="space-y-3">
       {isCalculatingFares && (
