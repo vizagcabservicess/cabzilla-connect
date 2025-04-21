@@ -1,0 +1,53 @@
+× Return statement is not allowed here
+     ╭─[/home/runner/workspace/src/components/cab-options/CabList.tsx:495:1]
+ 492 │         }, 500);
+ 493 │       };
+ 494 │     
+ 495 │ ╭─▶   return (
+ 496 │ │       <div className="space-y-3">
+ 497 │ │         {isCalculatingFares && (
+ 498 │ │           <div className="bg-blue-50 p-3 rounded-md flex items-center justify-center mb-3">
+ 499 │ │             <div className="animate-spin mr-2 h-4 w-4 border-b-2 border-blue-600"></div>
+ 500 │ │             <span className="text-blue-600 text-sm">Calculating fares...</span>
+ 501 │ │           </div>
+ 502 │ │         )}
+ 503 │ │   
+ 504 │ │         {(!cabTypes || cabTypes.length === 0) ? (
+ 505 │ │           <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
+ 506 │ │             <p className="font-medium">No cab options available</p>
+ 507 │ │             <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
+ 508 │ │           </div>
+ 509 │ │         ) : (
+ 510 │ │           cabTypes.map((cab) => (
+ 511 │ │             <div 
+ 512 │ │               key={cab.id || `cab-${Math.random()}`}
+ 513 │ │               className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+ 514 │ │               data-last-update={lastUpdateTimestamp}
+ 515 │ │             >
+ 516 │ │               <CabOptionCard 
+ 517 │ │                 cab={cab}
+ 518 │ │                 fare={getDisplayFare(cab)}
+ 519 │ │                 isSelected={selectedCabId === cab.id}
+ 520 │ │                 onSelect={() => enhancedSelectCab(cab)}
+ 521 │ │                 fareDetails={getFareDetails(cab)}
+ 522 │ │                 isCalculating={isCalculatingFares}
+ 523 │ │               />
+ 524 │ │             </div>
+ 525 │ │           ))
+ 526 │ │         )}
+ 527 │ │       </div>
+ 528 │ ╰─▶   );
+ 529 │     }
+     ╰────
+  × Expression expected
+     ╭─[/home/runner/workspace/src/components/cab-options/CabList.tsx:529:1]
+ 526 │       )}
+ 527 │     </div>
+ 528 │   );
+ 529 │ }
+     · ─
+     ╰────
+
+
+Caused by:
+    Syntax Error
