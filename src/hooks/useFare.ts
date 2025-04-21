@@ -58,21 +58,21 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             if (localFares) {
               // Map package type to fare property
               const fareMap: Record<string, string> = {
-                '4hrs-40km': 'price8hrs80km',
+                '4hrs-40km': 'price4hrs40km',
                 '8hrs-80km': 'price8hrs80km',
                 '10hrs-100km': 'price10hrs100km'
               };
 
               const fareProp = fareMap[packageType] || 'price8hrs80km';
-              fare = localFares[fareProp] || 0;
+              fare = localFares[fareProp] || localFares[`package${fareProp.slice(5)}`] || 0;
 
               if (fare > 0) {
                 breakdown = {
                   basePrice: fare,
                   packageLabel: packageType,
                   extraDistanceFare: 0,
-                  extraKmCharge: localFares.priceExtraKm || 0,
-                  extraHourCharge: localFares.priceExtraHour || 0
+                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
+                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
                 };
               }
             }

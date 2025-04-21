@@ -113,7 +113,11 @@ export const CabList: React.FC<CabListProps> = ({
               default:
                 fare = 0;
             }
-            fareText = fare > 0 ? `₹${fare}` : 'Price unavailable';
+            fareText = fare > 0 ? `₹${Math.round(fare)}` : 'Price unavailable';
+  // Cache the valid fare
+  if (fare > 0) {
+    localStorage.setItem(`fare_${tripType}_${normalizedId}`, fare.toString());
+  }
           }
           
           // Debug logging
