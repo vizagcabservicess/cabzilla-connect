@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -49,28 +50,25 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             throw new Error('Invalid trip type');
         }
 
-        const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`);
-        let data;
-        try {
-          const contentType = response.headers.get('content-type');
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+        const response = await fetch(`${endpoint}?vehicle_id=${normalizedCabId}`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
           }
-          if (!contentType || !contentType.includes('application/json')) {
-            console.error('Invalid content type:', contentType);
-            throw new Error('API returned non-JSON response');
-          }
-          data = await response.json();
-        } catch (e) {
-          console.error('Failed to parse response:', e);
-          setFareData(null);
-          throw new Error(`Fare API error: ${e.message}`);
+        });
+
+        // Check response status first
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        if (!response.ok) {
-          //Improved error handling: Check for specific error codes or messages if needed.
-          throw new Error(data.message || `Failed to fetch fare: ${response.status}`);
+        // Get content type and ensure it's JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error(`Expected JSON response but got ${contentType}`);
         }
+
+        const data = await response.json();
 
         let parsedFare: FareData = {
           totalPrice: 0,
@@ -79,27 +77,36 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         };
 
         if (tripType === 'local') {
-          const vehicleFare = data.fares?.find((f: any) => 
-            normalizeVehicleId(f.vehicleId) === normalizedCabId
-          );
+          let vehicleFare;
+          
+          // Handle both array and object response formats
+          if (Array.isArray(data.fares)) {
+            vehicleFare = data.fares.find((f: any) => 
+              normalizeVehicleId(f.vehicleId || f.vehicle_id) === normalizedCabId
+            );
+          } else if (data.fares && typeof data.fares === 'object') {
+            vehicleFare = data.fares[normalizedCabId];
+          }
 
           if (vehicleFare) {
-            if (vehicleFare.totalPrice) {
-              parsedFare.totalPrice = vehicleFare.totalPrice;
-              parsedFare.basePrice = vehicleFare.basePrice || vehicleFare.totalPrice;
+            if (vehicleFare.totalPrice || vehicleFare.total_price) {
+              parsedFare.totalPrice = vehicleFare.totalPrice || vehicleFare.total_price;
+              parsedFare.basePrice = vehicleFare.basePrice || vehicleFare.base_price || parsedFare.totalPrice;
             } else {
               const packagePrice = packageType === '8hrs-80km' ? 
-                vehicleFare.price8hrs80km || vehicleFare.package8hr80km :
+                (vehicleFare.price8hrs80km || vehicleFare.package8hr80km) :
                 packageType === '10hrs-100km' ?
-                vehicleFare.price10hrs100km || vehicleFare.package10hr100km :
-                vehicleFare.price4hrs40km || vehicleFare.package4hr40km;
+                (vehicleFare.price10hrs100km || vehicleFare.package10hr100km) :
+                (vehicleFare.price4hrs40km || vehicleFare.package4hr40km);
 
-              parsedFare.totalPrice = packagePrice;
-              parsedFare.basePrice = packagePrice;
-              parsedFare.breakdown = {
-                packageLabel: packageType,
-                basePrice: packagePrice
-              };
+              if (typeof packagePrice === 'number') {
+                parsedFare.totalPrice = packagePrice;
+                parsedFare.basePrice = packagePrice;
+                parsedFare.breakdown = {
+                  packageLabel: packageType,
+                  basePrice: packagePrice
+                };
+              }
             }
           }
         } else if (tripType === 'outstation') {
@@ -115,7 +122,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             };
           }
         } else if (tripType === 'airport') {
-          const fare = data.fares?.[0];
+          const fare = Array.isArray(data.fares) ? data.fares[0] : data.fares?.[normalizedCabId];
           if (fare) {
             parsedFare.totalPrice = fare.total_price || 
               (fare.base_price + fare.pickup_price + fare.drop_price);
@@ -129,11 +136,12 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
         setFareData(parsedFare);
       } catch (err) {
-        const error = err instanceof Error ? err : new Error('Failed to fetch fare');
-        setError(error);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch fare';
+        console.error(`Fare API error for ${cabId}:`, errorMessage);
+        setError(new Error(errorMessage));
         toast({
           title: "Error",
-          description: error.message,
+          description: errorMessage,
           variant: "destructive"
         });
       } finally {
