@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -27,6 +28,11 @@ export const CabList: React.FC<CabListProps> = ({
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
 
+  // Normalize cab ID for API calls
+  const normalizeCabId = (id: string): string => {
+    return id.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  };
+
   // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
     handleSelectCab(cab);
@@ -35,11 +41,6 @@ export const CabList: React.FC<CabListProps> = ({
     setTimeout(() => {
       setFadeIn(prev => ({ ...prev, [cab.id]: false }));
     }, 500);
-  };
-
-  // Normalize cab ID for API calls
-  const normalizeCabId = (id: string): string => {
-    return id.toLowerCase().replace(/[^a-z0-9]/g, '_');
   };
 
   return (
