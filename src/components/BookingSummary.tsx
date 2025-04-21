@@ -206,12 +206,22 @@ export const BookingSummary = ({
     }
   }, [distance, tripMode, totalPrice]);
 
-  const recalculateFareDetails = async () => {
-    if (!selectedCab) {
-      console.log('BookingSummary: No cab selected, skipping calculation');
-      setShowDetailsLoading(false);
-      return;
+  useEffect(() => {
+    if (!selectedCab || !fareData) return;
+    
+    setBaseFare(fareData.basePrice || 0);
+    setDriverAllowance(fareData.breakdown.driverAllowance || 250);
+    setNightCharges(fareData.breakdown.nightCharges || 0);
+    setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
+    setCalculatedFare(fareData.totalPrice);
+    
+    if (tripType === 'local' && fareData.breakdown.packageLabel) {
+      setBaseFare(fareData.basePrice);
+      setDriverAllowance(0);
+      setNightCharges(0);
+      setExtraDistanceFare(0);
     }
+  }, [fareData, selectedCab, tripType]);
     
     if (calculationInProgressRef.current) {
       console.log('BookingSummary: Calculation already in progress, marking for retry');

@@ -357,22 +357,7 @@ export const CabList: React.FC<CabListProps> = ({
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    const cabId = cab.id;
-    const tripType = localStorage.getItem('tripType');
-    const isSelected = selectedCabId === cabId;
-
-    if (isSelected && fareData) {
-      return fareData.totalPrice;
-    }
-
-    const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
-    const storedFare = localStorage.getItem(localStorageKey);
-    if (storedFare) {
-      const parsedFare = parseInt(storedFare, 10);
-      if (parsedFare > 0) {
-        return parsedFare;
-      }
-    }
+    return displayedFares[cab.id] || 0;
 
     // For airport transfers, first check if we have a calculated fare from BookingSummary
     const isAirportTransferFromProps = isAirportTransfer; // Use prop if available
