@@ -343,9 +343,21 @@ export function CabList({
     const cabId = cab.id;
     const isSelected = selectedCabId === cabId;
     
-    // For airport transfers, always try to get the most recent calculated fare first
+    // First check if we have a valid fare in cabFares
+    if (cabFares[cabId] && cabFares[cabId] > 0) {
+      return cabFares[cabId];
+    }
+    
+    // Then check localStorage for persistence
     const tripType = localStorage.getItem('tripType');
-    const isAirportTransfer = tripType === 'airport';
+    const localStorageKey = `fare_${tripType}_${cabId.toLowerCase()}`;
+    const storedFare = localStorage.getItem(localStorageKey);
+    if (storedFare) {
+      const parsedFare = parseInt(storedFare, 10);
+      if (parsedFare > 0) {
+        return parsedFare;
+      }
+    }
     
     // For airport transfers, first check if we have a calculated fare from BookingSummary
     if (isAirportTransfer && calculatedFaresRef.current[cabId] && calculatedFaresRef.current[cabId].fare > 0) {

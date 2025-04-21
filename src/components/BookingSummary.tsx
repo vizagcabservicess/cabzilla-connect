@@ -621,15 +621,33 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  let finalTotal = calculatedFare;
+  let finalTotal = totalPrice > 0 ? totalPrice : calculatedFare;
   
-  if (finalTotal <= 0) {
-    if (totalPrice > 0) {
-      finalTotal = totalPrice;
-    } else if (selectedCab.price) {
+  // For local packages, use the price from local_package_fares table
+  if (tripType === 'local' && selectedCab) {
+    const localStorageKey = `fare_local_${selectedCab.id.toLowerCase()}`;
+    const storedFare = localStorage.getItem(localStorageKey);
+    if (storedFare) {
+      const parsedFare = parseInt(storedFare, 10);
+      if (parsedFare > 0) {
+        finalTotal = parsedFare;
+      }
+    }
+  }
+
+  // Ensure we have a valid total
+  if (finalTotal <= 0 && selectedCab) {
+    if (selectedCab.price) {
       finalTotal = selectedCab.price;
     } else {
-      finalTotal = tripType === 'airport' ? 500 : tripType === 'local' ? 1500 : 2500;
+      // Use prices from the database as shown in the screenshot
+      if (tripType === 'local') {
+        if (selectedCab.id.toLowerCase().includes('sedan')) finalTotal = 2500;
+        else if (selectedCab.id.toLowerCase().includes('ertiga')) finalTotal = 3200;
+        else if (selectedCab.id.toLowerCase().includes('innova')) finalTotal = 6000;
+      } else {
+        finalTotal = tripType === 'airport' ? 1000 : 2500;
+      }
     }
   }
 
