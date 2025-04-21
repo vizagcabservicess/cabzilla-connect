@@ -797,7 +797,7 @@ export const BookingSummary = ({
                 ) : (
                   `₹${(fareData?.totalPrice || 0).toLocaleString()}`
                 )}
-              </</span>
+              </span>
             </div>
           </div>
         </div>
