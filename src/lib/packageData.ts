@@ -1,4 +1,5 @@
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
+import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
 // Define standard hourly packages
 export const hourlyPackages: HourlyPackage[] = [
@@ -187,8 +188,7 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
     cabType = 'sedan';
   }
 
-  import { normalizeVehicleId } from '@/utils/safeStringUtils';
-  const normalizedCabType = normalizeVehicleId(cabType);
+  const normalizedCabType = cabType.toLowerCase();
   console.log(`Looking for price with normalized cab type: ${normalizedCabType}`);
 
   // Normalize packageId to make sure it matches our standard format
@@ -342,8 +342,7 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
     cabType = 'sedan';
   }
 
-  import { normalizeVehicleId } from '@/utils/safeStringUtils';
-  const normalizedCabType = normalizeVehicleId(cabType);
+  const normalizedCabType = cabType.toLowerCase();
 
   console.log(`Updating local package price: package=${packageId}, cab=${normalizedCabType}, price=${price}`);
 

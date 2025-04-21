@@ -27,8 +27,7 @@ export const CabList: React.FC<CabListProps> = ({
   packageType = '8hrs-80km'
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
-
-  import { normalizeVehicleId } from '@/utils/safeStringUtils';
+  const normalizeVehicleId = (id: string): string => id.toLowerCase();
 
   // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
