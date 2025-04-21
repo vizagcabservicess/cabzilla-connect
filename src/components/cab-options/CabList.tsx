@@ -49,24 +49,46 @@ export const CabList: React.FC<CabListProps> = ({
   const initializedRef = useRef<boolean>(false);
 
 
-  // Initialize displayed fares from cabFares on first render or when cabTypes change
+  // Initialize displayed fares from API on first render or when cabTypes change
   useEffect(() => {
-    if (!initializedRef.current && Object.keys(cabFares).length > 0) {
-      console.log('CabList: Initial fare setup', cabFares);
-      setDisplayedFares({...cabFares});
+    const fetchFares = async () => {
+      if (!initializedRef.current) {
+        try {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+          const response = await fetch(`${baseUrl}/api/local-package-fares.php`, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch fares');
+          }
 
-      // Initialize fare history for each cab
-      const newFareHistory: Record<string, number[]> = {};
-      Object.keys(cabFares).forEach(cabId => {
-        if (cabFares[cabId] > 0) {
-          newFareHistory[cabId] = [cabFares[cabId]];
+          const data = await response.json();
+          if (data && data.fares) {
+            console.log('CabList: Initial fare setup from API', data.fares);
+            setDisplayedFares(data.fares);
+            
+            const newFareHistory: Record<string, number[]> = {};
+            Object.entries(data.fares).forEach(([cabId, fare]) => {
+              if (typeof fare === 'number' && fare > 0) {
+                newFareHistory[cabId] = [fare];
+              }
+            });
+            fareHistoryRef.current = newFareHistory;
+          }
+        } catch (error) {
+          console.error('Error fetching fares:', error);
+        } finally {
+          initializedRef.current = true;
         }
-      });
-      fareHistoryRef.current = newFareHistory;
+      }
+    };
 
-      initializedRef.current = true;
-    }
-  }, [cabFares, cabTypes]);
+    fetchFares();
+  }, [cabTypes]);
 
   // Process any pending updates
   const processPendingUpdates = () => {
@@ -357,16 +379,9 @@ export const CabList: React.FC<CabListProps> = ({
 
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
-    // First check localStorage for any saved fare
-    const tripTypeStr = tripType || 'local';
-    const localStorageKey = `fare_${tripTypeStr}_${cab.id.toLowerCase()}`;
-    const savedFare = localStorage.getItem(localStorageKey);
-
-    if (savedFare) {
-      const parsedFare = parseInt(savedFare, 10);
-      if (parsedFare > 0) {
-        return parsedFare;
-      }
+    // First check displayed fares from API
+    if (displayedFares[cab.id] && displayedFares[cab.id] > 0) {
+      return displayedFares[cab.id];
     }
 
     // Then check cabFares
