@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { useFare } from '@/hooks/useFare';
@@ -32,7 +33,12 @@ export const CabList: React.FC<CabListProps> = ({
   const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
-  const { fareData } = useFare(selectedCabId || '', tripType, distance, packageType);
+  const { fareData, isLoading: isFareLoading } = useFare(
+    selectedCabId || '', 
+    tripType || 'local', 
+    distance || 0, 
+    packageType || '8hrs-80km'
+  );
   const updateTimeoutRef = useRef<number | null>(null);
   const directUpdateEnabledRef = useRef<boolean>(true);
   const fareCalculatedTimestampsRef = useRef<Record<string, number>>({});
