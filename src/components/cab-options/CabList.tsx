@@ -67,8 +67,22 @@ export const CabList: React.FC<CabListProps> = ({
             packageType
           );
 
-          const fare = fareData?.totalPrice || (cab.price || 0);
-          console.log(`Fare for ${cab.name}:`, { fareData, calculatedFare: fare });
+          // Improved fare handling logic
+          let fare = 0;
+          if (fareData && fareData.totalPrice > 0) {
+            fare = fareData.totalPrice;
+          } else if (cab.price && cab.price > 0) {
+            fare = cab.price;
+          }
+          
+          // Debug logging
+          console.log(`Fare for ${cab.name}:`, {
+            fareData,
+            calculatedFare: fare,
+            normalizedId,
+            tripType,
+            packageType
+          });
 
           return (
             <div 
