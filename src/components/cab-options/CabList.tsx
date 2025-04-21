@@ -526,7 +526,4 @@ export function CabList({
       )}
     </div>
   );
-      )}
-    </div>
-  );
 }
