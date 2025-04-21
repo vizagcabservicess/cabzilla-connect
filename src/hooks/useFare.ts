@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -30,7 +29,7 @@ const normalizeVehicleId = (id: string): string => {
     .replace(/^mpv$/, 'mpv')
     .replace(/^innova_hycross$/, 'mpv')
     .replace(/^innova$/, 'mpv');
-    
+
   return normalizedId;
 };
 
@@ -63,8 +62,17 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 '10hrs-100km': 'price10hrs100km'
               };
 
-              const fareProp = fareMap[packageType] || 'price8hrs80km';
-              fare = localFares[fareProp] || localFares[`package${fareProp.slice(5)}`] || 0;
+              const fareProp = fareMap[packageType];
+              if (!fareProp) {
+                console.error(`Invalid package type: ${packageType}`);
+                return 0;
+              }
+
+              // Try multiple property variations
+              fare = localFares[fareProp] || 
+                    localFares[`package${fareProp.slice(5)}`] || 
+                    localFares[`local_package_${fareProp.slice(5, 6)}`] || 
+                    0;
 
               if (fare > 0) {
                 breakdown = {

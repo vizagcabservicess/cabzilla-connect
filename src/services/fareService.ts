@@ -837,7 +837,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
 
             // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('airport_fares');
-      const fares = cachedFares ? JSON.parse(cachedFares) : {};
+      const fares = cachedFares? JSON.parse(cachedFares) : {};
       fares[vehicleId] = fare;
       localStorage.setItem('airport_fares', JSON.stringify(fares));
       localStorage.setItem('airport_fares_timestamp', now.toString());
