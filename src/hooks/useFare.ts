@@ -21,6 +21,8 @@ interface FareData {
 }
 
 const normalizeVehicleId = (id: string): string => {
+  if (!id) return '';
+  
   // First convert to lowercase and trim
   let normalizedId = id.toLowerCase().trim();
 
@@ -30,14 +32,20 @@ const normalizeVehicleId = (id: string): string => {
     'innova': 'innova_crysta',
     'mpv': 'MPV',
     'etios': 'sedan',
-    'dzire_cng': 'Dzire CNG',
-    'dzire': 'Dzire CNG'
+    'dzire_cng': 'dzire_cng',
+    'dzire': 'dzire_cng',
+    'sedan': 'sedan'
   };
 
   // Apply specific mappings first
   if (vehicleMapping[normalizedId]) {
     return vehicleMapping[normalizedId];
   }
+
+  // Handle special cases
+  if (normalizedId.includes('sedan')) return 'sedan';
+  if (normalizedId.includes('dzire')) return 'dzire_cng';
+  if (normalizedId.includes('innova')) return 'innova_crysta';
 
   return normalizedId;
 };
@@ -65,25 +73,29 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             const localFares = await getLocalFaresForVehicle(cabId);
             if (localFares) {
               // Map package type to all possible property variations
-              const fareMap: Record<string, string[]> = {
-                '4hrs-40km': ['price4hrs40km', 'price_4hrs_40km', 'package4hr40km', 'package_4hr_40km'],
-                '8hrs-80km': ['price8hrs80km', 'price_8hrs_80km', 'package8hr80km', 'package_8hr_80km'],
-                '10hrs-100km': ['price10hrs100km', 'price_10hrs_100km', 'package10hr100km', 'package_10hr_100km']
+              const packageMap: Record<string, string> = {
+                '4hrs-40km': 'price4hrs40km',
+                '8hrs-80km': 'price8hrs80km',
+                '10hrs-100km': 'price10hrs100km'
               };
 
-              const possibleProps = fareMap[packageType];
-              if (!possibleProps) {
+              const propertyName = packageMap[packageType];
+              if (!propertyName) {
                 console.error(`Invalid package type: ${packageType}`);
                 return 0;
               }
 
-              // Try all property variations
-              for (const prop of possibleProps) {
-                if (localFares[prop] && localFares[prop] > 0) {
-                  fare = localFares[prop];
-                  break;
-                }
-              }
+              // Try to get fare using the property name or fallback variations
+              fare = localFares[propertyName] || 
+                     localFares[propertyName.replace('price', 'package')] ||
+                     localFares[`${propertyName.slice(0, -2)}_${propertyName.slice(-2)}`] || 0;
+
+              console.log(`Looking up fare for ${cabType.name} with package ${packageType}:`, {
+                normalizedId: normalizeVehicleId(cabType.id),
+                propertyName,
+                fareFound: fare,
+                availableFares: localFares
+              });
 
               // Log the fare lookup attempt
               console.log(`Looking up fare for ${cabId} with package ${packageType}:`, {
