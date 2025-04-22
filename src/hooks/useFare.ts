@@ -40,17 +40,30 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let breakdown: FareBreakdown = {};
 
         if (tripType === 'local') {
+          // First check BookingSummary cache
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`;
+          const bookingSummaryFare = localStorage.getItem(bookingSummaryKey);
+          
+          if (bookingSummaryFare && parseInt(bookingSummaryFare) > 0) {
+            console.log(`Using cached BookingSummary fare for ${cabId}: ${bookingSummaryFare}`);
+            return {
+              totalPrice: parseInt(bookingSummaryFare),
+              basePrice: parseInt(bookingSummaryFare),
+              breakdown: { basePrice: parseInt(bookingSummaryFare) }
+            };
+          }
+
           try {
             console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
             if (localFares) {
               let fareAmount = 0;
               if (packageType === '8hrs-80km') {
-                fareAmount = localFares.price8hrs80km || localFares.package8hr80km || 3800;
+                fareAmount = localFares.price8hrs80km || localFares.package8hr80km || 2500;
               } else if (packageType === '4hrs-40km') {
-                fareAmount = localFares.price4hrs40km || localFares.package4hr40km || 2500;
+                fareAmount = localFares.price4hrs40km || localFares.package4hr40km || 1500;
               } else if (packageType === '10hrs-100km') {
-                fareAmount = localFares.price10hrs100km || localFares.package10hr100km || 4500;
+                fareAmount = localFares.price10hrs100km || localFares.package10hr100km || 3000;
               }
 
               if (fareAmount > 0) {
