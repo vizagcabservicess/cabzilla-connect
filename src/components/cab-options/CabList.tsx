@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -29,12 +29,32 @@ export const CabList: React.FC<CabListProps> = ({
   packageType = '8hrs-80km'
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
+  const [refreshKey, setRefreshKey] = useState<number>(Date.now());
+  
   const normalizeVehicleId = (id: string): string => {
     return id.trim()
       .toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
   };
+
+  // Listen for fare update events and refresh the component
+  useEffect(() => {
+    const handleFareUpdate = () => {
+      console.log('CabList: Detected fare update, refreshing list');
+      setRefreshKey(Date.now());
+    };
+    
+    window.addEventListener('fare-calculated', handleFareUpdate);
+    window.addEventListener('fare-cache-cleared', handleFareUpdate);
+    window.addEventListener('significant-fare-difference', handleFareUpdate);
+    
+    return () => {
+      window.removeEventListener('fare-calculated', handleFareUpdate);
+      window.removeEventListener('fare-cache-cleared', handleFareUpdate);
+      window.removeEventListener('significant-fare-difference', handleFareUpdate);
+    };
+  }, []);
 
   // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
@@ -72,6 +92,7 @@ export const CabList: React.FC<CabListProps> = ({
 
           let fare = 0;
           let fareText = 'Price unavailable';
+          let fareSource = 'unknown';
           
           if (isLoading) {
             fareText = 'Calculating...';
@@ -80,9 +101,21 @@ export const CabList: React.FC<CabListProps> = ({
             fareText = 'Error fetching price';
           } else if (fareData) {
             fare = fareData.totalPrice;
-            fareText = fareData.source === 'database' ? 
-              `Database fare: ₹${fare}` : 
-              `Calculated fare: ₹${fare}`;
+            fareSource = fareData.source || 'unknown';
+            
+            // Customize the fare text based on the source
+            if (fareSource === 'database') {
+              fareText = `₹${fare.toLocaleString()} (verified)`;
+            } else if (fareSource === 'stored') {
+              fareText = `₹${fare.toLocaleString()} (saved)`;
+            } else if (fareSource === 'default') {
+              fareText = `₹${fare.toLocaleString()} (standard)`;
+            } else {
+              fareText = `₹${fare.toLocaleString()}`;
+            }
+            
+            // For debugging - log the fare source
+            console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
           }
 
           // Get trip type label for display
@@ -97,7 +130,7 @@ export const CabList: React.FC<CabListProps> = ({
 
           return (
             <div 
-              key={cab.id}
+              key={`${cab.id}-${refreshKey}`}
               className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
             >
               <CabOptionCard 
@@ -109,6 +142,7 @@ export const CabList: React.FC<CabListProps> = ({
                 fareDetails={error ? "Error fetching fare" : fareText}
                 tripType={tripType}
                 tripMode={tripMode}
+                fareSource={fareSource}
               />
             </div>
           );

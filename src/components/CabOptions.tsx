@@ -29,6 +29,21 @@ interface CabOptionsProps {
   returnDate?: Date | null;
 }
 
+// Clear the fare cache to ensure fresh data
+export const clearFareCache = () => {
+  console.log('Clearing fare cache from localStorage');
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('fare_')) {
+      localStorage.removeItem(key);
+    }
+  });
+  
+  // Dispatch event to notify components of cache clearing
+  window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+    detail: { timestamp: Date.now() }
+  }));
+};
+
 // This component adapts the properties from parent components to what CabList expects
 export const CabOptions: React.FC<CabOptionsProps> = ({
   cabTypes,
@@ -45,6 +60,31 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
 
+  // Ensure we're working with fresh data
+  useEffect(() => {
+    // Clear stale fares older than 30 minutes
+    const now = Date.now();
+    const thirtyMinutesAgo = now - 30 * 60 * 1000;
+    
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('fare_')) {
+        try {
+          const fareJson = localStorage.getItem(key);
+          if (fareJson) {
+            const fareObj = JSON.parse(fareJson);
+            if (fareObj.timestamp && fareObj.timestamp < thirtyMinutesAgo) {
+              localStorage.removeItem(key);
+              console.log(`CabOptions: Cleared stale fare: ${key}`);
+            }
+          }
+        } catch (e) {
+          // If it's not valid JSON, remove it
+          localStorage.removeItem(key);
+        }
+      }
+    });
+  }, []);
+
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
@@ -54,9 +94,28 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     
     // Emit event when a cab is selected, which BookingSummary will listen for
     try {
-      const localStorageKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-      const storedFare = localStorage.getItem(localStorageKey);
-      const cabFare = storedFare ? parseFloat(storedFare) : 0;
+      // Try to get the fare from the hook system first
+      const fareKey = `fare_${tripType}_${cab.id.toLowerCase()}_${hourlyPackage || ''}`;
+      let cabFare = 0;
+      
+      try {
+        const fareJson = localStorage.getItem(fareKey);
+        if (fareJson) {
+          const fareObj = JSON.parse(fareJson);
+          if (fareObj.fare && typeof fareObj.fare === 'number') {
+            cabFare = fareObj.fare;
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing stored fare:', e);
+      }
+      
+      // If no fare from hook system, fall back to legacy storage
+      if (cabFare === 0) {
+        const legacyKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
+        const storedFare = localStorage.getItem(legacyKey);
+        cabFare = storedFare ? parseFloat(storedFare) : 0;
+      }
       
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
@@ -65,6 +124,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           fare: cabFare,
           tripType: tripType,
           tripMode: tripMode,
+          hourlyPackage: hourlyPackage,
           timestamp: Date.now()
         }
       }));

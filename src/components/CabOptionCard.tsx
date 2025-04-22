@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
-import { Users, Briefcase, Info, Check } from 'lucide-react';
+import { Users, Briefcase, Info, Check, Database, Clock, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CabOptionCardProps {
@@ -14,6 +14,7 @@ interface CabOptionCardProps {
   isCalculating: boolean;
   tripType?: string;
   tripMode?: string;
+  fareSource?: string;
 }
 
 export function CabOptionCard({ 
@@ -24,7 +25,8 @@ export function CabOptionCard({
   fareDetails,
   isCalculating,
   tripType = 'local',
-  tripMode = 'one-way'
+  tripMode = 'one-way',
+  fareSource = 'unknown'
 }: CabOptionCardProps) {
   const [expandedDetails, setExpandedDetails] = useState(false);
 
@@ -48,6 +50,34 @@ export function CabOptionCard({
         return 'Local Package';
       default:
         return 'Trip';
+    }
+  };
+
+  // Function to get the appropriate icon based on fare source
+  const getFareSourceIcon = () => {
+    switch (fareSource) {
+      case 'database':
+        return <Database size={12} className="mr-1 text-green-600" />;
+      case 'stored':
+        return <Clock size={12} className="mr-1 text-blue-500" />;
+      case 'default':
+        return <Calculator size={12} className="mr-1 text-orange-500" />;
+      default:
+        return <Calculator size={12} className="mr-1 text-gray-500" />;
+    }
+  };
+
+  // Function to get source text label
+  const getFareSourceLabel = () => {
+    switch (fareSource) {
+      case 'database':
+        return 'Verified pricing';
+      case 'stored':
+        return 'Saved price';
+      case 'default':
+        return 'Standard price';
+      default:
+        return 'Calculated price';
     }
   };
 
@@ -110,8 +140,8 @@ export function CabOptionCard({
             </div>
             <div className="text-xs text-gray-600">{getTripTypeLabel()}</div>
             <div className="flex items-center text-xs text-gray-400">
-              <span className="text-green-600 mr-1 text-[10px]">✓</span>
-              Includes taxes & fees
+              {getFareSourceIcon()}
+              {getFareSourceLabel()}
             </div>
           </div>
         </div>
