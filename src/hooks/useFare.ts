@@ -24,9 +24,16 @@ interface FareData {
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
   const [fareData, setFareData] = useState<FareData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
+
+  // Clear previous fare data when inputs change
+  React.useEffect(() => {
+    setFareData(null);
+    setIsLoading(true);
+    setError(null);
+  }, [cabId, tripType, distance, packageType]);
 
   useEffect(() => {
     const calculateFareData = async () => {

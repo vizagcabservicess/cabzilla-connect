@@ -26,6 +26,7 @@ export const CabList: React.FC<CabListProps> = ({
   packageType = '8hrs-80km'
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
+
   const normalizeVehicleId = (id: string): string => {
     return id.trim()
       .toLowerCase()
@@ -33,7 +34,6 @@ export const CabList: React.FC<CabListProps> = ({
       .replace(/[^a-z0-9_]/g, '');
   };
 
-  // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
     handleSelectCab(cab);
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
@@ -67,73 +67,27 @@ export const CabList: React.FC<CabListProps> = ({
             packageType
           );
 
-          // Enhanced fare handling logic with proper error states
           let fare = 0;
           let fareText = 'Price unavailable';
 
-          if (isLoading) {
-            fareText = 'Calculating...';
-          } else if (error) {
-            console.error(`Fare error for ${cab.name}:`, error);
-            fareText = 'Error fetching price';
-          } else if (tripType === 'local' && packageType) {
-            // First try to get fare from BookingSummary
-            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
-            const bookingSummaryFare = localStorage.getItem(bookingSummaryKey);
-            
-            if (bookingSummaryFare && parseInt(bookingSummaryFare) > 0) {
-              fare = parseInt(bookingSummaryFare);
-              fareText = `₹${fare}`;
-              console.log(`Using BookingSummary fare for ${cab.name}: ${fare}`);
-            } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-              fare = fareData.totalPrice;
-              fareText = `₹${fare}`;
-              localStorage.setItem(bookingSummaryKey, fare.toString());
-              console.log(`Using API fare for ${cab.name}: ${fare}`);
-            } else {
-              // Trigger a new calculation
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  packageType,
-                  timestamp: Date.now()
-                }
-              }));
-              fareText = 'Calculating...';
-            }
+          // Check BookingSummary first for the most recent fare
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+          const bookingSummaryFare = localStorage.getItem(bookingSummaryKey);
+
+          if (bookingSummaryFare && !isNaN(Number(bookingSummaryFare))) {
+            fare = Number(bookingSummaryFare);
+            fareText = `₹${fare}`;
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-            // Use the API totalPrice for non-local trips
             fare = fareData.totalPrice;
             fareText = `₹${fare}`;
-          } else {
-            // Fallback to BookingSummary
-            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-            if (bookingSummaryFare) {
-              fare = parseInt(bookingSummaryFare, 10);
-              fareText = `₹${Math.round(fare)}`;
-              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-            } else {
-              console.log(`No fare available for ${cab.name}`);
-              fareText = 'Calculating...';
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  timestamp: Date.now()
-                }
-              }));
-            }
+            // Store in localStorage for consistency
+            localStorage.setItem(bookingSummaryKey, fare.toString());
+          } else if (isLoading) {
+            fareText = 'Calculating...';
+          } else if (error) {
+            fareText = 'Error fetching price';
+            console.error(`Fare error for ${cab.name}:`, error);
           }
-
-          // Debug logging
-          console.log(`Fare for ${cab.name}:`, {
-            fareData,
-            calculatedFare: fare,
-            normalizedId,
-            tripType,
-            packageType
-          });
 
           return (
             <div 
