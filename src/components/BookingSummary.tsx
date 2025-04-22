@@ -751,9 +751,9 @@ export const BookingSummary = ({
               </>
             )}
 
-            {tripType === 'local' && (
+            {tripType === 'local' && packageType && (
               <div className="flex justify-between">
-                <span className="text-gray-700">08hrs 80KM Package</span>
+                <span className="text-gray-700">{packageType} Package</span>
                 <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
               </div>
             )}

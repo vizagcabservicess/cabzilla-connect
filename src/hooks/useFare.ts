@@ -43,22 +43,25 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           try {
             console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
-            if (localFares && packageType) {
-              const packageMap = {
-                '8hrs-80km': 'price8hrs80km',
-                '4hrs-40km': 'price4hrs40km',
-                '10hrs-100km': 'price10hrs100km'
-              };
-              const key = packageMap[packageType];
-              if (key && localFares[key] > 0) {
-                console.log(`Found local package fare for ${cabId}: ${localFares[key]}`);
-                fare = localFares[key];
+            if (localFares) {
+              let fareAmount = 0;
+              if (packageType === '8hrs-80km') {
+                fareAmount = localFares.price8hrs80km || localFares.package8hr80km || 3800;
+              } else if (packageType === '4hrs-40km') {
+                fareAmount = localFares.price4hrs40km || localFares.package4hr40km || 2500;
+              } else if (packageType === '10hrs-100km') {
+                fareAmount = localFares.price10hrs100km || localFares.package10hr100km || 4500;
+              }
+
+              if (fareAmount > 0) {
+                console.log(`Found local package fare for ${cabId}: ${fareAmount}`);
+                fare = fareAmount;
                 breakdown = {
                   basePrice: fare,
                   packageLabel: packageType,
                   extraDistanceFare: 0,
-                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
-                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
+                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 15,
+                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 200
                 };
               }
             }
