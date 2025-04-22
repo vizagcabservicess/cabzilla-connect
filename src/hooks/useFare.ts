@@ -24,16 +24,9 @@ interface FareData {
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
   const [fareData, setFareData] = useState<FareData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
-
-  // Clear previous fare data when inputs change
-  React.useEffect(() => {
-    setFareData(null);
-    setIsLoading(true);
-    setError(null);
-  }, [cabId, tripType, distance, packageType]);
 
   useEffect(() => {
     const calculateFareData = async () => {
@@ -46,65 +39,26 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
 
-        if (tripType === 'local' && packageType) {
-          console.log(`Calculating local fare for ${cabId} with package ${packageType}`);
-          const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
-          
-          if (localFares) {
-            if (packageType === '8hrs-80km') {
-              fare = localFares.price8hrs80km || 2500;
-            } else if (packageType === '4hrs-40km') {
-              fare = localFares.price4hrs40km || 1500;
-            } else if (packageType === '10hrs-100km') {
-              fare = localFares.price10hrs100km || 3000;
-            }
-            
-            if (fare > 0) {
-              breakdown = {
-                basePrice: fare,
-                packageLabel: packageType
-              };
-              
-              console.log(`Found local package fare: ${fare} for ${packageType}`);
-              return {
-                totalPrice: fare,
-                basePrice: fare,
-                breakdown
-              };
-            }
-          }
-          
-          if (bookingSummaryFare && parseInt(bookingSummaryFare) > 0) {
-            console.log(`Using cached BookingSummary fare for ${cabId}: ${bookingSummaryFare}`);
-            return {
-              totalPrice: parseInt(bookingSummaryFare),
-              basePrice: parseInt(bookingSummaryFare),
-              breakdown: { basePrice: parseInt(bookingSummaryFare) }
-            };
-          }
-
+        if (tripType === 'local') {
           try {
             console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
-            if (localFares) {
-              let fareAmount = 0;
-              if (packageType === '8hrs-80km') {
-                fareAmount = localFares.price8hrs80km || localFares.package8hr80km || 2500;
-              } else if (packageType === '4hrs-40km') {
-                fareAmount = localFares.price4hrs40km || localFares.package4hr40km || 1500;
-              } else if (packageType === '10hrs-100km') {
-                fareAmount = localFares.price10hrs100km || localFares.package10hr100km || 3000;
-              }
-
-              if (fareAmount > 0) {
-                console.log(`Found local package fare for ${cabId}: ${fareAmount}`);
-                fare = fareAmount;
+            if (localFares && packageType) {
+              const packageMap = {
+                '8hrs-80km': 'price8hrs80km',
+                '4hrs-40km': 'price4hrs40km',
+                '10hrs-100km': 'price10hrs100km'
+              };
+              const key = packageMap[packageType];
+              if (key && localFares[key] > 0) {
+                console.log(`Found local package fare for ${cabId}: ${localFares[key]}`);
+                fare = localFares[key];
                 breakdown = {
                   basePrice: fare,
                   packageLabel: packageType,
                   extraDistanceFare: 0,
-                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 15,
-                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 200
+                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
+                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
                 };
               }
             }
