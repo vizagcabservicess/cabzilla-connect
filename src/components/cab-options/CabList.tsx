@@ -11,7 +11,7 @@ interface CabListProps {
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType) => void;
   isAirportTransfer?: boolean;
-  tripType?: TripType;
+  tripType?: string; // Changed from TripType to string to match useFare
   tripMode?: string;
   distance?: number;
   packageType?: string;

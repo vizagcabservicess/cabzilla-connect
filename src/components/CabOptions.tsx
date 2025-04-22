@@ -10,7 +10,7 @@ export interface CabListProps {
   selectedCabId?: string;
   onSelectCab: (cab: CabType) => void;
   distance: number;
-  tripType: TripType | string;
+  tripType: string; // Changed from TripType to string to match useFare
   tripMode: TripMode | string;
   hourlyPackage?: string;
   pickupDate?: Date;
@@ -22,7 +22,7 @@ interface CabOptionsProps {
   selectedCab: CabType | null;
   onSelectCab: (cab: CabType) => void;
   distance: number;
-  tripType: TripType | string;
+  tripType: string; // Changed from TripType to string to match useFare
   tripMode: TripMode | string;
   hourlyPackage?: string;
   pickupDate?: Date;
