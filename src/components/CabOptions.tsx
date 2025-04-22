@@ -28,19 +28,20 @@ interface CabOptionsProps {
   returnDate?: Date | null;
 }
 
-// Clear the fare cache to ensure fresh data
+// Clear all fares, but also force a complete cache refresh for all keys
 export const clearFareCache = () => {
   console.log('Clearing fare cache from localStorage');
   Object.keys(localStorage).forEach(key => {
-    if (key.startsWith('fare_')) {
+    if (key.startsWith('fare_') || key.startsWith('selected_fare_')) {
       localStorage.removeItem(key);
     }
   });
-  
   // Dispatch event to notify components of cache clearing
   window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
     detail: { timestamp: Date.now() }
   }));
+  // Add a localStorage flag to force refresh
+  localStorage.setItem('forceCacheRefresh', 'true');
 };
 
 // This component adapts the properties from parent components to what CabList expects
@@ -59,14 +60,14 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
   const [isCalculatingFares, setIsCalculatingFares] = useState(true);
 
-  // Ensure we're working with fresh data
+  // On mount, clear all stale fares, and force refresh just in case
   useEffect(() => {
-    // Clear stale fares older than 30 minutes
+    clearFareCache();
+    // Clear fares older than 30 minutes as a fallback
     const now = Date.now();
     const thirtyMinutesAgo = now - 30 * 60 * 1000;
-    
     Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('fare_')) {
+      if ((key.startsWith('fare_') || key.startsWith('selected_fare_'))) {
         try {
           const fareJson = localStorage.getItem(key);
           if (fareJson) {
@@ -77,22 +78,21 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
             }
           }
         } catch (e) {
-          // If it's not valid JSON, remove it
           localStorage.removeItem(key);
         }
       }
     });
-  }, []);
+  }, [tripType, hourlyPackage, tripMode, distance]);
 
   const handleCabSelect = (cab: CabType, fare: number, fareSource: string) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
-    
-    // Store the current trip type and package in localStorage for better fare syncing
+
+    // Store trip and package for coordination
     localStorage.setItem('tripType', tripType.toString());
     localStorage.setItem('currentPackage', hourlyPackage || '');
-    
-    // Emit event when a cab is selected, which BookingSummary will listen for
+
+    // Forward cab/fare event for BookingSummary listener, enforce normalized keys
     try {
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
@@ -106,7 +106,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           timestamp: Date.now()
         }
       }));
-      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${fare} (source: ${fareSource}, package: ${hourlyPackage})`);
+      console.log(`CabOptions: Dispatched cab-selected-with-fare for ${cab.id}: ${fare} [source=${fareSource}, package=${hourlyPackage}]`);
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
     }

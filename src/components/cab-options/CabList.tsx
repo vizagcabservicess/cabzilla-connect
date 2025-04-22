@@ -66,14 +66,16 @@ export const CabList: React.FC<CabListProps> = ({
     
     if (fare > 0) {
       try {
-        localStorage.setItem(`selected_fare_${cab.id}_${tripType}_${packageType}`, JSON.stringify({
+        const normId = normalizeVehicleId(cab.id);
+        const storageKey = `selected_fare_${normId}_${tripType}_${packageType || ""}`;
+        localStorage.setItem(storageKey, JSON.stringify({
           fare,
           source: fareSource,
           timestamp: Date.now(),
           packageType,
           cabId: cab.id
         }));
-        console.log(`Stored selected fare for ${cab.name}: ₹${fare} (${fareSource})`);
+        console.log(`CabList: Stored selected fare for ${cab.name}: ₹${fare} (${fareSource}) [key: ${storageKey}]`);
       } catch (e) {
         console.error('Error storing selected fare:', e);
       }
@@ -127,7 +129,7 @@ export const CabList: React.FC<CabListProps> = ({
               fareText = `₹${fare.toLocaleString()}`;
             }
             
-            console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
+            console.log(`CabList: ${cab.name} normalizedId=${normalizedId}, fare=${fare} (source=${fareSource})`);
           }
 
           let tripTypeLabel = "Trip";
