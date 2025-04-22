@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -82,6 +83,16 @@ export const CabList: React.FC<CabListProps> = ({
             fareText = fareData.source === 'database' ? 
               `Database fare: ₹${fare}` : 
               `Calculated fare: ₹${fare}`;
+          }
+
+          // Get trip type label for display
+          let tripTypeLabel = "Trip";
+          if (tripType === 'local') {
+            tripTypeLabel = "Local Package";
+          } else if (tripType === 'airport') {
+            tripTypeLabel = "Airport Transfer";
+          } else if (tripType === 'outstation') {
+            tripTypeLabel = tripMode === 'round-trip' ? "Outstation Round Trip" : "Outstation One Way";
           }
 
           return (

@@ -72,8 +72,13 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         } else {
           // For outstation and airport trips
           const result = await calculateFare(normalizeVehicleId(cabId), tripType, distance);
-          fare = result.totalFare;
-          breakdown = result.breakdown;
+          if (typeof result === 'number') {
+            fare = result;
+            breakdown = { basePrice: fare };
+          } else {
+            fare = result.totalFare;
+            breakdown = result.breakdown;
+          }
           source = 'api';
         }
 
