@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -14,6 +15,7 @@ interface CabListProps {
   tripMode?: string;
   distance?: number;
   packageType?: string;
+  pickupDate?: Date; // Add pickupDate prop
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -25,7 +27,8 @@ export const CabList: React.FC<CabListProps> = ({
   tripType = 'local',
   tripMode = 'one-way',
   distance = 0,
-  packageType
+  packageType,
+  pickupDate // Add pickupDate to destructuring
 }) => {
   console.log(`CabList: Rendering with package ${packageType}`);
   
@@ -101,7 +104,8 @@ export const CabList: React.FC<CabListProps> = ({
             normalizedId,
             tripType,
             distance,
-            packageType
+            packageType,
+            pickupDate // Pass pickupDate to useFare hook
           );
 
           let fare = 0;

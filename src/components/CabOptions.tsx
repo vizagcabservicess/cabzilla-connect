@@ -167,6 +167,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       tripMode={tripMode}
       distance={distance}
       packageType={hourlyPackage}
+      pickupDate={pickupDate}
     />
   );
 };

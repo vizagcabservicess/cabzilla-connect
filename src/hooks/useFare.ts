@@ -25,7 +25,13 @@ interface FareData {
   timestamp?: number;
 }
 
-export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
+export function useFare(
+  cabId: string, 
+  tripType: string, 
+  distance: number, 
+  packageType: string = '',
+  pickupDate?: Date
+) {
   console.log(`useFare: Called for ${cabId} with package ${packageType}`);
   
   const [fareData, setFareData] = useState<FareData | null>(null);
@@ -368,7 +374,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     };
 
     calculateFareData();
-  }, [cabId, tripType, distance, packageType, toast]);
+  }, [cabId, tripType, distance, packageType, pickupDate, toast]);
 
   return { fareData, isLoading, error };
 }
