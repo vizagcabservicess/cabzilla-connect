@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
-import { getLocalFaresForVehicle } from '@/services/fareService';
+import { getLocalFaresForVehicle, getOutstationFaresForVehicle } from '@/services/fareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
 import { CabType } from '@/types/cab';
 import { cabTypes } from '@/lib/cabData';
@@ -160,7 +160,64 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let source = 'calculated';
         let databaseFareFound = false;
 
-        if (tripType === 'local') {
+        if (tripType === 'outstation') {
+          try {
+            console.log(`Fetching outstation fares for ${cabId}`);
+            const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
+            console.log('Retrieved outstation fares:', outstationFares);
+
+            if (outstationFares) {
+              // For one-way trips, include driver return distance
+              const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
+              const baseKms = 300; // Standard 300km included
+
+              let pricePerKm = packageType === 'one-way' ? 
+                outstationFares.oneWayPricePerKm : 
+                outstationFares.roundTripPricePerKm;
+
+              let basePrice = packageType === 'one-way' ? 
+                outstationFares.oneWayBasePrice : 
+                outstationFares.roundTripBasePrice;
+
+              // Calculate base fare and extra distance charges
+              fare = basePrice;
+              let extraDistanceFare = 0;
+              
+              if (effectiveDistance > baseKms) {
+                const extraKms = effectiveDistance - baseKms;
+                extraDistanceFare = extraKms * pricePerKm;
+                fare += extraDistanceFare;
+              }
+
+              // Add driver allowance
+              const driverAllowance = outstationFares.driverAllowance || 250;
+              fare += driverAllowance;
+
+              // Night charges if applicable
+              let nightCharges = 0;
+              if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+                nightCharges = Math.round(basePrice * 0.1);
+                fare += nightCharges;
+              }
+
+              breakdown = {
+                basePrice,
+                driverAllowance,
+                nightCharges,
+                extraDistanceFare,
+                extraKmCharge: pricePerKm
+              };
+
+              source = 'database';
+              databaseFareFound = true;
+
+              console.log('Calculated outstation fare breakdown:', breakdown);
+              storeFareData(fareKey, fare, source, breakdown);
+            }
+          } catch (e) {
+            console.error('Error fetching outstation fares:', e);
+          }
+        } else if (tripType === 'local') {
           try {
             console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizedCabId);
@@ -221,6 +278,12 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               
               storeFareData(fareKey, fare, source, breakdown);
             }
+          }
+        } else if (tripType === 'airport') {
+          try {
+            
+          } catch (e) {
+            console.error('Error fetching real-time airport fares:', e);
           }
         } else if (tripType === 'tour') {
           try {
