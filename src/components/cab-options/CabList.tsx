@@ -77,21 +77,31 @@ export const CabList: React.FC<CabListProps> = ({
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
           } else if (tripType === 'local' && packageType) {
-            // Only use actual API fares for local packages
-            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-            if (bookingSummaryFare) {
-              fare = parseInt(bookingSummaryFare, 10);
-              fareText = `₹${Math.round(fare)}`;
+            if (fareData?.totalPrice && fareData.totalPrice > 0) {
+              fare = fareData.totalPrice;
+              fareText = `₹${fare}`;
+              // Cache the API fare
+              localStorage.setItem(`booking_summary_fare_${tripType}_${normalizedId}`, fare.toString());
             } else {
-              fareText = 'Calculating...';
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  packageType,
-                  timestamp: Date.now()
-                }
-              }));
+              // Try loading from price matrix
+              const priceMatrixStr = localStorage.getItem('localPackagePriceMatrix');
+              const priceMatrix = priceMatrixStr ? JSON.parse(priceMatrixStr) : null;
+              
+              if (priceMatrix?.[packageType]?.[normalizedId]) {
+                fare = priceMatrix[packageType][normalizedId];
+                fareText = `₹${fare}`;
+              } else {
+                fareText = 'Calculating...';
+                // Request new fare calculation
+                window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                  detail: {
+                    cabId: normalizedId,
+                    tripType,
+                    packageType,
+                    timestamp: Date.now()
+                  }
+                }));
+              }
             }
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
             // Use the API totalPrice for non-local trips
