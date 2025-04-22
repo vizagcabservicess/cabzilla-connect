@@ -798,20 +798,6 @@ export const BookingSummary = ({
       )}
     </div>
   );
-// Add final useEffect for fare calculations
-  useEffect(() => {
-    const calculateFares = async () => {
-      if (!selectedCab?.id) {
-        console.log('BookingSummary: No cab selected, skipping fare calculation');
-        return;
-      }
+};
 
-      try {
-        await recalculateFareDetails();
-      } catch (error) {
-        console.error('BookingSummary: Error calculating fares:', error);
-      }
-    };
-
-    calculateFares();
-  }, [selectedCab?.id, distance
+export { BookingSummary };
