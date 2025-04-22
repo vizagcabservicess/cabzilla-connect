@@ -151,8 +151,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
       const normalizedCabId = normalizeVehicleId(cabId);
       const fareKey = `fare_${tripType}_${normalizedCabId}_${packageType}`;
-      
-      console.log(`useFare: Calculating fare for ${normalizedCabId} with package ${packageType}`);
 
       try {
         let fare: number = 0;
@@ -162,96 +160,84 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
         if (tripType === 'outstation') {
           try {
-            console.log(`Fetching outstation fares for ${cabId}`);
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
-            console.log('Retrieved outstation fares:', outstationFares);
 
-            if (outstationFares) {
-              // For one-way trips, include driver return distance
-              const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
-              const baseKms = 300; // Standard 300km included
+            const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
+            const baseKms = 300;
 
-              let pricePerKm = packageType === 'one-way' ? 
-                outstationFares.oneWayPricePerKm : 
-                outstationFares.roundTripPricePerKm;
+            const pricePerKm = packageType === 'one-way'
+              ? outstationFares.pricePerKm
+              : outstationFares.roundTripPricePerKm;
 
-              let basePrice = packageType === 'one-way' ? 
-                outstationFares.oneWayBasePrice : 
-                outstationFares.roundTripBasePrice;
+            const basePrice = packageType === 'one-way'
+              ? outstationFares.basePrice
+              : outstationFares.roundTripBasePrice;
 
-              // Calculate base fare and extra distance charges
+            let extraDistanceFare = 0;
+            if (effectiveDistance > baseKms) {
+              const extraKms = effectiveDistance - baseKms;
+              extraDistanceFare = extraKms * pricePerKm;
+              fare = basePrice + extraDistanceFare;
+            } else {
               fare = basePrice;
-              let extraDistanceFare = 0;
-              
-              if (effectiveDistance > baseKms) {
-                const extraKms = effectiveDistance - baseKms;
-                extraDistanceFare = extraKms * pricePerKm;
-                fare += extraDistanceFare;
-              }
-
-              // Add driver allowance
-              const driverAllowance = outstationFares.driverAllowance || 250;
-              fare += driverAllowance;
-
-              // Night charges if applicable
-              let nightCharges = 0;
-              if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-                nightCharges = Math.round(basePrice * 0.1);
-                fare += nightCharges;
-              }
-
-              breakdown = {
-                basePrice,
-                driverAllowance,
-                nightCharges,
-                extraDistanceFare,
-                extraKmCharge: pricePerKm
-              };
-
-              source = 'database';
-              databaseFareFound = true;
-
-              console.log('Calculated outstation fare breakdown:', breakdown);
-              storeFareData(fareKey, fare, source, breakdown);
             }
+
+            const driverAllowance = outstationFares.driverAllowance || 250;
+            fare += driverAllowance;
+
+            let nightCharges = 0;
+            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+              nightCharges = Math.round(basePrice * 0.1);
+              fare += nightCharges;
+            }
+
+            breakdown = {
+              basePrice,
+              driverAllowance,
+              nightCharges,
+              extraDistanceFare,
+              extraKmCharge: pricePerKm
+            };
+
+            source = 'database';
+            databaseFareFound = true;
+
+            storeFareData(fareKey, fare, source, breakdown);
           } catch (e) {
             console.error('Error fetching outstation fares:', e);
           }
         } else if (tripType === 'local') {
           try {
-            console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizedCabId);
             
-            if (localFares) {
-              const packageMap: Record<string, string> = {
-                '8hrs-80km': 'price8hrs80km',
-                '4hrs-40km': 'price4hrs40km',
-                '10hrs-100km': 'price10hrs100km'
-              };
+            const packageMap: Record<string, string> = {
+              '8hrs-80km': 'price8hrs80km',
+              '4hrs-40km': 'price4hrs40km',
+              '10hrs-100km': 'price10hrs100km'
+            };
+            
+            const key = packageMap[packageType];
+            if (key && localFares[key] > 0) {
+              const dbFare = localFares[key];
+              console.log(`Found local package fare for ${cabId}: ${dbFare}`);
               
-              const key = packageMap[packageType];
-              if (key && localFares[key] > 0) {
-                const dbFare = localFares[key];
-                console.log(`Found local package fare for ${cabId}: ${dbFare}`);
+              if (validateFareAmount(dbFare, cabId, tripType)) {
+                fare = dbFare;
+                source = 'database';
+                databaseFareFound = true;
+                breakdown = {
+                  basePrice: fare,
+                  packageLabel: packageType,
+                  extraDistanceFare: 0,
+                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
+                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
+                };
                 
-                if (validateFareAmount(dbFare, cabId, tripType)) {
-                  fare = dbFare;
-                  source = 'database';
-                  databaseFareFound = true;
-                  breakdown = {
-                    basePrice: fare,
-                    packageLabel: packageType,
-                    extraDistanceFare: 0,
-                    extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
-                    extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
-                  };
-                  
-                  localStorage.removeItem(fareKey);
-                  
-                  storeFareData(fareKey, fare, source, breakdown);
-                } else {
-                  console.warn(`Invalid database fare value for ${cabId}: ${dbFare}, will try calculation instead`);
-                }
+                localStorage.removeItem(fareKey);
+                
+                storeFareData(fareKey, fare, source, breakdown);
+              } else {
+                console.warn(`Invalid database fare value for ${cabId}: ${dbFare}, will try calculation instead`);
               }
             }
           } catch (e) {
