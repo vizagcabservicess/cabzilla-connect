@@ -39,10 +39,33 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
 
-        if (tripType === 'local') {
-          // First check BookingSummary cache
-          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`;
-          const bookingSummaryFare = localStorage.getItem(bookingSummaryKey);
+        if (tripType === 'local' && packageType) {
+          console.log(`Calculating local fare for ${cabId} with package ${packageType}`);
+          const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
+          
+          if (localFares) {
+            if (packageType === '8hrs-80km') {
+              fare = localFares.price8hrs80km || 2500;
+            } else if (packageType === '4hrs-40km') {
+              fare = localFares.price4hrs40km || 1500;
+            } else if (packageType === '10hrs-100km') {
+              fare = localFares.price10hrs100km || 3000;
+            }
+            
+            if (fare > 0) {
+              breakdown = {
+                basePrice: fare,
+                packageLabel: packageType
+              };
+              
+              console.log(`Found local package fare: ${fare} for ${packageType}`);
+              return {
+                totalPrice: fare,
+                basePrice: fare,
+                breakdown
+              };
+            }
+          }
           
           if (bookingSummaryFare && parseInt(bookingSummaryFare) > 0) {
             console.log(`Using cached BookingSummary fare for ${cabId}: ${bookingSummaryFare}`);
