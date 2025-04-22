@@ -53,6 +53,7 @@ export function useFare() {
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       });
+      
       const data = response.data;
       
       console.log(`Local fares for vehicle ${normalizedId}:`, data);
@@ -60,7 +61,7 @@ export function useFare() {
       if (data?.source) {
         console.log(`Source table: ${data.source}`);
       } else {
-        console.log(`Source not specified in response`);
+        console.error(`ERROR: Source not specified in response. This should never happen.`);
       }
       
       if (data && data.fares && data.fares.length > 0) {
@@ -70,8 +71,8 @@ export function useFare() {
         );
         
         if (matchingFare) {
-          console.log(`Found local package fare for ${normalizedId}: ${matchingFare.price8hrs80km}`);
-          return matchingFare;
+          console.log(`Found local package fare for ${normalizedId}: ${matchingFare.price8hrs80km} (Source: ${data.source || 'unknown'})`);
+          return { ...matchingFare, source: data.source };
         } else {
           console.log(`No matching fare found in response for ${normalizedId}`);
         }
@@ -82,7 +83,8 @@ export function useFare() {
       return {
         price4hrs40km: 0,
         price8hrs80km: 0,
-        price10hrs100km: 0
+        price10hrs100km: 0,
+        source: 'empty_response'
       };
     } catch (err) {
       console.error('Error fetching local fares:', err);
@@ -90,7 +92,8 @@ export function useFare() {
       return {
         price4hrs40km: 0,
         price8hrs80km: 0,
-        price10hrs100km: 0
+        price10hrs100km: 0,
+        source: 'error'
       };
     } finally {
       setIsLoading(false);
@@ -200,6 +203,11 @@ export function useFare() {
       if (tripType === 'local') {
         const localFare = await getLocalFaresForVehicle(vehicleId);
         
+        // Log the source of the fare data
+        if (localFare.source) {
+          console.log(`Using fare data from source: ${localFare.source}`);
+        }
+        
         // Determine which package to use
         let packagePrice = 0;
         if (packageType.includes('4hrs') || packageType.includes('4hr') || packageType.includes('04hrs')) {
@@ -236,7 +244,7 @@ export function useFare() {
         fareData.basePrice = packagePrice;
         fareData.totalPrice = localFare.totalPrice ? Number(localFare.totalPrice) : packagePrice;
         
-        console.log(`Using local package fare for ${vehicleId}: ₹${fareData.totalPrice}`);
+        console.log(`Using local package fare for ${vehicleId}: ₹${fareData.totalPrice} (Source: ${localFare.source || 'unknown'})`);
       } else if (tripType === 'outstation') {
         const outstationFare = await getOutstationFaresForVehicle(vehicleId);
         

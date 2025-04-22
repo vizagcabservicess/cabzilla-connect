@@ -41,14 +41,6 @@ if (!$vehicleId) {
 // Log the request
 error_log("Processing local fare request for vehicle ID: " . $vehicleId);
 
-// Initialize the response data
-$response = [
-    'status' => 'success',
-    'message' => 'Local fares retrieved successfully',
-    'fares' => [],
-    'source' => 'fallback_mock_data' // Default source
-];
-
 // Try to get fares from the database first
 try {
     require_once '../../config.php';
@@ -89,19 +81,20 @@ try {
             $row = $result->fetch_assoc();
             error_log("Found data in database for vehicle_id: " . $vehicleId . " with price_8hrs_80km: " . $row['price_8hrs_80km']);
             
-            // Update response with database data
-            $response['source'] = 'local_package_fares';
-            $response['fares'] = [[
-                'vehicleId' => $row['vehicle_id'],
-                'price4hrs40km' => floatval($row['price_4hrs_40km']),
-                'price8hrs80km' => floatval($row['price_8hrs_80km']),
-                'price10hrs100km' => floatval($row['price_10hrs_100km']),
-                'priceExtraKm' => floatval($row['price_extra_km']),
-                'priceExtraHour' => floatval($row['price_extra_hour'])
-            ]];
-            
-            // Return the data from database and exit
-            echo json_encode($response);
+            // Return the data from database
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Local fares retrieved successfully from database',
+                'source' => 'local_package_fares',
+                'fares' => [[
+                    'vehicleId' => $row['vehicle_id'],
+                    'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                    'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                    'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                    'priceExtraKm' => floatval($row['price_extra_km']),
+                    'priceExtraHour' => floatval($row['price_extra_hour'])
+                ]]
+            ]);
             exit;
         } else {
             error_log("No results found in local_package_fares for vehicle_id: " . $vehicleId);
@@ -120,55 +113,80 @@ error_log("Using fallback data for vehicle_id: " . $vehicleId);
 // Sample fare data based on vehicle type
 switch ($vehicleId) {
     case 'sedan':
-        $response['fares'] = [[
-            'vehicleId' => 'sedan',
-            'price4hrs40km' => 800,
-            'price8hrs80km' => 1500,
-            'price10hrs100km' => 1800,
-            'priceExtraKm' => 12,
-            'priceExtraHour' => 100
-        ]];
+        $response = [
+            'status' => 'success',
+            'message' => 'Local fares retrieved successfully from fallback',
+            'source' => 'fallback_mock_data',
+            'fares' => [[
+                'vehicleId' => 'sedan',
+                'price4hrs40km' => 800,
+                'price8hrs80km' => 1500,
+                'price10hrs100km' => 1800,
+                'priceExtraKm' => 12,
+                'priceExtraHour' => 100
+            ]]
+        ];
         break;
     case 'ertiga':
-        $response['fares'] = [[
-            'vehicleId' => 'ertiga',
-            'price4hrs40km' => 1000,
-            'price8hrs80km' => 1800,
-            'price10hrs100km' => 2200,
-            'priceExtraKm' => 15,
-            'priceExtraHour' => 120
-        ]];
+        $response = [
+            'status' => 'success',
+            'message' => 'Local fares retrieved successfully from fallback',
+            'source' => 'fallback_mock_data',
+            'fares' => [[
+                'vehicleId' => 'ertiga',
+                'price4hrs40km' => 1000,
+                'price8hrs80km' => 1800,
+                'price10hrs100km' => 2200,
+                'priceExtraKm' => 15,
+                'priceExtraHour' => 120
+            ]]
+        ];
         break;
     case 'innova_crysta':
-        $response['fares'] = [[
-            'vehicleId' => 'innova_crysta',
-            'price4hrs40km' => 1200,
-            'price8hrs80km' => 2200,
-            'price10hrs100km' => 2600,
-            'priceExtraKm' => 18,
-            'priceExtraHour' => 150
-        ]];
+        $response = [
+            'status' => 'success',
+            'message' => 'Local fares retrieved successfully from fallback',
+            'source' => 'fallback_mock_data',
+            'fares' => [[
+                'vehicleId' => 'innova_crysta',
+                'price4hrs40km' => 1200,
+                'price8hrs80km' => 2200,
+                'price10hrs100km' => 2600,
+                'priceExtraKm' => 18,
+                'priceExtraHour' => 150
+            ]]
+        ];
         break;
     case 'tempo_traveller':
-        $response['fares'] = [[
-            'vehicleId' => 'tempo_traveller',
-            'price4hrs40km' => 2000,
-            'price8hrs80km' => 3500,
-            'price10hrs100km' => 4000,
-            'priceExtraKm' => 25,
-            'priceExtraHour' => 200
-        ]];
+        $response = [
+            'status' => 'success',
+            'message' => 'Local fares retrieved successfully from fallback',
+            'source' => 'fallback_mock_data',
+            'fares' => [[
+                'vehicleId' => 'tempo_traveller',
+                'price4hrs40km' => 2000,
+                'price8hrs80km' => 3500,
+                'price10hrs100km' => 4000,
+                'priceExtraKm' => 25,
+                'priceExtraHour' => 200
+            ]]
+        ];
         break;
     default:
         // For unknown vehicles, return empty fare structure
-        $response['fares'] = [[
-            'vehicleId' => $vehicleId,
-            'price4hrs40km' => 0,
-            'price8hrs80km' => 0,
-            'price10hrs100km' => 0,
-            'priceExtraKm' => 0,
-            'priceExtraHour' => 0
-        ]];
+        $response = [
+            'status' => 'success',
+            'message' => 'Local fares retrieved with default values',
+            'source' => 'fallback_mock_data',
+            'fares' => [[
+                'vehicleId' => $vehicleId,
+                'price4hrs40km' => 0,
+                'price8hrs80km' => 0,
+                'price10hrs100km' => 0,
+                'priceExtraKm' => 0,
+                'priceExtraHour' => 0
+            ]]
+        ];
         break;
 }
 

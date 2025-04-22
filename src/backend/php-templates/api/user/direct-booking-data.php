@@ -57,6 +57,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     echo json_encode([
                         'status' => 'success',
                         'exists' => true,
+                        'source' => 'local_package_fares',
                         'data' => [
                             'vehicleId' => $row['vehicle_id'],
                             'price4hrs40km' => floatval($row['price_4hrs_40km']),
@@ -72,6 +73,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                     echo json_encode([
                         'status' => 'success',
                         'exists' => false,
+                        'source' => 'database_query_empty',
                         'message' => "No fares found for vehicle ID $vehicleId",
                         'timestamp' => time()
                     ]);
@@ -80,6 +82,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             } else {
                 echo json_encode([
                     'status' => 'error',
+                    'source' => 'table_missing',
                     'message' => "Table local_package_fares does not exist",
                     'timestamp' => time()
                 ]);
@@ -89,6 +92,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             error_log("Error checking local package fares: " . $e->getMessage());
             echo json_encode([
                 'status' => 'error',
+                'source' => 'database_error',
                 'message' => "Database error: " . $e->getMessage(),
                 'timestamp' => time()
             ]);
@@ -97,6 +101,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     } else {
         echo json_encode([
             'status' => 'error',
+            'source' => 'connection_failed',
             'message' => "Database connection failed",
             'timestamp' => time()
         ]);
