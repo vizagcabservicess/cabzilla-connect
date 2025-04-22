@@ -783,7 +783,7 @@ export const BookingSummary = ({
                     <span className="text-gray-700">Driver allowance</span>
                     <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
                   </div>
-                )}
+                )}>)
               </>
             )}
 
