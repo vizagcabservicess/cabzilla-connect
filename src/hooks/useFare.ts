@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -25,7 +26,7 @@ interface FareData {
   timestamp?: number;
 }
 
-export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
+export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '', pickupDate?: Date) {
   console.log(`useFare: Called for ${cabId} with package ${packageType}`);
   
   const [fareData, setFareData] = useState<FareData | null>(null);
@@ -171,12 +172,13 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
               const baseKms = 300; // Standard 300km included
 
+              // Use proper property names from OutstationFare type
               let pricePerKm = packageType === 'one-way' ? 
-                outstationFares.oneWayPricePerKm : 
+                outstationFares.pricePerKm : 
                 outstationFares.roundTripPricePerKm;
 
               let basePrice = packageType === 'one-way' ? 
-                outstationFares.oneWayBasePrice : 
+                outstationFares.basePrice : 
                 outstationFares.roundTripBasePrice;
 
               // Calculate base fare and extra distance charges
@@ -281,7 +283,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           }
         } else if (tripType === 'airport') {
           try {
-            
+            // Implementation for airport fare calculation will go here
           } catch (e) {
             console.error('Error fetching real-time airport fares:', e);
           }
@@ -382,7 +384,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     };
 
     calculateFareData();
-  }, [cabId, tripType, distance, packageType, toast]);
+  }, [cabId, tripType, distance, packageType, pickupDate, toast]);
 
   return { fareData, isLoading, error };
 }
