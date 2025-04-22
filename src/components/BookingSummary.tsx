@@ -664,7 +664,6 @@ export const BookingSummary = ({
 
   let finalTotal = totalPrice > 0 ? totalPrice : calculatedFare;
 
-
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
       <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
@@ -799,5 +798,3 @@ export const BookingSummary = ({
     </div>
   );
 };
-
-export { BookingSummary };
