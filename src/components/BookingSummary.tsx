@@ -77,7 +77,7 @@ export const BookingSummary = ({
       if (selectedCab) {
         try {
           const normalizedId = normalizeVehicleId(selectedCab.id);
-          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
           localStorage.setItem(bookingSummaryKey, totalPrice.toString());
           console.log(`BookingSummary: Stored fare in localStorage: ${bookingSummaryKey} = ${totalPrice}`);
 
@@ -89,6 +89,7 @@ export const BookingSummary = ({
               tripMode: tripMode,
               calculated: true,
               fare: totalPrice,
+              packageType: hourlyPackage,
               timestamp: Date.now()
             }
           }));
@@ -127,7 +128,7 @@ export const BookingSummary = ({
         // Store the fare in localStorage for CabList to access
         try {
           const normalizedId = normalizeVehicleId(selectedCab.id);
-          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
           localStorage.setItem(bookingSummaryKey, totalPrice.toString());
           console.log(`BookingSummary: Stored fare in localStorage: ${bookingSummaryKey} = ${totalPrice}`);
 
@@ -139,6 +140,7 @@ export const BookingSummary = ({
               tripMode: tripMode,
               calculated: true,
               fare: totalPrice,
+              packageType: hourlyPackage,
               timestamp: Date.now()
             }
           }));
@@ -160,7 +162,7 @@ export const BookingSummary = ({
           // Store this fare in localStorage for CabList to access
           try {
             const normalizedId = normalizeVehicleId(selectedCab.id);
-            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
             localStorage.setItem(bookingSummaryKey, event.detail.fare.toString());
             console.log(`BookingSummary: Stored direct fare in localStorage: ${bookingSummaryKey} = ${event.detail.fare}`);
           } catch (error) {
@@ -234,6 +236,52 @@ export const BookingSummary = ({
     }
   }, [fareData, selectedCab, tripType]);
 
+  useEffect(() => {
+    if (tripType === 'local' && hourlyPackage) {
+      console.log('BookingSummary: Package changed to:', hourlyPackage);
+      // Clear stored fare when package changes
+      if (selectedCab) {
+        const normalizedId = normalizeVehicleId(selectedCab.id);
+        const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
+        localStorage.removeItem(bookingSummaryKey);
+        console.log(`BookingSummary: Cleared stored fare for package change: ${bookingSummaryKey}`);
+      }
+      setShowDetailsLoading(true);
+      if (calculationTimeoutRef.current) {
+        clearTimeout(calculationTimeoutRef.current);
+      }
+      calculationTimeoutRef.current = setTimeout(() => {
+        recalculateFareDetails();
+      }, 100);
+    }
+  }, [hourlyPackage, tripType]);
+
+  useEffect(() => {
+    if (selectedCab && fareData?.totalPrice > 0) {
+      try {
+        const normalizedId = normalizeVehicleId(selectedCab.id);
+        const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
+        localStorage.setItem(bookingSummaryKey, fareData.totalPrice.toString());
+        console.log(`BookingSummary: Stored fare with package: ${bookingSummaryKey} = ${fareData.totalPrice}`);
+
+        // Dispatch event for CabList to update
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: normalizedId,
+            tripType,
+            tripMode,
+            calculated: true,
+            fare: fareData.totalPrice,
+            packageType: hourlyPackage,
+            timestamp: Date.now()
+          }
+        }));
+      } catch (error) {
+        console.error('Error storing fare in localStorage:', error);
+      }
+    }
+  }, [fareData, selectedCab, tripType, tripMode, hourlyPackage]);
+
   const recalculateFareDetails = async (): Promise<void> => {
     if (calculationInProgressRef.current) {
       console.log('BookingSummary: Calculation already in progress, skipping duplicate calculation');
@@ -242,7 +290,7 @@ export const BookingSummary = ({
 
     // For local packages, use the fare from useFare hook if available
     if (tripType === 'local' && fareData?.totalPrice > 0) {
-      console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice);
+      console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice, 'Package:', hourlyPackage);
       setCalculatedFare(fareData.totalPrice);
       setBaseFare(fareData.basePrice);
       setDriverAllowance(0);
@@ -411,7 +459,7 @@ export const BookingSummary = ({
       // Update localStorage with the calculated fare
       try {
         const normalizedId = normalizeVehicleId(selectedCab.id);
-        const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+        const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
         localStorage.setItem(bookingSummaryKey, finalFare.toString());
         console.log(`BookingSummary: Stored calculated fare in localStorage: ${bookingSummaryKey} = ${finalFare}`);
 
@@ -456,7 +504,7 @@ export const BookingSummary = ({
 
           // Store this calculated fare in localStorage and re-emit
           const normalizedId = normalizeVehicleId(selectedCab.id);
-          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
           localStorage.setItem(bookingSummaryKey, newCalculatedFare.toString());
 
           // Emit an event for the CabList to update with this calculated fare
@@ -504,7 +552,7 @@ export const BookingSummary = ({
           // Store this fare in localStorage
           try {
             const normalizedId = normalizeVehicleId(customEvent.detail.cabType);
-            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
             localStorage.setItem(bookingSummaryKey, customEvent.detail.fare.toString());
             console.log(`BookingSummary: Stored selected cab fare in localStorage: ${bookingSummaryKey} = ${customEvent.detail.fare}`);
 
@@ -593,7 +641,7 @@ export const BookingSummary = ({
         if (selectedCab) {
           try {
             const normalizedId = normalizeVehicleId(selectedCab.id);
-            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
+            const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
             localStorage.setItem(bookingSummaryKey, totalPrice.toString());
             console.log(`BookingSummary: Stored initial fare in localStorage: ${bookingSummaryKey} = ${totalPrice}`);
 

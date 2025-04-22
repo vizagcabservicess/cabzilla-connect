@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -32,7 +31,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
 
-  // Clear stale fare data from localStorage (older than 30 minutes)
   const clearStaleFares = () => {
     try {
       const now = Date.now();
@@ -49,7 +47,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 console.log(`Cleared stale fare data: ${key}`);
               }
             } catch (e) {
-              // If it's not valid JSON, remove it
               localStorage.removeItem(key);
             }
           }
@@ -60,23 +57,22 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     }
   };
 
-  // Store fare data in localStorage with source and timestamp
   const storeFareData = (key: string, fare: number, source: string, breakdown: FareBreakdown) => {
     try {
       const fareData = {
         fare,
         source,
         breakdown,
+        packageType,
         timestamp: Date.now()
       };
       localStorage.setItem(key, JSON.stringify(fareData));
-      console.log(`Stored fare data in localStorage: ${key} = ${fare} (source: ${source})`);
+      console.log(`Stored fare data in localStorage: ${key} = ${fare} (source: ${source}, package: ${packageType})`);
     } catch (e) {
       console.error('Error storing fare in localStorage:', e);
     }
   };
 
-  // Get fare data from localStorage with validation
   const getStoredFare = (key: string): { fare: number, source: string, breakdown: FareBreakdown } | null => {
     try {
       const fareJson = localStorage.getItem(key);
@@ -84,7 +80,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         try {
           const fareObj = JSON.parse(fareJson);
           
-          // Validate the stored fare
           if (typeof fareObj.fare === 'number' && fareObj.fare > 0) {
             return {
               fare: fareObj.fare,
@@ -94,7 +89,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           }
         } catch (e) {
           console.error('Error parsing stored fare:', e);
-          // Remove invalid data
           localStorage.removeItem(key);
         }
       }
@@ -105,11 +99,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     }
   };
 
-  // Check if a fare value is reasonable (not too high or low)
   const validateFareAmount = (fare: number, cabId: string, tripType: string): boolean => {
     if (isNaN(fare) || fare <= 0) return false;
     
-    // Set reasonable min/max bounds based on vehicle type and trip type
     let minFare = 500;
     let maxFare = 20000;
     
@@ -147,7 +139,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
   }, 100);
 
   useEffect(() => {
-    // Clean up stale fares when component mounts
     clearStaleFares();
     
     const calculateFareData = async () => {
@@ -182,7 +173,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 const dbFare = localFares[key];
                 console.log(`Found local package fare for ${cabId}: ${dbFare}`);
                 
-                // Validate the database fare amount
                 if (validateFareAmount(dbFare, cabId, tripType)) {
                   fare = dbFare;
                   source = 'database';
@@ -195,10 +185,8 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                     extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
                   };
                   
-                  // Clear any previously stored fare for this trip/cab/package
                   localStorage.removeItem(fareKey);
                   
-                  // Store the new database fare
                   storeFareData(fareKey, fare, source, breakdown);
                 } else {
                   console.warn(`Invalid database fare value for ${cabId}: ${dbFare}, will try calculation instead`);
@@ -209,7 +197,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             console.error('Error fetching real-time local fares:', e);
           }
           
-          // If no valid database fare was found, check localStorage
           if (!databaseFareFound) {
             const storedFare = getStoredFare(fareKey);
             if (storedFare && validateFareAmount(storedFare.fare, cabId, tripType)) {
@@ -218,7 +205,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               source = storedFare.source;
               breakdown = storedFare.breakdown;
             } else {
-              // If no stored fare, calculate a default based on vehicle type
               console.log(`No valid stored fare for ${cabId}, calculating default`);
               if (normalizedCabId.includes('sedan')) fare = 2400;
               else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) fare = 3000;
@@ -233,16 +219,13 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             }
           }
         } else {
-          // For outstation and airport trips
-          // Find the full cab object from cabTypes array
           const fullCabType = cabTypes.find(cab => normalizeVehicleId(cab.id) === normalizedCabId);
           
           if (!fullCabType) {
             console.warn(`Could not find full cab type for ID: ${cabId}, creating minimal object`);
-            // Create a minimal CabType object with required properties
             const minimalCabType: CabType = {
               id: cabId,
-              name: cabId, // Use ID as name for fallback
+              name: cabId,
               capacity: 4,
               luggageCapacity: 2,
               image: "/cars/sedan.png",
@@ -287,13 +270,11 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             source = 'api';
           }
           
-          // Store the calculated fare
           if (validateFareAmount(fare, cabId, tripType)) {
             storeFareData(fareKey, fare, source, breakdown);
           }
         }
 
-        // Set the fareData state with all the information
         setFareData({
           totalPrice: fare,
           basePrice: breakdown.basePrice || fare,
@@ -302,7 +283,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           timestamp: Date.now()
         });
 
-        // Dispatch fare calculated event
         debouncedDispatchEvent({
           cabId: normalizedCabId,
           tripType,

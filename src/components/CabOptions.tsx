@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CabList } from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -89,8 +88,9 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     onSelectCab(cab);
     setHasSelectedCab(true);
     
-    // Store the current trip type in localStorage for better fare syncing
+    // Store the current trip type and package in localStorage for better fare syncing
     localStorage.setItem('tripType', tripType.toString());
+    localStorage.setItem('currentPackage', hourlyPackage || '');
     
     // Emit event when a cab is selected, which BookingSummary will listen for
     try {
@@ -106,7 +106,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
           timestamp: Date.now()
         }
       }));
-      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${fare} (source: ${fareSource})`);
+      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${fare} (source: ${fareSource}, package: ${hourlyPackage})`);
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
     }
