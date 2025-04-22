@@ -804,37 +804,13 @@ export const BookingSummary = ({
 
       try {
         await recalculateFareDetails();
-        
-        // After calculation, ensure CabList is updated
-        const normalizedId = normalizeVehicleId(selectedCab.id);
-        const currentFare = totalPriceRef.current || totalPrice;
-        
-        if (currentFare > 0) {
-          // Store the fare for CabList to access
-          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}`;
-          localStorage.setItem(bookingSummaryKey, currentFare.toString());
-          console.log(`BookingSummary: Updated fare in localStorage: ${bookingSummaryKey} = ${currentFare}`);
-
-          // Notify CabList of the new fare
-          window.dispatchEvent(new CustomEvent('fare-calculated', {
-            detail: {
-              cabId: normalizedId,
-              tripType,
-              tripMode,
-              calculated: true,
-              fare: currentFare,
-              timestamp: Date.now()
-            }
-          }));
-        }
       } catch (error) {
         console.error('BookingSummary: Error calculating fares:', error);
-        setShowDetailsLoading(false);
       }
     };
 
     calculateFares();
-  }, [selectedCab?.id, distance, tripType, tripMode, totalPrice]);
+  }, [selectedCab?.id, distance, tripType, tripMode]);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">

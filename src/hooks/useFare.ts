@@ -35,26 +35,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
       setIsLoading(true);
       setError(null);
 
-      const normalizedId = normalizeVehicleId(cabId);
-      console.log(`Calculating fare for ${normalizedId} (${tripType})`);
-
       try {
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
-
-        // First check if we have a valid BookingSummary fare
-        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-        if (bookingSummaryFare) {
-          const parsedFare = parseInt(bookingSummaryFare, 10);
-          if (!isNaN(parsedFare) && parsedFare > 0) {
-            console.log(`Using BookingSummary fare for ${normalizedId}: ${parsedFare}`);
-            return {
-              totalPrice: parsedFare,
-              basePrice: parsedFare,
-              breakdown: { basePrice: parsedFare }
-            };
-          }
-        }
 
         if (tripType === 'local') {
           try {
@@ -123,7 +106,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
 
         // Only use BookingSummary calculated fares
-        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`);
         if (bookingSummaryFare) {
           const fare = parseInt(bookingSummaryFare, 10);
           setFareData({
