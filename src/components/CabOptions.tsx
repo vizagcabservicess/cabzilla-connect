@@ -85,7 +85,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     });
   }, []);
 
-  const handleCabSelect = (cab: CabType) => {
+  const handleCabSelect = (cab: CabType, fare: number, fareSource: string) => {
     onSelectCab(cab);
     setHasSelectedCab(true);
     
@@ -94,41 +94,19 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     
     // Emit event when a cab is selected, which BookingSummary will listen for
     try {
-      // Try to get the fare from the hook system first
-      const fareKey = `fare_${tripType}_${cab.id.toLowerCase()}_${hourlyPackage || ''}`;
-      let cabFare = 0;
-      
-      try {
-        const fareJson = localStorage.getItem(fareKey);
-        if (fareJson) {
-          const fareObj = JSON.parse(fareJson);
-          if (fareObj.fare && typeof fareObj.fare === 'number') {
-            cabFare = fareObj.fare;
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing stored fare:', e);
-      }
-      
-      // If no fare from hook system, fall back to legacy storage
-      if (cabFare === 0) {
-        const legacyKey = `fare_${tripType}_${cab.id.toLowerCase()}`;
-        const storedFare = localStorage.getItem(legacyKey);
-        cabFare = storedFare ? parseFloat(storedFare) : 0;
-      }
-      
       window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
         detail: {
           cabType: cab.id,
           cabName: cab.name,
-          fare: cabFare,
+          fare: fare,
+          fareSource: fareSource,
           tripType: tripType,
           tripMode: tripMode,
           hourlyPackage: hourlyPackage,
           timestamp: Date.now()
         }
       }));
-      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${cabFare}`);
+      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${fare} (source: ${fareSource})`);
     } catch (error) {
       console.error('Error dispatching cab selection event:', error);
     }

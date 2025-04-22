@@ -9,7 +9,7 @@ interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
   isCalculatingFares: boolean;
-  handleSelectCab: (cab: CabType) => void;
+  handleSelectCab: (cab: CabType, fareAmount: number, fareSource: string) => void;
   isAirportTransfer?: boolean;
   tripType?: string; // Changed from TripType to string to match useFare
   tripMode?: string;
@@ -57,13 +57,29 @@ export const CabList: React.FC<CabListProps> = ({
   }, []);
 
   // Enhanced cab selection handler
-  const enhancedSelectCab = (cab: CabType) => {
-    handleSelectCab(cab);
+  const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string) => {
+    handleSelectCab(cab, fare, fareSource);
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
 
     setTimeout(() => {
       setFadeIn(prev => ({ ...prev, [cab.id]: false }));
     }, 500);
+    
+    // Store the selected fare in localStorage for BookingSummary to use
+    if (fare > 0) {
+      try {
+        localStorage.setItem(`selected_fare_${cab.id}_${tripType}_${packageType}`, JSON.stringify({
+          fare,
+          source: fareSource,
+          timestamp: Date.now(),
+          packageType,
+          cabId: cab.id
+        }));
+        console.log(`Stored selected fare for ${cab.name}: ₹${fare} (${fareSource})`);
+      } catch (e) {
+        console.error('Error storing selected fare:', e);
+      }
+    }
   };
 
   return (
@@ -137,7 +153,7 @@ export const CabList: React.FC<CabListProps> = ({
                 cab={cab}
                 fare={fare}
                 isSelected={selectedCabId === cab.id}
-                onSelect={() => enhancedSelectCab(cab)}
+                onSelect={() => enhancedSelectCab(cab, fare, fareSource)}
                 isCalculating={isLoading}
                 fareDetails={error ? "Error fetching fare" : fareText}
                 tripType={tripType}
