@@ -71,7 +71,6 @@ export const CabList: React.FC<CabListProps> = ({
           // Unified fare handling with BookingSummary sync
           let fare = 0;
           let fareText = 'Price unavailable';
-          const normalizedId = normalizeVehicleId(cab.id);
           
           // First check BookingSummary fare
           const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
