@@ -753,8 +753,8 @@ export const BookingSummary = ({
 
             {tripType === 'local' && (
               <div className="flex justify-between">
-                <span className="text-gray-700">08hrs 80KM Package</span>
-                <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                <span className="text-gray-700">Base fare</span>
+                <span className="font-semibold">₹{totalPrice.toLocaleString()}</span>
               </div>
             )}
 
@@ -785,13 +785,7 @@ export const BookingSummary = ({
 
             <div className="flex justify-between text-lg font-bold pt-2">
               <span>Total Amount</span>
-              <span>
-                {isLoading ? (
-                  <span className="text-gray-400">Calculating...</span>
-                ) : (
-                  `₹${(fareData?.totalPrice || 0).toLocaleString()}`
-                )}
-              </span>
+              <span>₹{totalPrice.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -820,13 +814,4 @@ export const BookingSummary = ({
     };
 
     calculateFares();
-  }, [selectedCab?.id, distance, tripType, tripMode]);
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 relative">
-      {/* Rest of the JSX */}
-    </div>
-  );
-};
-
-export default BookingSummary;
+  }, [selectedCab?.id, distance
