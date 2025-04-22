@@ -168,32 +168,40 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
             if (outstationFares) {
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
-              const baseKms = 300; // Standard 300km included
+              const baseKms = 300;
               const isOneWay = packageType === 'one-way';
 
               // Set vehicle-specific base prices and rates
               let basePrice = 3900; // Default sedan price
               let pricePerKm = 13;  // Default sedan rate
+              let driverAllowance = 250; // Default driver allowance
 
-              // Adjust based on vehicle type
+              // Adjust based on vehicle type with specific handling for Innova variants
               if (normalizedCabId.includes('ertiga')) {
                 basePrice = 5400;
                 pricePerKm = 18;
+                driverAllowance = 250;
+              } else if (normalizedCabId.includes('innova_hycross')) {
+                basePrice = 5730;
+                pricePerKm = 22;
+                driverAllowance = 300;
               } else if (normalizedCabId.includes('innova')) {
-                basePrice = 6000;
+                basePrice = 5500;
                 pricePerKm = 20;
+                driverAllowance = 300;
               }
 
-              // Use database values if available, otherwise use our calculated defaults
-              basePrice = outstationFares.basePrice || basePrice;
-              pricePerKm = outstationFares.pricePerKm || pricePerKm;
-
-              console.log('Using fare values:', {
+              console.log('Vehicle-specific base rates:', {
+                vehicleType: normalizedCabId,
                 basePrice,
                 pricePerKm,
-                vehicleType: normalizedCabId,
-                source: isOneWay ? 'one-way' : 'round-trip'
+                driverAllowance
               });
+
+              // Override with database values if available
+              basePrice = outstationFares.basePrice || basePrice;
+              pricePerKm = outstationFares.pricePerKm || pricePerKm;
+              driverAllowance = outstationFares.driverAllowance || driverAllowance;
 
               // Start with base price
               fare = basePrice;
@@ -213,7 +221,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               }
 
               // Add driver allowance
-              const driverAllowance = outstationFares.driverAllowance || 250;
               fare += driverAllowance;
 
               // Night charges if applicable (between 22:00 and 05:00)
@@ -221,7 +228,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               if (pickupDate) {
                 const hours = pickupDate.getHours();
                 if (hours >= 22 || hours <= 5) {
-                  nightCharges = Math.round(basePrice * 0.1); // 10% of base price
+                  nightCharges = Math.round(basePrice * 0.1);
                   fare += nightCharges;
                   console.log('Added night charges:', nightCharges);
                 }
@@ -234,6 +241,27 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 extraDistanceFare,
                 extraKmCharge: pricePerKm
               };
+
+              // Validate total matches component sum
+              const calculatedSum = basePrice + extraDistanceFare + driverAllowance + nightCharges;
+              console.log('Fare validation:', {
+                calculatedSum,
+                fare,
+                components: {
+                  basePrice,
+                  extraDistanceFare,
+                  driverAllowance,
+                  nightCharges
+                }
+              });
+
+              if (Math.abs(calculatedSum - fare) > 0.01) {
+                console.warn('Fare calculation mismatch detected:', {
+                  calculatedSum,
+                  fare,
+                  difference: Math.abs(calculatedSum - fare)
+                });
+              }
 
               source = 'database';
               databaseFareFound = true;
