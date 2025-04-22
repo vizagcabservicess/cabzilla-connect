@@ -4,6 +4,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle } from '@/services/fareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
+import { CabType } from '@/types/cab';
+import { cabTypes } from '@/lib/cabData';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -71,21 +73,58 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           }
         } else {
           // For outstation and airport trips
-          const params = {
-            cabType: { id: normalizeVehicleId(cabId) },
-            tripType,
-            distance
-          };
-          const result = await calculateFare(params);
+          // Find the full cab object from cabTypes array
+          const fullCabType = cabTypes.find(cab => normalizeVehicleId(cab.id) === normalizeVehicleId(cabId));
           
-          if (typeof result === 'number') {
-            fare = result;
-            breakdown = { basePrice: fare };
+          if (!fullCabType) {
+            console.warn(`Could not find full cab type for ID: ${cabId}, creating minimal object`);
+            // Create a minimal CabType object with required properties
+            const minimalCabType: CabType = {
+              id: cabId,
+              name: cabId, // Use ID as name for fallback
+              capacity: 4,
+              luggageCapacity: 2,
+              image: "/cars/sedan.png",
+              amenities: ["AC"],
+              description: "Default vehicle",
+              ac: true
+            };
+            
+            const params = {
+              cabType: minimalCabType,
+              tripType,
+              distance
+            };
+            
+            const result = await calculateFare(params);
+            
+            if (typeof result === 'number') {
+              fare = result;
+              breakdown = { basePrice: fare };
+            } else {
+              fare = result;
+              breakdown = { basePrice: fare };
+            }
+            source = 'api';
           } else {
-            fare = result;
-            breakdown = { basePrice: fare };
+            console.log(`Found full cab type for ${cabId}:`, fullCabType.name);
+            const params = {
+              cabType: fullCabType,
+              tripType,
+              distance
+            };
+            
+            const result = await calculateFare(params);
+            
+            if (typeof result === 'number') {
+              fare = result;
+              breakdown = { basePrice: fare };
+            } else {
+              fare = result;
+              breakdown = { basePrice: fare };
+            }
+            source = 'api';
           }
-          source = 'api';
         }
 
         const fareKey = `fare_${tripType}_${normalizeVehicleId(cabId)}`;
