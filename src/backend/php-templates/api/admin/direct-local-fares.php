@@ -41,21 +41,35 @@ if (!$vehicleId) {
 // First try to get fares from the local_package_fares table
 $conn = null;
 $fromDatabase = false;
-$sourceTable = "local_package_fares";
+$sourceTable = "fallback_mock_data";
 
 try {
     require_once '../../config.php';
     $conn = getDbConnection();
     
     if ($conn) {
+        // Log the query attempt
+        error_log("Attempting to query local_package_fares for vehicle_id: " . $vehicleId);
+        
         // Query for the vehicle's fare data from the local_package_fares table
-        $stmt = $conn->prepare("SELECT * FROM local_package_fares WHERE vehicle_id = ?");
+        // FIXED: Using the correct column names from the database schema
+        $stmt = $conn->prepare("SELECT 
+            vehicle_id, 
+            price_4hr_40km as price_4hrs_40km, 
+            price_8hr_80km as price_8hrs_80km, 
+            price_10hr_100km as price_10hrs_100km,
+            extra_km_rate as price_extra_km,
+            extra_hour_rate as price_extra_hour
+            FROM local_package_fares WHERE vehicle_id = ?");
+        
         $stmt->bind_param("s", $vehicleId);
         $stmt->execute();
         $result = $stmt->get_result();
         
         if ($result && $result->num_rows > 0) {
             $row = $result->fetch_assoc();
+            $sourceTable = "local_package_fares";
+            $fromDatabase = true;
             
             $localFares = [[
                 'vehicleId' => $row['vehicle_id'],
@@ -73,6 +87,8 @@ try {
                 'source' => $sourceTable
             ]);
             exit;
+        } else {
+            error_log("No results found in local_package_fares for vehicle_id: " . $vehicleId);
         }
     }
 } catch (Exception $e) {
