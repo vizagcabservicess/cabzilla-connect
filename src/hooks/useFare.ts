@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -171,35 +170,49 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               // For one-way trips, include driver return distance
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
               const baseKms = 300; // Standard 300km included
+              const isOneWay = packageType === 'one-way';
 
-              // Use proper property names from OutstationFare type
-              let pricePerKm = packageType === 'one-way' ? 
-                outstationFares.pricePerKm : 
-                outstationFares.roundTripPricePerKm;
+              // Use the correct base price and per km rate based on trip type
+              const basePrice = isOneWay ? outstationFares.basePrice : outstationFares.roundTripBasePrice;
+              const pricePerKm = isOneWay ? outstationFares.pricePerKm : outstationFares.roundTripPricePerKm;
+              const driverAllowance = outstationFares.driverAllowance || 250;
 
-              let basePrice = packageType === 'one-way' ? 
-                outstationFares.basePrice : 
-                outstationFares.roundTripBasePrice;
+              console.log(`Base calculation parameters:`, {
+                effectiveDistance,
+                baseKms,
+                basePrice,
+                pricePerKm,
+                driverAllowance
+              });
 
-              // Calculate base fare and extra distance charges
+              // Start with base price
               fare = basePrice;
-              let extraDistanceFare = 0;
               
+              // Calculate extra distance charges if applicable
+              let extraDistanceFare = 0;
               if (effectiveDistance > baseKms) {
                 const extraKms = effectiveDistance - baseKms;
                 extraDistanceFare = extraKms * pricePerKm;
                 fare += extraDistanceFare;
+                console.log(`Extra distance calculation:`, {
+                  extraKms,
+                  pricePerKm,
+                  extraDistanceFare
+                });
               }
 
               // Add driver allowance
-              const driverAllowance = outstationFares.driverAllowance || 250;
               fare += driverAllowance;
 
-              // Night charges if applicable
+              // Night charges if applicable (between 22:00 and 05:00)
               let nightCharges = 0;
-              if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-                nightCharges = Math.round(basePrice * 0.1);
-                fare += nightCharges;
+              if (pickupDate) {
+                const hours = pickupDate.getHours();
+                if (hours >= 22 || hours <= 5) {
+                  nightCharges = Math.round(basePrice * 0.1); // 10% of base price
+                  fare += nightCharges;
+                  console.log(`Added night charges: ${nightCharges}`);
+                }
               }
 
               breakdown = {
@@ -213,11 +226,17 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               source = 'database';
               databaseFareFound = true;
 
-              console.log('Calculated outstation fare breakdown:', breakdown);
-              storeFareData(fareKey, fare, source, breakdown);
+              console.log('Final outstation fare breakdown:', {
+                basePrice,
+                extraDistanceFare,
+                driverAllowance,
+                nightCharges,
+                totalFare: fare
+              });
             }
-          } catch (e) {
-            console.error('Error fetching outstation fares:', e);
+          } catch (error) {
+            console.error('Error calculating outstation fare:', error);
+            setError(error instanceof Error ? error : new Error('Failed to calculate outstation fare'));
           }
         } else if (tripType === 'local') {
           try {
