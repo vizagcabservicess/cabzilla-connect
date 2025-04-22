@@ -1,3 +1,4 @@
+
 /**
  * Utility functions for safely handling string operations
  */
@@ -14,12 +15,12 @@ export function safeIncludes(value: any, substring: string): boolean {
   if (value === null || value === undefined || typeof value !== 'string') {
     return false;
   }
-
+  
   // Ensure substring is a string and not null/undefined
   if (substring === null || substring === undefined || typeof substring !== 'string') {
     return false;
   }
-
+  
   // Now safely perform the includes check
   return value.toLowerCase().includes(substring.toLowerCase());
 }
@@ -47,18 +48,18 @@ export function parseNumericValue(value: any, defaultValue: number = 0): number 
   if (value === null || value === undefined || value === '') {
     return defaultValue;
   }
-
+  
   // Handle case where value is already a number
   if (typeof value === 'number') {
     return isNaN(value) ? defaultValue : value;
   }
-
+  
   // Handle case where value is a string representing a number
   if (typeof value === 'string') {
     const parsedValue = parseFloat(value);
     return isNaN(parsedValue) ? defaultValue : parsedValue;
   }
-
+  
   // Try to convert to number as a last resort
   const attemptNumber = Number(value);
   return isNaN(attemptNumber) ? defaultValue : attemptNumber;
@@ -100,14 +101,14 @@ export function parseAmenities(amenities: any): string[] {
   if (!amenities) {
     return [];
   }
-
+  
   // If already an array, filter out any non-string or empty values
   if (Array.isArray(amenities)) {
     return amenities
       .filter(item => typeof item === 'string' && item.trim() !== '')
       .map(item => item.trim());
   }
-
+  
   // If it's a string, split by commas and clean up
   if (typeof amenities === 'string') {
     return amenities
@@ -115,31 +116,11 @@ export function parseAmenities(amenities: any): string[] {
       .map(item => item.trim())
       .filter(item => item !== '');
   }
-
+  
   // For any other case, return empty array
   return [];
 }
 export function normalizeVehicleId(vehicleId: string | undefined | null): string {
   if (!vehicleId) return '';
-
-  // Handle known variants first
-  const knownMappings: Record<string, string> = {
-    'tempo traveller': 'tempo_traveller',
-    'innova crysta': 'innova_crysta',
-    'dzire cng': 'dzire_cng',
-    'dzire': 'sedan',
-    'etios': 'sedan',
-    'swift dzire': 'sedan'
-  };
-
-  const normalized = vehicleId.trim().toLowerCase();
-  if (knownMappings[normalized]) {
-    return knownMappings[normalized];
-  }
-
-  // General normalization
-  return normalized
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/_+/g, '_');
+  return vehicleId.toLowerCase().trim();
 }

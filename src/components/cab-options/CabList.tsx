@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -14,6 +13,7 @@ interface CabListProps {
   tripType?: TripType;
   distance?: number;
   packageType?: string;
+  tripMode?: string; // Added tripMode
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -24,7 +24,8 @@ export const CabList: React.FC<CabListProps> = ({
   isAirportTransfer,
   tripType = 'local',
   distance = 0,
-  packageType = '8hrs-80km'
+  packageType = '8hrs-80km',
+  tripMode = 'normal' // Added tripMode with default value
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const normalizeVehicleId = (id: string): string => {
@@ -68,58 +69,71 @@ export const CabList: React.FC<CabListProps> = ({
             packageType
           );
 
-          // Unified fare handling with BookingSummary sync
+          // Enhanced fare handling logic with proper error states
           let fare = 0;
-          let fareText = 'Price unavailable';
-          
-          // First check BookingSummary fare
-          const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-          
+          let fareText = 'Calculating...';
+
           if (isLoading) {
             fareText = 'Calculating...';
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
-            fareText = 'Error fetching price';
-          } else if (bookingSummaryFare) {
-            // Always prefer BookingSummary fare if available
-            fare = parseInt(bookingSummaryFare, 10);
-            fareText = `₹${Math.round(fare)}`;
-            console.log(`Using synchronized BookingSummary fare for ${cab.name}: ${fareText}`);
+            // Try to use BookingSummary fare even if there's an error
+            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+            if (bookingSummaryFare) {
+              fare = parseInt(bookingSummaryFare, 10);
+              fareText = `₹${Math.round(fare)}`;
+              console.log(`Using BookingSummary fare after error for ${cab.name}: ${fareText}`);
+            } else {
+              fareText = 'Retrying...';
+              // Trigger a fare recalculation
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: normalizedId,
+                  tripType,
+                  tripMode,
+                  distance,
+                  timestamp: Date.now()
+                }
+              }));
+            }
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
             fare = fareData.totalPrice;
-            fareText = `₹${fare}`;
-            console.log(`Using API fare for ${cab.name}: ${fareText}`);
+            fareText = `₹${Math.round(fare)}`;
+
+            // Store valid fare in localStorage for consistency
+            try {
+              localStorage.setItem(`cab_list_fare_${tripType}_${normalizedId}`, fare.toString());
+              console.log(`Stored CabList fare: ${tripType}_${normalizedId} = ${fare}`);
+            } catch (error) {
+              console.error('Error storing fare:', error);
+            }
           } else {
-            console.log(`No fare available for ${cab.name}, requesting calculation`);
-            fareText = 'Calculating...';
-            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-              detail: {
-                cabId: normalizedId,
-                tripType,
-                timestamp: Date.now()
-              }
-            }));
+            // Try multiple fare sources in order of preference
+            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+            const cabListFare = localStorage.getItem(`cab_list_fare_${tripType}_${normalizedId}`);
+
+            if (bookingSummaryFare) {
+              fare = parseInt(bookingSummaryFare, 10);
+              fareText = `₹${Math.round(fare)}`;
+              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
+            } else if (cabListFare) {
+              fare = parseInt(cabListFare, 10);
+              fareText = `₹${Math.round(fare)}`;
+              console.log(`Using cached CabList fare for ${cab.name}: ${fareText}`);
+            } else {
+              console.log(`No fare available for ${cab.name}, requesting calculation`);
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: normalizedId,
+                  tripType,
+                  tripMode,
+                  distance,
+                  timestamp: Date.now()
+                }
+              }));
+            }
           }
 
-          // Listen for fare updates
-          useEffect(() => {
-            const handleFareUpdate = (event: CustomEvent) => {
-              if (event.detail.cabId === normalizedId) {
-                console.log(`Received fare update for ${cab.name}:`, event.detail.fare);
-                setFadeIn(prev => ({ ...prev, [cab.id]: true }));
-                setTimeout(() => setFadeIn(prev => ({ ...prev, [cab.id]: false })), 500);
-              }
-            };
-
-            window.addEventListener('fare-calculated', handleFareUpdate as EventListener);
-            window.addEventListener('significant-fare-difference', handleFareUpdate as EventListener);
-
-            return () => {
-              window.removeEventListener('fare-calculated', handleFareUpdate as EventListener);
-              window.removeEventListener('significant-fare-difference', handleFareUpdate as EventListener);
-            };
-          }, [normalizedId, cab.name, cab.id]);
-          
           // Debug logging
           console.log(`Fare for ${cab.name}:`, {
             fareData,

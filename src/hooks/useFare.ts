@@ -35,9 +35,26 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
       setIsLoading(true);
       setError(null);
 
+      const normalizedId = normalizeVehicleId(cabId);
+      console.log(`Calculating fare for ${normalizedId} (${tripType})`);
+
       try {
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
+
+        // First check if we have a valid BookingSummary fare
+        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+        if (bookingSummaryFare) {
+          const parsedFare = parseInt(bookingSummaryFare, 10);
+          if (!isNaN(parsedFare) && parsedFare > 0) {
+            console.log(`Using BookingSummary fare for ${normalizedId}: ${parsedFare}`);
+            return {
+              totalPrice: parsedFare,
+              basePrice: parsedFare,
+              breakdown: { basePrice: parsedFare }
+            };
+          }
+        }
 
         if (tripType === 'local') {
           try {
@@ -105,16 +122,16 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
 
-        // Always check BookingSummary fare first
-        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`);
+        // Only use BookingSummary calculated fares
+        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
         if (bookingSummaryFare) {
           const fare = parseInt(bookingSummaryFare, 10);
-          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
           setFareData({
             totalPrice: fare,
             basePrice: fare,
             breakdown: { basePrice: fare }
           });
+          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
         } else {
           console.log(`No BookingSummary fare available for ${cabId}`);
           // Trigger a new calculation
