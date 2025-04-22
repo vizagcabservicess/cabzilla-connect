@@ -39,6 +39,24 @@ export const CabList: React.FC<CabListProps> = ({
       .replace(/[^a-z0-9_]/g, '');
   };
 
+  // Listen for fare updates
+  useEffect(() => {
+    const handleFareUpdate = (event: CustomEvent) => {
+      const { vehicleId, fare, tripType: fareType, source } = event.detail;
+      console.log(`CabList: Received fare update for ${vehicleId}: ₹${fare} (${source})`);
+      
+      if (fareType === tripType) {
+        setRefreshKey(Date.now()); // Trigger re-render
+      }
+    };
+    
+    window.addEventListener('fare-update', handleFareUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('fare-update', handleFareUpdate as EventListener);
+    };
+  }, [tripType]);
+
   useEffect(() => {
     const handleFareUpdate = () => {
       console.log('CabList: Detected fare update, refreshing list');

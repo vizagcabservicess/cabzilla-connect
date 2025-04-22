@@ -1,4 +1,3 @@
-
 import { normalizeVehicleId } from './safeStringUtils';
 
 // Vehicle classification for pricing tiers
@@ -17,6 +16,7 @@ export interface VehiclePricingTier {
  */
 export const getVehiclePricingTier = (vehicleId: string): VehiclePricingTier => {
   const normalized = normalizeVehicleId(vehicleId);
+  console.log(`Getting pricing tier for vehicle: ${normalized}`);
   
   // Map of known vehicle types and their default pricing information
   const vehicleTiers: Record<string, VehiclePricingTier> = {
@@ -106,6 +106,7 @@ export const getVehiclePricingTier = (vehicleId: string): VehiclePricingTier => 
   // Find an exact match first
   for (const [key, tier] of Object.entries(vehicleTiers)) {
     if (normalized === key) {
+      console.log(`Found exact match for ${normalized}:`, tier);
       return tier;
     }
   }
@@ -113,11 +114,12 @@ export const getVehiclePricingTier = (vehicleId: string): VehiclePricingTier => 
   // If no exact match, try to find by partial name
   for (const [key, tier] of Object.entries(vehicleTiers)) {
     if (normalized.includes(key)) {
+      console.log(`Found partial match for ${normalized} with ${key}:`, tier);
       return tier;
     }
   }
   
-  // Default sedan pricing if nothing matches
+  console.log(`No match found for ${normalized}, using default sedan pricing`);
   return {
     basePrice: 3900,
     pricePerKm: 13,
@@ -184,6 +186,37 @@ export const validateFareAmount = (fare: number, vehicleId: string, tripType: st
   }
   
   return true;
+};
+
+/**
+ * Validate and emit a fare update event
+ * @param fare The fare amount
+ * @param vehicleId The vehicle ID
+ * @param source The source of the fare (e.g., 'api', 'database', 'default')
+ */
+export const emitFareUpdate = (fare: number, vehicleId: string, tripType: string, source: string = 'default') => {
+  try {
+    window.dispatchEvent(new CustomEvent('fare-update', {
+      detail: {
+        vehicleId,
+        fare,
+        tripType,
+        source,
+        timestamp: Date.now()
+      }
+    }));
+    console.log(`Emitted fare update for ${vehicleId}: ₹${fare} (${source})`);
+    
+    // Also store in localStorage for persistence
+    const key = `fare_${tripType}_${normalizeVehicleId(vehicleId)}`;
+    localStorage.setItem(key, JSON.stringify({
+      fare,
+      source,
+      timestamp: Date.now()
+    }));
+  } catch (error) {
+    console.error('Error emitting fare update:', error);
+  }
 };
 
 /**
