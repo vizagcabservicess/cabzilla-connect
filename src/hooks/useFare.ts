@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getLocalPackagePrice } from '@/lib/packageData';
@@ -26,7 +26,16 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
   const [fareData, setFareData] = useState<FareData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const lastUpdateRef = useRef<number>(0);
   const { toast } = useToast();
+
+  const updateFareFromBookingSummary = (fare: number) => {
+    setFareData({
+      totalPrice: fare,
+      basePrice: fare,
+      breakdown: { basePrice: fare }
+    });
+  };
 
   useEffect(() => {
     const calculateFareData = async () => {
@@ -118,6 +127,23 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     };
 
     calculateFareData();
+
+    const handleFareCalculated = (event: CustomEvent) => {
+      if (event.detail?.cabId === normalizeVehicleId(cabId) && 
+          event.detail?.tripType === tripType &&
+          event.detail?.timestamp > lastUpdateRef.current) {
+        lastUpdateRef.current = event.detail.timestamp;
+        updateFareFromBookingSummary(event.detail.fare);
+      }
+    };
+
+    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
+    window.addEventListener('significant-fare-difference', handleFareCalculated as EventListener);
+
+    return () => {
+      window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
+      window.removeEventListener('significant-fare-difference', handleFareCalculated as EventListener);
+    };
   }, [cabId, tripType, distance, packageType, toast]);
 
   return { fareData, isLoading, error };
