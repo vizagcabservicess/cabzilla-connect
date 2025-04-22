@@ -329,6 +329,7 @@ const ToursPage = () => {
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     totalPrice={getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
+                    hourlyPackage="tour"
                   />
                 )}
               </div>

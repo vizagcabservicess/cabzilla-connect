@@ -594,6 +594,7 @@ export function Hero() {
                       tripType={tripType} 
                       tripMode={tripMode} 
                       totalPrice={totalPrice}
+                      hourlyPackage={hourlyPackage}
                     />
                   </div>
                   
@@ -635,6 +636,7 @@ export function Hero() {
                 totalPrice={totalPrice}
                 tripType={tripType}
                 tripMode={tripMode}
+                hourlyPackage={hourlyPackage}
               />
             </div>
           </div>

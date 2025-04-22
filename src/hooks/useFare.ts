@@ -222,6 +222,20 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               storeFareData(fareKey, fare, source, breakdown);
             }
           }
+        } else if (tripType === 'tour') {
+          try {
+            if (normalizedCabId.includes('sedan')) fare = 3500;
+            else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) fare = 4500;
+            else if (normalizedCabId.includes('innova') || normalizedCabId.includes('crysta') || normalizedCabId.includes('mpv')) fare = 5500;
+            else fare = 4000;
+            
+            source = 'default';
+            breakdown = { basePrice: fare };
+            
+            storeFareData(fareKey, fare, source, breakdown);
+          } catch (e) {
+            console.error('Error fetching real-time tour fares:', e);
+          }
         } else {
           const fullCabType = cabTypes.find(cab => normalizeVehicleId(cab.id) === normalizedCabId);
           
