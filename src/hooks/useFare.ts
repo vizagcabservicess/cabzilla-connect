@@ -25,7 +25,7 @@ interface FareData {
   timestamp?: number;
 }
 
-export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '', pickupDate?: Date) {
+export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
   console.log(`useFare: Called for ${cabId} with package ${packageType}`);
   
   const [fareData, setFareData] = useState<FareData | null>(null);
@@ -167,64 +167,37 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             console.log('Retrieved outstation fares:', outstationFares);
 
             if (outstationFares) {
+              // For one-way trips, include driver return distance
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
               const baseKms = 300; // Standard 300km included
-              const isOneWay = packageType === 'one-way';
 
-              // Set vehicle-specific base prices and rates
-              let basePrice = 3900; // Default sedan price
-              let pricePerKm = 13;  // Default sedan rate
+              let pricePerKm = packageType === 'one-way' ? 
+                outstationFares.oneWayPricePerKm : 
+                outstationFares.roundTripPricePerKm;
 
-              // Adjust based on vehicle type
-              if (normalizedCabId.includes('ertiga')) {
-                basePrice = 5400;
-                pricePerKm = 18;
-              } else if (normalizedCabId.includes('innova')) {
-                basePrice = 6000;
-                pricePerKm = 20;
-              }
+              let basePrice = packageType === 'one-way' ? 
+                outstationFares.oneWayBasePrice : 
+                outstationFares.roundTripBasePrice;
 
-              // Use database values if available, otherwise use our calculated defaults
-              basePrice = outstationFares.basePrice || basePrice;
-              pricePerKm = outstationFares.pricePerKm || pricePerKm;
-
-              console.log('Using fare values:', {
-                basePrice,
-                pricePerKm,
-                vehicleType: normalizedCabId,
-                source: isOneWay ? 'one-way' : 'round-trip'
-              });
-
-              // Start with base price
+              // Calculate base fare and extra distance charges
               fare = basePrice;
-              
-              // Calculate extra distance charges
               let extraDistanceFare = 0;
+              
               if (effectiveDistance > baseKms) {
                 const extraKms = effectiveDistance - baseKms;
                 extraDistanceFare = extraKms * pricePerKm;
                 fare += extraDistanceFare;
-                
-                console.log('Extra distance calculation:', {
-                  extraKms,
-                  pricePerKm,
-                  extraDistanceFare
-                });
               }
 
               // Add driver allowance
               const driverAllowance = outstationFares.driverAllowance || 250;
               fare += driverAllowance;
 
-              // Night charges if applicable (between 22:00 and 05:00)
+              // Night charges if applicable
               let nightCharges = 0;
-              if (pickupDate) {
-                const hours = pickupDate.getHours();
-                if (hours >= 22 || hours <= 5) {
-                  nightCharges = Math.round(basePrice * 0.1); // 10% of base price
-                  fare += nightCharges;
-                  console.log('Added night charges:', nightCharges);
-                }
+              if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+                nightCharges = Math.round(basePrice * 0.1);
+                fare += nightCharges;
               }
 
               breakdown = {
@@ -238,21 +211,11 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               source = 'database';
               databaseFareFound = true;
 
-              console.log('Final outstation fare breakdown:', {
-                basePrice,
-                extraDistanceFare,
-                driverAllowance,
-                nightCharges,
-                totalFare: fare,
-                vehicleType: normalizedCabId
-              });
-
-              // Store the calculated fare
+              console.log('Calculated outstation fare breakdown:', breakdown);
               storeFareData(fareKey, fare, source, breakdown);
             }
-          } catch (error) {
-            console.error('Error calculating outstation fare:', error);
-            setError(error instanceof Error ? error : new Error('Failed to calculate outstation fare'));
+          } catch (e) {
+            console.error('Error fetching outstation fares:', e);
           }
         } else if (tripType === 'local') {
           try {
@@ -318,7 +281,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           }
         } else if (tripType === 'airport') {
           try {
-            // Implementation for airport fare calculation will go here
+            
           } catch (e) {
             console.error('Error fetching real-time airport fares:', e);
           }
@@ -419,7 +382,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     };
 
     calculateFareData();
-  }, [cabId, tripType, distance, packageType, pickupDate, toast]);
+  }, [cabId, tripType, distance, packageType, toast]);
 
   return { fareData, isLoading, error };
 }

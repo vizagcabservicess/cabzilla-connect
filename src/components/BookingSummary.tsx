@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -40,7 +39,6 @@ export const BookingSummary = ({
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
   
-  // Use the useFare hook for all calculations.
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,
@@ -48,7 +46,6 @@ export const BookingSummary = ({
     tripType === 'local' ? hourlyPackage : undefined
   );
 
-  // These state variables remain, but we'll shift their meaning to always follow fareData when available.
   const [baseFare, setBaseFare] = useState<number>(0);
   const [driverAllowance, setDriverAllowance] = useState<number>(250);
   const [nightCharges, setNightCharges] = useState<number>(0);
@@ -70,32 +67,6 @@ export const BookingSummary = ({
   const pendingCalculationRef = useRef<boolean>(false);
   const totalPriceRef = useRef<number>(totalPrice);
   const calculationTimeoutRef = useRef<any>(null);
-
-  // Use fareData as the true source for amounts; fallback to 0 if loading or unavailable.
-  const resolvedTotal = fareData?.totalPrice ?? 0;
-  const resolvedBaseFare = fareData?.basePrice ?? 0;
-
-  // Drive local state from fareData (so the UI matches calculation source of truth)
-  useEffect(() => {
-    if (!fareData) return;
-    setBaseFare(fareData.basePrice || 0);
-    setDriverAllowance(fareData.breakdown?.driverAllowance ?? 0);
-    setNightCharges(fareData.breakdown?.nightCharges ?? 0);
-    setExtraDistanceFare(fareData.breakdown?.extraDistanceFare ?? 0);
-    setPerKmRate(fareData.breakdown?.extraKmCharge ?? 0);
-    // estimate effective distance (this could be made more precise depending on the business logic)
-    setEffectiveDistance(distance);
-    // extraDistance: set if available in breakdown, else estimate
-    let extraDist = 0;
-    if (
-      typeof fareData.breakdown?.extraDistanceFare === 'number' &&
-      typeof fareData.breakdown?.extraKmCharge === 'number' &&
-      fareData.breakdown.extraKmCharge > 0
-    ) {
-      extraDist = Math.floor(fareData.breakdown.extraDistanceFare / fareData.breakdown.extraKmCharge);
-    }
-    setExtraDistance(extraDist);
-  }, [fareData, distance]);
 
   useEffect(() => {
     totalPriceRef.current = totalPrice;
@@ -744,8 +715,7 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  // Always show the value from fareData if available. Never fallback to totalPrice state/prop unless fareData is missing (rare).
-  const finalTotal = fareData?.totalPrice ?? 0;
+  const finalTotal = fareData?.totalPrice || totalPrice;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
@@ -795,46 +765,94 @@ export const BookingSummary = ({
           </div>
         </div>
 
-        <div className="space-y-3 transition-opacity duration-300">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">Base Fare</span>
-            <span>{baseFare > 0 ? `₹${baseFare.toLocaleString('en-IN')}` : 'Calculating...'}</span>
-          </div>
+        <div>
+          <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            {tripType === 'outstation' && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Base fare (300 km included)</span>
+                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                </div>
 
-          {driverAllowance > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Driver Allowance</span>
-              <span>₹{driverAllowance.toLocaleString('en-IN')}</span>
+                <div className="text-gray-600 text-sm ml-1">
+                  {tripMode === 'one-way' ? (
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
+                  ) : (
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
+                  )}
+                </div>
+
+                {extraDistance > 0 && extraDistanceFare > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Driver allowance</span>
+                  <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+                </div>
+
+                {nightCharges > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Night charges</span>
+                    <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tripType === 'local' && (
+              <div className="flex justify-between">
+                <span className="text-gray-700">
+                  {fareData?.breakdown?.packageLabel || '8 Hours Package'} 
+                  <span className="block text-sm text-gray-500">
+                    Includes {fareData?.breakdown?.packageLabel?.split('-')[1] || '80 km'} and {fareData?.breakdown?.packageLabel?.split('-')[0] || '8 hrs'}
+                  </span>
+                </span>
+                <span className="font-semibold">₹{finalTotal.toLocaleString()}</span>
+              </div>
+            )}
+
+            {(tripType === 'airport' || tripType === 'tour') && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Base fare</span>
+                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
+                </div>
+
+                {extraDistance > 0 && tripType === 'airport' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
+                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {tripType === 'airport' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Driver allowance</span>
+                    <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            <Separator />
+
+            <div className="flex justify-between text-lg font-bold pt-2">
+              <span>Total Amount</span>
+              <span>₹{finalTotal.toLocaleString()}</span>
             </div>
-          )}
-
-          {nightCharges > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Night Charges</span>
-              <span>₹{nightCharges.toLocaleString('en-IN')}</span>
-            </div>
-          )}
-
-          {extraDistanceFare > 0 && extraDistance > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">
-                Extra {extraDistance} km
-                {perKmRate > 0 && ` @ ₹${perKmRate}/km`}
-              </span>
-              <span>₹{extraDistanceFare.toLocaleString('en-IN')}</span>
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="flex justify-between items-center font-semibold">
-            <span>Total Amount</span>
-            <span className="text-lg">
-              ₹{calculatedFare > 0 ? calculatedFare.toLocaleString('en-IN') : 'Calculating...'}
-            </span>
           </div>
         </div>
       </div>
+
+      {(isRefreshing || showDetailsLoading) && (
+        <div className="absolute inset-0 bg-white/5 flex items-center justify-center rounded-lg pointer-events-none">
+          <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+        </div>
+      )}
     </div>
   );
 };
