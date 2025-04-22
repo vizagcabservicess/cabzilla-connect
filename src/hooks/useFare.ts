@@ -1,8 +1,12 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getOutstationFaresForVehicle } from '@/services/fareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
+import { CabType } from '@/types/cab';
+import { cabTypes } from '@/lib/cabData';
+import { debounce } from '@/lib/utils';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -176,8 +180,12 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               });
 
               // Set base price and per km rate based on trip type
-              const basePrice = isOneWay ? outstationFares.oneWayBasePrice || outstationFares.basePrice : outstationFares.roundTripBasePrice;
-              const pricePerKm = isOneWay ? outstationFares.oneWayPricePerKm || outstationFares.pricePerKm : outstationFares.roundTripPricePerKm;
+              const basePrice = isOneWay ? 
+                (outstationFares.basePrice || 3900) : 
+                outstationFares.roundTripBasePrice;
+              const pricePerKm = isOneWay ? 
+                (outstationFares.pricePerKm || 13) : 
+                outstationFares.roundTripPricePerKm;
               
               console.log('Using fare values:', {
                 basePrice,
