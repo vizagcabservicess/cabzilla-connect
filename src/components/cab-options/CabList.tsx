@@ -64,7 +64,7 @@ export const CabList: React.FC<CabListProps> = ({
             normalizedId,
             tripType,
             distance,
-            packageType
+            tripType === 'local' ? '8hrs-80km' : undefined
           );
 
           // Enhanced fare handling logic with proper error states
