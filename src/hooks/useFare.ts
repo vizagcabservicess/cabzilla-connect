@@ -168,31 +168,33 @@ export function useFare(
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
 
-            const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
             const baseKms = 300;
+            let basePrice = outstationFares.basePrice || 0;
+            let pricePerKm = outstationFares.pricePerKm || 0;
+            let driverAllowance = outstationFares.driverAllowance ?? 250;
+            let nightCharges = 0;
 
-            const pricePerKm = packageType === 'one-way'
-              ? outstationFares.pricePerKm
-              : outstationFares.roundTripPricePerKm;
-
-            const basePrice = packageType === 'one-way'
-              ? outstationFares.basePrice
-              : outstationFares.roundTripBasePrice;
+            let effectiveDistance = distance;
+            if (packageType === 'round-trip') {
+              pricePerKm = outstationFares.roundTripPricePerKm || pricePerKm;
+              basePrice = outstationFares.roundTripBasePrice || basePrice;
+              effectiveDistance = Math.max(distance * 2, baseKms);
+            }
+            if (effectiveDistance < baseKms) {
+              effectiveDistance = baseKms;
+            }
 
             let extraDistanceFare = 0;
             if (effectiveDistance > baseKms) {
               const extraKms = effectiveDistance - baseKms;
               extraDistanceFare = extraKms * pricePerKm;
-              fare = basePrice + extraDistanceFare;
-            } else {
-              fare = basePrice;
             }
 
-            const driverAllowance = outstationFares.driverAllowance || 250;
-            fare += driverAllowance;
-
-            let nightCharges = 0;
-            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+            fare = basePrice + extraDistanceFare + driverAllowance;
+            if (
+              pickupDate &&
+              (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)
+            ) {
               nightCharges = Math.round(basePrice * 0.1);
               fare += nightCharges;
             }
@@ -202,11 +204,14 @@ export function useFare(
               driverAllowance,
               nightCharges,
               extraDistanceFare,
-              extraKmCharge: pricePerKm
+              extraKmCharge: pricePerKm,
             };
-
             source = 'database';
             databaseFareFound = true;
+
+            console.log(
+              `[Outstation Calculation] basePrice: ${basePrice}, extraDistanceFare: ${extraDistanceFare}, driverAllowance: ${driverAllowance}, nightCharges: ${nightCharges}, TOTAL: ${fare}`
+            );
 
             storeFareData(fareKey, fare, source, breakdown);
           } catch (e) {
