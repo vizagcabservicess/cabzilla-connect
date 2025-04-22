@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -172,28 +171,31 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               const baseKms = 300; // Standard 300km included
               const isOneWay = packageType === 'one-way';
 
-              console.log('Initial calculation parameters:', {
-                effectiveDistance,
-                baseKms,
-                isOneWay,
-                outstationFares
-              });
+              // Set vehicle-specific base prices and rates
+              let basePrice = 3900; // Default sedan price
+              let pricePerKm = 13;  // Default sedan rate
 
-              // Set base price and per km rate based on trip type
-              const basePrice = isOneWay ? 
-                (outstationFares.basePrice || 3900) : 
-                outstationFares.roundTripBasePrice;
-              const pricePerKm = isOneWay ? 
-                (outstationFares.pricePerKm || 13) : 
-                outstationFares.roundTripPricePerKm;
-              
+              // Adjust based on vehicle type
+              if (normalizedCabId.includes('ertiga')) {
+                basePrice = 5400;
+                pricePerKm = 18;
+              } else if (normalizedCabId.includes('innova')) {
+                basePrice = 6000;
+                pricePerKm = 20;
+              }
+
+              // Use database values if available, otherwise use our calculated defaults
+              basePrice = outstationFares.basePrice || basePrice;
+              pricePerKm = outstationFares.pricePerKm || pricePerKm;
+
               console.log('Using fare values:', {
                 basePrice,
                 pricePerKm,
+                vehicleType: normalizedCabId,
                 source: isOneWay ? 'one-way' : 'round-trip'
               });
 
-              // Start with base price (₹3,900 for sedan one-way)
+              // Start with base price
               fare = basePrice;
               
               // Calculate extra distance charges
@@ -241,7 +243,8 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 extraDistanceFare,
                 driverAllowance,
                 nightCharges,
-                totalFare: fare
+                totalFare: fare,
+                vehicleType: normalizedCabId
               });
 
               // Store the calculated fare
