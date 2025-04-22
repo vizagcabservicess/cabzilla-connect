@@ -609,6 +609,7 @@ const CabsPage = () => {
                   totalPrice={totalPrice}
                   tripType={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
+                  hourlyPackage={hourlyPackage}
                 />
               </div>
             </div>
