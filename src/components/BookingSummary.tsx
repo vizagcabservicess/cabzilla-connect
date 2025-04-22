@@ -217,17 +217,18 @@ export const BookingSummary = ({
   useEffect(() => {
     if (!selectedCab || !fareData) return;
 
-    setBaseFare(fareData.basePrice || 0);
-    setDriverAllowance(fareData.breakdown.driverAllowance || 250);
-    setNightCharges(fareData.breakdown.nightCharges || 0);
-    setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
-    setCalculatedFare(fareData.totalPrice);
-
-    if (tripType === 'local' && fareData.breakdown.packageLabel) {
-      setBaseFare(fareData.basePrice);
+    if (tripType === 'local' && fareData?.breakdown?.packageLabel) {
+      setBaseFare(fareData.totalPrice);
       setDriverAllowance(0);
       setNightCharges(0);
       setExtraDistanceFare(0);
+      setCalculatedFare(fareData.totalPrice);
+    } else {
+      setBaseFare(fareData.basePrice || 0);
+      setDriverAllowance(fareData.breakdown.driverAllowance || 250);
+      setNightCharges(fareData.breakdown.nightCharges || 0);
+      setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
+      setCalculatedFare(fareData.totalPrice);
     }
   }, [fareData, selectedCab, tripType]);
 
@@ -662,7 +663,7 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  let finalTotal = totalPrice > 0 ? totalPrice : calculatedFare;
+  const finalTotal = fareData?.totalPrice || totalPrice;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
@@ -752,8 +753,13 @@ export const BookingSummary = ({
 
             {tripType === 'local' && (
               <div className="flex justify-between">
-                <span className="text-gray-700">Base fare</span>
-                <span className="font-semibold">₹{totalPrice.toLocaleString()}</span>
+                <span className="text-gray-700">
+                  {fareData?.breakdown?.packageLabel || '8 Hours Package'} 
+                  <span className="block text-sm text-gray-500">
+                    Includes {fareData?.breakdown?.packageLabel?.split('-')[1] || '80 km'} and {fareData?.breakdown?.packageLabel?.split('-')[0] || '8 hrs'}
+                  </span>
+                </span>
+                <span className="font-semibold">₹{finalTotal.toLocaleString()}</span>
               </div>
             )}
 
@@ -784,7 +790,7 @@ export const BookingSummary = ({
 
             <div className="flex justify-between text-lg font-bold pt-2">
               <span>Total Amount</span>
-              <span>₹{totalPrice.toLocaleString()}</span>
+              <span>₹{finalTotal.toLocaleString()}</span>
             </div>
           </div>
         </div>
