@@ -45,7 +45,7 @@ export function useFare() {
       const normalizedId = normalizeVehicleId(vehicleId);
       
       const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-      const url = `${domain}/api/direct-local-fares.php?vehicle_id=${normalizedId}&_t=${Date.now()}`;
+      const url = `${domain}/api/admin/direct-local-fares.php?vehicle_id=${normalizedId}&_t=${Date.now()}`;
       
       const response = await axios.get(url, {
         headers: {
@@ -60,10 +60,10 @@ export function useFare() {
       if (data?.source) {
         console.log(`Source table: ${data.source}`);
       } else {
-        console.log(`Source table not specified in response, but likely from local_package_fares`);
+        console.log(`Source not specified in response`);
       }
       
-      if (data && data.fares) {
+      if (data && data.fares && data.fares.length > 0) {
         // Find the matching fare entry for this vehicle
         const matchingFare = data.fares.find((fare: any) => 
           normalizeVehicleId(fare.vehicleId) === normalizedId
@@ -72,7 +72,11 @@ export function useFare() {
         if (matchingFare) {
           console.log(`Found local package fare for ${normalizedId}: ${matchingFare.price8hrs80km}`);
           return matchingFare;
+        } else {
+          console.log(`No matching fare found in response for ${normalizedId}`);
         }
+      } else {
+        console.log(`No fares array in response or empty fares array`);
       }
       
       return {

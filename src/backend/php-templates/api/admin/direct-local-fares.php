@@ -1,8 +1,7 @@
 
 <?php
-// Mock PHP file for direct-local-fares.php
-// Note: This file won't actually be executed in the Lovable preview environment,
-// but it helps document the expected API structure and responses.
+// PHP file for fetching data from local_package_fares database table
+// This file retrieves real pricing data from the database
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -33,45 +32,66 @@ if (!$vehicleId) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Vehicle ID is required'
+        'message' => 'Vehicle ID is required',
+        'source' => 'error_handler'
     ]);
     exit;
 }
 
-// First try to get fares from the local_package_fares table
-$conn = null;
-$fromDatabase = false;
-$sourceTable = "fallback_mock_data";
+// Log the request
+error_log("Processing local fare request for vehicle ID: " . $vehicleId);
 
+// Initialize the response data
+$response = [
+    'status' => 'success',
+    'message' => 'Local fares retrieved successfully',
+    'fares' => [],
+    'source' => 'fallback_mock_data' // Default source
+];
+
+// Try to get fares from the database first
 try {
     require_once '../../config.php';
     $conn = getDbConnection();
     
     if ($conn) {
-        // Log the query attempt
-        error_log("Attempting to query local_package_fares for vehicle_id: " . $vehicleId);
+        // Log connection success
+        error_log("Database connection successful, querying local_package_fares for vehicle_id: " . $vehicleId);
         
-        // Query for the vehicle's fare data from the local_package_fares table
-        // FIXED: Using the correct column names from the database schema
+        // Using the proper column names from the database schema (as shown in PHPMyAdmin)
         $stmt = $conn->prepare("SELECT 
-            vehicle_id, 
-            price_4hr_40km as price_4hrs_40km, 
-            price_8hr_80km as price_8hrs_80km, 
-            price_10hr_100km as price_10hrs_100km,
-            extra_km_rate as price_extra_km,
-            extra_hour_rate as price_extra_hour
+            id,
+            vehicle_id,
+            price_4hrs_40km,
+            price_8hrs_80km,
+            price_10hrs_100km,
+            price_extra_km,
+            price_extra_hour
             FROM local_package_fares WHERE vehicle_id = ?");
         
+        if (!$stmt) {
+            error_log("Error preparing statement: " . $conn->error);
+            throw new Exception("Database query preparation failed");
+        }
+        
         $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
+        $success = $stmt->execute();
+        
+        if (!$success) {
+            error_log("Error executing query: " . $stmt->error);
+            throw new Exception("Database query execution failed");
+        }
+        
         $result = $stmt->get_result();
         
         if ($result && $result->num_rows > 0) {
+            // Found data in the database
             $row = $result->fetch_assoc();
-            $sourceTable = "local_package_fares";
-            $fromDatabase = true;
+            error_log("Found data in database for vehicle_id: " . $vehicleId . " with price_8hrs_80km: " . $row['price_8hrs_80km']);
             
-            $localFares = [[
+            // Update response with database data
+            $response['source'] = 'local_package_fares';
+            $response['fares'] = [[
                 'vehicleId' => $row['vehicle_id'],
                 'price4hrs40km' => floatval($row['price_4hrs_40km']),
                 'price8hrs80km' => floatval($row['price_8hrs_80km']),
@@ -80,84 +100,77 @@ try {
                 'priceExtraHour' => floatval($row['price_extra_hour'])
             ]];
             
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'Local fares retrieved successfully from database',
-                'fares' => $localFares,
-                'source' => $sourceTable
-            ]);
+            // Return the data from database and exit
+            echo json_encode($response);
             exit;
         } else {
             error_log("No results found in local_package_fares for vehicle_id: " . $vehicleId);
         }
+    } else {
+        error_log("Database connection failed");
     }
 } catch (Exception $e) {
-    // Log error but continue to fallback data
-    error_log("Error querying database for local fares: " . $e->getMessage());
+    error_log("Database error: " . $e->getMessage());
 }
 
-// Sample fare data based on vehicle type (fallback if database query fails)
-$localFares = [];
-$sourceTable = "fallback_mock_data";
+// If we reach here, we didn't get data from the database
+// Use fallback mock data
+error_log("Using fallback data for vehicle_id: " . $vehicleId);
 
+// Sample fare data based on vehicle type
 switch ($vehicleId) {
     case 'sedan':
-        $localFares[] = [
+        $response['fares'] = [[
             'vehicleId' => 'sedan',
             'price4hrs40km' => 800,
             'price8hrs80km' => 1500,
             'price10hrs100km' => 1800,
             'priceExtraKm' => 12,
             'priceExtraHour' => 100
-        ];
+        ]];
         break;
     case 'ertiga':
-        $localFares[] = [
+        $response['fares'] = [[
             'vehicleId' => 'ertiga',
             'price4hrs40km' => 1000,
             'price8hrs80km' => 1800,
             'price10hrs100km' => 2200,
             'priceExtraKm' => 15,
             'priceExtraHour' => 120
-        ];
+        ]];
         break;
     case 'innova_crysta':
-        $localFares[] = [
+        $response['fares'] = [[
             'vehicleId' => 'innova_crysta',
             'price4hrs40km' => 1200,
             'price8hrs80km' => 2200,
             'price10hrs100km' => 2600,
             'priceExtraKm' => 18,
             'priceExtraHour' => 150
-        ];
+        ]];
         break;
     case 'tempo_traveller':
-        $localFares[] = [
+        $response['fares'] = [[
             'vehicleId' => 'tempo_traveller',
             'price4hrs40km' => 2000,
             'price8hrs80km' => 3500,
             'price10hrs100km' => 4000,
             'priceExtraKm' => 25,
             'priceExtraHour' => 200
-        ];
+        ]];
         break;
     default:
         // For unknown vehicles, return empty fare structure
-        $localFares[] = [
+        $response['fares'] = [[
             'vehicleId' => $vehicleId,
             'price4hrs40km' => 0,
             'price8hrs80km' => 0,
             'price10hrs100km' => 0,
             'priceExtraKm' => 0,
             'priceExtraHour' => 0
-        ];
+        ]];
         break;
 }
 
 // Return JSON response
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Local fares retrieved successfully',
-    'fares' => $localFares,
-    'source' => $sourceTable
-]);
+echo json_encode($response);
