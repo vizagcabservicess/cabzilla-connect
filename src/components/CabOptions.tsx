@@ -45,7 +45,15 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
 
   // Handle cab selection
   const handleCabSelect = (cab: CabType) => {
-    onSelectCab(cab);
+    const completeCAb: CabType = {
+      ...cab,
+      image: cab.image || cab.imageUrl || '/placeholder.svg',
+      amenities: cab.amenities || [],
+      description: cab.description || '',
+      ac: cab.ac !== undefined ? cab.ac : true
+    };
+    
+    onSelectCab(completeCAb);
     setHasSelectedCab(true);
     
     // Store the current trip type in localStorage for better fare syncing
@@ -355,7 +363,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
 
   return (
     <CabList
-      cabTypes={cabTypes}
+      cabTypes={cabTypes} 
       selectedCabId={selectedCab?.id || ""}
       onSelectCab={(cab, fare) => handleCabSelect(cab)}
       distance={distance}

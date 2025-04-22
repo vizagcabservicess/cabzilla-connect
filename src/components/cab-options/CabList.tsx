@@ -1,22 +1,8 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import CabOptionCard from '../CabOptionCard';
 import { useFare } from '@/hooks/useFare';
 import { formatPrice } from '@/lib/utils';
-
-interface CabType {
-  id: string;
-  name: string;
-  capacity: number;
-  luggageCapacity: number;
-  description?: string;
-  features?: string[];
-  imageUrl?: string;
-  price?: number;
-  image?: string;
-  amenities?: string[];
-  ac?: boolean;
-}
+import { CabType } from '@/types/cab';
 
 interface CabListProps {
   cabTypes: CabType[];

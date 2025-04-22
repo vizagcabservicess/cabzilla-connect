@@ -2,16 +2,7 @@
 import React from 'react';
 import { formatPrice } from '@/lib/utils';
 import { Users, Briefcase, CheckCircle2, Info } from 'lucide-react';
-
-interface CabType {
-  id: string;
-  name: string;
-  capacity: number;
-  luggageCapacity: number;
-  description?: string;
-  features?: string[];
-  imageUrl?: string;
-}
+import { CabType } from '@/types/cab';
 
 interface CabOptionCardProps {
   cab: CabType;
@@ -51,9 +42,9 @@ const CabOptionCard: React.FC<CabOptionCardProps> = ({
         {/* Cab image and details */}
         <div className="flex items-center gap-3">
           <div className="w-16 h-12 bg-gray-200 rounded">
-            {cab.imageUrl ? (
+            {cab.image ? (
               <img 
-                src={cab.imageUrl} 
+                src={cab.image} 
                 alt={cab.name} 
                 className="w-full h-full object-cover rounded"
               />
@@ -106,10 +97,10 @@ const CabOptionCard: React.FC<CabOptionCardProps> = ({
       </div>
       
       {/* Features list if available */}
-      {cab.features && cab.features.length > 0 && (
+      {cab.amenities && cab.amenities.length > 0 && (
         <div className="mt-3 pt-3 border-t border-gray-200">
           <div className="flex flex-wrap gap-2">
-            {cab.features.map((feature, index) => (
+            {cab.amenities.map((feature, index) => (
               <span 
                 key={index}
                 className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full"
