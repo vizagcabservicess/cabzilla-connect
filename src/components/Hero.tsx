@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
-import BookingSummary from './BookingSummary';
+import { BookingSummary } from './BookingSummary';
 import { 
   vizagLocations, 
   calculateAirportFare,

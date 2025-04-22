@@ -6,7 +6,7 @@ import { CabOptions } from "@/components/CabOptions";
 import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
-import BookingSummary from "@/components/BookingSummary"; 
+import { BookingSummary } from "@/components/BookingSummary"; 
 import { 
   Location, 
   vizagLocations, 

@@ -1,10 +1,11 @@
+
 // We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
-import BookingSummary from "@/components/BookingSummary";
+import { BookingSummary } from "@/components/BookingSummary";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";

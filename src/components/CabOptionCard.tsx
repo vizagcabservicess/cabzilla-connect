@@ -1,118 +1,140 @@
-
-import React from 'react';
-import { formatPrice } from '@/lib/utils';
-import { Users, Briefcase, CheckCircle2, Info } from 'lucide-react';
+import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
+import { formatPrice } from '@/lib/cabData';
+import { Users, Briefcase, Info, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface CabOptionCardProps {
   cab: CabType;
-  fare: number;
+  fare: number | string; // Updated to handle string fare
   isSelected: boolean;
-  onSelect: () => void;
-  fareDetails?: string;
-  isCalculating?: boolean;
+  onSelect: (cab: CabType) => void;
+  fareDetails: string;
+  isCalculating: boolean;
 }
 
-const CabOptionCard: React.FC<CabOptionCardProps> = ({
-  cab,
-  fare,
-  isSelected,
-  onSelect,
+export function CabOptionCard({ 
+  cab, 
+  fare, 
+  isSelected, 
+  onSelect, 
   fareDetails,
-  isCalculating = false
-}) => {
-  // Card highlight classes based on selection state
-  const cardClasses = `
-    relative p-4 rounded-lg border transition-all cursor-pointer
-    ${isSelected 
-      ? 'border-blue-500 bg-blue-50 shadow-md' 
-      : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'}
-  `;
+  isCalculating
+}: CabOptionCardProps) {
+  const [expandedDetails, setExpandedDetails] = useState(false);
+
+  const toggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedDetails(!expandedDetails);
+  };
+
+  const handleCardClick = () => {
+    console.log('Card clicked, selecting cab:', cab.name);
+    onSelect(cab);
+  };
 
   return (
-    <div className={cardClasses} onClick={onSelect}>
-      {/* Selected indicator checkmark */}
-      {isSelected && (
-        <div className="absolute -top-2 -right-2 bg-blue-500 rounded-full text-white p-0.5">
-          <CheckCircle2 size={18} />
-        </div>
+    <div 
+      className={cn(
+        "border rounded-lg overflow-hidden transition-all duration-300",
+        isSelected 
+          ? "border-blue-500 shadow-md bg-blue-50 transform scale-[1.02]" 
+          : "border-gray-200 hover:border-gray-300 bg-white"
       )}
+      onClick={handleCardClick}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+    >
+      <div className="p-4 cursor-pointer relative">
+        {isSelected && (
+          <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+            <Check size={16} />
+          </div>
+        )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Cab image and details */}
-        <div className="flex items-center gap-3">
-          <div className="w-16 h-12 bg-gray-200 rounded">
-            {cab.image ? (
-              <img 
-                src={cab.image} 
-                alt={cab.name} 
-                className="w-full h-full object-cover rounded"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500">
-                {cab.name.charAt(0)}
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-1">
-            <h3 className="font-medium text-gray-900">{cab.name}</h3>
-            
-            <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-              <div className="flex items-center gap-1">
-                <Users size={14} />
-                <span>{cab.capacity} persons</span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <Briefcase size={14} />
-                <span>{cab.luggageCapacity} bags</span>
-              </div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-3">
+            <div className={cn(
+              "w-12 h-12 rounded-md flex items-center justify-center bg-cover bg-center",
+              isSelected ? "bg-blue-100" : "bg-gray-100"
+            )} style={{backgroundImage: cab.image && !cab.image.includes('undefined') ? `url(${cab.image})` : 'none'}}>
+              {(!cab.image || cab.image.includes('undefined')) && (
+                <span className={isSelected ? "text-blue-500 text-xs" : "text-gray-500 text-xs"}>
+                  {cab.name.charAt(0)}
+                </span>
+              )}
             </div>
-            
-            {cab.description && (
-              <p className="text-sm text-gray-500 mt-1">{cab.description}</p>
-            )}
+            <div>
+              <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
+              <p className="text-xs text-gray-500">{cab.description}</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <div className={cn(
+              "text-lg font-bold",
+              isSelected ? "text-blue-600" : "text-gray-800"
+            )}>
+              {isCalculating ? (
+                <div className="text-sm text-gray-500">Calculating...</div>
+              ) : typeof fare === 'number' ? ( //Added type check here
+                <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
+              ) : fareDetails ? (
+                <div className="text-sm text-red-500">{fareDetails}</div>
+              ) : (
+                <div className="text-sm text-gray-500">Price unavailable</div>
+              )}
+            </div>
+            <div className="text-xs text-gray-400">Local package</div>
+            <div className="flex items-center text-xs text-gray-400">
+              <span className="text-green-600 mr-1 text-[10px]">✓</span>
+              Includes taxes & fees (Tolls & Permits Extra)
+            </div>
           </div>
         </div>
-        
-        {/* Fare display */}
-        <div className="flex flex-col items-end">
-          {isCalculating ? (
-            <div className="text-gray-400 font-medium">Calculating...</div>
-          ) : fare > 0 ? (
-            <div className="text-xl font-bold text-gray-900">
-              {formatPrice(fare)}
+
+        <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
+            <Users size={12} className="mr-1" />
+            {cab.capacity} persons
+          </div>
+          <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
+            <Briefcase size={12} className="mr-1" />
+            {cab.luggageCapacity} bags
+          </div>
+          {cab.ac && (
+            <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
+              <Check size={12} className="mr-1" />
+              AC
             </div>
-          ) : (
-            <div className="text-gray-500">Price unavailable</div>
           )}
-          
-          {fareDetails && (
-            <div className="text-sm text-gray-500">
-              {fareDetails}
+          {cab.amenities && cab.amenities.length > 0 && (
+            <div 
+              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
+              onClick={(e) => {
+                e.stopPropagation();  // Prevent card selection when clicking this button
+                toggleExpand(e);
+              }}
+            >
+              <Info size={12} className="mr-1" />
+              {expandedDetails ? 'Hide details' : 'More details'}
             </div>
           )}
         </div>
+
+        {expandedDetails && cab.amenities && cab.amenities.length > 0 && (
+          <div className="mt-3 pt-3 border-t text-sm text-gray-600">
+            <div className="font-medium mb-1">Amenities:</div>
+            <div className="flex flex-wrap gap-1">
+              {cab.amenities.map((amenity, index) => (
+                <span key={index} className="bg-gray-50 text-xs px-2 py-1 rounded">
+                  {amenity}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-      
-      {/* Features list if available */}
-      {cab.amenities && cab.amenities.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <div className="flex flex-wrap gap-2">
-            {cab.amenities.map((feature, index) => (
-              <span 
-                key={index}
-                className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full"
-              >
-                {feature}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
-};
-
-export default CabOptionCard;
+}
