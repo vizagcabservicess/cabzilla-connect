@@ -3,9 +3,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getOutstationFaresForVehicle } from '@/services/fareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
-import { CabType } from '@/types/cab';
-import { cabTypes } from '@/lib/cabData';
-import { debounce } from '@/lib/utils';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -167,34 +164,38 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
             console.log('Retrieved outstation fares:', outstationFares);
 
             if (outstationFares) {
-              // For one-way trips, include driver return distance
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
               const baseKms = 300; // Standard 300km included
               const isOneWay = packageType === 'one-way';
 
-              // Use the correct base price and per km rate based on trip type
-              const basePrice = isOneWay ? outstationFares.basePrice : outstationFares.roundTripBasePrice;
-              const pricePerKm = isOneWay ? outstationFares.pricePerKm : outstationFares.roundTripPricePerKm;
-              const driverAllowance = outstationFares.driverAllowance || 250;
-
-              console.log(`Base calculation parameters:`, {
+              console.log('Initial calculation parameters:', {
                 effectiveDistance,
                 baseKms,
-                basePrice,
-                pricePerKm,
-                driverAllowance
+                isOneWay,
+                outstationFares
               });
 
-              // Start with base price
+              // Set base price and per km rate based on trip type
+              const basePrice = isOneWay ? outstationFares.oneWayBasePrice || outstationFares.basePrice : outstationFares.roundTripBasePrice;
+              const pricePerKm = isOneWay ? outstationFares.oneWayPricePerKm || outstationFares.pricePerKm : outstationFares.roundTripPricePerKm;
+              
+              console.log('Using fare values:', {
+                basePrice,
+                pricePerKm,
+                source: isOneWay ? 'one-way' : 'round-trip'
+              });
+
+              // Start with base price (₹3,900 for sedan one-way)
               fare = basePrice;
               
-              // Calculate extra distance charges if applicable
+              // Calculate extra distance charges
               let extraDistanceFare = 0;
               if (effectiveDistance > baseKms) {
                 const extraKms = effectiveDistance - baseKms;
                 extraDistanceFare = extraKms * pricePerKm;
                 fare += extraDistanceFare;
-                console.log(`Extra distance calculation:`, {
+                
+                console.log('Extra distance calculation:', {
                   extraKms,
                   pricePerKm,
                   extraDistanceFare
@@ -202,6 +203,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               }
 
               // Add driver allowance
+              const driverAllowance = outstationFares.driverAllowance || 250;
               fare += driverAllowance;
 
               // Night charges if applicable (between 22:00 and 05:00)
@@ -211,7 +213,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 if (hours >= 22 || hours <= 5) {
                   nightCharges = Math.round(basePrice * 0.1); // 10% of base price
                   fare += nightCharges;
-                  console.log(`Added night charges: ${nightCharges}`);
+                  console.log('Added night charges:', nightCharges);
                 }
               }
 
@@ -233,6 +235,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 nightCharges,
                 totalFare: fare
               });
+
+              // Store the calculated fare
+              storeFareData(fareKey, fare, source, breakdown);
             }
           } catch (error) {
             console.error('Error calculating outstation fare:', error);
