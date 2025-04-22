@@ -105,14 +105,26 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
 
-        const cachedFare = localStorage.getItem(`fare_${tripType}_${normalizeVehicleId(cabId)}`);
-        if (cachedFare) {
-          const fare = parseInt(cachedFare, 10);
+        // Only use BookingSummary calculated fares
+        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`);
+        if (bookingSummaryFare) {
+          const fare = parseInt(bookingSummaryFare, 10);
           setFareData({
             totalPrice: fare,
             basePrice: fare,
             breakdown: { basePrice: fare }
           });
+          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
+        } else {
+          console.log(`No BookingSummary fare available for ${cabId}`);
+          // Trigger a new calculation
+          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+            detail: {
+              cabId: normalizeVehicleId(cabId),
+              tripType,
+              timestamp: Date.now()
+            }
+          }));
         }
       } finally {
         setIsLoading(false);

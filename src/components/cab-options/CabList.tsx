@@ -27,7 +27,12 @@ export const CabList: React.FC<CabListProps> = ({
   packageType = '8hrs-80km'
 }) => {
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
-  const normalizeVehicleId = (id: string): string => id.toLowerCase();
+  const normalizeVehicleId = (id: string): string => {
+    return id.trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+  };
 
   // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType) => {
@@ -77,43 +82,24 @@ export const CabList: React.FC<CabListProps> = ({
             fare = fareData.totalPrice;
             fareText = `₹${fare}`;
           } else {
-            // Fallback to default pricing based on vehicle type
-            switch (normalizedId) {
-              case 'sedan':
-                fare = 1500;
-                break;
-              case 'ertiga':
-                fare = 1800;
-                break;
-              case 'innova_crysta':
-                fare = 2200;
-                break;
-              case 'innova_hycross':
-              case 'mpv':
-                fare = 6000;
-                break;
-              case 'tempo_traveller':
-                fare = 3500;
-                break;
-              case 'etios':
-              case 'toyota':
-              case 'amaze':
-                fare = 4200;
-                break;
-              case 'dzire_cng':
-                fare = 5000;
-                break;
-              case 'bus':
-                fare = 12000;
-                break;
-              default:
-                fare = 0;
+            // Check if BookingSummary has calculated a fare
+            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+            if (bookingSummaryFare) {
+              fare = parseInt(bookingSummaryFare, 10);
+              fareText = `₹${Math.round(fare)}`;
+              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
+            } else {
+              console.log(`No fare available for ${cab.name}`);
+              fareText = 'Calculating...';
+              // Trigger a fare calculation event
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: normalizedId,
+                  tripType,
+                  timestamp: Date.now()
+                }
+              }));
             }
-            fareText = fare > 0 ? `₹${Math.round(fare)}` : 'Price unavailable';
-  // Cache the valid fare
-  if (fare > 0) {
-    localStorage.setItem(`fare_${tripType}_${normalizedId}`, fare.toString());
-  }
           }
           
           // Debug logging

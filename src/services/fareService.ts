@@ -465,7 +465,7 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
       // First try the main API endpoint
       const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
         params: {
-          vehicle_id: vehicleId,
+          vehicle_id: normalizeVehicleId(vehicleId),
           _t: now, // Cache busting
           force: 'true',
           source: 'vehicle_pricing' // Force using vehicle_pricing table
@@ -474,18 +474,18 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
         timeout: 5000 // 5 second timeout
       });
 
-      if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-        console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+      if (response.data && response.data.fares && response.data.fares[normalizeVehicleId(vehicleId)]) {
+        console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[normalizeVehicleId(vehicleId)]);
         console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
 
         // Cache this specific vehicle fare
         const cachedFares = localStorage.getItem('outstation_fares');
         const fares = cachedFares ? JSON.parse(cachedFares) : {};
-        fares[vehicleId] = response.data.fares[vehicleId];
+        fares[normalizeVehicleId(vehicleId)] = response.data.fares[normalizeVehicleId(vehicleId)];
         localStorage.setItem('outstation_fares', JSON.stringify(fares));
         localStorage.setItem('outstation_fares_timestamp', now.toString());
 
-        return response.data.fares[vehicleId];
+        return response.data.fares[normalizeVehicleId(vehicleId)];
       }
     } catch (mainError) {
       console.error(`Error fetching outstation fares for vehicle ${vehicleId} from main endpoint:`, mainError);
@@ -496,7 +496,7 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
         const fallbackUrl = `${baseUrl}/api/vehicle-pricing.php`;
         const fallbackResponse = await axios.get(fallbackUrl, {
           params: {
-            vehicle_id: vehicleId,
+            vehicle_id: normalizeVehicleId(vehicleId),
             trip_type: 'outstation',
             _t: now,
             force: 'true'
@@ -522,7 +522,7 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
           // Cache this fare
           const cachedFares = localStorage.getItem('outstation_fares');
           const fares = cachedFares ? JSON.parse(cachedFares) : {};
-          fares[vehicleId] = fare;
+          fares[normalizeVehicleId(vehicleId)] = fare;
           localStorage.setItem('outstation_fares', JSON.stringify(fares));
           localStorage.setItem('outstation_fares_timestamp', now.toString());
 
@@ -536,57 +536,57 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
     // If direct fetches failed, try to get all fares
     console.warn(`No specific fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getOutstationFares();
-    if (allFares && allFares[vehicleId]) {
-      return allFares[vehicleId];
+    if (allFares && allFares[normalizeVehicleId(vehicleId)]) {
+      return allFares[normalizeVehicleId(vehicleId)];
     }
 
     // Try to find in cache as a last resort
     const cachedFares = localStorage.getItem('outstation_fares');
     if (cachedFares) {
       const fares = JSON.parse(cachedFares);
-      if (fares[vehicleId]) {
-        return fares[vehicleId];
+      if (fares[normalizeVehicleId(vehicleId)]) {
+        return fares[normalizeVehicleId(vehicleId)];
       }
     }
 
     console.warn(`No outstation fare found for vehicle ${vehicleId}, using defaults`);
     // Return default values based on vehicle type
     const defaultFares = generateDefaultOutstationFares();
-    return defaultFares[vehicleId] || {
-      basePrice: vehicleId.includes('sedan') ? 1500 : 
-                vehicleId.includes('ertiga') ? 1800 : 
-                vehicleId.includes('innova') ? 2200 : 2000,
-      pricePerKm: vehicleId.includes('sedan') ? 12 : 
-                 vehicleId.includes('ertiga') ? 14 : 
-                 vehicleId.includes('innova') ? 16 : 15,
+    return defaultFares[normalizeVehicleId(vehicleId)] || {
+      basePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1500 : 
+                normalizeVehicleId(vehicleId).includes('ertiga') ? 1800 : 
+                normalizeVehicleId(vehicleId).includes('innova') ? 2200 : 2000,
+      pricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 12 : 
+                 normalizeVehicleId(vehicleId).includes('ertiga') ? 14 : 
+                 normalizeVehicleId(vehicleId).includes('innova') ? 16 : 15,
       driverAllowance: 250,
       nightHaltCharge: 300,
-      roundTripBasePrice: vehicleId.includes('sedan') ? 1400 : 
-                        vehicleId.includes('ertiga') ? 1700 : 
-                        vehicleId.includes('innova') ? 2000 : 1800,
-      roundTripPricePerKm: vehicleId.includes('sedan') ? 10 : 
-                         vehicleId.includes('ertiga') ? 12 : 
-                         vehicleId.includes('innova') ? 14 : 13
+      roundTripBasePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1400 : 
+                        normalizeVehicleId(vehicleId).includes('ertiga') ? 1700 : 
+                        normalizeVehicleId(vehicleId).includes('innova') ? 2000 : 1800,
+      roundTripPricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 10 : 
+                         normalizeVehicleId(vehicleId).includes('ertiga') ? 12 : 
+                         normalizeVehicleId(vehicleId).includes('innova') ? 14 : 13
     };
   } catch (error) {
     console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
 
     // Return default values based on vehicle type
     return {
-      basePrice: vehicleId.includes('sedan') ? 1500 : 
-                vehicleId.includes('ertiga') ? 1800 : 
-                vehicleId.includes('innova') ? 2200 : 2000,
-      pricePerKm: vehicleId.includes('sedan') ? 12 : 
-                 vehicleId.includes('ertiga') ? 14 : 
-                 vehicleId.includes('innova') ? 16 : 15,
+      basePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1500 : 
+                normalizeVehicleId(vehicleId).includes('ertiga') ? 1800 : 
+                normalizeVehicleId(vehicleId).includes('innova') ? 2200 : 2000,
+      pricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 12 : 
+                 normalizeVehicleId(vehicleId).includes('ertiga') ? 14 : 
+                 normalizeVehicleId(vehicleId).includes('innova') ? 16 : 15,
       driverAllowance: 250,
       nightHaltCharge: 300,
-      roundTripBasePrice: vehicleId.includes('sedan') ? 1400 : 
-                        vehicleId.includes('ertiga') ? 1700 : 
-                        vehicleId.includes('innova') ? 2000 : 1800,
-      roundTripPricePerKm: vehicleId.includes('sedan') ? 10 : 
-                         vehicleId.includes('ertiga') ? 12 : 
-                         vehicleId.includes('innova') ? 14 : 13
+      roundTripBasePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1400 : 
+                        normalizeVehicleId(vehicleId).includes('ertiga') ? 1700 : 
+                        normalizeVehicleId(vehicleId).includes('innova') ? 2000 : 1800,
+      roundTripPricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 10 : 
+                         normalizeVehicleId(vehicleId).includes('ertiga') ? 12 : 
+                         normalizeVehicleId(vehicleId).includes('innova') ? 14 : 13
     };
   }
 }
@@ -645,7 +645,7 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
 
     const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: {
-        vehicle_id: vehicleId,
+        vehicle_id: normalizeVehicleId(vehicleId),
         _t: now, // Cache busting
         force: 'true',
         source: 'vehicle_pricing' // Force using vehicle_pricing table
@@ -653,25 +653,25 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
       headers: getBypassHeaders()
     });
 
-    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-      console.log(`Local fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+    if (response.data && response.data.fares && response.data.fares[normalizeVehicleId(vehicleId)]) {
+      console.log(`Local fares for vehicle ${vehicleId}:`, response.data.fares[normalizeVehicleId(vehicleId)]);
       console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
 
       // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('local_fares');
       const fares = cachedFares ? JSON.parse(cachedFares) : {};
-      fares[vehicleId] = response.data.fares[vehicleId];
+      fares[normalizeVehicleId(vehicleId)] = response.data.fares[normalizeVehicleId(vehicleId)];
       localStorage.setItem('local_fares', JSON.stringify(fares));
       localStorage.setItem('local_fares_timestamp', now.toString());
 
-      return response.data.fares[vehicleId];
+      return response.data.fares[normalizeVehicleId(vehicleId)];
     }
 
     // If direct fetch failed, try to get all fares
     console.warn(`No specific local fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getLocalFares();
-    if (allFares && allFares[vehicleId]) {
-      return allFares[vehicleId];
+    if (allFares && allFares[normalizeVehicleId(vehicleId)]) {
+      return allFares[normalizeVehicleId(vehicleId)];
     }
 
     // Return default values if no data found
@@ -689,8 +689,8 @@ async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
     const cachedFares = localStorage.getItem('local_fares');
     if (cachedFares) {
       const fares = JSON.parse(cachedFares);
-      if (fares[vehicleId]) {
-        return fares[vehicleId];
+      if (fares[normalizeVehicleId(vehicleId)]) {
+        return fares[normalizeVehicleId(vehicleId)];
       }
     }
 
@@ -751,7 +751,7 @@ async function getAirportFares(): Promise<Record<string, AirportFare>> {
 async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare> {
   try {
     // Normalize vehicle ID to match database convention (handle casing and special chars)
-    const normalizedVehicleId = vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
+    const normalizedVehicleId = normalizeVehicleId(vehicleId);
 
     console.log(`Fetching airport fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId}) with timestamp:`, Date.now());
 
@@ -821,7 +821,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
           // Try a case-insensitive match
           const keys = Object.keys(response.data.fares);
           const matchingKey = keys.find(key => key.toLowerCase() === vehicleId.toLowerCase() || 
-                                              key.toLowerCase() === normalizedVehicleId.toLowerCase());
+                                              key.toLowerCase() ===normalizedVehicleId.toLowerCase());
 
           if (matchingKey) {
             console.log(`Found case-insensitive match in fares object:`, response.data.fares[matchingKey]);
@@ -892,7 +892,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
       }
 
       // Try normalized ID
-      const normalizedVehicleId = vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
+      const normalizedVehicleId = normalizeVehicleId(vehicleId);
       if (fares[normalizedVehicleId]) {
         return fares[normalizedVehicleId];
       }
@@ -932,7 +932,7 @@ function convertToAirportFare(data: any): AirportFare {
 // Generate default airport fares based on vehicle type
 function generateDefaultAirportFare(vehicleId: string): AirportFare {
   // Normalize vehicle ID for matching
-  const normalizedId = vehicleId.toLowerCase();
+  const normalizedId = normalizeVehicleId(vehicleId);
 
   // Default values based on vehicle types in the database
   if (normalizedId.includes('sedan') || normalizedId === 'toyota' || normalizedId === 'dzire cng') {
@@ -999,6 +999,15 @@ function generateDefaultAirportFare(vehicleId: string): AirportFare {
   };
 }
 
+// Normalize vehicle ID - critically important
+function normalizeVehicleId(vehicleId: string): string {
+  if (!vehicleId) return '';
+  return vehicleId.trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+}
+
 // Create the fareService object with all methods
 export const fareService = {
   clearCache: clearFareCache,
@@ -1019,7 +1028,8 @@ export const fareService = {
   getFaresByTripType,
   // Add the new helper functions
   convertToAirportFare,
-  generateDefaultAirportFare
+  generateDefaultAirportFare,
+  normalizeVehicleId
 };
 
 // Export individual functions for direct imports
@@ -1039,5 +1049,6 @@ export {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType
+  getFaresByTripType,
+  normalizeVehicleId
 };
