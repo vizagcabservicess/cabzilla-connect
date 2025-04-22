@@ -85,6 +85,7 @@ export const BookingSummary = ({
               cabId: normalizedId,
               tripType: tripType,
               tripMode: tripMode,
+              packageType: tripType === 'local' ? '8hrs-80km' : undefined,
               calculated: true,
               fare: totalPrice,
               timestamp: Date.now()
@@ -135,6 +136,7 @@ export const BookingSummary = ({
               cabId: normalizedId,
               tripType: tripType,
               tripMode: tripMode,
+              packageType: tripType === 'local' ? '8hrs-80km' : undefined,
               calculated: true,
               fare: totalPrice,
               timestamp: Date.now()
@@ -419,6 +421,7 @@ export const BookingSummary = ({
               cabId: normalizedId,
               tripType: tripType,
               tripMode: tripMode,
+              packageType: tripType === 'local' ? '8hrs-80km' : undefined,
               calculated: true,
               fare: finalFare,
               timestamp: Date.now()
@@ -462,6 +465,7 @@ export const BookingSummary = ({
               cabId: normalizedId,
               tripType: tripType,
               tripMode: tripMode,
+              packageType: tripType === 'local' ? '8hrs-80km' : undefined,
               calculated: true,
               fare: newCalculatedFare,
               timestamp: Date.now()
@@ -512,6 +516,7 @@ export const BookingSummary = ({
                   cabId: normalizedId,
                   tripType: tripType,
                   tripMode: tripMode,
+                  packageType: tripType === 'local' ? '8hrs-80km' : undefined,
                   calculated: true,
                   fare: customEvent.detail.fare,
                   timestamp: Date.now()
@@ -601,6 +606,7 @@ export const BookingSummary = ({
                   cabId: normalizedId,
                   tripType: tripType,
                   tripMode: tripMode,
+                  packageType: tripType === 'local' ? '8hrs-80km' : undefined,
                   calculated: true,
                   fare: totalPrice,
                   timestamp: Date.now()
@@ -751,9 +757,9 @@ export const BookingSummary = ({
               </>
             )}
 
-            {tripType === 'local' && packageType && (
+            {tripType === 'local' && fareData && fareData.breakdown.packageLabel && ( //Added check for fareData and packageLabel
               <div className="flex justify-between">
-                <span className="text-gray-700">{packageType} Package</span>
+                <span className="text-gray-700">{fareData.breakdown.packageLabel} Package</span> {/*Used packageLabel from fareData*/}
                 <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
               </div>
             )}
@@ -784,8 +790,7 @@ export const BookingSummary = ({
             <Separator />
 
             <div className="flex justify-between text-lg font-bold pt-2">
-              <span>Total Amount</span>
-              <span>
+              <span>Total Amount</span>              <span>
                 {isLoading ? (
                   <span className="text-gray-400">Calculating...</span>
                 ) : (
