@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -6,6 +5,7 @@ import { getLocalPackagePrice } from './packageData';
 import { tourFares } from './tourData';
 import axios from 'axios';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
+import { getVehiclePricingTier, getDefaultVehiclePricing } from '@/utils/vehiclePricingUtils';
 
 // Create a fare cache with expiration
 const fareCache = new Map<string, { expire: number, price: number }>();
@@ -414,14 +414,23 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         
         // For outstation trips
         const minimumKm = 300; // Minimum 300km for one-way trips
-        let perKmRate = 0;
-        let baseFare = 0;
-        let driverAllowance = outstationFares.driverAllowance || 250;
+        
+        // Get the default pricing tier for this vehicle
+        const pricingTier = getVehiclePricingTier(cabType.id);
+        
+        // Start with default values from the pricing tier
+        let perKmRate = pricingTier.pricePerKm;
+        let baseFare = pricingTier.basePrice;
+        let driverAllowance = pricingTier.driverAllowance;
+        
+        // Override with database values if available
+        if (outstationFares) {
+          if (outstationFares.basePrice && outstationFares.basePrice > 0) baseFare = outstationFares.basePrice;
+          if (outstationFares.pricePerKm && outstationFares.pricePerKm > 0) perKmRate = outstationFares.pricePerKm;
+          if (outstationFares.driverAllowance && outstationFares.driverAllowance > 0) driverAllowance = outstationFares.driverAllowance;
+        }
         
         if (tripMode === 'one-way') {
-          perKmRate = outstationFares.pricePerKm;
-          baseFare = outstationFares.basePrice;
-          
           // FIXED: For one-way trips, we need to consider the driver has to return
           // so we should calculate extra distance considering round trip for driver
           // Calculate total effective distance (one-way for customer, round trip for driver)
@@ -441,10 +450,10 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         }
         // For round trip
         else {
-          perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
+          perKmRate = outstationFares?.roundTripPricePerKm || (perKmRate * 0.85);
           
-          // For round trips, use the roundTripBasePrice
-          baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
+          // For round trips, use the roundTripBasePrice if available
+          baseFare = outstationFares?.roundTripBasePrice || (baseFare * 0.9);
           
           // For round trips, the effective distance is doubled
           const effectiveDistance = distance * 2;

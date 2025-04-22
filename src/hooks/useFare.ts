@@ -6,6 +6,7 @@ import { normalizeVehicleId } from '@/utils/safeStringUtils';
 import { CabType } from '@/types/cab';
 import { cabTypes } from '@/lib/cabData';
 import { debounce } from '@/lib/utils';
+import { getVehiclePricingTier, validateFareAmount } from '@/utils/vehiclePricingUtils';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -101,41 +102,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     }
   };
 
-  const validateFareAmount = (fare: number, cabId: string, tripType: string): boolean => {
-    if (isNaN(fare) || fare <= 0) return false;
-    
-    let minFare = 500;
-    let maxFare = 20000;
-    
-    const normalizedId = normalizeVehicleId(cabId);
-    
-    if (normalizedId.includes('sedan')) {
-      minFare = tripType === 'local' ? 1000 : 2000;
-      maxFare = 8000;
-    } else if (normalizedId.includes('ertiga') || normalizedId.includes('suv')) {
-      minFare = tripType === 'local' ? 1500 : 2500;
-      maxFare = 12000;
-    } else if (normalizedId.includes('innova') || normalizedId.includes('crysta') || normalizedId.includes('mpv')) {
-      minFare = tripType === 'local' ? 2000 : 3000;
-      maxFare = 15000;
-    } else if (normalizedId.includes('luxury')) {
-      minFare = tripType === 'local' ? 3000 : 4000;
-      maxFare = 20000;
-    }
-    
-    if (fare < minFare) {
-      console.warn(`Fare value too low: ${fare} for ${cabId} (${tripType}). Minimum expected: ${minFare}`);
-      return false;
-    }
-    
-    if (fare > maxFare) {
-      console.warn(`Fare value too high: ${fare} for ${cabId} (${tripType}). Maximum expected: ${maxFare}`);
-      return false;
-    }
-    
-    return true;
-  };
-
   const debouncedDispatchEvent = debounce((detail: any) => {
     window.dispatchEvent(new CustomEvent('fare-calculated', { detail }));
   }, 100);
@@ -171,37 +137,35 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               const baseKms = 300;
               const isOneWay = packageType === 'one-way';
 
-              // Set vehicle-specific base prices and rates
-              let basePrice = 3900; // Default sedan price
-              let pricePerKm = 13;  // Default sedan rate
-              let driverAllowance = 250; // Default driver allowance
-
-              // Adjust based on vehicle type with specific handling for Innova variants
-              if (normalizedCabId.includes('ertiga')) {
-                basePrice = 5400;
-                pricePerKm = 18;
-                driverAllowance = 250;
-              } else if (normalizedCabId.includes('innova_hycross')) {
-                basePrice = 5730;
-                pricePerKm = 22;
-                driverAllowance = 300;
-              } else if (normalizedCabId.includes('innova')) {
-                basePrice = 5500;
-                pricePerKm = 20;
-                driverAllowance = 300;
-              }
+              // Get the default pricing tier for this vehicle
+              const pricingTier = getVehiclePricingTier(normalizedCabId);
+              console.log('Vehicle pricing tier:', pricingTier);
+              
+              // Start with default values from the pricing tier
+              let basePrice = pricingTier.basePrice;
+              let pricePerKm = pricingTier.pricePerKm;
+              let driverAllowance = pricingTier.driverAllowance;
 
               console.log('Vehicle-specific base rates:', {
                 vehicleType: normalizedCabId,
                 basePrice,
                 pricePerKm,
-                driverAllowance
+                driverAllowance,
+                category: pricingTier.category,
+                displayName: pricingTier.displayName
               });
 
-              // Override with database values if available
-              basePrice = outstationFares.basePrice || basePrice;
-              pricePerKm = outstationFares.pricePerKm || pricePerKm;
-              driverAllowance = outstationFares.driverAllowance || driverAllowance;
+              // Override with database values if available and valid
+              if (outstationFares.basePrice && outstationFares.basePrice > 0) basePrice = outstationFares.basePrice;
+              if (outstationFares.pricePerKm && outstationFares.pricePerKm > 0) pricePerKm = outstationFares.pricePerKm;
+              if (outstationFares.driverAllowance && outstationFares.driverAllowance > 0) driverAllowance = outstationFares.driverAllowance;
+              
+              console.log('Final rates after database override:', {
+                basePrice,
+                pricePerKm,
+                driverAllowance,
+                source: outstationFares.basePrice ? 'database' : 'default tier'
+              });
 
               // Start with base price
               fare = basePrice;
@@ -261,6 +225,9 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                   fare,
                   difference: Math.abs(calculatedSum - fare)
                 });
+                
+                // Fix the fare to match the sum of components for consistency
+                fare = calculatedSum;
               }
 
               source = 'database';
