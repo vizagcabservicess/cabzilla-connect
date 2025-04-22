@@ -47,11 +47,21 @@ export function useFare() {
       const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
       const url = `${domain}/api/direct-local-fares.php?vehicle_id=${normalizedId}&_t=${Date.now()}`;
       
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        headers: {
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
       const data = response.data;
       
       console.log(`Local fares for vehicle ${normalizedId}:`, data);
-      console.log(`Source table: ${data.source || 'unknown'}`);
+      
+      if (data?.source) {
+        console.log(`Source table: ${data.source}`);
+      } else {
+        console.log(`Source table not specified in response, but likely from local_package_fares`);
+      }
       
       if (data && data.fares) {
         // Find the matching fare entry for this vehicle
@@ -223,7 +233,6 @@ export function useFare() {
         fareData.totalPrice = localFare.totalPrice ? Number(localFare.totalPrice) : packagePrice;
         
         console.log(`Using local package fare for ${vehicleId}: ₹${fareData.totalPrice}`);
-
       } else if (tripType === 'outstation') {
         const outstationFare = await getOutstationFaresForVehicle(vehicleId);
         
@@ -249,7 +258,6 @@ export function useFare() {
         };
         
         console.log(`Using outstation fare for ${vehicleId}: ₹${fareData.totalPrice}`);
-
       } else if (tripType === 'airport') {
         const airportFare = await getAirportFaresForVehicle(vehicleId);
         
@@ -277,6 +285,17 @@ export function useFare() {
       }
 
       console.log(`Fare for ${vehicleId}:`, { fareData, calculatedFare: fareData.totalPrice, normalizedId, tripType, packageType });
+      
+      // Trigger an event to notify that a fare has been calculated
+      window.dispatchEvent(new CustomEvent('fare-calculated', {
+        detail: {
+          cabId: vehicleId,
+          tripType: tripType,
+          fare: fareData.totalPrice,
+          calculated: true,
+          timestamp: Date.now()
+        }
+      }));
       
       return {
         fareData,

@@ -38,8 +38,51 @@ if (!$vehicleId) {
     exit;
 }
 
-// Sample fare data based on vehicle type
+// First try to get fares from the local_package_fares table
+$conn = null;
+$fromDatabase = false;
+$sourceTable = "local_package_fares";
+
+try {
+    require_once '../../config.php';
+    $conn = getDbConnection();
+    
+    if ($conn) {
+        // Query for the vehicle's fare data from the local_package_fares table
+        $stmt = $conn->prepare("SELECT * FROM local_package_fares WHERE vehicle_id = ?");
+        $stmt->bind_param("s", $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            
+            $localFares = [[
+                'vehicleId' => $row['vehicle_id'],
+                'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                'priceExtraKm' => floatval($row['price_extra_km']),
+                'priceExtraHour' => floatval($row['price_extra_hour'])
+            ]];
+            
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Local fares retrieved successfully from database',
+                'fares' => $localFares,
+                'source' => $sourceTable
+            ]);
+            exit;
+        }
+    }
+} catch (Exception $e) {
+    // Log error but continue to fallback data
+    error_log("Error querying database for local fares: " . $e->getMessage());
+}
+
+// Sample fare data based on vehicle type (fallback if database query fails)
 $localFares = [];
+$sourceTable = "fallback_mock_data";
 
 switch ($vehicleId) {
     case 'sedan':
@@ -99,5 +142,6 @@ switch ($vehicleId) {
 echo json_encode([
     'status' => 'success',
     'message' => 'Local fares retrieved successfully',
-    'fares' => $localFares
+    'fares' => $localFares,
+    'source' => $sourceTable
 ]);
