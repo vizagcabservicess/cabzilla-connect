@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -71,37 +70,28 @@ export const CabList: React.FC<CabListProps> = ({
           // Enhanced fare handling logic with proper error states
           let fare = 0;
           let fareText = 'Price unavailable';
-          
+
           if (isLoading) {
             fareText = 'Calculating...';
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
           } else if (tripType === 'local' && packageType) {
-            // Handle local package fares
-            const localFares = fareData?.breakdown;
-            if (localFares && localFares.basePrice > 0) {
-              fare = localFares.basePrice;
-              fareText = `₹${fare}`;
-              console.log(`Using local package fare for ${cab.name}: ${fareText}`);
+            // Only use actual API fares for local packages
+            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+            if (bookingSummaryFare) {
+              fare = parseInt(bookingSummaryFare, 10);
+              fareText = `₹${Math.round(fare)}`;
             } else {
-              // Try getting from BookingSummary
-              const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-              if (bookingSummaryFare) {
-                fare = parseInt(bookingSummaryFare, 10);
-                fareText = `₹${Math.round(fare)}`;
-                console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-              } else {
-                fareText = 'Calculating...';
-                window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                  detail: {
-                    cabId: normalizedId,
-                    tripType,
-                    packageType,
-                    timestamp: Date.now()
-                  }
-                }));
-              }
+              fareText = 'Calculating...';
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: normalizedId,
+                  tripType,
+                  packageType,
+                  timestamp: Date.now()
+                }
+              }));
             }
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
             // Use the API totalPrice for non-local trips
@@ -126,7 +116,7 @@ export const CabList: React.FC<CabListProps> = ({
               }));
             }
           }
-          
+
           // Debug logging
           console.log(`Fare for ${cab.name}:`, {
             fareData,
