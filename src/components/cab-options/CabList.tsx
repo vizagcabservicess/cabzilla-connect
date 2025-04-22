@@ -1,17 +1,18 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { TripType } from '@/lib/tripTypes';
-import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
 interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType) => void;
-  tripType: TripType;
-  distance: number;
+  isAirportTransfer?: boolean;
+  tripType?: TripType;
+  distance?: number;
   packageType?: string;
 }
 
@@ -20,10 +21,29 @@ export const CabList: React.FC<CabListProps> = ({
   selectedCabId,
   isCalculatingFares,
   handleSelectCab,
-  tripType,
-  distance,
+  isAirportTransfer,
+  tripType = 'local',
+  distance = 0,
   packageType = '8hrs-80km'
 }) => {
+  const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
+  const normalizeVehicleId = (id: string): string => {
+    return id.trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+  };
+
+  // Enhanced cab selection handler
+  const enhancedSelectCab = (cab: CabType) => {
+    handleSelectCab(cab);
+    setFadeIn(prev => ({ ...prev, [cab.id]: true }));
+
+    setTimeout(() => {
+      setFadeIn(prev => ({ ...prev, [cab.id]: false }));
+    }, 500);
+  };
+
   return (
     <div className="space-y-3">
       {isCalculatingFares && (
@@ -40,20 +60,67 @@ export const CabList: React.FC<CabListProps> = ({
         </div>
       ) : (
         cabTypes.map((cab) => {
+          const normalizedId = normalizeVehicleId(cab.id);
           const { fareData, isLoading, error } = useFare(
-            normalizeVehicleId(cab.id),
+            normalizedId,
             tripType,
             distance,
             packageType
           );
 
+          // Enhanced fare handling logic with proper error states
+          let fare = 0;
+          let fareText = 'Price unavailable';
+          
+          if (isLoading) {
+            fareText = 'Calculating...';
+          } else if (error) {
+            console.error(`Fare error for ${cab.name}:`, error);
+            fareText = 'Error fetching price';
+          } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
+            // Use the API totalPrice if available and valid
+            fare = fareData.totalPrice;
+            fareText = `₹${fare}`;
+          } else {
+            // Check if BookingSummary has calculated a fare
+            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+            if (bookingSummaryFare) {
+              fare = parseInt(bookingSummaryFare, 10);
+              fareText = `₹${Math.round(fare)}`;
+              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
+            } else {
+              console.log(`No fare available for ${cab.name}`);
+              fareText = 'Calculating...';
+              // Trigger a fare calculation event
+              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                detail: {
+                  cabId: normalizedId,
+                  tripType,
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          }
+          
+          // Debug logging
+          console.log(`Fare for ${cab.name}:`, {
+            fareData,
+            calculatedFare: fare,
+            normalizedId,
+            tripType,
+            packageType
+          });
+
           return (
-            <div key={cab.id}>
+            <div 
+              key={cab.id}
+              className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+            >
               <CabOptionCard 
                 cab={cab}
-                fare={fareData?.totalPrice || 0}
+                fare={fare}
                 isSelected={selectedCabId === cab.id}
-                onSelect={() => handleSelectCab(cab)}
+                onSelect={() => enhancedSelectCab(cab)}
                 isCalculating={isLoading}
                 fareDetails={error ? "Error fetching fare" : undefined}
               />
