@@ -63,7 +63,7 @@ export const BookingSummary = ({
     extraDistanceFare: 0
   });
   
-  // Add the missing state variables for loading states
+  // State variables for loading states
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
 
