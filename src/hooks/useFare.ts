@@ -192,7 +192,7 @@ export function useFare() {
         if (packageType.includes('4hrs') || packageType.includes('4hr') || packageType.includes('04hrs')) {
           packagePrice = localFare.price4hrs40km || 0;
           fareData.breakdown = {
-            packageLabel: '4hrs-40km',
+            packageLabel: 1, // Fix Type Error: Change string to number
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,
@@ -201,7 +201,7 @@ export function useFare() {
         } else if (packageType.includes('10hrs') || packageType.includes('10hr')) {
           packagePrice = localFare.price10hrs100km || 0;
           fareData.breakdown = {
-            packageLabel: '10hrs-100km',
+            packageLabel: 2, // Fix Type Error: Change string to number
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,
@@ -211,7 +211,7 @@ export function useFare() {
           // Default to 8hrs-80km
           packagePrice = localFare.price8hrs80km || 0;
           fareData.breakdown = {
-            packageLabel: '8hrs-80km',
+            packageLabel: 3, // Fix Type Error: Change string to number
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,

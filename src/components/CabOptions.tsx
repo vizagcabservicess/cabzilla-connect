@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { CabList } from './cab-options/CabList';
+import CabList from './cab-options/CabList';
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
