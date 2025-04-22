@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -61,12 +62,17 @@ export const BookingSummary = ({
     extraDistance: 0,
     extraDistanceFare: 0
   });
+  
+  // Add the missing state variables for loading states
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedCab) return;
 
     const calculateFareComponents = async () => {
       try {
+        setIsRefreshing(true); // Set loading state when starting calculation
         const outstationFares = await getOutstationFaresForVehicle(normalizeVehicleId(selectedCab.id));
         console.log('Retrieved outstation fares:', outstationFares);
 
@@ -129,11 +135,27 @@ export const BookingSummary = ({
 
       } catch (error) {
         console.error('Error calculating fare components:', error);
+      } finally {
+        setIsRefreshing(false); // Reset loading state after calculation
       }
     };
 
     calculateFareComponents();
   }, [selectedCab, distance, tripMode, tripType, pickupDate]);
+
+  // Effect to manage detail loading state
+  useEffect(() => {
+    if (isLoading) {
+      setShowDetailsLoading(true);
+    } else {
+      // Add a small delay before hiding loading indicator for better UX
+      const timer = setTimeout(() => {
+        setShowDetailsLoading(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
