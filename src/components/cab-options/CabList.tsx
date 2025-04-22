@@ -77,12 +77,38 @@ export const CabList: React.FC<CabListProps> = ({
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
+          } else if (tripType === 'local' && packageType) {
+            // Handle local package fares
+            const localFares = fareData?.breakdown;
+            if (localFares && localFares.basePrice > 0) {
+              fare = localFares.basePrice;
+              fareText = `₹${fare}`;
+              console.log(`Using local package fare for ${cab.name}: ${fareText}`);
+            } else {
+              // Try getting from BookingSummary
+              const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
+              if (bookingSummaryFare) {
+                fare = parseInt(bookingSummaryFare, 10);
+                fareText = `₹${Math.round(fare)}`;
+                console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
+              } else {
+                fareText = 'Calculating...';
+                window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+                  detail: {
+                    cabId: normalizedId,
+                    tripType,
+                    packageType,
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            }
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-            // Use the API totalPrice if available and valid
+            // Use the API totalPrice for non-local trips
             fare = fareData.totalPrice;
             fareText = `₹${fare}`;
           } else {
-            // Check if BookingSummary has calculated a fare
+            // Fallback to BookingSummary
             const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
             if (bookingSummaryFare) {
               fare = parseInt(bookingSummaryFare, 10);
@@ -91,7 +117,6 @@ export const CabList: React.FC<CabListProps> = ({
             } else {
               console.log(`No fare available for ${cab.name}`);
               fareText = 'Calculating...';
-              // Trigger a fare calculation event
               window.dispatchEvent(new CustomEvent('request-fare-calculation', {
                 detail: {
                   cabId: normalizedId,
