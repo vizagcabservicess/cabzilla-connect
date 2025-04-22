@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { MapPin, Calendar, User, RefreshCcw } from 'lucide-react';
 import { Separator } from './ui/separator';
 import { useFare } from '@/hooks/useFare';
+import { formatPrice } from '@/lib/utils';
 
 interface Location {
   name: string;
@@ -30,8 +31,8 @@ interface BookingSummaryProps {
   packageType?: string;
   fare?: number;
   onFareUpdated?: (fare: number) => void;
-  returnDate?: Date | null;  // Add missing returnDate prop
-  totalPrice?: number;       // Add missing totalPrice prop
+  returnDate?: Date | null;  // Added returnDate prop
+  totalPrice?: number;       // Added totalPrice prop
 }
 
 const BookingSummary: React.FC<BookingSummaryProps> = ({
@@ -45,8 +46,8 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
   packageType = '8hrs-80km',
   fare: parentFare = 0,
   onFareUpdated,
-  returnDate = null,       // Use the passed returnDate with default value
-  totalPrice               // Use the passed totalPrice
+  returnDate = null,
+  totalPrice: initialTotalPrice // Renamed to avoid duplicate identifier
 }) => {
   // State for fare calculation
   const [fareData, setFareData] = useState<any | null>(null);
@@ -54,6 +55,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [calculatedPrice, setCalculatedPrice] = useState<number>(initialTotalPrice || 0);
 
   // Use the fare calculation hook
   const { 
@@ -71,7 +73,13 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
   const [extraDistanceFare, setExtraDistanceFare] = useState(0);
   const [perKmRate, setPerKmRate] = useState(0);
   const [effectiveDistance, setEffectiveDistance] = useState(0);
-  const [totalPrice, setTotalPrice] = useState(0);
+
+  // Update calculated price when initialTotalPrice changes
+  useEffect(() => {
+    if (initialTotalPrice) {
+      setCalculatedPrice(initialTotalPrice);
+    }
+  }, [initialTotalPrice]);
 
   // Calculate fare for the selected cab
   const calculateFareDetails = useCallback(async () => {
@@ -169,15 +177,15 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
       if (result && result.fareData) {
         setFareData(result.fareData);
         // Use the provided totalPrice if available, otherwise use calculated fare
-        const calculatedTotal = totalPrice !== undefined ? totalPrice : result.fareData.totalPrice;
-        setTotalPrice(calculatedTotal);
+        const newTotal = initialTotalPrice !== undefined ? initialTotalPrice : result.fareData.totalPrice;
+        setCalculatedPrice(newTotal);
         
         // Notify parent if it requested fare updates
         if (onFareUpdated) {
-          onFareUpdated(calculatedTotal);
+          onFareUpdated(newTotal);
         }
         
-        console.log('BookingSummary: Using fare from useFare hook for', tripType, 'package:', calculatedTotal);
+        console.log('BookingSummary: Using fare from useFare hook for', tripType, 'package:', newTotal);
       }
     } catch (error) {
       console.error('Error calculating fare details:', error);
@@ -196,7 +204,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
     getOutstationFaresForVehicle, 
     getAirportFaresForVehicle,
     onFareUpdated,
-    totalPrice
+    initialTotalPrice
   ]);
 
   // Calculate fare when selected cab, trip type, or distance changes
@@ -360,8 +368,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
                 {isLoading ? (
                   <span className="text-gray-400">Calculating...</span>
                 ) : (
-                  // Use totalPrice if provided, otherwise use fareData.totalPrice
-                  `₹${(totalPrice !== undefined ? totalPrice : (fareData?.totalPrice || 0)).toLocaleString()}`
+                  formatPrice(calculatedPrice)
                 )}
               </span>
             </div>

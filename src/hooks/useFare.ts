@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 
@@ -192,7 +191,7 @@ export function useFare() {
         if (packageType.includes('4hrs') || packageType.includes('4hr') || packageType.includes('04hrs')) {
           packagePrice = localFare.price4hrs40km || 0;
           fareData.breakdown = {
-            packageLabel: 1, // Fix Type Error: Change string to number
+            packageLabel: 1, 
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,
@@ -201,7 +200,7 @@ export function useFare() {
         } else if (packageType.includes('10hrs') || packageType.includes('10hr')) {
           packagePrice = localFare.price10hrs100km || 0;
           fareData.breakdown = {
-            packageLabel: 2, // Fix Type Error: Change string to number
+            packageLabel: 2, 
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,
@@ -211,7 +210,7 @@ export function useFare() {
           // Default to 8hrs-80km
           packagePrice = localFare.price8hrs80km || 0;
           fareData.breakdown = {
-            packageLabel: 3, // Fix Type Error: Change string to number
+            packageLabel: 3, 
             basePrice: packagePrice,
             extraDistanceFare: 0,
             extraKmCharge: localFare.priceExtraKm || 14,
@@ -221,7 +220,7 @@ export function useFare() {
         
         // Use totalPrice from API if available, else use the package price
         fareData.basePrice = packagePrice;
-        fareData.totalPrice = localFare.totalPrice || packagePrice;
+        fareData.totalPrice = localFare.totalPrice ? Number(localFare.totalPrice) : packagePrice;
         
         console.log(`Using local package fare for ${vehicleId}: ₹${fareData.totalPrice}`);
 
@@ -233,7 +232,7 @@ export function useFare() {
         const pricePerKm = outstationFare.price_per_km || 0;
         const driverAllowance = outstationFare.driver_allowance || 0;
         
-        let totalPrice = outstationFare.total_price || 0;
+        let totalPrice = outstationFare.total_price ? Number(outstationFare.total_price) : 0;
         if (!totalPrice && distance > 0) {
           totalPrice = baseFare + (distance * pricePerKm) + driverAllowance;
         }
@@ -259,7 +258,7 @@ export function useFare() {
         const pickupPrice = airportFare.pickup_price || 0;
         const dropPrice = airportFare.drop_price || 0;
         
-        let totalPrice = airportFare.total_price || 0;
+        let totalPrice = airportFare.total_price ? Number(airportFare.total_price) : 0;
         if (!totalPrice) {
           totalPrice = basePrice + pickupPrice + dropPrice;
         }

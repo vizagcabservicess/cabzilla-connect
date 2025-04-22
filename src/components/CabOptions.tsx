@@ -43,6 +43,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
 
+  // Handle cab selection
   const handleCabSelect = (cab: CabType) => {
     onSelectCab(cab);
     setHasSelectedCab(true);

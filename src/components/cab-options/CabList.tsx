@@ -12,6 +12,10 @@ interface CabType {
   description?: string;
   features?: string[];
   imageUrl?: string;
+  price?: number;
+  image?: string;
+  amenities?: string[];
+  ac?: boolean;
 }
 
 interface CabListProps {
@@ -22,10 +26,10 @@ interface CabListProps {
   onSelectCab: (cab: CabType, fare: number) => void;
   selectedCabId?: string;
   onFareCalculated?: (fare: number) => void;
-  cabFares?: Record<string, number>;  // Add this missing prop
-  isCalculatingFares?: boolean;       // Add this missing prop
-  handleSelectCab?: (cab: CabType) => void;  // Add this missing prop
-  getFareDetails?: (cab: CabType) => string; // Add this missing prop
+  cabFares?: Record<string, number>;
+  isCalculatingFares?: boolean;
+  handleSelectCab?: (cab: CabType) => void;
+  getFareDetails?: (cab: CabType) => string;
 }
 
 const CabList: React.FC<CabListProps> = ({
@@ -36,8 +40,8 @@ const CabList: React.FC<CabListProps> = ({
   onSelectCab,
   selectedCabId,
   onFareCalculated,
-  cabFares = {},  // Provide default value
-  isCalculatingFares = false,  // Provide default value
+  cabFares = {},
+  isCalculatingFares = false,
   handleSelectCab,
   getFareDetails
 }) => {
@@ -72,6 +76,7 @@ const CabList: React.FC<CabListProps> = ({
           const result = await fetchFare(cab.id, tripType, distance, packageType);
           if (result && result.fareData) {
             newFares[cab.id] = result.fareData.totalPrice;
+            console.log(`Fetched fare for ${cab.id}: ${result.fareData.totalPrice}`);
           }
         } catch (error) {
           console.error(`Error calculating fare for ${cab.id}:`, error);
