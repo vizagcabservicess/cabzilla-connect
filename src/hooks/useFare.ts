@@ -105,16 +105,16 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
 
-        // Only use BookingSummary calculated fares
+        // Always check BookingSummary fare first
         const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`);
         if (bookingSummaryFare) {
           const fare = parseInt(bookingSummaryFare, 10);
+          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
           setFareData({
             totalPrice: fare,
             basePrice: fare,
             breakdown: { basePrice: fare }
           });
-          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
         } else {
           console.log(`No BookingSummary fare available for ${cabId}`);
           // Trigger a new calculation

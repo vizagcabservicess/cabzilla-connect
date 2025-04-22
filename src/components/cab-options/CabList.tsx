@@ -68,39 +68,58 @@ export const CabList: React.FC<CabListProps> = ({
             packageType
           );
 
-          // Enhanced fare handling logic with proper error states
+          // Unified fare handling with BookingSummary sync
           let fare = 0;
           let fareText = 'Price unavailable';
+          const normalizedId = normalizeVehicleId(cab.id);
+          
+          // First check BookingSummary fare
+          const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
           
           if (isLoading) {
             fareText = 'Calculating...';
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
+          } else if (bookingSummaryFare) {
+            // Always prefer BookingSummary fare if available
+            fare = parseInt(bookingSummaryFare, 10);
+            fareText = `₹${Math.round(fare)}`;
+            console.log(`Using synchronized BookingSummary fare for ${cab.name}: ${fareText}`);
           } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-            // Use the API totalPrice if available and valid
             fare = fareData.totalPrice;
             fareText = `₹${fare}`;
+            console.log(`Using API fare for ${cab.name}: ${fareText}`);
           } else {
-            // Check if BookingSummary has calculated a fare
-            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-            if (bookingSummaryFare) {
-              fare = parseInt(bookingSummaryFare, 10);
-              fareText = `₹${Math.round(fare)}`;
-              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-            } else {
-              console.log(`No fare available for ${cab.name}`);
-              fareText = 'Calculating...';
-              // Trigger a fare calculation event
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  timestamp: Date.now()
-                }
-              }));
-            }
+            console.log(`No fare available for ${cab.name}, requesting calculation`);
+            fareText = 'Calculating...';
+            window.dispatchEvent(new CustomEvent('request-fare-calculation', {
+              detail: {
+                cabId: normalizedId,
+                tripType,
+                timestamp: Date.now()
+              }
+            }));
           }
+
+          // Listen for fare updates
+          useEffect(() => {
+            const handleFareUpdate = (event: CustomEvent) => {
+              if (event.detail.cabId === normalizedId) {
+                console.log(`Received fare update for ${cab.name}:`, event.detail.fare);
+                setFadeIn(prev => ({ ...prev, [cab.id]: true }));
+                setTimeout(() => setFadeIn(prev => ({ ...prev, [cab.id]: false })), 500);
+              }
+            };
+
+            window.addEventListener('fare-calculated', handleFareUpdate as EventListener);
+            window.addEventListener('significant-fare-difference', handleFareUpdate as EventListener);
+
+            return () => {
+              window.removeEventListener('fare-calculated', handleFareUpdate as EventListener);
+              window.removeEventListener('significant-fare-difference', handleFareUpdate as EventListener);
+            };
+          }, [normalizedId, cab.name, cab.id]);
           
           // Debug logging
           console.log(`Fare for ${cab.name}:`, {
