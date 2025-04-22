@@ -1,7 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
-import { getLocalPackagePrice } from '@/lib/packageData';
 import { getLocalFaresForVehicle } from '@/services/fareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
@@ -19,8 +19,8 @@ interface FareData {
   totalPrice: number;
   basePrice: number;
   breakdown: FareBreakdown;
+  source?: string;
 }
-
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
   const [fareData, setFareData] = useState<FareData | null>(null);
@@ -38,21 +38,25 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
       try {
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
+        let source = 'calculated';
 
         if (tripType === 'local') {
           try {
             console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
-            if (localFares && packageType) {
+            
+            if (localFares) {
               const packageMap = {
                 '8hrs-80km': 'price8hrs80km',
                 '4hrs-40km': 'price4hrs40km',
                 '10hrs-100km': 'price10hrs100km'
               };
+              
               const key = packageMap[packageType];
               if (key && localFares[key] > 0) {
                 console.log(`Found local package fare for ${cabId}: ${localFares[key]}`);
                 fare = localFares[key];
+                source = 'database';
                 breakdown = {
                   basePrice: fare,
                   packageLabel: packageType,
@@ -65,18 +69,12 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
           } catch (e) {
             console.error('Error fetching real-time local fares:', e);
           }
-
-          if (fare === 0) {
-            fare = await getLocalPackagePrice(packageType, normalizeVehicleId(cabId));
-            breakdown = {
-              basePrice: fare,
-              packageLabel: packageType
-            };
-          }
         } else {
+          // For outstation and airport trips
           const result = await calculateFare(normalizeVehicleId(cabId), tripType, distance);
           fare = result.totalFare;
           breakdown = result.breakdown;
+          source = 'api';
         }
 
         const fareKey = `fare_${tripType}_${normalizeVehicleId(cabId)}`;
@@ -85,33 +83,25 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
         setFareData({
           totalPrice: fare,
           basePrice: breakdown.basePrice || fare,
-          breakdown
+          breakdown,
+          source
         });
+
+        // Dispatch fare calculated event
+        window.dispatchEvent(new CustomEvent('fare-calculated', {
+          detail: {
+            cabId: cabId,
+            tripType,
+            calculated: true,
+            fare: fare,
+            source,
+            timestamp: Date.now()
+          }
+        }));
+
       } catch (err) {
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
-
-        // Only use BookingSummary calculated fares
-        const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizeVehicleId(cabId)}`);
-        if (bookingSummaryFare) {
-          const fare = parseInt(bookingSummaryFare, 10);
-          setFareData({
-            totalPrice: fare,
-            basePrice: fare,
-            breakdown: { basePrice: fare }
-          });
-          console.log(`Using BookingSummary fare for ${cabId}: ${fare}`);
-        } else {
-          console.log(`No BookingSummary fare available for ${cabId}`);
-          // Trigger a new calculation
-          window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-            detail: {
-              cabId: normalizeVehicleId(cabId),
-              tripType,
-              timestamp: Date.now()
-            }
-          }));
-        }
       } finally {
         setIsLoading(false);
       }

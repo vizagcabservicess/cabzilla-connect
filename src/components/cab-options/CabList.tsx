@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -12,6 +11,7 @@ interface CabListProps {
   handleSelectCab: (cab: CabType) => void;
   isAirportTransfer?: boolean;
   tripType?: TripType;
+  tripMode?: string;
   distance?: number;
   packageType?: string;
 }
@@ -23,6 +23,7 @@ export const CabList: React.FC<CabListProps> = ({
   handleSelectCab,
   isAirportTransfer,
   tripType = 'local',
+  tripMode = 'one-way',
   distance = 0,
   packageType = '8hrs-80km'
 }) => {
@@ -68,7 +69,6 @@ export const CabList: React.FC<CabListProps> = ({
             packageType
           );
 
-          // Enhanced fare handling logic with proper error states
           let fare = 0;
           let fareText = 'Price unavailable';
           
@@ -77,64 +77,12 @@ export const CabList: React.FC<CabListProps> = ({
           } else if (error) {
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
-          } else if (tripType === 'local' && packageType) {
-            // Handle local package fares
-            const localFares = fareData?.breakdown;
-            if (localFares && localFares.basePrice > 0) {
-              fare = localFares.basePrice;
-              fareText = `₹${fare}`;
-              console.log(`Using local package fare for ${cab.name}: ${fareText}`);
-            } else {
-              // Try getting from BookingSummary
-              const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-              if (bookingSummaryFare) {
-                fare = parseInt(bookingSummaryFare, 10);
-                fareText = `₹${Math.round(fare)}`;
-                console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-              } else {
-                fareText = 'Calculating...';
-                window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                  detail: {
-                    cabId: normalizedId,
-                    tripType,
-                    packageType,
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            }
-          } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-            // Use the API totalPrice for non-local trips
+          } else if (fareData) {
             fare = fareData.totalPrice;
-            fareText = `₹${fare}`;
-          } else {
-            // Fallback to BookingSummary
-            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-            if (bookingSummaryFare) {
-              fare = parseInt(bookingSummaryFare, 10);
-              fareText = `₹${Math.round(fare)}`;
-              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-            } else {
-              console.log(`No fare available for ${cab.name}`);
-              fareText = 'Calculating...';
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  timestamp: Date.now()
-                }
-              }));
-            }
+            fareText = fareData.source === 'database' ? 
+              `Database fare: ₹${fare}` : 
+              `Calculated fare: ₹${fare}`;
           }
-          
-          // Debug logging
-          console.log(`Fare for ${cab.name}:`, {
-            fareData,
-            calculatedFare: fare,
-            normalizedId,
-            tripType,
-            packageType
-          });
 
           return (
             <div 
@@ -147,7 +95,9 @@ export const CabList: React.FC<CabListProps> = ({
                 isSelected={selectedCabId === cab.id}
                 onSelect={() => enhancedSelectCab(cab)}
                 isCalculating={isLoading}
-                fareDetails={error ? "Error fetching fare" : undefined}
+                fareDetails={error ? "Error fetching fare" : fareText}
+                tripType={tripType}
+                tripMode={tripMode}
               />
             </div>
           );

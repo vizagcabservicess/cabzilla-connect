@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -6,11 +7,13 @@ import { cn } from '@/lib/utils';
 
 interface CabOptionCardProps {
   cab: CabType;
-  fare: number | string; // Updated to handle string fare
+  fare: number | string;
   isSelected: boolean;
   onSelect: (cab: CabType) => void;
   fareDetails: string;
   isCalculating: boolean;
+  tripType?: string;
+  tripMode?: string;
 }
 
 export function CabOptionCard({ 
@@ -19,7 +22,9 @@ export function CabOptionCard({
   isSelected, 
   onSelect, 
   fareDetails,
-  isCalculating
+  isCalculating,
+  tripType = 'local',
+  tripMode = 'one-way'
 }: CabOptionCardProps) {
   const [expandedDetails, setExpandedDetails] = useState(false);
 
@@ -31,6 +36,19 @@ export function CabOptionCard({
   const handleCardClick = () => {
     console.log('Card clicked, selecting cab:', cab.name);
     onSelect(cab);
+  };
+
+  const getTripTypeLabel = () => {
+    switch (tripType) {
+      case 'airport':
+        return 'Airport Transfer';
+      case 'outstation':
+        return tripMode === 'round-trip' ? 'Outstation Round Trip' : 'Outstation One Way';
+      case 'local':
+        return 'Local Package';
+      default:
+        return 'Trip';
+    }
   };
 
   return (
@@ -77,18 +95,23 @@ export function CabOptionCard({
             )}>
               {isCalculating ? (
                 <div className="text-sm text-gray-500">Calculating...</div>
-              ) : typeof fare === 'number' ? ( //Added type check here
-                <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
+              ) : typeof fare === 'number' ? (
+                <div>
+                  <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
+                  {fareDetails && (
+                    <div className="text-xs text-gray-500">{fareDetails}</div>
+                  )}
+                </div>
               ) : fareDetails ? (
                 <div className="text-sm text-red-500">{fareDetails}</div>
               ) : (
                 <div className="text-sm text-gray-500">Price unavailable</div>
               )}
             </div>
-            <div className="text-xs text-gray-400">Local package</div>
+            <div className="text-xs text-gray-600">{getTripTypeLabel()}</div>
             <div className="flex items-center text-xs text-gray-400">
               <span className="text-green-600 mr-1 text-[10px]">✓</span>
-              Includes taxes & fees (Tolls & Permits Extra)
+              Includes taxes & fees
             </div>
           </div>
         </div>
