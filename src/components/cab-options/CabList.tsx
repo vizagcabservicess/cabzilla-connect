@@ -1,47 +1,127 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import CabOptionCard from '../CabOptionCard';
 import { useFare } from '@/hooks/useFare';
-import { CabType } from '@/types/cab';
-import { CabOptionCard } from '@/components/CabOptionCard';
-import { TripType } from '@/lib/tripTypes';
+import { formatPrice } from '@/lib/utils';
+
+interface CabType {
+  id: string;
+  name: string;
+  capacity: number;
+  luggageCapacity: number;
+  description?: string;
+  features?: string[];
+  imageUrl?: string;
+}
 
 interface CabListProps {
   cabTypes: CabType[];
-  selectedCabId: string | null;
-  isCalculatingFares: boolean;
-  handleSelectCab: (cab: CabType) => void;
-  isAirportTransfer?: boolean;
-  tripType?: TripType;
-  distance?: number;
-  packageType?: string;
+  tripType: string;
+  distance: number;
+  packageType: string;
+  onSelectCab: (cab: CabType, fare: number) => void;
+  selectedCabId?: string;
+  onFareCalculated?: (fare: number) => void;
 }
 
-export const CabList: React.FC<CabListProps> = ({
+const CabList: React.FC<CabListProps> = ({
   cabTypes,
+  tripType,
+  distance,
+  packageType,
+  onSelectCab,
   selectedCabId,
-  isCalculatingFares,
-  handleSelectCab,
-  isAirportTransfer,
-  tripType = 'local',
-  distance = 0,
-  packageType = '8hrs-80km'
+  onFareCalculated
 }) => {
+  const [cabFares, setCabFares] = useState<Record<string, number>>({});
+  const [isCalculatingFares, setIsCalculatingFares] = useState(false);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
-  const normalizeVehicleId = (id: string): string => {
-    return id.trim()
-      .toLowerCase()
-      .replace(/\s+/g, '_')
-      .replace(/[^a-z0-9_]/g, '');
+  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState(Date.now());
+  
+  // Get fare calculation functions
+  const { fetchFare, isLoading: isFareLoading } = useFare();
+
+  // Calculate fares for all cab types
+  const calculateAllFares = useCallback(async () => {
+    if (!cabTypes || cabTypes.length === 0) return;
+    
+    setIsCalculatingFares(true);
+    const newFares: Record<string, number> = {};
+    
+    try {
+      const promises = cabTypes.map(async (cab) => {
+        try {
+          // Directly fetch from API for each cab type
+          const result = await fetchFare(cab.id, tripType, distance, packageType);
+          if (result && result.fareData) {
+            newFares[cab.id] = result.fareData.totalPrice;
+          }
+        } catch (error) {
+          console.error(`Error calculating fare for ${cab.id}:`, error);
+        }
+      });
+      
+      await Promise.all(promises);
+      
+      // Update all fares at once to minimize rerenders
+      setCabFares(newFares);
+      
+      // Set last update timestamp for debugging
+      setLastUpdateTimestamp(Date.now());
+    } catch (err) {
+      console.error('Error calculating all fares:', err);
+    } finally {
+      setIsCalculatingFares(false);
+    }
+  }, [cabTypes, tripType, distance, packageType, fetchFare]);
+
+  // Calculate fares whenever relevant props change
+  useEffect(() => {
+    calculateAllFares();
+  }, [calculateAllFares, tripType, distance, packageType]);
+
+  // Get fare display value for a specific cab
+  const getDisplayFare = (cab: CabType): number => {
+    // Return the direct fare from our state, or 0 if not available
+    return cabFares[cab.id] || 0;
   };
 
-  // Enhanced cab selection handler
-  const enhancedSelectCab = (cab: CabType) => {
-    handleSelectCab(cab);
-    setFadeIn(prev => ({ ...prev, [cab.id]: true }));
+  // Get fare details for display on the cab card
+  const getFareDetails = (cab: CabType): string => {
+    if (tripType === 'local') {
+      return 'Local package';
+    } else if (tripType === 'outstation') {
+      return distance > 0 ? `${distance} km trip` : 'Outstation trip';
+    } else if (tripType === 'airport') {
+      return 'Airport transfer';
+    }
+    return '';
+  };
 
+  // Enhanced select cab function with fare update
+  const enhancedSelectCab = (cab: CabType) => {
+    const fare = getDisplayFare(cab);
+    
+    // Flash the selected cab briefly
+    setFadeIn(prev => ({
+      ...prev,
+      [cab.id]: true
+    }));
+    
     setTimeout(() => {
-      setFadeIn(prev => ({ ...prev, [cab.id]: false }));
+      setFadeIn(prev => ({
+        ...prev,
+        [cab.id]: false
+      }));
     }, 500);
+    
+    // Notify parent about selection with fare
+    onSelectCab(cab, fare);
+    
+    // Notify about fare calculation if callback provided
+    if (onFareCalculated) {
+      onFareCalculated(fare);
+    }
   };
 
   return (
@@ -59,100 +139,25 @@ export const CabList: React.FC<CabListProps> = ({
           <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
         </div>
       ) : (
-        cabTypes.map((cab) => {
-          const normalizedId = normalizeVehicleId(cab.id);
-          const { fareData, isLoading, error } = useFare(
-            normalizedId,
-            tripType,
-            distance,
-            packageType
-          );
-
-          // Enhanced fare handling logic with proper error states
-          let fare = 0;
-          let fareText = 'Price unavailable';
-          
-          if (isLoading) {
-            fareText = 'Calculating...';
-          } else if (error) {
-            console.error(`Fare error for ${cab.name}:`, error);
-            fareText = 'Error fetching price';
-          } else if (tripType === 'local' && packageType) {
-            // Handle local package fares
-            const localFares = fareData?.breakdown;
-            if (localFares && localFares.basePrice > 0) {
-              fare = localFares.basePrice;
-              fareText = `₹${fare}`;
-              console.log(`Using local package fare for ${cab.name}: ${fareText}`);
-            } else {
-              // Try getting from BookingSummary
-              const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-              if (bookingSummaryFare) {
-                fare = parseInt(bookingSummaryFare, 10);
-                fareText = `₹${Math.round(fare)}`;
-                console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-              } else {
-                fareText = 'Calculating...';
-                window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                  detail: {
-                    cabId: normalizedId,
-                    tripType,
-                    packageType,
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            }
-          } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-            // Use the API totalPrice for non-local trips
-            fare = fareData.totalPrice;
-            fareText = `₹${fare}`;
-          } else {
-            // Fallback to BookingSummary
-            const bookingSummaryFare = localStorage.getItem(`booking_summary_fare_${tripType}_${normalizedId}`);
-            if (bookingSummaryFare) {
-              fare = parseInt(bookingSummaryFare, 10);
-              fareText = `₹${Math.round(fare)}`;
-              console.log(`Using BookingSummary fare for ${cab.name}: ${fareText}`);
-            } else {
-              console.log(`No fare available for ${cab.name}`);
-              fareText = 'Calculating...';
-              window.dispatchEvent(new CustomEvent('request-fare-calculation', {
-                detail: {
-                  cabId: normalizedId,
-                  tripType,
-                  timestamp: Date.now()
-                }
-              }));
-            }
-          }
-          
-          // Debug logging
-          console.log(`Fare for ${cab.name}:`, {
-            fareData,
-            calculatedFare: fare,
-            normalizedId,
-            tripType,
-            packageType
-          });
-
-          return (
-            <div 
-              key={cab.id}
-              className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
-            >
-              <CabOptionCard 
-                cab={cab}
-                fare={fare}
-                isSelected={selectedCabId === cab.id}
-                onSelect={() => enhancedSelectCab(cab)}
-                isCalculating={isLoading}
-                fareDetails={error ? "Error fetching fare" : undefined}
-              />
-            </div>
-          );
-        })
+        cabTypes.map((cab) => (
+          <div 
+            key={cab.id || `cab-${Math.random()}`}
+            className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+            data-last-update={lastUpdateTimestamp}
+          >
+            <CabOptionCard 
+              cab={cab}
+              fare={getDisplayFare(cab)}
+              isSelected={selectedCabId === cab.id}
+              onSelect={() => enhancedSelectCab(cab)}
+              fareDetails={getFareDetails(cab)}
+              isCalculating={isCalculatingFares}
+            />
+          </div>
+        ))
       )}
     </div>
   );
 };
+
+export default CabList;
