@@ -233,8 +233,18 @@ export const BookingSummary = ({
 
   const recalculateFareDetails = async (): Promise<void> => {
     if (calculationInProgressRef.current) {
-      console.log('BookingSummary: Calculation already in progress, marking for retry');
-      pendingCalculationRef.current = true;
+      console.log('BookingSummary: Calculation already in progress, skipping duplicate calculation');
+      return;
+    }
+
+    // For local packages, use the fare from useFare hook if available
+    if (tripType === 'local' && fareData?.totalPrice > 0) {
+      console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice);
+      setCalculatedFare(fareData.totalPrice);
+      setBaseFare(fareData.basePrice);
+      setDriverAllowance(0);
+      setNightCharges(0);
+      setExtraDistanceFare(0);
       return;
     }
 

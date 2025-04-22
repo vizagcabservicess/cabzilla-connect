@@ -41,32 +41,18 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
         if (tripType === 'local') {
           try {
+            console.log(`Fetching local fares for ${cabId} with package ${packageType}`);
             const localFares = await getLocalFaresForVehicle(normalizeVehicleId(cabId));
-            if (localFares) {
-              const packageMap: Record<string, string> = {
-                '4hrs-40km': 'price4hrs40km',
+            if (localFares && packageType) {
+              const packageMap = {
                 '8hrs-80km': 'price8hrs80km',
+                '4hrs-40km': 'price4hrs40km',
                 '10hrs-100km': 'price10hrs100km'
               };
-
-              const propertyName = packageMap[packageType];
-              if (!propertyName) {
-                console.error(`Invalid package type: ${packageType}`);
-                return 0;
-              }
-
-              fare = localFares[propertyName] || 
-                     localFares[propertyName.replace('price', 'package')] ||
-                     localFares[`${propertyName.slice(0, -2)}_${propertyName.slice(-2)}`] || 0;
-
-              console.log(`Looking up fare for ${cabId} with package ${packageType}:`, {
-                normalizedId: normalizeVehicleId(cabId),
-                propertyName,
-                fareFound: fare,
-                availableFares: localFares
-              });
-
-              if (fare > 0) {
+              const key = packageMap[packageType];
+              if (key && localFares[key] > 0) {
+                console.log(`Found local package fare for ${cabId}: ${localFares[key]}`);
+                fare = localFares[key];
                 breakdown = {
                   basePrice: fare,
                   packageLabel: packageType,
