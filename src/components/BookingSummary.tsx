@@ -30,6 +30,8 @@ interface BookingSummaryProps {
   packageType?: string;
   fare?: number;
   onFareUpdated?: (fare: number) => void;
+  returnDate?: Date | null;  // Add missing returnDate prop
+  totalPrice?: number;       // Add missing totalPrice prop
 }
 
 const BookingSummary: React.FC<BookingSummaryProps> = ({
@@ -42,7 +44,9 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
   distance,
   packageType = '8hrs-80km',
   fare: parentFare = 0,
-  onFareUpdated
+  onFareUpdated,
+  returnDate = null,       // Use the passed returnDate with default value
+  totalPrice               // Use the passed totalPrice
 }) => {
   // State for fare calculation
   const [fareData, setFareData] = useState<any | null>(null);
@@ -164,14 +168,16 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Store the complete fare data
       if (result && result.fareData) {
         setFareData(result.fareData);
-        setTotalPrice(result.fareData.totalPrice);
+        // Use the provided totalPrice if available, otherwise use calculated fare
+        const calculatedTotal = totalPrice !== undefined ? totalPrice : result.fareData.totalPrice;
+        setTotalPrice(calculatedTotal);
         
         // Notify parent if it requested fare updates
         if (onFareUpdated) {
-          onFareUpdated(result.fareData.totalPrice);
+          onFareUpdated(calculatedTotal);
         }
         
-        console.log('BookingSummary: Using fare from useFare hook for', tripType, 'package:', result.fareData.totalPrice);
+        console.log('BookingSummary: Using fare from useFare hook for', tripType, 'package:', calculatedTotal);
       }
     } catch (error) {
       console.error('Error calculating fare details:', error);
@@ -189,7 +195,8 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
     getLocalFaresForVehicle,
     getOutstationFaresForVehicle, 
     getAirportFaresForVehicle,
-    onFareUpdated
+    onFareUpdated,
+    totalPrice
   ]);
 
   // Calculate fare when selected cab, trip type, or distance changes
@@ -212,7 +219,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 relative">
+    <div className="bg-white rounded-lg shadow-md p-6 relative" id="booking-summary">
       <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
       
       <div className="space-y-4">
@@ -246,6 +253,20 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
               </p>
             </div>
           </div>
+          
+          {returnDate && tripMode === 'round-trip' && (
+            <div className="flex items-start gap-2 mb-3">
+              <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-gray-500">RETURN DATE & TIME</p>
+                <p className="font-medium">
+                  {format(returnDate, 'EEEE, MMMM d, yyyy')}
+                  <br/>
+                  {format(returnDate, 'h:mm a')}
+                </p>
+              </div>
+            </div>
+          )}
           
           <div className="flex items-start gap-2">
             <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -339,7 +360,8 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
                 {isLoading ? (
                   <span className="text-gray-400">Calculating...</span>
                 ) : (
-                  `₹${(fareData?.totalPrice || 0).toLocaleString()}`
+                  // Use totalPrice if provided, otherwise use fareData.totalPrice
+                  `₹${(totalPrice !== undefined ? totalPrice : (fareData?.totalPrice || 0)).toLocaleString()}`
                 )}
               </span>
             </div>

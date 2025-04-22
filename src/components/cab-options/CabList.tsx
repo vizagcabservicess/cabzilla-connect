@@ -22,6 +22,10 @@ interface CabListProps {
   onSelectCab: (cab: CabType, fare: number) => void;
   selectedCabId?: string;
   onFareCalculated?: (fare: number) => void;
+  cabFares?: Record<string, number>;  // Add this missing prop
+  isCalculatingFares?: boolean;       // Add this missing prop
+  handleSelectCab?: (cab: CabType) => void;  // Add this missing prop
+  getFareDetails?: (cab: CabType) => string; // Add this missing prop
 }
 
 const CabList: React.FC<CabListProps> = ({
@@ -31,21 +35,34 @@ const CabList: React.FC<CabListProps> = ({
   packageType,
   onSelectCab,
   selectedCabId,
-  onFareCalculated
+  onFareCalculated,
+  cabFares = {},  // Provide default value
+  isCalculatingFares = false,  // Provide default value
+  handleSelectCab,
+  getFareDetails
 }) => {
-  const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState(false);
+  const [localCabFares, setLocalCabFares] = useState<Record<string, number>>(cabFares);
+  const [localIsCalculatingFares, setLocalIsCalculatingFares] = useState(isCalculatingFares);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState(Date.now());
   
   // Get fare calculation functions
   const { fetchFare, isLoading: isFareLoading } = useFare();
 
+  // Update local state when props change
+  useEffect(() => {
+    setLocalCabFares(cabFares);
+  }, [cabFares]);
+
+  useEffect(() => {
+    setLocalIsCalculatingFares(isCalculatingFares);
+  }, [isCalculatingFares]);
+
   // Calculate fares for all cab types
   const calculateAllFares = useCallback(async () => {
     if (!cabTypes || cabTypes.length === 0) return;
     
-    setIsCalculatingFares(true);
+    setLocalIsCalculatingFares(true);
     const newFares: Record<string, number> = {};
     
     try {
@@ -64,30 +81,37 @@ const CabList: React.FC<CabListProps> = ({
       await Promise.all(promises);
       
       // Update all fares at once to minimize rerenders
-      setCabFares(newFares);
+      setLocalCabFares(newFares);
       
       // Set last update timestamp for debugging
       setLastUpdateTimestamp(Date.now());
     } catch (err) {
       console.error('Error calculating all fares:', err);
     } finally {
-      setIsCalculatingFares(false);
+      setLocalIsCalculatingFares(false);
     }
   }, [cabTypes, tripType, distance, packageType, fetchFare]);
 
   // Calculate fares whenever relevant props change
   useEffect(() => {
-    calculateAllFares();
-  }, [calculateAllFares, tripType, distance, packageType]);
+    // Only calculate fares if cabFares is not provided or empty
+    if (!cabFares || Object.keys(cabFares).length === 0) {
+      calculateAllFares();
+    }
+  }, [calculateAllFares, tripType, distance, packageType, cabFares]);
 
   // Get fare display value for a specific cab
   const getDisplayFare = (cab: CabType): number => {
     // Return the direct fare from our state, or 0 if not available
-    return cabFares[cab.id] || 0;
+    return localCabFares[cab.id] || 0;
   };
 
   // Get fare details for display on the cab card
-  const getFareDetails = (cab: CabType): string => {
+  const getLocalFareDetails = (cab: CabType): string => {
+    if (getFareDetails) {
+      return getFareDetails(cab);
+    }
+    
     if (tripType === 'local') {
       return 'Local package';
     } else if (tripType === 'outstation') {
@@ -115,8 +139,13 @@ const CabList: React.FC<CabListProps> = ({
       }));
     }, 500);
     
-    // Notify parent about selection with fare
-    onSelectCab(cab, fare);
+    // Use the provided handleSelectCab if available
+    if (handleSelectCab) {
+      handleSelectCab(cab);
+    } else {
+      // Notify parent about selection with fare
+      onSelectCab(cab, fare);
+    }
     
     // Notify about fare calculation if callback provided
     if (onFareCalculated) {
@@ -126,7 +155,7 @@ const CabList: React.FC<CabListProps> = ({
 
   return (
     <div className="space-y-3">
-      {isCalculatingFares && (
+      {localIsCalculatingFares && (
         <div className="bg-blue-50 p-3 rounded-md flex items-center justify-center mb-3">
           <div className="animate-spin mr-2 h-4 w-4 border-b-2 border-blue-600"></div>
           <span className="text-blue-600 text-sm">Calculating fares...</span>
@@ -150,8 +179,8 @@ const CabList: React.FC<CabListProps> = ({
               fare={getDisplayFare(cab)}
               isSelected={selectedCabId === cab.id}
               onSelect={() => enhancedSelectCab(cab)}
-              fareDetails={getFareDetails(cab)}
-              isCalculating={isCalculatingFares}
+              fareDetails={getLocalFareDetails(cab)}
+              isCalculating={localIsCalculatingFares}
             />
           </div>
         ))

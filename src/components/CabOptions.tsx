@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import CabList from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -356,7 +355,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   return (
     <CabList
       cabTypes={cabTypes}
-      selectedCabId={selectedCab?.id || null}
+      selectedCabId={selectedCab?.id || ""}
+      onSelectCab={(cab, fare) => handleCabSelect(cab)}
+      distance={distance}
+      tripType={tripType.toString()}
+      packageType={hourlyPackage || '8hrs-80km'}
       cabFares={cabFares}
       isCalculatingFares={isCalculatingFares}
       handleSelectCab={handleCabSelect}
