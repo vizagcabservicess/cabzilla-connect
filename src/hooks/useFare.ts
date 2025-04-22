@@ -31,6 +31,22 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
 
+  const storeFareData = (key: string, fare: number, source: string, breakdown: FareBreakdown) => {
+    try {
+      const fareData = {
+        fare,
+        source,
+        breakdown,
+        packageType,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(fareData));
+      console.log(`Stored fare data in localStorage: ${key} = ${fare} (source: ${source}, package: ${packageType})`);
+    } catch (e) {
+      console.error('Error storing fare in localStorage:', e);
+    }
+  };
+
   const clearStaleFares = () => {
     try {
       const now = Date.now();
@@ -54,22 +70,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
       });
     } catch (e) {
       console.error('Error clearing stale fares:', e);
-    }
-  };
-
-  const storeFareData = (key: string, fare: number, source: string, breakdown: FareBreakdown) => {
-    try {
-      const fareData = {
-        fare,
-        source,
-        breakdown,
-        packageType,
-        timestamp: Date.now()
-      };
-      localStorage.setItem(key, JSON.stringify(fareData));
-      console.log(`Stored fare data in localStorage: ${key} = ${fare} (source: ${source}, package: ${packageType})`);
-    } catch (e) {
-      console.error('Error storing fare in localStorage:', e);
     }
   };
 
