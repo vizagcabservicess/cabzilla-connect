@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -794,5 +795,46 @@ export const BookingSummary = ({
           </div>
         </div>
 
-        <div>
-          <div className={`space-y-3 transition-opacity duration-3
+        <div className="space-y-3 transition-opacity duration-300">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600">Base Fare</span>
+            <span>{baseFare > 0 ? `₹${baseFare.toLocaleString('en-IN')}` : 'Calculating...'}</span>
+          </div>
+
+          {driverAllowance > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Driver Allowance</span>
+              <span>₹{driverAllowance.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+
+          {nightCharges > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Night Charges</span>
+              <span>₹{nightCharges.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+
+          {extraDistanceFare > 0 && extraDistance > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">
+                Extra {extraDistance} km
+                {perKmRate > 0 && ` @ ₹${perKmRate}/km`}
+              </span>
+              <span>₹{extraDistanceFare.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="flex justify-between items-center font-semibold">
+            <span>Total Amount</span>
+            <span className="text-lg">
+              ₹{calculatedFare > 0 ? calculatedFare.toLocaleString('en-IN') : 'Calculating...'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
