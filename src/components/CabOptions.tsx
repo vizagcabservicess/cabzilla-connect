@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import CabList from './cab-options/CabList';
 import { CabType } from '@/types/cab';
@@ -47,7 +48,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   const handleCabSelect = (cab: CabType) => {
     const completeCAb: CabType = {
       ...cab,
-      image: cab.image || cab.imageUrl || '/placeholder.svg',
+      image: cab.image || '/placeholder.svg', // Removed imageUrl since it doesn't exist in CabType
       amenities: cab.amenities || [],
       description: cab.description || '',
       ac: cab.ac !== undefined ? cab.ac : true
