@@ -22,7 +22,7 @@ interface BookingSummaryProps {
   totalPrice: number;
   tripType: TripType;
   tripMode?: 'one-way' | 'round-trip';
-  hourlyPackage?: string;
+  hourlyPackage: string;
 }
 
 export const BookingSummary = ({
@@ -35,8 +35,10 @@ export const BookingSummary = ({
   totalPrice,
   tripType,
   tripMode = 'one-way',
-  hourlyPackage = '8hrs-80km'
+  hourlyPackage
 }: BookingSummaryProps) => {
+  console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
+  
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,

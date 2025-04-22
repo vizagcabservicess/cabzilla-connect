@@ -26,6 +26,8 @@ interface FareData {
 }
 
 export function useFare(cabId: string, tripType: string, distance: number, packageType: string = '') {
+  console.log(`useFare: Called for ${cabId} with package ${packageType}`);
+  
   const [fareData, setFareData] = useState<FareData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -149,6 +151,8 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
       const normalizedCabId = normalizeVehicleId(cabId);
       const fareKey = `fare_${tripType}_${normalizedCabId}_${packageType}`;
+      
+      console.log(`useFare: Calculating fare for ${normalizedCabId} with package ${packageType}`);
 
       try {
         let fare: number = 0;

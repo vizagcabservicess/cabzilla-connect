@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -11,7 +10,7 @@ interface CabListProps {
   isCalculatingFares: boolean;
   handleSelectCab: (cab: CabType, fareAmount: number, fareSource: string) => void;
   isAirportTransfer?: boolean;
-  tripType?: string; // Changed from TripType to string to match useFare
+  tripType?: string;
   tripMode?: string;
   distance?: number;
   packageType?: string;
@@ -26,8 +25,10 @@ export const CabList: React.FC<CabListProps> = ({
   tripType = 'local',
   tripMode = 'one-way',
   distance = 0,
-  packageType = '8hrs-80km'
+  packageType
 }) => {
+  console.log(`CabList: Rendering with package ${packageType}`);
+  
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   
@@ -38,7 +39,6 @@ export const CabList: React.FC<CabListProps> = ({
       .replace(/[^a-z0-9_]/g, '');
   };
 
-  // Listen for fare update events and refresh the component
   useEffect(() => {
     const handleFareUpdate = () => {
       console.log('CabList: Detected fare update, refreshing list');
@@ -56,7 +56,6 @@ export const CabList: React.FC<CabListProps> = ({
     };
   }, []);
 
-  // Enhanced cab selection handler
   const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string) => {
     handleSelectCab(cab, fare, fareSource);
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
@@ -65,7 +64,6 @@ export const CabList: React.FC<CabListProps> = ({
       setFadeIn(prev => ({ ...prev, [cab.id]: false }));
     }, 500);
     
-    // Store the selected fare in localStorage for BookingSummary to use
     if (fare > 0) {
       try {
         localStorage.setItem(`selected_fare_${cab.id}_${tripType}_${packageType}`, JSON.stringify({
@@ -119,7 +117,6 @@ export const CabList: React.FC<CabListProps> = ({
             fare = fareData.totalPrice;
             fareSource = fareData.source || 'unknown';
             
-            // Customize the fare text based on the source
             if (fareSource === 'database') {
               fareText = `₹${fare.toLocaleString()} (verified)`;
             } else if (fareSource === 'stored') {
@@ -130,11 +127,9 @@ export const CabList: React.FC<CabListProps> = ({
               fareText = `₹${fare.toLocaleString()}`;
             }
             
-            // For debugging - log the fare source
             console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
           }
 
-          // Get trip type label for display
           let tripTypeLabel = "Trip";
           if (tripType === 'local') {
             tripTypeLabel = "Local Package";
