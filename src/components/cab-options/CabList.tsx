@@ -27,43 +27,8 @@ export const CabList: React.FC<CabListProps> = ({
   distance = 0,
   packageType
 }) => {
-  console.log(`CabList: Rendering with trip type ${tripType}, mode ${tripMode}`);
+  console.log(`CabList: Rendering with package ${packageType}`);
   
-  const [fareStates, setFareStates] = useState<Record<string, {
-    fare: number;
-    source: string;
-    timestamp: number;
-  }>>({});
-
-  useEffect(() => {
-    const handleFareUpdate = (event: CustomEvent) => {
-      const { cabId, tripType: fareType, total, timestamp, components } = event.detail;
-      
-      if (fareType === tripType) {
-        console.log(`CabList: Received fare update for ${cabId}:`, {
-          total,
-          components,
-          timestamp
-        });
-
-        setFareStates(prev => ({
-          ...prev,
-          [cabId]: {
-            fare: total,
-            source: 'calculated',
-            timestamp
-          }
-        }));
-      }
-    };
-
-    window.addEventListener('fare-update', handleFareUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('fare-update', handleFareUpdate as EventListener);
-    };
-  }, [tripType]);
-
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   
@@ -73,24 +38,6 @@ export const CabList: React.FC<CabListProps> = ({
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
   };
-
-  // Listen for fare updates
-  useEffect(() => {
-    const handleFareUpdate = (event: CustomEvent) => {
-      const { vehicleId, fare, tripType: fareType, source } = event.detail;
-      console.log(`CabList: Received fare update for ${vehicleId}: ₹${fare} (${source})`);
-      
-      if (fareType === tripType) {
-        setRefreshKey(Date.now()); // Trigger re-render
-      }
-    };
-    
-    window.addEventListener('fare-update', handleFareUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('fare-update', handleFareUpdate as EventListener);
-    };
-  }, [tripType]);
 
   useEffect(() => {
     const handleFareUpdate = () => {
@@ -150,7 +97,6 @@ export const CabList: React.FC<CabListProps> = ({
       ) : (
         cabTypes.map((cab) => {
           const normalizedId = normalizeVehicleId(cab.id);
-          const fareState = fareStates[cab.id];
           const { fareData, isLoading, error } = useFare(
             normalizedId,
             tripType,
@@ -165,27 +111,44 @@ export const CabList: React.FC<CabListProps> = ({
           if (isLoading) {
             fareText = 'Calculating...';
           } else if (error) {
+            console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
-          } else if (fareState?.fare > 0) {
-            fare = fareState.fare;
-            fareSource = fareState.source;
-            fareText = `₹${fare.toLocaleString()}`;
           } else if (fareData) {
             fare = fareData.totalPrice;
             fareSource = fareData.source || 'unknown';
-            fareText = `₹${fare.toLocaleString()}`;
+            
+            if (fareSource === 'database') {
+              fareText = `₹${fare.toLocaleString()} (verified)`;
+            } else if (fareSource === 'stored') {
+              fareText = `₹${fare.toLocaleString()} (saved)`;
+            } else if (fareSource === 'default') {
+              fareText = `₹${fare.toLocaleString()} (standard)`;
+            } else {
+              fareText = `₹${fare.toLocaleString()}`;
+            }
+            
+            console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
+          }
+
+          let tripTypeLabel = "Trip";
+          if (tripType === 'local') {
+            tripTypeLabel = "Local Package";
+          } else if (tripType === 'airport') {
+            tripTypeLabel = "Airport Transfer";
+          } else if (tripType === 'outstation') {
+            tripTypeLabel = tripMode === 'round-trip' ? "Outstation Round Trip" : "Outstation One Way";
           }
 
           return (
             <div 
-              key={`${cab.id}-${fareState?.timestamp || Date.now()}`}
-              className="transition-opacity duration-300"
+              key={`${cab.id}-${refreshKey}`}
+              className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
             >
               <CabOptionCard 
                 cab={cab}
                 fare={fare}
                 isSelected={selectedCabId === cab.id}
-                onSelect={() => handleSelectCab(cab, fare, fareSource)}
+                onSelect={() => enhancedSelectCab(cab, fare, fareSource)}
                 isCalculating={isLoading}
                 fareDetails={error ? "Error fetching fare" : fareText}
                 tripType={tripType}

@@ -42,22 +42,7 @@
     "description": "Premium SUV with ample space for 7 passengers.",
     "ac": true,
     "nightHaltCharge": 1000,
-    "driverAllowance": 300,
-    "isActive": true
-  },
-  {
-    "id": "innova_hycross",
-    "name": "Innova Hycross",
-    "capacity": 7,
-    "luggageCapacity": 4,
-    "price": 4200,
-    "pricePerKm": 22,
-    "image": "/cars/innova.png",
-    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Hybrid Engine"],
-    "description": "Latest Innova model with hybrid technology for a smooth and eco-friendly journey.",
-    "ac": true,
-    "nightHaltCharge": 1200,
-    "driverAllowance": 300,
+    "driverAllowance": 250,
     "isActive": true
   },
   {

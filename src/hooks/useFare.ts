@@ -6,7 +6,6 @@ import { normalizeVehicleId } from '@/utils/safeStringUtils';
 import { CabType } from '@/types/cab';
 import { cabTypes } from '@/lib/cabData';
 import { debounce } from '@/lib/utils';
-import { getVehiclePricingTier, validateFareAmount } from '@/utils/vehiclePricingUtils';
 
 interface FareBreakdown {
   basePrice?: number;
@@ -102,6 +101,41 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
     }
   };
 
+  const validateFareAmount = (fare: number, cabId: string, tripType: string): boolean => {
+    if (isNaN(fare) || fare <= 0) return false;
+    
+    let minFare = 500;
+    let maxFare = 20000;
+    
+    const normalizedId = normalizeVehicleId(cabId);
+    
+    if (normalizedId.includes('sedan')) {
+      minFare = tripType === 'local' ? 1000 : 2000;
+      maxFare = 8000;
+    } else if (normalizedId.includes('ertiga') || normalizedId.includes('suv')) {
+      minFare = tripType === 'local' ? 1500 : 2500;
+      maxFare = 12000;
+    } else if (normalizedId.includes('innova') || normalizedId.includes('crysta') || normalizedId.includes('mpv')) {
+      minFare = tripType === 'local' ? 2000 : 3000;
+      maxFare = 15000;
+    } else if (normalizedId.includes('luxury')) {
+      minFare = tripType === 'local' ? 3000 : 4000;
+      maxFare = 20000;
+    }
+    
+    if (fare < minFare) {
+      console.warn(`Fare value too low: ${fare} for ${cabId} (${tripType}). Minimum expected: ${minFare}`);
+      return false;
+    }
+    
+    if (fare > maxFare) {
+      console.warn(`Fare value too high: ${fare} for ${cabId} (${tripType}). Maximum expected: ${maxFare}`);
+      return false;
+    }
+    
+    return true;
+  };
+
   const debouncedDispatchEvent = debounce((detail: any) => {
     window.dispatchEvent(new CustomEvent('fare-calculated', { detail }));
   }, 100);
@@ -134,37 +168,31 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
 
             if (outstationFares) {
               const effectiveDistance = distance * (packageType === 'one-way' ? 2 : 1);
-              const baseKms = 300;
+              const baseKms = 300; // Standard 300km included
               const isOneWay = packageType === 'one-way';
 
-              // Get the default pricing tier for this vehicle
-              const pricingTier = getVehiclePricingTier(normalizedCabId);
-              console.log('Vehicle pricing tier:', pricingTier);
-              
-              // Start with default values from the pricing tier
-              let basePrice = pricingTier.basePrice;
-              let pricePerKm = pricingTier.pricePerKm;
-              let driverAllowance = pricingTier.driverAllowance;
+              // Set vehicle-specific base prices and rates
+              let basePrice = 3900; // Default sedan price
+              let pricePerKm = 13;  // Default sedan rate
 
-              console.log('Vehicle-specific base rates:', {
+              // Adjust based on vehicle type
+              if (normalizedCabId.includes('ertiga')) {
+                basePrice = 5400;
+                pricePerKm = 18;
+              } else if (normalizedCabId.includes('innova')) {
+                basePrice = 6000;
+                pricePerKm = 20;
+              }
+
+              // Use database values if available, otherwise use our calculated defaults
+              basePrice = outstationFares.basePrice || basePrice;
+              pricePerKm = outstationFares.pricePerKm || pricePerKm;
+
+              console.log('Using fare values:', {
+                basePrice,
+                pricePerKm,
                 vehicleType: normalizedCabId,
-                basePrice,
-                pricePerKm,
-                driverAllowance,
-                category: pricingTier.category,
-                displayName: pricingTier.displayName
-              });
-
-              // Override with database values if available and valid
-              if (outstationFares.basePrice && outstationFares.basePrice > 0) basePrice = outstationFares.basePrice;
-              if (outstationFares.pricePerKm && outstationFares.pricePerKm > 0) pricePerKm = outstationFares.pricePerKm;
-              if (outstationFares.driverAllowance && outstationFares.driverAllowance > 0) driverAllowance = outstationFares.driverAllowance;
-              
-              console.log('Final rates after database override:', {
-                basePrice,
-                pricePerKm,
-                driverAllowance,
-                source: outstationFares.basePrice ? 'database' : 'default tier'
+                source: isOneWay ? 'one-way' : 'round-trip'
               });
 
               // Start with base price
@@ -185,6 +213,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               }
 
               // Add driver allowance
+              const driverAllowance = outstationFares.driverAllowance || 250;
               fare += driverAllowance;
 
               // Night charges if applicable (between 22:00 and 05:00)
@@ -192,7 +221,7 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
               if (pickupDate) {
                 const hours = pickupDate.getHours();
                 if (hours >= 22 || hours <= 5) {
-                  nightCharges = Math.round(basePrice * 0.1);
+                  nightCharges = Math.round(basePrice * 0.1); // 10% of base price
                   fare += nightCharges;
                   console.log('Added night charges:', nightCharges);
                 }
@@ -205,30 +234,6 @@ export function useFare(cabId: string, tripType: string, distance: number, packa
                 extraDistanceFare,
                 extraKmCharge: pricePerKm
               };
-
-              // Validate total matches component sum
-              const calculatedSum = basePrice + extraDistanceFare + driverAllowance + nightCharges;
-              console.log('Fare validation:', {
-                calculatedSum,
-                fare,
-                components: {
-                  basePrice,
-                  extraDistanceFare,
-                  driverAllowance,
-                  nightCharges
-                }
-              });
-
-              if (Math.abs(calculatedSum - fare) > 0.01) {
-                console.warn('Fare calculation mismatch detected:', {
-                  calculatedSum,
-                  fare,
-                  difference: Math.abs(calculatedSum - fare)
-                });
-                
-                // Fix the fare to match the sum of components for consistency
-                fare = calculatedSum;
-              }
 
               source = 'database';
               databaseFareFound = true;
