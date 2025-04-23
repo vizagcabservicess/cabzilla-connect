@@ -802,6 +802,16 @@ export const BookingSummary = ({
             </div>
           )}
 
+          {tripType === 'airport' && (
+            <div className="flex items-start gap-2 mt-3">
+              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-gray-500">TRIP TYPE</p>
+                <p className="font-medium">Airport Transfer ({Math.round(distance)} KM)</p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-start gap-2 mb-3">
             <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>
@@ -842,7 +852,7 @@ export const BookingSummary = ({
             <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
           </div>
 
-          {breakdown.driverAllowance > 0 && (
+          {tripType !== 'airport' && breakdown.driverAllowance > 0 && (
             <div className="flex justify-between items-center mb-2">
               <p className="text-gray-600">Driver allowance</p>
               <p>{formatPrice(breakdown.driverAllowance)}</p>
@@ -871,13 +881,10 @@ export const BookingSummary = ({
             </div>
           )}
 
-          {tripType === 'airport' && (
-            <div className="flex items-start gap-2 mt-3">
-              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-gray-500">TRIP TYPE</p>
-                <p className="font-medium">Airport Transfer ({Math.round(distance)} KM)</p>
-              </div>
+          {tripType === 'airport' && breakdown.airportFee > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Airport fee</p>
+              <p>{formatPrice(breakdown.airportFee)}</p>
             </div>
           )}
 
