@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,12 +12,10 @@ export default function BookingConfirmationPage() {
   const [secondsRemaining, setSecondsRemaining] = useState(10);
   const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | 'pending' | 'unknown'>('unknown');
 
-  // Check if this is a new booking, which would trigger automatic redirect
   const isNewBooking = location.state?.newBooking === true;
   const emailSent = location.state?.emailSent;
 
   useEffect(() => {
-    // Check email status from location state
     if (isNewBooking) {
       if (emailSent === true) {
         setEmailStatus('sent');
@@ -43,7 +40,6 @@ export default function BookingConfirmationPage() {
     }
   }, [isNewBooking, emailSent]);
 
-  // Auto redirect after 10 seconds if it's a new booking
   useEffect(() => {
     if (isNewBooking) {
       const intervalId = setInterval(() => {
@@ -144,7 +140,7 @@ export default function BookingConfirmationPage() {
                 {bookingDetails?.bookingType === 'airport' && (
                   <>
                     <div className="flex items-start">
-                      <Info className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                      <Calendar className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Trip Type</p>
                         <p className="font-medium">Airport Transfer</p>
@@ -152,7 +148,7 @@ export default function BookingConfirmationPage() {
                     </div>
                     {bookingDetails?.distance && (
                       <div className="flex items-start">
-                        <Info className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                        <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                         <div>
                           <p className="text-sm text-gray-500">Total Distance</p>
                           <p className="font-medium">{bookingDetails.distance} KM</p>
@@ -257,7 +253,6 @@ export default function BookingConfirmationPage() {
                           size="sm" 
                           className="text-amber-700 border-amber-300 hover:bg-amber-50"
                           onClick={() => {
-                            // Copy booking number to clipboard
                             if (bookingDetails?.bookingNumber) {
                               navigator.clipboard.writeText(bookingDetails.bookingNumber);
                               toast.success("Booking number copied to clipboard");

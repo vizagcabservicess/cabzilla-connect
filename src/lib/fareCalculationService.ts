@@ -151,7 +151,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   }
   
   try {
-    // Always fetch the latest airport fares from vehicle_pricing table
     const airportFares = await getAirportFaresForVehicle(cabType.id);
     console.log(`Retrieved airport fares for ${cabType.name} from vehicle_pricing:`, airportFares);
     
@@ -166,10 +165,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare = airportFares.tier3Price;
     } else {
       fare = airportFares.tier4Price;
-    }
-    
-    // Add extra km costs if distance exceeds tiers
-    if (distance > 30) {
       const extraKm = distance - 30;
       const extraKmCost = extraKm * airportFares.extraKmCharge;
       fare += extraKmCost;
@@ -177,6 +172,13 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     
     // Add airport fee (Rs 40)
     fare += 40;
+    
+    // Store fare in localStorage for consistency across booking flow
+    localStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify({
+      fare,
+      timestamp: Date.now(),
+      distance
+    }));
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -188,13 +190,24 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   } catch (error) {
     console.error(`Error calculating airport fare for ${cabType.name}:`, error);
     
-    // If API fails, fallback to values from cab type
+    // Try to get stored fare from earlier calculation
+    const storedFare = localStorage.getItem(`airport_fare_${cabType.id}`);
+    if (storedFare) {
+      try {
+        const { fare, timestamp, distance: storedDistance } = JSON.parse(storedFare);
+        // Only use stored fare if it's recent (within 15 minutes) and for same distance
+        if (Date.now() - timestamp < 15 * 60 * 1000 && storedDistance === distance) {
+          return fare;
+        }
+      } catch (e) {
+        console.error('Error parsing stored airport fare:', e);
+      }
+    }
+    
+    // If we can't get real fares, use cab type fares
     if (cabType.airportFares) {
-      console.log(`Using fallback airport fares for ${cabType.name} from cabType:`, cabType.airportFares);
-      
       let fare = cabType.airportFares.basePrice;
       
-      // Determine tier based on distance
       if (distance <= 10) {
         fare = cabType.airportFares.tier1Price;
       } else if (distance <= 20) {
@@ -203,10 +216,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare = cabType.airportFares.tier3Price;
       } else {
         fare = cabType.airportFares.tier4Price;
-      }
-      
-      // Add extra km costs if distance exceeds tiers
-      if (distance > 30) {
         const extraKm = distance - 30;
         const extraKmCost = extraKm * cabType.airportFares.extraKmCharge;
         fare += extraKmCost;
@@ -224,13 +233,11 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       return fare;
     }
     
-    // Default airport fare values for fallback
+    // Last resort default values
     const defaultFare = {
       basePrice: 1000,
       pricePerKm: 14,
-      airportFee: 40, // Updated to Rs 40
-      dropPrice: 1200,
-      pickupPrice: 1500,
+      airportFee: 40,
       tier1Price: 800,    // 0-10 KM
       tier2Price: 1200,   // 11-20 KM
       tier3Price: 1800,   // 21-30 KM
@@ -240,7 +247,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     
     let fare = defaultFare.basePrice;
     
-    // Determine tier based on distance
     if (distance <= 10) {
       fare = defaultFare.tier1Price;
     } else if (distance <= 20) {
@@ -249,10 +255,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare = defaultFare.tier3Price;
     } else {
       fare = defaultFare.tier4Price;
-    }
-    
-    // Add extra km costs if distance exceeds tiers
-    if (distance > 30) {
       const extraKm = distance - 30;
       const extraKmCost = extraKm * defaultFare.extraKmCharge;
       fare += extraKmCost;
