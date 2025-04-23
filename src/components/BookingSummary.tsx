@@ -783,6 +783,17 @@ export const BookingSummary = ({
       <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
 
       <div className="space-y-4">
+        {tripType === 'airport' && (
+          <div className="border-b pb-4">
+            <p className="text-sm text-gray-600 mb-2">
+              Trip type: Airport Transfer
+            </p>
+            <p className="text-sm text-gray-600">
+              Total Distance: {distance} KM
+            </p>
+          </div>
+        )}
+
         <div className="border-b pb-4">
           <div className="flex items-start gap-2 mb-3">
             <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -863,7 +874,7 @@ export const BookingSummary = ({
                 <div className="relative">
                   <Info className="h-4 w-4 text-blue-500 cursor-help" />
                   <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1)).toFixed(0)} km �� {formatPrice(breakdown.extraKmCharge || 0)}/km
+                    {(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1)).toFixed(0)} km × {formatPrice(breakdown.extraKmCharge || 0)}/km
                   </div>
                 </div>
               </div>

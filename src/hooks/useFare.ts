@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -196,7 +197,7 @@ export function useFare(
             console.log(`Retrieved airport fares for ${cabId}:`, airportFares);
 
             let basePrice = 0;
-            const airportFee = airportFares.airportFee || 150;
+            const airportFee = 40; // Updated airport fee to Rs 40
 
             if (distance <= 10) {
               basePrice = airportFares.tier1Price || 1200;
@@ -243,6 +244,7 @@ export function useFare(
             
             let basePrice = 0;
             let fare = 0;
+            const airportFee = 40; // Updated airport fee here too
 
             if (distance <= 10) {
               basePrice = 1200;
@@ -261,7 +263,6 @@ export function useFare(
               fare = basePrice;
             }
 
-            const airportFee = 150;
             fare += airportFee;
 
             breakdown = {
