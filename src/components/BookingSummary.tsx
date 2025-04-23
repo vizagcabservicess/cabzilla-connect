@@ -38,24 +38,22 @@ export const BookingSummary = ({
   hourlyPackage
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
-  
+
+  // Use the fare breakdown from the useFare hook and DO NOT recalculate for outstation trips.
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,
     distance,
-    tripType === 'local' ? hourlyPackage : undefined
+    tripType === 'local' ? hourlyPackage : undefined, // Package only for local
+    pickupDate // Ensure night charge is included
   );
 
-  const [baseFare, setBaseFare] = useState<number>(0);
-  const [driverAllowance, setDriverAllowance] = useState<number>(250);
-  const [nightCharges, setNightCharges] = useState<number>(0);
-  const [extraDistance, setExtraDistance] = useState<number>(0);
-  const [extraDistanceFare, setExtraDistanceFare] = useState<number>(0);
-  const [perKmRate, setPerKmRate] = useState<number>(0);
-  const [effectiveDistance, setEffectiveDistance] = useState<number>(distance);
-  const [calculatedFare, setCalculatedFare] = useState<number>(0);
+  // Only use state for loading indication
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
+
+  // Remove all extra fare state & calculations for outstation;
+  // use only fareData.breakdown, fareData.totalPrice, etc.
 
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
@@ -796,6 +794,7 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
+  const breakdown = fareData?.breakdown || {};
   const finalTotal = fareData?.totalPrice || totalPrice;
 
   return (
@@ -823,113 +822,4 @@ export const BookingSummary = ({
           )}
 
           <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">PICKUP DATE & TIME</p>
-              <p className="font-medium">
-                {pickupDate ? format(pickupDate, 'EEEE, MMMM d, yyyy') : 'Not specified'}
-                <br/>
-                {pickupDate ? format(pickupDate, 'h:mm a') : ''}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2">
-            <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">CAB TYPE</p>
-              <p className="font-medium">
-                {selectedCab.name}
-                <span className="text-sm text-gray-500"> • {selectedCab.capacity} persons • {selectedCab.luggageCapacity} bags</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className={`space-y-3 transition-opacity duration-300 ${isRefreshing || showDetailsLoading ? 'opacity-50' : 'opacity-100'}`}>
-            {tripType === 'outstation' && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">
-                    Base fare <span className="text-xs text-gray-400">(300 km included)</span>
-                  </span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-                </div>
-                <div className="text-gray-600 text-sm ml-1">
-                  Trip distance: {distance} km &nbsp;|&nbsp; Effective (2-way): {effectiveDistance} km
-                </div>
-                {(extraDistance > 0) && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">
-                      Extra distance fare ({extraDistance} km × ₹{perKmRate})
-                    </span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Driver allowance</span>
-                  <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                </div>
-                {(nightCharges > 0) && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Night charges</span>
-                    <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            )}
-
-            {tripType === 'local' && (
-              <div className="flex justify-between">
-                <span className="text-gray-700">
-                  {fareData?.breakdown?.packageLabel || '8 Hours Package'} 
-                  <span className="block text-sm text-gray-500">
-                    Includes {fareData?.breakdown?.packageLabel?.split('-')[1] || '80 km'} and {fareData?.breakdown?.packageLabel?.split('-')[0] || '8 hrs'}
-                  </span>
-                </span>
-                <span className="font-semibold">₹{finalTotal.toLocaleString()}</span>
-              </div>
-            )}
-
-            {(tripType === 'airport' || tripType === 'tour') && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare</span>
-                  <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
-                </div>
-
-                {extraDistance > 0 && tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
-                  </div>
-                )}
-
-                {tripType === 'airport' && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Driver allowance</span>
-                    <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
-                  </div>
-                )}
-              </>
-            )}
-
-            <Separator />
-
-            <div className="flex justify-between text-lg font-bold pt-2">
-              <span>Total Amount</span>
-              <span>₹{(fareData?.totalPrice || calculatedFare).toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {(isRefreshing || showDetailsLoading) && (
-        <div className="absolute inset-0 bg-white/5 flex items-center justify-center rounded-lg pointer-events-none">
-          <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-        </div>
-      )}
-    </div>
-  );
-};
+            <Calendar className="

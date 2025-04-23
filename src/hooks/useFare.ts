@@ -199,8 +199,8 @@ export function useFare(
             let driverAllowance = outstationFares.driverAllowance ?? 250;
             let nightCharges = 0;
 
-            let effectiveDistance = distance;
-            if (packageType === 'round-trip') {
+            let effectiveDistance = distance * 2;
+            if (packageType === "round-trip") {
               pricePerKm = outstationFares.roundTripPricePerKm || pricePerKm;
               basePrice = outstationFares.roundTripBasePrice || basePrice;
               effectiveDistance = Math.max(distance * 2, baseKms);
@@ -231,16 +231,28 @@ export function useFare(
               extraDistanceFare,
               extraKmCharge: pricePerKm,
             };
-            source = 'database';
-            databaseFareFound = true;
 
-            console.log(
-              `[Outstation Calculation] basePrice: ${basePrice}, extraDistanceFare: ${extraDistanceFare}, driverAllowance: ${driverAllowance}, nightCharges: ${nightCharges}, TOTAL: ${fare}`
-            );
+            source = 'calculated';
+
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith(`fare_outstation_${normalizedCabId}_`)) {
+                localStorage.removeItem(key);
+              }
+            });
 
             storeFareData(fareKey, fare, source, breakdown);
+
+            debouncedDispatchEvent({
+              cabId: normalizedCabId,
+              tripType,
+              calculated: true,
+              fare: fare,
+              source,
+              timestamp: Date.now()
+            });
+
           } catch (e) {
-            console.error('Error fetching outstation fares:', e);
+            console.error('Error calculating outstation fare:', e);
           }
         } else if (tripType === "local") {
           try {
@@ -386,14 +398,16 @@ export function useFare(
           timestamp: Date.now()
         });
 
-        debouncedDispatchEvent({
-          cabId: normalizedCabId,
-          tripType,
-          calculated: true,
-          fare: fare,
-          source,
-          timestamp: Date.now()
-        });
+        if (tripType !== "outstation") {
+          debouncedDispatchEvent({
+            cabId: normalizedCabId,
+            tripType,
+            calculated: true,
+            fare: fare,
+            source,
+            timestamp: Date.now()
+          });
+        }
 
       } catch (err) {
         console.error(`Fare calculation error for ${cabId}:`, err);
