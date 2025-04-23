@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -40,16 +39,14 @@ export const BookingSummary = ({
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
-  // Use the fare breakdown from the useFare hook and DO NOT recalculate for outstation trips.
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,
     distance,
-    tripType === 'local' ? hourlyPackage : undefined, // Package only for local
-    pickupDate // Ensure night charge is included
+    tripType === 'local' ? hourlyPackage : undefined,
+    pickupDate
   );
 
-  // Define all needed state variables
   const [calculatedFare, setCalculatedFare] = useState<number>(0);
   const [baseFare, setBaseFare] = useState<number>(0);
   const [driverAllowance, setDriverAllowance] = useState<number>(250);
@@ -61,7 +58,6 @@ export const BookingSummary = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
 
-  // References to manage state between renders
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
@@ -73,9 +69,7 @@ export const BookingSummary = ({
   const totalPriceRef = useRef<number>(totalPrice);
   const calculationTimeoutRef = useRef<any>(null);
 
-  // Utility to compute correct fare storage key
   function getFareKey({ tripType, cabId, packageType }: { tripType: string, cabId: string, packageType?: string }) {
-    // --- MAIN LOGIC: Outstation must NOT use packageType
     if (tripType === "outstation") {
       return `fare_outstation_${cabId}`;
     }
@@ -85,7 +79,6 @@ export const BookingSummary = ({
     if (tripType === "airport") {
       return `fare_airport_${cabId}`;
     }
-    // fallback
     return `fare_${tripType}_${cabId}`;
   }
 
@@ -93,16 +86,13 @@ export const BookingSummary = ({
     totalPriceRef.current = totalPrice;
 
     if (totalPrice > 0) {
-      console.log(`BookingSummary: Setting calculated fare to match parent total price: ${totalPrice}`);
       setCalculatedFare(totalPrice);
 
-      // Also store the fare in localStorage for CabList to access
       if (selectedCab) {
         try {
           const normalizedId = normalizeVehicleId(selectedCab.id);
           const fareKey = getFareKey({ tripType, cabId: normalizedId });
-          localStorage.setItem(fareKey, String(calculatedFare)); // No package
-          // Optionally, clean up any package-based keys accidentally left behind!
+          localStorage.setItem(fareKey, String(calculatedFare));
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith(`fare_outstation_${normalizedId}_`)) {
               localStorage.removeItem(key);
@@ -117,8 +107,6 @@ export const BookingSummary = ({
               timestamp: Date.now(),
             }
           }));
-          // Prevent BookingSummary's package-based key being set for outstation!
-          // (even if code later mistakenly does so)
           const wrongKey = `fare_outstation_${normalizedId}_${hourlyPackage}`;
           if (wrongKey !== fareKey) localStorage.removeItem(wrongKey);
         } catch (error) {
@@ -153,12 +141,10 @@ export const BookingSummary = ({
       if (totalPrice > 0) {
         setCalculatedFare(totalPrice);
 
-        // Store the fare in localStorage for CabList to access
         try {
           const normalizedId = normalizeVehicleId(selectedCab.id);
           const fareKey = getFareKey({ tripType, cabId: normalizedId });
-          localStorage.setItem(fareKey, String(calculatedFare)); // No package
-          // Optionally, clean up any package-based keys accidentally left behind!
+          localStorage.setItem(fareKey, String(calculatedFare));
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith(`fare_outstation_${normalizedId}_`)) {
               localStorage.removeItem(key);
@@ -173,8 +159,6 @@ export const BookingSummary = ({
               timestamp: Date.now(),
             }
           }));
-          // Prevent BookingSummary's package-based key being set for outstation!
-          // (even if code later mistakenly does so)
           const wrongKey = `fare_outstation_${normalizedId}_${hourlyPackage}`;
           if (wrongKey !== fareKey) localStorage.removeItem(wrongKey);
         } catch (error) {
@@ -192,12 +176,10 @@ export const BookingSummary = ({
           setCalculatedFare(event.detail.fare);
           totalPriceRef.current = event.detail.fare;
 
-          // Store this fare in localStorage for CabList to access
           try {
             const normalizedId = normalizeVehicleId(selectedCab.id);
             const fareKey = getFareKey({ tripType, cabId: normalizedId });
-            localStorage.setItem(fareKey, String(event.detail.fare)); // No package
-            // Optionally, clean up any package-based keys accidentally left behind!
+            localStorage.setItem(fareKey, String(event.detail.fare));
             Object.keys(localStorage).forEach(key => {
               if (key.startsWith(`fare_outstation_${normalizedId}_`)) {
                 localStorage.removeItem(key);
@@ -240,8 +222,6 @@ export const BookingSummary = ({
       lastDistanceRef.current !== distance || 
       lastTripModeRef.current !== tripMode
     ) {
-      console.log(`BookingSummary: Distance (${lastDistanceRef.current} → ${distance}) or trip mode (${lastTripModeRef.current} → ${tripMode}) changed`);
-
       lastDistanceRef.current = distance;
       lastTripModeRef.current = tripMode;
 
@@ -286,7 +266,6 @@ export const BookingSummary = ({
   useEffect(() => {
     if (tripType === 'local' && hourlyPackage) {
       console.log('BookingSummary: Package changed to:', hourlyPackage);
-      // Clear stored fare when package changes
       if (selectedCab) {
         const normalizedId = normalizeVehicleId(selectedCab.id);
         const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
@@ -308,8 +287,7 @@ export const BookingSummary = ({
       try {
         const normalizedId = normalizeVehicleId(selectedCab.id);
         const fareKey = getFareKey({ tripType, cabId: normalizedId });
-        localStorage.setItem(fareKey, String(fareData.totalPrice)); // No package
-        // Optionally, clean up any package-based keys accidentally left behind!
+        localStorage.setItem(fareKey, String(fareData.totalPrice));
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith(`fare_outstation_${normalizedId}_`)) {
             localStorage.removeItem(key);
@@ -317,7 +295,6 @@ export const BookingSummary = ({
         });
         console.log(`BookingSummary: Stored fare with package: ${fareKey} = ${fareData.totalPrice}`);
 
-        // Dispatch event for CabList to update
         window.dispatchEvent(new CustomEvent("fare-calculated", {
           detail: {
             cabId: normalizedId,
@@ -348,19 +325,17 @@ export const BookingSummary = ({
         let driverAllowance = outstationFares.driverAllowance ?? 250;
         let nightCharges = 0;
 
-        // Correction: Use distance*2 for one-way, regular for round-trip (if present)
         let effectiveDistance = distance * 2;
-        let isOneWay = tripMode !== "round-trip"; // default to one-way if tripMode missing
+        let isOneWay = tripMode !== "round-trip";
 
-        if (!isOneWay) { // round-trip logic
+        if (!isOneWay) {
           perKmRate = outstationFares.roundTripPricePerKm || perKmRate;
           baseFare = outstationFares.roundTripBasePrice || baseFare;
           effectiveDistance = distance * 2;
         }
 
-        // Calculate extra distance (driver returns empty!)
-        const extraDistance = effectiveDistance > minimumKm ? effectiveDistance - minimumKm : 0;
-        const extraDistanceFare = extraDistance * perKmRate;
+        let extraDistance = effectiveDistance > minimumKm ? effectiveDistance - minimumKm : 0;
+        let extraDistanceFare = extraDistance * perKmRate;
 
         if (pickupDate) {
           const pickupHour = pickupDate.getHours();
@@ -382,7 +357,7 @@ export const BookingSummary = ({
 
         try {
           const fareKey = getFareKey({ tripType, cabId: normalizedId });
-          localStorage.setItem(fareKey, String(finalFare)); // No package
+          localStorage.setItem(fareKey, String(finalFare));
           window.dispatchEvent(new CustomEvent("fare-calculated", {
             detail: {
               cabId: normalizedId,
@@ -393,7 +368,6 @@ export const BookingSummary = ({
               timestamp: Date.now(),
             }
           }));
-          console.log(`[BookingSummary][OUTSTATION]: Stored and dispatched fare: ${fareKey} = ${finalFare}`);
         } catch (error) {
           console.error('[BookingSummary][OUTSTATION]: Error storing/disoatching fare', error);
         }
@@ -559,7 +533,7 @@ export const BookingSummary = ({
       try {
         const normalizedId = normalizeVehicleId(selectedCab.id);
         const fareKey = getFareKey({ tripType, cabId: normalizedId });
-        localStorage.setItem(fareKey, String(finalFare)); // No package
+        localStorage.setItem(fareKey, String(finalFare));
         console.log(`BookingSummary: Stored calculated fare in localStorage: ${fareKey} = ${finalFare}`);
 
         if (tripType === 'airport') {
@@ -599,7 +573,7 @@ export const BookingSummary = ({
 
           const normalizedId = normalizeVehicleId(selectedCab.id);
           const fareKey = getFareKey({ tripType, cabId: normalizedId });
-          localStorage.setItem(fareKey, String(newCalculatedFare)); // No package
+          localStorage.setItem(fareKey, String(newCalculatedFare));
           window.dispatchEvent(new CustomEvent("fare-calculated", {
             detail: {
               cabId: normalizedId,
@@ -644,7 +618,7 @@ export const BookingSummary = ({
           try {
             const normalizedId = normalizeVehicleId(customEvent.detail.cabType);
             const fareKey = getFareKey({ tripType, cabId: normalizedId });
-            localStorage.setItem(fareKey, String(customEvent.detail.fare)); // No package
+            localStorage.setItem(fareKey, String(customEvent.detail.fare));
             console.log(`BookingSummary: Stored selected cab fare in localStorage: ${fareKey} = ${customEvent.detail.fare}`);
 
             if (tripType === 'airport') {
@@ -731,7 +705,7 @@ export const BookingSummary = ({
           try {
             const normalizedId = normalizeVehicleId(selectedCab.id);
             const fareKey = getFareKey({ tripType, cabId: normalizedId });
-            localStorage.setItem(fareKey, String(totalPrice)); // No package
+            localStorage.setItem(fareKey, String(totalPrice));
             console.log(`BookingSummary: Stored initial fare in localStorage: ${fareKey} = ${totalPrice}`);
 
             if (tripType === 'airport') {
@@ -894,6 +868,16 @@ export const BookingSummary = ({
                 </div>
               </div>
               <p>{formatPrice(breakdown.extraDistanceFare)}</p>
+            </div>
+          )}
+
+          {tripType === 'airport' && (
+            <div className="flex items-start gap-2 mt-3">
+              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-gray-500">TRIP TYPE</p>
+                <p className="font-medium">Airport Transfer ({Math.round(distance)} KM)</p>
+              </div>
             </div>
           )}
 
