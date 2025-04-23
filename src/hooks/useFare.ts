@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -15,6 +16,7 @@ interface FareBreakdown {
   packageLabel?: string;
   extraKmCharge?: number;
   extraHourCharge?: number;
+  airportFee?: number; // Added airportFee property
 }
 
 interface FareData {

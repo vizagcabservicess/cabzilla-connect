@@ -68,9 +68,9 @@ export interface AirportFare {
   tier3Price: number;   // 21-30 KM
   tier4Price: number;   // 31+ KM
   extraKmCharge: number;
+  airportFee?: number;  // Added airportFee property
 }
 
-// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
