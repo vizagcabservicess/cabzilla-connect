@@ -141,6 +141,27 @@ export default function BookingConfirmationPage() {
                   </div>
                 </div>
                 
+                {bookingDetails?.bookingType === 'airport' && (
+                  <>
+                    <div className="flex items-start">
+                      <Info className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500">Trip Type</p>
+                        <p className="font-medium">Airport Transfer</p>
+                      </div>
+                    </div>
+                    {bookingDetails?.distance && (
+                      <div className="flex items-start">
+                        <Info className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-500">Total Distance</p>
+                          <p className="font-medium">{bookingDetails.distance} KM</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                
                 {bookingDetails?.bookingType === 'tour' && bookingDetails?.tourName && (
                   <div className="flex items-start">
                     <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />

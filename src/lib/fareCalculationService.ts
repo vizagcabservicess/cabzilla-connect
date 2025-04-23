@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -176,8 +175,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       fare += extraKmCost;
     }
     
-    // Add driver allowance
-    fare += airportFares.dropPrice > 0 ? 250 : 0;
+    // Add airport fee (Rs 40)
+    fare += 40;
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -213,8 +212,8 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
         fare += extraKmCost;
       }
       
-      // Add driver allowance
-      fare += cabType.airportFares.dropPrice > 0 ? 250 : 0;
+      // Add airport fee (Rs 40)
+      fare += 40;
       
       // Cache the result
       fareCache.set(cacheKey, {
@@ -229,7 +228,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const defaultFare = {
       basePrice: 1000,
       pricePerKm: 14,
-      airportFee: 150,
+      airportFee: 40, // Updated to Rs 40
       dropPrice: 1200,
       pickupPrice: 1500,
       tier1Price: 800,    // 0-10 KM
@@ -258,9 +257,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       const extraKmCost = extraKm * defaultFare.extraKmCharge;
       fare += extraKmCost;
     }
-    
-    // Add driver allowance
-    fare += 250;
     
     // Add airport fee
     fare += defaultFare.airportFee;
