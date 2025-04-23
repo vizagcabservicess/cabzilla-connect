@@ -807,7 +807,16 @@ export const BookingSummary = ({
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  const finalTotal = fareData?.totalPrice || totalPrice;
+  let finalTotal = totalPrice;
+  if (tripType === "outstation") {
+    finalTotal =
+      (baseFare || 0) +
+      (driverAllowance || 0) +
+      (extraDistanceFare || 0) +
+      (nightCharges || 0);
+  } else {
+    finalTotal = fareData?.totalPrice || totalPrice;
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
