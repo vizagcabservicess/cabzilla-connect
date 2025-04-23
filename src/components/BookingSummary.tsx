@@ -783,18 +783,26 @@ export const BookingSummary = ({
       <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
 
       <div className="space-y-4">
-        {tripType === 'airport' && (
-          <div className="border-b pb-4">
-            <p className="text-sm text-gray-600 mb-2">
-              Trip type: Airport Transfer
-            </p>
-            <p className="text-sm text-gray-600">
-              Total Distance: {distance} KM
-            </p>
-          </div>
-        )}
-
         <div className="border-b pb-4">
+          {tripType === 'airport' && (
+            <>
+              <div className="flex items-start gap-2 mb-3">
+                <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-gray-500">TRIP TYPE</p>
+                  <p className="font-medium">Airport Transfer</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 mb-3">
+                <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-gray-500">TOTAL DISTANCE</p>
+                  <p className="font-medium">{distance} KM</p>
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="flex items-start gap-2 mb-3">
             <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>

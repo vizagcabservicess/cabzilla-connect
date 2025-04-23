@@ -148,11 +148,18 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   const cachedFare = fareCache.get(cacheKey);
   if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached airport fare for ${cabType.name}: ₹${cachedFare.price}`);
+    // Store in sessionStorage for consistency
     const fareDetails = {
       fare: cachedFare.price,
       timestamp: Date.now(),
       tripType: 'airport',
-      cabId: cabType.id
+      cabId: cabType.id,
+      distance,
+      breakdown: {
+        basePrice: cachedFare.price - 40,
+        airportFee: 40,
+        distance
+      }
     };
     sessionStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify(fareDetails));
     return cachedFare.price;
@@ -167,20 +174,25 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     }
 
     let fare = airportFares.basePrice;
+    let basePrice = fare;
     
     // Determine tier based on distance
     if (distance <= 10) {
-      fare = airportFares.tier1Price || 1200;
+      basePrice = airportFares.tier1Price || 1200;
     } else if (distance <= 20) {
-      fare = airportFares.tier2Price || 1800;
+      basePrice = airportFares.tier2Price || 1800;
     } else if (distance <= 30) {
-      fare = airportFares.tier3Price || 2400;
+      basePrice = airportFares.tier3Price || 2400;
     } else {
-      fare = airportFares.tier3Price || 2400;
+      basePrice = airportFares.tier3Price || 2400;
       const extraKm = distance - 30;
       const extraKmCharge = airportFares.extraKmCharge || 14;
       const extraDistanceFare = extraKm * extraKmCharge;
-      fare += extraDistanceFare;
+      fare = basePrice + extraDistanceFare;
+    }
+
+    if (distance <= 30) {
+      fare = basePrice;
     }
     
     // Add airport fee (Rs 40)
@@ -194,9 +206,10 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       cabId: cabType.id,
       distance,
       breakdown: {
-        basePrice: fare - 40,
+        basePrice: basePrice,
         airportFee: 40,
-        distance
+        extraKmCharge: airportFares.extraKmCharge || 14,
+        extraDistanceFare: distance > 30 ? ((distance - 30) * (airportFares.extraKmCharge || 14)) : 0
       }
     };
     sessionStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify(fareDetails));
