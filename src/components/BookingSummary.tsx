@@ -33,8 +33,9 @@ const BookingSummary = ({
   const contextData = useBookingContext();
   
   // Use props if provided, otherwise fall back to context
-  const pickupLocationId = pickupLocation?.place_id || contextData.pickupLocation?.place_id;
-  const dropLocationId = dropLocation?.place_id || contextData.dropoffLocation?.place_id;
+  // Changed from place_id to id to match the Location type
+  const pickupLocationId = pickupLocation?.id || contextData.pickupLocation?.id;
+  const dropLocationId = dropLocation?.id || contextData.dropoffLocation?.id;
   const cabId = selectedCab?.id || contextData.selectedCab?.id;
   const currentTripType = tripType || contextData.tripType;
   const selectedDateTime = pickupDate || contextData.selectedDateTime;
