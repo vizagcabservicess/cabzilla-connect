@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { formatPrice } from '@/lib';
 import { useBookingContext } from '@/context/BookingContext';
@@ -6,13 +7,39 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface BookingSummaryProps {
   totalPrice: number;
+  pickupLocation?: any;
+  dropLocation?: any;
+  pickupDate?: Date;
+  returnDate?: Date | null;
+  selectedCab?: any;
+  distance?: number;
+  tripType?: string;
+  tripMode?: string;
+  hourlyPackage?: string;
 }
 
 const BookingSummary = ({
-  totalPrice
+  totalPrice,
+  pickupLocation,
+  dropLocation,
+  pickupDate,
+  returnDate,
+  selectedCab,
+  distance,
+  tripType = "outstation",
+  tripMode,
+  hourlyPackage
 }: BookingSummaryProps) => {
-  const { selectedCab, pickupLocation, dropoffLocation, tripType, selectedDateTime } = useBookingContext();
-  const { fareData, isLoading } = useFareDetails(pickupLocation?.place_id, dropoffLocation?.place_id, selectedCab?.id, tripType, selectedDateTime);
+  const contextData = useBookingContext();
+  
+  // Use props if provided, otherwise fall back to context
+  const pickupLocationId = pickupLocation?.place_id || contextData.pickupLocation?.place_id;
+  const dropLocationId = dropLocation?.place_id || contextData.dropoffLocation?.place_id;
+  const cabId = selectedCab?.id || contextData.selectedCab?.id;
+  const currentTripType = tripType || contextData.tripType;
+  const selectedDateTime = pickupDate || contextData.selectedDateTime;
+  
+  const { fareData, isLoading } = useFareDetails(pickupLocationId, dropLocationId, selectedCab || contextData.selectedCab, currentTripType, selectedDateTime);
 
   if (isLoading) {
     return <div className="p-4 bg-gray-100 rounded-lg"><Skeleton className="w-full h-5"/></div>;
@@ -26,7 +53,7 @@ const BookingSummary = ({
 
   // OUTSTATION: Handle detailed total by summing all extra applicable fields.
   let finalTotal = totalPrice;
-  if (tripType === "outstation") {
+  if (currentTripType === "outstation") {
     finalTotal =
       (baseFare || 0) +
       (driverAllowance || 0) +
@@ -43,7 +70,7 @@ const BookingSummary = ({
       <h2 className="text-xl font-semibold mb-4">Booking Summary</h2>
       <div className="space-y-2 mb-6">
         {/* Show breakdown for Outstation */}
-        {tripType === "outstation" && (
+        {currentTripType === "outstation" && (
           <>
             <div className="flex justify-between">
               <span>Base Fare</span>
@@ -84,7 +111,7 @@ const BookingSummary = ({
           </>
         )}
         {/* Show breakdown for Local and Airport */}
-        {tripType !== "outstation" && fareData && (
+        {currentTripType !== "outstation" && fareData && (
           <>
             {fareData.baseFare && (
               <div className="flex justify-between">
