@@ -40,7 +40,7 @@ const BookingSummary = ({
   }
   
   // Use props if provided, otherwise fall back to context if available
-  // Changed from place_id to id to match the Location type
+  // Must use .id, not .place_id, for the Location type
   const pickupLocationId = pickupLocation?.id || (contextData?.pickupLocation?.id);
   const dropLocationId = dropLocation?.id || (contextData?.dropoffLocation?.id);
   const cabId = selectedCab?.id || (contextData?.selectedCab?.id);
@@ -152,3 +152,4 @@ const BookingSummary = ({
 };
 
 export default BookingSummary;
+
