@@ -49,13 +49,19 @@ export const BookingSummary = ({
     pickupDate // Ensure night charge is included
   );
 
-  // Only use state for loading indication
+  // Define all needed state variables
+  const [calculatedFare, setCalculatedFare] = useState<number>(0);
+  const [baseFare, setBaseFare] = useState<number>(0);
+  const [driverAllowance, setDriverAllowance] = useState<number>(250);
+  const [nightCharges, setNightCharges] = useState<number>(0);
+  const [extraDistanceFare, setExtraDistanceFare] = useState<number>(0);
+  const [extraDistance, setExtraDistance] = useState<number>(0);
+  const [perKmRate, setPerKmRate] = useState<number>(0);
+  const [effectiveDistance, setEffectiveDistance] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
 
-  // Remove all extra fare state & calculations for outstation;
-  // use only fareData.breakdown, fareData.totalPrice, etc.
-
+  // References to manage state between renders
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
@@ -125,7 +131,7 @@ export const BookingSummary = ({
         setBaseFare(estimatedBaseFare);
       }
     }
-  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare, selectedCab, tripType]);
+  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare, selectedCab, tripType, calculatedFare]);
 
   useEffect(() => {
     if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
@@ -227,7 +233,7 @@ export const BookingSummary = ({
         window.removeEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
       };
     }
-  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare, tripType]);
+  }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare, tripType, calculatedFare, hourlyPackage]);
 
   useEffect(() => {
     if (
@@ -295,7 +301,7 @@ export const BookingSummary = ({
         recalculateFareDetails();
       }, 100);
     }
-  }, [hourlyPackage, tripType]);
+  }, [hourlyPackage, tripType, selectedCab]);
 
   useEffect(() => {
     if (selectedCab && fareData?.totalPrice > 0) {
