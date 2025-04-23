@@ -161,12 +161,6 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     return $success;
 }
 
-/**
- * Generate HTML email template for booking confirmation
- * 
- * @param array $booking Booking details
- * @return string HTML content for the email
- */
 function generateBookingConfirmationEmail($booking) {
     $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
     $pickupLocation = $booking['pickupLocation'] ?? 'N/A';
@@ -267,6 +261,14 @@ function generateBookingConfirmationEmail($booking) {
                     <div class="detail-label">Pickup Location:</div>
                     <div class="detail-value">$pickupLocation</div>
                 </div>
+                <div class="detail-row">
+                    <div class="detail-label">Pickup Date & Time:</div>
+                    <div class="detail-value">$pickupDate</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Trip Type:</div>
+                    <div class="detail-value">$formattedTripType</div>
+                </div>
 HTML;
 
     if (!empty($dropLocation) && $dropLocation !== 'N/A') {
@@ -279,13 +281,17 @@ HTML;
     }
 
     $html .= <<<HTML
+            </div>
+            
+            <div class="booking-details">
+                <h3>Contact Information</h3>
                 <div class="detail-row">
-                    <div class="detail-label">Pickup Date & Time:</div>
-                    <div class="detail-value">$pickupDate</div>
+                    <div class="detail-label">Name:</div>
+                    <div class="detail-value">$passengerName</div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-label">Trip Type:</div>
-                    <div class="detail-value">$formattedTripType</div>
+                    <div class="detail-label">Phone Number:</div>
+                    <div class="detail-value">$passengerPhone</div>
                 </div>
             </div>
             
@@ -298,14 +304,6 @@ HTML;
                 <div class="detail-row">
                     <div class="detail-label">Total Amount:</div>
                     <div class="detail-value">₹$totalAmount</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Passenger Name:</div>
-                    <div class="detail-value">$passengerName</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Phone Number:</div>
-                    <div class="detail-value">$passengerPhone</div>
                 </div>
             </div>
             
@@ -328,12 +326,6 @@ HTML;
     return $html;
 }
 
-/**
- * Generate HTML email template for admin notification of new booking
- * 
- * @param array $booking Booking details
- * @return string HTML content for the email
- */
 function generateAdminNotificationEmail($booking) {
     $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
     $pickupLocation = $booking['pickupLocation'] ?? 'N/A';
@@ -520,12 +512,6 @@ HTML;
     return $html;
 }
 
-/**
- * Send booking confirmation email to the customer with improved error handling
- * 
- * @param array $booking Booking details
- * @return bool True if the email was sent successfully, false otherwise
- */
 function sendBookingConfirmationEmail($booking) {
     if (empty($booking['passengerEmail'])) {
         logError("Cannot send confirmation email - no passenger email provided", ['booking_id' => $booking['id'] ?? 'unknown']);
@@ -536,7 +522,7 @@ function sendBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    // Add high importance headers and additional delivery headers
+    // Add high importance headers
     $headers = [
         'X-Priority' => '1',
         'X-MSMail-Priority' => 'High',
@@ -544,44 +530,46 @@ function sendBookingConfirmationEmail($booking) {
         'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
-    logError("Sending booking confirmation email through enhanced system", [
-        'to' => $to,
-        'booking_number' => $booking['bookingNumber'],
-        'passenger_name' => $booking['passengerName'] ?? 'unknown'
-    ]);
+    // Try sending with multiple methods
+    $attempts = 0;
+    $maxAttempts = 3;
+    $success = false;
     
-    // Try our enhanced email delivery system first
-    $result = sendEmailAllMethods($to, $subject, $htmlBody);
-    
-    if (!$result) {
-        // If enhanced system fails, try original method as fallback
-        $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    while (!$success && $attempts < $maxAttempts) {
+        $attempts++;
+        
+        // Try our enhanced email delivery system first
+        $success = sendEmailAllMethods($to, $subject, $htmlBody);
+        
+        if (!$success) {
+            // If enhanced system fails, try original method as fallback
+            $success = sendEmail($to, $subject, $htmlBody, '', $headers);
+        }
+        
+        if (!$success && $attempts < $maxAttempts) {
+            sleep(2); // Wait 2 seconds before retrying
+        }
     }
     
+    // Also send admin notification
+    $adminSuccess = sendAdminNotificationEmail($booking);
+    
     logError("Booking confirmation email result", [
-        'success' => $result ? 'yes' : 'no',
+        'customer_email_success' => $success ? 'yes' : 'no',
+        'admin_email_success' => $adminSuccess ? 'yes' : 'no',
         'booking_number' => $booking['bookingNumber'],
-        'recipient' => $to,
-        'methods_tried' => 'all available methods'
+        'attempts' => $attempts
     ]);
     
-    return $result;
+    return $success;
 }
 
-/**
- * Send booking notification email to admin with improved error handling
- * 
- * @param array $booking Booking details
- * @return bool True if the email was sent successfully, false otherwise
- */
 function sendAdminNotificationEmail($booking) {
-    // Admin email - should be a valid, existing email
-    $to = 'info@vizagup.com'; // Updated admin email
-    
+    // Send to multiple admin emails for reliability
+    $adminEmails = ['info@vizagup.com', 'info@vizagtaxihub.com'];
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    // Add high importance headers and additional delivery headers
     $headers = [
         'X-Priority' => '1',
         'X-MSMail-Priority' => 'High',
@@ -589,25 +577,38 @@ function sendAdminNotificationEmail($booking) {
         'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
-    logError("Sending admin notification email through enhanced system", [
-        'to' => $to,
-        'booking_number' => $booking['bookingNumber'],
-        'booking_id' => $booking['id'] ?? 'unknown'
-    ]);
+    $success = false;
     
-    // Try our enhanced email delivery system first
-    $result = sendEmailAllMethods($to, $subject, $htmlBody);
-    
-    if (!$result) {
-        // If enhanced system fails, try original method as fallback
-        $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    foreach ($adminEmails as $adminEmail) {
+        $attempts = 0;
+        $maxAttempts = 3;
+        
+        while (!$success && $attempts < $maxAttempts) {
+            $attempts++;
+            
+            // Try enhanced system first
+            $success = sendEmailAllMethods($adminEmail, $subject, $htmlBody);
+            
+            if (!$success) {
+                // Try original method as fallback
+                $success = sendEmail($adminEmail, $subject, $htmlBody, '', $headers);
+            }
+            
+            if (!$success && $attempts < $maxAttempts) {
+                sleep(2); // Wait 2 seconds before retrying
+            }
+        }
+        
+        if ($success) {
+            break; // Stop if we successfully sent to any admin email
+        }
     }
     
     logError("Admin notification email result", [
-        'success' => $result ? 'yes' : 'no',
+        'success' => $success ? 'yes' : 'no',
         'booking_number' => $booking['bookingNumber'],
-        'methods_tried' => 'all available methods'
+        'attempts' => $attempts
     ]);
     
-    return $result;
+    return $success;
 }
