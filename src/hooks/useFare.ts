@@ -167,23 +167,21 @@ export function useFare(
         if (tripType === 'outstation') {
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
+
             const baseKms = 300;
             let basePrice = outstationFares.basePrice || 0;
             let pricePerKm = outstationFares.pricePerKm || 0;
             let driverAllowance = outstationFares.driverAllowance ?? 250;
             let nightCharges = 0;
-            let effectiveDistance = distance;
 
-            if (packageType === 'one-way') {
-              effectiveDistance = Math.max(distance * 2, baseKms);
-              basePrice = outstationFares.basePrice || 0;
-              pricePerKm = outstationFares.pricePerKm || 0;
-            } else if (packageType === 'round-trip') {
+            let effectiveDistance = distance;
+            if (packageType === 'round-trip') {
               pricePerKm = outstationFares.roundTripPricePerKm || pricePerKm;
               basePrice = outstationFares.roundTripBasePrice || basePrice;
               effectiveDistance = Math.max(distance * 2, baseKms);
-            } else {
-              effectiveDistance = Math.max(distance * 2, baseKms);
+            }
+            if (effectiveDistance < baseKms) {
+              effectiveDistance = baseKms;
             }
 
             let extraDistanceFare = 0;
@@ -193,7 +191,6 @@ export function useFare(
             }
 
             fare = basePrice + extraDistanceFare + driverAllowance;
-
             if (
               pickupDate &&
               (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)
@@ -213,7 +210,7 @@ export function useFare(
             databaseFareFound = true;
 
             console.log(
-              `[Outstation Calculation - ONE WAY] packageType=${packageType}, basePrice: ${basePrice}, effectiveDistance: ${effectiveDistance}, extraDistanceFare: ${extraDistanceFare}, driverAllowance: ${driverAllowance}, nightCharges: ${nightCharges}, TOTAL: ${fare}`
+              `[Outstation Calculation] basePrice: ${basePrice}, extraDistanceFare: ${extraDistanceFare}, driverAllowance: ${driverAllowance}, nightCharges: ${nightCharges}, TOTAL: ${fare}`
             );
 
             storeFareData(fareKey, fare, source, breakdown);
