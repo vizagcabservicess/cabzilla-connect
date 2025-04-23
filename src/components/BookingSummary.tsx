@@ -284,6 +284,53 @@ export const BookingSummary = ({
     }
   }, [fareData, selectedCab, tripType, tripMode, hourlyPackage]);
 
+  useEffect(() => {
+    if (tripType !== 'outstation' || !selectedCab) return;
+
+    async function calculateOutstationBreakdown() {
+      try {
+        const normalizedId = normalizeVehicleId(selectedCab.id);
+        const outstationFares = await getOutstationFaresForVehicle(normalizedId);
+
+        const minimumKm = 300;
+        const rate = outstationFares.pricePerKm || 15;
+        const base = outstationFares.basePrice || minimumKm * rate;
+        const allowance = outstationFares.driverAllowance ?? 250;
+
+        let night = 0;
+        if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+          night = Math.round(base * 0.1);
+        }
+
+        // Always treat outstation as effective (distance x 2)
+        const effectiveDist = distance * 2;
+        let extraDist = effectiveDist > minimumKm ? effectiveDist - minimumKm : 0;
+        let extraDistFare = extraDist * rate;
+
+        const finalFare = base + allowance + night + extraDistFare;
+
+        console.log(
+          `[BookingSummary-Outstation]:`,
+          { base, effectiveDist, extraDist, rate, extraDistFare, allowance, night, finalFare }
+        );
+
+        setBaseFare(base);
+        setDriverAllowance(allowance);
+        setNightCharges(night);
+        setExtraDistance(extraDist);
+        setExtraDistanceFare(extraDistFare);
+        setPerKmRate(rate);
+        setEffectiveDistance(effectiveDist);
+        setCalculatedFare(finalFare);
+      } catch (err) {
+        console.error('BookingSummary: Outstation calculation error', err);
+        setCalculatedFare(totalPrice);
+      }
+    }
+
+    calculateOutstationBreakdown();
+  }, [tripType, selectedCab, distance, pickupDate, totalPrice]);
+
   const recalculateFareDetails = async (): Promise<void> => {
     if (calculationInProgressRef.current) {
       console.log('BookingSummary: Calculation already in progress, skipping duplicate calculation');
