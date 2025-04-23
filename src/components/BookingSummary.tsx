@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -822,4 +823,88 @@ export const BookingSummary = ({
           )}
 
           <div className="flex items-start gap-2 mb-3">
-            <Calendar className="
+            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">PICKUP DATE</p>
+              <p className="font-medium">
+                {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+              </p>
+            </div>
+          </div>
+
+          {returnDate && (
+            <div className="flex items-start gap-2">
+              <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-gray-500">RETURN DATE</p>
+                <p className="font-medium">
+                  {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-b pb-4">
+          <div className="flex items-center gap-2">
+            <Car className="h-5 w-5 text-blue-500" />
+            <p className="font-medium">{selectedCab.name}</p>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <User className="h-4 w-4 text-gray-500" />
+            <p className="text-sm text-gray-500">{selectedCab.capacity} persons</p>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-gray-600">Base fare</p>
+            <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
+          </div>
+
+          {breakdown.driverAllowance > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Driver allowance</p>
+              <p>{formatPrice(breakdown.driverAllowance)}</p>
+            </div>
+          )}
+
+          {breakdown.nightCharges > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Night charges</p>
+              <p>{formatPrice(breakdown.nightCharges)}</p>
+            </div>
+          )}
+
+          {breakdown.extraDistanceFare > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-1">
+                <p className="text-gray-600">Extra distance charges</p>
+                <div className="relative">
+                  <Info className="h-4 w-4 text-blue-500 cursor-help" />
+                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1)).toFixed(0)} km × {formatPrice(breakdown.extraKmCharge || 0)}/km
+                  </div>
+                </div>
+              </div>
+              <p>{formatPrice(breakdown.extraDistanceFare)}</p>
+            </div>
+          )}
+
+          <Separator className="my-3" />
+
+          <div className="flex justify-between items-center">
+            <p className="font-semibold">Total Price</p>
+            <p className="font-bold text-lg">{formatPrice(finalTotal)}</p>
+          </div>
+
+          {isLoading && (
+            <div className="mt-3 text-center">
+              <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
