@@ -290,7 +290,78 @@ export const BookingSummary = ({
       return;
     }
 
-    // For local packages, use the fare from useFare hook if available
+    if (tripType === 'outstation' && selectedCab) {
+      try {
+        const outstationFares = await getOutstationFaresForVehicle(normalizeVehicleId(selectedCab.id));
+        const baseKms = 300;
+        let basePrice = outstationFares.basePrice || 0;
+        let perKmRate = outstationFares.pricePerKm || 0;
+        let driverAllowance = outstationFares.driverAllowance ?? 250;
+        let nightCharges = 0;
+        let effectiveDistance = distance;
+
+        if (tripMode === 'one-way') {
+          effectiveDistance = Math.max(distance * 2, baseKms);
+        } else {
+          perKmRate = outstationFares.roundTripPricePerKm || perKmRate;
+          basePrice = outstationFares.roundTripBasePrice || basePrice;
+          effectiveDistance = Math.max(distance * 2, baseKms);
+        }
+
+        let extraDistance = 0;
+        let extraDistanceFare = 0;
+        if (effectiveDistance > baseKms) {
+          extraDistance = effectiveDistance - baseKms;
+          extraDistanceFare = extraDistance * perKmRate;
+        }
+
+        let totalFare = basePrice + extraDistanceFare + driverAllowance;
+
+        if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+          nightCharges = Math.round(basePrice * 0.1);
+          totalFare += nightCharges;
+        }
+
+        setBaseFare(basePrice);
+        setDriverAllowance(driverAllowance);
+        setExtraDistance(extraDistance);
+        setExtraDistanceFare(extraDistanceFare);
+        setNightCharges(nightCharges);
+        setPerKmRate(perKmRate);
+        setEffectiveDistance(effectiveDistance);
+
+        setCalculatedFare(totalFare);
+        totalPriceRef.current = totalFare;
+
+        // Update localStorage/emit events as needed
+        if (selectedCab) {
+          const normalizedId = normalizeVehicleId(selectedCab.id);
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
+          localStorage.setItem(bookingSummaryKey, totalFare.toString());
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: normalizedId,
+              tripType,
+              tripMode,
+              calculated: true,
+              fare: totalFare,
+              packageType: hourlyPackage,
+              timestamp: Date.now()
+            }
+          }));
+        }
+
+        setShowDetailsLoading(false);
+        setIsRefreshing(false);
+        calculationInProgressRef.current = false;
+        pendingCalculationRef.current = false;
+        calculationAttemptsRef.current = 0;
+        return;
+      } catch (error) {
+        console.error('BookingSummary: Error recalculating outstation one-way fare', error);
+      }
+    }
+
     if (tripType === 'local' && fareData?.totalPrice > 0) {
       console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice, 'Package:', hourlyPackage);
       setCalculatedFare(fareData.totalPrice);
@@ -299,6 +370,27 @@ export const BookingSummary = ({
       setNightCharges(0);
       setExtraDistanceFare(0);
       return;
+    }
+
+    if (tripType === 'airport') {
+      const airportFares = await getAirportFaresForVehicle(normalizeVehicleId(selectedCab.id));
+      console.log('BookingSummary: Retrieved airport fares:', airportFares);
+
+      if (distance <= 10) {
+        setBaseFare(airportFares.tier1Price || airportFares.basePrice || 1000);
+      } else if (distance <= 20) {
+        setBaseFare(airportFares.tier2Price || airportFares.basePrice || 1200);
+      } else if (distance <= 30) {
+        setBaseFare(airportFares.tier3Price || airportFares.basePrice || 1500);
+      } else {
+        setBaseFare(airportFares.tier4Price || airportFares.basePrice || 2000);
+
+        setExtraDistance(distance - 30);
+        setExtraDistanceFare((distance - 30) * (airportFares.extraKmCharge || 14));
+        setPerKmRate(airportFares.extraKmCharge || 14);
+      }
+
+      setDriverAllowance(250);
     }
 
     if (calculationAttemptsRef.current >= maxCalculationAttempts) {
