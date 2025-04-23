@@ -293,11 +293,26 @@ export const BookingSummary = ({
         const outstationFares = await getOutstationFaresForVehicle(normalizedId);
 
         const minimumKm = 300;
-        const perKmRate = outstationFares.pricePerKm ?? 15;
-        const baseFare = outstationFares.basePrice ?? minimumKm * perKmRate;
-        const driverAllowance = outstationFares.driverAllowance ?? 250;
 
+        let perKmRate = outstationFares.pricePerKm ?? 15;
+        let baseFare = outstationFares.basePrice ?? minimumKm * perKmRate;
+        let driverAllowance = outstationFares.driverAllowance ?? 250;
         let nightCharges = 0;
+
+        // Correction: Use distance*2 for one-way, regular for round-trip (if present)
+        let effectiveDistance = distance * 2;
+        let isOneWay = tripMode !== "round-trip"; // default to one-way if tripMode missing
+
+        if (!isOneWay) { // round-trip logic
+          perKmRate = outstationFares.roundTripPricePerKm || perKmRate;
+          baseFare = outstationFares.roundTripBasePrice || baseFare;
+          effectiveDistance = distance * 2;
+        }
+
+        // Calculate extra distance (driver returns empty!)
+        const extraDistance = effectiveDistance > minimumKm ? effectiveDistance - minimumKm : 0;
+        const extraDistanceFare = extraDistance * perKmRate;
+
         if (pickupDate) {
           const pickupHour = pickupDate.getHours();
           if (pickupHour >= 22 || pickupHour <= 5) {
@@ -305,27 +320,7 @@ export const BookingSummary = ({
           }
         }
 
-        const effectiveDistance = distance * 2;
-        const extraDistance = effectiveDistance > minimumKm ? effectiveDistance - minimumKm : 0;
-        const extraDistanceFare = extraDistance * perKmRate;
-
         const finalFare = baseFare + driverAllowance + nightCharges + extraDistanceFare;
-
-        console.log(
-          `[BookingSummary][OUTSTATION]:`,
-          {
-            vehicle: selectedCab.name,
-            baseFare,
-            minIncluded: minimumKm,
-            effectiveDistance,
-            extraDistance,
-            perKmRate,
-            extraDistanceFare,
-            driverAllowance,
-            nightCharges,
-            finalFare
-          }
-        );
 
         setBaseFare(baseFare);
         setDriverAllowance(driverAllowance);
