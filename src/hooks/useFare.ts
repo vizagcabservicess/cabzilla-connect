@@ -190,7 +190,92 @@ export function useFare(
         let source = 'calculated';
         let databaseFareFound = false;
 
-        if (tripType === "outstation") {
+        if (tripType === "airport") {
+          try {
+            const airportFares = await getAirportFaresForVehicle(normalizedCabId);
+            console.log(`Retrieved airport fares for ${cabId}:`, airportFares);
+
+            let basePrice = 0;
+            const airportFee = airportFares.airportFee || 150;
+
+            if (distance <= 10) {
+              basePrice = airportFares.tier1Price || 1200;
+            } else if (distance <= 20) {
+              basePrice = airportFares.tier2Price || 1800;
+            } else if (distance <= 30) {
+              basePrice = airportFares.tier3Price || 2400;
+            } else {
+              basePrice = airportFares.tier3Price || 2400;
+              const extraKm = distance - 30;
+              const extraKmCharge = airportFares.extraKmCharge || 14;
+              const extraDistanceFare = extraKm * extraKmCharge;
+              fare = basePrice + extraDistanceFare;
+            }
+
+            if (distance <= 30) {
+              fare = basePrice;
+            }
+
+            fare += airportFee;
+
+            breakdown = {
+              basePrice: basePrice,
+              airportFee: airportFee,
+              extraDistanceFare: distance > 30 ? ((distance - 30) * (airportFares.extraKmCharge || 14)) : 0,
+              extraKmCharge: airportFares.extraKmCharge || 14
+            };
+
+            source = 'database';
+            
+            storeFareData(fareKey, fare, source, breakdown);
+            
+            debouncedDispatchEvent({
+              cabId: normalizedCabId,
+              tripType,
+              calculated: true,
+              fare: fare,
+              source,
+              timestamp: Date.now()
+            });
+
+          } catch (e) {
+            console.error('Error calculating airport fare:', e);
+            
+            let basePrice = 0;
+            let fare = 0;
+
+            if (distance <= 10) {
+              basePrice = 1200;
+            } else if (distance <= 20) {
+              basePrice = 1800;
+            } else if (distance <= 30) {
+              basePrice = 2400;
+            } else {
+              basePrice = 2400;
+              const extraKm = distance - 30;
+              const extraDistanceFare = extraKm * 14;
+              fare = basePrice + extraDistanceFare;
+            }
+
+            if (distance <= 30) {
+              fare = basePrice;
+            }
+
+            const airportFee = 150;
+            fare += airportFee;
+
+            breakdown = {
+              basePrice: basePrice,
+              airportFee: airportFee,
+              extraDistanceFare: distance > 30 ? ((distance - 30) * 14) : 0,
+              extraKmCharge: 14
+            };
+
+            source = 'default';
+            
+            storeFareData(fareKey, fare, source, breakdown);
+          }
+        } else if (tripType === "outstation") {
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
 
@@ -313,92 +398,6 @@ export function useFare(
               
               storeFareData(fareKey, fare, source, breakdown);
             }
-          }
-        } else if (tripType === "airport") {
-          try {
-            const airportFares = await getAirportFaresForVehicle(normalizedCabId);
-            console.log(`Retrieved airport fares for ${cabId}:`, airportFares);
-
-            let fare = 0;
-            let basePrice = 0;
-
-            if (distance <= 10) {
-              basePrice = airportFares.tier1Price || 1200;
-            } else if (distance <= 20) {
-              basePrice = airportFares.tier2Price || 1800;
-            } else if (distance <= 30) {
-              basePrice = airportFares.tier3Price || 2400;
-            } else {
-              basePrice = airportFares.tier4Price || 3000;
-              const extraKm = distance - 30;
-              const extraKmCharge = airportFares.extraKmCharge || 14;
-              const extraDistanceFare = extraKm * extraKmCharge;
-              fare = basePrice + extraDistanceFare;
-            }
-
-            if (distance <= 30) {
-              fare = basePrice;
-            }
-
-            const airportFee = airportFares.airportFee || 150;
-            fare += airportFee;
-
-            const breakdown = {
-              basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * (airportFares.extraKmCharge || 14)) : 0,
-              extraKmCharge: airportFares.extraKmCharge || 14
-            };
-
-            source = 'database';
-            
-            storeFareData(fareKey, fare, source, breakdown);
-            
-            debouncedDispatchEvent({
-              cabId: normalizedCabId,
-              tripType,
-              calculated: true,
-              fare: fare,
-              source,
-              timestamp: Date.now()
-            });
-
-          } catch (e) {
-            console.error('Error calculating airport fare:', e);
-            
-            let basePrice = 0;
-            let fare = 0;
-
-            if (distance <= 10) {
-              basePrice = 1200;
-            } else if (distance <= 20) {
-              basePrice = 1800;
-            } else if (distance <= 30) {
-              basePrice = 2400;
-            } else {
-              basePrice = 3000;
-              const extraKm = distance - 30;
-              const extraDistanceFare = extraKm * 14;
-              fare = basePrice + extraDistanceFare;
-            }
-
-            if (distance <= 30) {
-              fare = basePrice;
-            }
-
-            const airportFee = 150;
-            fare += airportFee;
-
-            const breakdown = {
-              basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * 14) : 0,
-              extraKmCharge: 14
-            };
-
-            source = 'default';
-            
-            storeFareData(fareKey, fare, source, breakdown);
           }
         } else if (tripType === "tour") {
           try {
