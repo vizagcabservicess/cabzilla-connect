@@ -30,17 +30,24 @@ const BookingSummary = ({
   tripMode,
   hourlyPackage
 }: BookingSummaryProps) => {
-  const contextData = useBookingContext();
+  // Attempt to use context, but don't throw an error if not available
+  let contextData;
+  try {
+    contextData = useBookingContext();
+  } catch (error) {
+    // Context not available, will use only props
+    contextData = null;
+  }
   
-  // Use props if provided, otherwise fall back to context
+  // Use props if provided, otherwise fall back to context if available
   // Changed from place_id to id to match the Location type
-  const pickupLocationId = pickupLocation?.id || contextData.pickupLocation?.id;
-  const dropLocationId = dropLocation?.id || contextData.dropoffLocation?.id;
-  const cabId = selectedCab?.id || contextData.selectedCab?.id;
-  const currentTripType = tripType || contextData.tripType;
-  const selectedDateTime = pickupDate || contextData.selectedDateTime;
+  const pickupLocationId = pickupLocation?.id || (contextData?.pickupLocation?.id);
+  const dropLocationId = dropLocation?.id || (contextData?.dropoffLocation?.id);
+  const cabId = selectedCab?.id || (contextData?.selectedCab?.id);
+  const currentTripType = tripType || (contextData?.tripType || 'outstation');
+  const selectedDateTime = pickupDate || (contextData?.selectedDateTime);
   
-  const { fareData, isLoading } = useFareDetails(pickupLocationId, dropLocationId, selectedCab || contextData.selectedCab, currentTripType, selectedDateTime);
+  const { fareData, isLoading } = useFareDetails(pickupLocationId, dropLocationId, selectedCab || (contextData?.selectedCab), currentTripType, selectedDateTime);
 
   if (isLoading) {
     return <div className="p-4 bg-gray-100 rounded-lg"><Skeleton className="w-full h-5"/></div>;

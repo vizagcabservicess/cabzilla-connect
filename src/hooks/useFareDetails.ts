@@ -31,6 +31,11 @@ export function useFareDetails(
     const calculateFareDetails = async () => {
       if (!pickupPlaceId || !dropoffPlaceId || !selectedCab || !tripType) {
         setIsLoading(false);
+        // Provide default fare data when inputs are missing
+        setFareData({
+          baseFare: 0,
+          totalPrice: 0
+        });
         return;
       }
 
@@ -81,6 +86,11 @@ export function useFareDetails(
       } catch (error) {
         console.error('Error calculating fare details:', error);
         setError(error instanceof Error ? error : new Error('Unknown error calculating fare'));
+        // Provide fallback fare data in case of errors
+        setFareData({
+          baseFare: selectedCab?.price || 2000,
+          totalPrice: selectedCab?.price || 2000
+        });
         setIsLoading(false);
       }
     };
