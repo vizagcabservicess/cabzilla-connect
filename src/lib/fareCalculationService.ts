@@ -144,6 +144,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   const cacheKey = `airport_${cabType.id}_${distance}_${lastCacheClearTime}`;
   const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
   
+  // Check cache first
   const cachedFare = fareCache.get(cacheKey);
   if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached airport fare for ${cabType.name}: ₹${cachedFare.price}`);
@@ -154,31 +155,39 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const airportFares = await getAirportFaresForVehicle(cabType.id);
     console.log(`Retrieved airport fares for ${cabType.name} from vehicle_pricing:`, airportFares);
     
+    if (!airportFares || !airportFares.basePrice) {
+      throw new Error('Invalid airport fares retrieved');
+    }
+
     let fare = airportFares.basePrice;
     
     // Determine tier based on distance
     if (distance <= 10) {
-      fare = airportFares.tier1Price;
+      fare = airportFares.tier1Price || 1200;
     } else if (distance <= 20) {
-      fare = airportFares.tier2Price;
+      fare = airportFares.tier2Price || 1800;
     } else if (distance <= 30) {
-      fare = airportFares.tier3Price;
+      fare = airportFares.tier3Price || 2400;
     } else {
-      fare = airportFares.tier4Price;
+      fare = airportFares.tier3Price || 2400;
       const extraKm = distance - 30;
-      const extraKmCost = extraKm * airportFares.extraKmCharge;
-      fare += extraKmCost;
+      const extraKmCharge = airportFares.extraKmCharge || 14;
+      const extraDistanceFare = extraKm * extraKmCharge;
+      fare += extraDistanceFare;
     }
     
     // Add airport fee (Rs 40)
     fare += 40;
     
-    // Store fare in localStorage for consistency across booking flow
-    localStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify({
+    // Store calculated fare in sessionStorage for consistency
+    const fareDetails = {
       fare,
       timestamp: Date.now(),
-      distance
-    }));
+      distance,
+      tripType: 'airport',
+      cabId: cabType.id
+    };
+    sessionStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify(fareDetails));
     
     // Cache the result
     fareCache.set(cacheKey, {
@@ -186,90 +195,27 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       price: fare
     });
     
+    // Log the final fare for debugging
+    console.log(`Calculated airport fare for ${cabType.name}: ₹${fare} (distance: ${distance}km)`);
+    
     return fare;
   } catch (error) {
     console.error(`Error calculating airport fare for ${cabType.name}:`, error);
     
-    // Try to get stored fare from earlier calculation
-    const storedFare = localStorage.getItem(`airport_fare_${cabType.id}`);
+    // Try to get previously calculated fare from sessionStorage
+    const storedFare = sessionStorage.getItem(`airport_fare_${cabType.id}`);
     if (storedFare) {
       try {
-        const { fare, timestamp, distance: storedDistance } = JSON.parse(storedFare);
-        // Only use stored fare if it's recent (within 15 minutes) and for same distance
-        if (Date.now() - timestamp < 15 * 60 * 1000 && storedDistance === distance) {
-          return fare;
+        const parsedFare = JSON.parse(storedFare);
+        if (parsedFare.distance === distance && Date.now() - parsedFare.timestamp < 15 * 60 * 1000) {
+          return parsedFare.fare;
         }
       } catch (e) {
         console.error('Error parsing stored airport fare:', e);
       }
     }
     
-    // If we can't get real fares, use cab type fares
-    if (cabType.airportFares) {
-      let fare = cabType.airportFares.basePrice;
-      
-      if (distance <= 10) {
-        fare = cabType.airportFares.tier1Price;
-      } else if (distance <= 20) {
-        fare = cabType.airportFares.tier2Price;
-      } else if (distance <= 30) {
-        fare = cabType.airportFares.tier3Price;
-      } else {
-        fare = cabType.airportFares.tier4Price;
-        const extraKm = distance - 30;
-        const extraKmCost = extraKm * cabType.airportFares.extraKmCharge;
-        fare += extraKmCost;
-      }
-      
-      // Add airport fee (Rs 40)
-      fare += 40;
-      
-      // Cache the result
-      fareCache.set(cacheKey, {
-        expire: Date.now() + 15 * 60 * 1000,
-        price: fare
-      });
-      
-      return fare;
-    }
-    
-    // Last resort default values
-    const defaultFare = {
-      basePrice: 1000,
-      pricePerKm: 14,
-      airportFee: 40,
-      tier1Price: 800,    // 0-10 KM
-      tier2Price: 1200,   // 11-20 KM
-      tier3Price: 1800,   // 21-30 KM
-      tier4Price: 2500,   // 31+ KM
-      extraKmCharge: 14
-    };
-    
-    let fare = defaultFare.basePrice;
-    
-    if (distance <= 10) {
-      fare = defaultFare.tier1Price;
-    } else if (distance <= 20) {
-      fare = defaultFare.tier2Price;
-    } else if (distance <= 30) {
-      fare = defaultFare.tier3Price;
-    } else {
-      fare = defaultFare.tier4Price;
-      const extraKm = distance - 30;
-      const extraKmCost = extraKm * defaultFare.extraKmCharge;
-      fare += extraKmCost;
-    }
-    
-    // Add airport fee
-    fare += defaultFare.airportFee;
-    
-    // Cache the result
-    fareCache.set(cacheKey, {
-      expire: Date.now() + 15 * 60 * 1000,
-      price: fare
-    });
-    
-    return fare;
+    throw new Error('Could not calculate airport fare');
   }
 };
 
