@@ -293,43 +293,75 @@ export const BookingSummary = ({
         const outstationFares = await getOutstationFaresForVehicle(normalizedId);
 
         const minimumKm = 300;
-        const rate = outstationFares.pricePerKm || 15;
-        const base = outstationFares.basePrice || minimumKm * rate;
-        const allowance = outstationFares.driverAllowance ?? 250;
+        const perKmRate = outstationFares.pricePerKm ?? 15;
+        const baseFare = outstationFares.basePrice ?? minimumKm * perKmRate;
+        const driverAllowance = outstationFares.driverAllowance ?? 250;
 
-        let night = 0;
-        if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-          night = Math.round(base * 0.1);
+        let nightCharges = 0;
+        if (pickupDate) {
+          const pickupHour = pickupDate.getHours();
+          if (pickupHour >= 22 || pickupHour <= 5) {
+            nightCharges = Math.round(baseFare * 0.1);
+          }
         }
 
-        // Always treat outstation as effective (distance x 2)
-        const effectiveDist = distance * 2;
-        let extraDist = effectiveDist > minimumKm ? effectiveDist - minimumKm : 0;
-        let extraDistFare = extraDist * rate;
+        const effectiveDistance = distance * 2;
+        const extraDistance = effectiveDistance > minimumKm ? effectiveDistance - minimumKm : 0;
+        const extraDistanceFare = extraDistance * perKmRate;
 
-        const finalFare = base + allowance + night + extraDistFare;
+        const finalFare = baseFare + driverAllowance + nightCharges + extraDistanceFare;
 
         console.log(
-          `[BookingSummary-Outstation]:`,
-          { base, effectiveDist, extraDist, rate, extraDistFare, allowance, night, finalFare }
+          `[BookingSummary][OUTSTATION]:`,
+          {
+            vehicle: selectedCab.name,
+            baseFare,
+            minIncluded: minimumKm,
+            effectiveDistance,
+            extraDistance,
+            perKmRate,
+            extraDistanceFare,
+            driverAllowance,
+            nightCharges,
+            finalFare
+          }
         );
 
-        setBaseFare(base);
-        setDriverAllowance(allowance);
-        setNightCharges(night);
-        setExtraDistance(extraDist);
-        setExtraDistanceFare(extraDistFare);
-        setPerKmRate(rate);
-        setEffectiveDistance(effectiveDist);
+        setBaseFare(baseFare);
+        setDriverAllowance(driverAllowance);
+        setNightCharges(nightCharges);
+        setExtraDistance(extraDistance);
+        setExtraDistanceFare(extraDistanceFare);
+        setPerKmRate(perKmRate);
+        setEffectiveDistance(effectiveDistance);
         setCalculatedFare(finalFare);
+
+        try {
+          const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
+          localStorage.setItem(bookingSummaryKey, finalFare.toString());
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: normalizedId,
+              tripType: tripType,
+              tripMode: tripMode,
+              calculated: true,
+              fare: finalFare,
+              packageType: hourlyPackage,
+              timestamp: Date.now()
+            }
+          }));
+          console.log(`[BookingSummary][OUTSTATION]: Stored and dispatched fare: ${bookingSummaryKey} = ${finalFare}`);
+        } catch (error) {
+          console.error('[BookingSummary][OUTSTATION]: Error storing/disoatching fare', error);
+        }
       } catch (err) {
-        console.error('BookingSummary: Outstation calculation error', err);
+        console.error('[BookingSummary][OUTSTATION]: Calculation error', err);
         setCalculatedFare(totalPrice);
       }
     }
 
     calculateOutstationBreakdown();
-  }, [tripType, selectedCab, distance, pickupDate, totalPrice]);
+  }, [tripType, selectedCab, distance, pickupDate, tripMode, hourlyPackage, totalPrice]);
 
   const recalculateFareDetails = async (): Promise<void> => {
     if (calculationInProgressRef.current) {
@@ -337,7 +369,6 @@ export const BookingSummary = ({
       return;
     }
 
-    // For local packages, use the fare from useFare hook if available
     if (tripType === 'local' && fareData?.totalPrice > 0) {
       console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice, 'Package:', hourlyPackage);
       setCalculatedFare(fareData.totalPrice);
@@ -482,14 +513,12 @@ export const BookingSummary = ({
       setCalculatedFare(finalFare);
       totalPriceRef.current = finalFare;
 
-      // Update localStorage with the calculated fare
       try {
         const normalizedId = normalizeVehicleId(selectedCab.id);
         const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
         localStorage.setItem(bookingSummaryKey, finalFare.toString());
         console.log(`BookingSummary: Stored calculated fare in localStorage: ${bookingSummaryKey} = ${finalFare}`);
 
-        // For airport transfers, dispatch a fare-calculated event to update cab cards
         if (tripType === 'airport') {
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
@@ -509,8 +538,6 @@ export const BookingSummary = ({
       if (Math.abs(newCalculatedFare - totalPrice) > 10 && totalPrice > 0 && !isNaN(newCalculatedFare)) {
         console.log(`BookingSummary: Significant fare difference detected - calculated: ${newCalculatedFare}, parent: ${totalPrice}`);
 
-        // CRITICAL FIX: Emit a custom event for significant fare differences
-        // CabList and CabOptions will listen for this event to update their displayed fares
         window.dispatchEvent(new CustomEvent('significant-fare-difference', {
           detail: {
             cabId: normalizeVehicleId(selectedCab.id),
@@ -522,18 +549,15 @@ export const BookingSummary = ({
           }
         }));
 
-        // For airport transfers, we need to make sure the calculated fare is used
         if (tripType === 'airport' && Math.abs(newCalculatedFare - totalPrice) > 50) {
           console.log(`BookingSummary: Using calculated fare ${newCalculatedFare} for airport transfer instead of ${totalPrice}`);
           setCalculatedFare(newCalculatedFare);
           totalPriceRef.current = newCalculatedFare;
 
-          // Store this calculated fare in localStorage and re-emit
           const normalizedId = normalizeVehicleId(selectedCab.id);
           const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
           localStorage.setItem(bookingSummaryKey, newCalculatedFare.toString());
 
-          // Emit an event for the CabList to update with this calculated fare
           window.dispatchEvent(new CustomEvent('fare-calculated', {
             detail: {
               cabId: normalizedId,
@@ -575,14 +599,12 @@ export const BookingSummary = ({
           setCalculatedFare(customEvent.detail.fare);
           totalPriceRef.current = customEvent.detail.fare;
 
-          // Store this fare in localStorage
           try {
             const normalizedId = normalizeVehicleId(customEvent.detail.cabType);
             const bookingSummaryKey = `booking_summary_fare_${tripType}_${normalizedId}_${hourlyPackage}`;
             localStorage.setItem(bookingSummaryKey, customEvent.detail.fare.toString());
             console.log(`BookingSummary: Stored selected cab fare in localStorage: ${bookingSummaryKey} = ${customEvent.detail.fare}`);
 
-            // Broadcast the fare calculation back to CabList
             if (tripType === 'airport') {
               window.dispatchEvent(new CustomEvent('fare-calculated', {
                 detail: {
@@ -663,7 +685,6 @@ export const BookingSummary = ({
         setCalculatedFare(totalPrice);
         totalPriceRef.current = totalPrice;
 
-        // Store this fare in localStorage for CabList to access
         if (selectedCab) {
           try {
             const normalizedId = normalizeVehicleId(selectedCab.id);
@@ -671,7 +692,6 @@ export const BookingSummary = ({
             localStorage.setItem(bookingSummaryKey, totalPrice.toString());
             console.log(`BookingSummary: Stored initial fare in localStorage: ${bookingSummaryKey} = ${totalPrice}`);
 
-            // For airport transfers, dispatch fare event immediately
             if (tripType === 'airport') {
               window.dispatchEvent(new CustomEvent('fare-calculated', {
                 detail: {
@@ -802,7 +822,7 @@ export const BookingSummary = ({
                 <div className="text-gray-600 text-sm ml-1">
                   Trip distance: {distance} km &nbsp;|&nbsp; Effective (2-way): {effectiveDistance} km
                 </div>
-                {extraDistance > 0 && (
+                {(extraDistance > 0) && (
                   <div className="flex justify-between">
                     <span className="text-gray-700">
                       Extra distance fare ({extraDistance} km × ₹{perKmRate})
@@ -814,7 +834,7 @@ export const BookingSummary = ({
                   <span className="text-gray-700">Driver allowance</span>
                   <span className="font-semibold">₹{driverAllowance.toLocaleString()}</span>
                 </div>
-                {nightCharges > 0 && (
+                {(nightCharges > 0) && (
                   <div className="flex justify-between">
                     <span className="text-gray-700">Night charges</span>
                     <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
