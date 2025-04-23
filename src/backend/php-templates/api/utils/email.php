@@ -175,6 +175,7 @@ function generateBookingConfirmationEmail($booking) {
     $cabType = $booking['cabType'] ?? 'N/A';
     $totalAmount = isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A';
     $passengerName = $booking['passengerName'] ?? 'N/A';
+    $passengerPhone = $booking['passengerPhone'] ?? 'N/A';
     $tripType = $booking['tripType'] ?? 'Standard';
     $tripMode = $booking['tripMode'] ?? '';
     
@@ -498,7 +499,7 @@ HTML;
                     <div class="detail-value">$passengerName</div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-label">Phone:</div>
+                    <div class="detail-label">Phone Number:</div>
                     <div class="detail-value">$passengerPhone</div>
                 </div>
                 <div class="detail-row">

@@ -155,16 +155,6 @@ export default function BookingConfirmationPage() {
                     </div>
                   </>
                 )}
-
-                {bookingDetails?.bookingType === 'tour' && bookingDetails?.tourName && (
-                  <div className="flex items-start">
-                    <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-gray-500">Tour Package</p>
-                      <p className="font-medium">{bookingDetails.tourName}</p>
-                    </div>
-                  </div>
-                )}
               </div>
               
               <div className="space-y-4">

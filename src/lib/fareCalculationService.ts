@@ -148,6 +148,13 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   const cachedFare = fareCache.get(cacheKey);
   if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached airport fare for ${cabType.name}: ₹${cachedFare.price}`);
+    const fareDetails = {
+      fare: cachedFare.price,
+      timestamp: Date.now(),
+      tripType: 'airport',
+      cabId: cabType.id
+    };
+    sessionStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify(fareDetails));
     return cachedFare.price;
   }
   
@@ -183,9 +190,14 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const fareDetails = {
       fare,
       timestamp: Date.now(),
-      distance,
       tripType: 'airport',
-      cabId: cabType.id
+      cabId: cabType.id,
+      distance,
+      breakdown: {
+        basePrice: fare - 40,
+        airportFee: 40,
+        distance
+      }
     };
     sessionStorage.setItem(`airport_fare_${cabType.id}`, JSON.stringify(fareDetails));
     
@@ -195,7 +207,6 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       price: fare
     });
     
-    // Log the final fare for debugging
     console.log(`Calculated airport fare for ${cabType.name}: ₹${fare} (distance: ${distance}km)`);
     
     return fare;
@@ -208,6 +219,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       try {
         const parsedFare = JSON.parse(storedFare);
         if (parsedFare.distance === distance && Date.now() - parsedFare.timestamp < 15 * 60 * 1000) {
+          console.log(`Using stored airport fare: ₹${parsedFare.fare}`);
           return parsedFare.fare;
         }
       } catch (e) {
