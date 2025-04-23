@@ -146,6 +146,27 @@ export function useFare(
     window.dispatchEvent(new CustomEvent('fare-calculated', { detail }));
   }, 100);
 
+  const getFareKey = (tripType: string, cabId: string, packageType?: string) => {
+    if (tripType === "outstation") {
+      return `fare_outstation_${normalizeVehicleId(cabId)}`;
+    }
+    if (tripType === "local") {
+      return `fare_local_${normalizeVehicleId(cabId)}_${packageType || ''}`;
+    }
+    if (tripType === "airport") {
+      return `fare_airport_${normalizeVehicleId(cabId)}`;
+    }
+    return `fare_${tripType}_${normalizeVehicleId(cabId)}`;
+  };
+
+  const cleanWrongOutstationKeys = (normId: string) => {
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith(`fare_outstation_${normId}_`)) {
+        localStorage.removeItem(key);
+      }
+    });
+  };
+
   useEffect(() => {
     clearStaleFares();
     
@@ -156,7 +177,11 @@ export function useFare(
       setError(null);
 
       const normalizedCabId = normalizeVehicleId(cabId);
-      const fareKey = `fare_${tripType}_${normalizedCabId}_${packageType}`;
+      const fareKey = getFareKey(tripType, normalizedCabId, tripType === "local" ? packageType : undefined);
+
+      if (tripType === "outstation") {
+        cleanWrongOutstationKeys(normalizedCabId);
+      }
 
       try {
         let fare: number = 0;
@@ -164,7 +189,7 @@ export function useFare(
         let source = 'calculated';
         let databaseFareFound = false;
 
-        if (tripType === 'outstation') {
+        if (tripType === "outstation") {
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
 
@@ -217,7 +242,7 @@ export function useFare(
           } catch (e) {
             console.error('Error fetching outstation fares:', e);
           }
-        } else if (tripType === 'local') {
+        } else if (tripType === "local") {
           try {
             const localFares = await getLocalFaresForVehicle(normalizedCabId);
             
@@ -276,13 +301,13 @@ export function useFare(
               storeFareData(fareKey, fare, source, breakdown);
             }
           }
-        } else if (tripType === 'airport') {
+        } else if (tripType === "airport") {
           try {
             
           } catch (e) {
             console.error('Error fetching real-time airport fares:', e);
           }
-        } else if (tripType === 'tour') {
+        } else if (tripType === "tour") {
           try {
             if (normalizedCabId.includes('sedan')) fare = 3500;
             else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) fare = 4500;
