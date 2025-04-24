@@ -271,7 +271,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   }
   
   // Try to get existing valid fare from cache
-  const existingFare = getFare(cacheKey, { cabType, tripType: 'airport', distance });
+  const existingFare = getFare(cacheKey, { cabType: cabType.id, tripType: 'airport', distance });
   if (existingFare) {
     console.log(`Using existing airport fare: ₹${existingFare}`);
     return existingFare;
@@ -305,7 +305,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     const totalFare = basePrice + airportFee;
     
     if (storeFare(cacheKey, totalFare, 'database', {
-      cabType,
+      cabType: cabType.id,
       tripType: 'airport',
       distance,
       breakdown: {
@@ -338,7 +338,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   }
   
   // Try to get existing valid fare from cache
-  const existingFare = getFare(cacheKey, { cabType, tripType, distance });
+  const existingFare = getFare(cacheKey, { cabType: cabType.id, tripType, distance });
   
   if (existingFare) {
     console.log(`Using existing fare: ₹${existingFare}`);
@@ -399,7 +399,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     
     if (calculatedFare > 0) {
       storeFare(cacheKey, calculatedFare, 'calculated', {
-        cabType,
+        cabType: cabType.id,
         tripType,
         distance,
         tripMode,

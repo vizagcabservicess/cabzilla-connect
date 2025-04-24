@@ -2,7 +2,7 @@
 import { normalizeVehicleId } from './safeStringUtils';
 
 // Helper to validate fare amounts
-export const validateFare = (fare: number, cabType: string, tripType: string): boolean => {
+export const validateFare = (fare: number, cabType: string | { id?: string }, tripType: string): boolean => {
   if (!fare || isNaN(fare) || fare <= 0) return false;
   
   const cabId = typeof cabType === 'string' ? 
