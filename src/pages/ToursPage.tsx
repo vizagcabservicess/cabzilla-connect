@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -329,6 +330,7 @@ const ToursPage = () => {
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
                     totalPrice={getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
+                    tripMode="one-way" // Add the missing tripMode property
                     hourlyPackage="tour"
                   />
                 )}
