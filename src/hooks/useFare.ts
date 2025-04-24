@@ -16,7 +16,7 @@ interface FareBreakdown {
   packageLabel?: string;
   extraKmCharge?: number;
   extraHourCharge?: number;
-  airportFee?: number;
+  airportFee?: number; // Added airportFee property
 }
 
 interface FareData {
@@ -25,20 +25,7 @@ interface FareData {
   breakdown: FareBreakdown;
   source?: string;
   timestamp?: number;
-  version?: string;
-  checksum?: string;
 }
-
-// Minimum fare amounts to prevent invalid values
-const MIN_FARES = {
-  airport: 800,
-  local: 1000,
-  outstation: 2000,
-  default: 500
-};
-
-// Current fare version - increment when calculation logic changes
-const FARE_VERSION = '1.0.2';
 
 export function useFare(
   cabId: string, 
@@ -54,52 +41,19 @@ export function useFare(
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
 
-  // Generate a checksum for fare data to detect tampering
-  const generateFareChecksum = (cabId: string, tripType: string, fare: number): string => {
-    const input = `${cabId}-${tripType}-${fare}-${FARE_VERSION}`;
-    let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-      const char = input.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString(16);
-  };
-
   const storeFareData = (key: string, fare: number, source: string, breakdown: FareBreakdown) => {
-    if (!validateFareAmount(fare, cabId, tripType)) {
-      console.warn(`Invalid fare value prevented from storage: ${fare} for ${cabId} (${tripType})`);
-      return false;
-    }
-
     try {
-      const checksum = generateFareChecksum(cabId, tripType, fare);
       const fareData = {
         fare,
         source,
         breakdown,
         packageType,
-        timestamp: Date.now(),
-        version: FARE_VERSION,
-        checksum
+        timestamp: Date.now()
       };
-      
-      // Store in both storage mechanisms for redundancy
       localStorage.setItem(key, JSON.stringify(fareData));
-      sessionStorage.setItem(key, JSON.stringify(fareData));
-      
       console.log(`Stored fare data in localStorage: ${key} = ${fare} (source: ${source}, package: ${packageType})`);
-      
-      // Also store in alternative format for critical trip types
-      if (tripType === 'airport' || tripType === 'outstation') {
-        const backupKey = `${tripType}_fare_${normalizeVehicleId(cabId)}`;
-        localStorage.setItem(backupKey, JSON.stringify(fareData));
-      }
-      
-      return true;
     } catch (e) {
       console.error('Error storing fare in localStorage:', e);
-      return false;
     }
   };
 
@@ -129,29 +83,14 @@ export function useFare(
     }
   };
 
-  const getStoredFare = (key: string): { fare: number, source: string, breakdown: FareBreakdown } | null => {
+  const getStoredFare = (key: string) => {
     try {
-      // Try both storage mechanisms
-      const fareJson = localStorage.getItem(key) || sessionStorage.getItem(key);
+      const fareJson = localStorage.getItem(key);
       if (fareJson) {
         try {
           const fareObj = JSON.parse(fareJson);
           
-          // Verify version and checksum if available
-          if (fareObj.version && fareObj.version !== FARE_VERSION) {
-            console.log(`Fare version mismatch: ${fareObj.version} vs ${FARE_VERSION}, recalculating`);
-            return null;
-          }
-          
-          if (fareObj.checksum) {
-            const expectedChecksum = generateFareChecksum(cabId, tripType, fareObj.fare);
-            if (fareObj.checksum !== expectedChecksum) {
-              console.warn('Fare checksum mismatch, possible tampering detected');
-              return null;
-            }
-          }
-          
-          if (typeof fareObj.fare === 'number' && fareObj.fare > 0 && validateFareAmount(fareObj.fare, cabId, tripType)) {
+          if (typeof fareObj.fare === 'number' && fareObj.fare > 0) {
             return {
               fare: fareObj.fare,
               source: fareObj.source || 'stored',
@@ -163,29 +102,9 @@ export function useFare(
           localStorage.removeItem(key);
         }
       }
-      
-      // Try alternative storage format
-      const backupKey = `${tripType}_fare_${normalizeVehicleId(cabId)}`;
-      const backupJson = localStorage.getItem(backupKey);
-      if (backupJson) {
-        try {
-          const backupObj = JSON.parse(backupJson);
-          if (typeof backupObj.fare === 'number' && backupObj.fare > 0 && 
-              validateFareAmount(backupObj.fare, cabId, tripType)) {
-            return {
-              fare: backupObj.fare,
-              source: backupObj.source || 'backup',
-              breakdown: backupObj.breakdown || { basePrice: backupObj.fare }
-            };
-          }
-        } catch (e) {
-          console.error('Error parsing backup fare:', e);
-        }
-      }
-      
       return null;
     } catch (e) {
-      console.error('Error retrieving fare from storage:', e);
+      console.error('Error retrieving fare from localStorage:', e);
       return null;
     }
   };
@@ -193,28 +112,25 @@ export function useFare(
   const validateFareAmount = (fare: number, cabId: string, tripType: string): boolean => {
     if (isNaN(fare) || fare <= 0) return false;
     
-    // Get minimum fare based on trip type
-    let minFare = MIN_FARES[tripType as keyof typeof MIN_FARES] || MIN_FARES.default;
+    let minFare = 500;
     let maxFare = 20000;
     
     const normalizedId = normalizeVehicleId(cabId);
     
-    // Adjust min/max fares based on cab type
     if (normalizedId.includes('sedan')) {
-      minFare = tripType === 'local' ? 1000 : (tripType === 'airport' ? 800 : 2000);
+      minFare = tripType === 'local' ? 1000 : 2000;
       maxFare = 8000;
     } else if (normalizedId.includes('ertiga') || normalizedId.includes('suv')) {
-      minFare = tripType === 'local' ? 1500 : (tripType === 'airport' ? 1000 : 2500);
+      minFare = tripType === 'local' ? 1500 : 2500;
       maxFare = 12000;
     } else if (normalizedId.includes('innova') || normalizedId.includes('crysta') || normalizedId.includes('mpv')) {
-      minFare = tripType === 'local' ? 2000 : (tripType === 'airport' ? 1200 : 3000);
+      minFare = tripType === 'local' ? 2000 : 3000;
       maxFare = 15000;
     } else if (normalizedId.includes('luxury')) {
-      minFare = tripType === 'local' ? 3000 : (tripType === 'airport' ? 2000 : 4000);
+      minFare = tripType === 'local' ? 3000 : 4000;
       maxFare = 20000;
     }
     
-    // Log warning if fare is outside acceptable range
     if (fare < minFare) {
       console.warn(`Fare value too low: ${fare} for ${cabId} (${tripType}). Minimum expected: ${minFare}`);
       return false;
@@ -233,18 +149,16 @@ export function useFare(
   }, 100);
 
   const getFareKey = (tripType: string, cabId: string, packageType?: string) => {
-    const normalizedId = normalizeVehicleId(cabId);
-    
     if (tripType === "outstation") {
-      return `fare_outstation_${normalizedId}`;
+      return `fare_outstation_${normalizeVehicleId(cabId)}`;
     }
     if (tripType === "local") {
-      return `fare_local_${normalizedId}_${packageType || ''}`;
+      return `fare_local_${normalizeVehicleId(cabId)}_${packageType || ''}`;
     }
     if (tripType === "airport") {
-      return `fare_airport_${normalizedId}`;
+      return `fare_airport_${normalizeVehicleId(cabId)}`;
     }
-    return `fare_${tripType}_${normalizedId}`;
+    return `fare_${tripType}_${normalizeVehicleId(cabId)}`;
   };
 
   const cleanWrongOutstationKeys = (normId: string) => {
@@ -276,32 +190,6 @@ export function useFare(
         let breakdown: FareBreakdown = {};
         let source = 'calculated';
         let databaseFareFound = false;
-        
-        // First try to get stored fare
-        const storedFare = getStoredFare(fareKey);
-        if (storedFare && validateFareAmount(storedFare.fare, cabId, tripType)) {
-          console.log(`Using stored fare for ${cabId}: ${storedFare.fare} (source: ${storedFare.source})`);
-          
-          setFareData({
-            totalPrice: storedFare.fare,
-            basePrice: storedFare.breakdown.basePrice || storedFare.fare,
-            breakdown: storedFare.breakdown,
-            source: storedFare.source,
-            timestamp: Date.now()
-          });
-          
-          debouncedDispatchEvent({
-            cabId: normalizedCabId,
-            tripType,
-            calculated: false,
-            fare: storedFare.fare,
-            source: storedFare.source,
-            timestamp: Date.now()
-          });
-          
-          setIsLoading(false);
-          return; // Exit early if we found a valid stored fare
-        }
 
         if (tripType === "airport") {
           try {
@@ -311,15 +199,14 @@ export function useFare(
             let basePrice = 0;
             const airportFee = 40; // Updated airport fee to Rs 40
 
-            // Enforce minimum base price by distance tiers
             if (distance <= 10) {
-              basePrice = Math.max(airportFares.tier1Price || 1200, 800);
+              basePrice = airportFares.tier1Price || 1200;
             } else if (distance <= 20) {
-              basePrice = Math.max(airportFares.tier2Price || 1800, 1000);
+              basePrice = airportFares.tier2Price || 1800;
             } else if (distance <= 30) {
-              basePrice = Math.max(airportFares.tier3Price || 2400, 1200);
+              basePrice = airportFares.tier3Price || 2400;
             } else {
-              basePrice = Math.max(airportFares.tier3Price || 2400, 1200);
+              basePrice = airportFares.tier3Price || 2400;
               const extraKm = distance - 30;
               const extraKmCharge = airportFares.extraKmCharge || 14;
               const extraDistanceFare = extraKm * extraKmCharge;
@@ -331,9 +218,6 @@ export function useFare(
             }
 
             fare += airportFee;
-            
-            // Ensure minimum fare for airport transfers
-            fare = Math.max(fare, MIN_FARES.airport);
 
             breakdown = {
               basePrice: basePrice,
@@ -344,60 +228,42 @@ export function useFare(
 
             source = 'database';
             
-            if (validateFareAmount(fare, cabId, tripType)) {
-              storeFareData(fareKey, fare, source, breakdown);
-              
-              debouncedDispatchEvent({
-                cabId: normalizedCabId,
-                tripType,
-                calculated: true,
-                fare: fare,
-                source,
-                timestamp: Date.now()
-              });
-            } else {
-              // If invalid fare, use minimum valid fare
-              fare = MIN_FARES.airport;
-              source = 'minimum';
-              
-              storeFareData(fareKey, fare, source, {
-                basePrice: fare - 40,
-                airportFee: 40
-              });
-            }
+            storeFareData(fareKey, fare, source, breakdown);
+            
+            debouncedDispatchEvent({
+              cabId: normalizedCabId,
+              tripType,
+              calculated: true,
+              fare: fare,
+              source,
+              timestamp: Date.now()
+            });
 
           } catch (e) {
             console.error('Error calculating airport fare:', e);
             
-            // Fallback calculation for airport transfer
             let basePrice = 0;
-            const airportFee = 40;
-            
-            // Set fallback fares based on cab type and distance
-            const cabTypeNormalized = normalizeVehicleId(cabId);
-            if (cabTypeNormalized.includes('sedan')) {
-              basePrice = 1000;
-            } else if (cabTypeNormalized.includes('ertiga') || cabTypeNormalized.includes('suv')) {
+            let fare = 0;
+            const airportFee = 40; // Updated airport fee here too
+
+            if (distance <= 10) {
               basePrice = 1200;
-            } else if (cabTypeNormalized.includes('innova') || cabTypeNormalized.includes('crysta')) {
-              basePrice = 1500;
-            } else if (cabTypeNormalized.includes('tempo') || cabTypeNormalized.includes('traveller')) {
-              basePrice = 2000;
+            } else if (distance <= 20) {
+              basePrice = 1800;
+            } else if (distance <= 30) {
+              basePrice = 2400;
             } else {
-              basePrice = 1200;
+              basePrice = 2400;
+              const extraKm = distance - 30;
+              const extraDistanceFare = extraKm * 14;
+              fare = basePrice + extraDistanceFare;
             }
-            
-            // Add distance surcharge
-            if (distance > 10) {
-              const extraDistance = Math.min(distance - 10, 20);
-              const farFactor = Math.max(0, distance - 30) * 0.2;
-              basePrice += extraDistance * 25 + farFactor;
+
+            if (distance <= 30) {
+              fare = basePrice;
             }
-            
-            fare = basePrice + airportFee;
-            
-            // Ensure minimum fare
-            fare = Math.max(fare, MIN_FARES.airport);
+
+            fare += airportFee;
 
             breakdown = {
               basePrice: basePrice,
@@ -406,15 +272,14 @@ export function useFare(
               extraKmCharge: 14
             };
 
-            source = 'fallback';
+            source = 'default';
             
             storeFareData(fareKey, fare, source, breakdown);
           }
         } else if (tripType === "outstation") {
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
-            console.log(`Retrieved outstation fares for ${cabId}:`, outstationFares);
-            
+
             const baseKms = 300;
             let basePrice = outstationFares.basePrice || 0;
             let pricePerKm = outstationFares.pricePerKm || 0;
@@ -445,9 +310,6 @@ export function useFare(
               nightCharges = Math.round(basePrice * 0.1);
               fare += nightCharges;
             }
-            
-            // Ensure minimum fare for outstation trips
-            fare = Math.max(fare, MIN_FARES.outstation);
 
             breakdown = {
               basePrice,
@@ -457,7 +319,13 @@ export function useFare(
               extraKmCharge: pricePerKm,
             };
 
-            source = 'database';
+            source = 'calculated';
+
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith(`fare_outstation_${normalizedCabId}_`)) {
+                localStorage.removeItem(key);
+              }
+            });
 
             storeFareData(fareKey, fare, source, breakdown);
 
@@ -472,44 +340,10 @@ export function useFare(
 
           } catch (e) {
             console.error('Error calculating outstation fare:', e);
-            
-            // Fallback calculation for outstation
-            const cabTypeNormalized = normalizeVehicleId(cabId);
-            const baseKms = 300;
-            
-            let pricePerKm = 12; // Default
-            if (cabTypeNormalized.includes('sedan')) pricePerKm = 12;
-            else if (cabTypeNormalized.includes('ertiga') || cabTypeNormalized.includes('suv')) pricePerKm = 14;
-            else if (cabTypeNormalized.includes('innova')) pricePerKm = 16;
-            else if (cabTypeNormalized.includes('tempo') || cabTypeNormalized.includes('traveller')) pricePerKm = 18;
-            
-            const basePrice = baseKms * pricePerKm;
-            const driverAllowance = 250;
-            let effectiveDistance = distance * 2;
-            let extraDistanceFare = 0;
-            
-            if (effectiveDistance > baseKms) {
-              extraDistanceFare = (effectiveDistance - baseKms) * pricePerKm;
-            }
-            
-            fare = basePrice + driverAllowance + extraDistanceFare;
-            fare = Math.max(fare, MIN_FARES.outstation);
-            
-            breakdown = {
-              basePrice,
-              driverAllowance,
-              extraDistanceFare,
-              extraKmCharge: pricePerKm
-            };
-            
-            source = 'fallback';
-            
-            storeFareData(fareKey, fare, source, breakdown);
           }
         } else if (tripType === "local") {
           try {
             const localFares = await getLocalFaresForVehicle(normalizedCabId);
-            console.log(`Retrieved local fares for ${cabId}:`, localFares);
             
             const packageMap: Record<string, string> = {
               '8hrs-80km': 'price8hrs80km',
@@ -538,48 +372,33 @@ export function useFare(
                 
                 storeFareData(fareKey, fare, source, breakdown);
               } else {
-                console.warn(`Invalid database fare value for ${cabId}: ${dbFare}, will use minimum instead`);
-                fare = MIN_FARES.local;
-                source = 'minimum';
-                breakdown = {
-                  basePrice: fare,
-                  packageLabel: packageType
-                };
-                
-                storeFareData(fareKey, fare, source, breakdown);
+                console.warn(`Invalid database fare value for ${cabId}: ${dbFare}, will try calculation instead`);
               }
+            }
+          } catch (e) {
+            console.error('Error fetching real-time local fares:', e);
+          }
+          
+          if (!databaseFareFound) {
+            const storedFare = getStoredFare(fareKey);
+            if (storedFare && validateFareAmount(storedFare.fare, cabId, tripType)) {
+              console.log(`Using stored fare for ${cabId}: ${storedFare.fare} (source: ${storedFare.source})`);
+              fare = storedFare.fare;
+              source = storedFare.source;
+              breakdown = storedFare.breakdown;
             } else {
-              console.warn(`No valid package price found for ${packageType}, using fallback`);
-              
-              // Use fallback values based on cab type
+              console.log(`No valid stored fare for ${cabId}, calculating default`);
               if (normalizedCabId.includes('sedan')) fare = 2400;
               else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) fare = 3000;
               else if (normalizedCabId.includes('innova') || normalizedCabId.includes('crysta') || normalizedCabId.includes('mpv')) fare = 4000;
               else if (normalizedCabId.includes('luxury')) fare = 5000;
               else fare = 3000;
               
-              source = 'fallback';
-              breakdown = { 
-                basePrice: fare,
-                packageLabel: packageType
-              };
+              source = 'default';
+              breakdown = { basePrice: fare };
               
               storeFareData(fareKey, fare, source, breakdown);
             }
-          } catch (e) {
-            console.error('Error fetching real-time local fares:', e);
-            
-            // Use fallback values based on cab type
-            if (normalizedCabId.includes('sedan')) fare = 2400;
-            else if (normalizedCabId.includes('ertiga') || normalizedCabId.includes('suv')) fare = 3000;
-            else if (normalizedCabId.includes('innova') || normalizedCabId.includes('crysta') || normalizedCabId.includes('mpv')) fare = 4000;
-            else if (normalizedCabId.includes('luxury')) fare = 5000;
-            else fare = 3000;
-            
-            source = 'fallback';
-            breakdown = { basePrice: fare };
-            
-            storeFareData(fareKey, fare, source, breakdown);
           }
         } else if (tripType === "tour") {
           try {
@@ -596,7 +415,6 @@ export function useFare(
             console.error('Error fetching real-time tour fares:', e);
           }
         } else {
-          // For any other trip type, use the general calculateFare function
           const fullCabType = cabTypes.find(cab => normalizeVehicleId(cab.id) === normalizedCabId);
           
           if (!fullCabType) {
@@ -650,13 +468,6 @@ export function useFare(
           
           if (validateFareAmount(fare, cabId, tripType)) {
             storeFareData(fareKey, fare, source, breakdown);
-          } else {
-            // Use minimum fare if invalid
-            const minFare = MIN_FARES[tripType as keyof typeof MIN_FARES] || MIN_FARES.default;
-            console.warn(`Invalid calculated fare: ${fare}, using minimum: ${minFare}`);
-            fare = minFare;
-            source = 'minimum';
-            storeFareData(fareKey, fare, source, { basePrice: fare });
           }
         }
 
@@ -665,45 +476,23 @@ export function useFare(
           basePrice: breakdown.basePrice || fare,
           breakdown,
           source,
-          timestamp: Date.now(),
-          version: FARE_VERSION
-        });
-
-        debouncedDispatchEvent({
-          cabId: normalizedCabId,
-          tripType,
-          calculated: true,
-          fare: fare,
-          source,
           timestamp: Date.now()
         });
+
+        if (tripType !== "outstation") {
+          debouncedDispatchEvent({
+            cabId: normalizedCabId,
+            tripType,
+            calculated: true,
+            fare: fare,
+            source,
+            timestamp: Date.now()
+          });
+        }
 
       } catch (err) {
         console.error(`Fare calculation error for ${cabId}:`, err);
         setError(err instanceof Error ? err : new Error('Failed to calculate fare'));
-        
-        // Use fallback minimum fare in case of error
-        const minFare = MIN_FARES[tripType as keyof typeof MIN_FARES] || MIN_FARES.default;
-        
-        setFareData({
-          totalPrice: minFare,
-          basePrice: minFare,
-          breakdown: { basePrice: minFare },
-          source: 'error_fallback',
-          timestamp: Date.now()
-        });
-        
-        storeFareData(fareKey, minFare, 'error_fallback', { basePrice: minFare });
-        
-        debouncedDispatchEvent({
-          cabId: normalizedCabId,
-          tripType,
-          calculated: false,
-          fare: minFare,
-          source: 'error_fallback',
-          timestamp: Date.now(),
-          error: err instanceof Error ? err.message : 'Unknown error'
-        });
       } finally {
         setIsLoading(false);
       }

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -30,68 +29,14 @@ export default function BookingConfirmationPage() {
       }
     }
 
-    // Enhanced booking details retrieval ensuring fare consistency
-    let bookingDetailsFromStorage = null;
-    try {
-      const detailsStr = sessionStorage.getItem('bookingDetails');
-      if (detailsStr) {
-        const parsedDetails = JSON.parse(detailsStr);
-        
-        // CRITICAL FIX: Check for consistent fare from global booking fare key
-        if (parsedDetails.selectedCab && parsedDetails.tripType) {
-          const cabId = parsedDetails.selectedCab.id;
-          const tripType = parsedDetails.tripType;
-          
-          // Try to get the fare from the global booking fare key
-          const globalFareLookupKey = `fareBooking_${cabId}_${tripType}`;
-          const globalFareStr = localStorage.getItem(globalFareLookupKey) || sessionStorage.getItem(globalFareLookupKey);
-          
-          if (globalFareStr) {
-            try {
-              const globalFareData = JSON.parse(globalFareStr);
-              
-              if (globalFareData.fare && 
-                  typeof globalFareData.fare === 'number' && 
-                  globalFareData.fare > 0) {
-                // Use the fare from the booking fare key
-                console.log(`BookingConfirmation: Using consistent fare from booking key: ₹${globalFareData.fare} (Original: ₹${parsedDetails.totalPrice})`);
-                parsedDetails.totalPrice = globalFareData.fare;
-              }
-            } catch (e) {
-              console.error('Error parsing global fare data:', e);
-            }
-          } else {
-            // Try alternative approach with simplified key
-            const simplifiedKey = `${tripType}_fare_${cabId.toLowerCase()}`;
-            const simplifiedFareStr = localStorage.getItem(simplifiedKey) || sessionStorage.getItem(simplifiedKey);
-            
-            if (simplifiedFareStr) {
-              try {
-                const simplifiedFareData = JSON.parse(simplifiedFareStr);
-                if (simplifiedFareData.fare && 
-                    typeof simplifiedFareData.fare === 'number' && 
-                    simplifiedFareData.fare > 0) {
-                  console.log(`BookingConfirmation: Using consistent fare from simplified key: ₹${simplifiedFareData.fare} (Original: ₹${parsedDetails.totalPrice})`);
-                  parsedDetails.totalPrice = simplifiedFareData.fare;
-                }
-              } catch (e) {
-                console.error('Error parsing simplified fare data:', e);
-              }
-            }
-          }
-        }
-        
-        bookingDetailsFromStorage = parsedDetails;
-      }
-    } catch (error) {
-      console.error('Error parsing booking details:', error);
-    }
-    
+    const bookingDetailsFromStorage = sessionStorage.getItem('bookingDetails');
     if (bookingDetailsFromStorage) {
-      setBookingDetails(bookingDetailsFromStorage);
-      console.log('Retrieved booking details:', bookingDetailsFromStorage);
-    } else {
-      console.error('No booking details found in storage');
+      try {
+        const parsedDetails = JSON.parse(bookingDetailsFromStorage);
+        setBookingDetails(parsedDetails);
+      } catch (error) {
+        console.error('Error parsing booking details:', error);
+      }
     }
   }, [isNewBooking, emailSent]);
 
