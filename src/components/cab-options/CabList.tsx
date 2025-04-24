@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { TripType } from '@/lib/tripTypes';
-import { storeFareWithValidation } from '@/utils/fareValidator';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -15,7 +15,7 @@ interface CabListProps {
   tripMode?: string;
   distance?: number;
   packageType?: string;
-  pickupDate?: Date;
+  pickupDate?: Date; // Add pickupDate prop
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -28,7 +28,7 @@ export const CabList: React.FC<CabListProps> = ({
   tripMode = 'one-way',
   distance = 0,
   packageType,
-  pickupDate
+  pickupDate // Add pickupDate to destructuring
 }) => {
   console.log(`CabList: Rendering with package ${packageType}`);
   
@@ -68,20 +68,17 @@ export const CabList: React.FC<CabListProps> = ({
     }, 500);
     
     if (fare > 0) {
-      const stored = storeFareWithValidation(cab.id, tripType, fare, {
-        source: fareSource,
-        packageType,
-        tripMode,
-        distance,
-        pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
-        cabName: cab.name,
-        cabType: cab
-      });
-      
-      if (stored) {
-        console.log(`Stored validated fare for ${cab.name}: ₹${fare} (${fareSource})`);
-      } else {
-        console.warn(`Failed to store validated fare for ${cab.name}: ₹${fare}`);
+      try {
+        localStorage.setItem(`selected_fare_${cab.id}_${tripType}_${packageType}`, JSON.stringify({
+          fare,
+          source: fareSource,
+          timestamp: Date.now(),
+          packageType,
+          cabId: cab.id
+        }));
+        console.log(`Stored selected fare for ${cab.name}: ₹${fare} (${fareSource})`);
+      } catch (e) {
+        console.error('Error storing selected fare:', e);
       }
     }
   };
@@ -108,7 +105,7 @@ export const CabList: React.FC<CabListProps> = ({
             tripType,
             distance,
             packageType,
-            pickupDate
+            pickupDate // Pass pickupDate to useFare hook
           );
 
           let fare = 0;
@@ -123,16 +120,6 @@ export const CabList: React.FC<CabListProps> = ({
           } else if (fareData) {
             fare = fareData.totalPrice;
             fareSource = fareData.source || 'unknown';
-            
-            if (fare > 0) {
-              storeFareWithValidation(cab.id, tripType, fare, {
-                source: fareSource,
-                packageType,
-                tripMode,
-                distance,
-                breakdown: fareData.breakdown
-              });
-            }
             
             if (fareSource === 'database') {
               fareText = `₹${fare.toLocaleString()} (verified)`;

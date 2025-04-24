@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,6 @@ import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard } from 'lucide-re
 import { format } from 'date-fns';
 import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
-import { getValidatedFare, syncFareStorage } from '@/utils/fareValidator';
 
 interface BookingDetails {
   pickupLocation: Location;
@@ -17,7 +17,6 @@ interface BookingDetails {
   totalPrice: number;
   discountAmount: number;
   finalPrice: number;
-  bookingType?: string;
 }
 
 const BookingConfirmation = () => {
@@ -26,8 +25,7 @@ const BookingConfirmation = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    syncFareStorage();
-    
+    // Generate a random booking ID
     const generateBookingId = () => {
       const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let result = 'BK';
@@ -38,28 +36,14 @@ const BookingConfirmation = () => {
     };
 
     try {
+      // Retrieve booking details from sessionStorage
       const storedBooking = sessionStorage.getItem('bookingDetails');
       if (storedBooking) {
         const parsedBooking = JSON.parse(storedBooking);
-        
-        if (parsedBooking.selectedCab?.id && (parsedBooking.bookingType || parsedBooking.tripType)) {
-          const cabId = parsedBooking.selectedCab.id;
-          const tripType = parsedBooking.bookingType || parsedBooking.tripType;
-          
-          const validatedFare = getValidatedFare(cabId, tripType);
-          
-          if (validatedFare && Math.abs(validatedFare - parsedBooking.totalPrice) > 50) {
-            console.log(`Updating fare in BookingConfirmation from ${parsedBooking.totalPrice} to validated fare ${validatedFare}`);
-            parsedBooking.totalPrice = validatedFare;
-            parsedBooking.finalPrice = validatedFare - (parsedBooking.discountAmount || 0);
-            
-            sessionStorage.setItem('bookingDetails', JSON.stringify(parsedBooking));
-          }
-        }
-        
         setBooking(parsedBooking);
-        setBookingId(parsedBooking.bookingNumber || generateBookingId());
+        setBookingId(generateBookingId());
       } else {
+        // If no booking details found, redirect to home
         navigate('/');
       }
     } catch (error) {
