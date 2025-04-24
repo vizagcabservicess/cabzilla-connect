@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -184,6 +185,7 @@ export function useFare(
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
         let source = 'calculated';
+        let databaseFareFound = false; // Added this missing variable
 
         if (tripType === "airport") {
           // Updated airport fare calculation to match correct pricing

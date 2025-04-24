@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -9,6 +10,11 @@ import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresF
 // Create a fare cache with expiration and strict validation
 const fareCache = new Map<string, { expire: number, price: number, source: string }>();
 let lastCacheClearTime = Date.now();
+
+// Add the missing variables for event throttling
+let eventDispatchCount = 0;
+let lastEventDispatchTime = Date.now();
+const MAX_EVENTS_PER_MINUTE = 10;
 
 // Helper to validate fare amounts
 const validateFare = (fare: number, cabType: CabType, tripType: string): boolean => {
