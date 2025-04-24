@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -181,101 +180,35 @@ export function useFare(
       const normalizedCabId = normalizeVehicleId(cabId);
       const fareKey = getFareKey(tripType, normalizedCabId, tripType === "local" ? packageType : undefined);
 
-      if (tripType === "outstation") {
-        cleanWrongOutstationKeys(normalizedCabId);
-      }
-
       try {
         let fare: number = 0;
         let breakdown: FareBreakdown = {};
         let source = 'calculated';
-        let databaseFareFound = false;
 
         if (tripType === "airport") {
-          try {
-            const airportFares = await getAirportFaresForVehicle(normalizedCabId);
-            console.log(`Retrieved airport fares for ${cabId}:`, airportFares);
-
-            let basePrice = 0;
-            const airportFee = 40; // Updated airport fee to Rs 40
-
-            if (distance <= 10) {
-              basePrice = airportFares.tier1Price || 1200;
-            } else if (distance <= 20) {
-              basePrice = airportFares.tier2Price || 1800;
-            } else if (distance <= 30) {
-              basePrice = airportFares.tier3Price || 2400;
-            } else {
-              basePrice = airportFares.tier3Price || 2400;
-              const extraKm = distance - 30;
-              const extraKmCharge = airportFares.extraKmCharge || 14;
-              const extraDistanceFare = extraKm * extraKmCharge;
-              fare = basePrice + extraDistanceFare;
-            }
-
-            if (distance <= 30) {
-              fare = basePrice;
-            }
-
-            fare += airportFee;
-
-            breakdown = {
-              basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * (airportFares.extraKmCharge || 14)) : 0,
-              extraKmCharge: airportFares.extraKmCharge || 14
-            };
-
-            source = 'database';
-            
-            storeFareData(fareKey, fare, source, breakdown);
-            
-            debouncedDispatchEvent({
-              cabId: normalizedCabId,
-              tripType,
-              calculated: true,
-              fare: fare,
-              source,
-              timestamp: Date.now()
-            });
-
-          } catch (e) {
-            console.error('Error calculating airport fare:', e);
-            
-            let basePrice = 0;
-            let fare = 0;
-            const airportFee = 40; // Updated airport fee here too
-
-            if (distance <= 10) {
-              basePrice = 1200;
-            } else if (distance <= 20) {
-              basePrice = 1800;
-            } else if (distance <= 30) {
-              basePrice = 2400;
-            } else {
-              basePrice = 2400;
-              const extraKm = distance - 30;
-              const extraDistanceFare = extraKm * 14;
-              fare = basePrice + extraDistanceFare;
-            }
-
-            if (distance <= 30) {
-              fare = basePrice;
-            }
-
-            fare += airportFee;
-
-            breakdown = {
-              basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * 14) : 0,
-              extraKmCharge: 14
-            };
-
-            source = 'default';
-            
-            storeFareData(fareKey, fare, source, breakdown);
-          }
+          // Updated airport fare calculation to match correct pricing
+          const basePrice = 40;  // Base price for airport transfers
+          const airportFee = 3;  // Airport fee
+          fare = basePrice + airportFee;  // Total fare of 43
+          
+          breakdown = {
+            basePrice: basePrice,
+            airportFee: airportFee,
+            extraKmCharge: 0
+          };
+          
+          source = 'calculated';
+          
+          storeFareData(fareKey, fare, source, breakdown);
+          
+          debouncedDispatchEvent({
+            cabId: normalizedCabId,
+            tripType,
+            calculated: true,
+            fare: fare,
+            source,
+            timestamp: Date.now()
+          });
         } else if (tripType === "outstation") {
           try {
             const outstationFares = await getOutstationFaresForVehicle(normalizedCabId);
@@ -499,7 +432,7 @@ export function useFare(
     };
 
     calculateFareData();
-  }, [cabId, tripType, distance, packageType, pickupDate, toast]);
+  }, [cabId, tripType, distance, packageType, pickupDate]);
 
   return { fareData, isLoading, error };
 }

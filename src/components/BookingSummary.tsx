@@ -486,7 +486,7 @@ export const BookingSummary = ({
           newPerKmRate = airportFares.extraKmCharge || 14;
         }
 
-        newDriverAllowance = 250;
+        newDriverAllowance = 0;
       } else if (tripType === 'local') {
         const localFares = await getLocalFaresForVehicle(normalizeVehicleId(selectedCab.id));
         console.log('BookingSummary: Retrieved local fares:', localFares);
