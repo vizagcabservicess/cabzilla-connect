@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { toast } from "sonner";
+import { reconcileFares, syncFareStorage, getValidatedFare } from '@/utils/fareValidator';
 
 export default function BookingConfirmationPage() {
   const navigate = useNavigate();
@@ -16,6 +17,9 @@ export default function BookingConfirmationPage() {
   const emailSent = location.state?.emailSent;
 
   useEffect(() => {
+    // Sync fare storage to ensure consistency
+    syncFareStorage();
+    
     if (isNewBooking) {
       if (emailSent === true) {
         setEmailStatus('sent');
@@ -33,9 +37,33 @@ export default function BookingConfirmationPage() {
     if (bookingDetailsFromStorage) {
       try {
         const parsedDetails = JSON.parse(bookingDetailsFromStorage);
+        
+        // If we have a selected cab, validate the fare
+        if (parsedDetails.selectedCab?.id && parsedDetails.bookingType) {
+          const cabId = parsedDetails.selectedCab.id;
+          const tripType = parsedDetails.bookingType;
+          
+          // Check for validated fare
+          const validatedFare = getValidatedFare(cabId, tripType);
+          
+          if (validatedFare && (Math.abs(validatedFare - parsedDetails.totalPrice) > 50)) {
+            console.log(`Updating fare from ${parsedDetails.totalPrice} to validated fare ${validatedFare}`);
+            parsedDetails.totalPrice = validatedFare;
+            
+            // Update sessionStorage with corrected fare
+            sessionStorage.setItem('bookingDetails', JSON.stringify(parsedDetails));
+            
+            toast.info("Fare has been validated and updated", {
+              duration: 3000,
+              position: "bottom-right"
+            });
+          }
+        }
+        
         setBookingDetails(parsedDetails);
       } catch (error) {
         console.error('Error parsing booking details:', error);
+        toast.error("Could not load booking details correctly");
       }
     }
   }, [isNewBooking, emailSent]);

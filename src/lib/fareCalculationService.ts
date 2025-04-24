@@ -5,32 +5,22 @@ import { getLocalPackagePrice } from './packageData';
 import { tourFares } from './tourData';
 import axios from 'axios';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
+import { validateFare, getValidatedFare } from '@/utils/fareValidator';
 
 // Create a fare cache with expiration and strict validation
 const fareCache = new Map<string, { expire: number, price: number, source: string }>();
 let lastCacheClearTime = Date.now();
+// Event throttling variables
+let eventDispatchCount = 0;
+let lastEventDispatchTime = Date.now();
+const MAX_EVENTS_PER_MINUTE = 5;
 
-// Helper to validate fare amounts
-const validateFare = (fare: number, cabType: CabType, tripType: string): boolean => {
-  if (!fare || isNaN(fare) || fare <= 0) return false;
-  
-  const cabId = cabType.id.toLowerCase();
-  let minFare = 500;
-  let maxFare = 20000;
-  
-  // Set min/max fares based on cab type and trip type
-  if (cabId.includes('sedan')) {
-    minFare = tripType === 'local' ? 1000 : (tripType === 'airport' ? 800 : 2000);
-    maxFare = 8000;
-  } else if (cabId.includes('ertiga') || cabId.includes('suv')) {
-    minFare = tripType === 'local' ? 1500 : (tripType === 'airport' ? 1000 : 2500);
-    maxFare = 12000;
-  } else if (cabId.includes('innova')) {
-    minFare = tripType === 'local' ? 2000 : (tripType === 'airport' ? 1200 : 3000);
-    maxFare = 15000;
+// Helper to safely convert a value to lowercase
+const safeToLowerCase = (value: any): string => {
+  if (typeof value === 'string') {
+    return value.toLowerCase();
   }
-  
-  return fare >= minFare && fare <= maxFare;
+  return String(value).toLowerCase();
 };
 
 // Store fare in both cache and session storage
@@ -55,12 +45,53 @@ const storeFare = (key: string, fare: number, source: string, details: any = {})
     ...details
   };
   
-  sessionStorage.setItem(key, JSON.stringify(fareDetails));
-  return true;
+  try {
+    sessionStorage.setItem(key, JSON.stringify(fareDetails));
+    // Also store in local storage for cross-page persistence
+    localStorage.setItem(key, JSON.stringify(fareDetails));
+    
+    // Store the validated fare for booking confirmation
+    if (details.cabType && details.tripType) {
+      const cabId = typeof details.cabType === 'string' ? 
+        details.cabType : 
+        details.cabType.id || 'unknown';
+      
+      const validatedKey = `valid_fare_${cabId.toLowerCase().replace(/\s+/g, '_')}_${details.tripType}`;
+      const validatedFare = {
+        fare,
+        cabId,
+        tripType: details.tripType,
+        timestamp: Date.now(),
+        source,
+        details
+      };
+      
+      sessionStorage.setItem(validatedKey, JSON.stringify(validatedFare));
+      localStorage.setItem(validatedKey, JSON.stringify(validatedFare));
+    }
+    
+    return true;
+  } catch (e) {
+    console.error('Error storing fare data:', e);
+    return false;
+  }
 };
 
 // Get fare from cache or session storage
 const getFare = (key: string, details: any = {}): number | null => {
+  // Check for validated fare first
+  if (details.cabType && details.tripType) {
+    const cabId = typeof details.cabType === 'string' ? 
+      details.cabType : 
+      details.cabType.id || 'unknown';
+    
+    const validatedFare = getValidatedFare(cabId, details.tripType);
+    if (validatedFare) {
+      console.log(`Using validated fare: ₹${validatedFare}`);
+      return validatedFare;
+    }
+  }
+  
   // Try cache first
   const cached = fareCache.get(key);
   if (cached && cached.expire > Date.now()) {
@@ -81,6 +112,21 @@ const getFare = (key: string, details: any = {}): number | null => {
       }
     } catch (e) {
       console.error('Error parsing stored fare:', e);
+    }
+  }
+  
+  // Try localStorage as a fallback
+  const localStored = localStorage.getItem(key);
+  if (localStored) {
+    try {
+      const parsed = JSON.parse(localStored);
+      if (parsed.timestamp && Date.now() - parsed.timestamp < 30 * 60 * 1000) {
+        if (validateFare(parsed.fare, details.cabType, details.tripType)) {
+          return parsed.fare;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing locally stored fare:', e);
     }
   }
   
@@ -139,7 +185,7 @@ export const fareService = {
   getLastCacheClearTime: () => lastCacheClearTime
 };
 
-// Generate a unique key for caching fare calculations
+// Generate a unique key for caching fare calculations - improved with more parameters
 const generateCacheKey = (params: FareCalculationParams): string => {
   if (!params || !params.cabType) {
     console.warn('Invalid params for generating cache key:', params);
@@ -154,18 +200,18 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   const priceMatrixTime = localStorage.getItem('localPackagePriceMatrixUpdated') || '0';
   const globalRefreshToken = localStorage.getItem('globalFareRefreshToken') || '0';
   
-  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${shouldForceRefresh}_${cacheClearTime}_${priceMatrixTime}_${globalRefreshToken}`;
+  // Add time of day to the cache key to handle night rates properly
+  const timeOfDay = pickupDate ? 
+    (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5 ? 'night' : 'day') : 
+    'day';
+  
+  // Include more specific distance information for better accuracy
+  const distanceRounded = Math.round(distance / 10) * 10; // Round to nearest 10km
+  
+  return `${cabId}_${distanceRounded}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${timeOfDay}_${shouldForceRefresh}_${cacheClearTime}_${priceMatrixTime}_${globalRefreshToken}`;
 };
 
-// Helper to safely convert a value to lowercase
-const safeToLowerCase = (value: any): string => {
-  if (typeof value === 'string') {
-    return value.toLowerCase();
-  }
-  return String(value).toLowerCase();
-};
-
-// Get default pricing for a cab type
+// Helper to get default pricing for a cab type
 const getDefaultCabPricing = (cabName: string = 'sedan') => {
   const cabNameLower = safeToLowerCase(cabName);
   
@@ -217,7 +263,14 @@ const getDefaultCabPricing = (cabName: string = 'sedan') => {
 export const calculateAirportFare = async (cabType: CabType, distance: number): Promise<number> => {
   const cacheKey = `airport_${cabType.id}_${distance}`;
   
-  // Try to get existing valid fare
+  // First check if we have a validated fare from previous calculations
+  const validatedFare = getValidatedFare(cabType.id, 'airport');
+  if (validatedFare) {
+    console.log(`Using previously validated airport fare: ₹${validatedFare}`);
+    return validatedFare;
+  }
+  
+  // Try to get existing valid fare from cache
   const existingFare = getFare(cacheKey, { cabType, tripType: 'airport', distance });
   if (existingFare) {
     console.log(`Using existing airport fare: ₹${existingFare}`);
@@ -233,7 +286,7 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
     }
     
     let basePrice = 0;
-    const airportFee = 40;
+    const airportFee = airportFares.airportFee || 40;
     
     if (distance <= 10) {
       basePrice = airportFares.tier1Price || 1200;
@@ -271,11 +324,20 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   }
 };
 
-// Enhanced calculateFare function with strict validation
+// Enhanced calculateFare function with strict validation and fare reconciliation
 export const calculateFare = async (params: FareCalculationParams): Promise<number> => {
   const { cabType, distance, tripType, tripMode = 'one-way', hourlyPackage } = params;
   
   const cacheKey = generateCacheKey(params);
+  
+  // First check if we have a validated fare from previous calculations
+  const validatedFare = getValidatedFare(cabType.id, tripType);
+  if (validatedFare) {
+    console.log(`Using previously validated ${tripType} fare: ₹${validatedFare}`);
+    return validatedFare;
+  }
+  
+  // Try to get existing valid fare from cache
   const existingFare = getFare(cacheKey, { cabType, tripType, distance });
   
   if (existingFare) {
