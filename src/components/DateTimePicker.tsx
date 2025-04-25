@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface DateTimePickerProps {
@@ -85,7 +86,7 @@ export function DateTimePicker({
   return (
     <div className="space-y-2">
       {label && (
-        <label className="text-sm font-medium text-gray-700">
+        <label className="text-xs font-medium text-gray-600 mb-1">
           {label}
         </label>
       )}
@@ -94,19 +95,23 @@ export function DateTimePicker({
           <Button
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal h-[50px]",
-              !date && "text-muted-foreground",
+              "w-full justify-start text-left font-normal h-[50px] bg-white",
+              "border-gray-200 hover:bg-gray-50",
+              !date && "text-gray-400",
               "md:h-[42px]"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-            {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-gray-400" />
+              <span className="text-sm">
+                {date ? format(date, "PPP, hh:mm a") : "Select date and time"}
+              </span>
+            </div>
           </Button>
         </PopoverTrigger>
         <PopoverContent 
           className="w-auto p-0" 
           align="start"
-          side="bottom"
         >
           <Calendar
             mode="single"
@@ -114,9 +119,10 @@ export function DateTimePicker({
             onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
-            className={cn("p-3")}
+            className="rounded-t-none border-t"
           />
           <div className="p-3 border-t flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gray-400" />
             <Input
               type="time"
               value={selectedTime || ""}
@@ -125,7 +131,7 @@ export function DateTimePicker({
             />
             <Button 
               onClick={handleApply}
-              className="flex-1"
+              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
             >
               Apply
             </Button>

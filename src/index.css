@@ -78,28 +78,104 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-[#eef2f7] text-foreground antialiased;
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
-  }
-
-  /* Improved Mobile Input Styling */
-  input, select, textarea {
-    @apply appearance-none;
-    font-size: 16px; /* Prevents iOS zoom on focus */
-  }
-
-  /* Enhanced Touch Targets */
-  button, 
-  [role="button"],
-  a {
-    @apply select-none;
-    min-height: 44px; /* iOS minimum touch target */
-    touch-action: manipulation;
   }
 }
 
 @layer components {
+  /* Trip Type Tabs */
+  .trip-tabs {
+    @apply flex w-full mb-4 bg-white rounded-lg overflow-hidden border border-gray-200;
+  }
+
+  .trip-tab {
+    @apply flex-1 py-4 px-3 text-center relative cursor-pointer transition-colors;
+    @apply text-sm font-medium text-gray-600;
+  }
+
+  .trip-tab[data-state="active"] {
+    @apply text-blue-600 bg-blue-50;
+  }
+
+  .trip-tab[data-state="active"]::after {
+    content: '';
+    @apply absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600;
+  }
+
+  /* Hide Tour Package Tab */
+  .trip-tab[data-value="tour"] {
+    @apply hidden;
+  }
+
+  /* Trip Mode Toggle */
+  .trip-mode-toggle {
+    @apply flex gap-2 p-1 bg-gray-100 rounded-md mb-4;
+  }
+
+  .trip-mode-button {
+    @apply flex-1 py-2 px-4 rounded text-sm font-medium transition-colors;
+    @apply text-gray-600 hover:bg-white;
+  }
+
+  .trip-mode-button[data-active="true"] {
+    @apply bg-white text-blue-600 shadow-sm;
+  }
+
+  /* Location Inputs */
+  .location-input-wrapper {
+    @apply relative bg-white rounded-lg border border-gray-200 mb-3;
+  }
+
+  .location-input {
+    @apply w-full px-10 py-3 text-sm placeholder:text-gray-400;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
+  .location-icon {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 text-gray-400;
+  }
+
+  /* Date Time Picker */
+  .date-picker-wrapper {
+    @apply bg-white rounded-lg border border-gray-200 mb-3;
+  }
+
+  .date-picker-input {
+    @apply w-full px-10 py-3 text-sm;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
+  /* Search Button */
+  .search-button {
+    @apply w-full bg-blue-600 text-white py-4 rounded-lg text-sm font-medium uppercase;
+    @apply hover:bg-blue-700 transition-colors;
+  }
+
+  /* Info Bar */
+  .info-bar {
+    @apply bg-orange-50 text-orange-700 px-4 py-2 rounded-lg text-sm mb-4;
+    @apply flex items-center gap-2;
+  }
+
+  /* Mobile Optimizations */
+  @media (max-width: 640px) {
+    .trip-tab {
+      @apply py-3 px-2 text-xs;
+    }
+
+    .location-input,
+    .date-picker-input {
+      @apply py-4;
+    }
+
+    .search-button {
+      @apply fixed bottom-4 left-4 right-4 z-50;
+      width: calc(100% - 32px);
+    }
+  }
+
   .mobile-container {
     @apply px-4 sm:px-6 md:px-8 mx-auto max-w-7xl w-full;
   }

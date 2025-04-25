@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -38,17 +37,19 @@ export function CabOptionCard({
   return (
     <div 
       className={cn(
-        "cab-card group",
-        isSelected && "ring-2 ring-blue-500 bg-blue-50"
+        "bg-white rounded-lg border transition-all",
+        isSelected 
+          ? "border-blue-500 bg-blue-50/50" 
+          : "border-gray-200 hover:border-gray-300"
       )}
       onClick={() => onSelect(cab)}
       role="button"
       tabIndex={0}
     >
-      <div className="flex flex-col md:flex-row md:items-center gap-4">
-        <div className="flex items-center flex-1 gap-3">
+      <div className="p-4">
+        <div className="flex items-center gap-4">
           <div className={cn(
-            "w-16 h-16 md:w-12 md:h-12 rounded-lg flex items-center justify-center bg-cover bg-center",
+            "w-16 h-16 rounded-lg flex items-center justify-center bg-cover bg-center",
             isSelected ? "bg-blue-100" : "bg-gray-100"
           )} style={{backgroundImage: cab.image ? `url(${cab.image})` : 'none'}}>
             {!cab.image && (
@@ -61,74 +62,55 @@ export function CabOptionCard({
             )}
           </div>
 
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900">{cab.name}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">{cab.description}</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-gray-900 mb-1">{cab.name}</h3>
+            <p className="text-sm text-gray-500 truncate">{cab.description}</p>
           </div>
-        </div>
 
-        <div className="flex flex-col items-end justify-center gap-1">
-          {isCalculating ? (
-            <div className="flex items-center text-sm text-gray-500">
-              <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
-              Calculating...
-            </div>
-          ) : (
-            <>
-              <div className={cn(
-                "text-lg font-bold",
-                isSelected ? "text-blue-600" : "text-gray-900"
-              )}>
-                {typeof fare === 'number' ? `₹${fare.toLocaleString()}` : fareDetails}
+          <div className="text-right">
+            {isCalculating ? (
+              <div className="flex items-center text-sm text-gray-500">
+                <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
+                Calculating...
               </div>
-              <div className="text-xs text-gray-500">{fareSource}</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mt-4">
-        <div className="cab-feature">
-          <Users size={14} className="mr-1.5" />
-          <span>{cab.capacity} persons</span>
-        </div>
-        <div className="cab-feature">
-          <Briefcase size={14} className="mr-1.5" />
-          <span>{cab.luggageCapacity} bags</span>
-        </div>
-        {cab.ac && (
-          <div className="cab-feature">
-            <Check size={14} className="mr-1.5" />
-            <span>AC</span>
+            ) : (
+              <>
+                <div className="text-lg font-bold text-gray-900">
+                  {typeof fare === 'number' ? `₹${fare.toLocaleString()}` : fareDetails}
+                </div>
+                <div className="text-xs text-gray-500">{fareSource}</div>
+              </>
+            )}
           </div>
+        </div>
+
+        {cab.amenities && cab.amenities.length > 0 && (
+          <>
+            <button 
+              onClick={toggleExpand}
+              className="mt-3 text-sm text-blue-600 hover:text-blue-700 flex items-center"
+            >
+              <Info size={14} className="mr-1.5" />
+              {expandedDetails ? 'Hide details' : 'More details'}
+            </button>
+
+            {expandedDetails && (
+              <div className="mt-3 pt-3 border-t">
+                <div className="flex flex-wrap gap-2">
+                  {cab.amenities.map((amenity, index) => (
+                    <span 
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
+                    >
+                      {amenity}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {cab.amenities && cab.amenities.length > 0 && (
-        <button 
-          onClick={toggleExpand}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-700 flex items-center"
-        >
-          <Info size={14} className="mr-1.5" />
-          {expandedDetails ? 'Hide details' : 'More details'}
-        </button>
-      )}
-
-      {expandedDetails && cab.amenities && (
-        <div className="mt-3 pt-3 border-t">
-          <div className="text-sm font-medium text-gray-700 mb-2">Amenities</div>
-          <div className="flex flex-wrap gap-2">
-            {cab.amenities.map((amenity, index) => (
-              <span 
-                key={index}
-                className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
-              >
-                {amenity}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
