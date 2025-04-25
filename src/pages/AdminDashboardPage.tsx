@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,19 @@ import { AdminStatsCards } from '@/components/admin/AdminStatsCards';
 import { AdminOrdersChart } from '@/components/admin/AdminOrdersChart';
 import { bookingAPI } from '@/services/api';
 import { toast } from "sonner";
+
+// Import existing components
+import VehicleManagement from '@/components/admin/VehicleManagement';
+import { FareManagement } from '@/components/admin/FareManagement';
+import { UserManagement } from '@/components/admin/UserManagement';
+import { DriverManagement } from '@/components/admin/DriverManagement';
+import OutstationFareManagement from '@/components/admin/OutstationFareManagement';
+
+// Let's create placeholder components for the missing ones
+import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
+import { VehiclePricingManagement } from '@/components/admin/VehiclePricingManagement';
+import { LocalFareManagement } from '@/components/admin/LocalFareManagement';
+import { AirportFareManagement } from '@/components/admin/AirportFareManagement';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
