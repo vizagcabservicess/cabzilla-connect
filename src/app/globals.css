@@ -93,16 +93,26 @@
 
 /* Fix tab content visibility */
 [role="tabpanel"] {
-  opacity: 0;
-  height: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
+  display: none;
 }
 
 [role="tabpanel"][data-state="active"] {
-  opacity: 1;
-  height: auto;
-  pointer-events: auto;
+  display: block;
+}
+
+/* Fix tab triggers spacing */
+.TabsTrigger {
+  position: relative;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.TabsTrigger[data-state="active"] {
+  background-color: white;
+  color: hsl(var(--foreground));
+  position: relative;
+  z-index: 1;
 }
 
 /* Fix booking details tabs spacing */

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,6 @@ import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatBookingDate, getStatusColor } from '@/utils/bookingUtils';
-import { toast } from 'sonner';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -58,7 +58,7 @@ export function BookingDetails({
             <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
           </div>
           
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="booking-details-tabs">
+          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={handleTabChange} className="booking-details-tabs">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -68,7 +68,7 @@ export function BookingDetails({
             </TabsList>
           </Tabs>
         </CardHeader>
-        
+
         <CardContent className="pt-6">
           <TabsContent value="details">
             <div className="space-y-6">
