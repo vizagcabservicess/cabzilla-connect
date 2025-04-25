@@ -13,16 +13,14 @@ import VehicleManagement from "@/components/admin/VehicleManagement";
 import { VehiclePricingManagement } from "@/components/admin/VehiclePricingManagement";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { DriverManagement } from "@/components/admin/DriverManagement";
-import { AdminNotifications } from "@/components/admin/AdminNotifications";
-import { 
-  Database, CreditCard, Car, CalendarDays, Users, 
-  Map, Settings, LayoutDashboard, LogOut, 
-  BarChart3, User, FileText, Tag, BellRing 
-} from 'lucide-react';
+import { Database, Settings, LayoutDashboard, LogOut, 
+  BarChart3, User, FileText, Tag, BellRing, CreditCard, Car, CalendarDays, Users, 
+  Map } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { AdminStatsCards } from '@/components/admin/AdminStatsCards';
 import { AdminOrdersChart } from '@/components/admin/AdminOrdersChart';
+import { AdminNotifications } from '@/components/admin/AdminNotifications';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -48,10 +46,8 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Sidebar */}
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-6 pb-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
@@ -71,11 +67,6 @@ export default function AdminDashboardPage() {
               Settings
             </Button>
           </div>
-        </div>
-        
-        {/* Notifications */}
-        <div className="mb-8">
-          <AdminNotifications />
         </div>
 
         {/* Dashboard Content */}
@@ -181,7 +172,6 @@ export default function AdminDashboardPage() {
             <DashboardMetrics />
           </TabsContent>
           
-          {/* Keep existing tabs content */}
           <TabsContent value="bookings">
             <AdminBookingsList />
           </TabsContent>
