@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,7 +27,6 @@ export function DateTimePicker({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Initialize with current date and time immediately
   useEffect(() => {
     const now = new Date();
     const currentTime = format(now, "HH:mm");
@@ -41,7 +39,6 @@ export function DateTimePicker({
     }
   }, []);
 
-  // Update selectedTime when date prop changes
   useEffect(() => {
     if (date) {
       setSelectedTime(format(date, "HH:mm"));
@@ -53,7 +50,6 @@ export function DateTimePicker({
   };
 
   const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
-    // Prevent default to avoid any browser default behavior
     e.preventDefault();
     e.stopPropagation();
     
@@ -70,13 +66,11 @@ export function DateTimePicker({
     newDate.setMinutes(minutes);
     onDateChange(newDate);
     
-    // Close the popover after applying the time
     setOpen(false);
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
-      // Preserve the previously selected time if any
       if (date && selectedTime) {
         const [hours, minutes] = selectedTime.split(":").map(Number);
         selectedDate.setHours(hours);
@@ -91,51 +85,50 @@ export function DateTimePicker({
   return (
     <div className="space-y-2">
       {label && (
-        <label
-          htmlFor="date"
-          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-        >
+        <label className="text-sm font-medium text-gray-700">
           {label}
         </label>
       )}
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover>
         <PopoverTrigger asChild>
           <Button
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              "w-full justify-start text-left font-normal h-[50px]",
+              !date && "text-muted-foreground",
+              "md:h-[42px]"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
             {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="center" side="bottom">
+        <PopoverContent 
+          className="w-auto p-0" 
+          align="start"
+          side="bottom"
+        >
           <Calendar
             mode="single"
             selected={date}
             onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
-            className={cn("p-3 pointer-events-auto")}
+            className={cn("p-3")}
           />
-          <div className="p-4 flex items-center space-x-2">
+          <div className="p-3 border-t flex items-center gap-2">
             <Input
               type="time"
               value={selectedTime || ""}
               onChange={handleTimeChange}
-              className="max-w-[80px]"
+              className="max-w-[120px]"
             />
-            <button 
+            <Button 
               onClick={handleApply}
-              className="h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/100"
-              type="button"
-              data-testid="apply-time-button"
-              style={{touchAction: "manipulation"}}
+              className="flex-1"
             >
-              Apply Time
-            </button>
+              Apply
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

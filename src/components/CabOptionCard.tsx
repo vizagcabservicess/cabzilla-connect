@@ -35,159 +35,100 @@ export function CabOptionCard({
     setExpandedDetails(!expandedDetails);
   };
 
-  const handleCardClick = () => {
-    console.log('Card clicked, selecting cab:', cab.name);
-    onSelect(cab);
-  };
-
-  const getTripTypeLabel = () => {
-    switch (tripType) {
-      case 'airport':
-        return 'Airport Transfer';
-      case 'outstation':
-        return tripMode === 'round-trip' ? 'Outstation Round Trip' : 'Outstation One Way';
-      case 'local':
-        return 'Local Package';
-      default:
-        return 'Trip';
-    }
-  };
-
-  // Function to get the appropriate icon based on fare source
-  const getFareSourceIcon = () => {
-    switch (fareSource) {
-      case 'database':
-        return <Database size={12} className="mr-1 text-green-600" />;
-      case 'stored':
-        return <Clock size={12} className="mr-1 text-blue-500" />;
-      case 'default':
-        return <Calculator size={12} className="mr-1 text-orange-500" />;
-      default:
-        return <Calculator size={12} className="mr-1 text-gray-500" />;
-    }
-  };
-
-  // Function to get source text label
-  const getFareSourceLabel = () => {
-    switch (fareSource) {
-      case 'database':
-        return 'Verified pricing';
-      case 'stored':
-        return 'Saved price';
-      case 'default':
-        return 'Standard price';
-      default:
-        return 'Calculated price';
-    }
-  };
-
   return (
     <div 
       className={cn(
-        "border rounded-lg overflow-hidden transition-all duration-300",
-        isSelected 
-          ? "border-blue-500 shadow-md bg-blue-50 transform scale-[1.02]" 
-          : "border-gray-200 hover:border-gray-300 bg-white"
+        "cab-card group",
+        isSelected && "ring-2 ring-blue-500 bg-blue-50"
       )}
-      onClick={handleCardClick}
+      onClick={() => onSelect(cab)}
       role="button"
       tabIndex={0}
-      aria-pressed={isSelected}
     >
-      <div className="p-4 cursor-pointer relative">
-        {isSelected && (
-          <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-            <Check size={16} />
+      <div className="flex flex-col md:flex-row md:items-center gap-4">
+        <div className="flex items-center flex-1 gap-3">
+          <div className={cn(
+            "w-16 h-16 md:w-12 md:h-12 rounded-lg flex items-center justify-center bg-cover bg-center",
+            isSelected ? "bg-blue-100" : "bg-gray-100"
+          )} style={{backgroundImage: cab.image ? `url(${cab.image})` : 'none'}}>
+            {!cab.image && (
+              <span className={cn(
+                "text-lg font-semibold",
+                isSelected ? "text-blue-500" : "text-gray-500"
+              )}>
+                {cab.name.charAt(0)}
+              </span>
+            )}
           </div>
-        )}
 
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-3">
-            <div className={cn(
-              "w-12 h-12 rounded-md flex items-center justify-center bg-cover bg-center",
-              isSelected ? "bg-blue-100" : "bg-gray-100"
-            )} style={{backgroundImage: cab.image && !cab.image.includes('undefined') ? `url(${cab.image})` : 'none'}}>
-              {(!cab.image || cab.image.includes('undefined')) && (
-                <span className={isSelected ? "text-blue-500 text-xs" : "text-gray-500 text-xs"}>
-                  {cab.name.charAt(0)}
-                </span>
-              )}
-            </div>
-            <div>
-              <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
-              <p className="text-xs text-gray-500">{cab.description}</p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end">
-            <div className={cn(
-              "text-lg font-bold",
-              isSelected ? "text-blue-600" : "text-gray-800"
-            )}>
-              {isCalculating ? (
-                <div className="text-sm text-gray-500">Calculating...</div>
-              ) : typeof fare === 'number' ? (
-                <div>
-                  <div className="text-lg font-semibold">₹{fare.toLocaleString()}</div>
-                  {fareDetails && (
-                    <div className="text-xs text-gray-500">{fareDetails}</div>
-                  )}
-                </div>
-              ) : fareDetails ? (
-                <div className="text-sm text-red-500">{fareDetails}</div>
-              ) : (
-                <div className="text-sm text-gray-500">Price unavailable</div>
-              )}
-            </div>
-            <div className="text-xs text-gray-600">{getTripTypeLabel()}</div>
-            <div className="flex items-center text-xs text-gray-400">
-              {getFareSourceIcon()}
-              {getFareSourceLabel()}
-            </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900">{cab.name}</h3>
+            <p className="text-sm text-gray-500 mt-0.5">{cab.description}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-2">
-          <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-            <Users size={12} className="mr-1" />
-            {cab.capacity} persons
-          </div>
-          <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-            <Briefcase size={12} className="mr-1" />
-            {cab.luggageCapacity} bags
-          </div>
-          {cab.ac && (
-            <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-              <Check size={12} className="mr-1" />
-              AC
+        <div className="flex flex-col items-end justify-center gap-1">
+          {isCalculating ? (
+            <div className="flex items-center text-sm text-gray-500">
+              <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full mr-2"></div>
+              Calculating...
             </div>
-          )}
-          {cab.amenities && cab.amenities.length > 0 && (
-            <div 
-              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
-              onClick={(e) => {
-                e.stopPropagation();  // Prevent card selection when clicking this button
-                toggleExpand(e);
-              }}
-            >
-              <Info size={12} className="mr-1" />
-              {expandedDetails ? 'Hide details' : 'More details'}
-            </div>
+          ) : (
+            <>
+              <div className={cn(
+                "text-lg font-bold",
+                isSelected ? "text-blue-600" : "text-gray-900"
+              )}>
+                {typeof fare === 'number' ? `₹${fare.toLocaleString()}` : fareDetails}
+              </div>
+              <div className="text-xs text-gray-500">{fareSource}</div>
+            </>
           )}
         </div>
+      </div>
 
-        {expandedDetails && cab.amenities && cab.amenities.length > 0 && (
-          <div className="mt-3 pt-3 border-t text-sm text-gray-600">
-            <div className="font-medium mb-1">Amenities:</div>
-            <div className="flex flex-wrap gap-1">
-              {cab.amenities.map((amenity, index) => (
-                <span key={index} className="bg-gray-50 text-xs px-2 py-1 rounded">
-                  {amenity}
-                </span>
-              ))}
-            </div>
+      <div className="flex flex-wrap gap-2 mt-4">
+        <div className="cab-feature">
+          <Users size={14} className="mr-1.5" />
+          <span>{cab.capacity} persons</span>
+        </div>
+        <div className="cab-feature">
+          <Briefcase size={14} className="mr-1.5" />
+          <span>{cab.luggageCapacity} bags</span>
+        </div>
+        {cab.ac && (
+          <div className="cab-feature">
+            <Check size={14} className="mr-1.5" />
+            <span>AC</span>
           </div>
         )}
       </div>
+
+      {cab.amenities && cab.amenities.length > 0 && (
+        <button 
+          onClick={toggleExpand}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-700 flex items-center"
+        >
+          <Info size={14} className="mr-1.5" />
+          {expandedDetails ? 'Hide details' : 'More details'}
+        </button>
+      )}
+
+      {expandedDetails && cab.amenities && (
+        <div className="mt-3 pt-3 border-t">
+          <div className="text-sm font-medium text-gray-700 mb-2">Amenities</div>
+          <div className="flex flex-wrap gap-2">
+            {cab.amenities.map((amenity, index) => (
+              <span 
+                key={index}
+                className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+              >
+                {amenity}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
