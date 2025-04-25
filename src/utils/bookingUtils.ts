@@ -82,18 +82,28 @@ export const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-// Helper to ensure tab visibility
+// Enhanced helper to ensure tab visibility with direct DOM manipulation if needed
 export const ensureTabVisibility = (tabId: string) => {
-  // Hide all panels first
-  document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-    panel.setAttribute('data-state', 'inactive');
-    panel.setAttribute('style', 'display: none;');
-  });
-  
-  // Show only the active panel
-  const activePanel = document.querySelector(`[role="tabpanel"][value="${tabId}"]`);
-  if (activePanel) {
-    activePanel.setAttribute('data-state', 'active');
-    activePanel.setAttribute('style', 'display: block;');
-  }
+  setTimeout(() => {
+    // First try to use data-state attributes
+    document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+      const panelValue = panel.getAttribute('value') || panel.getAttribute('data-value');
+      if (panelValue === tabId) {
+        panel.setAttribute('data-state', 'active');
+        (panel as HTMLElement).style.display = 'block';
+      } else {
+        panel.setAttribute('data-state', 'inactive');
+        (panel as HTMLElement).style.display = 'none';
+      }
+    });
+    
+    // Also try with direct id targeting as fallback
+    const activePanel = document.getElementById(`tabpanel-${tabId}`);
+    if (activePanel) {
+      activePanel.setAttribute('data-state', 'active');
+      activePanel.style.display = 'block';
+    }
+    
+    console.log(`Ensuring visibility for tab: ${tabId}`);
+  }, 50);
 };

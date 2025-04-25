@@ -92,15 +92,6 @@
   display: none;
 }
 
-/* Fix tab content visibility - IMPORTANT FIX */
-[role="tabpanel"] {
-  display: none !important;
-}
-
-[role="tabpanel"][data-state="active"] {
-  display: block !important;
-}
-
 /* Fix tab triggers spacing */
 .TabsTrigger {
   position: relative;
@@ -129,4 +120,13 @@
   border-bottom: 1px solid hsl(var(--border));
   padding-bottom: 0.5rem;
   gap: 0.5rem;
+}
+
+/* CRITICAL FIX: Make sure TabsContent is visible when active */
+[data-state="active"][role="tabpanel"] {
+  display: block !important;
+}
+
+[data-state="inactive"][role="tabpanel"] {
+  display: none !important;
 }
