@@ -89,21 +89,21 @@
 @layer components {
   /* Trip Type Tabs */
   .trip-tabs {
-    @apply flex w-full mb-3 bg-white rounded-xl shadow-sm overflow-hidden;
+    @apply flex w-full mb-3 bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100;
   }
 
   .trip-tab {
-    @apply flex-1 py-2.5 px-3 text-center relative cursor-pointer transition-all;
+    @apply flex-1 py-2 px-3 text-center relative cursor-pointer transition-all;
     @apply text-sm font-medium text-gray-600;
   }
 
   .trip-tab[data-state="active"] {
-    @apply text-blue-600 bg-blue-50 font-semibold;
+    @apply text-emerald-600 font-semibold;
   }
 
   .trip-tab[data-state="active"]::after {
     content: '';
-    @apply absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600;
+    @apply absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600;
   }
 
   /* Hide Tour Package Tab with maximum specificity */
@@ -118,33 +118,34 @@
   [data-radix-collection-item][data-value="tour"],
   [data-state] [value="tour"],
   button[value="tour"],
-  *[data-value="tour"] {
+  *[data-value="tour"],
+  .tour-packages {
     @apply hidden !important;
     display: none !important;
   }
 
   /* Trip Mode Toggle */
   .trip-mode-toggle {
-    @apply flex gap-2 p-1 bg-gray-50 rounded-xl mb-4;
+    @apply flex gap-2 mb-4 bg-transparent;
   }
 
   .trip-mode-button {
-    @apply flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all items-center justify-center;
-    @apply text-gray-600 hover:bg-white;
+    @apply flex-1 py-2 px-4 rounded text-sm font-medium transition-all items-center justify-center border;
+    @apply text-gray-600 bg-white border-gray-200;
   }
 
   .trip-mode-button[data-active="true"] {
-    @apply bg-white text-blue-600 shadow-sm;
+    @apply bg-emerald-600 text-white border-emerald-600 shadow-sm;
   }
 
   /* Location Inputs */
   .location-input-wrapper {
-    @apply relative bg-white rounded-xl shadow-sm border border-gray-100 mb-3;
+    @apply relative bg-white rounded-lg border border-gray-200 mb-3;
   }
 
   .location-input {
-    @apply w-full px-12 py-4 text-base placeholder:text-gray-400;
-    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-12 py-3 text-base placeholder:text-gray-400;
+    @apply focus:ring-2 focus:ring-emerald-500 focus:border-transparent;
   }
 
   .location-icon {
@@ -153,18 +154,18 @@
 
   /* Date Time Picker */
   .date-picker-wrapper {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 mb-3;
+    @apply bg-white rounded-lg border border-gray-200 mb-3;
   }
 
   .date-picker-input {
-    @apply w-full px-12 py-4 text-base;
-    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-12 py-3 text-base;
+    @apply focus:ring-2 focus:ring-emerald-500 focus:border-transparent;
   }
 
   /* Search Button */
   .search-button {
-    @apply w-full bg-blue-600 text-white py-4 rounded-xl text-base font-semibold;
-    @apply hover:bg-blue-700 transition-all active:scale-[0.99];
+    @apply w-full bg-emerald-600 text-white py-3 rounded-lg text-base font-semibold;
+    @apply hover:bg-emerald-700 transition-all active:scale-[0.99];
     @apply fixed bottom-4 left-4 right-4 z-50 shadow-lg;
     width: calc(100% - 32px);
   }
@@ -217,10 +218,28 @@
 
   /* Form Controls */
   .form-input {
-    @apply w-full px-4 py-4 rounded-xl border border-gray-100 shadow-sm;
-    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm;
+    @apply focus:ring-2 focus:ring-emerald-500 focus:border-transparent;
     @apply text-base mb-4 md:mb-0;
     @apply bg-white;
+  }
+
+  /* Mobile Navigation */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4;
+    @apply grid grid-cols-4 gap-2;
+  }
+
+  .bottom-nav-item {
+    @apply flex flex-col items-center justify-center p-2 text-gray-600;
+  }
+
+  .bottom-nav-item.active {
+    @apply text-emerald-600;
+  }
+
+  .bottom-nav-label {
+    @apply text-xs mt-1;
   }
 
   /* Mobile-First Cards */
@@ -228,6 +247,21 @@
     @apply bg-white rounded-xl shadow-sm border border-gray-100;
     @apply p-4 md:p-5 mb-3 last:mb-0;
     @apply transition-all active:bg-gray-50;
+  }
+
+  /* Mobile Optimizations */
+  @media (max-width: 640px) {
+    .mobile-container {
+      @apply px-4;
+    }
+
+    .mobile-safe-bottom {
+      padding-bottom: calc(env(safe-area-inset-bottom, 1rem) + 4rem);
+    }
+
+    body {
+      @apply bg-gray-50;
+    }
   }
 }
 
