@@ -87,6 +87,11 @@ const getFare = (key: string, details: any = {}): number | null => {
   return null;
 };
 
+// Declare variables for event dispatch throttling
+let eventDispatchCount = 1;
+let lastEventDispatchTime = Date.now();
+const MAX_EVENTS_PER_MINUTE = 5; // Reasonable default for throttling events
+
 // Clear the fare cache
 export const clearFareCache = () => {
   // Prevent multiple cache clears within 30 seconds
