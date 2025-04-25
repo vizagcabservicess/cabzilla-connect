@@ -323,9 +323,8 @@ export function AdminBookingsList() {
   };
 
   const handleAssignDriver = async (bookingId: number) => {
-    toast({
-      title: "Coming Soon",
-      description: "Driver assignment functionality will be available shortly.",
+    uiToast({
+      description: "Driver assignment functionality will be available shortly."
     });
   };
 
@@ -348,9 +347,8 @@ export function AdminBookingsList() {
   };
 
   const handleGenerateInvoice = async (bookingId: number) => {
-    toast({
-      title: "Coming Soon",
-      description: "Invoice generation will be available shortly.",
+    uiToast({
+      description: "Invoice generation will be available shortly."
     });
   };
 
