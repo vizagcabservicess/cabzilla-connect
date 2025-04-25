@@ -58,7 +58,7 @@ export function Hero() {
       return {
         pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
         dropLocation: dropData ? JSON.parse(dropData) as Location : null,
-        pickupDate: pickupDateStr ? new Date(JSON.parse(pickupDateStr)) : addDays(new Date(), 1),
+        pickupDate: pickupDateStr ? new Date(JSON.parse(pickupDateStr)) : new Date(),
         returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
         tripType: tripTypeData as TripType || 'outstation',
         tripMode: tripModeData as TripMode || 'one-way',
@@ -70,7 +70,7 @@ export function Hero() {
       return {
         pickupLocation: null,
         dropLocation: null,
-        pickupDate: addDays(new Date(), 1),
+        pickupDate: new Date(),
         returnDate: null,
         tripType: 'outstation' as TripType,
         tripMode: 'one-way' as TripMode,
