@@ -23,11 +23,6 @@ interface BookingDetailsProps {
   isSubmitting: boolean;
 }
 
-// Use a domain that is guaranteed to work (the current site's domain)
-const SITE_DOMAIN = window.location.origin;
-// For absolute URL formation
-const API_BASE_URL = `${SITE_DOMAIN}/api/admin`;
-
 export function BookingDetails({
   booking,
   onClose,
@@ -42,6 +37,8 @@ export function BookingDetails({
   const { toast } = useToast();
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
+  const currentDomain = window.location.origin;
+
   const handleTabChange = (value: string) => {
     console.log('Tab changed to:', value);
     setActiveTab(value);
@@ -51,7 +48,6 @@ export function BookingDetails({
     handleTabChange('details');
   };
 
-  // Helper function for making API requests with better error handling
   const safeFetch = async (url: string, method: string, body: any) => {
     console.log(`Making ${method} request to: ${url}`);
     console.log('Request payload:', body);
@@ -61,26 +57,31 @@ export function BookingDetails({
         method,
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         body: JSON.stringify(body),
       });
 
       console.log(`Response status: ${response.status}`);
 
-      // Attempt to parse the response, but handle errors gracefully
       let data;
       const textResponse = await response.text();
       console.log('Raw response:', textResponse);
 
       try {
-        data = JSON.parse(textResponse);
+        if (textResponse && textResponse.trim()) {
+          data = JSON.parse(textResponse);
+        } else {
+          data = { status: response.ok ? 'success' : 'error', message: response.ok ? 'Operation successful' : 'Empty response' };
+        }
       } catch (parseError) {
         console.error('Error parsing JSON response:', parseError);
-        throw new Error(`Server response is not valid JSON: ${textResponse.substring(0, 100)}...`);
+        throw new Error(`Server response is not valid JSON. Raw response: ${textResponse.substring(0, 100)}...`);
       }
 
       if (!response.ok) {
-        throw new Error(data.message || `Request failed with status ${response.status}`);
+        throw new Error(data?.message || `Request failed with status ${response.status}`);
       }
 
       console.log('Parsed response data:', data);
@@ -96,14 +97,14 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Assigning driver:', driverData);
       
-      const url = `${API_BASE_URL}/assign-driver`;
+      const url = `${currentDomain}/api/admin/assign-driver`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id,
         ...driverData
       });
       
-      if (result.status === 'success') {
+      if (result?.status === 'success' || result?.data) {
         toast({
           title: "Success",
           description: "Driver assigned successfully",
@@ -111,7 +112,7 @@ export function BookingDetails({
         await onAssignDriver(driverData);
         handleBackToDetails();
       } else {
-        throw new Error(result.message || 'Failed to assign driver');
+        throw new Error(result?.message || 'Failed to assign driver');
       }
     } catch (error) {
       console.error('Error assigning driver:', error);
@@ -130,20 +131,20 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Cancelling booking:', booking.id);
       
-      const url = `${API_BASE_URL}/cancel-booking`;
+      const url = `${currentDomain}/api/admin/cancel-booking`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id
       });
       
-      if (result.status === 'success') {
+      if (result?.status === 'success' || result?.data) {
         toast({
           title: "Success",
           description: "Booking cancelled successfully",
         });
         await onCancel();
       } else {
-        throw new Error(result.message || 'Failed to cancel booking');
+        throw new Error(result?.message || 'Failed to cancel booking');
       }
     } catch (error) {
       console.error('Error cancelling booking:', error);
@@ -162,14 +163,14 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Updating booking:', { bookingId: booking.id, ...updatedData });
       
-      const url = `${API_BASE_URL}/update-booking`;
+      const url = `${currentDomain}/api/admin/update-booking`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id,
         ...updatedData
       });
       
-      if (result.status === 'success') {
+      if (result?.status === 'success' || result?.data) {
         toast({
           title: "Success",
           description: "Booking updated successfully",
@@ -177,7 +178,7 @@ export function BookingDetails({
         await onEdit(updatedData);
         handleBackToDetails();
       } else {
-        throw new Error(result.message || 'Failed to update booking');
+        throw new Error(result?.message || 'Failed to update booking');
       }
     } catch (error) {
       console.error('Error updating booking:', error);
@@ -196,25 +197,24 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Generating invoice for booking:', booking.id);
       
-      const url = `${API_BASE_URL}/generate-invoice`;
+      const url = `${currentDomain}/api/admin/generate-invoice`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id
       });
       
-      if (result.status === 'success') {
+      if (result?.status === 'success' || result?.data) {
         toast({
           title: "Success",
           description: "Invoice generated successfully",
         });
         
-        // Open invoice in new tab with absolute URL
-        const invoiceUrl = `${SITE_DOMAIN}/api/download-invoice?id=${booking.id}`;
+        const invoiceUrl = `${currentDomain}/api/download-invoice?id=${booking.id}`;
         window.open(invoiceUrl, '_blank');
         
         await onGenerateInvoice();
       } else {
-        throw new Error(result.message || 'Failed to generate invoice');
+        throw new Error(result?.message || 'Failed to generate invoice');
       }
     } catch (error) {
       console.error('Error generating invoice:', error);
@@ -260,7 +260,6 @@ export function BookingDetails({
         <CardContent className="pt-6">
           {activeTab === 'details' && (
             <div className="space-y-6">
-              {/* Customer Information */}
               <section className="space-y-2">
                 <h3 className="font-semibold">Customer Information</h3>
                 <div className="grid gap-2">
@@ -279,7 +278,6 @@ export function BookingDetails({
                 </div>
               </section>
 
-              {/* Trip Details */}
               <section className="space-y-2">
                 <h3 className="font-semibold">Trip Details</h3>
                 <div className="grid gap-2">
@@ -318,7 +316,6 @@ export function BookingDetails({
                 </div>
               </section>
 
-              {/* Payment Details */}
               <section className="space-y-2">
                 <h3 className="font-semibold">Payment Details</h3>
                 <div className="grid gap-2">
@@ -332,7 +329,6 @@ export function BookingDetails({
                 </div>
               </section>
 
-              {/* Driver Information */}
               {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
                 <section className="space-y-2">
                   <h3 className="font-semibold">Driver Information</h3>
@@ -368,7 +364,6 @@ export function BookingDetails({
                 </section>
               )}
 
-              {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 pt-4 border-t">
                 <Button 
                   onClick={() => handleTabChange('edit')} 

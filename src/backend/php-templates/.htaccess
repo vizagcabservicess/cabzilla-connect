@@ -22,7 +22,7 @@ RewriteRule .* - [R=200,L]
     Header always set Expires "0"
 </IfModule>
 
-# CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY
+# CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY (Ensure these come first)
 RewriteRule ^api/admin/assign-driver$ /api/admin/assign-driver.php [L,QSA]
 RewriteRule ^api/admin/cancel-booking$ /api/admin/cancel-booking.php [L,QSA]
 RewriteRule ^api/admin/update-booking$ /api/admin/update-booking.php [L,QSA]
