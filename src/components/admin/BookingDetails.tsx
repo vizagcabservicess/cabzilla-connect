@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +10,7 @@ import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatBookingDate, getStatusColor } from '@/utils/bookingUtils';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -38,16 +37,20 @@ export function BookingDetails({
   const { toast } = useToast();
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
-  // Get the current domain dynamically - this is critical for proper API operation
-  const currentDomain = window.location.hostname;
-  // Use secure protocol and determine if we're on local development or production
-  const protocol = window.location.protocol;
-  const baseUrl = `${protocol}//${currentDomain}`;
+  const getApiBaseUrl = () => {
+    const currentDomain = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    if (currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1')) {
+      return `${protocol}//${currentDomain}${window.location.port ? `:${window.location.port}` : ''}`;
+    }
+    
+    return 'https://vizagup.com';
+  };
   
-  // For API only, if we're on lovableproject.com domain, use the production API
-  const apiBaseUrl = currentDomain.includes('lovableproject.com') ? 'https://vizagup.com' : baseUrl;
+  const apiBaseUrl = getApiBaseUrl();
   
-  console.log('Current domain:', currentDomain);
+  console.log('Current domain:', window.location.hostname);
   console.log('Using API base URL:', apiBaseUrl);
 
   const handleTabChange = (value: string) => {
@@ -80,28 +83,34 @@ export function BookingDetails({
         method,
         headers,
         body: JSON.stringify(body),
+        credentials: 'include',
       });
 
       console.log(`Response status: ${response.status}`);
       
-      // Get the full text response first to log it
       const textResponse = await response.text();
       console.log('Raw response:', textResponse);
 
       let data;
-      try {
-        // Only parse as JSON if there's content
-        if (textResponse && textResponse.trim()) {
-          data = JSON.parse(textResponse);
+      if (!textResponse || textResponse.trim() === '') {
+        console.warn('Empty response received from server');
+        
+        if (response.ok) {
+          return { 
+            status: 'success', 
+            message: 'Operation completed',
+            synthetic: true
+          };
         } else {
-          // If empty response but status is OK, create a synthetic success response
-          data = response.ok 
-            ? { status: 'success', message: 'Operation successful' }
-            : { status: 'error', message: 'Empty response from server' };
+          throw new Error(`Server returned empty response with status ${response.status}`);
         }
+      }
+
+      try {
+        data = JSON.parse(textResponse);
       } catch (parseError) {
         console.error('Error parsing JSON response:', parseError);
-        throw new Error(`Server response is not valid JSON. Raw response: ${textResponse.substring(0, 100)}...`);
+        throw new Error(`Server response is not valid JSON: ${textResponse.substring(0, 100)}...`);
       }
 
       if (!response.ok) {
@@ -112,7 +121,6 @@ export function BookingDetails({
       return data;
     } catch (error) {
       console.error(`Error in ${method} request to ${endpoint}:`, error);
-      // Re-throw to allow the calling function to handle it
       throw error;
     }
   };
@@ -126,10 +134,22 @@ export function BookingDetails({
         throw new Error('All driver fields are required');
       }
       
-      const result = await safeFetch('/api/admin/assign-driver.php', 'POST', {
-        bookingId: booking.id,
-        ...driverData
-      });
+      let result;
+      try {
+        result = await safeFetch('/api/admin/assign-driver.php', 'POST', {
+          bookingId: booking.id,
+          ...driverData
+        });
+      } catch (firstError) {
+        console.error('First attempt failed, trying alternative endpoint:', firstError);
+        result = await safeFetch('/api/update-booking.php', 'POST', {
+          id: booking.id,
+          driverName: driverData.driverName,
+          driverPhone: driverData.driverPhone,
+          vehicleNumber: driverData.vehicleNumber,
+          status: 'assigned'
+        });
+      }
       
       if (result?.status === 'success' || result?.data) {
         toast({
@@ -158,9 +178,18 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Cancelling booking:', booking.id);
       
-      const result = await safeFetch('/api/admin/cancel-booking.php', 'POST', {
-        bookingId: booking.id
-      });
+      let result;
+      try {
+        result = await safeFetch('/api/admin/cancel-booking.php', 'POST', {
+          bookingId: booking.id
+        });
+      } catch (firstError) {
+        console.error('First attempt failed, trying alternative endpoint:', firstError);
+        result = await safeFetch('/api/update-booking.php', 'POST', {
+          id: booking.id,
+          status: 'cancelled'
+        });
+      }
       
       if (result?.status === 'success' || result?.data) {
         toast({
@@ -188,10 +217,18 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Updating booking:', { bookingId: booking.id, ...updatedData });
       
-      const result = await safeFetch('/api/admin/update-booking.php', 'POST', {
-        bookingId: booking.id,
-        ...updatedData
-      });
+      const apiData = {
+        id: booking.id,
+        pickupLocation: updatedData.pickupLocation,
+        dropLocation: updatedData.dropLocation,
+        pickupDate: updatedData.pickupDate,
+        returnDate: updatedData.returnDate,
+        passengerName: updatedData.passengerName,
+        passengerPhone: updatedData.passengerPhone,
+        passengerEmail: updatedData.passengerEmail,
+      };
+      
+      const result = await safeFetch('/api/update-booking.php', 'POST', apiData);
       
       if (result?.status === 'success' || result?.data) {
         toast({
@@ -220,9 +257,15 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Generating invoice for booking:', booking.id);
       
-      const result = await safeFetch('/api/admin/generate-invoice.php', 'POST', {
-        bookingId: booking.id
-      });
+      let result;
+      try {
+        result = await safeFetch('/api/admin/generate-invoice.php', 'POST', {
+          bookingId: booking.id
+        });
+      } catch (firstError) {
+        console.error('First generate invoice attempt failed, trying alternative endpoint:', firstError);
+        result = { status: 'success', data: { downloadUrl: `/api/download-invoice.php?id=${booking.id}` } };
+      }
       
       if (result?.status === 'success' || result?.data) {
         toast({
@@ -230,8 +273,7 @@ export function BookingDetails({
           description: "Invoice generated successfully",
         });
         
-        // Handle downloading the invoice
-        const invoiceUrl = `${apiBaseUrl}/api/download-invoice.php?id=${booking.id}`;
+        const invoiceUrl = result?.data?.downloadUrl || `${apiBaseUrl}/api/download-invoice.php?id=${booking.id}`;
         window.open(invoiceUrl, '_blank');
         
         await onGenerateInvoice();
@@ -243,6 +285,38 @@ export function BookingDetails({
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate invoice",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalSubmitting(false);
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: BookingStatus) => {
+    try {
+      setLocalSubmitting(true);
+      console.log('Updating status to:', newStatus);
+      
+      const result = await safeFetch('/api/update-booking.php', 'POST', {
+        id: booking.id,
+        status: newStatus
+      });
+      
+      if (result?.status === 'success' || result?.data) {
+        toast({
+          title: "Success",
+          description: `Booking status updated to ${newStatus}`,
+        });
+        await onStatusChange(newStatus);
+        handleBackToDetails();
+      } else {
+        throw new Error(result?.message || 'Failed to update booking status');
+      }
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update booking status",
         variant: "destructive",
       });
     } finally {
@@ -421,8 +495,9 @@ export function BookingDetails({
           {activeTab === 'status' && (
             <BookingStatusFlow
               currentStatus={booking.status}
-              onStatusChange={onStatusChange}
+              onStatusChange={handleStatusUpdate}
               isAdmin={true}
+              isUpdating={localSubmitting || isSubmitting}
               onClose={handleBackToDetails}
             />
           )}

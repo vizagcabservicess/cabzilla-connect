@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Booking } from '@/types/api';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/use-toast";
+
+interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  vehicleNumber: string;
+}
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -17,6 +25,7 @@ interface DriverAssignmentProps {
 }
 
 export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: DriverAssignmentProps) {
+  const { toast } = useToast();
   const [driverData, setDriverData] = useState({
     driverName: booking.driverName || '',
     driverPhone: booking.driverPhone || '',
@@ -25,15 +34,41 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
   
   const [driverType, setDriverType] = useState<string>('new');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
 
-  // Mock drivers for dropdown - in a real app, this would come from the API
-  const availableDrivers = [
-    { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
-    { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
-    { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
-    { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
-    { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
-  ];
+  // Fetch drivers from API or use default mock data
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      setLoadingDrivers(true);
+      try {
+        // In a real application, this would fetch from your drivers API
+        // Example: const response = await fetch('https://yourapi.com/api/drivers');
+        
+        // For now, we'll use mock data
+        const mockDrivers = [
+          { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
+          { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
+          { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
+          { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
+          { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
+        ];
+        
+        setAvailableDrivers(mockDrivers);
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+        toast({
+          variant: "destructive",
+          title: "Failed to load drivers",
+          description: "Please try again or add a driver manually."
+        });
+      } finally {
+        setLoadingDrivers(false);
+      }
+    };
+    
+    fetchDrivers();
+  }, [toast]);
 
   const handleDriverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -133,9 +168,9 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
           {driverType === 'existing' && (
             <div>
               <Label htmlFor="existingDriver">Select Driver</Label>
-              <Select onValueChange={handleSelectDriver}>
+              <Select onValueChange={handleSelectDriver} disabled={loadingDrivers}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a driver" />
+                  <SelectValue placeholder={loadingDrivers ? "Loading drivers..." : "Select a driver"} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableDrivers.map((driver) => (

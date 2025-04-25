@@ -44,6 +44,7 @@ RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
 RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
 RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
 RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
+RewriteRule ^drivers\.php$ drivers.php [L,NC,QSA]
 
 # CRITICAL: Explicitly define booking endpoints with highest priority
 RewriteRule ^booking\.php$ booking.php [L,NC,QSA]
