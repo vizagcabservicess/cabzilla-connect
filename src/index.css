@@ -119,9 +119,24 @@
   [data-state] [value="tour"],
   button[value="tour"],
   *[data-value="tour"],
-  .tour-packages {
+  .tour-packages,
+  [data-tab="tour"],
+  div[role="tabpanel"][data-value="tour"],
+  div[aria-labelledby*="tour"],
+  *[class*="tour-package"],
+  *[id*="tour-package"] {
     @apply hidden !important;
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    margin: -1px !important;
+    padding: 0 !important;
   }
 
   /* Trip Mode Toggle */

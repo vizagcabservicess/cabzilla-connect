@@ -8,110 +8,81 @@ const Index = () => {
       <Navbar />
       <Hero />
       
-      <section className="py-16 bg-white">
+      <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h5 className="text-cabBlue-600 font-medium text-sm uppercase tracking-wider mb-2">
-              Why Choose Us
-            </h5>
-            <h2 className="text-3xl font-bold text-cabGray-800">
-              The Premier Cab Service Experience
-            </h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featureItems.map((item, index) => (
-              <div 
-                key={index}
-                className="p-6 bg-white rounded-xl border border-cabGray-100 shadow-card hover:shadow-elevated transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-full bg-cabBlue-100 flex items-center justify-center text-cabBlue-600 mb-4">
-                  {item.icon}
-                </div>
-                <h3 className="text-xl font-semibold text-cabGray-800 mb-2">{item.title}</h3>
-                <p className="text-cabGray-600">{item.description}</p>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            {/* Company Description */}
+            <div className="md:col-span-4">
+              <div className="mb-6">
+                <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-12 mb-4" />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      
-      <footer className="bg-cabGray-100 py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between mb-8">
-            <div className="mb-6 md:mb-0">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-cabBlue-500 text-white flex items-center justify-center font-bold text-xl">
-                  CC
-                </div>
-                <span className="font-bold text-xl text-cabBlue-800">
-                  CabZilla
-                </span>
-              </div>
-              <p className="text-cabGray-600 max-w-md">
-                Book reliable and comfortable cab services for all your travel needs.
-                Available 24/7 with transparent pricing and professional drivers.
+              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam. We place a high priority on customer satisfaction, which makes us unique in our approach. We are committed to providing our customers with on-time pick-ups and drop-offs.
+              </p>
+              <p className="text-gray-600 text-sm">
+                <span className="font-semibold">Monday - Sunday:</span> <span className="text-blue-600 font-semibold">24hrs</span>
               </p>
             </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-              <div>
-                <h4 className="font-semibold text-cabGray-800 mb-3">Company</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">About Us</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Team</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Careers</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Blog</a></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold text-cabGray-800 mb-3">Support</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Help Center</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Safety</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Terms of Service</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">Privacy Policy</a></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold text-cabGray-800 mb-3">Contact</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">info@cabzilla.com</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">+1 800 123 4567</a></li>
-                  <li><a href="#" className="text-cabGray-600 hover:text-cabBlue-600 transition-colors">123 Travel Street</a></li>
-                </ul>
-              </div>
+
+            {/* Helpful Links */}
+            <div className="md:col-span-2 md:ml-auto">
+              <h3 className="text-gray-800 font-semibold mb-4">Helpful links</h3>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-gray-600 hover:text-blue-600 text-sm">Terms & Conditions</a></li>
+                <li><a href="#" className="text-gray-600 hover:text-blue-600 text-sm">Refunds Policy</a></li>
+                <li><a href="#" className="text-gray-600 hover:text-blue-600 text-sm">Privacy Policy</a></li>
+              </ul>
+            </div>
+
+            {/* Contact Info */}
+            <div className="md:col-span-3">
+              <h3 className="text-gray-800 font-semibold mb-4">Contacts Info</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start space-x-3">
+                  <span className="text-gray-600 text-sm">Mail:</span>
+                  <a href="mailto:info@vizagtaxihub.com" className="text-gray-600 hover:text-blue-600 text-sm">info@vizagtaxihub.com</a>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <span className="text-gray-600 text-sm">Address:</span>
+                  <span className="text-gray-600 text-sm">44-66-22/4, Singalammapuram, Kailasapuram, Visakhapatnam - 530024</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <span className="text-gray-600 text-sm">Phone:</span>
+                  <a href="tel:+919966363662" className="text-gray-600 hover:text-blue-600 text-sm">+91 9966363662</a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Google Map */}
+            <div className="md:col-span-3">
+              <h3 className="text-gray-800 font-semibold mb-4">Our Location</h3>
+              <iframe 
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3800.3270296460007!2d83.2983!3d17.7384!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a39431389e6973f%3A0x92d9c20395498b86!2sVizag%20Taxi%20Hub!5e0!3m2!1sen!2sin!4v1650123456789!5m2!1sen!2sin"
+                width="100%"
+                height="200"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="rounded-lg"
+              ></iframe>
             </div>
           </div>
           
-          <div className="border-t border-cabGray-200 pt-8 mt-8 text-center text-cabGray-600 text-sm">
-            &copy; {new Date().getFullYear()} CabZilla. All rights reserved.
+          <div className="border-t border-gray-200 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-600 text-sm">
+              © Vizag Taxi Hub {new Date().getFullYear()} - {new Date().getFullYear() + 1}. All rights reserved.
+            </p>
+            <div className="flex space-x-4 mt-4 md:mt-0">
+              <a href="#" className="text-gray-600 hover:text-blue-600">Terms & Conditions</a>
+              <a href="#" className="text-gray-600 hover:text-blue-600">Refunds Policy</a>
+              <a href="#" className="text-gray-600 hover:text-blue-600">Privacy Policy</a>
+            </div>
           </div>
         </div>
       </footer>
     </div>
   );
 };
-
-// Feature items
-const featureItems = [
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>,
-    title: "Transparent Pricing",
-    description: "No hidden charges or surprises. Our pricing is transparent with all charges clearly mentioned before booking."
-  },
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path></svg>,
-    title: "Safety First",
-    description: "All our cabs undergo regular safety checks and our drivers are trained professionals with verified backgrounds."
-  },
-  {
-    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>,
-    title: "24/7 Availability",
-    description: "Our cabs are available round the clock. Book a ride anytime, anywhere with just a few clicks."
-  }
-];
 
 export default Index;
