@@ -109,10 +109,16 @@ export function AdminBookingsList() {
         console.log('Direct API response:', responseData);
         
         if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-          data = responseData.bookings;
+          data = responseData.bookings.map(booking => ({
+            ...booking,
+            status: booking.status as BookingStatus
+          }));
           responseSource = 'direct_fetch';
         } else if (Array.isArray(responseData)) {
-          data = responseData;
+          data = responseData.map(booking => ({
+            ...booking,
+            status: booking.status as BookingStatus
+          }));
           responseSource = 'direct_fetch_array';
         } else {
           console.error('Invalid data format:', responseData);
@@ -158,10 +164,16 @@ export function AdminBookingsList() {
           console.log('Alternative direct API response:', responseData);
           
           if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-            data = responseData.bookings;
+            data = responseData.bookings.map(booking => ({
+              ...booking,
+              status: booking.status as BookingStatus
+            }));
             responseSource = 'alt_direct_fetch';
           } else if (Array.isArray(responseData)) {
-            data = responseData;
+            data = responseData.map(booking => ({
+              ...booking,
+              status: booking.status as BookingStatus
+            }));
             responseSource = 'alt_direct_fetch_array';
           } else {
             throw new Error('Invalid data format from alternative direct API');
@@ -173,7 +185,11 @@ export function AdminBookingsList() {
             setApiAttempt(3);
             // Fallback to using the bookingAPI service
             console.log('Attempting to fetch via bookingAPI.getAllBookings()');
-            data = await bookingAPI.getAllBookings();
+            const apiData = await bookingAPI.getAllBookings();
+            data = apiData.map(booking => ({
+              ...booking,
+              status: booking.status as BookingStatus
+            }));
             console.log('Admin: Bookings received from admin API:', data);
             responseSource = 'booking_api';
           } catch (adminError) {
@@ -183,7 +199,11 @@ export function AdminBookingsList() {
               setApiAttempt(4);
               // Try user bookings as a final fallback
               console.log('Attempting to fetch via bookingAPI.getUserBookings()');
-              data = await bookingAPI.getUserBookings();
+              const userBookings = await bookingAPI.getUserBookings();
+              data = userBookings.map(booking => ({
+                ...booking,
+                status: booking.status as BookingStatus
+              }));
               console.log('Admin: Bookings received from user API:', data);
               responseSource = 'user_api';
             } catch (userError) {
@@ -208,9 +228,15 @@ export function AdminBookingsList() {
                   console.log('Final fallback API successful:', responseData);
                   
                   if (responseData.bookings && Array.isArray(responseData.bookings)) {
-                    data = responseData.bookings;
+                    data = responseData.bookings.map(booking => ({
+                      ...booking,
+                      status: booking.status as BookingStatus
+                    }));
                   } else if (Array.isArray(responseData)) {
-                    data = responseData;
+                    data = responseData.map(booking => ({
+                      ...booking,
+                      status: booking.status as BookingStatus
+                    }));
                   } else {
                     throw new Error('Invalid data format from final fallback API');
                   }
@@ -275,7 +301,7 @@ export function AdminBookingsList() {
             tripType: 'airport',
             tripMode: 'one-way',
             totalAmount: 1500,
-            status: 'pending',
+            status: 'pending' as BookingStatus,
             passengerName: 'Demo User',
             passengerPhone: '9876543210',
             passengerEmail: 'demo@example.com',
@@ -293,7 +319,7 @@ export function AdminBookingsList() {
             tripType: 'local',
             tripMode: 'round-trip',
             totalAmount: 2500,
-            status: 'confirmed',
+            status: 'confirmed' as BookingStatus,
             passengerName: 'Demo Admin',
             passengerPhone: '9876543211',
             passengerEmail: 'admin@example.com',
@@ -370,7 +396,7 @@ export function AdminBookingsList() {
       setSelectedBooking({
         ...selectedBooking,
         ...driverData,
-        status: 'assigned'
+        status: 'assigned' as BookingStatus
       });
       
       // Also update in the bookings list
@@ -378,7 +404,7 @@ export function AdminBookingsList() {
         booking.id === bookingId ? { 
           ...booking, 
           ...driverData,
-          status: 'assigned' 
+          status: 'assigned' as BookingStatus 
         } : booking
       );
       setBookings(updatedBookings);
@@ -406,14 +432,14 @@ export function AdminBookingsList() {
       // Update the selected booking
       setSelectedBooking({
         ...selectedBooking,
-        status: 'cancelled'
+        status: 'cancelled' as BookingStatus
       });
       
       // Update in the bookings list
       const updatedBookings = bookings.map(booking => 
         booking.id === bookingId ? { 
           ...booking, 
-          status: 'cancelled' 
+          status: 'cancelled' as BookingStatus
         } : booking
       );
       setBookings(updatedBookings);

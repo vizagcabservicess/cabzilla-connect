@@ -241,8 +241,8 @@ export default function AdminDashboardPage() {
         </Tabs>
       </main>
 
-      {/* Add global CSS fixes */}
-      <style jsx global>{`
+      {/* Add global CSS fixes as a style tag instead of using jsx and global properties */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .TabsList {
           width: 100%;
           justify-content: flex-start;
@@ -254,7 +254,7 @@ export default function AdminDashboardPage() {
           border-bottom: 1px solid #e2e8f0;
           margin-bottom: 1rem;
         }
-      `}</style>
+      `}} />
     </div>
   );
 }
