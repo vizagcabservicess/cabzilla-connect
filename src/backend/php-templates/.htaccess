@@ -17,7 +17,17 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
 </IfModule>
+
+# CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY
+RewriteRule ^api/admin/assign-driver$ /api/admin/assign-driver.php [L,QSA]
+RewriteRule ^api/admin/cancel-booking$ /api/admin/cancel-booking.php [L,QSA]
+RewriteRule ^api/admin/update-booking$ /api/admin/update-booking.php [L,QSA]
+RewriteRule ^api/admin/generate-invoice$ /api/admin/generate-invoice.php [L,QSA]
+RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,QSA]
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority

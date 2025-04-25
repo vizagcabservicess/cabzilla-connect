@@ -23,7 +23,10 @@ interface BookingDetailsProps {
   isSubmitting: boolean;
 }
 
-const API_BASE_URL = 'https://vizagup.com/api/admin';
+// Use a domain that is guaranteed to work (the current site's domain)
+const SITE_DOMAIN = window.location.origin;
+// For absolute URL formation
+const API_BASE_URL = `${SITE_DOMAIN}/api/admin`;
 
 export function BookingDetails({
   booking,
@@ -48,30 +51,58 @@ export function BookingDetails({
     handleTabChange('details');
   };
 
+  // Helper function for making API requests with better error handling
+  const safeFetch = async (url: string, method: string, body: any) => {
+    console.log(`Making ${method} request to: ${url}`);
+    console.log('Request payload:', body);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      console.log(`Response status: ${response.status}`);
+
+      // Attempt to parse the response, but handle errors gracefully
+      let data;
+      const textResponse = await response.text();
+      console.log('Raw response:', textResponse);
+
+      try {
+        data = JSON.parse(textResponse);
+      } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
+        throw new Error(`Server response is not valid JSON: ${textResponse.substring(0, 100)}...`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || `Request failed with status ${response.status}`);
+      }
+
+      console.log('Parsed response data:', data);
+      return data;
+    } catch (error) {
+      console.error(`Error in ${method} request to ${url}:`, error);
+      throw error;
+    }
+  };
+
   const handleAssignDriver = async (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => {
     try {
       setLocalSubmitting(true);
       console.log('Assigning driver:', driverData);
       
-      const response = await fetch(`${API_BASE_URL}/assign-driver`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          ...driverData
-        }),
+      const url = `${API_BASE_URL}/assign-driver`;
+      
+      const result = await safeFetch(url, 'POST', {
+        bookingId: booking.id,
+        ...driverData
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to assign driver');
-      }
-
-      const result = await response.json();
-      console.log('Driver assignment response:', result);
-
+      
       if (result.status === 'success') {
         toast({
           title: "Success",
@@ -99,24 +130,12 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Cancelling booking:', booking.id);
       
-      const response = await fetch(`${API_BASE_URL}/cancel-booking`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId: booking.id
-        }),
+      const url = `${API_BASE_URL}/cancel-booking`;
+      
+      const result = await safeFetch(url, 'POST', {
+        bookingId: booking.id
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to cancel booking');
-      }
-
-      const result = await response.json();
-      console.log('Booking cancellation response:', result);
-
+      
       if (result.status === 'success') {
         toast({
           title: "Success",
@@ -143,25 +162,13 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Updating booking:', { bookingId: booking.id, ...updatedData });
       
-      const response = await fetch(`${API_BASE_URL}/update-booking`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          ...updatedData
-        }),
+      const url = `${API_BASE_URL}/update-booking`;
+      
+      const result = await safeFetch(url, 'POST', {
+        bookingId: booking.id,
+        ...updatedData
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update booking');
-      }
-
-      const result = await response.json();
-      console.log('Booking update response:', result);
-
+      
       if (result.status === 'success') {
         toast({
           title: "Success",
@@ -189,32 +196,20 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Generating invoice for booking:', booking.id);
       
-      const response = await fetch(`${API_BASE_URL}/generate-invoice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId: booking.id
-        }),
+      const url = `${API_BASE_URL}/generate-invoice`;
+      
+      const result = await safeFetch(url, 'POST', {
+        bookingId: booking.id
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to generate invoice');
-      }
-
-      const result = await response.json();
-      console.log('Invoice generation response:', result);
-
+      
       if (result.status === 'success') {
         toast({
           title: "Success",
           description: "Invoice generated successfully",
         });
         
-        // Open invoice in new tab
-        const invoiceUrl = `${API_BASE_URL}/download-invoice?id=${booking.id}`;
+        // Open invoice in new tab with absolute URL
+        const invoiceUrl = `${SITE_DOMAIN}/api/download-invoice?id=${booking.id}`;
         window.open(invoiceUrl, '_blank');
         
         await onGenerateInvoice();
