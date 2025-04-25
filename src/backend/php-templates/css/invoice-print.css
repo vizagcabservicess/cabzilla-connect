@@ -1,0 +1,115 @@
+
+/* Invoice Print Styles */
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+}
+
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
+  .invoice-container {
+    border: none;
+    box-shadow: none;
+    padding: 10mm;
+    max-width: 100%;
+  }
+}
+
+.invoice-container {
+  max-width: 800px;
+  margin: 0 auto;
+  border: 1px solid #ddd;
+  padding: 30px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+}
+
+.invoice-header div:first-child {
+  float: left;
+}
+
+.invoice-header div:last-child {
+  float: right;
+  text-align: right;
+}
+
+.invoice-details {
+  margin-bottom: 40px;
+  overflow: auto;
+}
+
+.customer-details {
+  float: left;
+  width: 48%;
+}
+
+.invoice-summary {
+  float: right;
+  width: 48%;
+  text-align: right;
+}
+
+.booking-details {
+  clear: both;
+  margin-bottom: 30px;
+  padding-top: 20px;
+}
+
+.fare-breakdown {
+  margin-top: 30px;
+  border-top: 1px solid #ddd;
+  padding-top: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
+}
+
+table th, table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.total-row {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.company-info {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #666;
+}
+
+h1 {
+  color: #444;
+  margin: 0 0 10px 0;
+}
+
+h3 {
+  color: #555;
+  margin-bottom: 10px;
+}

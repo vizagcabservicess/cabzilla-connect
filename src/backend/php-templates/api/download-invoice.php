@@ -4,19 +4,13 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 
-// OVERRIDE any previously set headers
-if (headers_sent()) {
-    // Log if headers have been sent
-    error_log("Headers already sent before download-invoice.php execution");
-} else {
-    // Clear any existing output buffers
-    while (ob_get_level()) ob_end_clean();
-}
+// Clear all output buffers first
+while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
-// CORS headers (these are safe to repeat even if headers sent)
+// CRITICAL: Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -31,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     header('Content-Type: application/json');
-    if (ob_get_level()) ob_end_clean();
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
@@ -288,17 +281,15 @@ try {
     $format = isset($_GET['format']) ? $_GET['format'] : 'html';
     
     if ($format === 'pdf') {
-        // For PDF generation, we'll use a simple HTML to PDF conversion
-        // This is a lightweight approach that avoids requiring external libraries
-        
-        // Force download with proper headers
+        // CRITICAL FIX: Set proper headers before any output
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="invoice_' . $invoiceData['invoice_number'] . '.pdf"');
         
-        // Very simple HTML to PDF conversion using browser print capabilities
+        // Simple HTML to PDF using browser print capabilities
         echo '<!DOCTYPE html>
         <html>
         <head>
+            <meta charset="utf-8">
             <title>Invoice #' . $invoiceData['invoice_number'] . '</title>
             <script>
                 window.onload = function() {
@@ -311,19 +302,20 @@ try {
             <style>
                 @media print {
                     body { margin: 0; }
-                    @page { margin: 0; }
+                    @page { size: auto; margin: 0; }
                 }
+                ' . file_get_contents(__DIR__ . '/../css/invoice-print.css') . '
             </style>
         </head>
         <body>' . $invoiceHtml . '</body>
         </html>';
-        exit;
     } else {
-        // For HTML, we'll just output the invoice HTML directly
+        // For HTML output
         header('Content-Type: text/html; charset=UTF-8');
         echo $invoiceHtml;
-        exit;
     }
+    
+    exit; // Important to prevent any additional output
 
 } catch (Exception $e) {
     logInvoiceError("Error in download-invoice.php", ['error' => $e->getMessage()]);

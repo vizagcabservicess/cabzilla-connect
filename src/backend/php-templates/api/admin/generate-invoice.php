@@ -17,6 +17,21 @@ $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 // Log request
 error_log("Admin generate-invoice endpoint called: " . $_SERVER['REQUEST_METHOD']);
 
+// Error logging function
+function logGenerateInvoiceError($message, $data = []) {
+    error_log("GENERATE INVOICE ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../../logs/generate_invoice_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
+}
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -46,27 +61,71 @@ try {
         // Get JSON input data for POST
         $jsonData = file_get_contents('php://input');
         $data = json_decode($jsonData, true);
+        
+        // Debug log the raw POST data
+        error_log("Generate invoice POST data: " . $jsonData);
+        
         $bookingId = isset($data['bookingId']) ? (int)$data['bookingId'] : null;
+        
+        // If we couldn't get it from JSON, try regular POST
+        if (!$bookingId && isset($_POST['bookingId'])) {
+            $bookingId = (int)$_POST['bookingId'];
+        }
     }
+    
+    logGenerateInvoiceError("Processing invoice generation for booking ID: " . $bookingId, [
+        'method' => $_SERVER['REQUEST_METHOD'],
+        'queryString' => $_SERVER['QUERY_STRING'],
+        'jsonData' => $jsonData ?? 'none'
+    ]);
     
     if (!$bookingId) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
     // Connect to database with improved error handling
-    $conn = getDbConnectionWithRetry();
-    
-    // Get booking details
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-    $stmt->bind_param("i", $bookingId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows === 0) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+    try {
+        $conn = getDbConnectionWithRetry();
+        if (!$conn) {
+            throw new Exception("Could not establish database connection after retries");
+        }
+    } catch (Exception $e) {
+        logGenerateInvoiceError("Database connection failed", ['error' => $e->getMessage()]);
+        sendJsonResponse([
+            'status' => 'error', 
+            'message' => 'Database connection failed',
+            'error_details' => $debugMode ? $e->getMessage() : null
+        ], 500);
     }
     
-    $booking = $result->fetch_assoc();
+    // Get booking details
+    try {
+        $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+        if (!$stmt) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
+        }
+        
+        $stmt->bind_param("i", $bookingId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows === 0) {
+            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+        }
+        
+        $booking = $result->fetch_assoc();
+    } catch (Exception $e) {
+        logGenerateInvoiceError("Error fetching booking", [
+            'booking_id' => $bookingId,
+            'error' => $e->getMessage()
+        ]);
+        
+        sendJsonResponse([
+            'status' => 'error', 
+            'message' => 'Error retrieving booking details',
+            'error_details' => $debugMode ? $e->getMessage() : null
+        ], 500);
+    }
     
     // Generate invoice data
     $invoiceNumber = 'INV-' . date('Ymd') . '-' . $booking['id'];
@@ -98,94 +157,113 @@ try {
     ];
     
     // Check if invoices table exists, create it if needed
-    $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
-    if ($checkTableResult->num_rows === 0) {
-        $createInvoicesTableSql = "
-            CREATE TABLE invoices (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                invoice_number VARCHAR(50) NOT NULL UNIQUE,
-                booking_id INT NOT NULL,
-                booking_number VARCHAR(50) NOT NULL,
-                passenger_name VARCHAR(100) NOT NULL,
-                passenger_email VARCHAR(100) NOT NULL,
-                passenger_phone VARCHAR(20) NOT NULL,
-                trip_type VARCHAR(20) NOT NULL,
-                trip_mode VARCHAR(20) NOT NULL,
-                pickup_location TEXT NOT NULL,
-                drop_location TEXT,
-                pickup_date DATETIME NOT NULL,
-                cab_type VARCHAR(50) NOT NULL,
-                base_fare DECIMAL(10,2) NOT NULL,
-                tax_amount DECIMAL(10,2) NOT NULL,
-                total_amount DECIMAL(10,2) NOT NULL,
-                invoice_date DATE NOT NULL,
-                status VARCHAR(20) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $conn->query($createInvoicesTableSql);
+    try {
+        $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
+        if ($checkTableResult->num_rows === 0) {
+            $createInvoicesTableSql = "
+                CREATE TABLE invoices (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    invoice_number VARCHAR(50) NOT NULL UNIQUE,
+                    booking_id INT NOT NULL,
+                    booking_number VARCHAR(50) NOT NULL,
+                    passenger_name VARCHAR(100) NOT NULL,
+                    passenger_email VARCHAR(100) NOT NULL,
+                    passenger_phone VARCHAR(20) NOT NULL,
+                    trip_type VARCHAR(20) NOT NULL,
+                    trip_mode VARCHAR(20) NOT NULL,
+                    pickup_location TEXT NOT NULL,
+                    drop_location TEXT,
+                    pickup_date DATETIME NOT NULL,
+                    cab_type VARCHAR(50) NOT NULL,
+                    base_fare DECIMAL(10,2) NOT NULL,
+                    tax_amount DECIMAL(10,2) NOT NULL,
+                    total_amount DECIMAL(10,2) NOT NULL,
+                    invoice_date DATE NOT NULL,
+                    status VARCHAR(20) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            $conn->query($createInvoicesTableSql);
+            if ($conn->error) {
+                logGenerateInvoiceError("Error creating invoices table", ['error' => $conn->error]);
+            }
+        }
+    } catch (Exception $e) {
+        logGenerateInvoiceError("Error checking/creating invoices table", ['error' => $e->getMessage()]);
+        // Continue execution - we'll try to handle without the table if needed
     }
     
     // Check if invoice already exists for this booking
-    $checkInvoiceStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
-    $checkInvoiceStmt->bind_param("i", $bookingId);
-    $checkInvoiceStmt->execute();
-    $invoiceResult = $checkInvoiceStmt->get_result();
-    
-    if ($invoiceResult->num_rows > 0) {
-        $existingInvoice = $invoiceResult->fetch_assoc();
-        $invoiceId = $existingInvoice['id'];
+    try {
+        $checkInvoiceStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
+        $checkInvoiceStmt->bind_param("i", $bookingId);
+        $checkInvoiceStmt->execute();
+        $invoiceResult = $checkInvoiceStmt->get_result();
         
-        // Update invoice status
-        $updateStmt = $conn->prepare("UPDATE invoices SET status = 'generated', updated_at = NOW() WHERE id = ?");
-        $updateStmt->bind_param("i", $invoiceId);
-        $updateStmt->execute();
-    } else {
-        // Insert new invoice
-        $insertSql = "INSERT INTO invoices (invoice_number, booking_id, booking_number, passenger_name, passenger_email, 
-                      passenger_phone, trip_type, trip_mode, pickup_location, drop_location, pickup_date, cab_type, 
-                      base_fare, tax_amount, total_amount, invoice_date, status) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $insertStmt = $conn->prepare($insertSql);
-        $insertStmt->bind_param(
-            "sisssssssssdddss",
-            $invoiceData['invoice_number'],
-            $invoiceData['booking_id'],
-            $invoiceData['booking_number'],
-            $invoiceData['passenger_name'],
-            $invoiceData['passenger_email'],
-            $invoiceData['passenger_phone'],
-            $invoiceData['trip_type'],
-            $invoiceData['trip_mode'],
-            $invoiceData['pickup_location'],
-            $invoiceData['drop_location'],
-            $invoiceData['pickup_date'],
-            $invoiceData['cab_type'],
-            $invoiceData['base_fare'],
-            $invoiceData['tax_amount'],
-            $invoiceData['total_amount'],
-            $invoiceData['invoice_date'],
-            $invoiceData['status']
-        );
-        $insertStmt->execute();
-        
-        // Update booking to indicate invoice has been created
-        $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
-        if ($conn->error) {
-            // If invoice_generated column doesn't exist, we'll add it
-            $conn->query("ALTER TABLE bookings ADD COLUMN invoice_generated TINYINT(1) DEFAULT 0");
-            $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
+        if ($invoiceResult->num_rows > 0) {
+            $existingInvoice = $invoiceResult->fetch_assoc();
+            $invoiceId = $existingInvoice['id'];
+            
+            // Update invoice status
+            $updateStmt = $conn->prepare("UPDATE invoices SET status = 'generated', updated_at = NOW() WHERE id = ?");
+            $updateStmt->bind_param("i", $invoiceId);
+            $updateStmt->execute();
+        } else {
+            // Insert new invoice
+            $insertSql = "INSERT INTO invoices (invoice_number, booking_id, booking_number, passenger_name, passenger_email, 
+                        passenger_phone, trip_type, trip_mode, pickup_location, drop_location, pickup_date, cab_type, 
+                        base_fare, tax_amount, total_amount, invoice_date, status) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            $insertStmt = $conn->prepare($insertSql);
+            $insertStmt->bind_param(
+                "sisssssssssdddss",
+                $invoiceData['invoice_number'],
+                $invoiceData['booking_id'],
+                $invoiceData['booking_number'],
+                $invoiceData['passenger_name'],
+                $invoiceData['passenger_email'],
+                $invoiceData['passenger_phone'],
+                $invoiceData['trip_type'],
+                $invoiceData['trip_mode'],
+                $invoiceData['pickup_location'],
+                $invoiceData['drop_location'],
+                $invoiceData['pickup_date'],
+                $invoiceData['cab_type'],
+                $invoiceData['base_fare'],
+                $invoiceData['tax_amount'],
+                $invoiceData['total_amount'],
+                $invoiceData['invoice_date'],
+                $invoiceData['status']
+            );
+            $insertStmt->execute();
+            
+            // Update booking to indicate invoice has been created
+            try {
+                $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
+                if ($conn->error) {
+                    // If invoice_generated column doesn't exist, we'll add it
+                    $conn->query("ALTER TABLE bookings ADD COLUMN invoice_generated TINYINT(1) DEFAULT 0");
+                    $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
+                }
+                $updateBookingStmt->bind_param("i", $bookingId);
+                $updateBookingStmt->execute();
+            } catch (Exception $e) {
+                logGenerateInvoiceError("Error updating booking's invoice status", ['error' => $e->getMessage()]);
+                // Continue execution - this is not critical
+            }
         }
-        $updateBookingStmt->bind_param("i", $bookingId);
-        $updateBookingStmt->execute();
+    } catch (Exception $e) {
+        logGenerateInvoiceError("Error creating/updating invoice record", ['error' => $e->getMessage()]);
+        // Continue execution - we can still generate the invoice even if we couldn't save it
     }
     
     // Add invoice download URL to response
     $invoiceUrl = "/api/download-invoice.php?id=" . $bookingId;
+    $pdfUrl = "/api/download-invoice.php?id=" . $bookingId . "&format=pdf";
     
-    // Add code for HTML invoice generation - sent in response for immediate access
+    // Generate HTML invoice for response
     $invoiceHtml = generateInvoiceHTML($invoiceData);
     
     // Send success response with invoice data
@@ -209,12 +287,13 @@ try {
                 'totalAmount' => (float)$booking['total_amount']
             ],
             'downloadUrl' => $invoiceUrl,
+            'pdfDownloadUrl' => $pdfUrl,
             'invoiceHtml' => $invoiceHtml
         ]
     ]);
 
 } catch (Exception $e) {
-    error_log("Error in generate-invoice.php: " . $e->getMessage());
+    logGenerateInvoiceError("Unhandled error", ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error', 
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),

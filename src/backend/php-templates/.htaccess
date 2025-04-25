@@ -45,42 +45,51 @@ RewriteRule .* - [R=200,L]
     Header unset Content-Type
 </FilesMatch>
 
+# PDF Download Fix - CRITICAL - Address the PDF download issue
+<Files "download-invoice.php">
+    # Allow the script to set its own content type
+    SetEnvIf Request_URI "format=pdf" pdf_download=1
+    Header always unset Content-Type env=pdf_download
+    Header always set X-Content-Type-Options "nosniff" env=pdf_download
+</Files>
+
 # CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY (Ensure these come first)
-RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/assign-driver/?$ /api/admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^api/admin/cancel-booking/?$ /api/admin/cancel-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/update-booking/?$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/generate-invoice/?$ /api/admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
-RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/booking/([0-9]+)$ /api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/bookings$ /api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/bookings/([0-9]+)$ /api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/test-booking-api\.php$ /api/admin/test-booking-api.php [L,NC,QSA]
+RewriteRule ^api/admin/booking/?$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/booking/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/admin/bookings/?$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 # Add direct access to the book endpoint - HIGHEST PRIORITY
-RewriteRule ^api/book\.php$ /api/book.php [L,NC,QSA]
-RewriteRule ^create-booking$ /api/book.php [L,NC,QSA]
-RewriteRule ^api/create-booking$ /api/book.php [L,NC,QSA]
+RewriteRule ^api/book/?$ /api/book.php [L,NC,QSA]
+RewriteRule ^create-booking/?$ /api/book.php [L,NC,QSA]
+RewriteRule ^api/create-booking/?$ /api/book.php [L,NC,QSA]
 
 # Add direct access to the test endpoint
-RewriteRule ^test-booking-api\.php$ /api/admin/test-booking-api.php [L,NC,QSA]
+RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 # User bookings endpoints
-RewriteRule ^api/user/bookings\.php$ /api/user/bookings.php [L,NC,QSA]
-RewriteRule ^api/bookings\.php$ /api/bookings.php [L,NC,QSA]
+RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
+RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 
 # Other admin API endpoints
+RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC,QSA]
 RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
 # Regular API routes
 RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
-RewriteRule ^api/login\.php$ /api/login.php [L,NC,QSA]
-RewriteRule ^api/signup\.php$ /api/signup.php [L,NC,QSA]
-RewriteRule ^api/register\.php$ /api/signup.php [L,NC,QSA]
+RewriteRule ^api/login/?$ /api/login.php [L,NC,QSA]
+RewriteRule ^api/signup/?$ /api/signup.php [L,NC,QSA]
+RewriteRule ^api/register/?$ /api/signup.php [L,NC,QSA]
 RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
 
 # IMPORTANT: Direct frontend routes to React app

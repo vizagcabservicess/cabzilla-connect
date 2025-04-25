@@ -31,6 +31,21 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+// Log errors
+function logDriversError($message, $data = []) {
+    error_log("DRIVERS API ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../../logs/drivers_api_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
+}
+
 // Helper function to get mock drivers data
 function getMockDrivers() {
     return [
@@ -105,10 +120,18 @@ function getMockDrivers() {
 // Check if drivers table exists and create it if necessary
 function ensureDriversTableExists($conn) {
     try {
+        error_log("Checking if drivers table exists");
+        
         // Check if drivers table exists
         $tableCheck = $conn->query("SHOW TABLES LIKE 'drivers'");
         
+        if (!$tableCheck) {
+            throw new Exception("Error checking drivers table: " . $conn->error);
+        }
+        
         if ($tableCheck->num_rows == 0) {
+            error_log("Drivers table doesn't exist, creating it");
+            
             // Create drivers table
             $createTable = "CREATE TABLE IF NOT EXISTS `drivers` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -126,9 +149,12 @@ function ensureDriversTableExists($conn) {
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
             
-            if (!$conn->query($createTable)) {
+            $result = $conn->query($createTable);
+            if (!$result) {
                 throw new Exception("Failed to create drivers table: " . $conn->error);
             }
+            
+            error_log("Drivers table created successfully");
             
             // Insert sample driver data
             $mockDrivers = getMockDrivers();
@@ -141,6 +167,7 @@ function ensureDriversTableExists($conn) {
                 
                 if (!$insertStmt) {
                     $insertSuccess = false;
+                    error_log("Failed to prepare insert statement: " . $conn->error);
                     break;
                 }
                 
@@ -160,12 +187,15 @@ function ensureDriversTableExists($conn) {
                 
                 if (!$insertStmt->execute()) {
                     $insertSuccess = false;
+                    error_log("Failed to insert driver: " . $insertStmt->error);
                     break;
                 }
+                
+                $insertStmt->close();
             }
             
-            error_log("Created drivers table and " . ($insertSuccess ? "successfully" : "failed to") . " insert sample data");
-            return true;
+            error_log("Sample drivers " . ($insertSuccess ? "successfully" : "failed to") . " insert");
+            return $insertSuccess;
         }
         
         return true;
@@ -176,65 +206,116 @@ function ensureDriversTableExists($conn) {
 }
 
 try {
+    error_log("Processing drivers.php request");
+    
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 
     // Connect to database with improved error handling
-    $conn = getDbConnectionWithRetry();
+    try {
+        $conn = getDbConnectionWithRetry();
+        if (!$conn) {
+            throw new Exception("Could not establish database connection after retries");
+        }
+    } catch (Exception $e) {
+        logDriversError("Database connection failed", ['error' => $e->getMessage()]);
+        
+        // Return mock data in case of connection error
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'Drivers mock data (database connection failed)',
+            'count' => 5,
+            'drivers' => getMockDrivers()
+        ]);
+    }
     
     // Ensure drivers table exists
-    $tableExists = ensureDriversTableExists($conn);
+    try {
+        $tableExists = ensureDriversTableExists($conn);
+        if (!$tableExists) {
+            // If table creation failed, return mock data
+            sendJsonResponse([
+                'status' => 'success',
+                'message' => 'Drivers mock data (table creation failed)',
+                'count' => 5,
+                'drivers' => getMockDrivers()
+            ]);
+        }
+    } catch (Exception $e) {
+        logDriversError("Error creating drivers table", ['error' => $e->getMessage()]);
+        
+        // Return mock data in case of table creation error
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'Drivers mock data (table setup failed)',
+            'count' => 5,
+            'drivers' => getMockDrivers()
+        ]);
+    }
     
     // Fetch drivers from the database
-    $driversQuery = "SELECT * FROM drivers";
-    $result = $conn->query($driversQuery);
-    
-    if (!$result) {
-        throw new Exception("Database query failed: " . $conn->error);
+    try {
+        $driversQuery = "SELECT * FROM drivers";
+        $result = $conn->query($driversQuery);
+        
+        if (!$result) {
+            throw new Exception("Database query failed: " . $conn->error);
+        }
+        
+        $drivers = [];
+        
+        while ($row = $result->fetch_assoc()) {
+            // Map database fields to the format expected by the frontend
+            $drivers[] = [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+                'phone' => $row['phone'],
+                'email' => $row['email'],
+                'licenseNo' => $row['license_no'],
+                'status' => $row['status'],
+                'totalRides' => (int)$row['total_rides'],
+                'earnings' => (float)$row['earnings'],
+                'rating' => (float)$row['rating'],
+                'location' => $row['location'],
+                'vehicle' => $row['vehicle']
+            ];
+        }
+        
+        // If no drivers found, use mock data
+        if (empty($drivers)) {
+            $drivers = getMockDrivers();
+        }
+        
+        // Send successful response with drivers data
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'Drivers loaded successfully',
+            'count' => count($drivers),
+            'drivers' => $drivers
+        ]);
+    } catch (Exception $e) {
+        logDriversError("Error fetching drivers", ['error' => $e->getMessage()]);
+        
+        // Return mock data in case of any error
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'Drivers mock data (query error fallback)',
+            'count' => 5,
+            'drivers' => getMockDrivers()
+        ]);
     }
-    
-    $drivers = [];
-    
-    while ($row = $result->fetch_assoc()) {
-        // Map database fields to the format expected by the frontend
-        $drivers[] = [
-            'id' => (int)$row['id'],
-            'name' => $row['name'],
-            'phone' => $row['phone'],
-            'email' => $row['email'],
-            'licenseNo' => $row['license_no'],
-            'status' => $row['status'],
-            'totalRides' => (int)$row['total_rides'],
-            'earnings' => (float)$row['earnings'],
-            'rating' => (float)$row['rating'],
-            'location' => $row['location'],
-            'vehicle' => $row['vehicle']
-        ];
-    }
-    
-    // If no drivers found, use mock data
-    if (empty($drivers)) {
-        $drivers = getMockDrivers();
-    }
-    
-    // Send successful response with drivers data
-    sendJsonResponse([
-        'status' => 'success',
-        'message' => 'Drivers loaded successfully',
-        'count' => count($drivers),
-        'drivers' => $drivers
-    ]);
 
 } catch (Exception $e) {
-    error_log("Error in drivers.php: " . $e->getMessage());
+    error_log("Unhandled error in drivers.php: " . $e->getMessage());
     
     // Return mock data in case of error
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Drivers mock data (fallback)',
         'error_details' => $debugMode ? $e->getMessage() : null,
+        'count' => 5,
         'drivers' => getMockDrivers()
     ]);
 }
