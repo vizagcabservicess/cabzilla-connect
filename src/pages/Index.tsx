@@ -8,7 +8,7 @@ const Index = () => {
       <Navbar />
       <Hero />
       
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         /* Hide Tour Package Tab with maximum specificity */
         .trip-tab[data-value="tour"],
         .trip-tab[value="tour"],
@@ -41,7 +41,7 @@ const Index = () => {
           margin: -1px !important;
           padding: 0 !important;
         }
-      `}</style>
+      `}} />
       
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
