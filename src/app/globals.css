@@ -1,5 +1,4 @@
 
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -119,5 +118,16 @@
 /* Hide airport tab extra space */
 [value="airport"] + [value="all"] {
   margin-left: 0;
+}
+
+/* Fix airport tab layout in AdminDashboardPage */
+[data-value="fares"] .TabsList [data-value="airport"] + [data-value="all"] {
+  margin-left: 0;
+}
+
+/* Ensure tabs are properly spaced and aligned */
+[data-value="fares"] .TabsList [data-state="active"] {
+  position: relative;
+  z-index: 1;
 }
 

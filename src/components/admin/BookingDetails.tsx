@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingStatusFlow } from './BookingStatusFlow';
+import { toast } from 'sonner';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -33,6 +35,37 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState<string>('details');
+  
+  // Set the activeTab based on the tab specified in the URL on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tab = searchParams.get('tab');
+    if (tab && ['details', 'edit', 'driver', 'status', 'invoice'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set('tab', activeTab);
+    const newUrl = `${window.location.pathname}?${searchParams.toString()}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+  }, [activeTab]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+  };
+
+  const handleCancel = async () => {
+    try {
+      await onCancel();
+      toast.success("Booking cancelled successfully");
+    } catch (error) {
+      toast.error("Failed to cancel booking");
+      console.error("Cancel booking error:", error);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -48,7 +81,7 @@ export function BookingDetails({
             <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-4">
             <TabsList className="booking-details-tabs">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -128,7 +161,7 @@ export function BookingDetails({
                     <IndianRupee className="w-4 h-4 text-gray-500" />
                     <div>
                       <p className="font-medium">Total Amount</p>
-                      <p className="text-sm text-gray-600">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                      <p className="text-sm text-gray-600">₹{booking.totalAmount?.toLocaleString('en-IN') || '0'}</p>
                     </div>
                   </div>
                 </div>
@@ -172,21 +205,40 @@ export function BookingDetails({
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 pt-4 border-t">
-                <Button onClick={() => setActiveTab('edit')} disabled={!(['pending', 'confirmed'].includes(booking.status))}>
+                <Button 
+                  onClick={() => setActiveTab('edit')} 
+                  disabled={!(['pending', 'confirmed'].includes(booking.status)) || isSubmitting}
+                >
                   Edit Booking
                 </Button>
-                <Button onClick={() => setActiveTab('driver')} variant="outline" disabled={booking.status === 'cancelled'}>
+                <Button 
+                  onClick={() => setActiveTab('driver')} 
+                  variant="outline" 
+                  disabled={booking.status === 'cancelled' || isSubmitting}
+                >
                   {booking.driverName ? 'Change Driver' : 'Assign Driver'}
                 </Button>
                 {['pending', 'confirmed'].includes(booking.status) && (
-                  <Button onClick={onCancel} variant="destructive">
+                  <Button 
+                    onClick={handleCancel} 
+                    variant="destructive"
+                    disabled={isSubmitting}
+                  >
                     Cancel Booking
                   </Button>
                 )}
-                <Button onClick={() => setActiveTab('invoice')} variant="outline">
+                <Button 
+                  onClick={() => setActiveTab('invoice')} 
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
                   Generate Invoice
                 </Button>
-                <Button onClick={onClose} variant="outline">
+                <Button 
+                  onClick={onClose} 
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
                   Close
                 </Button>
               </div>
@@ -197,7 +249,7 @@ export function BookingDetails({
             <BookingEditForm 
               booking={booking}
               onSave={onEdit}
-              onCancel={onClose}
+              onCancel={() => setActiveTab('details')}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
@@ -206,7 +258,7 @@ export function BookingDetails({
             <DriverAssignment 
               booking={booking}
               onAssign={onAssignDriver}
-              onClose={onClose}
+              onClose={() => setActiveTab('details')}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
@@ -218,12 +270,21 @@ export function BookingDetails({
               isAdmin={true}
               isUpdating={isSubmitting}
             />
+            <div className="flex justify-end mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setActiveTab('details')}
+                disabled={isSubmitting}
+              >
+                Back to Details
+              </Button>
+            </div>
           </TabsContent>
           
           <TabsContent value="invoice">
             <BookingInvoice 
               booking={booking}
-              onClose={onClose}
+              onClose={() => setActiveTab('details')}
               onGenerate={onGenerateInvoice}
               isGenerating={isSubmitting}
             />

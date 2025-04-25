@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -108,13 +109,13 @@ export function AdminBookingsList() {
         console.log('Direct API response:', responseData);
         
         if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-          data = responseData.bookings.map(booking => ({
+          data = responseData.bookings.map((booking: any) => ({
             ...booking,
             status: booking.status as BookingStatus
           }));
           responseSource = 'direct_fetch';
         } else if (Array.isArray(responseData)) {
-          data = responseData.map(booking => ({
+          data = responseData.map((booking: any) => ({
             ...booking,
             status: booking.status as BookingStatus
           }));
@@ -163,13 +164,13 @@ export function AdminBookingsList() {
           console.log('Alternative direct API response:', responseData);
           
           if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-            data = responseData.bookings.map(booking => ({
+            data = responseData.bookings.map((booking: any) => ({
               ...booking,
               status: booking.status as BookingStatus
             }));
             responseSource = 'alt_direct_fetch';
           } else if (Array.isArray(responseData)) {
-            data = responseData.map(booking => ({
+            data = responseData.map((booking: any) => ({
               ...booking,
               status: booking.status as BookingStatus
             }));
@@ -185,7 +186,7 @@ export function AdminBookingsList() {
             // Fallback to using the bookingAPI service
             console.log('Attempting to fetch via bookingAPI.getAllBookings()');
             const apiData = await bookingAPI.getAllBookings();
-            data = apiData.map(booking => ({
+            data = apiData.map((booking: any) => ({
               ...booking,
               status: booking.status as BookingStatus
             }));
@@ -199,7 +200,7 @@ export function AdminBookingsList() {
               // Try user bookings as a final fallback
               console.log('Attempting to fetch via bookingAPI.getUserBookings()');
               const userBookings = await bookingAPI.getUserBookings();
-              data = userBookings.map(booking => ({
+              data = userBookings.map((booking: any) => ({
                 ...booking,
                 status: booking.status as BookingStatus
               }));
@@ -227,12 +228,12 @@ export function AdminBookingsList() {
                   console.log('Final fallback API successful:', responseData);
                   
                   if (responseData.bookings && Array.isArray(responseData.bookings)) {
-                    data = responseData.bookings.map(booking => ({
+                    data = responseData.bookings.map((booking: any) => ({
                       ...booking,
                       status: booking.status as BookingStatus
                     }));
                   } else if (Array.isArray(responseData)) {
-                    data = responseData.map(booking => ({
+                    data = responseData.map((booking: any) => ({
                       ...booking,
                       status: booking.status as BookingStatus
                     }));
@@ -452,6 +453,7 @@ export function AdminBookingsList() {
     setIsSubmitting(true);
     try {
       // Implement invoice generation logic here
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulating API call
       toast.success("Invoice generated successfully");
     } catch (error) {
       console.error('Error generating invoice:', error);
@@ -493,16 +495,6 @@ export function AdminBookingsList() {
     }
     
     setFilteredBookings(filtered);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   const handleRetry = () => {
@@ -741,8 +733,8 @@ export function AdminBookingsList() {
                     </TableCell>
                     <TableCell>₹{booking.totalAmount?.toLocaleString('en-IN') || 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(booking.status || 'pending')}>
-                        {booking.status || 'pending'}
+                      <Badge className={getStatusColor(booking.status)}>
+                        {booking.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
