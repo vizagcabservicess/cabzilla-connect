@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +10,7 @@ import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatBookingDate, getStatusColor } from '@/utils/bookingUtils';
+import { useToast } from "@/hooks/use-toast";
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -23,6 +23,8 @@ interface BookingDetailsProps {
   isSubmitting: boolean;
 }
 
+const API_BASE_URL = 'https://vizagup.com/api/admin';
+
 export function BookingDetails({
   booking,
   onClose,
@@ -34,6 +36,8 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
+  const { toast } = useToast();
+  const [localSubmitting, setLocalSubmitting] = useState(false);
 
   const handleTabChange = (value: string) => {
     console.log('Tab changed to:', value);
@@ -42,6 +46,191 @@ export function BookingDetails({
 
   const handleBackToDetails = () => {
     handleTabChange('details');
+  };
+
+  const handleAssignDriver = async (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => {
+    try {
+      setLocalSubmitting(true);
+      console.log('Assigning driver:', driverData);
+      
+      const response = await fetch(`${API_BASE_URL}/assign-driver`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          ...driverData
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to assign driver');
+      }
+
+      const result = await response.json();
+      console.log('Driver assignment response:', result);
+
+      if (result.status === 'success') {
+        toast({
+          title: "Success",
+          description: "Driver assigned successfully",
+        });
+        await onAssignDriver(driverData);
+        handleBackToDetails();
+      } else {
+        throw new Error(result.message || 'Failed to assign driver');
+      }
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to assign driver",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalSubmitting(false);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    try {
+      setLocalSubmitting(true);
+      console.log('Cancelling booking:', booking.id);
+      
+      const response = await fetch(`${API_BASE_URL}/cancel-booking`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: booking.id
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to cancel booking');
+      }
+
+      const result = await response.json();
+      console.log('Booking cancellation response:', result);
+
+      if (result.status === 'success') {
+        toast({
+          title: "Success",
+          description: "Booking cancelled successfully",
+        });
+        await onCancel();
+      } else {
+        throw new Error(result.message || 'Failed to cancel booking');
+      }
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to cancel booking",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalSubmitting(false);
+    }
+  };
+
+  const handleEditBooking = async (updatedData: Partial<Booking>) => {
+    try {
+      setLocalSubmitting(true);
+      console.log('Updating booking:', { bookingId: booking.id, ...updatedData });
+      
+      const response = await fetch(`${API_BASE_URL}/update-booking`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          ...updatedData
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update booking');
+      }
+
+      const result = await response.json();
+      console.log('Booking update response:', result);
+
+      if (result.status === 'success') {
+        toast({
+          title: "Success",
+          description: "Booking updated successfully",
+        });
+        await onEdit(updatedData);
+        handleBackToDetails();
+      } else {
+        throw new Error(result.message || 'Failed to update booking');
+      }
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update booking",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalSubmitting(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    try {
+      setLocalSubmitting(true);
+      console.log('Generating invoice for booking:', booking.id);
+      
+      const response = await fetch(`${API_BASE_URL}/generate-invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: booking.id
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to generate invoice');
+      }
+
+      const result = await response.json();
+      console.log('Invoice generation response:', result);
+
+      if (result.status === 'success') {
+        toast({
+          title: "Success",
+          description: "Invoice generated successfully",
+        });
+        
+        // Open invoice in new tab
+        const invoiceUrl = `${API_BASE_URL}/download-invoice?id=${booking.id}`;
+        window.open(invoiceUrl, '_blank');
+        
+        await onGenerateInvoice();
+      } else {
+        throw new Error(result.message || 'Failed to generate invoice');
+      }
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate invoice",
+        variant: "destructive",
+      });
+    } finally {
+      setLocalSubmitting(false);
+    }
   };
 
   return (
@@ -201,7 +390,7 @@ export function BookingDetails({
                 </Button>
                 {['pending', 'confirmed'].includes(booking.status) && (
                   <Button 
-                    onClick={onCancel} 
+                    onClick={handleCancelBooking} 
                     variant="destructive"
                     disabled={isSubmitting}
                   >
@@ -229,18 +418,18 @@ export function BookingDetails({
           {activeTab === 'edit' && (
             <BookingEditForm 
               booking={booking}
-              onSave={onEdit}
+              onSave={handleEditBooking}
               onCancel={handleBackToDetails}
-              isSubmitting={isSubmitting}
+              isSubmitting={localSubmitting}
             />
           )}
           
           {activeTab === 'driver' && (
             <DriverAssignment 
               booking={booking}
-              onAssign={onAssignDriver}
+              onAssign={handleAssignDriver}
               onClose={handleBackToDetails}
-              isSubmitting={isSubmitting}
+              isSubmitting={localSubmitting}
             />
           )}
           
@@ -268,8 +457,8 @@ export function BookingDetails({
             <BookingInvoice 
               booking={booking}
               onClose={handleBackToDetails}
-              onGenerate={onGenerateInvoice}
-              isGenerating={isSubmitting}
+              onGenerate={handleGenerateInvoice}
+              isGenerating={localSubmitting}
             />
           )}
         </CardContent>
