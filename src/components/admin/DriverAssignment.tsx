@@ -31,24 +31,18 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
     { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" }
   ];
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDriverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setDriverData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setDriverData({ ...driverData, [name]: value });
     
-    // Clear error when field is edited
+    // Clear error when field is updated
     if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+      setErrors({ ...errors, [name]: '' });
     }
   };
 
-  const selectExistingDriver = (driverId: string) => {
-    const selectedDriver = availableDrivers.find(d => d.id === parseInt(driverId));
+  const handleSelectDriver = (driverId: string) => {
+    const selectedDriver = availableDrivers.find(d => d.id.toString() === driverId);
     if (selectedDriver) {
       setDriverData({
         driverName: selectedDriver.name,
@@ -58,20 +52,20 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
     }
   };
 
-  const validateForm = () => {
+  const validate = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!driverData.driverName.trim()) {
+    if (!driverData.driverName) {
       newErrors.driverName = 'Driver name is required';
     }
     
-    if (!driverData.driverPhone.trim()) {
-      newErrors.driverPhone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(driverData.driverPhone.replace(/\D/g, ''))) {
-      newErrors.driverPhone = 'Invalid phone number format';
+    if (!driverData.driverPhone) {
+      newErrors.driverPhone = 'Driver phone is required';
+    } else if (!/^\d{10}$/.test(driverData.driverPhone.replace(/\s+/g, ''))) {
+      newErrors.driverPhone = 'Enter a valid 10-digit phone number';
     }
     
-    if (!driverData.vehicleNumber.trim()) {
+    if (!driverData.vehicleNumber) {
       newErrors.vehicleNumber = 'Vehicle number is required';
     }
     
@@ -82,136 +76,136 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    if (!validate()) {
       return;
     }
     
-    await onAssign(driverData);
+    try {
+      await onAssign(driverData);
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Assign Driver for Booking #{booking.bookingNumber}</h3>
-        <div className="bg-gray-50 p-4 rounded-md mb-6">
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <span className="font-medium">Trip:</span> {booking.tripType} ({booking.tripMode})
-            </div>
-            <div>
-              <span className="font-medium">Vehicle:</span> {booking.cabType}
-            </div>
-            <div>
-              <span className="font-medium">Date:</span> {new Date(booking.pickupDate).toLocaleDateString()}
-            </div>
-            <div>
-              <span className="font-medium">Time:</span> {new Date(booking.pickupDate).toLocaleTimeString()}
-            </div>
-            <div className="col-span-2">
-              <span className="font-medium">Pickup:</span> {booking.pickupLocation}
-            </div>
-            {booking.dropLocation && (
-              <div className="col-span-2">
-                <span className="font-medium">Drop:</span> {booking.dropLocation}
-              </div>
-            )}
-          </div>
+    <form onSubmit={handleSubmit}>
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-medium">Driver Assignment</h3>
+          <p className="text-sm text-gray-500">
+            Assign a driver to booking #{booking.bookingNumber}
+          </p>
         </div>
-      </div>
-
-      <div className="flex gap-4 pb-2">
-        <Button 
-          type="button" 
-          variant={driverType === 'existing' ? "default" : "outline"} 
-          onClick={() => setDriverType('existing')}
-          className="flex-1"
-        >
-          Select Existing Driver
-        </Button>
-        <Button 
-          type="button" 
-          variant={driverType === 'new' ? "default" : "outline"} 
-          onClick={() => setDriverType('new')}
-          className="flex-1"
-        >
-          Add New Driver
-        </Button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {driverType === 'existing' && (
-          <div className="space-y-4">
-            <Label htmlFor="driverId">Select Driver</Label>
-            <Select onValueChange={selectExistingDriver}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a driver" />
+        
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="driverType">Driver Selection</Label>
+            <Select 
+              value={driverType} 
+              onValueChange={setDriverType}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select driver type" />
               </SelectTrigger>
               <SelectContent>
-                {availableDrivers.map(driver => (
-                  <SelectItem key={driver.id} value={driver.id.toString()}>
-                    {driver.name} - {driver.vehicleNumber}
-                  </SelectItem>
-                ))}
+                <SelectItem value="new">Add New Driver</SelectItem>
+                <SelectItem value="existing">Select Existing Driver</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        )}
-
-        <div className="space-y-4">
+          
+          {driverType === 'existing' && (
+            <div>
+              <Label htmlFor="existingDriver">Select Driver</Label>
+              <Select onValueChange={handleSelectDriver}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDrivers.map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id.toString()}>
+                      {driver.name} - {driver.vehicleNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
           <div>
-            <Label htmlFor="driverName">Driver Name</Label>
+            <Label htmlFor="driverName">
+              Driver Name
+              <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="driverName"
               name="driverName"
+              placeholder="Enter driver's name"
               value={driverData.driverName}
-              onChange={handleInputChange}
-              disabled={isSubmitting}
+              onChange={handleDriverChange}
+              className={errors.driverName ? "border-red-500" : ""}
             />
             {errors.driverName && (
-              <p className="text-sm text-red-500">{errors.driverName}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.driverName}</p>
             )}
           </div>
-
+          
           <div>
-            <Label htmlFor="driverPhone">Driver Phone</Label>
+            <Label htmlFor="driverPhone">
+              Driver Phone
+              <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="driverPhone"
               name="driverPhone"
+              placeholder="Enter driver's phone"
               value={driverData.driverPhone}
-              onChange={handleInputChange}
-              disabled={isSubmitting}
+              onChange={handleDriverChange}
+              className={errors.driverPhone ? "border-red-500" : ""}
             />
             {errors.driverPhone && (
-              <p className="text-sm text-red-500">{errors.driverPhone}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.driverPhone}</p>
             )}
           </div>
-
+          
           <div>
-            <Label htmlFor="vehicleNumber">Vehicle Number</Label>
+            <Label htmlFor="vehicleNumber">
+              Vehicle Number
+              <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="vehicleNumber"
               name="vehicleNumber"
+              placeholder="Enter vehicle number"
               value={driverData.vehicleNumber}
-              onChange={handleInputChange}
-              disabled={isSubmitting}
+              onChange={handleDriverChange}
+              className={errors.vehicleNumber ? "border-red-500" : ""}
             />
             {errors.vehicleNumber && (
-              <p className="text-sm text-red-500">{errors.vehicleNumber}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.vehicleNumber}</p>
             )}
           </div>
         </div>
-
+        
         <Separator />
-
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+        
+        <div className="flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button 
+            type="submit"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Assigning..." : "Assign Driver"}
           </Button>
         </div>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

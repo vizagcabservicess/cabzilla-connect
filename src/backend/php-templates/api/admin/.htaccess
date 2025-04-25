@@ -30,20 +30,24 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# Test endpoint for API connectivity verification
-RewriteRule ^test-booking-api$ test-booking-api.php [L,QSA]
+# Direct access to PHP files - CRITICAL NEW RULE
+<Files ~ "\.php$">
+    Order Allow,Deny
+    Allow from all
+</Files>
 
-# NEW CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT
-RewriteRule ^assign-driver$ assign-driver.php [L,QSA]
-RewriteRule ^cancel-booking$ cancel-booking.php [L,QSA]
-RewriteRule ^update-booking$ update-booking.php [L,QSA]
-RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
+# Test endpoint for API connectivity verification
+RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
+
+# NEW CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
+RewriteRule ^assign-driver\.php$ assign-driver.php [L,QSA]
+RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,QSA]
+RewriteRule ^update-booking\.php$ update-booking.php [L,QSA]
+RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
 
 # CRITICAL: Explicitly define booking endpoints with highest priority
-RewriteRule ^booking$ booking.php [L,QSA]
+RewriteRule ^booking\.php$ booking.php [L,QSA]
 RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,QSA]
-RewriteRule ^bookings$ booking.php [L,QSA]
-RewriteRule ^bookings/([0-9]+)$ booking.php?id=$1 [L,QSA]
 
 # Critical: Don't apply rewriting to actual PHP files
 RewriteCond %{REQUEST_FILENAME} -f

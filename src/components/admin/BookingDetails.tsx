@@ -37,7 +37,7 @@ export function BookingDetails({
   const { toast } = useToast();
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
-  const currentDomain = window.location.origin;
+  const baseUrl = "https://vizagup.com";
 
   const handleTabChange = (value: string) => {
     console.log('Tab changed to:', value);
@@ -59,6 +59,7 @@ export function BookingDetails({
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(body),
       });
@@ -97,7 +98,7 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Assigning driver:', driverData);
       
-      const url = `${currentDomain}/api/admin/assign-driver`;
+      const url = `${baseUrl}/api/admin/assign-driver.php`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id,
@@ -131,7 +132,7 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Cancelling booking:', booking.id);
       
-      const url = `${currentDomain}/api/admin/cancel-booking`;
+      const url = `${baseUrl}/api/admin/cancel-booking.php`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id
@@ -163,7 +164,7 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Updating booking:', { bookingId: booking.id, ...updatedData });
       
-      const url = `${currentDomain}/api/admin/update-booking`;
+      const url = `${baseUrl}/api/admin/update-booking.php`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id,
@@ -197,7 +198,7 @@ export function BookingDetails({
       setLocalSubmitting(true);
       console.log('Generating invoice for booking:', booking.id);
       
-      const url = `${currentDomain}/api/admin/generate-invoice`;
+      const url = `${baseUrl}/api/admin/generate-invoice.php`;
       
       const result = await safeFetch(url, 'POST', {
         bookingId: booking.id
@@ -209,7 +210,7 @@ export function BookingDetails({
           description: "Invoice generated successfully",
         });
         
-        const invoiceUrl = `${currentDomain}/api/download-invoice?id=${booking.id}`;
+        const invoiceUrl = `${baseUrl}/api/download-invoice.php?id=${booking.id}`;
         window.open(invoiceUrl, '_blank');
         
         await onGenerateInvoice();
@@ -426,7 +427,7 @@ export function BookingDetails({
           {activeTab === 'status' && (
             <div>
               <BookingStatusFlow 
-                currentStatus={booking.status}
+                currentStatus={booking.status as BookingStatus}
                 onStatusChange={onStatusChange}
                 isAdmin={true}
                 isUpdating={isSubmitting}
