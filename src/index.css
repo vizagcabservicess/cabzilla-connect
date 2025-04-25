@@ -78,6 +78,7 @@
     @apply antialiased;
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    @apply overflow-x-hidden;
   }
 
   body {
@@ -115,6 +116,19 @@
     -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
     mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
   }
+  
+  /* Mobile optimized components */
+  .mobile-tab {
+    @apply flex-1 text-center py-3 px-1 text-sm sm:text-base font-medium border-b-2 transition-colors duration-200;
+  }
+  
+  .mobile-input-group {
+    @apply mb-4 sm:mb-5;
+  }
+  
+  .mobile-button {
+    @apply w-full flex items-center justify-center text-white rounded-md py-3.5;
+  }
 }
 
 /* Animation utilities */
@@ -142,4 +156,32 @@
 /* Glass effect */
 .glass-effect {
   @apply bg-white bg-opacity-80 backdrop-blur-md border border-white border-opacity-40;
+}
+
+/* Mobile optimized layout */
+@media (max-width: 640px) {
+  .container {
+    @apply px-4;
+  }
+  
+  .mobile-card {
+    @apply rounded-none border-x-0 shadow-none my-0;
+  }
+  
+  .mobile-select-group {
+    @apply grid grid-cols-2 gap-2;
+  }
+  
+  .mobile-full-width {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+  }
+  
+  .mobile-sticky-bottom {
+    @apply fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] p-3 z-10;
+  }
+  
+  .mobile-bottom-padding {
+    @apply pb-20;
+  }
 }

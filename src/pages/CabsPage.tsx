@@ -31,12 +31,14 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { Check, MapPin } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const CabsPage = () => {
   const navigate = useNavigate();
   const { tripType: urlTripType } = useParams<{ tripType?: string }>();
   const { toast } = useToast();
   const { isLoaded } = useGoogleMaps();
+  const isMobile = useIsMobile();
   
   const getInitialFromSession = (key: string, defaultValue: any) => {
     try {
@@ -69,7 +71,7 @@ const CabsPage = () => {
   
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
-  
+
   useEffect(() => {
     if (pickup) sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
     if (dropoff) sessionStorage.setItem('dropLocation', JSON.stringify(dropoff));
@@ -255,7 +257,6 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
   
-  // When trip type changes to local, reset any cached distance from previous trip types
   useEffect(() => {
     if (tripType === "local") {
       const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
@@ -281,7 +282,6 @@ const CabsPage = () => {
             returnDate
           });
           
-          // CRITICAL FIX: Store the fare in localStorage for persistence between components
           try {
             const localStorageKey = `fare_${tripType}_${selectedCab.id.toLowerCase()}`;
             localStorage.setItem(localStorageKey, fare.toString());
@@ -292,7 +292,6 @@ const CabsPage = () => {
           
           setTotalPrice(fare);
           
-          // CRITICAL FIX: Dispatch event to synchronize fare across components
           try {
             window.dispatchEvent(new CustomEvent('fare-calculated', {
               detail: {
@@ -326,7 +325,6 @@ const CabsPage = () => {
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
-      // Reset to exactly the package kilometers
       setDistance(selectedPackage.kilometers);
       const estimatedTime = selectedPackage.hours * 60;
       setTravelTime(estimatedTime);
@@ -429,7 +427,6 @@ const CabsPage = () => {
         duration: 3000,
       });
       
-      // Fix the navigation to match the route in router.tsx
       navigate(`/booking-confirmation`);
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -465,11 +462,14 @@ const CabsPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-4 sm:py-6">
         <div className="max-w-5xl mx-auto">
           {!showGuestDetailsForm ? (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="p-4">
+            <div className={cn(
+              "bg-white rounded-lg shadow-md overflow-hidden",
+              isMobile && "mobile-card"
+            )}>
+              <div className="p-3 sm:p-4">
                 <TabTripSelector 
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
@@ -478,47 +478,58 @@ const CabsPage = () => {
                 />
               </div>
 
-              <div className="p-6">
-                <LocationInput 
-                  label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
-                  placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
-                  value={pickup ? convertToApiLocation(pickup) : undefined}
-                  onLocationChange={handlePickupLocationChange}
-                  isPickupLocation={true}
-                  isAirportTransfer={tripType === "airport"}
-                  readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
-                />
-                
-                <LocationInput 
-                  label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
-                  placeholder="Enter destination location" 
-                  value={dropoff ? convertToApiLocation(dropoff) : undefined}
-                  onLocationChange={handleDropoffLocationChange}
-                  isPickupLocation={false}
-                  isAirportTransfer={tripType === "airport"}
-                  readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
-                />
-
-                <DateTimePicker 
-                  label="PICKUP DATE & TIME" 
-                  date={pickupDate} 
-                  onDateChange={setPickupDate} 
-                  minDate={new Date()} 
-                />
-
-                {tripType === "outstation" && tripMode === "round-trip" && (
-                  <DateTimePicker 
-                    label="RETURN DATE & TIME" 
-                    date={returnDate} 
-                    onDateChange={setReturnDate} 
-                    minDate={pickupDate} 
+              <div className="p-4 sm:p-6">
+                <div className="space-y-4">
+                  <LocationInput 
+                    label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
+                    placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
+                    value={pickup ? convertToApiLocation(pickup) : undefined}
+                    onLocationChange={handlePickupLocationChange}
+                    isPickupLocation={true}
+                    isAirportTransfer={tripType === "airport"}
+                    readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
+                    className="mobile-input-group"
                   />
-                )}
+                  
+                  <LocationInput 
+                    label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
+                    placeholder="Enter destination location" 
+                    value={dropoff ? convertToApiLocation(dropoff) : undefined}
+                    onLocationChange={handleDropoffLocationChange}
+                    isPickupLocation={false}
+                    isAirportTransfer={tripType === "airport"}
+                    readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
+                    className="mobile-input-group"
+                  />
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  <DateTimePicker 
+                    label="PICKUP DATE & TIME" 
+                    date={pickupDate} 
+                    onDateChange={setPickupDate} 
+                    minDate={new Date()} 
+                    className="mobile-input-group"
+                  />
+
+                  {tripType === "outstation" && tripMode === "round-trip" && (
+                    <DateTimePicker 
+                      label="RETURN DATE & TIME" 
+                      date={returnDate} 
+                      onDateChange={setReturnDate} 
+                      minDate={pickupDate} 
+                      className="mobile-input-group"
+                    />
+                  )}
+                </div>
 
                 {tripType === "local" && (
-                  <div className="mt-4">
+                  <div className="mt-4 mobile-input-group">
                     <label className="block text-sm font-medium text-gray-700 mb-2">SELECT PACKAGE</label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className={cn(
+                      "grid gap-3",
+                      isMobile ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4"
+                    )}>
                       {hourlyPackages.map((pkg) => (
                         <button
                           key={pkg.id}
@@ -574,22 +585,39 @@ const CabsPage = () => {
                   </div>
                 )}
 
-                <Button 
-                  onClick={handleSearch} 
-                  disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
-                >
-                  {isCalculatingDistance ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Please wait...
-                    </div>
-                  ) : "BOOK NOW"}
-                </Button>
+                {isMobile ? (
+                  <div className="mobile-sticky-bottom">
+                    <Button 
+                      onClick={handleSearch} 
+                      disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
+                      className="mobile-button bg-blue-600"
+                    >
+                      {isCalculatingDistance ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Please wait...
+                        </div>
+                      ) : "BOOK NOW"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button 
+                    onClick={handleSearch} 
+                    disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
+                  >
+                    {isCalculatingDistance ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Please wait...
+                      </div>
+                    ) : "BOOK NOW"}
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
@@ -615,9 +643,17 @@ const CabsPage = () => {
             </div>
           )}
         </div>
+        
+        {isMobile && !showGuestDetailsForm && 
+          <div className="mobile-bottom-padding"></div>
+        }
       </div>
     </div>
   );
+};
+
+const cn = (...classes: (string | boolean | undefined)[]) => {
+  return classes.filter(Boolean).join(' ');
 };
 
 export default CabsPage;

@@ -25,6 +25,7 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -43,6 +44,7 @@ export function Hero() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   
   const loadFromSessionStorage = () => {
     try {
@@ -412,13 +414,13 @@ export function Hero() {
   };
 
   return (
-    <section className="min-h-screen bg-gradient-to-b from-cabBlue-50 to-white py-16 overflow-hidden">
+    <section className="min-h-screen bg-gradient-to-b from-cabBlue-50 to-white py-6 sm:py-16 overflow-hidden">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h5 className="text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3">
+        <div className="text-center mb-6 sm:mb-8">
+          <h5 className="text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-2 sm:mb-3">
             Book a Cab in Minutes
           </h5>
-          <h1 className="text-4xl md:text-5xl font-bold text-cabGray-800 mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-cabGray-800 mb-2 sm:mb-4">
             Your Journey, Our Priority
           </h1>
         </div>
@@ -426,7 +428,7 @@ export function Hero() {
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white rounded-xl shadow-card border p-8">
+              <div className={`bg-white rounded-xl shadow-card border ${isMobile ? "p-4" : "p-8"}`}>
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
@@ -434,7 +436,7 @@ export function Hero() {
                   onTripModeChange={setTripMode}
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mt-6">
                   <LocationInput
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
@@ -500,11 +502,11 @@ export function Hero() {
                   </div>
                 )}
 
-                <div className="mt-8 flex justify-end">
+                <div className={`mt-8 ${isMobile ? "" : "flex justify-end"}`}>
                   <Button
                     onClick={handleContinue}
                     disabled={!isFormValid || isCalculatingDistance}
-                    className={`px-10 py-6 rounded-md ${
+                    className={`${isMobile ? "w-full" : "px-10"} py-4 sm:py-6 rounded-md ${
                       isFormValid && !isCalculatingDistance
                         ? "bg-blue-500 text-white"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -517,16 +519,16 @@ export function Hero() {
             )}
 
             {currentStep === 2 && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-white rounded-xl shadow-card p-6">
-                    <div className="flex items-center justify-between mb-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mt-6 sm:mt-8">
+                <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+                  <div className="bg-white rounded-xl shadow-card p-4 sm:p-6">
+                    <div className="flex items-center justify-between mb-4 sm:mb-6">
                       <h3 className="text-xl font-semibold">Trip Details</h3>
                       <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
                         Edit
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-4 sm:gap-x-6">
                       <div>
                         <p className="text-xs">PICKUP LOCATION</p>
                         <p className="font-medium">{pickupLocation?.name}</p>
@@ -545,8 +547,8 @@ export function Hero() {
                           </p>
                         </div>
                       )}
-                      <div className="col-span-2 border-t pt-3 mt-2 flex justify-between">
-                        <div>
+                      <div className="col-span-2 border-t pt-3 mt-2 flex justify-between flex-wrap">
+                        <div className="mb-2 sm:mb-0">
                           <p className="text-xs">PICKUP DATE & TIME</p>
                           <p className="font-medium">{pickupDate?.toLocaleString()}</p>
                         </div>
@@ -598,21 +600,37 @@ export function Hero() {
                     />
                   </div>
                   
-                  <Button 
-                    onClick={handleBookNow}
-                    className="w-full mt-4 py-6 text-base"
-                    disabled={!isFormValid || !selectedCab}
-                  >
-                    Book Now
-                  </Button>
+                  {isMobile ? (
+                    <div className="fixed bottom-0 left-0 right-0 p-3 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-10">
+                      <Button 
+                        onClick={handleBookNow}
+                        className="w-full py-4 text-base"
+                        disabled={!isFormValid || !selectedCab}
+                      >
+                        Book Now
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={handleBookNow}
+                      className="w-full mt-4 py-6 text-base"
+                      disabled={!isFormValid || !selectedCab}
+                    >
+                      Book Now
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
+            
+            {isMobile && currentStep === 2 && (
+              <div className="pb-20"></div> // Bottom padding for fixed button
+            )}
           </>
         ) : (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
+              <div className="bg-white rounded-xl shadow-card border p-4 sm:p-6 mb-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-semibold">Complete Your Booking</h3>
                 </div>

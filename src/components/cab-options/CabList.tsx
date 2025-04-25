@@ -4,6 +4,7 @@ import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { TripType } from '@/lib/tripTypes';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -15,7 +16,7 @@ interface CabListProps {
   tripMode?: string;
   distance?: number;
   packageType?: string;
-  pickupDate?: Date; // Add pickupDate prop
+  pickupDate?: Date;
 }
 
 export const CabList: React.FC<CabListProps> = ({
@@ -28,12 +29,13 @@ export const CabList: React.FC<CabListProps> = ({
   tripMode = 'one-way',
   distance = 0,
   packageType,
-  pickupDate // Add pickupDate to destructuring
+  pickupDate
 }) => {
   console.log(`CabList: Rendering with package ${packageType}`);
   
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
+  const isMobile = useIsMobile();
   
   const normalizeVehicleId = (id: string): string => {
     return id.trim()
@@ -98,70 +100,72 @@ export const CabList: React.FC<CabListProps> = ({
           <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
         </div>
       ) : (
-        cabTypes.map((cab) => {
-          const normalizedId = normalizeVehicleId(cab.id);
-          const { fareData, isLoading, error } = useFare(
-            normalizedId,
-            tripType,
-            distance,
-            packageType,
-            pickupDate // Pass pickupDate to useFare hook
-          );
+        <div className={isMobile ? "grid grid-cols-1 gap-3" : "space-y-3"}>
+          {cabTypes.map((cab) => {
+            const normalizedId = normalizeVehicleId(cab.id);
+            const { fareData, isLoading, error } = useFare(
+              normalizedId,
+              tripType,
+              distance,
+              packageType,
+              pickupDate
+            );
 
-          let fare = 0;
-          let fareText = 'Price unavailable';
-          let fareSource = 'unknown';
-          
-          if (isLoading) {
-            fareText = 'Calculating...';
-          } else if (error) {
-            console.error(`Fare error for ${cab.name}:`, error);
-            fareText = 'Error fetching price';
-          } else if (fareData) {
-            fare = fareData.totalPrice;
-            fareSource = fareData.source || 'unknown';
+            let fare = 0;
+            let fareText = 'Price unavailable';
+            let fareSource = 'unknown';
             
-            if (fareSource === 'database') {
-              fareText = `₹${fare.toLocaleString()} (verified)`;
-            } else if (fareSource === 'stored') {
-              fareText = `₹${fare.toLocaleString()} (saved)`;
-            } else if (fareSource === 'default') {
-              fareText = `₹${fare.toLocaleString()} (standard)`;
-            } else {
-              fareText = `₹${fare.toLocaleString()}`;
+            if (isLoading) {
+              fareText = 'Calculating...';
+            } else if (error) {
+              console.error(`Fare error for ${cab.name}:`, error);
+              fareText = 'Error fetching price';
+            } else if (fareData) {
+              fare = fareData.totalPrice;
+              fareSource = fareData.source || 'unknown';
+              
+              if (fareSource === 'database') {
+                fareText = `₹${fare.toLocaleString()} (verified)`;
+              } else if (fareSource === 'stored') {
+                fareText = `₹${fare.toLocaleString()} (saved)`;
+              } else if (fareSource === 'default') {
+                fareText = `₹${fare.toLocaleString()} (standard)`;
+              } else {
+                fareText = `₹${fare.toLocaleString()}`;
+              }
+              
+              console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
             }
-            
-            console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
-          }
 
-          let tripTypeLabel = "Trip";
-          if (tripType === 'local') {
-            tripTypeLabel = "Local Package";
-          } else if (tripType === 'airport') {
-            tripTypeLabel = "Airport Transfer";
-          } else if (tripType === 'outstation') {
-            tripTypeLabel = tripMode === 'round-trip' ? "Outstation Round Trip" : "Outstation One Way";
-          }
+            let tripTypeLabel = "Trip";
+            if (tripType === 'local') {
+              tripTypeLabel = "Local Package";
+            } else if (tripType === 'airport') {
+              tripTypeLabel = "Airport Transfer";
+            } else if (tripType === 'outstation') {
+              tripTypeLabel = tripMode === 'round-trip' ? "Outstation Round Trip" : "Outstation One Way";
+            }
 
-          return (
-            <div 
-              key={`${cab.id}-${refreshKey}`}
-              className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
-            >
-              <CabOptionCard 
-                cab={cab}
-                fare={fare}
-                isSelected={selectedCabId === cab.id}
-                onSelect={() => enhancedSelectCab(cab, fare, fareSource)}
-                isCalculating={isLoading}
-                fareDetails={error ? "Error fetching fare" : fareText}
-                tripType={tripType}
-                tripMode={tripMode}
-                fareSource={fareSource}
-              />
-            </div>
-          );
-        })
+            return (
+              <div 
+                key={`${cab.id}-${refreshKey}`}
+                className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+              >
+                <CabOptionCard 
+                  cab={cab}
+                  fare={fare}
+                  isSelected={selectedCabId === cab.id}
+                  onSelect={() => enhancedSelectCab(cab, fare, fareSource)}
+                  isCalculating={isLoading}
+                  fareDetails={error ? "Error fetching fare" : fareText}
+                  tripType={tripType}
+                  tripMode={tripMode}
+                  fareSource={fareSource}
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
