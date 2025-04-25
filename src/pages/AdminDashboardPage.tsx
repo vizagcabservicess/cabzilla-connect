@@ -196,7 +196,7 @@ export default function AdminDashboardPage() {
           
           <TabsContent value="fares">
             <Tabs defaultValue="outstation" className="w-full">
-              <TabsList className="mb-4 w-full justify-start">
+              <TabsList className="mb-4 w-full justify-start gap-1">
                 <TabsTrigger value="outstation">Outstation</TabsTrigger>
                 <TabsTrigger value="local">Local Package</TabsTrigger>
                 <TabsTrigger value="airport">Airport</TabsTrigger>

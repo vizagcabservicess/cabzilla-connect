@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,13 @@ export function BookingDetails({
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState<string>('details');
 
+  // Handle button clicks to change tabs
+  const handleEditClick = () => setActiveTab('edit');
+  const handleDriverClick = () => setActiveTab('driver');
+  const handleStatusClick = () => setActiveTab('status');
+  const handleInvoiceClick = () => setActiveTab('invoice');
+  const handleBackToDetails = () => setActiveTab('details');
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
@@ -49,19 +57,20 @@ export function BookingDetails({
             <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 booking-details-tabs">
             <TabsList>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="driver">Driver</TabsTrigger>
-              <TabsTrigger value="status">Status Flow</TabsTrigger>
-              <TabsTrigger value="invoice">Invoice</TabsTrigger>
+              <TabsTrigger value="details" id="details-tab">Details</TabsTrigger>
+              <TabsTrigger value="edit" id="edit-tab">Edit</TabsTrigger>
+              <TabsTrigger value="driver" id="driver-tab">Driver</TabsTrigger>
+              <TabsTrigger value="status" id="status-tab">Status Flow</TabsTrigger>
+              <TabsTrigger value="invoice" id="invoice-tab">Invoice</TabsTrigger>
             </TabsList>
           </Tabs>
         </CardHeader>
         
         <CardContent className="pt-6">
-          <div className="space-y-6">
+          <TabsContent value="details">
+            <div className="space-y-6">
               {/* Customer Information */}
               <section className="space-y-2">
                 <h3 className="font-semibold">Customer Information</h3>
@@ -173,13 +182,13 @@ export function BookingDetails({
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 pt-4 border-t">
                 <Button 
-                  onClick={() => setActiveTab('edit')} 
+                  onClick={handleEditClick} 
                   disabled={!(['pending', 'confirmed'].includes(booking.status)) || isSubmitting}
                 >
                   Edit Booking
                 </Button>
                 <Button 
-                  onClick={() => setActiveTab('driver')} 
+                  onClick={handleDriverClick}
                   variant="outline" 
                   disabled={booking.status === 'cancelled' || isSubmitting}
                 >
@@ -195,7 +204,7 @@ export function BookingDetails({
                   </Button>
                 )}
                 <Button 
-                  onClick={() => setActiveTab('invoice')} 
+                  onClick={handleInvoiceClick}
                   variant="outline"
                   disabled={isSubmitting}
                 >
@@ -210,12 +219,13 @@ export function BookingDetails({
                 </Button>
               </div>
             </div>
+          </TabsContent>
 
           <TabsContent value="edit">
             <BookingEditForm 
               booking={booking}
               onSave={onEdit}
-              onCancel={() => setActiveTab('details')}
+              onCancel={handleBackToDetails}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
@@ -224,7 +234,7 @@ export function BookingDetails({
             <DriverAssignment 
               booking={booking}
               onAssign={onAssignDriver}
-              onClose={() => setActiveTab('details')}
+              onClose={handleBackToDetails}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
@@ -239,7 +249,7 @@ export function BookingDetails({
             <div className="flex justify-end mt-6">
               <Button 
                 variant="outline" 
-                onClick={() => setActiveTab('details')}
+                onClick={handleBackToDetails}
                 disabled={isSubmitting}
               >
                 Back to Details
@@ -250,7 +260,7 @@ export function BookingDetails({
           <TabsContent value="invoice">
             <BookingInvoice 
               booking={booking}
-              onClose={() => setActiveTab('details')}
+              onClose={handleBackToDetails}
               onGenerate={onGenerateInvoice}
               isGenerating={isSubmitting}
             />
