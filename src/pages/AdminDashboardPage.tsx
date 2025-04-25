@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
@@ -177,8 +178,8 @@ export default function AdminDashboardPage() {
           </TabsContent>
           
           <TabsContent value="vehicles">
-            <Tabs defaultValue="management">
-              <TabsList className="mb-4">
+            <Tabs defaultValue="management" className="w-full">
+              <TabsList className="mb-4 w-full justify-start">
                 <TabsTrigger value="management">Vehicle Types</TabsTrigger>
                 <TabsTrigger value="pricing">Vehicle Pricing</TabsTrigger>
               </TabsList>
@@ -194,8 +195,8 @@ export default function AdminDashboardPage() {
           </TabsContent>
           
           <TabsContent value="fares">
-            <Tabs defaultValue="outstation">
-              <TabsList className="mb-4">
+            <Tabs defaultValue="outstation" className="w-full">
+              <TabsList className="mb-4 w-full justify-start border-b">
                 <TabsTrigger value="outstation">Outstation</TabsTrigger>
                 <TabsTrigger value="local">Local Package</TabsTrigger>
                 <TabsTrigger value="airport">Airport</TabsTrigger>
@@ -239,6 +240,21 @@ export default function AdminDashboardPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Add global CSS fixes */}
+      <style jsx global>{`
+        .TabsList {
+          width: 100%;
+          justify-content: flex-start;
+          overflow-x: auto;
+        }
+        
+        /* Fix tabs spacing in fares section */
+        [value="fares"] .TabsList {
+          border-bottom: 1px solid #e2e8f0;
+          margin-bottom: 1rem;
+        }
+      `}</style>
     </div>
   );
 }

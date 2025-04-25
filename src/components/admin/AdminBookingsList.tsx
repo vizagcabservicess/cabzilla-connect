@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -22,8 +23,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
-import { Booking } from '@/types/api';
-import { AlertCircle, MapPin, Phone, Mail, CheckCircle, XCircle, MoreHorizontal, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Booking, BookingStatus } from '@/types/api';
+import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -36,6 +37,7 @@ import {
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetails } from './BookingDetails';
+import { getStatusColor } from '@/utils/bookingUtils';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -52,6 +54,7 @@ export function AdminBookingsList() {
   const [responseDebug, setResponseDebug] = useState<string | null>(null);
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const fetchBookings = async () => {
     try {
@@ -318,35 +321,147 @@ export function AdminBookingsList() {
     setSelectedBooking(null);
   };
 
-  const handleEditBooking = (bookingId: number) => {
-    navigate(`/admin/booking/${bookingId}/edit`);
-  };
-
-  const handleAssignDriver = async (bookingId: number) => {
-    uiToast({
-      description: "Driver assignment functionality will be available shortly."
-    });
-  };
-
-  const handleCancelBooking = async (bookingId: number) => {
+  const handleEditBooking = async (updatedData: Partial<Booking>) => {
+    if (!selectedBooking) return;
+    
+    setIsSubmitting(true);
     try {
-      // Update booking status to cancelled
-      await bookingAPI.updateBooking(bookingId, { status: 'cancelled' });
+      const bookingId = selectedBooking.id;
+      const result = await bookingAPI.updateBooking(bookingId, updatedData);
       
-      // Refresh the bookings list
-      fetchBookings();
+      // Update the selected booking with new data
+      setSelectedBooking({
+        ...selectedBooking,
+        ...updatedData
+      });
       
-      // Close the details modal
-      setSelectedBooking(null);
+      // Also update in the bookings list
+      const updatedBookings = bookings.map(booking => 
+        booking.id === bookingId ? { ...booking, ...updatedData } : booking
+      );
+      setBookings(updatedBookings);
+      applyFilters(updatedBookings, searchTerm, statusFilter);
+      
+      toast.success("Booking updated successfully");
+      return result;
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      toast.error("Failed to update booking");
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAssignDriver = async (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => {
+    if (!selectedBooking) return;
+    
+    setIsSubmitting(true);
+    try {
+      const bookingId = selectedBooking.id;
+      const updatedData = {
+        ...driverData,
+        status: 'assigned' as BookingStatus
+      };
+      
+      const result = await bookingAPI.updateBooking(bookingId, updatedData);
+      
+      // Update the selected booking with new data
+      setSelectedBooking({
+        ...selectedBooking,
+        ...driverData,
+        status: 'assigned'
+      });
+      
+      // Also update in the bookings list
+      const updatedBookings = bookings.map(booking => 
+        booking.id === bookingId ? { 
+          ...booking, 
+          ...driverData,
+          status: 'assigned' 
+        } : booking
+      );
+      setBookings(updatedBookings);
+      applyFilters(updatedBookings, searchTerm, statusFilter);
+      
+      toast.success("Driver assigned successfully");
+      return result;
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      toast.error("Failed to assign driver");
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    if (!selectedBooking) return;
+    
+    setIsSubmitting(true);
+    try {
+      const bookingId = selectedBooking.id;
+      await bookingAPI.updateBooking(bookingId, { status: 'cancelled' as BookingStatus });
+      
+      // Update the selected booking
+      setSelectedBooking({
+        ...selectedBooking,
+        status: 'cancelled'
+      });
+      
+      // Update in the bookings list
+      const updatedBookings = bookings.map(booking => 
+        booking.id === bookingId ? { 
+          ...booking, 
+          status: 'cancelled' 
+        } : booking
+      );
+      setBookings(updatedBookings);
+      applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Booking cancelled successfully");
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error("Failed to cancel booking");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleGenerateInvoice = async (bookingId: number) => {
+  const handleStatusChange = async (newStatus: BookingStatus) => {
+    if (!selectedBooking) return;
+    
+    setIsSubmitting(true);
+    try {
+      const bookingId = selectedBooking.id;
+      await bookingAPI.updateBooking(bookingId, { status: newStatus });
+      
+      // Update the selected booking
+      setSelectedBooking({
+        ...selectedBooking,
+        status: newStatus
+      });
+      
+      // Update in the bookings list
+      const updatedBookings = bookings.map(booking => 
+        booking.id === bookingId ? { 
+          ...booking, 
+          status: newStatus 
+        } : booking
+      );
+      setBookings(updatedBookings);
+      applyFilters(updatedBookings, searchTerm, statusFilter);
+      
+      toast.success(`Booking status updated to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      toast.error("Failed to update booking status");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
     uiToast({
       description: "Invoice generation will be available shortly."
     });
@@ -538,6 +653,7 @@ export function AdminBookingsList() {
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
@@ -574,10 +690,11 @@ export function AdminBookingsList() {
         <BookingDetails
           booking={selectedBooking}
           onClose={handleCloseDetails}
-          onEdit={() => handleEditBooking(selectedBooking.id)}
-          onAssignDriver={() => handleAssignDriver(selectedBooking.id)}
-          onCancel={() => handleCancelBooking(selectedBooking.id)}
-          onGenerateInvoice={() => handleGenerateInvoice(selectedBooking.id)}
+          onEdit={handleEditBooking}
+          onAssignDriver={handleAssignDriver}
+          onCancel={handleCancelBooking}
+          onGenerateInvoice={handleGenerateInvoice}
+          onStatusChange={handleStatusChange}
         />
       )}
 
@@ -660,23 +777,37 @@ export function AdminBookingsList() {
                           <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/booking/${booking.id}/edit`)}>
-                            Edit Booking
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {booking.status === 'pending' && (
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedBooking(booking);
+                              handleStatusChange('confirmed');
+                            }}>
+                              Confirm Booking
+                            </DropdownMenuItem>
+                          )}
+                          {['pending', 'confirmed'].includes(booking.status) && (
                             <>
-                              <DropdownMenuItem onClick={() => handleAssignDriver(booking.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                handleViewDetails(booking);
+                                setTimeout(() => document.getElementById('driver-tab')?.click(), 100);
+                              }}>
                                 Assign Driver
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleCancelBooking(booking.id)}>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedBooking(booking);
+                                handleCancelBooking();
+                              }}>
                                 Cancel Booking
                               </DropdownMenuItem>
                             </>
                           )}
-                          {booking.status === 'confirmed' && (
-                            <DropdownMenuItem onClick={() => handleCancelBooking(booking.id)}>
-                              Cancel Booking
+                          {booking.status === 'assigned' && (
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedBooking(booking);
+                              handleStatusChange('completed');
+                            }}>
+                              Mark as Completed
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
