@@ -90,13 +90,13 @@
   /* Trip Type Tabs */
   .trip-tabs {
     @apply flex w-full mb-3 bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100;
-    @apply justify-start; /* Added for better alignment */
+    @apply justify-start items-center; /* Enhanced alignment */
   }
 
   .trip-tab {
     @apply flex-1 py-2 px-3 text-center relative cursor-pointer transition-all;
     @apply text-sm font-medium text-gray-600;
-    @apply max-w-[200px]; /* Added to prevent tabs from stretching too wide */
+    @apply max-w-[200px] min-w-[100px]; /* Control tab widths */
   }
 
   .trip-tab[data-state="active"] {
@@ -108,7 +108,7 @@
     @apply absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600;
   }
 
-  /* Enhanced Tour Package Tab Hiding */
+  /* Complete Tour Package Hiding */
   .trip-tab[data-value="tour"],
   [role="tab"][value="tour"],
   div[data-state="tour"],
@@ -129,7 +129,14 @@
   *[id*="tour-package"],
   [data-tour-package],
   .tour-section,
-  #tour-content {
+  #tour-content,
+  .tour-related,
+  [aria-controls*="tour"],
+  [data-state*="tour"],
+  div[id*="tour"],
+  section[data-tour],
+  *[tour],
+  *[data-tour] {
     @apply hidden !important;
     display: none !important;
     visibility: hidden !important;

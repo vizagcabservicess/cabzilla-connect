@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -36,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
+import { BookingDetails } from './BookingDetails';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -50,6 +50,8 @@ export function AdminBookingsList() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [apiAttempt, setApiAttempt] = useState(0);
   const [responseDebug, setResponseDebug] = useState<string | null>(null);
+  
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   
   const fetchBookings = async () => {
     try {
@@ -308,6 +310,50 @@ export function AdminBookingsList() {
     }
   };
 
+  const handleViewDetails = (booking: Booking) => {
+    setSelectedBooking(booking);
+  };
+
+  const handleCloseDetails = () => {
+    setSelectedBooking(null);
+  };
+
+  const handleEditBooking = (bookingId: number) => {
+    navigate(`/admin/booking/${bookingId}/edit`);
+  };
+
+  const handleAssignDriver = async (bookingId: number) => {
+    toast({
+      title: "Coming Soon",
+      description: "Driver assignment functionality will be available shortly.",
+    });
+  };
+
+  const handleCancelBooking = async (bookingId: number) => {
+    try {
+      // Update booking status to cancelled
+      await bookingAPI.updateBooking(bookingId, { status: 'cancelled' });
+      
+      // Refresh the bookings list
+      fetchBookings();
+      
+      // Close the details modal
+      setSelectedBooking(null);
+      
+      toast.success("Booking cancelled successfully");
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      toast.error("Failed to cancel booking");
+    }
+  };
+
+  const handleGenerateInvoice = async (bookingId: number) => {
+    toast({
+      title: "Coming Soon",
+      description: "Invoice generation will be available shortly.",
+    });
+  };
+
   useEffect(() => {
     fetchBookings();
   }, [retryCount]);
@@ -382,20 +428,6 @@ export function AdminBookingsList() {
     } finally {
       setIsRefreshing(false);
     }
-  };
-
-  const handleAssignDriver = (bookingId: number) => {
-    uiToast({
-      title: "Feature Coming Soon",
-      description: "Driver assignment functionality will be available soon.",
-    });
-  };
-
-  const handleCancelBooking = (bookingId: number) => {
-    uiToast({
-      title: "Feature Coming Soon",
-      description: "Booking cancellation functionality will be available soon.",
-    });
   };
 
   if (isLoading && retryCount === 0) {
@@ -540,6 +572,17 @@ export function AdminBookingsList() {
         </Alert>
       )}
 
+      {selectedBooking && (
+        <BookingDetails
+          booking={selectedBooking}
+          onClose={handleCloseDetails}
+          onEdit={() => handleEditBooking(selectedBooking.id)}
+          onAssignDriver={() => handleAssignDriver(selectedBooking.id)}
+          onCancel={() => handleCancelBooking(selectedBooking.id)}
+          onGenerateInvoice={() => handleGenerateInvoice(selectedBooking.id)}
+        />
+      )}
+
       {filteredBookings.length > 0 ? (
         <div className="rounded-md border overflow-hidden">
           <div className="overflow-x-auto">
@@ -616,7 +659,7 @@ export function AdminBookingsList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => navigate(`/admin/booking/${booking.id}`)}>
+                          <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
                             View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => navigate(`/booking/${booking.id}/edit`)}>
