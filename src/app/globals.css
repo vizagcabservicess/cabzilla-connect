@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -91,13 +92,13 @@
   display: none;
 }
 
-/* Fix tab content visibility */
+/* Fix tab content visibility - IMPORTANT FIX */
 [role="tabpanel"] {
-  display: none;
+  display: none !important;
 }
 
 [role="tabpanel"][data-state="active"] {
-  display: block;
+  display: block !important;
 }
 
 /* Fix tab triggers spacing */
@@ -121,20 +122,6 @@
   padding: 0.5rem;
   background-color: hsl(var(--muted));
   border-radius: 0.5rem;
-}
-
-/* Fix tab triggers spacing */
-.TabsTrigger {
-  position: relative;
-  padding: 0.5rem 1rem;
-  transition: all 0.2s;
-}
-
-.TabsTrigger[data-state="active"] {
-  background-color: white;
-  color: hsl(var(--foreground));
-  position: relative;
-  z-index: 1;
 }
 
 /* Fix nested tabs spacing in admin dashboard */

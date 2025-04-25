@@ -86,12 +86,14 @@ export const formatCurrency = (amount: number) => {
 export const ensureTabVisibility = (tabId: string) => {
   // Hide all panels first
   document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-    panel.setAttribute('style', 'display: none !important');
+    panel.setAttribute('data-state', 'inactive');
+    panel.setAttribute('style', 'display: none;');
   });
   
   // Show only the active panel
-  const activePanel = document.querySelector(`#${tabId}-panel`);
+  const activePanel = document.querySelector(`[role="tabpanel"][value="${tabId}"]`);
   if (activePanel) {
-    activePanel.setAttribute('style', 'display: block !important');
+    activePanel.setAttribute('data-state', 'active');
+    activePanel.setAttribute('style', 'display: block;');
   }
 };

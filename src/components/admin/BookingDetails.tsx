@@ -10,7 +10,7 @@ import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingStatusFlow } from './BookingStatusFlow';
-import { formatBookingDate, getStatusColor } from '@/utils/bookingUtils';
+import { formatBookingDate, getStatusColor, ensureTabVisibility } from '@/utils/bookingUtils';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -44,6 +44,23 @@ export function BookingDetails({
     handleTabChange('details');
   };
 
+  // Make sure tab visibility is enforced after the component updates
+  useEffect(() => {
+    // Force visibility of active tab using a slight delay to ensure DOM is updated
+    const timer = setTimeout(() => {
+      document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+        if (panel.getAttribute('data-value') === activeTab || 
+            panel.getAttribute('value') === activeTab) {
+          panel.setAttribute('data-state', 'active');
+        } else {
+          panel.setAttribute('data-state', 'inactive');
+        }
+      });
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
@@ -58,7 +75,12 @@ export function BookingDetails({
             <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
           </div>
           
-          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={handleTabChange} className="booking-details-tabs">
+          <Tabs 
+            value={activeTab} 
+            onValueChange={handleTabChange} 
+            className="booking-details-tabs"
+            defaultValue="details"
+          >
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -70,7 +92,7 @@ export function BookingDetails({
         </CardHeader>
 
         <CardContent className="pt-6">
-          <TabsContent value="details">
+          <TabsContent value="details" data-state={activeTab === 'details' ? 'active' : 'inactive'}>
             <div className="space-y-6">
               {/* Customer Information */}
               <section className="space-y-2">
@@ -222,7 +244,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
 
-          <TabsContent value="edit">
+          <TabsContent value="edit" data-state={activeTab === 'edit' ? 'active' : 'inactive'}>
             <BookingEditForm 
               booking={booking}
               onSave={onEdit}
@@ -231,7 +253,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="driver">
+          <TabsContent value="driver" data-state={activeTab === 'driver' ? 'active' : 'inactive'}>
             <DriverAssignment 
               booking={booking}
               onAssign={onAssignDriver}
@@ -240,7 +262,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="status">
+          <TabsContent value="status" data-state={activeTab === 'status' ? 'active' : 'inactive'}>
             <BookingStatusFlow 
               currentStatus={booking.status}
               onStatusChange={onStatusChange}
@@ -258,7 +280,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
           
-          <TabsContent value="invoice">
+          <TabsContent value="invoice" data-state={activeTab === 'invoice' ? 'active' : 'inactive'}>
             <BookingInvoice 
               booking={booking}
               onClose={handleBackToDetails}
