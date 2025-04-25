@@ -8,6 +8,41 @@ const Index = () => {
       <Navbar />
       <Hero />
       
+      <style jsx global>{`
+        /* Hide Tour Package Tab with maximum specificity */
+        .trip-tab[data-value="tour"],
+        .trip-tab[value="tour"],
+        [role="tab"][value="tour"],
+        div[data-state="tour"],
+        .trip-tabs [value="tour"],
+        [data-radix-collection-item][value="tour"],
+        [data-orientation="horizontal"] [value="tour"],
+        [data-state="inactive"][value="tour"],
+        [data-orientation] [data-value="tour"],
+        [data-radix-collection-item][data-value="tour"],
+        [data-state] [value="tour"],
+        button[value="tour"],
+        *[data-value="tour"],
+        .tour-packages,
+        [data-tab="tour"],
+        div[role="tabpanel"][data-value="tour"],
+        div[aria-labelledby*="tour"],
+        *[class*="tour-package"],
+        *[id*="tour-package"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          position: absolute !important;
+          width: 0 !important;
+          height: 0 !important;
+          overflow: hidden !important;
+          clip: rect(0 0 0 0) !important;
+          margin: -1px !important;
+          padding: 0 !important;
+        }
+      `}</style>
+      
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
