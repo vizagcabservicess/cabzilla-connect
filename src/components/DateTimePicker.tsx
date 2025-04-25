@@ -90,7 +90,7 @@ export function DateTimePicker({
           {label}
         </label>
       )}
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant={"outline"}
@@ -119,7 +119,7 @@ export function DateTimePicker({
             onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
-            className="rounded-t-none border-t"
+            className="rounded-t-none border-t pointer-events-auto"
           />
           <div className="p-3 border-t flex items-center gap-2">
             <Clock className="h-4 w-4 text-gray-400" />

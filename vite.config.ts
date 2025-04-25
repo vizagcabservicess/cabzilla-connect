@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     allowedHosts: [
       // Allow all domains during development
-      'all'
+      'all',
+      // Explicitly add the lovable project domain
+      '43014fa9-5dfc-4d2d-a3b8-389cd9ef25a7.lovableproject.com'
     ],
     watch: {
       usePolling: true,

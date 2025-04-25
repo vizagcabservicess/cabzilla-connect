@@ -1,3 +1,4 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
@@ -106,10 +107,16 @@
     @apply absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600;
   }
 
-  /* Hide Tour Package Tab */
+  /* Hide Tour Package Tab with higher specificity */
   .trip-tab[data-value="tour"],
   [role="tab"][value="tour"],
-  div[data-state="tour"] {
+  div[data-state="tour"],
+  .trip-tabs [value="tour"],
+  [data-radix-collection-item][value="tour"],
+  [data-orientation="horizontal"] [value="tour"],
+  [data-state="inactive"][value="tour"],
+  [data-orientation] [data-value="tour"],
+  [data-radix-collection-item][data-value="tour"] {
     @apply hidden !important;
   }
 
