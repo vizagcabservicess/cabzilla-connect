@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,69 +18,21 @@ interface BookingDetailsProps {
   onAssignDriver: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onCancel: () => Promise<void>;
   onGenerateInvoice: () => Promise<void>;
-  onStatusChange?: (newStatus: BookingStatus) => Promise<void>;
+  onStatusChange: (newStatus: BookingStatus) => Promise<void>;
+  isSubmitting: boolean;
 }
 
-export function BookingDetails({ 
-  booking, 
-  onClose, 
+export function BookingDetails({
+  booking,
+  onClose,
   onEdit,
   onAssignDriver,
   onCancel,
   onGenerateInvoice,
-  onStatusChange
+  onStatusChange,
+  isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState<string>('details');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  const handleEdit = async (updatedData: Partial<Booking>) => {
-    setIsSubmitting(true);
-    try {
-      await onEdit(updatedData);
-      setActiveTab('details');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAssignDriver = async (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => {
-    setIsSubmitting(true);
-    try {
-      await onAssignDriver(driverData);
-      setActiveTab('details');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  const handleStatusChange = async (newStatus: BookingStatus) => {
-    if (onStatusChange) {
-      setIsSubmitting(true);
-      try {
-        await onStatusChange(newStatus);
-      } finally {
-        setIsSubmitting(false);
-      }
-    }
-  };
-
-  const handleCancel = async () => {
-    setIsSubmitting(true);
-    try {
-      await onCancel();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleGenerateInvoice = async () => {
-    setIsSubmitting(true);
-    try {
-      await onGenerateInvoice();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -98,10 +49,10 @@ export function BookingDetails({
           </div>
           
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-            <TabsList>
+            <TabsList className="booking-details-tabs">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="driver">Driver</TabsTrigger>
+              <TabsTrigger value="driver" id="driver-tab">Driver</TabsTrigger>
               <TabsTrigger value="status">Status Flow</TabsTrigger>
               <TabsTrigger value="invoice">Invoice</TabsTrigger>
             </TabsList>
@@ -228,7 +179,7 @@ export function BookingDetails({
                   {booking.driverName ? 'Change Driver' : 'Assign Driver'}
                 </Button>
                 {['pending', 'confirmed'].includes(booking.status) && (
-                  <Button onClick={handleCancel} variant="destructive">
+                  <Button onClick={onCancel} variant="destructive">
                     Cancel Booking
                   </Button>
                 )}
@@ -245,8 +196,8 @@ export function BookingDetails({
           <TabsContent value="edit">
             <BookingEditForm 
               booking={booking}
-              onSave={handleEdit}
-              onCancel={() => setActiveTab('details')}
+              onSave={onEdit}
+              onCancel={onClose}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
@@ -254,35 +205,26 @@ export function BookingDetails({
           <TabsContent value="driver">
             <DriverAssignment 
               booking={booking}
-              onAssign={handleAssignDriver}
-              onClose={() => setActiveTab('details')}
+              onAssign={onAssignDriver}
+              onClose={onClose}
               isSubmitting={isSubmitting}
             />
           </TabsContent>
           
           <TabsContent value="status">
-            <div className="space-y-6 py-6">
-              <h3 className="font-semibold text-lg">Booking Status Management</h3>
-              <BookingStatusFlow 
-                currentStatus={booking.status as BookingStatus}
-                onStatusChange={handleStatusChange}
-                isAdmin={true}
-                isUpdating={isSubmitting}
-              />
-              
-              <div className="flex justify-end mt-6 pt-4 border-t">
-                <Button onClick={() => setActiveTab('details')} variant="outline">
-                  Back to Details
-                </Button>
-              </div>
-            </div>
+            <BookingStatusFlow 
+              currentStatus={booking.status}
+              onStatusChange={onStatusChange}
+              isAdmin={true}
+              isUpdating={isSubmitting}
+            />
           </TabsContent>
           
           <TabsContent value="invoice">
             <BookingInvoice 
               booking={booking}
-              onClose={() => setActiveTab('details')}
-              onGenerate={handleGenerateInvoice}
+              onClose={onClose}
+              onGenerate={onGenerateInvoice}
               isGenerating={isSubmitting}
             />
           </TabsContent>

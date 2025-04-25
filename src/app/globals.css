@@ -106,7 +106,7 @@
   display: none;
 }
 
-/* Fix for tour package content */
+/* Fix tour package content visibility */
 [value="tour-packages"] {
   display: none !important;
 }
@@ -114,5 +114,10 @@
 /* Fix booking details tabs spacing */
 .booking-details-tabs [role="tablist"] {
   gap: 0.5rem;
+}
+
+/* Hide airport tab extra space */
+[value="airport"] + [value="all"] {
+  margin-left: 0;
 }
 

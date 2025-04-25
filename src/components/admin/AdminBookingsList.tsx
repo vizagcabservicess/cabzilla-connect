@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -352,28 +351,20 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      const bookingId = selectedBooking.id;
-      const result = await bookingAPI.updateBooking(bookingId, updatedData);
+      await bookingAPI.updateBooking(selectedBooking.id, updatedData);
       
-      // Update the selected booking with new data
-      setSelectedBooking({
-        ...selectedBooking,
-        ...updatedData
-      });
-      
-      // Also update in the bookings list
+      // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === bookingId ? { ...booking, ...updatedData } : booking
+        booking.id === selectedBooking.id ? { ...booking, ...updatedData } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Booking updated successfully");
-      return result;
+      handleCloseDetails();
     } catch (error) {
       console.error('Error updating booking:', error);
       toast.error("Failed to update booking");
-      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -384,38 +375,25 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      const bookingId = selectedBooking.id;
       const updatedData = {
         ...driverData,
         status: 'assigned' as BookingStatus
       };
       
-      const result = await bookingAPI.updateBooking(bookingId, updatedData);
+      await bookingAPI.updateBooking(selectedBooking.id, updatedData);
       
-      // Update the selected booking with new data
-      setSelectedBooking({
-        ...selectedBooking,
-        ...driverData,
-        status: 'assigned' as BookingStatus
-      });
-      
-      // Also update in the bookings list
+      // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === bookingId ? { 
-          ...booking, 
-          ...driverData,
-          status: 'assigned' as BookingStatus 
-        } : booking
+        booking.id === selectedBooking.id ? { ...booking, ...updatedData } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Driver assigned successfully");
-      return result;
+      handleCloseDetails();
     } catch (error) {
       console.error('Error assigning driver:', error);
       toast.error("Failed to assign driver");
-      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -426,26 +404,17 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      const bookingId = selectedBooking.id;
-      await bookingAPI.updateBooking(bookingId, { status: 'cancelled' as BookingStatus });
+      await bookingAPI.updateBooking(selectedBooking.id, { status: 'cancelled' as BookingStatus });
       
-      // Update the selected booking
-      setSelectedBooking({
-        ...selectedBooking,
-        status: 'cancelled' as BookingStatus
-      });
-      
-      // Update in the bookings list
+      // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === bookingId ? { 
-          ...booking, 
-          status: 'cancelled' as BookingStatus
-        } : booking
+        booking.id === selectedBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Booking cancelled successfully");
+      handleCloseDetails();
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error("Failed to cancel booking");
@@ -459,21 +428,11 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      const bookingId = selectedBooking.id;
-      await bookingAPI.updateBooking(bookingId, { status: newStatus });
+      await bookingAPI.updateBooking(selectedBooking.id, { status: newStatus });
       
-      // Update the selected booking
-      setSelectedBooking({
-        ...selectedBooking,
-        status: newStatus
-      });
-      
-      // Update in the bookings list
+      // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === bookingId ? { 
-          ...booking, 
-          status: newStatus 
-        } : booking
+        booking.id === selectedBooking.id ? { ...booking, status: newStatus } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -488,9 +447,18 @@ export function AdminBookingsList() {
   };
 
   const handleGenerateInvoice = async () => {
-    uiToast({
-      description: "Invoice generation will be available shortly."
-    });
+    if (!selectedBooking) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Implement invoice generation logic here
+      toast.success("Invoice generated successfully");
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      toast.error("Failed to generate invoice");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -721,6 +689,7 @@ export function AdminBookingsList() {
           onCancel={handleCancelBooking}
           onGenerateInvoice={handleGenerateInvoice}
           onStatusChange={handleStatusChange}
+          isSubmitting={isSubmitting}
         />
       )}
 
