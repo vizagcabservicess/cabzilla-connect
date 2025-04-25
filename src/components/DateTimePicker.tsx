@@ -1,111 +1,144 @@
 
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { Calendar as CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { TimeSelector } from './TimeSelector';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-interface DateTimePickerProps {
+export interface DateTimePickerProps {
   date?: Date;
-  onDateChange?: (date: Date) => void;
-  label?: string;
+  onDateChange: (date: Date | undefined) => void;
   minDate?: Date;
-  maxDate?: Date;
   className?: string;
+  label?: string;
 }
 
 export function DateTimePicker({ 
-  date,
-  onDateChange,
-  label,
-  minDate,
-  maxDate,
-  className
+  date, 
+  onDateChange, 
+  minDate, 
+  className,
+  label
 }: DateTimePickerProps) {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(date);
-  const [selectedTime, setSelectedTime] = useState<string>(date ? format(date, 'HH:mm') : '10:00');
   const isMobile = useIsMobile();
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
-  // Update selected date whenever the date prop changes
+  // Initialize with current date and time immediately
   useEffect(() => {
-    setSelectedDate(date);
+    const now = new Date();
+    const currentTime = format(now, "HH:mm");
+    
+    if (!date) {
+      setSelectedTime(currentTime);
+      onDateChange(now);
+    } else {
+      setSelectedTime(format(date, "HH:mm"));
+    }
+  }, []);
+
+  // Update selectedTime when date prop changes
+  useEffect(() => {
     if (date) {
-      setSelectedTime(format(date, 'HH:mm'));
+      setSelectedTime(format(date, "HH:mm"));
     }
   }, [date]);
 
-  // Combine date and time when date or time changes
-  useEffect(() => {
-    if (selectedDate && onDateChange) {
-      const [hours, minutes] = selectedTime.split(':').map(Number);
-      
-      const combinedDate = new Date(selectedDate);
-      combinedDate.setHours(hours, minutes, 0, 0);
-      
-      onDateChange(combinedDate);
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedTime(e.target.value);
+  };
+
+  const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Prevent default to avoid any browser default behavior
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!selectedTime) return;
+
+    const [hours, minutes] = selectedTime.split(":").map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      alert("Invalid time format. Please use HH:mm (24-hour format).");
+      return;
     }
-  }, [selectedDate, selectedTime, onDateChange]);
+
+    const newDate = date ? new Date(date) : new Date();
+    newDate.setHours(hours);
+    newDate.setMinutes(minutes);
+    onDateChange(newDate);
+    
+    // Close the popover after applying the time
+    setOpen(false);
+  };
+
+  const handleCalendarSelect = (selectedDate: Date | undefined) => {
+    if (selectedDate) {
+      // Preserve the previously selected time if any
+      if (date && selectedTime) {
+        const [hours, minutes] = selectedTime.split(":").map(Number);
+        selectedDate.setHours(hours);
+        selectedDate.setMinutes(minutes);
+      }
+      onDateChange(selectedDate);
+    } else {
+      onDateChange(undefined);
+    }
+  };
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className="space-y-2">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor="date"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
           {label}
         </label>
       )}
-      
-      <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline"
-              className={cn(
-                "w-full justify-start text-left font-normal",
-                !selectedDate && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent 
-            className="w-auto p-0" 
-            align={isMobile ? "center" : "start"}
-            side={isMobile ? "bottom" : "bottom"}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant={"outline"}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground"
+            )}
           >
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              disabled={(date) => {
-                if (minDate && date < minDate) {
-                  return true;
-                }
-                if (maxDate && date > maxDate) {
-                  return true;
-                }
-                return false;
-              }}
-              initialFocus
-              className="p-3 pointer-events-auto"
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="center" side="bottom">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={handleCalendarSelect}
+            disabled={minDate ? { before: minDate } : undefined}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
+          />
+          <div className="p-4 flex items-center space-x-2">
+            <Input
+              type="time"
+              value={selectedTime || ""}
+              onChange={handleTimeChange}
+              className="max-w-[80px]"
             />
-          </PopoverContent>
-        </Popover>
-        
-        <TimeSelector 
-          value={selectedTime}
-          onChange={setSelectedTime} 
-          className="w-full sm:w-40"
-        />
-      </div>
+            <button 
+              onClick={handleApply}
+              className="h-10 px-4 py-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/100"
+              type="button"
+              data-testid="apply-time-button"
+              style={{touchAction: "manipulation"}}
+            >
+              Apply Time
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
