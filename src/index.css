@@ -4,68 +4,66 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 210 33% 99%;
-    --foreground: 222 47% 11%;
+:root {
+  --background: 210 33% 99%;
+  --foreground: 222 47% 11%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
 
-    --primary: 216 96% 58%;
-    --primary-foreground: 210 40% 98%;
+  --primary: 216 96% 58%;
+  --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222 47% 11.2%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222 47% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11.2%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222 47% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 216 96% 58%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 216 96% 58%;
 
-    --radius: 0.5rem;
-  }
+  --radius: 0.5rem;
+}
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
 
-    --primary: 216 96% 58%;
-    --primary-foreground: 210 40% 98%;
+  --primary: 216 96% 58%;
+  --primary-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 212.7 26.8% 83.9%;
 }
 
 @layer base {
@@ -75,28 +73,32 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
+    height: 100%;
   }
 
   body {
-    @apply bg-[#eef2f7] text-foreground antialiased;
+    @apply bg-[#f8fafc] text-foreground antialiased;
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-y: auto;
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
 @layer components {
   /* Trip Type Tabs */
   .trip-tabs {
-    @apply flex w-full mb-4 bg-white rounded-lg overflow-hidden border border-gray-200;
+    @apply flex w-full mb-4 bg-white rounded-xl shadow-sm overflow-hidden;
   }
 
   .trip-tab {
-    @apply flex-1 py-4 px-3 text-center relative cursor-pointer transition-colors;
+    @apply flex-1 py-3 px-3 text-center relative cursor-pointer transition-all;
     @apply text-sm font-medium text-gray-600;
   }
 
   .trip-tab[data-state="active"] {
-    @apply text-blue-600 bg-blue-50;
+    @apply text-blue-600 bg-blue-50 font-semibold;
   }
 
   .trip-tab[data-state="active"]::after {
@@ -105,17 +107,19 @@
   }
 
   /* Hide Tour Package Tab */
-  .trip-tab[data-value="tour"] {
-    @apply hidden;
+  .trip-tab[data-value="tour"],
+  [role="tab"][value="tour"],
+  div[data-state="tour"] {
+    @apply hidden !important;
   }
 
   /* Trip Mode Toggle */
   .trip-mode-toggle {
-    @apply flex gap-2 p-1 bg-gray-100 rounded-md mb-4;
+    @apply flex gap-2 p-1.5 bg-gray-50 rounded-xl mb-4;
   }
 
   .trip-mode-button {
-    @apply flex-1 py-2 px-4 rounded text-sm font-medium transition-colors;
+    @apply flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all items-center justify-center;
     @apply text-gray-600 hover:bg-white;
   }
 
@@ -125,57 +129,43 @@
 
   /* Location Inputs */
   .location-input-wrapper {
-    @apply relative bg-white rounded-lg border border-gray-200 mb-3;
+    @apply relative bg-white rounded-xl shadow-sm border border-gray-100 mb-3;
   }
 
   .location-input {
-    @apply w-full px-10 py-3 text-sm placeholder:text-gray-400;
+    @apply w-full px-12 py-4 text-base placeholder:text-gray-400;
     @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
 
   .location-icon {
-    @apply absolute left-3 top-1/2 -translate-y-1/2 text-gray-400;
+    @apply absolute left-4 top-1/2 -translate-y-1/2 text-gray-400;
   }
 
   /* Date Time Picker */
   .date-picker-wrapper {
-    @apply bg-white rounded-lg border border-gray-200 mb-3;
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 mb-3;
   }
 
   .date-picker-input {
-    @apply w-full px-10 py-3 text-sm;
+    @apply w-full px-12 py-4 text-base;
     @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
 
   /* Search Button */
   .search-button {
-    @apply w-full bg-blue-600 text-white py-4 rounded-lg text-sm font-medium uppercase;
-    @apply hover:bg-blue-700 transition-colors;
+    @apply w-full bg-blue-600 text-white py-4 rounded-xl text-base font-semibold;
+    @apply hover:bg-blue-700 transition-all active:scale-[0.99];
+    @apply fixed bottom-4 left-4 right-4 z-50 shadow-lg;
+    width: calc(100% - 32px);
   }
 
   /* Info Bar */
   .info-bar {
-    @apply bg-orange-50 text-orange-700 px-4 py-2 rounded-lg text-sm mb-4;
+    @apply bg-orange-50 text-orange-700 px-4 py-3 rounded-xl text-sm mb-4;
     @apply flex items-center gap-2;
   }
 
   /* Mobile Optimizations */
-  @media (max-width: 640px) {
-    .trip-tab {
-      @apply py-3 px-2 text-xs;
-    }
-
-    .location-input,
-    .date-picker-input {
-      @apply py-4;
-    }
-
-    .search-button {
-      @apply fixed bottom-4 left-4 right-4 z-50;
-      width: calc(100% - 32px);
-    }
-  }
-
   .mobile-container {
     @apply px-4 sm:px-6 md:px-8 mx-auto max-w-7xl w-full;
   }
@@ -184,59 +174,50 @@
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
 
-  /* Responsive Form Controls */
+  /* Native-like Animations */
+  .animate-enter {
+    animation: slide-up 0.3s ease-out;
+  }
+
+  .animate-exit {
+    animation: slide-down 0.3s ease-out;
+  }
+
+  @keyframes slide-up {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+  }
+
+  /* Form Controls */
   .form-input {
-    @apply w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
-    @apply text-base md:text-sm;
-    @apply mb-4 md:mb-0;
+    @apply w-full px-4 py-4 rounded-xl border border-gray-100 shadow-sm;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply text-base mb-4 md:mb-0;
+    @apply bg-white;
   }
 
   /* Mobile-First Cards */
   .cab-card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-100;
-    @apply p-4 md:p-6;
-    @apply mb-4 last:mb-0;
-    @apply transition-all duration-200;
-  }
-
-  /* Touch-friendly Tabs */
-  .trip-tab {
-    @apply flex-1 py-3 px-4 text-center;
-    @apply text-sm md:text-base;
-    @apply border-b-2 transition-colors duration-200;
-    @apply min-h-[48px] flex items-center justify-center;
-  }
-
-  /* Bottom Sheet for Mobile */
-  .mobile-sheet {
-    @apply fixed bottom-0 left-0 right-0;
-    @apply bg-white rounded-t-2xl shadow-lg;
-    @apply transform transition-transform duration-300;
-    @apply z-50;
-    @apply p-4;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  /* Responsive Grid Layout */
-  .responsive-grid {
-    @apply grid gap-4;
-    @apply grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4;
-  }
-
-  /* Mobile Action Button */
-  .mobile-action-btn {
-    @apply fixed bottom-0 left-0 right-0;
-    @apply p-4 bg-white border-t border-gray-100;
-    @apply flex justify-center items-center;
-    @apply mobile-safe-bottom;
-  }
-
-  /* Mobile Navigation */
-  .mobile-nav {
-    @apply sticky top-0 z-50;
-    @apply bg-white/80 backdrop-blur-lg;
-    @apply border-b border-gray-100;
+    @apply bg-white rounded-xl shadow-sm border border-gray-100;
+    @apply p-4 md:p-5 mb-3 last:mb-0;
+    @apply transition-all active:bg-gray-50;
   }
 }
 
@@ -267,40 +248,6 @@
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  
-  /* Prevent pull-to-refresh on iOS */
-  html {
-    overflow: hidden;
-    height: 100%;
-  }
-  
-  body {
-    overflow-y: auto;
-    height: 100%;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* Animation utilities */
-.animate-enter {
-  opacity: 0;
-  transform: translateY(0.5rem);
-}
-
-.animate-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 300ms, transform 300ms;
-}
-
-.animate-exit {
-  opacity: 1;
-}
-
-.animate-exit-active {
-  opacity: 0;
-  transform: translateY(0.5rem);
-  transition: opacity 300ms, transform 300ms;
 }
 
 /* Glass effect */

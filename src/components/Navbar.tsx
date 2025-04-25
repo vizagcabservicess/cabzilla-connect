@@ -21,105 +21,60 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        'fixed top-0 left-0 w-full z-50 transition-all duration-300 h-16',
+        'sticky top-0 w-full z-50 transition-all duration-300',
         isScrolled
           ? 'bg-white/90 backdrop-blur-md shadow-sm'
-          : 'bg-transparent'
+          : 'bg-white'
       )}
     >
-      <div className="container mx-auto px-4 h-full flex items-center justify-between">
+      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <Link 
           to="/" 
           className="flex items-center space-x-2"
         >
-          <div className="w-10 h-10 rounded-lg bg-cabBlue-500 text-white flex items-center justify-center font-bold text-xl">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
             CC
           </div>
-          <span className="font-bold text-xl text-cabBlue-800 hidden sm:inline-block">
+          <span className="font-bold text-lg text-gray-900 hidden sm:inline-block">
             CabZilla
           </span>
         </Link>
 
-        <nav className="hidden md:flex items-center space-x-8">
-          <NavLink href="/">Home</NavLink>
-          <NavLink href="/cabs">Cabs</NavLink>
-          <NavLink href="/offers">Offers</NavLink>
-          <NavLink href="/about">About</NavLink>
-        </nav>
-
-        <div className="hidden md:flex items-center space-x-4">
+        <div className="flex items-center space-x-4">
           <a 
             href="tel:+919966363662" 
-            className="flex items-center space-x-2 text-cabBlue-600 hover:text-cabBlue-800 transition-colors"
+            className="flex items-center space-x-2 text-blue-600"
           >
             <Phone size={18} />
-            <span>+91 9966363662</span>
+            <span className="hidden sm:inline">+91 9966363662</span>
           </a>
-          <Link to="/login">
-            <Button variant="outline" className="mr-2">Login</Button>
-          </Link>
-          <Link to="/signup">
-            <Button>Sign Up</Button>
-          </Link>
+          <Button 
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </Button>
         </div>
-
-        <button 
-          className="md:hidden text-cabBlue-800" 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
       </div>
 
-      {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 w-full bg-white shadow-lg animate-slide-down">
-          <div className="px-4 py-4 space-y-4">
+        <div className="fixed inset-x-0 top-14 bg-white border-t border-gray-100 animate-enter">
+          <nav className="container mx-auto px-4 py-4 space-y-2">
             <MobileNavLink href="/" onClick={() => setIsMobileMenuOpen(false)}>Home</MobileNavLink>
-            <MobileNavLink href="/cabs" onClick={() => setIsMobileMenuOpen(false)}>Cabs</MobileNavLink>
+            <MobileNavLink href="/cabs" onClick={() => setIsMobileMenuOpen(false)}>Book Cab</MobileNavLink>
             <MobileNavLink href="/offers" onClick={() => setIsMobileMenuOpen(false)}>Offers</MobileNavLink>
-            <MobileNavLink href="/about" onClick={() => setIsMobileMenuOpen(false)}>About</MobileNavLink>
-            
-            <div className="pt-4 border-t border-cabGray-200">
-              <a 
-                href="tel:+919966363662" 
-                className="flex items-center space-x-2 text-cabBlue-600 py-2"
-              >
-                <Phone size={18} />
-                <span>+91 9966363662</span>
-              </a>
-              <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                <Button variant="outline" className="w-full mt-4 mb-2">Login</Button>
-              </Link>
-              <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)}>
-                <Button className="w-full">Sign Up</Button>
-              </Link>
-            </div>
-          </div>
+          </nav>
         </div>
       )}
     </header>
   );
 }
 
-interface NavLinkProps {
+interface MobileNavLinkProps {
   href: string;
   children: React.ReactNode;
-}
-
-function NavLink({ href, children }: NavLinkProps) {
-  return (
-    <Link 
-      to={href} 
-      className="text-cabGray-700 hover:text-cabBlue-600 font-medium transition-colors relative group"
-    >
-      {children}
-      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-cabBlue-500 transition-all duration-300 group-hover:w-full"></span>
-    </Link>
-  );
-}
-
-interface MobileNavLinkProps extends NavLinkProps {
   onClick?: () => void;
 }
 
@@ -127,7 +82,7 @@ function MobileNavLink({ href, children, onClick }: MobileNavLinkProps) {
   return (
     <Link 
       to={href} 
-      className="block py-2 text-cabGray-800 font-medium"
+      className="block py-3 px-4 text-gray-800 font-medium rounded-lg hover:bg-gray-50 active:bg-gray-100"
       onClick={onClick}
     >
       {children}
