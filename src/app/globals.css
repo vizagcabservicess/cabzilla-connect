@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -76,21 +75,7 @@
   }
 }
 
-/* Fix for tab spacing in admin dashboard */
-.TabsList {
-  width: 100%;
-  justify-content: flex-start !important;
-  overflow-x: auto;
-  margin-bottom: 1rem;
-}
-
-/* Specific fixes for admin dashboard tabs */
-[data-value="fares"] .TabsList {
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.5rem;
-}
-
-/* Fix for small tabs and overflows */
+/* Tab Layout Fixes */
 [role="tablist"] {
   width: 100%;
   justify-content: flex-start;
@@ -105,9 +90,13 @@
   display: none;
 }
 
-/* Fix tour package content visibility */
-[value="tour-packages"] {
-  display: none !important;
+/* Fix tab content visibility */
+[role="tabpanel"] {
+  display: none;
+}
+
+[role="tabpanel"][data-state="active"] {
+  display: block;
 }
 
 /* Fix booking details tabs spacing */
@@ -115,19 +104,20 @@
   gap: 0.5rem;
 }
 
-/* Hide airport tab extra space */
-[value="airport"] + [value="all"] {
-  margin-left: 0;
+/* Fix tab triggers spacing */
+.TabsTrigger {
+  position: relative;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s;
 }
 
-/* Fix airport tab layout in AdminDashboardPage */
-[data-value="fares"] .TabsList [data-value="airport"] + [data-value="all"] {
-  margin-left: 0;
-}
-
-/* Ensure tabs are properly spaced and aligned */
-[data-value="fares"] .TabsList [data-state="active"] {
+.TabsTrigger[data-state="active"] {
   position: relative;
   z-index: 1;
 }
 
+/* Fix nested tabs spacing in admin dashboard */
+[data-value="fares"] .TabsList {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
