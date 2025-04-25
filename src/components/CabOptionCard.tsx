@@ -58,9 +58,9 @@ export const CabOptionCard = ({
         {/* Cab Image */}
         <div className="relative shrink-0">
           <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-md bg-gray-100 overflow-hidden">
-            {cab.imageUrl ? (
+            {cab.image ? (
               <img
-                src={cab.imageUrl}
+                src={cab.image}
                 alt={cab.name}
                 className="h-full w-full object-cover"
               />
@@ -92,7 +92,7 @@ export const CabOptionCard = ({
                 <span>{cab.capacity}</span>
               </div>
               <span className="text-xs text-gray-500">|</span>
-              <div className="text-sm text-gray-600">{cab.acType || "AC"}</div>
+              <div className="text-sm text-gray-600">{cab.ac ? "AC" : "Non-AC"}</div>
             </div>
           </div>
           
@@ -111,9 +111,9 @@ export const CabOptionCard = ({
               )}
             </div>
             
-            {cab.features && cab.features.length > 0 && (
+            {cab.amenities && cab.amenities.length > 0 && (
               <p className="text-xs text-gray-500 mt-1 truncate">
-                {cab.features.join(' • ')}
+                {cab.amenities.join(' • ')}
               </p>
             )}
           </div>
