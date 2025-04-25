@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Table, TableBody, TableCaption, TableCell, 
@@ -10,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   MapPin, Phone, Mail, CheckCircle, XCircle, 
-  Plus, Edit, AlertTriangle, Search, Star, 
+  Plus, Edit, AlertCircle, Search, Star, 
   MoreHorizontal, ToggleLeft, Car, Settings, Loader2
 } from "lucide-react";
 import {
@@ -45,20 +44,16 @@ export function DriverManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Function to fetch drivers from API
   useEffect(() => {
     const fetchDrivers = async () => {
       setLoading(true);
       setError(null);
       
       try {
-        // Get the current domain dynamically for API calls
         const apiBaseUrl = getApiBaseUrl();
         
-        // Attempt to fetch from the API
         const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`);
         
-        // If API call fails, use mock data
         if (!response.ok) {
           console.warn('API request failed, using mock driver data');
           setDrivers(getMockDrivers());
@@ -85,21 +80,17 @@ export function DriverManagement() {
     fetchDrivers();
   }, []);
 
-  // Get API base URL based on environment
   const getApiBaseUrl = () => {
     const currentDomain = window.location.hostname;
     const protocol = window.location.protocol;
     
-    // Check environment - if we're on local development, use development API URL
     if (currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1')) {
       return `${protocol}//${currentDomain}${window.location.port ? `:${window.location.port}` : ''}`;
     }
     
-    // If on lovableproject.com domain or any other domain, use the production API
     return 'https://vizagup.com';
   };
 
-  // Generate mock driver data for testing
   const getMockDrivers = (): Driver[] => {
     return [
       { 
@@ -170,7 +161,6 @@ export function DriverManagement() {
     ];
   };
 
-  // Function to filter drivers based on search term
   const filteredDrivers = drivers.filter(driver => 
     driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     driver.phone.includes(searchTerm) ||
@@ -178,7 +168,6 @@ export function DriverManagement() {
     driver.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Function to get status badge color
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'available':
@@ -192,7 +181,6 @@ export function DriverManagement() {
     }
   };
 
-  // Handler for toggling driver status (would connect to an API in production)
   const toggleDriverStatus = (driverId: number) => {
     toast({
       title: "Status Updated",
@@ -208,12 +196,10 @@ export function DriverManagement() {
     }));
   };
 
-  // Calculate driver statistics
   const totalDrivers = drivers.length;
   const availableDrivers = drivers.filter(d => d.status === 'available').length;
   const busyDrivers = drivers.filter(d => d.status === 'busy').length;
 
-  // Handle adding a new driver
   const handleAddDriver = () => {
     toast({
       title: "Feature Coming Soon",
@@ -276,9 +262,8 @@ export function DriverManagement() {
       )}
 
       {error && (
-        <Alert>
+        <Alert variant="destructive" className="my-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error loading drivers</AlertTitle>
           <AlertDescription>
             {error}
           </AlertDescription>
@@ -398,7 +383,6 @@ export function DriverManagement() {
   );
 }
 
-// Separate icon component for search results
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     {...props}
