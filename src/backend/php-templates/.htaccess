@@ -1,131 +1,63 @@
 
-# Enable URL rewriting
-RewriteEngine On
-
-# Set the base directory
-RewriteBase /
-
-# Handle OPTIONS requests for CORS preflight - immediately return 200
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
-
-# Set aggressive CORS headers for all responses
-<IfModule mod_headers.c>
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Handle CORS preflight requests
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+    
+    # Add CORS headers for all requests
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First, *"
-    Header always set Access-Control-Max-Age "86400"
-    Header always set Access-Control-Expose-Headers "*"
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set Cache-Control "no-cache, no-store, must-revalidate"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
+    Header always set Access-Control-Allow-Headers "*"
+    
+    # Prevent direct access to PHP files for security
+    # RewriteCond %{REQUEST_URI} !^/api/
+    # RewriteRule \.php$ - [F]
+    
+    # Debug mode - allow all PHP execution
+    # Comment these two lines in production
+    # RewriteCond %{REQUEST_URI} \.php$
+    # RewriteRule .* - [L]
+    
+    # Redirect all API requests to their respective endpoints
+    RewriteRule ^api/admin/drivers$ api/admin/drivers.php [L]
+    RewriteRule ^api/admin/generate-invoice$ api/admin/generate-invoice.php [L]
+    RewriteRule ^api/admin/booking$ api/admin/booking.php [L]
+    RewriteRule ^api/admin/update-booking$ api/admin/update-booking.php [L]
+    RewriteRule ^api/admin/assign-driver$ api/admin/assign-driver.php [L]
+    RewriteRule ^api/admin/cancel-booking$ api/admin/cancel-booking.php [L]
+    RewriteRule ^api/download-invoice$ api/download-invoice.php [L]
+    
+    # Redirect everything else to index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [L]
 </IfModule>
 
-# CRITICAL: Enable direct access to PHP files in the admin directory
-<FilesMatch "\.(php)$">
-    # Ensure proper PHP handling
-    SetHandler application/x-httpd-php
-    # For API responses
-    Header always set Content-Type "application/json" env=API_RESPONSE
-    # No caching
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-</FilesMatch>
+# Enable CORS for all domains
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "*"
+    
+    # Cache control
+    <FilesMatch "\.(html|php)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>
 
-# Direct access to all PHP files - CRITICAL NEW RULE
-<Files ~ "\.php$">
-    Order Allow,Deny
-    Allow from all
-</Files>
-
-# SPECIAL RULE FOR INVOICE DOWNLOAD - Override Content-Type for this file only
-<FilesMatch "download-invoice\.php$">
-    # Don't set Content-Type here, let the script handle it
-    SetEnv no_content_type 1
-    Header unset Content-Type
-</FilesMatch>
-
-# PDF Download Fix - CRITICAL - Address the PDF download issue
-<Files "download-invoice.php">
-    # Allow the script to set its own content type
-    SetEnvIf Request_URI "format=pdf" pdf_download=1
-    Header always unset Content-Type env=pdf_download
-    Header always set X-Content-Type-Options "nosniff" env=pdf_download
-</Files>
-
-# CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY (Ensure these come first)
-RewriteRule ^api/admin/assign-driver/?$ /api/admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^api/admin/cancel-booking/?$ /api/admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/update-booking/?$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/generate-invoice/?$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
-
-# CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
-# Explicit booking endpoint mappings - these MUST be at the top and have high priority
-RewriteRule ^api/admin/booking/?$ /api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/booking/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/bookings/?$ /api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
-
-# Add direct access to the book endpoint - HIGHEST PRIORITY
-RewriteRule ^api/book/?$ /api/book.php [L,NC,QSA]
-RewriteRule ^create-booking/?$ /api/book.php [L,NC,QSA]
-RewriteRule ^api/create-booking/?$ /api/book.php [L,NC,QSA]
-
-# Add direct access to the test endpoint
-RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
-
-# User bookings endpoints
-RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
-RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
-
-# Other admin API endpoints
-RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC,QSA]
-RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
-
-# Regular API routes
-RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
-RewriteRule ^api/login/?$ /api/login.php [L,NC,QSA]
-RewriteRule ^api/signup/?$ /api/signup.php [L,NC,QSA]
-RewriteRule ^api/register/?$ /api/signup.php [L,NC,QSA]
-RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
-
-# IMPORTANT: Direct frontend routes to React app
-# These routes should serve the frontend app, not the API
-RewriteRule ^login/?$ /index.html [L]
-RewriteRule ^signup/?$ /index.html [L]
-RewriteRule ^register/?$ /index.html [L]
-RewriteRule ^dashboard/?$ /index.html [L]
-RewriteRule ^admin/?$ /index.html [L]
-RewriteRule ^admin/(.*)$ /index.html [L]
-RewriteRule ^booking/(.*)$ /index.html [L]
-RewriteRule ^receipt/(.*)$ /index.html [L]
-RewriteRule ^cabs/?$ /index.html [L]
-RewriteRule ^tours/?$ /index.html [L]
-
-# CRITICAL: Don't apply rewriting to actual files or directories
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Send all other requests to index.html for React to handle
-RewriteRule ^(.*)$ /index.html [L]
-
-# Set PHP settings for this directory
+# PHP settings
 <IfModule mod_php7.c>
-    php_flag display_errors Off
-    php_value error_reporting 32767
+    php_flag display_errors On
+    php_value error_reporting E_ALL
+    php_flag log_errors On
+    php_value error_log /tmp/php_errors.log
+    
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_input_time 300
+    php_value max_execution_time 300
 </IfModule>
-
-# Prevent direct access to sensitive files
-<FilesMatch "\.(htaccess|htpasswd|ini)$">
-    Require all denied
-</FilesMatch>
-
-# Handle errors
-ErrorDocument 404 /api/error.php
-ErrorDocument 500 /api/error.php
-
-# Force proper MIME type for PHP files to ensure they're executed correctly
-AddType application/x-httpd-php .php
