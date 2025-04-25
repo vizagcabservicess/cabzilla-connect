@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,11 +19,20 @@ interface Driver {
 interface DriverAssignmentProps {
   booking: Booking;
   onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onSubmit?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onClose: () => void;
+  onCancel?: () => void;
   isSubmitting: boolean;
 }
 
-export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: DriverAssignmentProps) {
+export function DriverAssignment({ 
+  booking, 
+  onAssign, 
+  onSubmit, 
+  onClose, 
+  onCancel, 
+  isSubmitting 
+}: DriverAssignmentProps) {
   const { toast } = useToast();
   const [driverData, setDriverData] = useState({
     driverName: booking.driverName || '',
@@ -37,15 +45,13 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
 
-  // Fetch drivers from API or use default mock data
+  const closeHandler = onCancel || onClose;
+  const submitHandler = onSubmit || onAssign;
+
   useEffect(() => {
     const fetchDrivers = async () => {
       setLoadingDrivers(true);
       try {
-        // In a real application, this would fetch from your drivers API
-        // Example: const response = await fetch('https://yourapi.com/api/drivers');
-        
-        // For now, we'll use mock data
         const mockDrivers = [
           { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
           { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
@@ -74,7 +80,6 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
     const { name, value } = e.target;
     setDriverData({ ...driverData, [name]: value });
     
-    // Clear error when field is updated
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -89,7 +94,6 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
         vehicleNumber: selectedDriver.vehicleNumber
       });
       
-      // Clear any existing errors when a driver is selected
       setErrors({});
     }
   };
@@ -123,7 +127,7 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
     }
     
     try {
-      await onAssign(driverData);
+      await submitHandler(driverData);
     } catch (error) {
       console.error('Error assigning driver:', error);
     }
@@ -244,7 +248,7 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
           <Button
             type="button"
             variant="outline"
-            onClick={onClose}
+            onClick={closeHandler}
             disabled={isSubmitting}
           >
             Cancel

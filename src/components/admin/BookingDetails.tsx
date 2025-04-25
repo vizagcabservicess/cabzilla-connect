@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +58,6 @@ export function BookingDetails({
   const handleTabChange = (value: string) => {
     console.log('Tab changed to:', value);
     setActiveTab(value);
-    // Clear any previous API errors when changing tabs
     setApiError(null);
   };
 
@@ -141,10 +139,8 @@ export function BookingDetails({
         throw new Error('All driver fields are required');
       }
       
-      // Try multiple endpoints to find one that works
       let result;
       try {
-        // First try the dedicated endpoint
         result = await safeFetch('/api/admin/assign-driver.php', 'POST', {
           bookingId: booking.id,
           ...driverData
@@ -153,7 +149,6 @@ export function BookingDetails({
         console.error('First attempt failed, trying alternative endpoint:', firstError);
         
         try {
-          // Try the update-booking endpoint as fallback
           result = await safeFetch('/api/admin/update-booking.php', 'POST', {
             bookingId: booking.id,
             driverName: driverData.driverName,
@@ -164,7 +159,6 @@ export function BookingDetails({
         } catch (secondError) {
           console.error('Second attempt failed, trying direct request:', secondError);
           
-          // Try a direct URL as a last resort
           result = await safeFetch(`https://vizagup.com/api/admin/assign-driver.php`, 'POST', {
             bookingId: booking.id,
             ...driverData
@@ -178,7 +172,6 @@ export function BookingDetails({
           description: "Driver has been successfully assigned to this booking",
         });
         
-        // Call the parent handler to update the booking in the UI
         await onAssignDriver(driverData);
         handleBackToDetails();
       }
@@ -198,10 +191,8 @@ export function BookingDetails({
     try {
       setLocalSubmitting(true);
       
-      // Try multiple endpoints to find one that works
       let result;
       try {
-        // First try the dedicated endpoint
         result = await safeFetch('/api/admin/cancel-booking.php', 'POST', {
           bookingId: booking.id
         });
@@ -209,7 +200,6 @@ export function BookingDetails({
         console.error('First cancel attempt failed, trying alternative endpoint:', firstError);
         
         try {
-          // Try the update-booking endpoint as fallback
           result = await safeFetch('/api/admin/update-booking.php', 'POST', {
             bookingId: booking.id,
             status: 'cancelled'
@@ -217,7 +207,6 @@ export function BookingDetails({
         } catch (secondError) {
           console.error('Second cancel attempt failed, trying booking status change:', secondError);
           
-          // Try direct status change as last resort
           result = await safeFetch('/api/admin/booking.php?id=' + booking.id, 'POST', {
             status: 'cancelled'
           });
@@ -230,7 +219,6 @@ export function BookingDetails({
           description: "The booking has been successfully cancelled",
         });
         
-        // Call the parent handler to update the booking in the UI
         await onCancel();
         handleBackToDetails();
       }
@@ -250,10 +238,8 @@ export function BookingDetails({
     try {
       setLocalSubmitting(true);
       
-      // Try multiple endpoints to find one that works
       let result;
       try {
-        // First try the dedicated endpoint
         console.log('Attempting to generate invoice for booking:', booking.id);
         result = await safeFetch('/api/admin/generate-invoice.php', 'POST', {
           bookingId: booking.id
@@ -262,14 +248,12 @@ export function BookingDetails({
         console.error('First generate invoice attempt failed, trying alternative endpoint:', firstError);
         
         try {
-          // Try a direct URL as a fallback
           result = await safeFetch(`https://vizagup.com/api/admin/generate-invoice.php`, 'POST', {
             bookingId: booking.id
           });
         } catch (secondError) {
           console.error('Second generate invoice attempt failed, trying GET method:', secondError);
           
-          // Try GET method as last resort
           result = await safeFetch(`/api/admin/generate-invoice.php?id=${booking.id}`, 'GET', null);
         }
       }
@@ -280,9 +264,7 @@ export function BookingDetails({
           description: "Invoice has been successfully generated",
         });
         
-        // Call the parent handler to update the booking in the UI
         await onGenerateInvoice();
-        // Stay on invoice tab to show the result
         if (activeTab !== 'invoice') {
           handleTabChange('invoice');
         }
@@ -339,7 +321,7 @@ export function BookingDetails({
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <Badge variant={getStatusColor(booking.status as BookingStatus)}>
+          <Badge variant={getStatusColor(booking.status as BookingStatus) as any}>
             {booking.status?.toUpperCase()}
           </Badge>
           <h2 className="text-xl font-bold">{booking.bookingNumber}</h2>
@@ -455,6 +437,8 @@ export function BookingDetails({
             <BookingStatusFlow 
               currentStatus={booking.status as BookingStatus} 
               onStatusChange={handleStatusChange}
+              isAdmin={true}
+              onClose={handleBackToDetails}
               disabled={isSubmitting || localSubmitting}
             />
 
@@ -473,7 +457,7 @@ export function BookingDetails({
         <TabsContent value="edit">
           <BookingEditForm 
             booking={booking}
-            onSubmit={onEdit}
+            onSave={onEdit}
             onCancel={handleBackToDetails}
             isSubmitting={isSubmitting || localSubmitting}
           />
@@ -482,8 +466,8 @@ export function BookingDetails({
         <TabsContent value="driver">
           <DriverAssignment 
             booking={booking}
-            onSubmit={handleAssignDriver}
-            onCancel={handleBackToDetails}
+            onAssign={onAssignDriver}
+            onClose={handleBackToDetails}
             isSubmitting={isSubmitting || localSubmitting}
           />
         </TabsContent>

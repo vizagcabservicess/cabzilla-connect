@@ -15,17 +15,19 @@ import {
 interface BookingStatusFlowProps {
   currentStatus: BookingStatus;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
-  isAdmin: boolean;
+  isAdmin?: boolean;
   isUpdating?: boolean;
-  onClose: () => void;
+  onClose?: () => void;
+  disabled?: boolean; // Add the disabled prop
 }
 
 export function BookingStatusFlow({ 
   currentStatus, 
   onStatusChange, 
-  isAdmin,
+  isAdmin = true,
   isUpdating = false,
-  onClose 
+  onClose = () => {},
+  disabled = false
 }: BookingStatusFlowProps) {
   // Define the status flow
   const statusFlow: BookingStatus[] = [
@@ -87,7 +89,7 @@ export function BookingStatusFlow({
   // Can only move to the next status or cancel
   const canTransitionTo = (status: BookingStatus): boolean => {
     if (!isAdmin) return false;
-    if (isUpdating) return false;
+    if (isUpdating || disabled) return false; // Consider disabled prop
     if (currentStatus === 'cancelled' || currentStatus === 'completed') return false;
     
     const currentIdx = getCurrentIndex();
@@ -128,7 +130,7 @@ export function BookingStatusFlow({
                     size="icon"
                     className={`rounded-full w-10 h-10 ${active ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                     onClick={() => onStatusChange(status)}
-                    disabled={isUpdating}
+                    disabled={isUpdating || disabled}
                   >
                     <StatusIcon className="h-5 w-5" />
                   </Button>
@@ -153,7 +155,7 @@ export function BookingStatusFlow({
                 variant="outline"
                 className="text-red-500 border-red-300 hover:bg-red-50"
                 onClick={() => onStatusChange('cancelled')}
-                disabled={isUpdating || currentStatus === 'completed'}
+                disabled={isUpdating || disabled || currentStatus === 'completed'}
               >
                 <Ban className="h-4 w-4 mr-2" />
                 Cancel Booking

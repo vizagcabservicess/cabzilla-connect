@@ -14,11 +14,18 @@ import { isBookingEditable } from '@/utils/bookingUtils';
 interface BookingEditFormProps {
   booking: Booking;
   onSave: (updatedData: Partial<Booking>) => Promise<void>;
+  onSubmit?: (updatedData: Partial<Booking>) => Promise<void>; // Add for backward compatibility
   onCancel: () => void;
   isSubmitting: boolean;
 }
 
-export function BookingEditForm({ booking, onSave, onCancel, isSubmitting }: BookingEditFormProps) {
+export function BookingEditForm({ 
+  booking, 
+  onSave, 
+  onSubmit, 
+  onCancel, 
+  isSubmitting 
+}: BookingEditFormProps) {
   const [formData, setFormData] = useState({
     passengerName: booking.passengerName || '',
     passengerPhone: booking.passengerPhone || '',
@@ -105,7 +112,9 @@ export function BookingEditForm({ booking, onSave, onCancel, isSubmitting }: Boo
       pickupDate: formData.pickupDate.toISOString()
     };
     
-    await onSave(updatedData);
+    // Use onSubmit if provided (for backward compatibility), otherwise use onSave
+    const submitHandler = onSubmit || onSave;
+    await submitHandler(updatedData);
   };
 
   const isEditable = isBookingEditable(booking.status);
