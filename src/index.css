@@ -108,7 +108,7 @@
 
   /* Hide Tour Package Tab with maximum specificity */
   .trip-tab[data-value="tour"],
-  .trip-tab[value="tour"],
+  [role="tab"][value="tour"],
   div[data-state="tour"],
   .trip-tabs [value="tour"],
   [data-radix-collection-item][value="tour"],
@@ -124,12 +124,8 @@
   div[role="tabpanel"][data-value="tour"],
   div[aria-labelledby*="tour"],
   *[class*="tour-package"],
-  *[id*="tour-package"],
-  [data-state="tour"],
-  [data-tab-value="tour"],
-  [aria-controls*="tour"],
-  .tour-section,
-  .tour-content {
+  *[id*="tour-package"] {
+    @apply hidden !important;
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
