@@ -1,4 +1,3 @@
-
 import { Booking, BookingStatus } from '@/types/api';
 
 export const isBookingEditable = (status: BookingStatus): boolean => {
@@ -80,30 +79,4 @@ export const formatCurrency = (amount: number) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);
-};
-
-// Enhanced helper to ensure tab visibility with direct DOM manipulation if needed
-export const ensureTabVisibility = (tabId: string) => {
-  setTimeout(() => {
-    // First try to use data-state attributes
-    document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-      const panelValue = panel.getAttribute('value') || panel.getAttribute('data-value');
-      if (panelValue === tabId) {
-        panel.setAttribute('data-state', 'active');
-        (panel as HTMLElement).style.display = 'block';
-      } else {
-        panel.setAttribute('data-state', 'inactive');
-        (panel as HTMLElement).style.display = 'none';
-      }
-    });
-    
-    // Also try with direct id targeting as fallback
-    const activePanel = document.getElementById(`tabpanel-${tabId}`);
-    if (activePanel) {
-      activePanel.setAttribute('data-state', 'active');
-      activePanel.style.display = 'block';
-    }
-    
-    console.log(`Ensuring visibility for tab: ${tabId}`);
-  }, 50);
 };

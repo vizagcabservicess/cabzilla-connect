@@ -80,36 +80,20 @@
 [role="tablist"] {
   width: 100%;
   justify-content: flex-start;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  margin-bottom: 1rem;
   gap: 0.5rem;
 }
 
-[role="tablist"]::-webkit-scrollbar {
-  display: none;
-}
-
 /* Fix tab triggers spacing */
-.TabsTrigger {
-  position: relative;
+.TabsTrigger, [role="tab"] {
   padding: 0.5rem 1rem;
-  transition: all 0.2s;
   white-space: nowrap;
-}
-
-.TabsTrigger[data-state="active"] {
-  background-color: white;
-  color: hsl(var(--foreground));
-  position: relative;
-  z-index: 1;
+  transition: all 0.2s;
+  border-radius: 0.25rem;
 }
 
 /* Fix booking details tabs spacing */
 .booking-details-tabs [role="tablist"] {
-  gap: 0.5rem;
+  gap: 0.25rem;
   padding: 0.5rem;
   background-color: hsl(var(--muted));
   border-radius: 0.5rem;
@@ -120,13 +104,4 @@
   border-bottom: 1px solid hsl(var(--border));
   padding-bottom: 0.5rem;
   gap: 0.5rem;
-}
-
-/* CRITICAL FIX: Make sure TabsContent is visible when active */
-[data-state="active"][role="tabpanel"] {
-  display: block !important;
-}
-
-[data-state="inactive"][role="tabpanel"] {
-  display: none !important;
 }

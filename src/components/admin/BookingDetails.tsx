@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,27 +44,6 @@ export function BookingDetails({
     handleTabChange('details');
   };
 
-  // Force the active tab to be visible after rendering
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // Hide all panels first
-      document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-        if (panel.getAttribute('data-value') === activeTab || 
-            panel.getAttribute('value') === activeTab) {
-          panel.setAttribute('data-state', 'active');
-          (panel as HTMLElement).style.display = 'block';
-        } else {
-          panel.setAttribute('data-state', 'inactive');
-          (panel as HTMLElement).style.display = 'none';
-        }
-      });
-      
-      console.log(`Set visibility for ${activeTab} tab`);
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [activeTab]);
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
@@ -82,188 +61,191 @@ export function BookingDetails({
           <Tabs 
             value={activeTab} 
             onValueChange={handleTabChange} 
-            className="booking-details-tabs w-full"
-            defaultValue="details"
+            className="booking-details-tabs mt-4"
           >
-            <TabsList className="w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
               <TabsTrigger value="driver">Driver</TabsTrigger>
               <TabsTrigger value="status">Status Flow</TabsTrigger>
               <TabsTrigger value="invoice">Invoice</TabsTrigger>
             </TabsList>
+          </Tabs>
+        </CardHeader>
 
-            <TabsContent value="details" className="mt-4" data-state={activeTab === 'details' ? 'active' : 'inactive'}>
-              <div className="space-y-6">
-                {/* Customer Information */}
-                <section className="space-y-2">
-                  <h3 className="font-semibold">Customer Information</h3>
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-500" />
-                      <span>{booking.passengerName}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-gray-500" />
-                      <span>{booking.passengerPhone}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-500" />
-                      <span>{booking.passengerEmail}</span>
+        <CardContent className="pt-6">
+          {activeTab === 'details' && (
+            <div className="space-y-6">
+              {/* Customer Information */}
+              <section className="space-y-2">
+                <h3 className="font-semibold">Customer Information</h3>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-500" />
+                    <span>{booking.passengerName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-500" />
+                    <span>{booking.passengerPhone}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-gray-500" />
+                    <span>{booking.passengerEmail}</span>
+                  </div>
+                </div>
+              </section>
+
+              {/* Trip Details */}
+              <section className="space-y-2">
+                <h3 className="font-semibold">Trip Details</h3>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <p className="font-medium">Pickup Location</p>
+                      <p className="text-sm text-gray-600">{booking.pickupLocation}</p>
                     </div>
                   </div>
-                </section>
-
-                {/* Trip Details */}
-                <section className="space-y-2">
-                  <h3 className="font-semibold">Trip Details</h3>
-                  <div className="grid gap-2">
+                  {booking.dropLocation && (
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-gray-500" />
                       <div>
-                        <p className="font-medium">Pickup Location</p>
-                        <p className="text-sm text-gray-600">{booking.pickupLocation}</p>
+                        <p className="font-medium">Drop Location</p>
+                        <p className="text-sm text-gray-600">{booking.dropLocation}</p>
                       </div>
                     </div>
-                    {booking.dropLocation && (
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <p className="font-medium">Pickup Date & Time</p>
+                      <p className="text-sm text-gray-600">
+                        {formatBookingDate(booking.pickupDate)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Car className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <p className="font-medium">Vehicle Type</p>
+                      <p className="text-sm text-gray-600">{booking.cabType}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Payment Details */}
+              <section className="space-y-2">
+                <h3 className="font-semibold">Payment Details</h3>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <IndianRupee className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <p className="font-medium">Total Amount</p>
+                      <p className="text-sm text-gray-600">₹{booking.totalAmount?.toLocaleString('en-IN') || '0'}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Driver Information */}
+              {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
+                <section className="space-y-2">
+                  <h3 className="font-semibold">Driver Information</h3>
+                  <div className="grid gap-2">
+                    {booking.driverName && (
                       <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-gray-500" />
+                        <User className="w-4 h-4 text-gray-500" />
                         <div>
-                          <p className="font-medium">Drop Location</p>
-                          <p className="text-sm text-gray-600">{booking.dropLocation}</p>
+                          <p className="font-medium">Driver Name</p>
+                          <p className="text-sm text-gray-600">{booking.driverName}</p>
                         </div>
                       </div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Pickup Date & Time</p>
-                        <p className="text-sm text-gray-600">
-                          {formatBookingDate(booking.pickupDate)}
-                        </p>
+                    {booking.driverPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-500" />
+                        <div>
+                          <p className="font-medium">Driver Phone</p>
+                          <p className="text-sm text-gray-600">{booking.driverPhone}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Car className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Vehicle Type</p>
-                        <p className="text-sm text-gray-600">{booking.cabType}</p>
+                    )}
+                    {booking.vehicleNumber && (
+                      <div className="flex items-center gap-2">
+                        <Car className="w-4 h-4 text-gray-500" />
+                        <div>
+                          <p className="font-medium">Vehicle Number</p>
+                          <p className="text-sm text-gray-600">{booking.vehicleNumber}</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </section>
+              )}
 
-                {/* Payment Details */}
-                <section className="space-y-2">
-                  <h3 className="font-semibold">Payment Details</h3>
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2">
-                      <IndianRupee className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Total Amount</p>
-                        <p className="text-sm text-gray-600">₹{booking.totalAmount?.toLocaleString('en-IN') || '0'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Driver Information */}
-                {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
-                  <section className="space-y-2">
-                    <h3 className="font-semibold">Driver Information</h3>
-                    <div className="grid gap-2">
-                      {booking.driverName && (
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-500" />
-                          <div>
-                            <p className="font-medium">Driver Name</p>
-                            <p className="text-sm text-gray-600">{booking.driverName}</p>
-                          </div>
-                        </div>
-                      )}
-                      {booking.driverPhone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-gray-500" />
-                          <div>
-                            <p className="font-medium">Driver Phone</p>
-                            <p className="text-sm text-gray-600">{booking.driverPhone}</p>
-                          </div>
-                        </div>
-                      )}
-                      {booking.vehicleNumber && (
-                        <div className="flex items-center gap-2">
-                          <Car className="w-4 h-4 text-gray-500" />
-                          <div>
-                            <p className="font-medium">Vehicle Number</p>
-                            <p className="text-sm text-gray-600">{booking.vehicleNumber}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </section>
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 pt-4 border-t">
+                <Button 
+                  onClick={() => handleTabChange('edit')} 
+                  disabled={!(['pending', 'confirmed'].includes(booking.status)) || isSubmitting}
+                >
+                  Edit Booking
+                </Button>
+                <Button 
+                  onClick={() => handleTabChange('driver')}
+                  variant="outline" 
+                  disabled={booking.status === 'cancelled' || isSubmitting}
+                >
+                  {booking.driverName ? 'Change Driver' : 'Assign Driver'}
+                </Button>
+                {['pending', 'confirmed'].includes(booking.status) && (
+                  <Button 
+                    onClick={onCancel} 
+                    variant="destructive"
+                    disabled={isSubmitting}
+                  >
+                    Cancel Booking
+                  </Button>
                 )}
-
-                {/* Action Buttons */}
-                <div className="flex flex-wrap gap-3 pt-4 border-t">
-                  <Button 
-                    onClick={() => handleTabChange('edit')} 
-                    disabled={!(['pending', 'confirmed'].includes(booking.status)) || isSubmitting}
-                  >
-                    Edit Booking
-                  </Button>
-                  <Button 
-                    onClick={() => handleTabChange('driver')}
-                    variant="outline" 
-                    disabled={booking.status === 'cancelled' || isSubmitting}
-                  >
-                    {booking.driverName ? 'Change Driver' : 'Assign Driver'}
-                  </Button>
-                  {['pending', 'confirmed'].includes(booking.status) && (
-                    <Button 
-                      onClick={onCancel} 
-                      variant="destructive"
-                      disabled={isSubmitting}
-                    >
-                      Cancel Booking
-                    </Button>
-                  )}
-                  <Button 
-                    onClick={() => handleTabChange('invoice')}
-                    variant="outline"
-                    disabled={isSubmitting}
-                  >
-                    Generate Invoice
-                  </Button>
-                  <Button 
-                    onClick={onClose} 
-                    variant="outline"
-                    disabled={isSubmitting}
-                  >
-                    Close
-                  </Button>
-                </div>
+                <Button 
+                  onClick={() => handleTabChange('invoice')}
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
+                  Generate Invoice
+                </Button>
+                <Button 
+                  onClick={onClose} 
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
+                  Close
+                </Button>
               </div>
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="edit" className="mt-4" data-state={activeTab === 'edit' ? 'active' : 'inactive'}>
-              <BookingEditForm 
-                booking={booking}
-                onSave={onEdit}
-                onCancel={handleBackToDetails}
-                isSubmitting={isSubmitting}
-              />
-            </TabsContent>
-            
-            <TabsContent value="driver" className="mt-4" data-state={activeTab === 'driver' ? 'active' : 'inactive'}>
-              <DriverAssignment 
-                booking={booking}
-                onAssign={onAssignDriver}
-                onClose={handleBackToDetails}
-                isSubmitting={isSubmitting}
-              />
-            </TabsContent>
-            
-            <TabsContent value="status" className="mt-4" data-state={activeTab === 'status' ? 'active' : 'inactive'}>
+          {activeTab === 'edit' && (
+            <BookingEditForm 
+              booking={booking}
+              onSave={onEdit}
+              onCancel={handleBackToDetails}
+              isSubmitting={isSubmitting}
+            />
+          )}
+          
+          {activeTab === 'driver' && (
+            <DriverAssignment 
+              booking={booking}
+              onAssign={onAssignDriver}
+              onClose={handleBackToDetails}
+              isSubmitting={isSubmitting}
+            />
+          )}
+          
+          {activeTab === 'status' && (
+            <div>
               <BookingStatusFlow 
                 currentStatus={booking.status}
                 onStatusChange={onStatusChange}
@@ -279,21 +261,17 @@ export function BookingDetails({
                   Back to Details
                 </Button>
               </div>
-            </TabsContent>
-            
-            <TabsContent value="invoice" className="mt-4" data-state={activeTab === 'invoice' ? 'active' : 'inactive'}>
-              <BookingInvoice 
-                booking={booking}
-                onClose={handleBackToDetails}
-                onGenerate={onGenerateInvoice}
-                isGenerating={isSubmitting}
-              />
-            </TabsContent>
-          </Tabs>
-        </CardHeader>
-
-        <CardContent className="pt-6">
-          {/* This is now an empty CardContent since we moved all tab content inside the Tabs component */}
+            </div>
+          )}
+          
+          {activeTab === 'invoice' && (
+            <BookingInvoice 
+              booking={booking}
+              onClose={handleBackToDetails}
+              onGenerate={onGenerateInvoice}
+              isGenerating={isSubmitting}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
