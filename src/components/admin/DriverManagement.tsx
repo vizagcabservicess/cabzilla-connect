@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Table, TableBody, TableCaption, TableCell, 
@@ -21,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Driver {
   id: number;
@@ -43,6 +44,7 @@ export function DriverManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const fetchDrivers = async () => {
@@ -51,21 +53,26 @@ export function DriverManagement() {
       
       try {
         const apiBaseUrl = getApiBaseUrl();
+        console.log(`Fetching drivers from ${apiBaseUrl}/api/admin/drivers.php`);
         
-        const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`);
-        
-        if (!response.ok) {
-          console.warn('API request failed, using mock driver data');
-          setDrivers(getMockDrivers());
-          return;
-        }
+        const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`, {
+          headers: {
+            'X-Force-Refresh': 'true',
+            'X-Debug': 'true'
+          }
+        });
         
         const data = await response.json();
+        console.log('Drivers API response:', data);
         
-        if (data?.status === 'success' && data?.drivers) {
+        if (!response.ok) {
+          throw new Error(`API returned status ${response.status}: ${data?.message || 'Unknown error'}`);
+        }
+        
+        if (data?.status === 'success' && Array.isArray(data?.drivers) && data.drivers.length > 0) {
           setDrivers(data.drivers);
         } else {
-          console.warn('API returned unexpected format, using mock driver data');
+          console.warn('API returned empty or invalid drivers list, using mock data');
           setDrivers(getMockDrivers());
         }
       } catch (error) {
@@ -78,7 +85,7 @@ export function DriverManagement() {
     };
     
     fetchDrivers();
-  }, []);
+  }, [retryCount]);
 
   const getApiBaseUrl = () => {
     const currentDomain = window.location.hostname;
@@ -196,6 +203,10 @@ export function DriverManagement() {
     }));
   };
 
+  const retryFetchDrivers = () => {
+    setRetryCount(prev => prev + 1);
+  };
+
   const totalDrivers = drivers.length;
   const availableDrivers = drivers.filter(d => d.status === 'available').length;
   const busyDrivers = drivers.filter(d => d.status === 'busy').length;
@@ -266,6 +277,16 @@ export function DriverManagement() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             {error}
+            <div className="mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2"
+                onClick={retryFetchDrivers}
+              >
+                Retry
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}

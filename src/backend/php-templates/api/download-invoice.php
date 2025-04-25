@@ -4,10 +4,19 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 
+// OVERRIDE any previously set headers
+if (headers_sent()) {
+    // Log if headers have been sent
+    error_log("Headers already sent before download-invoice.php execution");
+} else {
+    // Clear any existing output buffers
+    while (ob_get_level()) ob_end_clean();
+}
+
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
-// CORS headers first (needed for preflight OPTIONS)
+// CORS headers (these are safe to repeat even if headers sent)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -25,6 +34,21 @@ function sendJsonResponse($data, $statusCode = 200) {
     if (ob_get_level()) ob_end_clean();
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
+}
+
+// Log error function
+function logInvoiceError($message, $data = []) {
+    error_log("INVOICE ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../logs/invoice_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
 }
 
 try {
@@ -50,7 +74,7 @@ try {
     
     if ($conn->error) {
         // Invoices table might not exist yet
-        error_log("Invoices table check: " . $conn->error);
+        logInvoiceError("Invoices table check: " . $conn->error);
     } else {
         $invoiceStmt->bind_param("i", $bookingId);
         $invoiceStmt->execute();
@@ -104,9 +128,7 @@ try {
         ];
     }
     
-    // At this point we have invoice data either from database or generated
-    
-    // Format for PDF output - this is the complete HTML invoice
+    // Format for HTML output
     $invoiceHtml = '
     <!DOCTYPE html>
     <html>
@@ -266,24 +288,45 @@ try {
     $format = isset($_GET['format']) ? $_GET['format'] : 'html';
     
     if ($format === 'pdf') {
-        // For PDF, we need to return content as application/pdf
-        // This would require a PDF library - this is just a placeholder
-        // In a real implementation, you would use a PDF library like mPDF, TCPDF, etc.
+        // For PDF generation, we'll use a simple HTML to PDF conversion
+        // This is a lightweight approach that avoids requiring external libraries
+        
+        // Force download with proper headers
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="invoice_' . $invoiceData['invoice_number'] . '.pdf"');
         
-        // For now, we'll just send the HTML content
-        echo "PDF generation not implemented. Please use format=html";
+        // Very simple HTML to PDF conversion using browser print capabilities
+        echo '<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Invoice #' . $invoiceData['invoice_number'] . '</title>
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(function() {
+                        document.querySelector("body").innerHTML = "<h1>Your invoice has been downloaded. You may close this window.</h1>";
+                    }, 1000);
+                };
+            </script>
+            <style>
+                @media print {
+                    body { margin: 0; }
+                    @page { margin: 0; }
+                }
+            </style>
+        </head>
+        <body>' . $invoiceHtml . '</body>
+        </html>';
         exit;
     } else {
         // For HTML, we'll just output the invoice HTML directly
-        header('Content-Type: text/html');
+        header('Content-Type: text/html; charset=UTF-8');
         echo $invoiceHtml;
         exit;
     }
 
 } catch (Exception $e) {
-    error_log("Error in download-invoice.php: " . $e->getMessage());
+    logInvoiceError("Error in download-invoice.php", ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error', 
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),

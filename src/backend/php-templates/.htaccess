@@ -38,6 +38,13 @@ RewriteRule .* - [R=200,L]
     Allow from all
 </Files>
 
+# SPECIAL RULE FOR INVOICE DOWNLOAD - Override Content-Type for this file only
+<FilesMatch "download-invoice\.php$">
+    # Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type
+</FilesMatch>
+
 # CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY (Ensure these come first)
 RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
