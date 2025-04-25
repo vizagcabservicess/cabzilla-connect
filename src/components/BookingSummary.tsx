@@ -784,24 +784,24 @@ export const BookingSummary = ({
 
       <div className="space-y-4">
         <div className="border-b pb-4">
-          {tripType === 'airport' && (
-            <>
-              <div className="flex items-start gap-2 mb-3">
-                <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-gray-500">TRIP TYPE</p>
-                  <p className="font-medium">Airport Transfer</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 mb-3">
-                <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-gray-500">TOTAL DISTANCE</p>
-                  <p className="font-medium">{distance} KM</p>
-                </div>
-              </div>
-            </>
-          )}
+          <div className="flex items-start gap-2 mb-3">
+            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">TRIP TYPE</p>
+              <p className="font-medium capitalize">
+                {tripType === 'outstation' ? `${tripType} (${tripMode})` : tripType}
+                {tripType === 'local' && ` - ${hourlyPackage}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 mb-3">
+            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500">TOTAL DISTANCE</p>
+              <p className="font-medium">{distance} KM</p>
+            </div>
+          </div>
 
           <div className="flex items-start gap-2 mb-3">
             <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -876,13 +876,13 @@ export const BookingSummary = ({
           )}
 
           {breakdown.extraDistanceFare > 0 && (
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex justify-between items-center mb-2 group">
               <div className="flex items-center gap-1">
                 <p className="text-gray-600">Extra distance charges</p>
                 <div className="relative">
                   <Info className="h-4 w-4 text-blue-500 cursor-help" />
-                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1)).toFixed(0)} km × {formatPrice(breakdown.extraKmCharge || 0)}/km
+                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 invisible group-hover:visible transition-opacity z-10">
+                    {Math.round(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1))} km × ₹{breakdown.extraKmCharge || 0}/km
                   </div>
                 </div>
               </div>
