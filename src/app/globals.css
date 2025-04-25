@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -85,7 +84,7 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   margin-bottom: 1rem;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 [role="tablist"]::-webkit-scrollbar {
@@ -94,17 +93,24 @@
 
 /* Fix tab content visibility */
 [role="tabpanel"] {
-  display: none !important;
-  margin-top: 1rem;
+  opacity: 0;
+  height: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 [role="tabpanel"][data-state="active"] {
-  display: block !important;
+  opacity: 1;
+  height: auto;
+  pointer-events: auto;
 }
 
 /* Fix booking details tabs spacing */
 .booking-details-tabs [role="tablist"] {
   gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: hsl(var(--muted));
+  border-radius: 0.5rem;
 }
 
 /* Fix tab triggers spacing */
@@ -115,27 +121,15 @@
 }
 
 .TabsTrigger[data-state="active"] {
+  background-color: white;
+  color: hsl(var(--foreground));
   position: relative;
   z-index: 1;
 }
 
 /* Fix nested tabs spacing in admin dashboard */
 [data-value="fares"] .TabsList {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid hsl(var(--border));
   padding-bottom: 0.5rem;
-}
-
-/* Fix airport tab spacing */
-[data-value="fares"] .TabsList {
-  display: flex;
   gap: 0.5rem;
 }
-
-[data-value="fares"] .TabsList [data-value="airport"] {
-  margin-right: 0;
-}
-
-[data-value="fares"] .TabsList [data-value="airport"] + * {
-  margin-left: 0;
-}
-

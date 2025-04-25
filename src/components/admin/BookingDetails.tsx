@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,59 +33,15 @@ export function BookingDetails({
   onStatusChange,
   isSubmitting
 }: BookingDetailsProps) {
-  const [activeTab, setActiveTab] = useState<string>('details');
+  const [activeTab, setActiveTab] = useState('details');
 
-  // Force the correct initial tab - this is important for visibility
-  useEffect(() => {
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(() => {
-      const activePanel = document.querySelector('[role="tabpanel"][data-state="active"]');
-      if (activePanel) {
-        activePanel.setAttribute('style', 'display: block !important');
-      }
-    }, 50);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Ensure tab content is visible after tab change
-  useEffect(() => {
-    // Hide all panels first
-    document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-      panel.setAttribute('style', 'display: none !important');
-    });
-    
-    // Show only the active panel
-    const activePanel = document.querySelector(`[role="tabpanel"][data-value="${activeTab}"]`);
-    if (activePanel) {
-      activePanel.setAttribute('style', 'display: block !important');
-    }
-  }, [activeTab]);
+  const handleTabChange = (value: string) => {
+    console.log('Tab changed to:', value);
+    setActiveTab(value);
+  };
 
-  // Handle button clicks to change tabs
-  const handleEditClick = () => {
-    setActiveTab('edit');
-    console.log("Edit tab clicked, setting active tab to:", 'edit');
-  };
-  
-  const handleDriverClick = () => {
-    setActiveTab('driver');
-    console.log("Driver tab clicked, setting active tab to:", 'driver');
-  };
-  
-  const handleStatusClick = () => {
-    setActiveTab('status');
-    console.log("Status tab clicked, setting active tab to:", 'status');
-  };
-  
-  const handleInvoiceClick = () => {
-    setActiveTab('invoice');
-    console.log("Invoice tab clicked, setting active tab to:", 'invoice');
-  };
-  
   const handleBackToDetails = () => {
-    setActiveTab('details');
-    console.log("Back to details clicked, setting active tab to:", 'details');
+    handleTabChange('details');
   };
 
   return (
@@ -103,19 +58,19 @@ export function BookingDetails({
             <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 booking-details-tabs">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="booking-details-tabs">
             <TabsList>
-              <TabsTrigger value="details" id="details-tab">Details</TabsTrigger>
-              <TabsTrigger value="edit" id="edit-tab">Edit</TabsTrigger>
-              <TabsTrigger value="driver" id="driver-tab">Driver</TabsTrigger>
-              <TabsTrigger value="status" id="status-tab">Status Flow</TabsTrigger>
-              <TabsTrigger value="invoice" id="invoice-tab">Invoice</TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="edit">Edit</TabsTrigger>
+              <TabsTrigger value="driver">Driver</TabsTrigger>
+              <TabsTrigger value="status">Status Flow</TabsTrigger>
+              <TabsTrigger value="invoice">Invoice</TabsTrigger>
             </TabsList>
           </Tabs>
         </CardHeader>
         
         <CardContent className="pt-6">
-          <TabsContent value="details" style={{display: activeTab === 'details' ? 'block' : 'none'}}>
+          <TabsContent value="details">
             <div className="space-y-6">
               {/* Customer Information */}
               <section className="space-y-2">
@@ -228,13 +183,13 @@ export function BookingDetails({
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 pt-4 border-t">
                 <Button 
-                  onClick={handleEditClick} 
+                  onClick={() => handleTabChange('edit')} 
                   disabled={!(['pending', 'confirmed'].includes(booking.status)) || isSubmitting}
                 >
                   Edit Booking
                 </Button>
                 <Button 
-                  onClick={handleDriverClick}
+                  onClick={() => handleTabChange('driver')}
                   variant="outline" 
                   disabled={booking.status === 'cancelled' || isSubmitting}
                 >
@@ -250,7 +205,7 @@ export function BookingDetails({
                   </Button>
                 )}
                 <Button 
-                  onClick={handleInvoiceClick}
+                  onClick={() => handleTabChange('invoice')}
                   variant="outline"
                   disabled={isSubmitting}
                 >
@@ -267,7 +222,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
 
-          <TabsContent value="edit" style={{display: activeTab === 'edit' ? 'block' : 'none'}}>
+          <TabsContent value="edit">
             <BookingEditForm 
               booking={booking}
               onSave={onEdit}
@@ -276,7 +231,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="driver" style={{display: activeTab === 'driver' ? 'block' : 'none'}}>
+          <TabsContent value="driver">
             <DriverAssignment 
               booking={booking}
               onAssign={onAssignDriver}
@@ -285,7 +240,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="status" style={{display: activeTab === 'status' ? 'block' : 'none'}}>
+          <TabsContent value="status">
             <BookingStatusFlow 
               currentStatus={booking.status}
               onStatusChange={onStatusChange}
@@ -303,7 +258,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
           
-          <TabsContent value="invoice" style={{display: activeTab === 'invoice' ? 'block' : 'none'}}>
+          <TabsContent value="invoice">
             <BookingInvoice 
               booking={booking}
               onClose={handleBackToDetails}
