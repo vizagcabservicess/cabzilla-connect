@@ -1,3 +1,4 @@
+
 import { Booking, BookingStatus } from '@/types/api';
 
 export const isBookingEditable = (status: BookingStatus): boolean => {
@@ -19,13 +20,18 @@ export const getStatusColor = (status: BookingStatus): string => {
 };
 
 export const formatBookingDate = (date: string): string => {
-  return new Date(date).toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  try {
+    return new Date(date).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (e) {
+    console.error("Error formatting date:", e);
+    return date; // Return original string if formatting fails
+  }
 };
 
 export const getNextStatus = (currentStatus: BookingStatus): BookingStatus | null => {
@@ -74,4 +80,18 @@ export const formatCurrency = (amount: number) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);
+};
+
+// Helper to ensure tab visibility
+export const ensureTabVisibility = (tabId: string) => {
+  // Hide all panels first
+  document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+    panel.setAttribute('style', 'display: none !important');
+  });
+  
+  // Show only the active panel
+  const activePanel = document.querySelector(`#${tabId}-panel`);
+  if (activePanel) {
+    activePanel.setAttribute('style', 'display: block !important');
+  }
 };

@@ -94,12 +94,12 @@
 
 /* Fix tab content visibility */
 [role="tabpanel"] {
-  display: none;
+  display: none !important;
   margin-top: 1rem;
 }
 
 [role="tabpanel"][data-state="active"] {
-  display: block;
+  display: block !important;
 }
 
 /* Fix booking details tabs spacing */
@@ -126,6 +126,16 @@
 }
 
 /* Fix airport tab spacing */
-[data-value="fares"] .TabsList [data-value="airport"] + * {
-  margin-right: 0 !important;
+[data-value="fares"] .TabsList {
+  display: flex;
+  gap: 0.5rem;
 }
+
+[data-value="fares"] .TabsList [data-value="airport"] {
+  margin-right: 0;
+}
+
+[data-value="fares"] .TabsList [data-value="airport"] + * {
+  margin-left: 0;
+}
+

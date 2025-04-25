@@ -36,12 +36,58 @@ export function BookingDetails({
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState<string>('details');
 
+  // Force the correct initial tab - this is important for visibility
+  useEffect(() => {
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      const activePanel = document.querySelector('[role="tabpanel"][data-state="active"]');
+      if (activePanel) {
+        activePanel.setAttribute('style', 'display: block !important');
+      }
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Ensure tab content is visible after tab change
+  useEffect(() => {
+    // Hide all panels first
+    document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+      panel.setAttribute('style', 'display: none !important');
+    });
+    
+    // Show only the active panel
+    const activePanel = document.querySelector(`[role="tabpanel"][data-value="${activeTab}"]`);
+    if (activePanel) {
+      activePanel.setAttribute('style', 'display: block !important');
+    }
+  }, [activeTab]);
+
   // Handle button clicks to change tabs
-  const handleEditClick = () => setActiveTab('edit');
-  const handleDriverClick = () => setActiveTab('driver');
-  const handleStatusClick = () => setActiveTab('status');
-  const handleInvoiceClick = () => setActiveTab('invoice');
-  const handleBackToDetails = () => setActiveTab('details');
+  const handleEditClick = () => {
+    setActiveTab('edit');
+    console.log("Edit tab clicked, setting active tab to:", 'edit');
+  };
+  
+  const handleDriverClick = () => {
+    setActiveTab('driver');
+    console.log("Driver tab clicked, setting active tab to:", 'driver');
+  };
+  
+  const handleStatusClick = () => {
+    setActiveTab('status');
+    console.log("Status tab clicked, setting active tab to:", 'status');
+  };
+  
+  const handleInvoiceClick = () => {
+    setActiveTab('invoice');
+    console.log("Invoice tab clicked, setting active tab to:", 'invoice');
+  };
+  
+  const handleBackToDetails = () => {
+    setActiveTab('details');
+    console.log("Back to details clicked, setting active tab to:", 'details');
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -69,7 +115,7 @@ export function BookingDetails({
         </CardHeader>
         
         <CardContent className="pt-6">
-          <TabsContent value="details">
+          <TabsContent value="details" style={{display: activeTab === 'details' ? 'block' : 'none'}}>
             <div className="space-y-6">
               {/* Customer Information */}
               <section className="space-y-2">
@@ -221,7 +267,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
 
-          <TabsContent value="edit">
+          <TabsContent value="edit" style={{display: activeTab === 'edit' ? 'block' : 'none'}}>
             <BookingEditForm 
               booking={booking}
               onSave={onEdit}
@@ -230,7 +276,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="driver">
+          <TabsContent value="driver" style={{display: activeTab === 'driver' ? 'block' : 'none'}}>
             <DriverAssignment 
               booking={booking}
               onAssign={onAssignDriver}
@@ -239,7 +285,7 @@ export function BookingDetails({
             />
           </TabsContent>
           
-          <TabsContent value="status">
+          <TabsContent value="status" style={{display: activeTab === 'status' ? 'block' : 'none'}}>
             <BookingStatusFlow 
               currentStatus={booking.status}
               onStatusChange={onStatusChange}
@@ -257,7 +303,7 @@ export function BookingDetails({
             </div>
           </TabsContent>
           
-          <TabsContent value="invoice">
+          <TabsContent value="invoice" style={{display: activeTab === 'invoice' ? 'block' : 'none'}}>
             <BookingInvoice 
               booking={booking}
               onClose={handleBackToDetails}
