@@ -642,6 +642,54 @@ export function Hero() {
           </div>
         )}
       </div>
+      {/* Popular Tour Packages Section */}
+      <div className="tour-packages">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Popular Tour Packages</h2>
+          <a href="#" className="text-blue-600 text-sm font-medium hover:text-blue-700">View all</a>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {
+              title: "Araku Valley Tour",
+              image: "https://images.unsplash.com/photo-1500673922987-e212871fec22",
+              rating: 4.8,
+              reviews: 245,
+              price: "₹6,999"
+            },
+            {
+              title: "Rushikonda Beach",
+              image: "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07",
+              rating: 4.6,
+              reviews: 189,
+              price: "₹2,499"
+            },
+            {
+              title: "Yarada Beach",
+              image: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05",
+              rating: 4.7,
+              reviews: 167,
+              price: "₹3,499"
+            }
+          ].map((tour, index) => (
+            <div key={index} className="tour-card">
+              <img src={tour.image} alt={tour.title} className="tour-image" />
+              <div className="tour-content">
+                <h3 className="tour-title">{tour.title}</h3>
+                <div className="tour-rating">
+                  <span className="flex items-center gap-1">
+                    <span>⭐</span> {tour.rating}
+                  </span>
+                  <span className="mx-2">•</span>
+                  <span>{tour.reviews} reviews</span>
+                </div>
+                <p className="tour-price">From {tour.price}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
