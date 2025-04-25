@@ -17,13 +17,15 @@ interface BookingStatusFlowProps {
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isAdmin: boolean;
   isUpdating?: boolean;
+  onClose: () => void;
 }
 
 export function BookingStatusFlow({ 
   currentStatus, 
   onStatusChange, 
   isAdmin,
-  isUpdating = false 
+  isUpdating = false,
+  onClose 
 }: BookingStatusFlowProps) {
   // Define the status flow
   const statusFlow: BookingStatus[] = [
@@ -159,6 +161,12 @@ export function BookingStatusFlow({
             </div>
           )}
         </div>
+      </div>
+      
+      <div className="flex justify-end mt-6">
+        <Button variant="outline" onClick={onClose}>
+          Close
+        </Button>
       </div>
     </div>
   );

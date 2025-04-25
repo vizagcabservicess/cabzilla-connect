@@ -104,7 +104,7 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
           </p>
         </div>
         
-        <Alert variant="info" className="mb-4">
+        <Alert variant="default" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Driver Assignment</AlertTitle>
           <AlertDescription>

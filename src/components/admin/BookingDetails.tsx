@@ -403,7 +403,7 @@ export function BookingDetails({
           {activeTab === 'edit' && (
             <BookingEditForm
               booking={booking}
-              onSubmit={handleEditBooking}
+              onSave={handleEditBooking}
               onCancel={handleBackToDetails}
               isSubmitting={localSubmitting || isSubmitting}
             />
@@ -420,8 +420,9 @@ export function BookingDetails({
           
           {activeTab === 'status' && (
             <BookingStatusFlow
-              booking={booking}
+              currentStatus={booking.status}
               onStatusChange={onStatusChange}
+              isAdmin={true}
               onClose={handleBackToDetails}
             />
           )}
