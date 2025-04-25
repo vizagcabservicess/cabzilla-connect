@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Booking } from '@/types/api';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -28,7 +30,9 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
   const availableDrivers = [
     { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
     { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
-    { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" }
+    { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
+    { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
+    { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
   ];
 
   const handleDriverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,6 +53,9 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
         driverPhone: selectedDriver.phone,
         vehicleNumber: selectedDriver.vehicleNumber
       });
+      
+      // Clear any existing errors when a driver is selected
+      setErrors({});
     }
   };
 
@@ -96,6 +103,15 @@ export function DriverAssignment({ booking, onAssign, onClose, isSubmitting }: D
             Assign a driver to booking #{booking.bookingNumber}
           </p>
         </div>
+        
+        <Alert variant="info" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Driver Assignment</AlertTitle>
+          <AlertDescription>
+            Since you're assigning a driver manually, you can enter custom driver details below. 
+            In production, these would be fetched from your drivers database.
+          </AlertDescription>
+        </Alert>
         
         <div className="space-y-4">
           <div>

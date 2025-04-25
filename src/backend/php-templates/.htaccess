@@ -13,7 +13,7 @@ RewriteRule .* - [R=200,L]
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, *"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First, *"
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
@@ -32,43 +32,49 @@ RewriteRule .* - [R=200,L]
     Header set Cache-Control "no-cache, no-store, must-revalidate"
 </FilesMatch>
 
+# Direct access to all PHP files - CRITICAL NEW RULE
+<Files ~ "\.php$">
+    Order Allow,Deny
+    Allow from all
+</Files>
+
 # CRITICAL BOOKING API ENDPOINTS - HIGH PRIORITY (Ensure these come first)
-RewriteRule ^api/admin/assign-driver.php$ /api/admin/assign-driver.php [L,QSA]
-RewriteRule ^api/admin/cancel-booking.php$ /api/admin/cancel-booking.php [L,QSA]
-RewriteRule ^api/admin/update-booking.php$ /api/admin/update-booking.php [L,QSA]
-RewriteRule ^api/admin/generate-invoice.php$ /api/admin/generate-invoice.php [L,QSA]
-RewriteRule ^api/download-invoice.php$ /api/download-invoice.php [L,QSA]
+RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
-RewriteRule ^api/admin/booking.php$ /api/admin/booking.php [L,QSA]
-RewriteRule ^api/admin/booking/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
-RewriteRule ^api/admin/bookings$ /api/admin/booking.php [L,QSA]
-RewriteRule ^api/admin/bookings/([0-9]+)$ /api/admin/booking.php?id=$1 [L,QSA]
-RewriteRule ^api/admin/test-booking-api.php$ /api/admin/test-booking-api.php [L,QSA]
+RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/booking/([0-9]+)$ /api/admin/booking.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/admin/bookings$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/bookings/([0-9]+)$ /api/admin/booking.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/admin/test-booking-api\.php$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 # Add direct access to the book endpoint - HIGHEST PRIORITY
-RewriteRule ^api/book.php$ /api/book.php [L,QSA]
-RewriteRule ^create-booking$ /api/book.php [L,QSA]
-RewriteRule ^api/create-booking$ /api/book.php [L,QSA]
+RewriteRule ^api/book\.php$ /api/book.php [L,NC,QSA]
+RewriteRule ^create-booking$ /api/book.php [L,NC,QSA]
+RewriteRule ^api/create-booking$ /api/book.php [L,NC,QSA]
 
 # Add direct access to the test endpoint
-RewriteRule ^test-booking-api.php$ /api/admin/test-booking-api.php [L,QSA]
+RewriteRule ^test-booking-api\.php$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 # User bookings endpoints
-RewriteRule ^api/user/bookings.php$ /api/user/bookings.php [L,QSA]
-RewriteRule ^api/bookings.php$ /api/bookings.php [L,QSA]
+RewriteRule ^api/user/bookings\.php$ /api/user/bookings.php [L,NC,QSA]
+RewriteRule ^api/bookings\.php$ /api/bookings.php [L,NC,QSA]
 
 # Other admin API endpoints
-RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,QSA]
-RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,QSA]
+RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC,QSA]
+RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
 # Regular API routes
-RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,QSA]
-RewriteRule ^api/login.php$ /api/login.php [L,QSA]
-RewriteRule ^api/signup.php$ /api/signup.php [L,QSA]
-RewriteRule ^api/register.php$ /api/signup.php [L,QSA]
-RewriteRule ^api/(.*)\.php$ /api/$1.php [L,QSA]
+RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
+RewriteRule ^api/login\.php$ /api/login.php [L,NC,QSA]
+RewriteRule ^api/signup\.php$ /api/signup.php [L,NC,QSA]
+RewriteRule ^api/register\.php$ /api/signup.php [L,NC,QSA]
+RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
 
 # IMPORTANT: Direct frontend routes to React app
 # These routes should serve the frontend app, not the API

@@ -40,14 +40,14 @@ RewriteRule ^(.*)$ $1 [R=200,L]
 RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
 
 # NEW CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
-RewriteRule ^assign-driver\.php$ assign-driver.php [L,QSA]
-RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,QSA]
-RewriteRule ^update-booking\.php$ update-booking.php [L,QSA]
-RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
+RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
+RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
+RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
+RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
 
 # CRITICAL: Explicitly define booking endpoints with highest priority
-RewriteRule ^booking\.php$ booking.php [L,QSA]
-RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,QSA]
+RewriteRule ^booking\.php$ booking.php [L,NC,QSA]
+RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,NC,QSA]
 
 # Critical: Don't apply rewriting to actual PHP files
 RewriteCond %{REQUEST_FILENAME} -f
