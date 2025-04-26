@@ -1,3 +1,4 @@
+
 /**
  * Helper functions for API communication
  */
@@ -5,9 +6,18 @@
 export async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 500) {
   let lastError: Error;
   
+  // Ensure the URL is properly formatted for all environments
+  const finalUrl = ensureProperApiUrl(url);
+  console.log(`Making API request to: ${finalUrl}`);
+  
   for (let i = 0; i < retries; i++) {
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(finalUrl, {
+        ...options,
+        // Add credentials and mode for proper CORS
+        credentials: 'include',
+        mode: 'cors'
+      });
       
       if (response.ok) {
         // Try to parse as JSON first
@@ -113,25 +123,32 @@ export function isDevEnvironment(): boolean {
          window.location.hostname.includes('lovable');
 }
 
-// Helper to get API base URL
+// Helper to get API base URL - simplified to always use relative URLs
 export function getApiBaseUrl(): string {
   // For all environments, use relative URLs which will resolve to the current domain
-  // This ensures API calls work regardless of domain configuration
   return '';
+}
+
+// NEW IMPROVED FUNCTION: Ensures API URL is properly formatted for current environment
+function ensureProperApiUrl(endpoint: string): string {
+  // If it's already a full URL, return it
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  
+  // Clean up the endpoint - remove leading slash if present
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  
+  // Make sure endpoint includes the 'api/' prefix if not already
+  if (!cleanEndpoint.startsWith('api/')) {
+    return `/api/${cleanEndpoint}`;
+  }
+  
+  // Ensure we have a leading slash
+  return `/${cleanEndpoint}`;
 }
 
 // Helper function to properly construct API URLs
 export function getApiUrl(endpoint: string): string {
-  // Clean up endpoint to ensure consistent format
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-  
-  // Make sure endpoint includes the 'api/' prefix if not already
-  const apiPrefix = cleanEndpoint.startsWith('api/') ? '' : 'api/';
-  const finalEndpoint = `${apiPrefix}${cleanEndpoint}`;
-  
-  // Ensure we have a leading slash
-  const fullUrl = finalEndpoint.startsWith('/') ? finalEndpoint : `/${finalEndpoint}`;
-  
-  console.log(`API URL constructed: ${fullUrl} from endpoint: ${endpoint}`);
-  return fullUrl;
+  return ensureProperApiUrl(endpoint);
 }

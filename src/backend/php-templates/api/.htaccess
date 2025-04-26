@@ -1,5 +1,5 @@
 
-# Enable URL rewriting with aggressive CORS configuration
+# API .htaccess - Handle API requests with aggressive CORS
 RewriteEngine On
 RewriteBase /api/
 
@@ -9,22 +9,22 @@ RewriteBase /api/
     SetHandler application/x-httpd-php
     # Set JSON content type for API responses
     Header always set Content-Type "application/json"
-    # No caching for PHP files
+    # No caching for API responses
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
 </FilesMatch>
 
-# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
+# CRITICAL: Respond with 200 OK for OPTIONS preflight requests
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Set access headers for all responses
+# Set CORS headers - extremely permissive for debugging
 <IfModule mod_headers.c>
     # Set CORS headers unconditionally for all responses
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Database-First, X-Debug"
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"

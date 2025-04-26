@@ -6,69 +6,80 @@
  * All frontend routes are directed here (/, /admin, /booking, etc.)
  */
 
-// Set appropriate headers to prevent caching
+// Set proper headers
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('X-Frame-Options: DENY');
 
-// Enable error reporting for debugging
+// Enable detailed error reporting during development
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // Get request URI for debugging
-$request_uri = $_SERVER['REQUEST_URI'] ?? '';
+$request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+$current_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 $is_admin_route = preg_match('/^\/admin(\/|$)/', $request_uri);
 
 // Log access for debugging
 error_log("Access to main SPA index.php, URI: " . $request_uri);
 
-// Define the base path dynamically based on the request
-// This is crucial for the React router to work correctly
+// Define base path as / which works with React Router
 $base_path = '/';
 
-// HTML content for the SPA
+// Setup initial route data for client-side JS
+$route_data = json_encode([
+    'path' => $request_uri,
+    'isAdmin' => $is_admin_route,
+    'baseUrl' => $base_path,
+    'timestamp' => time()
+]);
+
+// Determine proper asset paths based on environment
+$asset_prefix = file_exists('./assets') ? './assets' : '';
+
 ?><!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vizag Cabs - Book Cabs in Visakhapatnam</title>
+    <title><?php echo $is_admin_route ? 'Admin Dashboard - Vizag Cabs' : 'Vizag Cabs - Book Cabs in Visakhapatnam'; ?></title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
-    <meta name="author" content="Vizag Cabs" />
-    <meta property="og:image" content="<?php echo $base_path; ?>og-image.png" />
-    <link rel="icon" href="<?php echo $base_path; ?>favicon.ico" type="image/x-icon">
-    
-    <!-- Base path - critical for routing -->
     <base href="<?php echo $base_path; ?>">
     
-    <!-- CSS styles -->
-    <link rel="stylesheet" href="<?php echo $base_path; ?>assets/index.css">
+    <?php if (file_exists('./assets/index.css')): ?>
+    <link rel="stylesheet" href="<?php echo $asset_prefix; ?>/index.css">
+    <?php else: ?>
+    <!-- Fallback styles if needed -->
+    <style>
+      body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    </style>
+    <?php endif; ?>
   </head>
 
   <body>
     <div id="root"></div>
-    <!-- React app entry point -->
-    <script type="module" src="<?php echo $base_path; ?>assets/index.js"></script>
     
-    <!-- Error logging -->
+    <!-- Critical debugging info passed to React -->
     <script>
-      window.onerror = function(message, source, lineno, colno, error) {
-        console.error("JS Error:", message, "Source:", source, "Line:", lineno);
-        return false;
-      };
+      window.__initialRoute = <?php echo $route_data; ?>;
       
-      // Debug info for routing
-      console.log("Application loading. Route:", window.location.pathname);
-      
-      // Make route info available to React app
-      window.__initialRoute = {
-        path: window.location.pathname,
-        isAdmin: window.location.pathname.startsWith('/admin')
-      };
+      // Debug logging 
+      console.log("Application initializing...");
+      console.log("Current path:", window.location.pathname);
+      console.log("Base URL:", document.baseURI);
+      console.log("Route data:", window.__initialRoute);
     </script>
+    
+    <!-- Lovable script tag must be before the main app bundle -->
+    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    
+    <?php if (file_exists('./assets/index.js')): ?>
+    <!-- Production bundle -->
+    <script type="module" src="<?php echo $asset_prefix; ?>/index.js"></script>
+    <?php else: ?>
+    <!-- Development bundle -->
+    <script type="module" src="/src/main.tsx"></script>
+    <?php endif; ?>
   </body>
 </html>
-<?php
-// End of file
-?>

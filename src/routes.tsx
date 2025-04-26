@@ -13,6 +13,7 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
+// Create routes with proper nesting and path handling
 export const router = createBrowserRouter([
   // Main frontend routes
   {
@@ -56,23 +57,25 @@ export const router = createBrowserRouter([
     element: <ToursPage />,
   },
   
-  // Admin routes - specific routes first
+  // Admin routes - exact match for root admin route
   {
     path: '/admin',
     element: <AdminDashboardPage />,
   },
+  
+  // Specific admin routes - these must come before the catch-all
   {
     path: '/admin/database',
     element: <AdminDatabasePage />,
   },
   
-  // Catch-all route for admin to prevent 404s on nested admin routes
+  // Catch-all for admin nested routes
   {
     path: '/admin/*',
     element: <AdminDashboardPage />,
   },
   
-  // Wildcard route - must be last
+  // Global 404 - must be last
   {
     path: '*',
     element: <NotFound />,

@@ -1,50 +1,48 @@
 
-# Main .htaccess file - Handle all frontend routes correctly
+# Main .htaccess - Primary configuration for frontend and API routing
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
-    # Enable error logging for debugging
+    # Enable error logging
     RewriteLog "/var/log/apache2/rewrite.log"
     RewriteLogLevel 3
     
-    # Handle CORS preflight requests
+    # Handle CORS preflight requests first
     RewriteCond %{REQUEST_METHOD} OPTIONS
     RewriteRule ^(.*)$ $1 [R=200,L]
     
-    # Add CORS headers for all requests
+    # Add CORS headers 
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
-    # CRITICAL: API requests need to be handled differently
-    # Redirect API requests to the API directory
+    # CRITICAL: API requests handling - must be processed first
     RewriteRule ^api(/.*)?$ api$1 [L]
     
-    # CRITICAL: Special handling for /admin routes to ensure they route to the SPA
-    RewriteRule ^admin(/.*)?$ index.php [L]
-    
-    # Exclude actual files and directories from routing to index.php 
-    # (except for the admin directory which should always route to the SPA)
+    # IMPORTANT: Direct file and asset access - exclude from SPA routing
+    # Skip routing for real files and directories (except /admin path)
     RewriteCond %{REQUEST_URI} !^/admin(/.*)?$
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
     
-    # CRITICAL: Handle all other routes by redirecting to index.php
+    # CRITICAL: All other requests go to index.php (SPA router)
+    # This ensures React Router handles all frontend routes
     RewriteRule ^ index.php [L]
 </IfModule>
 
-# Enable CORS for all domains
+# General headers
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "*"
-    
-    # Cache control
+    # Cache control for HTML and PHP
     <FilesMatch "\.(html|php)$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
+    </FilesMatch>
+    
+    # Allow caching for assets
+    <FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=86400"
     </FilesMatch>
 </IfModule>
 
@@ -54,9 +52,4 @@
     php_value error_reporting E_ALL
     php_flag log_errors On
     php_value error_log /tmp/php_errors.log
-    
-    php_value upload_max_filesize 10M
-    php_value post_max_size 10M
-    php_value max_input_time 300
-    php_value max_execution_time 300
 </IfModule>
