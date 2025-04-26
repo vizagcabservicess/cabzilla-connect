@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type DriverStatus = 'available' | 'busy' | 'offline';
 interface Driver {
@@ -62,7 +64,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     console.log('EditDriverDialog formData:', formData);
     console.log('EditDriverDialog formErrors:', formErrors);
     console.log('EditDriverDialog isSubmitting:', isSubmitting);
-  });
+  }, [formData, formErrors, isSubmitting]);
   
   // Re-validate the form every time formData changes
   useEffect(() => {
@@ -91,23 +93,25 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       errors.license_no = 'License number is required';
     }
     
-    if (!formData.vehicle?.trim()) {
-      errors.vehicle = 'Vehicle is required';
-    }
-    
-    if (!formData.location?.trim()) {
-      errors.location = 'Location is required';
-    }
-    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
   
   const handleSubmit = async () => {
     if (!validateForm()) {
+      toast.error("Please fix form errors before submitting");
       return;
     }
-    await onSubmit(formData);
+    
+    try {
+      await onSubmit({
+        ...formData,
+        id: driver.id
+      });
+    } catch (error) {
+      console.error("Error in EditDriverDialog.handleSubmit:", error);
+      toast.error("Failed to save driver data");
+    }
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,11 +207,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                   value={formData.vehicle}
                   onChange={handleChange}
                   disabled={isSubmitting}
-                  className={formErrors.vehicle ? "border-red-500" : ""}
                 />
-                {formErrors.vehicle && (
-                  <p className="text-xs text-red-500">{formErrors.vehicle}</p>
-                )}
               </div>
               
               <div className="space-y-2">
@@ -218,11 +218,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                   value={formData.vehicle_id}
                   onChange={handleChange}
                   disabled={isSubmitting}
-                  className={formErrors.vehicle_id ? "border-red-500" : ""}
                 />
-                {formErrors.vehicle_id && (
-                  <p className="text-xs text-red-500">{formErrors.vehicle_id}</p>
-                )}
               </div>
               
               <div className="space-y-2">
@@ -251,26 +247,11 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                   value={formData.location}
                   onChange={handleChange}
                   disabled={isSubmitting}
-                  className={formErrors.location ? "border-red-500" : ""}
                 />
-                {formErrors.location && (
-                  <p className="text-xs text-red-500">{formErrors.location}</p>
-                )}
               </div>
             </div>
           </div>
           <DialogFooter>
-            {/* Show all validation errors here for debugging */}
-            {Object.keys(formErrors).length > 0 && (
-              <div style={{ color: 'red', marginBottom: 8 }}>
-                <strong>Validation Errors:</strong>
-                <ul>
-                  {Object.entries(formErrors).map(([field, error]) => (
-                    <li key={field}>{field}: {error}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
@@ -287,4 +268,4 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       </DialogContent>
     </Dialog>
   );
-} 
+}

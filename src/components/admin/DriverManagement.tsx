@@ -22,13 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { AddDriverDialog } from './AddDriverDialog';
 import { EditDriverDialog } from './EditDriverDialog';
 import { DeleteDriverDialog } from './DeleteDriverDialog';
+import { AddDriverDialog } from './AddDriverDialog';
+import { toast } from "sonner";
 
 interface Driver {
   id: number;
@@ -45,19 +42,8 @@ interface Driver {
   vehicle_id: string;
 }
 
-interface DriverFormData {
-  name: string;
-  phone: string;
-  email: string;
-  license_no: string;
-  vehicle: string;
-  vehicle_id: string;
-  status: string;
-  location: string;
-}
-
 export function DriverManagement() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -65,31 +51,12 @@ export function DriverManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [retryCount, setRetryCount] = useState(0);
-  
-  // Dialog state
   const [isAddDriverDialogOpen, setIsAddDriverDialogOpen] = useState(false);
   const [isEditDriverDialogOpen, setIsEditDriverDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentDriver, setCurrentDriver] = useState<Driver | null>(null);
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  
-  const [driverForm, setDriverForm] = useState<DriverFormData>({
-    name: '',
-    phone: '',
-    email: '',
-    license_no: '',
-    vehicle: '',
-    vehicle_id: '',
-    status: 'available',
-    location: 'Visakhapatnam',
-  });
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetchDrivers();
@@ -258,10 +225,7 @@ export function DriverManagement() {
         throw new Error(data.message || 'Failed to update driver status');
       }
       
-      toast({
-        title: "Status Updated",
-        description: `Driver status has been updated to ${newStatus}`,
-      });
+      toast.success(`Driver status has been updated to ${newStatus}`);
       
       setDrivers(drivers.map(d => {
         if (d.id === driver.id) {
@@ -271,11 +235,7 @@ export function DriverManagement() {
       }));
     } catch (error) {
       console.error('Error updating driver status:', error);
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update driver status",
-        variant: "destructive"
-      });
+      toast.error(error instanceof Error ? error.message : "Failed to update driver status");
     }
   };
 
@@ -283,37 +243,13 @@ export function DriverManagement() {
     setRetryCount(prev => prev + 1);
   };
 
-  const resetDriverForm = () => {
-    setDriverForm({
-      name: '',
-      phone: '',
-      email: '',
-      license_no: '',
-      vehicle: '',
-      vehicle_id: '',
-      status: 'available',
-      location: 'Visakhapatnam',
-    });
-    setFormErrors({});
-  };
-
   const openAddDriverDialog = () => {
-    resetDriverForm();
     setIsAddDriverDialogOpen(true);
   };
 
   const openEditDriverDialog = (driver: Driver) => {
+    console.log("Opening edit dialog for driver:", driver);
     setCurrentDriver(driver);
-    setDriverForm({
-      name: driver.name,
-      phone: driver.phone,
-      email: driver.email || '',
-      license_no: driver.license_no || '',
-      vehicle: driver.vehicle || '',
-      vehicle_id: driver.vehicle_id || '',
-      status: driver.status,
-      location: driver.location,
-    });
     setIsEditDriverDialogOpen(true);
   };
 
@@ -322,56 +258,17 @@ export function DriverManagement() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDriverFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setDriverForm(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const handleStatusChange = (value: string) => {
-    setDriverForm(prev => ({ ...prev, status: value }));
-  };
-
-  const validateDriverForm = (): boolean => {
-    const errors: Record<string, string> = {};
-    
-    if (!driverForm.name.trim()) {
-      errors.name = "Name is required";
-    }
-    
-    if (!driverForm.phone.trim()) {
-      errors.phone = "Phone number is required";
-    } else if (!/^\d{10}$/.test(driverForm.phone.replace(/\D/g, ''))) {
-      errors.phone = "Please enter a valid 10-digit phone number";
-    }
-    
-    if (driverForm.email && !/^\S+@\S+\.\S+$/.test(driverForm.email)) {
-      errors.email = "Please enter a valid email address";
-    }
-    
-    if (!driverForm.vehicle.trim()) {
-      errors.vehicle = "Vehicle information is required";
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleAddDriver = async (formData: any) => {
-    setFormSubmitting(true);
+    setIsSubmitting(true);
     try {
       const apiBaseUrl = getApiBaseUrl();
       const payload = {
         name: formData.name,
         phone: formData.phone,
         email: formData.email,
-        license_no: formData.license_number,
-        vehicle_number: formData.vehicle_number,
-        vehicle_type: formData.vehicle_type,
+        license_no: formData.license_number || formData.license_no,
+        vehicle: formData.vehicle_type || formData.vehicle,
+        vehicle_id: formData.vehicle_number || formData.vehicle_id,
         status: formData.status,
         location: formData.location
       };
@@ -388,33 +285,26 @@ export function DriverManagement() {
       if (!response.ok || data.status !== 'success') {
         throw new Error(data.message || 'Failed to add driver');
       }
-      toast({
-        description: "New driver has been added successfully",
-      });
+      toast.success("New driver has been added successfully");
       if (data.driver) {
         setDrivers([...drivers, data.driver]);
       } else {
         fetchDrivers();
       }
-      setShowAddDialog(false);
+      setIsAddDriverDialogOpen(false);
     } catch (error) {
       console.error('Error adding driver:', error);
-      toast({
-        title: "Failed to Add Driver",
-        description: error instanceof Error ? error.message : "An error occurred",
-        variant: "destructive"
-      });
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
-      setFormSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleEditDriver = async () => {
-    if (!currentDriver || !validateDriverForm()) {
-      return;
-    }
+  const handleEditDriver = async (formData: any) => {
+    if (!currentDriver) return;
     
-    setFormSubmitting(true);
+    setIsSubmitting(true);
+    console.log("Updating driver with data:", formData);
     
     try {
       const apiBaseUrl = getApiBaseUrl();
@@ -424,66 +314,37 @@ export function DriverManagement() {
           'Content-Type': 'application/json',
           'X-Force-Refresh': 'true'
         },
-        body: JSON.stringify({
-          name: driverForm.name,
-          phone: driverForm.phone,
-          email: driverForm.email,
-          license_no: driverForm.license_no,
-          vehicle: driverForm.vehicle,
-          vehicle_id: driverForm.vehicle_id,
-          status: driverForm.status,
-          location: driverForm.location
-        })
+        body: JSON.stringify(formData)
       });
       
+      console.log("API response status:", response.status);
       const data = await response.json();
+      console.log("API response data:", data);
       
       if (!response.ok || data.status !== 'success') {
         throw new Error(data.message || 'Failed to update driver');
       }
       
-      toast({
-        title: "Driver Updated",
-        description: "Driver information has been updated successfully",
-      });
+      toast.success("Driver has been updated successfully");
       
-      // Update driver in list
-      setDrivers(drivers.map(d => {
-        if (d.id === currentDriver.id) {
-          return {
-            ...d,
-            name: driverForm.name,
-            phone: driverForm.phone,
-            email: driverForm.email,
-            license_no: driverForm.license_no,
-            vehicle: driverForm.vehicle,
-            vehicle_id: driverForm.vehicle_id,
-            status: driverForm.status as 'available' | 'busy' | 'offline',
-            location: driverForm.location
-          };
-        }
-        return d;
-      }));
+      // Update the driver in the local state
+      setDrivers(drivers.map(d => 
+        d.id === currentDriver.id ? { ...d, ...formData } : d
+      ));
       
       setIsEditDriverDialogOpen(false);
     } catch (error) {
       console.error('Error updating driver:', error);
-      toast({
-        title: "Failed to Update Driver",
-        description: error instanceof Error ? error.message : "An error occurred",
-        variant: "destructive"
-      });
+      toast.error(error instanceof Error ? error.message : "Failed to update driver");
     } finally {
-      setFormSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteDriver = async () => {
-    if (!currentDriver) {
-      return;
-    }
+    if (!currentDriver) return;
     
-    setFormSubmitting(true);
+    setIsSubmitting(true);
     
     try {
       const apiBaseUrl = getApiBaseUrl();
@@ -500,219 +361,207 @@ export function DriverManagement() {
         throw new Error(data.message || 'Failed to delete driver');
       }
       
-      toast({
-        title: "Driver Deleted",
-        description: "Driver has been deleted successfully",
-      });
+      toast.success("Driver has been deleted successfully");
       
-      // Remove driver from list
+      // Remove the driver from the local state
       setDrivers(drivers.filter(d => d.id !== currentDriver.id));
+      
       setIsDeleteDialogOpen(false);
     } catch (error) {
       console.error('Error deleting driver:', error);
-      toast({
-        title: "Failed to Delete Driver",
-        description: error instanceof Error ? error.message : "An error occurred",
-        variant: "destructive"
-      });
+      toast.error(error instanceof Error ? error.message : "Failed to delete driver");
     } finally {
-      setFormSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const totalDrivers = drivers.length;
-  const availableDrivers = drivers.filter(d => d.status === 'available').length;
-  const busyDrivers = drivers.filter(d => d.status === 'busy').length;
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight">Drivers</h2>
-          <p className="text-muted-foreground">
-            Manage your drivers and their assignments
-          </p>
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle className="flex items-center gap-2">
+            <Car className="h-5 w-5" /> Driver Management
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={retryFetchDrivers}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={openAddDriverDialog}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Add Driver
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsRefreshing(true)}
-            disabled={isLoading || isRefreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button onClick={() => setShowAddDialog(true)}>
-            Add Driver
-          </Button>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert className="mb-4" variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        <div className="flex gap-4 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search drivers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
         </div>
-      </div>
-      
-      <div className="flex items-center space-x-2">
-        <Input
-          placeholder="Search drivers..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 py-2"
-        >
-          <option value="">All Status</option>
-          <option value="available">Available</option>
-          <option value="busy">Busy</option>
-          <option value="offline">Offline</option>
-        </select>
-      </div>
-      
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {error}
-            <div className="mt-2">
-              <Button variant="outline" size="sm" onClick={retryFetchDrivers}>
-                Retry
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center">
-                  Loading drivers...
-                </TableCell>
-              </TableRow>
-            ) : filteredDrivers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center">
-                  No drivers found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredDrivers.map((driver) => (
-                <TableRow key={driver.id}>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{driver.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        License: {driver.license_no}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center">
-                        <Phone className="h-4 w-4 mr-1" />
-                        <span>{driver.phone}</span>
-                      </div>
-                      {driver.email && (
-                        <div className="flex items-center">
-                          <Mail className="h-4 w-4 mr-1" />
-                          <span>{driver.email}</span>
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Car className="h-4 w-4" />
-                      <span>{driver.vehicle}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(driver.status)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      <span>{driver.location}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedDriver(driver);
-                            setShowEditDialog(true);
-                          }}
-                        >
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => {
-                            setSelectedDriver(driver);
-                            setShowDeleteDialog(true);
-                          }}
-                        >
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+        
+        {isLoading ? (
+          <div className="flex justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : filteredDrivers.length > 0 ? (
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      
-      {showAddDialog && (
-        <AddDriverDialog
-          isOpen={showAddDialog}
-          onClose={() => setShowAddDialog(false)}
+              </TableHeader>
+              <TableBody>
+                {filteredDrivers.map((driver) => (
+                  <TableRow key={driver.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{driver.name}</div>
+                        <div className="text-sm text-gray-500">License: {driver.license_no || 'N/A'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 text-sm">
+                          <Phone className="h-3 w-3" /> {driver.phone}
+                        </div>
+                        {driver.email && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Mail className="h-3 w-3" /> {driver.email}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {driver.vehicle ? (
+                        <div className="flex items-center">
+                          <Car className="h-4 w-4 mr-1 text-gray-500" />
+                          <span>{driver.vehicle}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">No vehicle</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(driver.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <MapPin className="h-4 w-4 mr-1 text-gray-500" />
+                        <span>{driver.location || 'Unknown'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleDriverStatus(driver)}
+                        >
+                          {driver.status === 'available' ? (
+                            <>
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Set Offline
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Set Available
+                            </>
+                          )}
+                        </Button>
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openEditDriverDialog(driver)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={() => openDeleteDriverDialog(driver)}
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No drivers found matching your search criteria.
+          </div>
+        )}
+      </CardContent>
+
+      {/* Driver Dialogs */}
+      {isAddDriverDialogOpen && (
+        <AddDriverDialog 
+          isOpen={isAddDriverDialogOpen}
+          onClose={() => setIsAddDriverDialogOpen(false)}
           onSubmit={handleAddDriver}
-          isSubmitting={formSubmitting}
+          isSubmitting={isSubmitting}
         />
       )}
       
-      {showEditDialog && selectedDriver && (
+      {isEditDriverDialogOpen && currentDriver && (
         <EditDriverDialog
-          key={selectedDriver?.id || 'new'}
-          isOpen={showEditDialog}
-          onClose={() => setShowEditDialog(false)}
+          isOpen={isEditDriverDialogOpen}
+          onClose={() => setIsEditDriverDialogOpen(false)}
           onSubmit={handleEditDriver}
-          driver={selectedDriver}
-          isSubmitting={formSubmitting}
+          driver={currentDriver}
+          isSubmitting={isSubmitting}
         />
       )}
       
-      {showDeleteDialog && selectedDriver && (
+      {isDeleteDialogOpen && currentDriver && (
         <DeleteDriverDialog
-          isOpen={showDeleteDialog}
-          onClose={() => setShowDeleteDialog(false)}
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
           onConfirm={handleDeleteDriver}
-          driver={selectedDriver}
-          isSubmitting={formSubmitting}
+          driver={currentDriver}
+          isDeleting={isSubmitting}
         />
       )}
-    </div>
+    </Card>
   );
 }

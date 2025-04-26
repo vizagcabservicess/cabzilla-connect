@@ -1,3 +1,4 @@
+
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -6,7 +7,7 @@ require_once __DIR__ . '/../common/db_helper.php';
 // Set headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Methods: GET, PUT, DELETE, OPTIONS, POST');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -90,6 +91,7 @@ try {
             rating DECIMAL(3,2) DEFAULT 5.0,
             location VARCHAR(255) DEFAULT 'Visakhapatnam',
             vehicle VARCHAR(100),
+            vehicle_id VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
@@ -152,7 +154,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $jsonData = file_get_contents('php://input');
             $data = json_decode($jsonData, true);
             
-            error_log('Received data: ' . print_r($data, true));
+            error_log('Received driver data for update: ' . print_r($data, true));
             
             if (!$data) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
@@ -180,12 +182,24 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 ], 409);
             }
             
-            // Ensure vehicle, vehicle_id, status, and location are set
-            $data['vehicle'] = isset($data['vehicle']) ? $data['vehicle'] : '';
-            $data['vehicle_id'] = isset($data['vehicle_id']) ? $data['vehicle_id'] : '';
-            $data['status'] = isset($data['status']) ? $data['status'] : 'available';
-            $data['location'] = isset($data['location']) ? $data['location'] : '';
-            error_log('Updating driver with: ' . print_r($data, true));
+            // Ensure required fields are set
+            $vehicleValue = isset($data['vehicle']) ? $data['vehicle'] : '';
+            $vehicleIdValue = isset($data['vehicle_id']) ? $data['vehicle_id'] : '';
+            $statusValue = isset($data['status']) ? $data['status'] : 'available';
+            $locationValue = isset($data['location']) ? $data['location'] : '';
+            $emailValue = isset($data['email']) ? $data['email'] : '';
+            
+            error_log('Processing driver update with: ' . print_r([
+                'name' => $data['name'],
+                'phone' => $data['phone'],
+                'email' => $emailValue,
+                'license_no' => $data['license_no'],
+                'vehicle' => $vehicleValue,
+                'vehicle_id' => $vehicleIdValue,
+                'status' => $statusValue,
+                'location' => $locationValue
+            ], true));
+            
             // Update driver details
             $stmt = $conn->prepare("
                 UPDATE drivers SET 
@@ -205,18 +219,18 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 "ssssssssi",
                 $data['name'],
                 $data['phone'],
-                $data['email'],
+                $emailValue,
                 $data['license_no'],
-                $data['vehicle'],
-                $data['vehicle_id'],
-                $data['status'],
-                $data['location'],
+                $vehicleValue,
+                $vehicleIdValue,
+                $statusValue,
+                $locationValue,
                 $driverId
             );
             
             if ($stmt->execute()) {
-                error_log('Rows affected: ' . $stmt->affected_rows);
-                error_log('Driver update executed: ' . print_r($data, true));
+                error_log('Driver update executed successfully. Affected rows: ' . $stmt->affected_rows);
+                
                 // Update documents if provided
                 if (!empty($data['documents'])) {
                     foreach ($data['documents'] as $doc) {
@@ -246,10 +260,25 @@ switch ($_SERVER['REQUEST_METHOD']) {
                     }
                 }
                 
-                sendJsonResponse([
-                    'status' => 'success',
-                    'message' => 'Driver updated successfully'
-                ]);
+                // Fetch the updated driver to return in response
+                $getStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+                $getStmt->bind_param("i", $driverId);
+                $getStmt->execute();
+                $result = $getStmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    $updatedDriver = $result->fetch_assoc();
+                    sendJsonResponse([
+                        'status' => 'success',
+                        'message' => 'Driver updated successfully',
+                        'data' => $updatedDriver
+                    ]);
+                } else {
+                    sendJsonResponse([
+                        'status' => 'success',
+                        'message' => 'Driver updated successfully'
+                    ]);
+                }
             } else {
                 throw new Exception("Failed to update driver: " . $stmt->error);
             }
