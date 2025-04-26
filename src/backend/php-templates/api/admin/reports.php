@@ -1,14 +1,14 @@
 
 <?php
-// reports.php - Generate reports based on booking data
+// reports.php - Generate various types of reports
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 
 // Set headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Debug, *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
 // Handle preflight OPTIONS request
@@ -17,19 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Debug mode
-$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
-
 // Function to send JSON response
 function sendResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     echo json_encode($data);
     exit;
-}
-
-// Log request
-if ($debugMode) {
-    error_log("Reports API called: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 }
 
 // Get database connection
@@ -39,309 +31,225 @@ try {
     sendResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
 }
 
-// Only allow GET requests
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    sendResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
-}
-
-// Get report type and filters
+// Get report parameters from query string
 $reportType = isset($_GET['type']) ? $_GET['type'] : 'bookings';
-$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-30 days'));
-$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+$startDate = isset($_GET['startDate']) ? $_GET['startDate'] : date('Y-m-d', strtotime('-30 days'));
+$endDate = isset($_GET['endDate']) ? $_GET['endDate'] : date('Y-m-d');
+$format = isset($_GET['format']) ? $_GET['format'] : 'json';
+$detailed = isset($_GET['detailed']) ? filter_var($_GET['detailed'], FILTER_VALIDATE_BOOLEAN) : false;
 
 try {
     $reportData = [];
     
     switch ($reportType) {
         case 'bookings':
-            $reportData = generateBookingsReport($conn, $startDate, $endDate);
+            // Get booking statistics
+            if ($detailed) {
+                $sql = "SELECT * FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $bookings = [];
+                while ($row = $result->fetch_assoc()) {
+                    $bookings[] = $row;
+                }
+                $reportData['bookings'] = $bookings;
+            } else {
+                // Summary report
+                $summaryData = [];
+                
+                // Total bookings
+                $sql = "SELECT COUNT(*) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result()->fetch_assoc();
+                $summaryData['totalBookings'] = (int)$result['total'];
+                
+                // Bookings by status
+                $sql = "SELECT status, COUNT(*) as count FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY status";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $bookingsByStatus = [];
+                while ($row = $result->fetch_assoc()) {
+                    $bookingsByStatus[$row['status']] = (int)$row['count'];
+                }
+                $summaryData['bookingsByStatus'] = $bookingsByStatus;
+                
+                // Daily booking counts
+                $sql = "SELECT DATE(created_at) as date, COUNT(*) as count FROM bookings 
+                        WHERE DATE(created_at) BETWEEN ? AND ? 
+                        GROUP BY DATE(created_at) ORDER BY DATE(created_at)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $dailyBookings = [];
+                while ($row = $result->fetch_assoc()) {
+                    $dailyBookings[] = [
+                        'date' => $row['date'],
+                        'count' => (int)$row['count']
+                    ];
+                }
+                $summaryData['dailyBookings'] = $dailyBookings;
+                
+                $reportData = $summaryData;
+            }
             break;
+            
         case 'revenue':
-            $reportData = generateRevenueReport($conn, $startDate, $endDate);
+            // Get revenue statistics
+            if ($detailed) {
+                $sql = "SELECT id, booking_number, passenger_name, passenger_phone, total_amount, created_at 
+                        FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $transactions = [];
+                while ($row = $result->fetch_assoc()) {
+                    $transactions[] = $row;
+                }
+                $reportData['transactions'] = $transactions;
+            } else {
+                // Summary revenue report
+                $summaryData = [];
+                
+                // Total revenue
+                $sql = "SELECT SUM(total_amount) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result()->fetch_assoc();
+                $summaryData['totalRevenue'] = (float)($result['total'] ?? 0);
+                
+                // Revenue by trip type
+                $sql = "SELECT trip_type, SUM(total_amount) as total FROM bookings 
+                        WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY trip_type";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $revenueByTripType = [];
+                while ($row = $result->fetch_assoc()) {
+                    $revenueByTripType[$row['trip_type']] = (float)$row['total'];
+                }
+                $summaryData['revenueByTripType'] = $revenueByTripType;
+                
+                // Daily revenue
+                $sql = "SELECT DATE(created_at) as date, SUM(total_amount) as total FROM bookings 
+                        WHERE DATE(created_at) BETWEEN ? AND ? 
+                        GROUP BY DATE(created_at) ORDER BY DATE(created_at)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $dailyRevenue = [];
+                while ($row = $result->fetch_assoc()) {
+                    $dailyRevenue[] = [
+                        'date' => $row['date'],
+                        'total' => (float)$row['total']
+                    ];
+                }
+                $summaryData['dailyRevenue'] = $dailyRevenue;
+                
+                $reportData = $summaryData;
+            }
             break;
+            
         case 'drivers':
-            $reportData = generateDriversReport($conn, $startDate, $endDate);
+            // Get driver statistics
+            if ($detailed) {
+                $sql = "SELECT * FROM drivers ORDER BY name";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $drivers = [];
+                while ($row = $result->fetch_assoc()) {
+                    $drivers[] = $row;
+                }
+                $reportData['drivers'] = $drivers;
+            } else {
+                // Summary driver report
+                $summaryData = [];
+                
+                // Driver count by status
+                $sql = "SELECT status, COUNT(*) as count FROM drivers GROUP BY status";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $driversByStatus = [];
+                while ($row = $result->fetch_assoc()) {
+                    $driversByStatus[$row['status']] = (int)$row['count'];
+                }
+                $summaryData['driversByStatus'] = $driversByStatus;
+                
+                // Top drivers by earnings
+                $sql = "SELECT name, phone, earnings, total_rides, rating FROM drivers ORDER BY earnings DESC LIMIT 5";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                $topDrivers = [];
+                while ($row = $result->fetch_assoc()) {
+                    $topDrivers[] = $row;
+                }
+                $summaryData['topDrivers'] = $topDrivers;
+                
+                $reportData = $summaryData;
+            }
             break;
+            
         case 'vehicles':
-            $reportData = generateVehiclesReport($conn, $startDate, $endDate);
+            // Get vehicle utilization statistics
+            
+            // Try to get booking data grouped by vehicle type
+            $sql = "SELECT cab_type, COUNT(*) as bookings, SUM(total_amount) as revenue 
+                    FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? 
+                    GROUP BY cab_type ORDER BY bookings DESC";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ss", $startDate, $endDate);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $vehicleStats = [];
+            while ($row = $result->fetch_assoc()) {
+                $vehicleStats[] = [
+                    'vehicleType' => $row['cab_type'],
+                    'bookings' => (int)$row['bookings'],
+                    'revenue' => (float)$row['revenue']
+                ];
+            }
+            $reportData['vehicleStats'] = $vehicleStats;
             break;
+            
         default:
-            sendResponse(['status' => 'error', 'message' => 'Invalid report type'], 400);
+            sendResponse(['status' => 'error', 'message' => 'Unknown report type'], 400);
     }
     
+    // Return the report data
     sendResponse([
-        'status' => 'success', 
-        'report_type' => $reportType,
-        'start_date' => $startDate,
-        'end_date' => $endDate,
+        'status' => 'success',
+        'reportType' => $reportType,
+        'startDate' => $startDate,
+        'endDate' => $endDate,
         'data' => $reportData
     ]);
+    
 } catch (Exception $e) {
     sendResponse(['status' => 'error', 'message' => 'Failed to generate report: ' . $e->getMessage()], 500);
 }
 
-// Generate bookings report
-function generateBookingsReport($conn, $startDate, $endDate) {
-    $sql = "SELECT 
-                DATE(pickup_date) as date,
-                COUNT(*) as total_bookings,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_bookings,
-                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_bookings,
-                SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed_bookings,
-                SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) as assigned_bookings,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_bookings
-            FROM bookings
-            WHERE pickup_date BETWEEN ? AND ? 
-            GROUP BY DATE(pickup_date)
-            ORDER BY date";
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ss", $startDate, $endDate);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $report = [];
-    while ($row = $result->fetch_assoc()) {
-        $report[] = $row;
-    }
-    
-    // If no data, generate empty report structure
-    if (empty($report)) {
-        $report = getMockBookingsReport($startDate, $endDate);
-    }
-    
-    return $report;
-}
-
-// Generate revenue report
-function generateRevenueReport($conn, $startDate, $endDate) {
-    $sql = "SELECT 
-                DATE(pickup_date) as date,
-                SUM(total_amount) as total_revenue,
-                AVG(total_amount) as average_booking_value,
-                COUNT(*) as booking_count,
-                trip_type,
-                cab_type
-            FROM bookings
-            WHERE pickup_date BETWEEN ? AND ? AND status != 'cancelled'
-            GROUP BY DATE(pickup_date), trip_type, cab_type
-            ORDER BY date";
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ss", $startDate, $endDate);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $report = [];
-    while ($row = $result->fetch_assoc()) {
-        $report[] = $row;
-    }
-    
-    // If no data, generate empty report structure
-    if (empty($report)) {
-        $report = getMockRevenueReport($startDate, $endDate);
-    }
-    
-    return $report;
-}
-
-// Generate drivers report
-function generateDriversReport($conn, $startDate, $endDate) {
-    // First check if the drivers table exists
-    $tableCheckResult = $conn->query("SHOW TABLES LIKE 'drivers'");
-    if ($tableCheckResult->num_rows === 0) {
-        return getMockDriversReport();
-    }
-    
-    // Check if the bookings table has driver_id column
-    $columnCheckResult = $conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
-    
-    if ($columnCheckResult->num_rows === 0) {
-        // No driver_id column, use driverName for join
-        $sql = "SELECT 
-                    d.id as driver_id,
-                    d.name as driver_name,
-                    COUNT(b.id) as total_trips,
-                    SUM(b.total_amount) as total_earnings,
-                    AVG(b.total_amount) as average_trip_value,
-                    d.rating
-                FROM drivers d
-                LEFT JOIN bookings b ON d.name = b.driverName AND b.pickup_date BETWEEN ? AND ? AND b.status = 'completed'
-                GROUP BY d.id, d.name, d.rating
-                ORDER BY total_trips DESC";
-    } else {
-        // Use driver_id for join
-        $sql = "SELECT 
-                    d.id as driver_id,
-                    d.name as driver_name,
-                    COUNT(b.id) as total_trips,
-                    SUM(b.total_amount) as total_earnings,
-                    AVG(b.total_amount) as average_trip_value,
-                    d.rating
-                FROM drivers d
-                LEFT JOIN bookings b ON d.id = b.driver_id AND b.pickup_date BETWEEN ? AND ? AND b.status = 'completed'
-                GROUP BY d.id, d.name, d.rating
-                ORDER BY total_trips DESC";
-    }
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ss", $startDate, $endDate);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $report = [];
-    while ($row = $result->fetch_assoc()) {
-        $report[] = $row;
-    }
-    
-    // If no data, generate empty report structure
-    if (empty($report)) {
-        $report = getMockDriversReport();
-    }
-    
-    return $report;
-}
-
-// Generate vehicles report
-function generateVehiclesReport($conn, $startDate, $endDate) {
-    $sql = "SELECT 
-                cab_type as vehicle_type,
-                COUNT(*) as total_bookings,
-                SUM(total_amount) as total_revenue,
-                AVG(total_amount) as average_revenue
-            FROM bookings
-            WHERE pickup_date BETWEEN ? AND ? AND status = 'completed'
-            GROUP BY cab_type
-            ORDER BY total_bookings DESC";
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ss", $startDate, $endDate);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $report = [];
-    while ($row = $result->fetch_assoc()) {
-        $report[] = $row;
-    }
-    
-    // If no data, generate empty report structure
-    if (empty($report)) {
-        $report = getMockVehiclesReport();
-    }
-    
-    return $report;
-}
-
-// Mock report data generation functions
-function getMockBookingsReport($startDate, $endDate) {
-    $start = new DateTime($startDate);
-    $end = new DateTime($endDate);
-    $interval = new DateInterval('P1D');
-    $dateRange = new DatePeriod($start, $interval, $end);
-    
-    $report = [];
-    foreach ($dateRange as $date) {
-        $dateStr = $date->format('Y-m-d');
-        $totalBookings = rand(10, 50);
-        $completed = rand(5, $totalBookings - 2);
-        $cancelled = rand(1, 3);
-        $confirmed = rand(1, 3);
-        $assigned = rand(1, 3);
-        $pending = $totalBookings - $completed - $cancelled - $confirmed - $assigned;
-        
-        $report[] = [
-            'date' => $dateStr,
-            'total_bookings' => $totalBookings,
-            'completed_bookings' => $completed,
-            'cancelled_bookings' => $cancelled,
-            'confirmed_bookings' => $confirmed,
-            'assigned_bookings' => $assigned,
-            'pending_bookings' => $pending
-        ];
-    }
-    
-    return $report;
-}
-
-function getMockRevenueReport($startDate, $endDate) {
-    $start = new DateTime($startDate);
-    $end = new DateTime($endDate);
-    $interval = new DateInterval('P1D');
-    $dateRange = new DatePeriod($start, $interval, $end);
-    
-    $tripTypes = ['local', 'outstation', 'airport'];
-    $cabTypes = ['Sedan', 'SUV', 'Hatchback', 'Luxury', 'Tempo Traveller'];
-    
-    $report = [];
-    foreach ($dateRange as $date) {
-        $dateStr = $date->format('Y-m-d');
-        
-        foreach ($tripTypes as $tripType) {
-            foreach ($cabTypes as $cabType) {
-                $bookingCount = rand(1, 10);
-                $totalRevenue = $bookingCount * rand(1000, 5000);
-                $avgBookingValue = $totalRevenue / $bookingCount;
-                
-                $report[] = [
-                    'date' => $dateStr,
-                    'total_revenue' => $totalRevenue,
-                    'average_booking_value' => $avgBookingValue,
-                    'booking_count' => $bookingCount,
-                    'trip_type' => $tripType,
-                    'cab_type' => $cabType
-                ];
-            }
-        }
-    }
-    
-    return $report;
-}
-
-function getMockDriversReport() {
-    $driverNames = [
-        'Rajesh Kumar', 'Pavan Reddy', 'Suresh Verma', 'Venkatesh S', 
-        'Ramesh Babu', 'Arun Singh', 'Mahesh Sharma', 'Srinivas Rao'
-    ];
-    
-    $report = [];
-    for ($i = 0; $i < count($driverNames); $i++) {
-        $totalTrips = rand(50, 200);
-        $avgTripValue = rand(800, 2000);
-        $totalEarnings = $totalTrips * $avgTripValue;
-        $rating = round(rand(35, 50) / 10, 1);
-        
-        $report[] = [
-            'driver_id' => $i + 1,
-            'driver_name' => $driverNames[$i],
-            'total_trips' => $totalTrips,
-            'total_earnings' => $totalEarnings,
-            'average_trip_value' => $avgTripValue,
-            'rating' => $rating
-        ];
-    }
-    
-    return $report;
-}
-
-function getMockVehiclesReport() {
-    $vehicleTypes = ['Sedan', 'SUV', 'Hatchback', 'Luxury', 'Tempo Traveller'];
-    
-    $report = [];
-    foreach ($vehicleTypes as $type) {
-        $totalBookings = rand(50, 200);
-        $avgRevenue = rand(1000, 3000);
-        $totalRevenue = $totalBookings * $avgRevenue;
-        
-        $report[] = [
-            'vehicle_type' => $type,
-            'total_bookings' => $totalBookings,
-            'total_revenue' => $totalRevenue,
-            'average_revenue' => $avgRevenue
-        ];
-    }
-    
-    return $report;
-}
-
-// Close database connection
+// Close connection
 $conn->close();

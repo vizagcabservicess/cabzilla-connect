@@ -52,6 +52,13 @@ RewriteRule ^delete-driver\.php$ delete-driver.php [L,NC,QSA]
 RewriteRule ^reports\.php$ reports.php [L,NC,QSA]
 RewriteRule ^report-metrics\.php$ report-metrics.php [L,NC,QSA]
 
+# Add aliases for the endpoints to make them accessible via different URL patterns
+RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
+RewriteRule ^driver/([0-9]+)$ driver.php?id=$1 [L,NC,QSA]
+RewriteRule ^reports/?$ reports.php [L,NC,QSA]
+RewriteRule ^metrics/?$ report-metrics.php [L,NC,QSA]
+RewriteRule ^booking/?$ booking.php [L,NC,QSA]
+
 # CRITICAL: Explicitly define booking endpoints with highest priority
 RewriteRule ^booking\.php$ booking.php [L,NC,QSA]
 RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,NC,QSA]

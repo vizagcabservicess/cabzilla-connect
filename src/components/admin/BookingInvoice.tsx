@@ -57,6 +57,10 @@ export function BookingInvoice({
       
       if (result && result.data) {
         setInvoiceData(result.data);
+        toast({
+          title: "Invoice Generated",
+          description: "Invoice was generated successfully"
+        });
       } else {
         // If no data returned but no error, still remove loading state
         setInvoiceData(null);

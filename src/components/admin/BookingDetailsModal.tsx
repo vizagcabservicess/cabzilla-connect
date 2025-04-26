@@ -11,7 +11,7 @@ interface BookingDetailsModalProps {
   onEdit: (updatedData: Partial<Booking>) => Promise<void>;
   onAssignDriver: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onCancel: () => Promise<void>;
-  onGenerateInvoice: () => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isSubmitting: boolean;
 }

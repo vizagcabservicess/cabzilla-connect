@@ -138,14 +138,24 @@ switch ($_SERVER['REQUEST_METHOD']) {
             
             // Set default values for optional fields
             $email = isset($data['email']) ? $data['email'] : '';
-            $licenseNo = isset($data['licenseNo']) ? $data['licenseNo'] : '';
+            $licenseNo = isset($data['license_no']) || isset($data['licenseNo']) ? 
+                (isset($data['license_no']) ? $data['license_no'] : $data['licenseNo']) : '';
             $status = isset($data['status']) ? $data['status'] : 'available';
             $location = isset($data['location']) ? $data['location'] : 'Visakhapatnam';
             $vehicle = isset($data['vehicle']) ? $data['vehicle'] : '';
             
-            $sql = "INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssss", $data['name'], $data['phone'], $email, $licenseNo, $status, $location, $vehicle);
+            $stmt->bind_param("sssssss", 
+                $data['name'], 
+                $data['phone'], 
+                $email, 
+                $licenseNo, 
+                $status, 
+                $location, 
+                $vehicle
+            );
             $stmt->execute();
             
             if ($stmt->affected_rows === 0) {
