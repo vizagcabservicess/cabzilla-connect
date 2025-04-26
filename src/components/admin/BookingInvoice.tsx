@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { getApiUrl } from '@/config/api';
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -84,8 +84,8 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
-    const gstParam = gstEnabled ? '&gst=1' : '';
+    const baseUrl = getApiUrl(`/api/admin/download-invoice.php?id=${booking.id}`);
+    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     

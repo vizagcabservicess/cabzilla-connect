@@ -3,7 +3,10 @@
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First, *"
+    Header always set Access-Control-Max-Age "86400"
+    Header always set Access-Control-Expose-Headers "*"
+    Header always set X-Content-Type-Options "nosniff"
     
     # Handle preflight OPTIONS request
     RewriteEngine On
@@ -27,3 +30,31 @@
 # Ensure PHP errors are displayed in development
 php_flag display_errors On
 php_value error_reporting E_ALL
+
+# Enable rewrite engine for api routing
+RewriteEngine On
+
+# Direct access to API PHP files
+<Files ~ "\.php$">
+    Order Allow,Deny
+    Allow from all
+    SetHandler application/x-httpd-php
+</Files>
+
+# High priority API endpoints
+RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
+
+# Invoice and receipt endpoints with high priority
+RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
+
+# Don't apply rewriting to actual files or directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Send all other requests to index.html for React to handle
+RewriteRule ^(.*)$ /index.html [L]

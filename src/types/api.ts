@@ -1,3 +1,4 @@
+
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -19,6 +20,7 @@ export interface Driver {
   license_no?: string;
   license_number?: string;  // Alternative field name for compatibility
   vehicle?: string;
+  vehicleNumber?: string;   // Added for compatibility with DriverAssignment component
   vehicle_id?: string;
   status?: DriverStatus;
   location?: string;
