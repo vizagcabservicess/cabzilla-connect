@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,7 +42,6 @@ export function BookingInvoice({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Try to generate invoice when component mounts
     if (booking && booking.id) {
       handleGenerateInvoice();
     }
@@ -53,6 +51,17 @@ export function BookingInvoice({
     try {
       setLoading(true);
       setError(null);
+      
+      if (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress)) {
+        toast({
+          variant: "destructive",
+          title: "Missing GST Details",
+          description: "Please fill in all GST details"
+        });
+        setLoading(false);
+        return;
+      }
+      
       const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
       
       if (result && result.data) {
@@ -62,7 +71,6 @@ export function BookingInvoice({
           description: "Invoice was generated successfully"
         });
       } else {
-        // If no data returned but no error, still remove loading state
         setInvoiceData(null);
       }
     } catch (error) {
@@ -74,7 +82,6 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    // Construct PDF URL with GST parameter if enabled
     const gstParam = gstEnabled ? '&gst=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
@@ -135,33 +142,36 @@ export function BookingInvoice({
             {gstEnabled && (
               <div className="mt-4 space-y-3">
                 <div>
-                  <Label htmlFor="gstNumber">GST Number</Label>
+                  <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
                   <Input 
                     id="gstNumber"
                     name="gstNumber"
                     value={gstDetails.gstNumber}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter GST number"
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="companyName">Company Name</Label>
+                  <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
                   <Input 
                     id="companyName"
                     name="companyName"
                     value={gstDetails.companyName}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company name"
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="companyAddress">Company Address</Label>
+                  <Label htmlFor="companyAddress">Company Address<span className="text-red-500">*</span></Label>
                   <Input 
                     id="companyAddress"
                     name="companyAddress"
                     value={gstDetails.companyAddress}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company address"
+                    required
                   />
                 </div>
               </div>
@@ -171,7 +181,7 @@ export function BookingInvoice({
               <Button 
                 variant="outline" 
                 onClick={handleGenerateInvoice}
-                disabled={loading || isSubmitting}
+                disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 className="w-full"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -220,7 +230,7 @@ export function BookingInvoice({
                 <Button 
                   variant="outline" 
                   onClick={handleGenerateInvoice}
-                  disabled={loading || isSubmitting}
+                  disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh

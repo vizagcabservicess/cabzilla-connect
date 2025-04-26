@@ -1,4 +1,3 @@
-
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -43,4 +42,34 @@ export interface Driver {
   vehicle_id?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface Booking {
+  id: number;
+  bookingNumber: string;
+  passengerName: string;
+  passengerPhone: string;
+  passengerEmail: string;
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  cabType: string;
+  tripType: string;
+  tripMode?: string;
+  status: BookingStatus;
+  totalAmount: number;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+  billingAddress?: string;
+  extraCharges?: {
+    amount: number;
+    description: string;
+  }[];
+  gstEnabled?: boolean;
+  gstDetails?: {
+    gstNumber: string;
+    companyName: string;
+    companyAddress: string;
+  };
 }

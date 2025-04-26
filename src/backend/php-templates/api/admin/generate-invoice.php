@@ -149,11 +149,11 @@ try {
     // Calculate tax components
     $totalAmount = (float)$booking['total_amount'];
     
-    // GST calculation (18% - split into CGST and SGST)
+    // GST calculation (12% - split into CGST and SGST)
     if ($gstEnabled) {
-        $baseAmount = $totalAmount / 1.18; // Remove GST from total to get base amount
-        $cgstRate = 0.09; // 9%
-        $sgstRate = 0.09; // 9%
+        $baseAmount = $totalAmount / 1.12; // Remove GST from total to get base amount
+        $cgstRate = 0.06; // 6%
+        $sgstRate = 0.06; // 6%
         
         $cgstAmount = round($baseAmount * $cgstRate, 2);
         $sgstAmount = round($baseAmount * $sgstRate, 2);

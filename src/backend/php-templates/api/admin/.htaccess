@@ -120,3 +120,18 @@ RewriteRule ^driver/([0-9]+)/?$ driver.php?id=$1 [L,NC,QSA]
 RewriteRule ^generate-invoice/?$ generate-invoice.php [L,NC,QSA]
 RewriteRule ^download-invoice/?$ download-invoice.php [L,NC,QSA]
 RewriteRule ^invoice/([0-9]+)/?$ generate-invoice.php?id=$1 [L,NC,QSA]
+
+# Add explicit rules for invoice generation
+<Files "generate-invoice.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# Critical invoice endpoints
+RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
+RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
+RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
+RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]

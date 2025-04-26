@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BookingDetails } from './BookingDetails';
@@ -28,21 +29,21 @@ export function BookingDetailsModal({
 }: BookingDetailsModalProps) {
   useEffect(() => {
     if (isOpen) {
-      // Scroll to top when modal opens
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      // Also reset modal scroll position
-      const modalContent = document.querySelector('.booking-details-modal-content');
-      if (modalContent) {
-        modalContent.scrollTop = 0;
-      }
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
     }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, [isOpen]);
 
   if (!booking) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
         <DialogHeader className="sticky top-0 z-50 bg-white pb-4 border-b">
           <DialogTitle>Booking #{booking.bookingNumber}</DialogTitle>
         </DialogHeader>
