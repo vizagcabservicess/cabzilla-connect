@@ -1,3 +1,4 @@
+
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -23,6 +24,11 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+// Debug logging function
+function debugLog($message, $data = []) {
+    error_log('DEBUG: ' . $message . ' ' . (is_array($data) ? json_encode($data) : $data));
+}
+
 // Function to validate driver data
 function validateDriverData($data) {
     $errors = [];
@@ -43,6 +49,7 @@ function validateDriverData($data) {
         $errors[] = 'Invalid email format';
     }
     
+    // Check license_no field
     if (empty($data['license_no'])) {
         $errors[] = 'License number is required';
     }
@@ -156,16 +163,14 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $jsonData = file_get_contents('php://input');
             $data = json_decode($jsonData, true);
             
+            // Log the received data
+            debugLog('Received data for driver update', $data);
+            
             // Defensive check for data structure
             if (!is_array($data)) {
-                error_log('DEBUG: Data is not an array: ' . $jsonData);
+                debugLog('Data is not an array', $jsonData);
                 sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data structure'], 400);
             }
-            
-            // Debug logging before validation
-            error_log('DEBUG: Received data for validation: ' . print_r($data, true));
-            
-            error_log('Received driver data for update: ' . print_r($data, true));
             
             if (!$data) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
@@ -205,7 +210,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $emailValue = isset($data['email']) ? $data['email'] : '';
             
             // Log the values we're going to use in the update
-            error_log('Driver update values: ' . print_r([
+            debugLog('Driver update values', [
                 'name' => $data['name'],
                 'phone' => $data['phone'],
                 'email' => $emailValue,
@@ -214,7 +219,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 'vehicle_id' => $vehicleIdValue,
                 'status' => $statusValue,
                 'location' => $locationValue
-            ], true));
+            ]);
             
             // Update driver details
             $stmt = $conn->prepare("
@@ -245,7 +250,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             );
             
             if ($stmt->execute()) {
-                error_log('Driver update executed successfully. Affected rows: ' . $stmt->affected_rows);
+                debugLog('Driver update executed successfully. Affected rows: ' . $stmt->affected_rows);
                 
                 // Fetch the updated driver to return in response
                 $getStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");

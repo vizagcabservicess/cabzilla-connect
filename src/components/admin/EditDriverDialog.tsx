@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -30,9 +31,10 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
-  // Initialize form data with driver details only when dialog opens
+  // Initialize form data with driver details only when dialog opens or driver changes
   useEffect(() => {
     if (isOpen && driver) {
+      // Ensure we're using license_no consistently
       setFormData({
         name: driver.name || '',
         phone: driver.phone || '',
@@ -40,7 +42,9 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
         license_no: driver.license_no || '',
         vehicle: driver.vehicle || '',
         vehicle_id: driver.vehicle_id || '',
-        status: (['available', 'busy', 'offline'].includes(driver.status) ? driver.status : 'available'),
+        status: (['available', 'busy', 'offline'].includes(driver.status as DriverStatus) 
+                ? driver.status 
+                : 'available') as DriverStatus,
         location: driver.location || ''
       });
       setFormErrors({});
@@ -126,6 +130,18 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   };
   
   const handleClose = () => {
+    // Reset form when closing
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      license_no: '',
+      vehicle: '',
+      vehicle_id: '',
+      status: 'available',
+      location: ''
+    });
+    setFormErrors({});
     onClose();
   };
   

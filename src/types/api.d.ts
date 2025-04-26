@@ -1,3 +1,4 @@
+
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -32,8 +33,7 @@ export interface Driver {
   name: string;
   phone: string;
   email: string;
-  license_no?: string;
-  license_number?: string;
+  license_no: string;  // Standardize on license_no
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
