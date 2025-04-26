@@ -59,7 +59,6 @@ interface DriverFormData {
 export function DriverManagement() {
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<DriverStatus | ''>('');
   const [isLoading, setIsLoading] = useState(true);
