@@ -368,7 +368,7 @@ export function DriverManagement() {
           license_no: formData.license_number,
           status: formData.status,
           location: formData.location,
-          vehicle: formData.vehicle_type || formData.vehicle
+          vehicle: formData.vehicle_type
         })
       });
       const data = await response.json();
