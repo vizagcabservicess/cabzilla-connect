@@ -55,6 +55,13 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     });
   }, [driver]);
   
+  // Debug: Log form state and errors on every render
+  useEffect(() => {
+    console.log('EditDriverDialog formData:', formData);
+    console.log('EditDriverDialog formErrors:', formErrors);
+    console.log('EditDriverDialog isSubmitting:', isSubmitting);
+  });
+  
   const validateForm = () => {
     const errors: Record<string, string> = {};
     
@@ -248,6 +255,17 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
             </div>
           </div>
           <DialogFooter>
+            {/* Show all validation errors here for debugging */}
+            {Object.keys(formErrors).length > 0 && (
+              <div style={{ color: 'red', marginBottom: 8 }}>
+                <strong>Validation Errors:</strong>
+                <ul>
+                  {Object.entries(formErrors).map(([field, error]) => (
+                    <li key={field}>{field}: {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
