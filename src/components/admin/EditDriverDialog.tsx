@@ -30,16 +30,16 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
-  // Initialize form data with driver details
+  // Initialize form data with driver details only when dialog opens
   useEffect(() => {
-    if (driver) {
+    if (isOpen && driver) {
       setFormData({
         ...driver,
-        status: driver.status || 'available'
+        status: (['available', 'busy', 'offline'].includes(driver.status) ? driver.status : 'available') as DriverStatus
       });
       setFormErrors({});
     }
-  }, [driver, isOpen]);
+  }, [isOpen, driver]);
   
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -50,8 +50,8 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     
     if (!formData.phone?.trim()) {
       errors.phone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(formData.phone)) {
-      errors.phone = 'Invalid phone number format';
+    } else if (!/^[0-9]{10}$/.test(formData.phone)) {
+      errors.phone = 'Phone number must be 10 digits';
     }
     
     if (!formData.email?.trim()) {
@@ -65,7 +65,19 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     }
     
     if (!formData.status || !['available', 'busy', 'offline'].includes(formData.status)) {
-      errors.status = 'Invalid status value';
+      errors.status = 'Status must be Available, Busy, or Offline';
+    }
+    
+    if (!formData.vehicle?.trim()) {
+      errors.vehicle = 'Vehicle is required';
+    }
+    
+    if (!formData.vehicle_id?.trim()) {
+      errors.vehicle_id = 'Vehicle ID is required';
+    }
+    
+    if (!formData.location?.trim()) {
+      errors.location = 'Location is required';
     }
     
     setFormErrors(errors);
@@ -107,17 +119,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   };
   
   const handleClose = () => {
-    setFormData({
-      name: '',
-      phone: '',
-      email: '',
-      license_no: '',
-      vehicle: '',
-      vehicle_id: '',
-      status: 'available',
-      location: ''
-    });
-    setFormErrors({});
+    // Only call onClose, do not reset form here
     onClose();
   };
   
