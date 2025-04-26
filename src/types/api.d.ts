@@ -33,7 +33,7 @@ export interface Driver {
   name: string;
   phone: string;
   email: string;
-  license_no: string;  // Standardize on license_no
+  license_no: string;  // Standardized to license_no
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;

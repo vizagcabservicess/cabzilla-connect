@@ -27,6 +27,7 @@ import { DeleteDriverDialog } from './DeleteDriverDialog';
 import { AddDriverDialog } from './AddDriverDialog';
 import { toast } from "sonner";
 import { Driver } from '@/types/api';
+import { FixDatabaseButton } from './FixDatabaseButton';
 
 export function DriverManagement() {
   const { toast: uiToast } = useToast();
@@ -395,6 +396,7 @@ export function DriverManagement() {
               <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            <FixDatabaseButton />
             <Button 
               size="sm" 
               onClick={openAddDriverDialog}
