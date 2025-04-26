@@ -20,10 +20,9 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     name: '',
     phone: '',
     email: '',
-    license_number: '',
-    vehicle_number: '',
-    vehicle_type: '',
-    status: 'inactive' as DriverStatus,
+    license_no: '',
+    vehicle: '',
+    status: 'available' as DriverStatus,
     location: ''
   });
   
@@ -35,9 +34,8 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       name: driver.name,
       phone: driver.phone,
       email: driver.email || '',
-      license_number: driver.license_number,
-      vehicle_number: driver.vehicle_number || '',
-      vehicle_type: driver.vehicle_type || '',
+      license_no: driver.license_no || '',
+      vehicle: driver.vehicle || '',
       status: driver.status,
       location: driver.location || ''
     });
@@ -60,16 +58,12 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       errors.email = 'Invalid email format';
     }
     
-    if (!formData.license_number?.trim()) {
-      errors.license_number = 'License number is required';
+    if (!formData.license_no?.trim()) {
+      errors.license_no = 'License number is required';
     }
     
-    if (!formData.vehicle_number?.trim()) {
-      errors.vehicle_number = 'Vehicle number is required';
-    }
-    
-    if (!formData.vehicle_type?.trim()) {
-      errors.vehicle_type = 'Vehicle type is required';
+    if (!formData.vehicle?.trim()) {
+      errors.vehicle = 'Vehicle is required';
     }
     
     if (!formData.location?.trim()) {
@@ -161,48 +155,32 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="license_number">License Number</Label>
+                <Label htmlFor="license_no">License Number</Label>
                 <Input
-                  id="license_number"
-                  name="license_number"
-                  value={formData.license_number}
+                  id="license_no"
+                  name="license_no"
+                  value={formData.license_no}
                   onChange={handleChange}
                   disabled={isSubmitting}
-                  className={formErrors.license_number ? "border-red-500" : ""}
+                  className={formErrors.license_no ? "border-red-500" : ""}
                 />
-                {formErrors.license_number && (
-                  <p className="text-xs text-red-500">{formErrors.license_number}</p>
+                {formErrors.license_no && (
+                  <p className="text-xs text-red-500">{formErrors.license_no}</p>
                 )}
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="vehicle_number">Vehicle Number</Label>
+                <Label htmlFor="vehicle">Vehicle</Label>
                 <Input
-                  id="vehicle_number"
-                  name="vehicle_number"
-                  value={formData.vehicle_number}
+                  id="vehicle"
+                  name="vehicle"
+                  value={formData.vehicle}
                   onChange={handleChange}
                   disabled={isSubmitting}
-                  className={formErrors.vehicle_number ? "border-red-500" : ""}
+                  className={formErrors.vehicle ? "border-red-500" : ""}
                 />
-                {formErrors.vehicle_number && (
-                  <p className="text-xs text-red-500">{formErrors.vehicle_number}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="vehicle_type">Vehicle Type</Label>
-                <Input
-                  id="vehicle_type"
-                  name="vehicle_type"
-                  placeholder="e.g. Sedan, SUV, etc."
-                  value={formData.vehicle_type}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className={formErrors.vehicle_type ? "border-red-500" : ""}
-                />
-                {formErrors.vehicle_type && (
-                  <p className="text-xs text-red-500">{formErrors.vehicle_type}</p>
+                {formErrors.vehicle && (
+                  <p className="text-xs text-red-500">{formErrors.vehicle}</p>
                 )}
               </div>
               
@@ -217,10 +195,9 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="on_trip">On Trip</SelectItem>
-                    <SelectItem value="blocked">Blocked</SelectItem>
+                    <SelectItem value="available">Available</SelectItem>
+                    <SelectItem value="busy">Busy</SelectItem>
+                    <SelectItem value="offline">Offline</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

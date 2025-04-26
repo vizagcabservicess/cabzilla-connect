@@ -302,7 +302,7 @@ export function DriverManagement() {
       license_no: driver.license_no || '',
       status: driver.status,
       location: driver.location,
-      vehicle: driver.vehicle,
+      vehicle: driver.vehicle || '',
     });
     setIsEditDriverDialogOpen(true);
   };
