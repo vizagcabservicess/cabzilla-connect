@@ -22,6 +22,11 @@ import { ReportRevenueTable } from './reports/ReportRevenueTable';
 import { ReportDriversTable } from './reports/ReportDriversTable';
 import { ReportVehiclesTable } from './reports/ReportVehiclesTable';
 
+interface ReportGeneratorProps {
+  reportType?: string;
+  dateRange?: DateRange;
+}
+
 // This will be imported from a proper API service
 const fetchReportData = async (reportType: string, dateRange: DateRange | undefined) => {
   try {
@@ -59,14 +64,16 @@ const fetchReportData = async (reportType: string, dateRange: DateRange | undefi
   }
 };
 
-export function ReportGenerator() {
-  const [activeTab, setActiveTab] = useState<string>('bookings');
+export function ReportGenerator({ reportType: initialReportType, dateRange: initialDateRange }: ReportGeneratorProps = {}) {
+  const [activeTab, setActiveTab] = useState<string>(initialReportType || 'bookings');
   const [loading, setLoading] = useState<boolean>(false);
   const [reportData, setReportData] = useState<any[]>([]);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(new Date().setDate(new Date().getDate() - 30)),
-    to: new Date(),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+    initialDateRange || {
+      from: new Date(new Date().setDate(new Date().getDate() - 30)),
+      to: new Date(),
+    }
+  );
   const { toast } = useToast();
 
   useEffect(() => {
