@@ -1,4 +1,3 @@
-
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -156,6 +155,15 @@ switch ($_SERVER['REQUEST_METHOD']) {
         try {
             $jsonData = file_get_contents('php://input');
             $data = json_decode($jsonData, true);
+            
+            // Defensive check for data structure
+            if (!is_array($data)) {
+                error_log('DEBUG: Data is not an array: ' . $jsonData);
+                sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data structure'], 400);
+            }
+            
+            // Debug logging before validation
+            error_log('DEBUG: Received data for validation: ' . print_r($data, true));
             
             error_log('Received driver data for update: ' . print_r($data, true));
             
