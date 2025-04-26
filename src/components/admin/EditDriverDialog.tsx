@@ -12,11 +12,11 @@ interface Driver {
   name: string;
   phone: string;
   email: string;
-  license_no: string;
-  vehicle: string;
-  vehicle_id: string;
-  status: DriverStatus;
-  location: string;
+  license_no?: string;
+  vehicle?: string;
+  vehicle_id?: string;
+  status?: DriverStatus;
+  location?: string;
 }
 
 interface EditDriverDialogProps {

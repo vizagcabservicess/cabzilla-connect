@@ -695,6 +695,7 @@ export function DriverManagement() {
       
       {showEditDialog && selectedDriver && (
         <EditDriverDialog
+          key={selectedDriver?.id || 'new'}
           isOpen={showEditDialog}
           onClose={() => setShowEditDialog(false)}
           onSubmit={handleEditDriver}
