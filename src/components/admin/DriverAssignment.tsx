@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ interface DriverAssignmentProps {
   onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onAssignDriver?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onSubmit?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
-  onClose: () => void;
+  onClose?: () => void;
   onCancel?: () => void;
   isSubmitting: boolean;
 }
@@ -47,7 +48,9 @@ export function DriverAssignment({
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
 
+  // Use onClose if provided, otherwise fall back to onCancel
   const closeHandler = onCancel || onClose;
+  // Use the first available handler in order of preference
   const submitHandler = onSubmit || onAssignDriver || onAssign;
 
   useEffect(() => {

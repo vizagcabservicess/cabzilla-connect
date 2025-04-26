@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ export function BookingEditForm({
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
     pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
-    billingAddress: booking.billingAddress || '', // Add billing address field
+    billingAddress: booking.billingAddress || '', // This works now that we've added billingAddress to the Booking interface
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});

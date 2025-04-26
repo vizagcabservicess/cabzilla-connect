@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -149,7 +148,7 @@ export function BookingDetails({
         <TabsContent value="edit" className="py-4">
           <BookingEditForm 
             booking={booking} 
-            onSubmit={onEdit} 
+            onSubmit={onEdit}
             onCancel={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
           />
@@ -160,6 +159,7 @@ export function BookingDetails({
             booking={booking}
             onAssign={onAssignDriver}
             onCancel={() => handleTabChange('details')}
+            onClose={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
           />
         </TabsContent>

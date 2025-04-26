@@ -57,6 +57,17 @@ export interface Booking {
   paymentMethod?: string;
   paymentStatus?: string;
   adminNotes?: string;
+  billingAddress?: string;
+  extraCharges?: {
+    amount: number;
+    description: string;
+  }[];
+  gstEnabled?: boolean;
+  gstDetails?: {
+    gstNumber: string;
+    companyName: string;
+    companyAddress: string;
+  };
 }
 
 export interface User {
