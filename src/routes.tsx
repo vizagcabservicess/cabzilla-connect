@@ -14,6 +14,7 @@ import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
 export const router = createBrowserRouter([
+  // Main frontend routes
   {
     path: '/',
     element: <Index />,
@@ -29,20 +30,6 @@ export const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: <DashboardPage />,
-  },
-  // Main admin route
-  {
-    path: '/admin',
-    element: <AdminDashboardPage />,
-  },
-  {
-    path: '/admin/database',
-    element: <AdminDatabasePage />,
-  },
-  // Add catch-all route for admin to prevent 404s on admin routes
-  {
-    path: '/admin/*',
-    element: <AdminDashboardPage />,
   },
   {
     path: '/booking/:bookingId/confirmation',
@@ -68,6 +55,24 @@ export const router = createBrowserRouter([
     path: '/tours',
     element: <ToursPage />,
   },
+  
+  // Admin routes - specific routes first
+  {
+    path: '/admin',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/database',
+    element: <AdminDatabasePage />,
+  },
+  
+  // Catch-all route for admin to prevent 404s on nested admin routes
+  {
+    path: '/admin/*',
+    element: <AdminDashboardPage />,
+  },
+  
+  // Wildcard route - must be last
   {
     path: '*',
     element: <NotFound />,

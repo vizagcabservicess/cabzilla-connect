@@ -117,24 +117,21 @@ export function isDevEnvironment(): boolean {
 export function getApiBaseUrl(): string {
   // For all environments, use relative URLs which will resolve to the current domain
   // This ensures API calls work regardless of domain configuration
-  console.log("Using relative API paths");
   return '';
 }
 
 // Helper function to properly construct API URLs
 export function getApiUrl(endpoint: string): string {
-  const baseUrl = getApiBaseUrl();
-  
   // Clean up endpoint to ensure consistent format
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
   
-  // Make sure it includes the 'api/' prefix if not already
+  // Make sure endpoint includes the 'api/' prefix if not already
   const apiPrefix = cleanEndpoint.startsWith('api/') ? '' : 'api/';
-  const fullEndpoint = `${apiPrefix}${cleanEndpoint}`;
+  const finalEndpoint = `${apiPrefix}${cleanEndpoint}`;
   
-  // Construct the final URL
-  const fullUrl = `/${fullEndpoint}`;
+  // Ensure we have a leading slash
+  const fullUrl = finalEndpoint.startsWith('/') ? finalEndpoint : `/${finalEndpoint}`;
   
-  console.log(`Constructed API URL: ${fullUrl} from endpoint: ${endpoint}`);
+  console.log(`API URL constructed: ${fullUrl} from endpoint: ${endpoint}`);
   return fullUrl;
 }

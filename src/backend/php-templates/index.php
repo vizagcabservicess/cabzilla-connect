@@ -23,6 +23,10 @@ $is_admin_route = preg_match('/^\/admin(\/|$)/', $request_uri);
 // Log access for debugging
 error_log("Access to main SPA index.php, URI: " . $request_uri);
 
+// Define the base path dynamically based on the request
+// This is crucial for the React router to work correctly
+$base_path = '/';
+
 // HTML content for the SPA
 ?><!DOCTYPE html>
 <html lang="en">
@@ -32,20 +36,20 @@ error_log("Access to main SPA index.php, URI: " . $request_uri);
     <title>Vizag Cabs - Book Cabs in Visakhapatnam</title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
     <meta name="author" content="Vizag Cabs" />
-    <meta property="og:image" content="/og-image.png" />
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <meta property="og:image" content="<?php echo $base_path; ?>og-image.png" />
+    <link rel="icon" href="<?php echo $base_path; ?>favicon.ico" type="image/x-icon">
     
     <!-- Base path - critical for routing -->
-    <base href="/">
+    <base href="<?php echo $base_path; ?>">
     
     <!-- CSS styles -->
-    <link rel="stylesheet" href="/assets/index.css">
+    <link rel="stylesheet" href="<?php echo $base_path; ?>assets/index.css">
   </head>
 
   <body>
     <div id="root"></div>
     <!-- React app entry point -->
-    <script type="module" src="/assets/index.js"></script>
+    <script type="module" src="<?php echo $base_path; ?>assets/index.js"></script>
     
     <!-- Error logging -->
     <script>
@@ -54,7 +58,14 @@ error_log("Access to main SPA index.php, URI: " . $request_uri);
         return false;
       };
       
+      // Debug info for routing
       console.log("Application loading. Route:", window.location.pathname);
+      
+      // Make route info available to React app
+      window.__initialRoute = {
+        path: window.location.pathname,
+        isAdmin: window.location.pathname.startsWith('/admin')
+      };
     </script>
   </body>
 </html>

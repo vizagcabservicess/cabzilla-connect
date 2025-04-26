@@ -41,6 +41,7 @@ RewriteRule ^(.*)$ $1/index.php [L]
 # Explicitly handle /admin in the API context
 RewriteRule ^admin$ admin/index.php [L]
 RewriteRule ^admin/$ admin/index.php [L]
+RewriteRule ^admin/(.*)$ admin/$1 [L]
 
 # Add a catch-all to prevent 404 errors for misconfigured API paths
 RewriteCond %{REQUEST_FILENAME} !-f
