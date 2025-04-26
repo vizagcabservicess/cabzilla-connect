@@ -178,6 +178,10 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 ], 409);
             }
             
+            // Ensure vehicle_id is set
+            if (!isset($data['vehicle_id'])) {
+                $data['vehicle_id'] = '';
+            }
             // Update driver details
             $stmt = $conn->prepare("
                 UPDATE drivers SET 
@@ -194,7 +198,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             ");
             
             $stmt->bind_param(
-                "sssssss si",
+                "ssssssssi",
                 $data['name'],
                 $data['phone'],
                 $data['email'],
