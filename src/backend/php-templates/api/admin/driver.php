@@ -180,10 +180,12 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 ], 409);
             }
             
-            // Ensure vehicle_id is set
-            if (!isset($data['vehicle_id'])) {
-                $data['vehicle_id'] = '';
-            }
+            // Ensure vehicle, vehicle_id, status, and location are set
+            $data['vehicle'] = isset($data['vehicle']) ? $data['vehicle'] : '';
+            $data['vehicle_id'] = isset($data['vehicle_id']) ? $data['vehicle_id'] : '';
+            $data['status'] = isset($data['status']) ? $data['status'] : 'available';
+            $data['location'] = isset($data['location']) ? $data['location'] : '';
+            error_log('Updating driver with: ' . print_r($data, true));
             // Update driver details
             $stmt = $conn->prepare("
                 UPDATE drivers SET 
