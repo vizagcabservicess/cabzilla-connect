@@ -1,5 +1,5 @@
 
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
@@ -13,15 +13,10 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
-console.log('Creating router...');
-
-// Create routes with proper configuration
 export const router = createBrowserRouter([
-  // Main frontend routes
   {
     path: '/',
     element: <Index />,
-    errorElement: <NotFound />,
   },
   {
     path: '/login',
@@ -34,6 +29,20 @@ export const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: <DashboardPage />,
+  },
+  // Main admin route
+  {
+    path: '/admin',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/database',
+    element: <AdminDatabasePage />,
+  },
+  // Add catch-all route for admin to prevent 404s on admin routes
+  {
+    path: '/admin/*',
+    element: <AdminDashboardPage />,
   },
   {
     path: '/booking/:bookingId/confirmation',
@@ -59,32 +68,10 @@ export const router = createBrowserRouter([
     path: '/tours',
     element: <ToursPage />,
   },
-  
-  // Admin routes - CRITICAL: precise route definitions
-  {
-    path: '/admin',
-    element: <AdminDashboardPage />,
-  },
-  {
-    path: '/admin/database',
-    element: <AdminDatabasePage />,
-  },
-  {
-    path: '/admin/dashboard',
-    element: <Navigate to="/admin" replace />,
-  },
-  {
-    path: '/admin/*',
-    element: <AdminDashboardPage />,
-  },
-  
-  // Global catch-all for 404 - must be last route
   {
     path: '*',
     element: <NotFound />,
   },
 ]);
-
-console.log('Router created successfully');
 
 export default router;

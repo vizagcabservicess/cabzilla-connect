@@ -1,254 +1,149 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { DownloadCloud, RefreshCcw, ArrowLeft, Printer } from 'lucide-react';
+import { Loader2, FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { useToast } from "@/components/ui/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface BookingInvoiceProps {
   booking: Booking;
-  downloadUrl: string;
-  onGenerate: () => Promise<any>;
-  onBack: () => void;
-  isGenerating?: boolean;
+  onGenerateInvoice: () => Promise<any>;
+  onClose: () => void;
+  isSubmitting: boolean;
+  pdfUrl: string;
 }
 
-export function BookingInvoice({ 
+export function BookingInvoice({
   booking,
-  downloadUrl,
-  onGenerate, 
-  onBack,
-  isGenerating = false
+  onGenerateInvoice,
+  onClose,
+  isSubmitting,
+  pdfUrl
 }: BookingInvoiceProps) {
-  
-  const handlePrint = () => {
-    // Open a new window and print
-    const printWindow = window.open(downloadUrl, '_blank');
-    if (printWindow) {
-      // If window opened, try to trigger print
-      printWindow.addEventListener('load', () => {
-        try {
-          printWindow.print();
-        } catch (e) {
-          console.error('Failed to trigger print:', e);
-        }
-      });
-    }
-  };
+  const [invoiceData, setInvoiceData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const getDirectDownloadUrl = () => {
-    // Ensure we're using the download URL with direct flag
-    if (downloadUrl.includes('?')) {
-      if (!downloadUrl.includes('direct=1')) {
-        return `${downloadUrl}&direct=1`;
-      }
-      return downloadUrl;
+  useEffect(() => {
+    // Try to generate invoice when component mounts
+    if (booking && booking.id) {
+      handleGenerateInvoice();
     }
-    return `${downloadUrl}?direct=1`;
-  };
-  
-  const getFallbackInvoiceHtml = () => {
-    // Generate a basic invoice directly in the browser as a fallback
-    const invoiceNumber = `INV-${Date.now().toString().substring(0, 10)}`;
-    const generatedDate = new Date().toLocaleDateString();
-    const baseFare = booking.totalAmount ? booking.totalAmount * 0.85 : 0;
-    const taxAmount = booking.totalAmount ? booking.totalAmount * 0.15 : 0;
-    
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Invoice #${invoiceNumber}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 30px; }
-          .invoice-container { max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
-          .header { display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
-          .company { margin-bottom: 30px; }
-          .details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .customer { width: 45%; }
-          .invoice-info { width: 45%; text-align: right; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-          .total { font-weight: bold; }
-          .footer { text-align: center; font-size: 0.9em; color: #666; margin-top: 30px; }
-          @media print {
-            body { padding: 0; }
-            button { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="invoice-container">
-          <div class="header">
-            <div>
-              <h1>INVOICE</h1>
-              <p>Vizag Taxi Hub</p>
-            </div>
-            <div>
-              <h2>${invoiceNumber}</h2>
-              <p>Date: ${generatedDate}</p>
-            </div>
-          </div>
-          
-          <div class="details">
-            <div class="customer">
-              <h3>Bill To:</h3>
-              <p>${booking.passengerName || 'Customer'}</p>
-              <p>${booking.passengerPhone || ''}</p>
-              <p>${booking.passengerEmail || ''}</p>
-            </div>
-            <div class="invoice-info">
-              <h3>Trip Details:</h3>
-              <p>Booking #: ${booking.bookingNumber}</p>
-              <p>Date: ${new Date(booking.pickupDate || '').toLocaleDateString()}</p>
-              <p>Vehicle: ${booking.cabType || 'Standard'}</p>
-            </div>
-          </div>
-          
-          <table>
-            <tr>
-              <th>Description</th>
-              <th>Amount</th>
-            </tr>
-            <tr>
-              <td>Base Fare</td>
-              <td>₹${baseFare.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td>Tax</td>
-              <td>₹${taxAmount.toFixed(2)}</td>
-            </tr>
-            <tr class="total">
-              <td>Total</td>
-              <td>₹${(booking.totalAmount || 0).toFixed(2)}</td>
-            </tr>
-          </table>
-          
-          <div class="footer">
-            <p>Thank you for choosing Vizag Taxi Hub.</p>
-            <p>For support, contact: support@vizagtaxihub.com | +91 9966363662</p>
-          </div>
-        </div>
-        
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `;
-  };
-  
-  const handleFallbackPrint = () => {
-    // Create a new window with the fallback invoice HTML
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(getFallbackInvoiceHtml());
-      printWindow.document.close();
-    }
-  };
+  }, [booking?.id]);
 
-  // Open download URL in an iframe to avoid page navigation
-  const handleDownload = () => {
+  const handleGenerateInvoice = async () => {
     try {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = getDirectDownloadUrl();
-      document.body.appendChild(iframe);
+      setLoading(true);
+      setError(null);
+      const result = await onGenerateInvoice();
       
-      // Remove iframe after download attempt
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
-    } catch (e) {
-      console.error('Download failed, falling back to direct link:', e);
-      window.open(getDirectDownloadUrl(), '_blank');
+      if (result && result.data) {
+        setInvoiceData(result.data);
+      } else {
+        // If no data returned but no error, still remove loading state
+        setInvoiceData(null);
+      }
+    } catch (error) {
+      console.error("Invoice generation error:", error);
+      setError(error instanceof Error ? error.message : "Failed to generate invoice");
+    } finally {
+      setLoading(false);
     }
   };
-  
-  return (
-    <Card className="p-6">
-      <div className="space-y-6">
+
+  const handleDownloadPdf = () => {
+    // Open PDF in new tab to trigger download
+    window.open(pdfUrl, '_blank');
+  };
+
+  const renderInvoiceContent = () => {
+    if (loading || isSubmitting) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+          <p>Generating invoice...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (invoiceData?.invoiceHtml) {
+      return (
         <div>
-          <h3 className="text-lg font-medium">Booking Invoice</h3>
-          <p className="text-sm text-gray-500">
-            Invoice for booking #{booking.bookingNumber}
-          </p>
+          <div className="mb-4 flex justify-between">
+            <h3 className="font-medium">Invoice #{invoiceData.invoiceNumber}</h3>
+            <span>Generated: {invoiceData.invoiceDate}</span>
+          </div>
+          
+          <div 
+            className="invoice-preview border rounded-md overflow-hidden" 
+            style={{ height: '400px', overflow: 'auto' }}
+          >
+            <iframe 
+              srcDoc={invoiceData.invoiceHtml}
+              title="Invoice Preview" 
+              className="w-full h-full"
+              style={{ border: 'none' }}
+            />
+          </div>
         </div>
+      );
+    }
+
+    return (
+      <div className="text-center py-8">
+        <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+        <p className="mb-4">No invoice has been generated for this booking yet.</p>
+        <Button onClick={handleGenerateInvoice}>Generate Invoice</Button>
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        {renderInvoiceContent()}
         
-        <div className="p-4 bg-gray-50 rounded-md">
-          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Booking Number</dt>
-              <dd className="mt-1 text-sm text-gray-900">{booking.bookingNumber}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Invoice Date</dt>
-              <dd className="mt-1 text-sm text-gray-900">{new Date().toLocaleDateString()}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Customer</dt>
-              <dd className="mt-1 text-sm text-gray-900">{booking.passengerName}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Amount</dt>
-              <dd className="mt-1 text-sm text-gray-900">₹{booking.totalAmount?.toFixed(2)}</dd>
-            </div>
-          </dl>
-        </div>
-        
-        <div className="flex flex-col gap-4 sm:flex-row sm:gap-2">
-          <Button
-            className="flex-1"
-            variant="default"
-            onClick={handlePrint}
-          >
-            <Printer className="mr-2 h-4 w-4" />
-            Print Invoice
-          </Button>
-          
-          <Button
-            className="flex-1"
-            variant="outline"
-            onClick={handleDownload}
-          >
-            <DownloadCloud className="mr-2 h-4 w-4" />
-            Download PDF
-          </Button>
-          
-          <Button
-            className="flex-1"
-            variant="outline"
-            onClick={() => onGenerate()}
-            disabled={isGenerating}
-          >
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            {isGenerating ? 'Regenerating...' : 'Regenerate'}
-          </Button>
-          
-          <Button
-            variant="ghost"
-            onClick={onBack}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+        <div className="flex justify-between mt-4">
+          <Button variant="outline" onClick={onClose}>
             Back
           </Button>
+          
+          <div className="flex space-x-2">
+            {invoiceData && (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={handleGenerateInvoice}
+                  disabled={loading || isSubmitting}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                
+                <Button
+                  onClick={handleDownloadPdf}
+                  disabled={loading || isSubmitting}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download PDF
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-
-        <div className="text-sm text-gray-500">
-          <p className="mb-2">If you encounter issues with the invoice download:</p>
-          <ul className="list-disc pl-5">
-            <li>Try using the Print button instead</li>
-            <li>Check your browser's download settings</li>
-            <li>Try regenerating the invoice</li>
-            <li>Contact support if problems persist</li>
-          </ul>
-        </div>
-      </div>
+      </CardContent>
     </Card>
   );
 }
