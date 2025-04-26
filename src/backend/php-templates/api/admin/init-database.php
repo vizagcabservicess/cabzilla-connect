@@ -68,11 +68,19 @@ try {
             'roundtrip_price_per_km' => 'DECIMAL(5,2) DEFAULT 0'
         ],
         'drivers' => [
+            'id' => 'INT AUTO_INCREMENT PRIMARY KEY',
             'name' => 'VARCHAR(100) NOT NULL',
             'phone' => 'VARCHAR(20) NOT NULL',
-            'license_number' => 'VARCHAR(50)',
-            'vehicle_id' => 'VARCHAR(50)',
-            'status' => 'ENUM("active", "inactive", "on_trip") DEFAULT "active"'
+            'email' => 'VARCHAR(100) NOT NULL',
+            'license_no' => 'VARCHAR(50)',
+            'status' => 'ENUM("available", "busy", "offline") DEFAULT "available"',
+            'total_rides' => 'INT DEFAULT 0',
+            'earnings' => 'DECIMAL(10,2) DEFAULT 0',
+            'rating' => 'DECIMAL(3,2) DEFAULT 5.0',
+            'location' => 'VARCHAR(255) DEFAULT "Visakhapatnam"',
+            'vehicle' => 'VARCHAR(100)',
+            'created_at' => 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            'updated_at' => 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
         ]
     ];
     

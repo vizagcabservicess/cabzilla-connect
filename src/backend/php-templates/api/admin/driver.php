@@ -155,7 +155,14 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 sendResponse(['status' => 'error', 'message' => 'Driver not found or no changes made'], 404);
             }
             
-            sendResponse(['status' => 'success', 'message' => 'Driver updated successfully']);
+            // Get updated driver data
+            $stmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+            $stmt->bind_param("i", $driverId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $updatedDriver = $result->fetch_assoc();
+            
+            sendResponse(['status' => 'success', 'message' => 'Driver updated successfully', 'driver' => $updatedDriver]);
         } catch (Exception $e) {
             sendResponse(['status' => 'error', 'message' => 'Failed to update driver: ' . $e->getMessage()], 500);
         }

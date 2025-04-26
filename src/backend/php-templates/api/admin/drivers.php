@@ -59,12 +59,72 @@ try {
         
         $conn->query($createTableSql);
         
-        // Add sample data for testing
-        $conn->query("INSERT INTO drivers (name, phone, email, license_no, status, total_rides, earnings, rating, vehicle) 
+        // Add sample data
+        $conn->query("INSERT INTO drivers (name, phone, email, license_no, status, total_rides, earnings, rating, location, vehicle) 
                       VALUES 
-                      ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Sedan - AP 31 XX 1234'),
-                      ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'busy', 215, 85500, 4.6, 'SUV - AP 32 XX 5678'),
-                      ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'offline', 180, 72000, 4.5, 'Sedan - AP 33 XX 9012')");
+                      ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Hyderabad Central', 'Sedan - AP 31 XX 1234'),
+                      ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'busy', 215, 85500, 4.6, 'Gachibowli', 'SUV - AP 32 XX 5678'),
+                      ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'offline', 180, 72000, 4.5, 'Offline', 'Sedan - AP 33 XX 9012')");
+    } else {
+        // Check if we need to update the schema
+        $result = $conn->query("SHOW COLUMNS FROM drivers");
+        $columns = [];
+        while ($row = $result->fetch_assoc()) {
+            $columns[$row['Field']] = $row;
+        }
+
+        // Start transaction for schema updates
+        $conn->begin_transaction();
+
+        try {
+            // Add missing columns
+            if (!isset($columns['email'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN email VARCHAR(100) NOT NULL DEFAULT ''");
+            }
+            if (!isset($columns['total_rides'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN total_rides INT DEFAULT 0");
+            }
+            if (!isset($columns['earnings'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN earnings DECIMAL(10,2) DEFAULT 0");
+            }
+            if (!isset($columns['rating'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN rating DECIMAL(3,2) DEFAULT 5.0");
+            }
+            if (!isset($columns['location'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN location VARCHAR(255) DEFAULT 'Visakhapatnam'");
+            }
+            if (!isset($columns['vehicle'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN vehicle VARCHAR(100)");
+            }
+            if (!isset($columns['created_at'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+            }
+            if (!isset($columns['updated_at'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+            }
+
+            // Update column names if they differ
+            if (isset($columns['license_number']) && !isset($columns['license_no'])) {
+                $conn->query("ALTER TABLE drivers CHANGE COLUMN license_number license_no VARCHAR(50)");
+            }
+            if (isset($columns['vehicle_id']) && !isset($columns['vehicle'])) {
+                $conn->query("ALTER TABLE drivers CHANGE COLUMN vehicle_id vehicle VARCHAR(100)");
+            }
+
+            // Update status enum if needed
+            if (isset($columns['status']) && strpos($columns['status']['Type'], 'active') !== false) {
+                $conn->query("ALTER TABLE drivers MODIFY COLUMN status ENUM('available', 'busy', 'offline') DEFAULT 'available'");
+                // Update status values
+                $conn->query("UPDATE drivers SET status = 'available' WHERE status = 'active'");
+                $conn->query("UPDATE drivers SET status = 'busy' WHERE status = 'on_trip'");
+                $conn->query("UPDATE drivers SET status = 'offline' WHERE status = 'inactive'");
+            }
+
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            error_log("Failed to update drivers table schema: " . $e->getMessage());
+        }
     }
 } catch (Exception $e) {
     // Log error but continue - we'll handle no table case in the specific methods
@@ -138,18 +198,24 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $status = isset($data['status']) ? $data['status'] : 'available';
             $location = isset($data['location']) ? $data['location'] : 'Visakhapatnam';
             $vehicle = isset($data['vehicle']) ? $data['vehicle'] : '';
+            $totalRides = isset($data['total_rides']) ? (int)$data['total_rides'] : 0;
+            $earnings = isset($data['earnings']) ? (float)$data['earnings'] : 0;
+            $rating = isset($data['rating']) ? (float)$data['rating'] : 5.0;
             
-            $sql = "INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle, total_rides, earnings, rating) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssss", 
+            $stmt->bind_param("sssssssidd", 
                 $data['name'], 
                 $data['phone'], 
                 $email, 
                 $licenseNo, 
                 $status, 
                 $location, 
-                $vehicle
+                $vehicle,
+                $totalRides,
+                $earnings,
+                $rating
             );
             $stmt->execute();
             
