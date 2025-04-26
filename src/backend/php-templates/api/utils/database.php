@@ -194,90 +194,23 @@ function testDirectDatabaseConnection() {
             throw new Exception("Test query failed: " . $conn->error);
         }
         
-        // Check if bookings table exists
-        $bookingsTableExists = tableExists($conn, 'bookings');
-        
-        // Try simple insert and delete on bookings table
-        $testInsertSuccess = false;
-        
-        if ($bookingsTableExists) {
-            // Generate test booking number
-            $testBookingNumber = 'TEST' . time() . rand(1000, 9999);
-            
-            // Try insert with MINIMUM required fields only
-            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, pickup_date, cab_type, trip_type, trip_mode, total_amount, passenger_name, passenger_phone, passenger_email) 
-                             VALUES ('$testBookingNumber', 'Test connection', NOW(), 'Test', 'test', 'test', 100, 'Test User', '1234567890', 'test@example.com')";
-            $testInsertResult = $conn->query($testInsertSql);
-            
-            $testInsertSuccess = $testInsertResult !== false;
-            logDbConnection("Test insert result", [
-                'success' => $testInsertSuccess, 
-                'error' => $testInsertSuccess ? null : $conn->error,
-                'sql' => $testInsertSql
-            ]);
-            
-            // Delete test record
-            if ($testInsertSuccess) {
-                $conn->query("DELETE FROM bookings WHERE booking_number = '$testBookingNumber'");
-            }
-        }
-        
-        // Build success response
+        // Update result with success
         $result = [
             'status' => 'success',
-            'message' => 'Database connection and query test successful',
+            'message' => 'Database connection test successful',
             'connection' => true,
             'timestamp' => time(),
-            'server' => $conn->server_info ?? 'unknown',
-            'php_version' => phpversion(),
-            'bookings_table_exists' => $bookingsTableExists,
-            'test_insert_success' => $testInsertSuccess
+            'server_info' => $conn->server_info
         ];
         
-        logDbConnection("Direct test successful", ['result' => $result]);
-        
-        // Close connection
-        $conn->close();
+        logDbConnection("Direct connection test successful", $result);
         
     } catch (Exception $e) {
-        // Log error and build error response
-        logDbConnection("Direct database connection test failed", ['error' => $e->getMessage()]);
-        
-        $result = [
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'connection' => false,
-            'timestamp' => time(),
-            'php_version' => phpversion(),
-            'mysql_client_version' => mysqli_get_client_info()
-        ];
+        // Log the error
+        logDbConnection("Direct connection test failed", ['error' => $e->getMessage()]);
+        $result['error'] = $e->getMessage();
     }
     
-    return $result;
-}
-
-// Function to verify database integrity
-function verifyDatabaseIntegrity($conn) {
-    if (!$conn) {
-        return ['status' => 'error', 'message' => 'No database connection'];
-    }
-    
-    $requiredTables = ['bookings'];
-    $missingTables = [];
-    
-    foreach ($requiredTables as $table) {
-        if (!tableExists($conn, $table)) {
-            $missingTables[] = $table;
-        }
-    }
-    
-    if (count($missingTables) > 0) {
-        return [
-            'status' => 'warning', 
-            'message' => 'Missing required tables', 
-            'missing_tables' => $missingTables
-        ];
-    }
-    
-    return ['status' => 'success', 'message' => 'Database integrity verified'];
+    // Return JSON response
+    sendDbJsonResponse($result);
 }
