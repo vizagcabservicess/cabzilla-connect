@@ -269,7 +269,11 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              onClick={() => { console.log('Save Changes button clicked'); }}
+            >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
             </Button>
