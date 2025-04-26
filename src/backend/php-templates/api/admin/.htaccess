@@ -30,7 +30,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# Direct access to PHP files - CRITICAL NEW RULE
+# Direct access to PHP files - CRITICAL RULE
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
@@ -39,7 +39,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
 # Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
 
-# NEW CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
+# CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
 RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
 RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
 RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
@@ -55,7 +55,6 @@ RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.+)\.php$ $1.php [L,QSA]
 
 # CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
-# Make sure these are at the top, before any other rules
 RewriteRule ^vehicles/create$ direct-vehicle-create.php [L,QSA]
 RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L,QSA]
 RewriteRule ^add-vehicle$ add-vehicle-simple.php [L,QSA]
@@ -68,8 +67,13 @@ RewriteRule ^update-vehicle$ direct-vehicle-modify.php [L,QSA]
 RewriteRule ^vehicles-update$ direct-vehicle-modify.php [L,QSA]
 RewriteRule ^direct-vehicle-update$ direct-vehicle-modify.php [L,QSA]
 
-# Reload endpoints (make these accessible via multiple paths)
+# Reload endpoints
 RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^reload$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
 RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
+
+# Special index.php fallback to catch all undefined routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]

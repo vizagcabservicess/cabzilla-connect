@@ -123,16 +123,20 @@ export function isDevEnvironment(): boolean {
          window.location.hostname.includes('lovable');
 }
 
-// Helper to get API base URL - simplified to always use relative URLs
+// IMPROVED: Helper to get API base URL with proper handling for all environments
 export function getApiBaseUrl(): string {
-  // For all environments, use relative URLs which will resolve to the current domain
+  // Always use relative URLs which will resolve to the current domain
   return '';
 }
 
-// NEW IMPROVED FUNCTION: Ensures API URL is properly formatted for current environment
+// CRITICAL FUNCTION: Ensures API URL is properly formatted for current environment
 function ensureProperApiUrl(endpoint: string): string {
+  // Log all API URL construction for debugging
+  console.log(`Constructing API URL for endpoint: ${endpoint}`);
+  
   // If it's already a full URL, return it
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    console.log(`Using full URL as is: ${endpoint}`);
     return endpoint;
   }
   
@@ -140,12 +144,16 @@ function ensureProperApiUrl(endpoint: string): string {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
   
   // Make sure endpoint includes the 'api/' prefix if not already
+  let finalEndpoint;
   if (!cleanEndpoint.startsWith('api/')) {
-    return `/api/${cleanEndpoint}`;
+    finalEndpoint = `/api/${cleanEndpoint}`;
+  } else {
+    // Ensure we have a leading slash
+    finalEndpoint = `/${cleanEndpoint}`;
   }
   
-  // Ensure we have a leading slash
-  return `/${cleanEndpoint}`;
+  console.log(`Final API URL: ${finalEndpoint}`);
+  return finalEndpoint;
 }
 
 // Helper function to properly construct API URLs

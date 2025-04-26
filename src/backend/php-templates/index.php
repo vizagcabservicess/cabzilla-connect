@@ -27,12 +27,17 @@ error_log("Access to main SPA index.php, URI: " . $request_uri);
 // Define base path as / which works with React Router
 $base_path = '/';
 
+// Debug route information
+error_log("Request URI: $request_uri");
+error_log("Is admin route: " . ($is_admin_route ? 'true' : 'false'));
+
 // Setup initial route data for client-side JS
 $route_data = json_encode([
     'path' => $request_uri,
     'isAdmin' => $is_admin_route,
     'baseUrl' => $base_path,
-    'timestamp' => time()
+    'timestamp' => time(),
+    'debug' => true
 ]);
 
 // Determine proper asset paths based on environment
@@ -45,6 +50,7 @@ $asset_prefix = file_exists('./assets') ? './assets' : '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><?php echo $is_admin_route ? 'Admin Dashboard - Vizag Cabs' : 'Vizag Cabs - Book Cabs in Visakhapatnam'; ?></title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
+    <!-- Critical for routing: base href must be / -->
     <base href="<?php echo $base_path; ?>">
     
     <?php if (file_exists('./assets/index.css')): ?>
@@ -69,6 +75,11 @@ $asset_prefix = file_exists('./assets') ? './assets' : '';
       console.log("Current path:", window.location.pathname);
       console.log("Base URL:", document.baseURI);
       console.log("Route data:", window.__initialRoute);
+      
+      // Additional debugging for admin routes
+      <?php if($is_admin_route): ?>
+      console.log("ADMIN ROUTE DETECTED - initializing admin view");
+      <?php endif; ?>
     </script>
     
     <!-- Lovable script tag must be before the main app bundle -->

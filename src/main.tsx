@@ -20,8 +20,10 @@ console.log('Initial route data:', initialRoute);
 
 // Check if we're on an admin route
 if (initialRoute.isAdmin) {
-  console.log('Initializing admin panel view');
+  console.log('Initializing admin panel view - path:', initialRoute.path);
   document.title = 'Admin Dashboard - Vizag Cabs';
+} else {
+  console.log('Initializing regular customer view - path:', initialRoute.path);
 }
 
 // Mount the app with React 18 createRoot API
@@ -44,6 +46,7 @@ declare global {
       isAdmin: boolean;
       baseUrl?: string;
       timestamp?: number;
+      debug?: boolean;
     };
   }
 }

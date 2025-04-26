@@ -57,25 +57,26 @@ export const router = createBrowserRouter([
     element: <ToursPage />,
   },
   
-  // Admin routes - exact match for root admin route
+  // Admin routes - IMPORTANT: These must be precise and exact
+  // Admin dashboard root
   {
     path: '/admin',
     element: <AdminDashboardPage />,
   },
   
-  // Specific admin routes - these must come before the catch-all
+  // Admin database page
   {
     path: '/admin/database',
     element: <AdminDatabasePage />,
   },
   
-  // Catch-all for admin nested routes
+  // Admin wildcard for nested routes - must be last among admin routes
   {
     path: '/admin/*',
     element: <AdminDashboardPage />,
   },
   
-  // Global 404 - must be last
+  // Global 404 - must be last route
   {
     path: '*',
     element: <NotFound />,
