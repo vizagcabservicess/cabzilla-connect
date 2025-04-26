@@ -28,14 +28,28 @@ export function FixDatabaseButton() {
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
-        }
+        },
+        // Add a payload to ensure it's treated as POST by all servers
+        body: JSON.stringify({ action: 'fix_schema', timestamp })
       });
       
-      const data = await response.json();
-      console.log('Fix schema response:', data);
-      
+      // Check for network errors first
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fix database schema');
+        console.error('Network error:', response.status, response.statusText);
+        throw new Error(`Network error: ${response.status} ${response.statusText}`);
+      }
+      
+      let data;
+      try {
+        data = await response.json();
+        console.log('Fix schema response:', data);
+      } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
+        throw new Error('Invalid server response. Unable to parse JSON.');
+      }
+      
+      if (!data) {
+        throw new Error('Empty response from server');
       }
       
       if (data.status === 'success') {
@@ -92,13 +106,24 @@ export function FixDatabaseButton() {
       }
     } catch (error) {
       console.error('Error fixing schema:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to fix database schema');
       
+      // Provide detailed error toast
       uiToast({
         variant: "destructive",
         title: 'Database Fix Failed',
-        description: 'There was an error fixing the database schema. Please check the console for details.',
+        description: (
+          <div>
+            <p>There was an error fixing the database schema:</p>
+            <p className="text-sm font-mono mt-2 bg-slate-800 p-2 rounded overflow-auto max-h-32">
+              {error instanceof Error ? error.message : 'Unknown error occurred'}
+            </p>
+            <p className="text-xs mt-2">Check browser console for more details.</p>
+          </div>
+        ),
       });
+      
+      // Also show a simpler toast
+      toast.error(error instanceof Error ? error.message : 'Failed to fix database schema');
     } finally {
       setIsFixing(false);
     }
