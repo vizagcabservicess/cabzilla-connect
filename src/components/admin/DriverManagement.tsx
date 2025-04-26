@@ -351,13 +351,8 @@ export function DriverManagement() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleAddDriver = async () => {
-    if (!validateDriverForm()) {
-      return;
-    }
-    
+  const handleAddDriver = async (formData: any) => {
     setFormSubmitting(true);
-    
     try {
       const apiBaseUrl = getApiBaseUrl();
       const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`, {
@@ -367,35 +362,28 @@ export function DriverManagement() {
           'X-Force-Refresh': 'true'
         },
         body: JSON.stringify({
-          name: driverForm.name,
-          phone: driverForm.phone,
-          email: driverForm.email,
-          licenseNo: driverForm.license_no,
-          status: driverForm.status,
-          location: driverForm.location,
-          vehicle: driverForm.vehicle
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          license_no: formData.license_number,
+          status: formData.status,
+          location: formData.location,
+          vehicle: formData.vehicle_type || formData.vehicle
         })
       });
-      
       const data = await response.json();
-      
       if (!response.ok || data.status !== 'success') {
         throw new Error(data.message || 'Failed to add driver');
       }
-      
       toast({
         description: "New driver has been added successfully",
       });
-      
-      // Add new driver to list
       if (data.driver) {
         setDrivers([...drivers, data.driver]);
       } else {
-        // Refresh list if driver object not returned
         fetchDrivers();
       }
-      
-      setIsAddDriverDialogOpen(false);
+      setShowAddDialog(false);
     } catch (error) {
       console.error('Error adding driver:', error);
       toast({
