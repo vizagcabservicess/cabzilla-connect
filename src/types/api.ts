@@ -9,6 +9,24 @@ export type BookingStatus =
   | 'continued'
   | 'cancelled';
 
+export type DriverStatus = 'available' | 'busy' | 'offline';
+
+export interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  license_no?: string;
+  license_number?: string;  // Alternative field name for compatibility
+  vehicle?: string;
+  vehicle_id?: string;
+  status?: DriverStatus;
+  location?: string;
+  total_rides?: number;
+  earnings?: number;
+  rating?: number;
+}
+
 export interface Booking {
   id: number;
   user_id?: number;
@@ -20,7 +38,7 @@ export interface Booking {
   pickupDate: string;
   returnDate?: string;
   cabType: string;
-  distance: number; // Added this property to fix the error
+  distance: number;
   passengers?: number;
   days?: number;
   hours?: number;

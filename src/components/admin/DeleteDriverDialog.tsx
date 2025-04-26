@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export function DeleteDriverDialog({ isOpen, onClose, onConfirm, driver, isSubmi
               <ul className="mt-2 list-disc list-inside">
                 <li>Name: {driver.name}</li>
                 <li>Phone: {driver.phone}</li>
-                <li>License Number: {driver.license_number}</li>
+                <li>License Number: {driver.license_no || driver.license_number}</li>
                 <li>Status: {driver.status}</li>
               </ul>
             </div>

@@ -559,7 +559,7 @@ export function DriverManagement() {
           onClose={() => setIsDeleteDialogOpen(false)}
           onConfirm={handleDeleteDriver}
           driver={currentDriver}
-          isDeleting={isSubmitting}
+          isSubmitting={isSubmitting}
         />
       )}
     </Card>
