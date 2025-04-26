@@ -116,13 +116,15 @@ export function isDevEnvironment(): boolean {
 
 // Helper to get API base URL
 export function getApiBaseUrl(): string {
-  // For development environment, use the production API
+  // For development environment, use the development API or specified API URL
   if (isDevEnvironment()) {
-    console.log("Using vizagup.com API in development mode");
-    return 'https://vizagup.com';
+    console.log("Using development API in development mode");
+    // Use relative URLs in dev mode to avoid CORS issues
+    return '';
   }
   
   // For production, use relative URLs which will resolve to the current domain
+  // This ensures API calls work regardless of domain configuration
   console.log("Using relative API paths in production mode");
   return '';
 }
@@ -131,10 +133,15 @@ export function getApiBaseUrl(): string {
 export function getApiUrl(endpoint: string): string {
   const baseUrl = getApiBaseUrl();
   
-  // Log the constructed URL for debugging
-  const fullUrl = baseUrl ? 
-    `${baseUrl}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}` :
-    `/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
+  // Clean up endpoint to ensure consistent format
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  
+  // Make sure it includes the 'api/' prefix if not already
+  const apiPrefix = cleanEndpoint.startsWith('api/') ? '' : 'api/';
+  const fullEndpoint = `${apiPrefix}${cleanEndpoint}`;
+  
+  // Construct the final URL
+  const fullUrl = baseUrl ? `${baseUrl}/${fullEndpoint}` : `/${fullEndpoint}`;
   
   console.log(`Constructed API URL: ${fullUrl} from baseUrl: ${baseUrl} and endpoint: ${endpoint}`);
   return fullUrl;

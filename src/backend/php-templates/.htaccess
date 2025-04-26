@@ -1,5 +1,5 @@
 
-
+# Main .htaccess file - Handle all frontend routes correctly
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
@@ -12,31 +12,23 @@
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
-    # CRITICAL: Handle frontend routes - redirect all admin paths to index.php
+    # Prevent direct access to PHP files except API endpoints
+    RewriteCond %{REQUEST_URI} !^/api/
+    RewriteRule \.php$ - [F]
+    
+    # Handle static assets - don't rewrite if file exists
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^(.*)$ $1 [L]
+    
+    # CRITICAL: Handle frontend routes - redirect all paths to index.php
     # This ensures React Router can handle these routes
-    RewriteCond %{REQUEST_URI} ^/admin$ [OR]
-    RewriteCond %{REQUEST_URI} ^/admin/
-    RewriteRule ^(.*)$ index.php [L]
+    RewriteRule ^(admin|login|signup|dashboard|booking|receipt|cabs|tours)($|/) index.php [L]
+    RewriteRule ^admin/.*$ index.php [L]
     
-    # Prevent direct access to PHP files for security
-    # RewriteCond %{REQUEST_URI} !^/api/
-    # RewriteRule \.php$ - [F]
+    # API endpoints - direct to API directory
+    RewriteRule ^api/(.*) api/$1 [L]
     
-    # Debug mode - allow all PHP execution
-    # Comment these two lines in production
-    # RewriteCond %{REQUEST_URI} \.php$
-    # RewriteRule .* - [L]
-    
-    # Redirect all API requests to their respective endpoints
-    RewriteRule ^api/admin/drivers$ api/admin/drivers.php [L]
-    RewriteRule ^api/admin/generate-invoice$ api/admin/generate-invoice.php [L]
-    RewriteRule ^api/admin/booking$ api/admin/booking.php [L]
-    RewriteRule ^api/admin/update-booking$ api/admin/update-booking.php [L]
-    RewriteRule ^api/admin/assign-driver$ api/admin/assign-driver.php [L]
-    RewriteRule ^api/admin/cancel-booking$ api/admin/cancel-booking.php [L]
-    RewriteRule ^api/download-invoice$ api/download-invoice.php [L]
-    
-    # Redirect everything else to index.php
+    # Redirect everything else to index.php for SPA routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ index.php [L]

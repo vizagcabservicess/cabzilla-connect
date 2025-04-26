@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -15,30 +14,9 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
-# Add explicit rule for users.php and direct-user-data.php
-<Files "users.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
-
-<Files "direct-user-data.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-    Header always set Access-Control-Allow-Origin "*" 
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
-
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
-
-# Explicitly handle /admin in the API context
-RewriteRule ^admin$ admin/index.php [L]
-RewriteRule ^admin/$ admin/index.php [L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
@@ -72,15 +50,14 @@ RewriteRule ^admin/assign-driver\.php$ admin/assign-driver.php [L,QSA]
 RewriteRule ^admin/cancel-booking$ admin/cancel-booking.php [L,QSA]
 RewriteRule ^admin/cancel-booking\.php$ admin/cancel-booking.php [L,QSA]
 
+# Explicitly handle /admin in the API context
+RewriteRule ^admin$ admin/index.php [L]
+RewriteRule ^admin/$ admin/index.php [L]
+
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
-
-# ADD: Test email endpoints - high priority with multiple URLs
-RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email$ test-email-sending.php [L,QSA]
 
 # HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]
@@ -237,3 +214,8 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
     Require all granted
 </Files>
 Options -Indexes
+
+# Add a catch-all to prevent 404 errors for misconfigured API paths
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]
