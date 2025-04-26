@@ -384,7 +384,6 @@ export function DriverManagement() {
       }
       
       toast({
-        title: "Driver Added",
         description: "New driver has been added successfully",
       });
       

@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -56,6 +55,12 @@ try {
     if (!$bookingId) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
+
+    // Get GST parameters from GET
+    $gstEnabled = isset($_GET['gstEnabled']) ? filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
+    $gstNumber = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
+    $companyName = isset($_GET['companyName']) ? $_GET['companyName'] : '';
+    $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
 
     // Connect to database with improved error handling
     $conn = getDbConnectionWithRetry();
@@ -119,6 +124,14 @@ try {
             'invoice_date' => $invoiceDate,
             'status' => 'generated'
         ];
+
+        // When building $invoiceData, override GST fields if provided
+        if ($gstEnabled) {
+            $invoiceData['gst_enabled'] = true;
+            $invoiceData['gst_number'] = $gstNumber ?: ($invoiceData['gst_number'] ?? '');
+            $invoiceData['company_name'] = $companyName ?: ($invoiceData['company_name'] ?? '');
+            $invoiceData['company_address'] = $companyAddress ?: ($invoiceData['company_address'] ?? '');
+        }
     }
     
     // Format for HTML output
