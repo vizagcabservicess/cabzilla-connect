@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -123,7 +122,6 @@ try {
                 driver_phone VARCHAR(20),
                 vehicle_number VARCHAR(20),
                 admin_notes TEXT,
-                billing_address TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY (booking_number)
@@ -132,29 +130,6 @@ try {
         $conn->query($createTableSql);
         sendJsonResponse(['status' => 'error', 'message' => 'Booking not found, created bookings table'], 404);
         exit;
-    }
-
-    // Check if we need to add the billing_address column
-    $columnsStmt = $conn->query("SHOW COLUMNS FROM bookings LIKE 'billing_address'");
-    if ($columnsStmt->num_rows === 0) {
-        $conn->query("ALTER TABLE bookings ADD COLUMN billing_address TEXT AFTER admin_notes");
-    }
-
-    // Check if booking_extras table exists, if not create it
-    $checkExtrasTableStmt = $conn->query("SHOW TABLES LIKE 'booking_extras'");
-    if ($checkExtrasTableStmt->num_rows === 0) {
-        // Table doesn't exist, create it
-        $createExtrasTableSql = "
-            CREATE TABLE IF NOT EXISTS booking_extras (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                booking_id INT NOT NULL,
-                description VARCHAR(255) NOT NULL,
-                amount DECIMAL(10,2) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX (booking_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $conn->query($createExtrasTableSql);
     }
 
     // First check if the booking exists
@@ -188,8 +163,7 @@ try {
         'driver_name' => 'driverName',
         'driver_phone' => 'driverPhone',
         'vehicle_number' => 'vehicleNumber',
-        'admin_notes' => 'adminNotes',
-        'billing_address' => 'billingAddress'
+        'admin_notes' => 'adminNotes'
     ];
     
     // Track if status is being updated
@@ -211,7 +185,7 @@ try {
     $updateTypes .= "i";
     
     // If no fields to update, return success (no changes)
-    if (count($updateFields) === 0 && !isset($data['extraCharges'])) {
+    if (count($updateFields) === 0) {
         sendJsonResponse(['status' => 'success', 'message' => 'No changes to apply']);
         exit;
     }
@@ -222,51 +196,23 @@ try {
         'types' => $updateTypes
     ]);
     
-    // Begin transaction for multiple updates
-    $conn->begin_transaction();
+    // Update the booking
+    $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
+    $updateStmt = $conn->prepare($updateQuery);
     
-    // Update the booking if there are fields to update
-    if (count($updateFields) > 0) {
-        $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
-        $updateStmt = $conn->prepare($updateQuery);
-        
-        if (!$updateStmt) {
-            throw new Exception("Prepare failed: " . $conn->error);
-        }
-        
-        // Dynamically bind parameters
-        $bindParams = array_merge([$updateTypes], $updateValues);
-        $updateStmt->bind_param(...$bindParams);
-        
-        $success = $updateStmt->execute();
-        
-        if (!$success) {
-            throw new Exception('Database error: ' . $updateStmt->error);
-        }
-    }
-
-    // Handle extra charges if provided
-    if (isset($data['extraCharges']) && is_array($data['extraCharges']) && !empty($data['extraCharges'])) {
-        foreach ($data['extraCharges'] as $extra) {
-            if (!isset($extra['description']) || !isset($extra['amount'])) {
-                continue; // Skip invalid entries
-            }
-            
-            $description = $extra['description'];
-            $amount = floatval($extra['amount']);
-            
-            if ($amount <= 0) {
-                continue; // Skip zero or negative amounts
-            }
-            
-            $extraStmt = $conn->prepare("INSERT INTO booking_extras (booking_id, description, amount) VALUES (?, ?, ?)");
-            $extraStmt->bind_param("isd", $bookingId, $description, $amount);
-            $extraStmt->execute();
-        }
+    if (!$updateStmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
     }
     
-    // Commit all changes
-    $conn->commit();
+    // Dynamically bind parameters
+    $bindParams = array_merge([$updateTypes], $updateValues);
+    $updateStmt->bind_param(...$bindParams);
+    
+    $success = $updateStmt->execute();
+    
+    if (!$success) {
+        throw new Exception('Database error: ' . $updateStmt->error);
+    }
     
     // Get the updated booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -274,23 +220,6 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     $updatedBooking = $result->fetch_assoc();
-
-    // Get extra charges
-    $extraCharges = [];
-    $totalExtraCharges = 0;
-    $extrasStmt = $conn->prepare("SELECT id, description, amount FROM booking_extras WHERE booking_id = ?");
-    $extrasStmt->bind_param("i", $bookingId);
-    $extrasStmt->execute();
-    $extrasResult = $extrasStmt->get_result();
-    
-    while ($row = $extrasResult->fetch_assoc()) {
-        $extraCharges[] = [
-            'id' => $row['id'],
-            'description' => $row['description'],
-            'amount' => floatval($row['amount'])
-        ];
-        $totalExtraCharges += floatval($row['amount']);
-    }
     
     // Format the response
     $booking = [
@@ -314,10 +243,6 @@ try {
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => $updatedBooking['admin_notes'],
-        'billingAddress' => $updatedBooking['billing_address'],
-        'extraCharges' => $extraCharges,
-        'totalExtraCharges' => $totalExtraCharges,
-        'finalAmount' => (float)$updatedBooking['total_amount'] + $totalExtraCharges,
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']
     ];
@@ -410,9 +335,6 @@ HTML;
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
 } catch (Exception $e) {
-    // Rollback on error
-    $conn->rollback();
-    
     logError("Update booking error", [
         'message' => $e->getMessage(), 
         'trace' => $e->getTraceAsString()

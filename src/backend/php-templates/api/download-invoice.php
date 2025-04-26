@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -54,7 +53,7 @@ try {
     $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
     
     if (!$bookingId) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+        sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
     // Get GST parameters from GET
@@ -63,7 +62,7 @@ try {
     $companyName = isset($_GET['companyName']) ? $_GET['companyName'] : '';
     $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
 
-    // Connect to database
+    // Connect to database with improved error handling
     $conn = getDbConnectionWithRetry();
     
     // First check if we have an invoice record
@@ -98,52 +97,13 @@ try {
         
         $booking = $bookingResult->fetch_assoc();
         
-        // Get extra charges if any
-        $extraCharges = 0;
-        try {
-            $extrasStmt = $conn->prepare("SELECT SUM(amount) AS total FROM booking_extras WHERE booking_id = ?");
-            if ($extrasStmt) {
-                $extrasStmt->bind_param("i", $bookingId);
-                $extrasStmt->execute();
-                $extrasResult = $extrasStmt->get_result();
-                if ($extrasRow = $extrasResult->fetch_assoc()) {
-                    $extraCharges = $extrasRow['total'] ? floatval($extrasRow['total']) : 0;
-                }
-            }
-        } catch (Exception $e) {
-            // If table doesn't exist yet or other error, just continue without extra charges
-            error_log("Could not fetch booking extras: " . $e->getMessage());
-        }
-        
         // Generate invoice data from booking
         $invoiceNumber = 'INV-' . date('Ymd') . '-' . $booking['id'];
         $invoiceDate = date('Y-m-d');
         
-        // Calculate tax components with GST at 12%
-        $totalAmount = (float)$booking['total_amount'] + $extraCharges;
-        
-        if ($gstEnabled) {
-            $baseAmount = $totalAmount / 1.12; // Remove GST from total to get base amount
-            $cgstRate = 0.06; // 6%
-            $sgstRate = 0.06; // 6%
-            
-            $cgstAmount = round($baseAmount * $cgstRate, 2);
-            $sgstAmount = round($baseAmount * $sgstRate, 2);
-            $totalGstAmount = $cgstAmount + $sgstAmount;
-            
-            $finalAmount = $baseAmount + $totalGstAmount;
-        } else {
-            // Non-GST calculation
-            $baseAmount = $totalAmount;
-            $serviceChargeRate = 0.05; // 5% service charge
-            $serviceChargeAmount = round($baseAmount * $serviceChargeRate, 2);
-            
-            $cgstAmount = 0;
-            $sgstAmount = 0;
-            $totalGstAmount = 0;
-            
-            $finalAmount = $baseAmount;
-        }
+        // Calculate tax components (15% tax)
+        $baseFare = round($booking['total_amount'] * 0.85);
+        $taxAmount = $booking['total_amount'] - $baseFare;
         
         $invoiceData = [
             'invoice_number' => $invoiceNumber,
@@ -158,16 +118,11 @@ try {
             'drop_location' => $booking['drop_location'],
             'pickup_date' => $booking['pickup_date'],
             'cab_type' => $booking['cab_type'],
-            'base_amount' => $baseAmount,
-            'extra_charges' => $extraCharges,
-            'gst_enabled' => $gstEnabled,
-            'cgst_amount' => $cgstAmount,
-            'sgst_amount' => $sgstAmount,
-            'total_gst_amount' => $totalGstAmount,
-            'service_charge_amount' => 0,
-            'final_amount' => $finalAmount,
+            'base_fare' => $baseFare,
+            'tax_amount' => $taxAmount,
+            'total_amount' => $booking['total_amount'],
             'invoice_date' => $invoiceDate,
-            'billing_address' => $booking['billing_address'] ?? ''
+            'status' => 'generated'
         ];
 
         // When building $invoiceData, override GST fields if provided
@@ -180,56 +135,6 @@ try {
     }
     
     // Format for HTML output
-    $hasGst = $invoiceData['gst_enabled'] && ($invoiceData['cgst_amount'] > 0 || $invoiceData['sgst_amount'] > 0);
-    $companyInfo = '';
-    
-    if ($hasGst && !empty($invoiceData['gst_number'])) {
-        $companyInfo = '
-        <div class="company-gst-details">
-            <h3>Billing To:</h3>
-            <p><strong>' . htmlspecialchars($invoiceData['company_name']) . '</strong></p>
-            <p>GST Number: ' . htmlspecialchars($invoiceData['gst_number']) . '</p>
-            <p>' . nl2br(htmlspecialchars($invoiceData['company_address'])) . '</p>
-        </div>';
-    } else if (!empty($invoiceData['billing_address'])) {
-        $companyInfo = '
-        <div class="company-gst-details">
-            <h3>Billing To:</h3>
-            <p>' . nl2br(htmlspecialchars($invoiceData['billing_address'])) . '</p>
-        </div>';
-    }
-    
-    $gstRow = '';
-    $extraChargesRow = '';
-    $serviceChargeRow = '';
-    
-    // Add extra charges row if applicable
-    if (isset($invoiceData['extra_charges']) && $invoiceData['extra_charges'] > 0) {
-        $extraChargesRow = '
-        <tr>
-            <td>Extra Charges</td>
-            <td>₹ ' . number_format($invoiceData['extra_charges'], 2) . '</td>
-        </tr>';
-    }
-    
-    if ($hasGst) {
-        $gstRow = '
-        <tr>
-            <td>CGST (6%)</td>
-            <td>₹ ' . number_format($invoiceData['cgst_amount'], 2) . '</td>
-        </tr>
-        <tr>
-            <td>SGST (6%)</td>
-            <td>₹ ' . number_format($invoiceData['sgst_amount'], 2) . '</td>
-        </tr>';
-    } else if (isset($invoiceData['service_charge_amount']) && $invoiceData['service_charge_amount'] > 0) {
-        $serviceChargeRow = '
-        <tr>
-            <td>Service Charge (5%)</td>
-            <td>₹ ' . number_format($invoiceData['service_charge_amount'], 2) . '</td>
-        </tr>';
-    }
-    
     $invoiceHtml = '
     <!DOCTYPE html>
     <html>
@@ -269,7 +174,7 @@ try {
                 margin-bottom: 40px;
                 overflow: auto;
             }
-            .customer-details, .company-gst-details {
+            .customer-details {
                 float: left;
                 width: 48%;
             }
@@ -334,12 +239,11 @@ try {
             
             <div class="invoice-details">
                 <div class="customer-details">
-                    <h3>Passenger Details:</h3>
+                    <h3>Billed To:</h3>
                     <p>' . $invoiceData['passenger_name'] . '</p>
                     <p>Phone: ' . $invoiceData['passenger_phone'] . '</p>
                     <p>Email: ' . $invoiceData['passenger_email'] . '</p>
                 </div>
-                ' . $companyInfo . '
                 <div class="invoice-summary">
                     <h3>Trip Summary:</h3>
                     <p><strong>Trip Type:</strong> ' . ucfirst($invoiceData['trip_type']) . ' (' . ucfirst($invoiceData['trip_mode']) . ')</p>
@@ -364,14 +268,15 @@ try {
                     </tr>
                     <tr>
                         <td>Base Fare</td>
-                        <td>₹ ' . number_format($invoiceData['base_amount'], 2) . '</td>
+                        <td>₹ ' . number_format($invoiceData['base_fare'], 2) . '</td>
                     </tr>
-                    ' . $extraChargesRow . '
-                    ' . $gstRow . '
-                    ' . $serviceChargeRow . '
+                    <tr>
+                        <td>Taxes</td>
+                        <td>₹ ' . number_format($invoiceData['tax_amount'], 2) . '</td>
+                    </tr>
                     <tr class="total-row">
                         <td>Total Amount</td>
-                        <td>₹ ' . number_format($invoiceData['final_amount'], 2) . '</td>
+                        <td>₹ ' . number_format($invoiceData['total_amount'], 2) . '</td>
                     </tr>
                 </table>
             </div>

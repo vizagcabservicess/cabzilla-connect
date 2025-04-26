@@ -1,5 +1,4 @@
-
-# Enable URL rewriting
+# Enable rewrite engine
 RewriteEngine On
 RewriteBase /api/admin/
 
@@ -9,29 +8,115 @@ AddHandler application/x-httpd-php .php
 # Enable CORS with comprehensive headers
 Header always set Access-Control-Allow-Origin "*"
 Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Database-First, X-Debug, *"
 Header always set Access-Control-Max-Age "86400"
+Header always set Access-Control-Expose-Headers "*"
+Header always set X-Content-Type-Options "nosniff"
 
-# Handle OPTIONS preflight requests
+# Handle OPTIONS preflight requests - CRITICAL: Must be VERY first rule
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
-# Critical PHP settings
+# Critical PHP settings - must be set early
 <FilesMatch "\.php$">
+    # Ensure PHP files are recognized and processed correctly
     SetHandler application/x-httpd-php
+    # Set JSON content type for API responses
     Header always set Content-Type "application/json"
+    # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
 </FilesMatch>
 
-# Critical API endpoints
-RewriteRule ^generate-invoice/?$ generate-invoice.php [L,QSA]
-RewriteRule ^assign-driver/?$ assign-driver.php [L,QSA]
-RewriteRule ^update-booking/?$ update-booking.php [L,QSA]
-RewriteRule ^cancel-booking/?$ cancel-booking.php [L,QSA]
-RewriteRule ^drivers/?$ drivers.php [L,QSA]
+# HIGHEST PRIORITY: Fix schema endpoints
+<Files "fix-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
 
-# Explicitly allow PHP files in admin directory
+<Files "fix-drivers-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+<Files "fix-drivers-table.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+# Direct access to PHP files - CRITICAL RULE
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
 </Files>
+
+# CRITICAL: Fix schema endpoints with highest priority
+RewriteRule ^fix-schema\.php$ fix-schema.php [L,QSA]
+RewriteRule ^fix-drivers-schema\.php$ fix-drivers-schema.php [L,QSA]
+RewriteRule ^fix-drivers-table\.php$ fix-drivers-table.php [L,QSA]
+
+# Test endpoint for API connectivity verification
+RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
+
+# CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
+RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
+RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
+RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
+RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
+RewriteRule ^drivers\.php$ drivers.php [L,NC,QSA]
+RewriteRule ^driver\.php$ driver.php [L,NC,QSA]
+RewriteRule ^add-driver\.php$ add-driver.php [L,NC,QSA]
+RewriteRule ^update-driver\.php$ update-driver.php [L,NC,QSA]
+RewriteRule ^delete-driver\.php$ delete-driver.php [L,NC,QSA]
+RewriteRule ^reports\.php$ reports.php [L,NC,QSA]
+RewriteRule ^report-metrics\.php$ report-metrics.php [L,NC,QSA]
+
+# Add aliases for the endpoints to make them accessible via different URL patterns
+RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
+RewriteRule ^driver/([0-9]+)$ driver.php?id=$1 [L,NC,QSA]
+RewriteRule ^reports/?$ reports.php [L,NC,QSA]
+RewriteRule ^metrics/?$ report-metrics.php [L,NC,QSA]
+RewriteRule ^booking/?$ booking.php [L,NC,QSA]
+
+# CRITICAL: Explicitly define booking endpoints with highest priority
+RewriteRule ^booking\.php$ booking.php [L,NC,QSA]
+RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,NC,QSA]
+
+# Critical: Don't apply rewriting to actual PHP files
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^(.+)\.php$ $1.php [L,QSA]
+
+# CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
+# Make sure these are at the top, before any other rules
+RewriteRule ^vehicles/create$ direct-vehicle-create.php [L,QSA]
+RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L,QSA]
+RewriteRule ^add-vehicle$ add-vehicle-simple.php [L,QSA]
+RewriteRule ^vehicle-create$ direct-vehicle-create.php [L,QSA] 
+RewriteRule ^add-vehicle-simple$ add-vehicle-simple.php [L,QSA]
+
+# Vehicle update endpoints
+RewriteRule ^vehicle-update$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^update-vehicle$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^vehicles-update$ direct-vehicle-modify.php [L,QSA]
+RewriteRule ^direct-vehicle-update$ direct-vehicle-modify.php [L,QSA]
+
+# Reload endpoints (make these accessible via multiple paths)
+RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
+RewriteRule ^reload$ reload-vehicles.php [L,QSA]
+RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
+RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
+
+# Invoice and receipt endpoints
+RewriteRule ^invoice/([0-9]+)$ generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [L,NC,QSA]
+
+# CRITICAL: Driver management endpoints
+RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
+RewriteRule ^driver/?$ driver.php [L,NC,QSA]
+RewriteRule ^driver/([0-9]+)/?$ driver.php?id=$1 [L,NC,QSA]
+
+# Invoice endpoints
+RewriteRule ^generate-invoice/?$ generate-invoice.php [L,NC,QSA]
+RewriteRule ^download-invoice/?$ download-invoice.php [L,NC,QSA]
+RewriteRule ^invoice/([0-9]+)/?$ generate-invoice.php?id=$1 [L,NC,QSA]

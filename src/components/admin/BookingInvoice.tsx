@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
@@ -42,6 +43,7 @@ export function BookingInvoice({
   const { toast } = useToast();
 
   useEffect(() => {
+    // Try to generate invoice when component mounts
     if (booking && booking.id) {
       handleGenerateInvoice();
     }
@@ -53,12 +55,15 @@ export function BookingInvoice({
       setError(null);
       const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
       
-      if (result?.data) {
+      if (result && result.data) {
         setInvoiceData(result.data);
         toast({
-          title: "Success",
-          description: "Invoice generated successfully"
+          title: "Invoice Generated",
+          description: "Invoice was generated successfully"
         });
+      } else {
+        // If no data returned but no error, still remove loading state
+        setInvoiceData(null);
       }
     } catch (error) {
       console.error("Invoice generation error:", error);
@@ -69,15 +74,12 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    const params = new URLSearchParams();
-    params.append('id', booking.id.toString());
-    if (gstEnabled) {
-      params.append('gstEnabled', '1');
-      params.append('gstNumber', gstDetails.gstNumber);
-      params.append('companyName', gstDetails.companyName);
-      params.append('companyAddress', gstDetails.companyAddress);
-    }
-    const downloadUrl = `${pdfUrl}?${params.toString()}`;
+    // Construct PDF URL with GST parameter if enabled
+    const gstParam = gstEnabled ? '&gst=1' : '';
+    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+    
+    const downloadUrl = `${pdfUrl}${gstParam}${gstDetailsParam}`;
     window.open(downloadUrl, '_blank');
   };
 
@@ -140,7 +142,6 @@ export function BookingInvoice({
                     value={gstDetails.gstNumber}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter GST number"
-                    required={gstEnabled}
                   />
                 </div>
                 <div>
@@ -151,7 +152,6 @@ export function BookingInvoice({
                     value={gstDetails.companyName}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company name"
-                    required={gstEnabled}
                   />
                 </div>
                 <div>
@@ -162,7 +162,6 @@ export function BookingInvoice({
                     value={gstDetails.companyAddress}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company address"
-                    required={gstEnabled}
                   />
                 </div>
               </div>

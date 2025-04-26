@@ -7,22 +7,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Plus, Trash2 } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { Booking, BookingStatus } from '@/types/api';
 import { isBookingEditable } from '@/utils/bookingUtils';
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-
-interface ExtraCharge {
-  id?: number;
-  description: string;
-  amount: number;
-}
 
 interface BookingEditFormProps {
   booking: Booking;
-  onSave: (updatedData: Partial<Booking> & { extraCharges?: ExtraCharge[] }) => Promise<void>;
-  onSubmit?: (updatedData: Partial<Booking> & { extraCharges?: ExtraCharge[] }) => Promise<void>; // For backward compatibility
+  onSave: (updatedData: Partial<Booking>) => Promise<void>;
+  onSubmit?: (updatedData: Partial<Booking>) => Promise<void>; // Add for backward compatibility
   onCancel: () => void;
   isSubmitting: boolean;
 }
@@ -40,17 +32,12 @@ export function BookingEditForm({
     passengerEmail: booking.passengerEmail || '',
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
-    billingAddress: booking.billingAddress || '',
     pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
   });
 
-  const [extraCharges, setExtraCharges] = useState<ExtraCharge[]>(
-    Array.isArray(booking.extraCharges) ? booking.extraCharges : []
-  );
-  
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -82,27 +69,6 @@ export function BookingEditForm({
     }
   };
 
-  const addExtraCharge = () => {
-    setExtraCharges([
-      ...extraCharges,
-      { description: '', amount: 0 }
-    ]);
-  };
-
-  const removeExtraCharge = (index: number) => {
-    setExtraCharges(extraCharges.filter((_, i) => i !== index));
-  };
-
-  const handleExtraChargeChange = (index: number, field: 'description' | 'amount', value: string) => {
-    const updatedCharges = [...extraCharges];
-    if (field === 'amount') {
-      updatedCharges[index][field] = parseFloat(value) || 0;
-    } else {
-      updatedCharges[index][field] = value;
-    }
-    setExtraCharges(updatedCharges);
-  };
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
@@ -126,15 +92,6 @@ export function BookingEditForm({
       newErrors.pickupLocation = 'Pickup location is required';
     }
     
-    // Validate extra charges
-    const validExtraCharges = extraCharges.filter(
-      charge => charge.description.trim() !== '' && charge.amount > 0
-    );
-    
-    if (extraCharges.length > validExtraCharges.length) {
-      newErrors.extraCharges = 'All extra charges must have a description and amount greater than 0';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -146,19 +103,13 @@ export function BookingEditForm({
       return;
     }
     
-    const validExtraCharges = extraCharges.filter(
-      charge => charge.description.trim() !== '' && charge.amount > 0
-    );
-    
     const updatedData = {
       passengerName: formData.passengerName,
       passengerPhone: formData.passengerPhone,
       passengerEmail: formData.passengerEmail,
       pickupLocation: formData.pickupLocation,
       dropLocation: formData.dropLocation,
-      billingAddress: formData.billingAddress,
-      pickupDate: formData.pickupDate.toISOString(),
-      extraCharges: validExtraCharges
+      pickupDate: formData.pickupDate.toISOString()
     };
     
     // Use onSubmit if provided (for backward compatibility), otherwise use onSave
@@ -167,10 +118,6 @@ export function BookingEditForm({
   };
 
   const isEditable = isBookingEditable(booking.status);
-
-  const calculateTotalExtras = (): number => {
-    return extraCharges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
-  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -291,97 +238,6 @@ export function BookingEditForm({
           disabled={!isEditable || isSubmitting}
         />
       </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="billingAddress">Billing Address</Label>
-        <Textarea
-          id="billingAddress"
-          name="billingAddress"
-          placeholder="Enter billing address for invoice"
-          value={formData.billingAddress}
-          onChange={handleInputChange}
-          rows={3}
-          disabled={!isEditable || isSubmitting}
-        />
-      </div>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium">Extra Charges</h3>
-            <Button 
-              type="button" 
-              size="sm" 
-              onClick={addExtraCharge} 
-              disabled={!isEditable || isSubmitting}
-            >
-              <Plus className="h-4 w-4 mr-1" /> Add Charge
-            </Button>
-          </div>
-
-          {extraCharges.length > 0 ? (
-            <div className="space-y-4">
-              {extraCharges.map((charge, index) => (
-                <div key={index} className="flex items-end gap-3">
-                  <div className="flex-grow">
-                    <Label htmlFor={`charge-desc-${index}`}>Description</Label>
-                    <Input
-                      id={`charge-desc-${index}`}
-                      value={charge.description}
-                      onChange={(e) => handleExtraChargeChange(index, 'description', e.target.value)}
-                      placeholder="e.g., Extra mileage"
-                      disabled={!isEditable || isSubmitting}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <Label htmlFor={`charge-amount-${index}`}>Amount (₹)</Label>
-                    <Input
-                      id={`charge-amount-${index}`}
-                      type="number"
-                      value={charge.amount}
-                      onChange={(e) => handleExtraChargeChange(index, 'amount', e.target.value)}
-                      min={0}
-                      step={0.01}
-                      disabled={!isEditable || isSubmitting}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => removeExtraCharge(index)}
-                    disabled={!isEditable || isSubmitting}
-                    className="mb-0.5"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                </div>
-              ))}
-              
-              {errors.extraCharges && (
-                <p className="text-sm text-red-500">{errors.extraCharges}</p>
-              )}
-
-              <div className="pt-2 border-t mt-4">
-                <div className="flex justify-between">
-                  <span className="font-medium">Total Extra Charges:</span>
-                  <span className="font-medium">₹{calculateTotalExtras().toFixed(2)}</span>
-                </div>
-                {booking.totalAmount && (
-                  <div className="flex justify-between mt-2">
-                    <span className="font-medium">Total with Extras:</span>
-                    <span className="font-medium">
-                      ₹{(Number(booking.totalAmount) + calculateTotalExtras()).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No extra charges added.</p>
-          )}
-        </CardContent>
-      </Card>
       
       <div className="flex justify-end gap-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>

@@ -20,7 +20,6 @@ export interface Driver {
   license_number?: string;  // Alternative field name for compatibility
   vehicle?: string;
   vehicle_id?: string;
-  vehicleNumber?: string; // Added vehicleNumber property for DriverAssignment component
   status?: DriverStatus;
   location?: string;
   total_rides?: number;
@@ -58,20 +57,6 @@ export interface Booking {
   paymentMethod?: string;
   paymentStatus?: string;
   adminNotes?: string;
-  billingAddress?: string; // Added billingAddress property
-  extraCharges?: {   // Added extraCharges property
-    id?: number;
-    description: string;
-    amount: number;
-  }[];
-  totalExtraCharges?: number; // Added totalExtraCharges
-  finalAmount?: number; // Added finalAmount
-  gstEnabled?: boolean; // Added gstEnabled flag
-  gstDetails?: {  // Added gstDetails
-    gstNumber: string;
-    companyName: string;
-    companyAddress: string;
-  };
 }
 
 export interface User {

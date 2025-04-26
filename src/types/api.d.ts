@@ -17,14 +17,6 @@ export interface BookingDetails {
   driverPhone?: string;
   vehicleNumber?: string;
   gstEnabled?: boolean;
-  billingAddress?: string;
-  extraCharges?: {
-    id?: number;
-    description: string;
-    amount: number;
-  }[];
-  totalExtraCharges?: number;
-  finalAmount?: number;
   gstDetails?: {
     gstNumber: string;
     companyName: string;
@@ -49,7 +41,6 @@ export interface Driver {
   location: string;
   vehicle?: string;
   vehicle_id?: string;
-  vehicleNumber?: string; // Added vehicleNumber property
   created_at?: string;
   updated_at?: string;
 }
