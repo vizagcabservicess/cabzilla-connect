@@ -43,17 +43,19 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   
   // Initialize form data with driver details
   useEffect(() => {
-    setFormData({
-      name: driver.name,
-      phone: driver.phone,
-      email: driver.email || '',
-      license_no: driver.license_no || '',
-      vehicle: driver.vehicle || '',
-      vehicle_id: driver.vehicle_id || '',
-      status: driver.status,
-      location: driver.location || ''
-    });
-  }, [driver]);
+    if (isOpen && driver) {
+      setFormData({
+        name: driver.name || '',
+        phone: driver.phone || '',
+        email: driver.email || '',
+        license_no: driver.license_no || '',
+        vehicle: driver.vehicle || '',
+        vehicle_id: driver.vehicle_id || '',
+        status: driver.status || 'available',
+        location: driver.location || ''
+      });
+    }
+  }, [driver, isOpen]);
   
   // Debug: Log form state and errors on every render
   useEffect(() => {
