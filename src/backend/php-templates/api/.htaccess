@@ -246,3 +246,18 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
     Require all granted
 </Files>
 Options -Indexes
+
+# CRITICAL: Set explicit content type and CORS for invoice and driver endpoints
+<FilesMatch "(generate-invoice|assign-driver|update-booking)\.php$">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+</FilesMatch>
+
+# CRITICAL: Add explicit routes for invoice and driver management
+RewriteRule ^admin/generate-invoice/?$ admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^admin/assign-driver/?$ admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^admin/update-booking/?$ admin/update-booking.php [L,NC,QSA]
