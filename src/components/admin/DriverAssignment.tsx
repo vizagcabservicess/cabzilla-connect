@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,7 +64,8 @@ export function DriverAssignment({
           // Add vehicleNumber to each driver if missing
           const driversWithVehicle = data.data.map((driver: Driver) => ({
             ...driver,
-            vehicleNumber: driver.vehicle_id || 'Not assigned'
+            vehicleNumber: driver.vehicle_id || 'Not assigned',
+            email: driver.email || '' // Ensure email is not undefined
           }));
           setAvailableDrivers(driversWithVehicle);
         } else {
@@ -82,12 +82,12 @@ export function DriverAssignment({
         });
         
         // Use mock drivers as fallback
-        const mockDrivers = [
-          { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
-          { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
-          { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
-          { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
-          { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
+        const mockDrivers: Driver[] = [
+          { id: 1, name: "Rajesh Kumar", phone: "9876543210", email: "", vehicleNumber: "AP 31 AB 1234", license_no: "", status: "available", location: "", total_rides: 0 },
+          { id: 2, name: "Suresh Singh", phone: "9876543211", email: "", vehicleNumber: "AP 31 CD 5678", license_no: "", status: "available", location: "", total_rides: 0 },
+          { id: 3, name: "Mahesh Reddy", phone: "9876543212", email: "", vehicleNumber: "AP 31 EF 9012", license_no: "", status: "available", location: "", total_rides: 0 },
+          { id: 4, name: "Venkatesh S", phone: "9876543211", email: "", vehicleNumber: "AP 34 XX 3456", license_no: "", status: "available", location: "", total_rides: 0 },
+          { id: 5, name: "Ramesh Babu", phone: "8765432108", email: "", vehicleNumber: "AP 35 XX 7890", license_no: "", status: "available", location: "", total_rides: 0 }
         ];
         setAvailableDrivers(mockDrivers);
       } finally {

@@ -49,6 +49,7 @@ export interface Driver {
   location: string;
   vehicle?: string;
   vehicle_id?: string;
+  vehicleNumber?: string; // Added vehicleNumber property
   created_at?: string;
   updated_at?: string;
 }
