@@ -5,7 +5,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { Driver, DriverStatus } from '@/types/api';
+
+type DriverStatus = 'available' | 'busy' | 'offline';
+
+interface Driver {
+  id?: number;
+  name: string;
+  phone: string;
+  email: string;
+  license_number: string;
+  vehicle_number: string;
+  vehicle_type: string;
+  status: DriverStatus;
+  location: string;
+}
 
 interface AddDriverDialogProps {
   isOpen: boolean;
