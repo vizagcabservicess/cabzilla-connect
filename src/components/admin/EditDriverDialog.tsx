@@ -103,13 +103,10 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     return Object.keys(errors).length === 0;
   };
   
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
-    
     await onSubmit(formData);
   };
   
@@ -134,7 +131,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
             Update the driver's information below.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <div>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
@@ -278,15 +275,15 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
               Cancel
             </Button>
             <Button
-              type="submit"
+              type="button"
               disabled={isSubmitting || Object.keys(formErrors).length > 0}
-              onClick={() => { console.log('Save Changes button clicked'); }}
+              onClick={handleSubmit}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
             </Button>
           </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
