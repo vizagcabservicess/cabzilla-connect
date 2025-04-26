@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -52,65 +51,53 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 
-    // Get booking ID from query parameters or POST data
-    $bookingId = null;
-    $gstEnabled = false; 
+    // Parse request data based on method and content type
+    $requestData = [];
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
+        
+        if (strpos($contentType, 'application/json') !== false) {
+            $jsonData = file_get_contents('php://input');
+            $requestData = json_decode($jsonData, true) ?: [];
+            error_log("Received JSON data: " . $jsonData);
+        } else {
+            $requestData = $_POST;
+            error_log("Received POST data: " . json_encode($_POST));
+        }
+    } else {
+        $requestData = $_GET;
+        error_log("Received GET data: " . json_encode($_GET));
+    }
+    
+    // Extract booking ID
+    $bookingId = isset($requestData['id']) ? (int)$requestData['id'] : 
+                 (isset($requestData['bookingId']) ? (int)$requestData['bookingId'] : null);
+    
+    // Extract GST details
+    $gstEnabled = isset($requestData['gstEnabled']) ? filter_var($requestData['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
     $gstDetails = [
         'gstNumber' => '',
         'companyName' => '',
         'companyAddress' => ''
     ];
     
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
-        $gstEnabled = isset($_GET['gst']) && $_GET['gst'] == '1';
-        
-        if ($gstEnabled) {
-            $gstDetails['gstNumber'] = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
-            $gstDetails['companyName'] = isset($_GET['companyName']) ? $_GET['companyName'] : '';
-            $gstDetails['companyAddress'] = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
-        }
+    if ($gstEnabled && isset($requestData['gstDetails'])) {
+        $gstDetails = is_array($requestData['gstDetails']) ? 
+            array_merge($gstDetails, $requestData['gstDetails']) : $gstDetails;
     } else {
-        // Get JSON input data for POST
-        $jsonData = file_get_contents('php://input');
-        $data = json_decode($jsonData, true);
-        
-        // Debug log the raw POST data
-        error_log("Generate invoice POST data: " . $jsonData);
-        
-        $bookingId = isset($data['bookingId']) ? (int)$data['bookingId'] : null;
-        $gstEnabled = isset($data['gstEnabled']) && $data['gstEnabled'] === true;
-        
-        if ($gstEnabled && isset($data['gstDetails'])) {
-            $gstDetails = array_merge($gstDetails, $data['gstDetails']);
-        }
-        
-        // If we couldn't get it from JSON, try regular POST
-        if (!$bookingId && isset($_POST['bookingId'])) {
-            $bookingId = (int)$_POST['bookingId'];
-            $gstEnabled = isset($_POST['gstEnabled']) && $_POST['gstEnabled'] == '1';
-            
-            if ($gstEnabled) {
-                $gstDetails['gstNumber'] = isset($_POST['gstNumber']) ? $_POST['gstNumber'] : '';
-                $gstDetails['companyName'] = isset($_POST['companyName']) ? $_POST['companyName'] : '';
-                $gstDetails['companyAddress'] = isset($_POST['companyAddress']) ? $_POST['companyAddress'] : '';
-            }
-        }
+        // Try individual GST fields
+        $gstDetails['gstNumber'] = $requestData['gstNumber'] ?? '';
+        $gstDetails['companyName'] = $requestData['companyName'] ?? '';
+        $gstDetails['companyAddress'] = $requestData['companyAddress'] ?? '';
     }
     
-    logGenerateInvoiceError("Processing invoice generation for booking ID: " . $bookingId, [
-        'method' => $_SERVER['REQUEST_METHOD'],
-        'queryString' => $_SERVER['QUERY_STRING'],
-        'jsonData' => $jsonData ?? 'none',
-        'gstEnabled' => $gstEnabled ? 'Yes' : 'No',
-        'gstDetails' => $gstDetails
-    ]);
-    
+    // Validate booking ID
     if (!$bookingId) {
+        logGenerateInvoiceError("Missing booking ID", ['request_data' => $requestData]);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database with improved error handling
+    // Connect to database
     try {
         $conn = getDbConnectionWithRetry();
         if (!$conn) {
@@ -137,6 +124,7 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
+            logGenerateInvoiceError("Booking not found", ['booking_id' => $bookingId]);
             sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
         }
         
@@ -161,26 +149,31 @@ try {
     // Calculate tax components
     $totalAmount = (float)$booking['total_amount'];
     
-    // Add GST if enabled (12%)
+    // GST calculation (18% - split into CGST and SGST)
     if ($gstEnabled) {
-        $baseAmount = $totalAmount;
-        $gstAmount = round($baseAmount * 0.12, 2);
-        $totalWithGst = $baseAmount + $gstAmount;
+        $baseAmount = $totalAmount / 1.18; // Remove GST from total to get base amount
+        $cgstRate = 0.09; // 9%
+        $sgstRate = 0.09; // 9%
         
-        $baseFare = round($baseAmount * 0.85, 2);
-        $serviceTaxAmount = $baseAmount - $baseFare;
+        $cgstAmount = round($baseAmount * $cgstRate, 2);
+        $sgstAmount = round($baseAmount * $sgstRate, 2);
+        $totalGstAmount = $cgstAmount + $sgstAmount;
         
-        // Updated totals with GST
-        $finalAmount = $totalWithGst;
+        $finalAmount = $baseAmount + $totalGstAmount;
     } else {
-        // Original calculation (15% tax)
-        $baseFare = round($totalAmount * 0.85, 2);
-        $serviceTaxAmount = $totalAmount - $baseFare;
-        $gstAmount = 0;
-        $finalAmount = $totalAmount;
+        // Non-GST calculation (service charge)
+        $baseAmount = $totalAmount;
+        $serviceChargeRate = 0.05; // 5% service charge
+        $serviceChargeAmount = round($baseAmount * $serviceChargeRate, 2);
+        
+        $cgstAmount = 0;
+        $sgstAmount = 0;
+        $totalGstAmount = 0;
+        
+        $finalAmount = $baseAmount + $serviceChargeAmount;
     }
     
-    // Create invoice record in invoices table if it exists
+    // Prepare invoice data
     $invoiceData = [
         'invoice_number' => $invoiceNumber,
         'booking_id' => $booking['id'],
@@ -194,218 +187,110 @@ try {
         'drop_location' => $booking['drop_location'],
         'pickup_date' => $booking['pickup_date'],
         'cab_type' => $booking['cab_type'],
-        'base_fare' => $baseFare,
-        'service_tax_amount' => $serviceTaxAmount,
+        'base_amount' => $baseAmount,
         'gst_enabled' => $gstEnabled,
-        'gst_amount' => $gstAmount,
+        'cgst_amount' => $cgstAmount,
+        'sgst_amount' => $sgstAmount,
+        'total_gst_amount' => $totalGstAmount,
+        'service_charge_amount' => $gstEnabled ? 0 : $serviceChargeAmount,
+        'final_amount' => $finalAmount,
+        'invoice_date' => $invoiceDate,
         'gst_number' => $gstEnabled ? $gstDetails['gstNumber'] : '',
         'company_name' => $gstEnabled ? $gstDetails['companyName'] : '',
-        'company_address' => $gstEnabled ? $gstDetails['companyAddress'] : '',
-        'total_amount' => $finalAmount,
-        'invoice_date' => $invoiceDate,
-        'status' => 'generated',
+        'company_address' => $gstEnabled ? $gstDetails['companyAddress'] : ''
     ];
-    
-    // Check if invoices table exists, create it if needed
+
+    // Save invoice to database
     try {
-        $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
-        if ($checkTableResult->num_rows === 0) {
-            $createInvoicesTableSql = "
-                CREATE TABLE invoices (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    invoice_number VARCHAR(50) NOT NULL UNIQUE,
-                    booking_id INT NOT NULL,
-                    booking_number VARCHAR(50) NOT NULL,
-                    passenger_name VARCHAR(100) NOT NULL,
-                    passenger_email VARCHAR(100) NOT NULL,
-                    passenger_phone VARCHAR(20) NOT NULL,
-                    trip_type VARCHAR(20) NOT NULL,
-                    trip_mode VARCHAR(20) NOT NULL,
-                    pickup_location TEXT NOT NULL,
-                    drop_location TEXT,
-                    pickup_date DATETIME NOT NULL,
-                    cab_type VARCHAR(50) NOT NULL,
-                    base_fare DECIMAL(10,2) NOT NULL,
-                    service_tax_amount DECIMAL(10,2) NOT NULL,
-                    gst_enabled TINYINT(1) DEFAULT 0,
-                    gst_amount DECIMAL(10,2) DEFAULT 0,
-                    gst_number VARCHAR(50),
-                    company_name VARCHAR(100),
-                    company_address TEXT,
-                    total_amount DECIMAL(10,2) NOT NULL,
-                    invoice_date DATE NOT NULL,
-                    status VARCHAR(20) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            ";
-            $conn->query($createInvoicesTableSql);
-            if ($conn->error) {
-                logGenerateInvoiceError("Error creating invoices table", ['error' => $conn->error]);
-            }
-        } else {
-            // Check if GST columns exist, add them if they don't
-            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE 'gst_enabled'");
-            if ($checkColumnResult->num_rows === 0) {
-                $conn->query("ALTER TABLE invoices 
-                    ADD COLUMN gst_enabled TINYINT(1) DEFAULT 0,
-                    ADD COLUMN gst_amount DECIMAL(10,2) DEFAULT 0,
-                    ADD COLUMN gst_number VARCHAR(50),
-                    ADD COLUMN company_name VARCHAR(100),
-                    ADD COLUMN company_address TEXT,
-                    CHANGE tax_amount service_tax_amount DECIMAL(10,2) NOT NULL");
-            }
-        }
-    } catch (Exception $e) {
-        logGenerateInvoiceError("Error checking/creating invoices table", ['error' => $e->getMessage()]);
-        // Continue execution - we'll try to handle without the table if needed
-    }
-    
-    // Check if invoice already exists for this booking
-    try {
-        $checkInvoiceStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
-        $checkInvoiceStmt->bind_param("i", $bookingId);
-        $checkInvoiceStmt->execute();
-        $invoiceResult = $checkInvoiceStmt->get_result();
+        $stmt = $conn->prepare("
+            INSERT INTO invoices (
+                invoice_number, booking_id, invoice_date, base_amount,
+                gst_enabled, cgst_amount, sgst_amount, service_charge_amount,
+                final_amount, gst_number, company_name, company_address
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                invoice_date = VALUES(invoice_date),
+                base_amount = VALUES(base_amount),
+                gst_enabled = VALUES(gst_enabled),
+                cgst_amount = VALUES(cgst_amount),
+                sgst_amount = VALUES(sgst_amount),
+                service_charge_amount = VALUES(service_charge_amount),
+                final_amount = VALUES(final_amount),
+                gst_number = VALUES(gst_number),
+                company_name = VALUES(company_name),
+                company_address = VALUES(company_address)
+        ");
         
-        if ($invoiceResult->num_rows > 0) {
-            $existingInvoice = $invoiceResult->fetch_assoc();
-            $invoiceId = $existingInvoice['id'];
-            
-            // Update invoice with new GST settings
-            $updateSql = "UPDATE invoices SET 
-                status = 'generated', 
-                gst_enabled = ?, 
-                gst_amount = ?,
-                gst_number = ?,
-                company_name = ?,
-                company_address = ?,
-                base_fare = ?,
-                service_tax_amount = ?,
-                total_amount = ?,
-                updated_at = NOW() 
-                WHERE id = ?";
-            
-            $updateStmt = $conn->prepare($updateSql);
-            $gstEnabledInt = $gstEnabled ? 1 : 0;
-            $updateStmt->bind_param(
-                "idsssdddi",
-                $gstEnabledInt,
-                $invoiceData['gst_amount'],
-                $invoiceData['gst_number'],
-                $invoiceData['company_name'],
-                $invoiceData['company_address'],
-                $invoiceData['base_fare'],
-                $invoiceData['service_tax_amount'],
-                $invoiceData['total_amount'],
-                $invoiceId
-            );
-            $updateStmt->execute();
-        } else {
-            // Insert new invoice
-            $insertSql = "INSERT INTO invoices (invoice_number, booking_id, booking_number, passenger_name, passenger_email, 
-                        passenger_phone, trip_type, trip_mode, pickup_location, drop_location, pickup_date, cab_type, 
-                        base_fare, service_tax_amount, gst_enabled, gst_amount, gst_number, company_name, company_address,
-                        total_amount, invoice_date, status) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $insertStmt = $conn->prepare($insertSql);
-            $gstEnabledInt = $gstEnabled ? 1 : 0;
-            $insertStmt->bind_param(
-                "sisssssssssddiidssdss",
-                $invoiceData['invoice_number'],
-                $invoiceData['booking_id'],
-                $invoiceData['booking_number'],
-                $invoiceData['passenger_name'],
-                $invoiceData['passenger_email'],
-                $invoiceData['passenger_phone'],
-                $invoiceData['trip_type'],
-                $invoiceData['trip_mode'],
-                $invoiceData['pickup_location'],
-                $invoiceData['drop_location'],
-                $invoiceData['pickup_date'],
-                $invoiceData['cab_type'],
-                $invoiceData['base_fare'],
-                $invoiceData['service_tax_amount'],
-                $gstEnabledInt,
-                $invoiceData['gst_amount'],
-                $invoiceData['gst_number'],
-                $invoiceData['company_name'],
-                $invoiceData['company_address'],
-                $invoiceData['total_amount'],
-                $invoiceData['invoice_date'],
-                $invoiceData['status']
-            );
-            $insertStmt->execute();
-            
-            // Update booking to indicate invoice has been created
-            try {
-                $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
-                if ($conn->error) {
-                    // If invoice_generated column doesn't exist, we'll add it
-                    $conn->query("ALTER TABLE bookings ADD COLUMN invoice_generated TINYINT(1) DEFAULT 0");
-                    $updateBookingStmt = $conn->prepare("UPDATE bookings SET invoice_generated = 1 WHERE id = ?");
-                }
-                $updateBookingStmt->bind_param("i", $bookingId);
-                $updateBookingStmt->execute();
-            } catch (Exception $e) {
-                logGenerateInvoiceError("Error updating booking's invoice status", ['error' => $e->getMessage()]);
-                // Continue execution - this is not critical
-            }
+        if (!$stmt) {
+            throw new Exception("Failed to prepare invoice insert statement: " . $conn->error);
         }
+        
+        $stmt->bind_param(
+            "sisidddddssss",
+            $invoiceNumber,
+            $booking['id'],
+            $invoiceDate,
+            $baseAmount,
+            $gstEnabled,
+            $cgstAmount,
+            $sgstAmount,
+            $serviceChargeAmount,
+            $finalAmount,
+            $gstDetails['gstNumber'],
+            $gstDetails['companyName'],
+            $gstDetails['companyAddress']
+        );
+        
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to save invoice: " . $stmt->error);
+        }
+        
+        $invoiceId = $stmt->insert_id ?: $conn->insert_id;
+        
     } catch (Exception $e) {
-        logGenerateInvoiceError("Error creating/updating invoice record", ['error' => $e->getMessage()]);
-        // Continue execution - we can still generate the invoice even if we couldn't save it
+        logGenerateInvoiceError("Error saving invoice", [
+            'booking_id' => $bookingId,
+            'error' => $e->getMessage()
+        ]);
+        
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'Failed to save invoice',
+            'error_details' => $debugMode ? $e->getMessage() : null
+        ], 500);
     }
     
-    // Add invoice download URL to response
-    $invoiceUrl = "/api/download-invoice.php?id=" . $bookingId . ($gstEnabled ? "&gst=1" : "");
-    $pdfUrl = "/api/download-invoice.php?id=" . $bookingId . "&format=pdf" . ($gstEnabled ? "&gst=1" : "");
-    
-    // Generate HTML invoice for response
-    $invoiceHtml = generateInvoiceHTML($invoiceData);
-    
-    // Send success response with invoice data
+    // Return success response
     sendJsonResponse([
-        'status' => 'success', 
+        'status' => 'success',
         'message' => 'Invoice generated successfully',
         'data' => [
-            'invoiceNumber' => $invoiceNumber,
-            'invoiceDate' => $invoiceDate,
-            'bookingDetails' => [
-                'id' => (int)$booking['id'],
-                'bookingNumber' => $booking['booking_number'],
-                'passengerName' => $booking['passenger_name'],
-                'tripType' => $booking['trip_type'],
-                'pickupDate' => $booking['pickup_date'],
-                'cabType' => $booking['cab_type']
+            'invoice_id' => $invoiceId,
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => $invoiceDate,
+            'amount_details' => [
+                'base_amount' => $baseAmount,
+                'cgst_amount' => $cgstAmount,
+                'sgst_amount' => $sgstAmount,
+                'service_charge_amount' => $serviceChargeAmount,
+                'final_amount' => $finalAmount
             ],
-            'fareBreakdown' => [
-                'baseFare' => $baseFare,
-                'serviceTax' => $serviceTaxAmount,
-                'gstEnabled' => $gstEnabled,
-                'gstAmount' => $gstAmount,
-                'gstDetails' => $gstEnabled ? $gstDetails : null,
-                'totalAmount' => $finalAmount
-            ],
-            'downloadUrl' => $invoiceUrl,
-            'pdfDownloadUrl' => $pdfUrl,
-            'invoiceHtml' => $invoiceHtml
+            'gst_details' => $gstEnabled ? $gstDetails : null
         ]
     ]);
-
+    
 } catch (Exception $e) {
     logGenerateInvoiceError("Unhandled error", ['error' => $e->getMessage()]);
     sendJsonResponse([
-        'status' => 'error', 
-        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
+        'status' => 'error',
+        'message' => 'An unexpected error occurred',
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
 }
 
 // Function to generate HTML invoice
 function generateInvoiceHTML($invoiceData) {
-    $hasGst = $invoiceData['gst_enabled'] && $invoiceData['gst_amount'] > 0;
+    $hasGst = $invoiceData['gst_enabled'] && $invoiceData['total_gst_amount'] > 0;
     $companyInfo = '';
     
     if ($hasGst && !empty($invoiceData['gst_number'])) {
@@ -422,8 +307,8 @@ function generateInvoiceHTML($invoiceData) {
     if ($hasGst) {
         $gstRow = '
         <tr>
-            <td>GST (12%)</td>
-            <td>₹ ' . number_format($invoiceData['gst_amount'], 2) . '</td>
+            <td>GST (18%)</td>
+            <td>₹ ' . number_format($invoiceData['total_gst_amount'], 2) . '</td>
         </tr>';
     }
     
@@ -548,16 +433,16 @@ function generateInvoiceHTML($invoiceData) {
                     </tr>
                     <tr>
                         <td>Base Fare</td>
-                        <td>₹ ' . number_format($invoiceData['base_fare'], 2) . '</td>
+                        <td>₹ ' . number_format($invoiceData['base_amount'], 2) . '</td>
                     </tr>
                     <tr>
                         <td>Service Tax</td>
-                        <td>₹ ' . number_format($invoiceData['service_tax_amount'], 2) . '</td>
+                        <td>₹ ' . number_format($invoiceData['service_charge_amount'], 2) . '</td>
                     </tr>
                     ' . $gstRow . '
                     <tr class="total-row">
                         <td>Total Amount</td>
-                        <td>₹ ' . number_format($invoiceData['total_amount'], 2) . '</td>
+                        <td>₹ ' . number_format($invoiceData['final_amount'], 2) . '</td>
                     </tr>
                 </table>
             </div>

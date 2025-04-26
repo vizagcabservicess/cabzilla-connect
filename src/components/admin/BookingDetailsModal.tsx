@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BookingDetails } from './BookingDetails';
 import { Booking, BookingStatus } from '@/types/api';
@@ -27,24 +26,38 @@ export function BookingDetailsModal({
   onStatusChange,
   isSubmitting
 }: BookingDetailsModalProps) {
+  useEffect(() => {
+    if (isOpen) {
+      // Scroll to top when modal opens
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Also reset modal scroll position
+      const modalContent = document.querySelector('.booking-details-modal-content');
+      if (modalContent) {
+        modalContent.scrollTop = 0;
+      }
+    }
+  }, [isOpen]);
+
   if (!booking) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content">
+        <DialogHeader className="sticky top-0 z-50 bg-white pb-4 border-b">
           <DialogTitle>Booking #{booking.bookingNumber}</DialogTitle>
         </DialogHeader>
-        <BookingDetails
-          booking={booking}
-          onClose={onClose}
-          onEdit={onEdit}
-          onAssignDriver={onAssignDriver}
-          onCancel={onCancel}
-          onGenerateInvoice={onGenerateInvoice}
-          onStatusChange={onStatusChange}
-          isSubmitting={isSubmitting}
-        />
+        <div className="pt-4">
+          <BookingDetails
+            booking={booking}
+            onClose={onClose}
+            onEdit={onEdit}
+            onAssignDriver={onAssignDriver}
+            onCancel={onCancel}
+            onGenerateInvoice={onGenerateInvoice}
+            onStatusChange={onStatusChange}
+            isSubmitting={isSubmitting}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

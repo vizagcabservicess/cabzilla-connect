@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Table, TableBody, TableCaption, TableCell, 
@@ -11,7 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { 
   MapPin, Phone, Mail, CheckCircle, XCircle, 
   Plus, Edit, AlertCircle, Search, Star, 
-  MoreHorizontal, ToggleLeft, Car, Settings, Loader2
+  MoreHorizontal, ToggleLeft, Car, Settings, Loader2, RefreshCw
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,11 +21,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Driver, DriverStatus } from '@/types/api';
+import { driverAPI } from '@/services/api';
+import { AddDriverDialog } from './AddDriverDialog';
+import { EditDriverDialog } from './EditDriverDialog';
+import { DeleteDriverDialog } from './DeleteDriverDialog';
 
 interface Driver {
   id: number;
@@ -55,9 +59,18 @@ interface DriverFormData {
 export function DriverManagement() {
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<DriverStatus | ''>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [retryCount, setRetryCount] = useState(0);
   
   // Dialog state
@@ -513,449 +526,203 @@ export function DriverManagement() {
   const busyDrivers = drivers.filter(d => d.status === 'busy').length;
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold">Driver Management</h2>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-grow md:w-64">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search drivers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Button className="flex items-center gap-2" onClick={openAddDriverDialog}>
-            <Plus className="h-4 w-4" /> Add Driver
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold tracking-tight">Drivers</h2>
+          <p className="text-muted-foreground">
+            Manage your drivers and their assignments
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsRefreshing(true)}
+            disabled={isLoading || isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)}>
+            Add Driver
           </Button>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalDrivers}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Available Drivers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{availableDrivers}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Busy Drivers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{busyDrivers}</div>
-          </CardContent>
-        </Card>
+      
+      <div className="flex items-center space-x-2">
+        <Input
+          placeholder="Search drivers..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as DriverStatus | '')}
+          className="h-10 rounded-md border border-input bg-background px-3 py-2"
+        >
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="on_trip">On Trip</option>
+          <option value="blocked">Blocked</option>
+        </select>
       </div>
-
-      {loading && (
-        <div className="flex justify-center items-center p-8">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-          <span>Loading drivers...</span>
-        </div>
-      )}
-
+      
       {error && (
-        <Alert variant="destructive" className="my-4">
+        <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             {error}
             <div className="mt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-2"
-                onClick={retryFetchDrivers}
-              >
+              <Button variant="outline" size="sm" onClick={retryFetchDrivers}>
                 Retry
               </Button>
             </div>
           </AlertDescription>
         </Alert>
       )}
-
-      {!loading && !error && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableCaption>List of all registered drivers</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Rides</TableHead>
-                  <TableHead>Earnings</TableHead>
-                  <TableHead>Rating</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDrivers.length > 0 ? (
-                  filteredDrivers.map((driver) => (
-                    <TableRow key={driver.id}>
-                      <TableCell className="font-medium">{driver.name}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {driver.phone}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" /> {driver.email}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(driver.status)}</TableCell>
-                      <TableCell>{driver.total_rides}</TableCell>
-                      <TableCell>₹{driver.earnings.toLocaleString('en-IN')}</TableCell>
-                      <TableCell>
+      
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>Vehicle</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center">
+                  Loading drivers...
+                </TableCell>
+              </TableRow>
+            ) : filteredDrivers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center">
+                  No drivers found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredDrivers.map((driver) => (
+                <TableRow key={driver.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{driver.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        License: {driver.license_no}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-center">
+                        <Phone className="h-4 w-4 mr-1" />
+                        <span>{driver.phone}</span>
+                      </div>
+                      {driver.email && (
                         <div className="flex items-center">
-                          <span className="font-bold mr-1">{driver.rating}</span>
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Car className="h-3 w-3" /> {driver.vehicle}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" /> {driver.location}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => openEditDriverDialog(driver)}>
-                              <Edit className="h-3.5 w-3.5 mr-2" /> Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <MapPin className="h-3.5 w-3.5 mr-2" /> Track Location
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => toggleDriverStatus(driver)}>
-                              <ToggleLeft className="h-3.5 w-3.5 mr-2" /> 
-                              {driver.status === 'available' ? 'Set as Offline' : 'Set as Available'}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openDeleteDriverDialog(driver)} className="text-red-600">
-                              <XCircle className="h-3.5 w-3.5 mr-2" /> Delete Driver
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
-                      {searchTerm ? (
-                        <div>
-                          <Search className="h-6 w-6 mx-auto mb-2" />
-                          <p>No drivers found matching "{searchTerm}"</p>
-                          <Button 
-                            variant="link" 
-                            onClick={() => setSearchTerm('')}
-                            className="mt-2"
-                          >
-                            Clear search
-                          </Button>
-                        </div>
-                      ) : (
-                        <div>
-                          <AlertCircle className="h-6 w-6 mx-auto mb-2" />
-                          <p>No drivers found</p>
-                          <Button 
-                            variant="link" 
-                            onClick={openAddDriverDialog}
-                            className="mt-2"
-                          >
-                            Add your first driver
-                          </Button>
+                          <Mail className="h-4 w-4 mr-1" />
+                          <span>{driver.email}</span>
                         </div>
                       )}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      )}
-
-      {/* Add Driver Dialog */}
-      <Dialog open={isAddDriverDialogOpen} onOpenChange={setIsAddDriverDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Add New Driver</DialogTitle>
-            <DialogDescription>
-              Enter the driver's information below to add them to your fleet.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Driver Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  value={driverForm.name}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.name ? "border-red-500" : ""}
-                />
-                {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  value={driverForm.phone}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.phone ? "border-red-500" : ""}
-                />
-                {formErrors.phone && <p className="text-xs text-red-500">{formErrors.phone}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={driverForm.email}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.email ? "border-red-500" : ""}
-                />
-                {formErrors.email && <p className="text-xs text-red-500">{formErrors.email}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="license_no">License Number</Label>
-                <Input
-                  id="license_no"
-                  name="license_no"
-                  value={driverForm.license_no}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={driverForm.status}
-                  onValueChange={handleStatusChange}
-                  disabled={formSubmitting}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="busy">Busy</SelectItem>
-                    <SelectItem value="offline">Offline</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  name="location"
-                  value={driverForm.location}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="vehicle">Vehicle Details</Label>
-                <Input
-                  id="vehicle"
-                  name="vehicle"
-                  placeholder="e.g. Sedan - AP 31 XX 1234"
-                  value={driverForm.vehicle}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.vehicle ? "border-red-500" : ""}
-                />
-                {formErrors.vehicle && <p className="text-xs text-red-500">{formErrors.vehicle}</p>}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDriverDialogOpen(false)} disabled={formSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddDriver} disabled={formSubmitting}>
-              {formSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Driver
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Driver Dialog */}
-      <Dialog open={isEditDriverDialogOpen} onOpenChange={setIsEditDriverDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit Driver</DialogTitle>
-            <DialogDescription>
-              Update the driver's information below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Driver Name</Label>
-                <Input
-                  id="edit-name"
-                  name="name"
-                  value={driverForm.name}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.name ? "border-red-500" : ""}
-                />
-                {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-phone">Phone Number</Label>
-                <Input
-                  id="edit-phone"
-                  name="phone"
-                  value={driverForm.phone}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.phone ? "border-red-500" : ""}
-                />
-                {formErrors.phone && <p className="text-xs text-red-500">{formErrors.phone}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-email">Email Address</Label>
-                <Input
-                  id="edit-email"
-                  name="email"
-                  type="email"
-                  value={driverForm.email}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.email ? "border-red-500" : ""}
-                />
-                {formErrors.email && <p className="text-xs text-red-500">{formErrors.email}</p>}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-license_no">License Number</Label>
-                <Input
-                  id="edit-license_no"
-                  name="license_no"
-                  value={driverForm.license_no}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select
-                  value={driverForm.status}
-                  onValueChange={handleStatusChange}
-                  disabled={formSubmitting}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="busy">Busy</SelectItem>
-                    <SelectItem value="offline">Offline</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-location">Location</Label>
-                <Input
-                  id="edit-location"
-                  name="location"
-                  value={driverForm.location}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-vehicle">Vehicle Details</Label>
-                <Input
-                  id="edit-vehicle"
-                  name="vehicle"
-                  value={driverForm.vehicle}
-                  onChange={handleDriverFormChange}
-                  disabled={formSubmitting}
-                  className={formErrors.vehicle ? "border-red-500" : ""}
-                />
-                {formErrors.vehicle && <p className="text-xs text-red-500">{formErrors.vehicle}</p>}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDriverDialogOpen(false)} disabled={formSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleEditDriver} disabled={formSubmitting}>
-              {formSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      <Car className="h-4 w-4" />
+                      <span>{driver.vehicle}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        driver.status === 'active' ? 'success' :
+                        driver.status === 'inactive' ? 'secondary' :
+                        driver.status === 'on_trip' ? 'default' :
+                        'destructive'
+                      }
+                    >
+                      {driver.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      <span>{driver.location}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedDriver(driver);
+                            setShowEditDialog(true);
+                          }}
+                        >
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => {
+                            setSelectedDriver(driver);
+                            setShowDeleteDialog(true);
+                          }}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
       
-      {/* Delete Driver Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete {currentDriver?.name}'s driver profile. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={formSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteDriver} disabled={formSubmitting} className="bg-red-600 hover:bg-red-700">
-              {formSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {showAddDialog && (
+        <AddDriverDialog
+          isOpen={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          onSubmit={handleAddDriver}
+          isSubmitting={formSubmitting}
+        />
+      )}
+      
+      {showEditDialog && selectedDriver && (
+        <EditDriverDialog
+          isOpen={showEditDialog}
+          onClose={() => setShowEditDialog(false)}
+          onSubmit={handleEditDriver}
+          driver={selectedDriver}
+          isSubmitting={formSubmitting}
+        />
+      )}
+      
+      {showDeleteDialog && selectedDriver && (
+        <DeleteDriverDialog
+          isOpen={showDeleteDialog}
+          onClose={() => setShowDeleteDialog(false)}
+          onConfirm={handleDeleteDriver}
+          driver={selectedDriver}
+          isSubmitting={formSubmitting}
+        />
+      )}
     </div>
   );
 }

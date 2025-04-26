@@ -134,3 +134,52 @@ ErrorDocument 500 /api/error.php
 
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Set CORS headers for all responses
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Debug"
+Header set Access-Control-Max-Age "3600"
+
+# Handle OPTIONS preflight requests
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Prevent direct access to PHP files
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteRule \.php$ - [F]
+
+# API Routes
+RewriteRule ^api/admin/generate-invoice/?$ api/admin/generate-invoice.php [QSA,L]
+RewriteRule ^api/admin/download-invoice/?$ api/admin/download-invoice.php [QSA,L]
+RewriteRule ^api/admin/drivers/?$ api/admin/drivers.php [QSA,L]
+RewriteRule ^api/admin/driver/([0-9]+)/?$ api/admin/driver.php?id=$1 [QSA,L]
+
+# Prevent directory listing
+Options -Indexes
+
+# Set default character set
+AddDefaultCharset UTF-8
+
+# Enable compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Set security headers
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "SAMEORIGIN"
+Header set X-XSS-Protection "1; mode=block"
+Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+# Cache control
+<FilesMatch "\.(html|htm|php)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+</FilesMatch>
+
+<FilesMatch "\.(js|css|jpg|jpeg|png|gif|ico)$">
+    Header set Cache-Control "public, max-age=31536000"
+</FilesMatch>

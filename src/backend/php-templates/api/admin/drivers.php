@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Function to send JSON response
-function sendResponse($data, $statusCode = 200) {
+function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     echo json_encode($data);
     exit;
@@ -33,7 +33,7 @@ if ($debugMode) {
 try {
     $conn = getDbConnectionWithRetry();
 } catch (Exception $e) {
-    sendResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
 }
 
 // Ensure the drivers table exists
@@ -131,6 +131,35 @@ try {
     error_log("Error checking/creating drivers table: " . $e->getMessage());
 }
 
+// Function to validate driver data
+function validateDriverData($data) {
+    $errors = [];
+    
+    if (empty($data['name'])) {
+        $errors[] = 'Name is required';
+    }
+    
+    if (empty($data['phone'])) {
+        $errors[] = 'Phone number is required';
+    } elseif (!preg_match('/^\d{10}$/', $data['phone'])) {
+        $errors[] = 'Invalid phone number format';
+    }
+    
+    if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Invalid email format';
+    }
+    
+    if (empty($data['license_number'])) {
+        $errors[] = 'License number is required';
+    }
+    
+    if (!empty($data['status']) && !in_array($data['status'], ['active', 'inactive', 'on_trip', 'blocked'])) {
+        $errors[] = 'Invalid status value';
+    }
+    
+    return $errors;
+}
+
 // Handle different HTTP methods
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
@@ -170,9 +199,9 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 $drivers[] = $row;
             }
             
-            sendResponse(['status' => 'success', 'drivers' => $drivers]);
+            sendJsonResponse(['status' => 'success', 'drivers' => $drivers]);
         } catch (Exception $e) {
-            sendResponse(['status' => 'error', 'message' => 'Failed to retrieve drivers: ' . $e->getMessage()], 500);
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve drivers: ' . $e->getMessage()], 500);
         }
         break;
         
@@ -183,63 +212,98 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $data = json_decode($jsonData, true);
             
             if (!$data) {
-                sendResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
+                sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
             }
             
-            // Validate required fields
-            if (empty($data['name']) || empty($data['phone'])) {
-                sendResponse(['status' => 'error', 'message' => 'Name and phone are required'], 400);
+            // Validate input data
+            $errors = validateDriverData($data);
+            if (!empty($errors)) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
             }
             
-            // Set default values for optional fields
-            $email = isset($data['email']) ? $data['email'] : '';
-            $licenseNo = isset($data['license_no']) || isset($data['licenseNo']) ? 
-                (isset($data['license_no']) ? $data['license_no'] : $data['licenseNo']) : '';
-            $status = isset($data['status']) ? $data['status'] : 'available';
-            $location = isset($data['location']) ? $data['location'] : 'Visakhapatnam';
-            $vehicle = isset($data['vehicle']) ? $data['vehicle'] : '';
-            $totalRides = isset($data['total_rides']) ? (int)$data['total_rides'] : 0;
-            $earnings = isset($data['earnings']) ? (float)$data['earnings'] : 0;
-            $rating = isset($data['rating']) ? (float)$data['rating'] : 5.0;
+            // Check for duplicate phone and license
+            $stmt = $conn->prepare("SELECT id FROM drivers WHERE phone = ? OR license_no = ?");
+            $stmt->bind_param("ss", $data['phone'], $data['license_no']);
+            $stmt->execute();
             
-            $sql = "INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle, total_rides, earnings, rating) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssssidd", 
-                $data['name'], 
-                $data['phone'], 
-                $email, 
-                $licenseNo, 
-                $status, 
-                $location, 
-                $vehicle,
-                $totalRides,
-                $earnings,
-                $rating
+            if ($stmt->get_result()->num_rows > 0) {
+                sendJsonResponse([
+                    'status' => 'error',
+                    'message' => 'Driver with this phone number or license number already exists'
+                ], 409);
+            }
+            
+            // Insert new driver
+            $stmt = $conn->prepare("
+                INSERT INTO drivers (
+                    name, phone, email, license_no, status, location, vehicle, total_rides, earnings, rating
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            $status = $data['status'] ?? 'available';
+            $stmt->bind_param(
+                "ssssssssdd",
+                $data['name'],
+                $data['phone'],
+                $data['email'],
+                $data['license_no'],
+                $status,
+                $data['location'],
+                $data['vehicle'],
+                $data['total_rides'],
+                $data['earnings'],
+                $data['rating']
             );
-            $stmt->execute();
             
-            if ($stmt->affected_rows === 0) {
-                sendResponse(['status' => 'error', 'message' => 'Failed to create driver'], 500);
+            if ($stmt->execute()) {
+                $driverId = $stmt->insert_id;
+                
+                // Handle document uploads if provided
+                if (!empty($data['documents'])) {
+                    $docStmt = $conn->prepare("
+                        INSERT INTO driver_documents (
+                            driver_id, document_type, document_number, 
+                            expiry_date, document_url, status
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    foreach ($data['documents'] as $doc) {
+                        $docStatus = 'pending';
+                        $docStmt->bind_param(
+                            "isssss",
+                            $driverId,
+                            $doc['type'],
+                            $doc['number'],
+                            $doc['expiry'],
+                            $doc['url'],
+                            $docStatus
+                        );
+                        $docStmt->execute();
+                    }
+                }
+                
+                // Get the newly created driver
+                $stmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+                $stmt->bind_param("i", $driverId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $newDriver = $result->fetch_assoc();
+                
+                sendJsonResponse([
+                    'status' => 'success',
+                    'message' => 'Driver created successfully',
+                    'driver' => $newDriver
+                ], 201);
+            } else {
+                throw new Exception("Failed to create driver: " . $stmt->error);
             }
-            
-            $newDriverId = $stmt->insert_id;
-            
-            // Get the newly created driver
-            $stmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
-            $stmt->bind_param("i", $newDriverId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $newDriver = $result->fetch_assoc();
-            
-            sendResponse(['status' => 'success', 'message' => 'Driver created successfully', 'driver' => $newDriver]);
         } catch (Exception $e) {
-            sendResponse(['status' => 'error', 'message' => 'Failed to create driver: ' . $e->getMessage()], 500);
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create driver: ' . $e->getMessage()], 500);
         }
         break;
         
     default:
-        sendResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
 
 // Close connection

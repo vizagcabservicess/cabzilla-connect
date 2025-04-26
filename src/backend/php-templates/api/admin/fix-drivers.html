@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Drivers Table</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fix Drivers Table Schema</h1>
+    
+    <div class="warning">
+        <strong>Warning:</strong> This operation will:
+        <ul>
+            <li>Create a backup of the current drivers table</li>
+            <li>Drop and recreate the drivers table with the correct schema</li>
+            <li>Insert sample data into the table</li>
+        </ul>
+        Make sure you have a backup of your data before proceeding.
+    </div>
+
+    <button id="fixButton" class="button">Fix Drivers Table</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('fixButton').addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to proceed? This will modify your database.')) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = '';
+            resultDiv.textContent = 'Processing...';
+
+            try {
+                const response = await fetch('fix-drivers-table.php');
+                const data = await response.json();
+
+                resultDiv.className = data.status === 'success' ? 'success' : 'error';
+                resultDiv.textContent = data.message;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = 'An error occurred: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html> 
