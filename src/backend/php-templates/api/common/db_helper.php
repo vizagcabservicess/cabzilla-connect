@@ -1,141 +1,148 @@
 
 <?php
 /**
- * Database helper functions for establishing connections with retry logic
+ * Database Helper Functions
+ * Provides reliable database connectivity functions
  */
 
-/**
- * Get database connection with retry logic
- * @param int $maxRetries Number of connection retry attempts
- * @param int $retryDelay Delay between retries in milliseconds
- * @return mysqli Database connection
- * @throws Exception If connection fails after all retries
- */
-function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 500) {
+// Function to get a database connection with retry logic
+function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
     $attempts = 0;
     $lastError = null;
     
     while ($attempts < $maxRetries) {
         try {
-            if (function_exists('getDbConnection')) {
-                $conn = getDbConnection();
-                return $conn;
+            $conn = getDbConnection();
+            if ($conn && $conn->ping()) {
+                return $conn; // Successful connection
             }
-            
-            $dbHost = getenv('DB_HOST') ?: 'localhost';
-            $dbName = getenv('DB_NAME') ?: 'cab_bookings';
-            $dbUser = getenv('DB_USER') ?: 'root';
-            $dbPass = getenv('DB_PASS') ?: '';
-            
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
-            }
-            
-            // Set character set
-            $conn->set_charset("utf8mb4");
-            
-            return $conn;
         } catch (Exception $e) {
             $lastError = $e;
-            $attempts++;
-            
-            if ($attempts < $maxRetries) {
-                // Wait before retrying
-                usleep($retryDelay * 1000);
-            }
+            error_log("Database connection attempt " . ($attempts + 1) . " failed: " . $e->getMessage());
+        }
+        
+        $attempts++;
+        
+        if ($attempts < $maxRetries) {
+            // Wait before retrying (increasing delay with each attempt)
+            usleep($retryDelayMs * 1000 * $attempts);
         }
     }
     
     // All retries failed
-    throw new Exception("Database connection failed after $maxRetries attempts: " . $lastError->getMessage());
+    throw new Exception("Failed to connect to database after $maxRetries attempts. Last error: " . 
+        ($lastError ? $lastError->getMessage() : "Unknown error"));
 }
 
-/**
- * Create mock database response for testing when real DB is unavailable
- * @param string $entityType Type of entity to mock (booking, driver, etc.)
- * @param int $id ID of the entity
- * @return array Mock data
- */
-function createMockData($entityType, $id = null) {
-    switch ($entityType) {
-        case 'booking':
-            return [
-                'id' => $id ?? rand(1000, 9999),
-                'booking_number' => 'CB' . rand(1000000000, 9999999999),
-                'passenger_name' => 'Test User',
-                'passenger_email' => 'test@example.com',
-                'passenger_phone' => '9876543210',
-                'pickup_location' => 'Test Pickup',
-                'drop_location' => 'Test Destination',
-                'pickup_date' => date('Y-m-d H:i:s'),
-                'cab_type' => 'Sedan',
-                'trip_type' => 'local',
-                'trip_mode' => 'outstation',
-                'total_amount' => 3500,
-                'status' => 'confirmed',
-                'driver_name' => 'Test Driver',
-                'driver_phone' => '9876543210',
-                'vehicle_number' => 'AP 31 AB 1234',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ];
-            
-        case 'driver':
-            return [
-                'id' => $id ?? rand(1000, 9999),
-                'name' => 'Test Driver',
-                'phone' => '9876543210',
-                'email' => 'driver@example.com',
-                'license_no' => 'DL' . rand(1000000, 9999999),
-                'status' => 'available',
-                'vehicle' => 'AP 31 AB 1234',
-                'location' => 'Visakhapatnam',
-                'total_rides' => rand(100, 500),
-                'rating' => 4.5
-            ];
-            
-        default:
-            return [
-                'id' => $id ?? rand(1000, 9999),
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
-            ];
-    }
-}
-
-/**
- * Log error to file and PHP error log
- * @param string $message Error message
- * @param array $data Additional data to log
- */
-function logError($message, $data = []) {
-    $logMessage = date('Y-m-d H:i:s') . " - $message - " . json_encode($data);
-    error_log($logMessage);
+// Base function to get DB connection
+function getDbConnection() {
+    // Use configuration from config.php if available
+    $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
+    $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+    $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+    $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
     
-    $logDir = __DIR__ . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
+    // Create connection
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    // Check connection
+    if ($conn->connect_error) {
+        throw new Exception("Connection failed: " . $conn->connect_error);
     }
     
-    $logFile = $logDir . '/api_errors.log';
-    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+    // Set character set
+    $conn->set_charset("utf8mb4");
+    
+    return $conn;
 }
 
-/**
- * Get parameter type for mysqli bind_param
- * @param mixed $value Value to check
- * @return string Parameter type (i, d, s, b)
- */
-function getParameterType($value) {
-    if (is_int($value)) {
-        return 'i'; // integer
-    } elseif (is_double($value) || is_float($value)) {
-        return 'd'; // double/float
-    } elseif (is_string($value)) {
-        return 's'; // string
-    } else {
-        return 's'; // default to string
+// Function to execute a query with error handling
+function executeQuery($sql, $params = [], $types = "") {
+    $conn = getDbConnectionWithRetry();
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Query preparation failed: " . $conn->error);
     }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $success = $stmt->execute();
+    if (!$success) {
+        throw new Exception("Query execution failed: " . $stmt->error);
+    }
+    
+    $result = $stmt->get_result();
+    $stmt->close();
+    
+    return $result;
+}
+
+// Function to fetch a single row
+function fetchOne($sql, $params = [], $types = "") {
+    $result = executeQuery($sql, $params, $types);
+    $row = $result->fetch_assoc();
+    $result->free();
+    return $row;
+}
+
+// Function to fetch multiple rows
+function fetchAll($sql, $params = [], $types = "") {
+    $result = executeQuery($sql, $params, $types);
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+    $result->free();
+    return $rows;
+}
+
+// Function to insert data and return insert ID
+function insertData($sql, $params = [], $types = "") {
+    $conn = getDbConnectionWithRetry();
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Insert preparation failed: " . $conn->error);
+    }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $success = $stmt->execute();
+    if (!$success) {
+        throw new Exception("Insert execution failed: " . $stmt->error);
+    }
+    
+    $insertId = $conn->insert_id;
+    $stmt->close();
+    
+    return $insertId;
+}
+
+// Function to update data and return affected rows
+function updateData($sql, $params = [], $types = "") {
+    $conn = getDbConnectionWithRetry();
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Update preparation failed: " . $conn->error);
+    }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $success = $stmt->execute();
+    if (!$success) {
+        throw new Exception("Update execution failed: " . $stmt->error);
+    }
+    
+    $affectedRows = $stmt->affected_rows;
+    $stmt->close();
+    
+    return $affectedRows;
 }

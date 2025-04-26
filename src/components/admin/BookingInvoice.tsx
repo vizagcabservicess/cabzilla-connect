@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,7 +64,9 @@ export function BookingInvoice({
         return;
       }
       
+      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled);
       const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
+      console.log('Invoice generation result:', result);
       
       if (result && result.data) {
         setInvoiceData(result.data);
@@ -73,6 +76,7 @@ export function BookingInvoice({
         });
       } else {
         setInvoiceData(null);
+        throw new Error('No invoice data returned from the server');
       }
     } catch (error) {
       console.error("Invoice generation error:", error);
@@ -84,12 +88,14 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = getApiUrl(`/api/admin/download-invoice.php?id=${booking.id}`);
+    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
+    const bookingIdParam = `?id=${booking.id}`;
     const gstParam = gstEnabled ? '&gstEnabled=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
-    const downloadUrl = `${baseUrl}${gstParam}${gstDetailsParam}`;
+    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${gstDetailsParam}`;
+    console.log('Download invoice URL:', downloadUrl);
     window.open(downloadUrl, '_blank');
   };
 

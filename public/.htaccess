@@ -41,10 +41,11 @@ RewriteEngine On
     SetHandler application/x-httpd-php
 </Files>
 
-# High priority API endpoints
+# High priority API endpoints - ensure these work first
 RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
 RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
 

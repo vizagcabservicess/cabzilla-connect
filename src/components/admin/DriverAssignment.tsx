@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,8 +47,11 @@ export function DriverAssignment({
     const fetchDrivers = async () => {
       setLoadingDrivers(true);
       try {
-        // Try to fetch from real API endpoint
-        const response = await axios.get(getApiUrl('/api/admin/get-drivers.php'), {
+        // Try to fetch from real API endpoint with proper URL formatting
+        const apiUrl = getApiUrl('/api/admin/get-drivers');
+        console.log('Fetching drivers from:', apiUrl);
+        
+        const response = await axios.get(apiUrl, {
           params: {
             status: 'available',
             search: searchQuery || undefined
@@ -58,18 +62,20 @@ export function DriverAssignment({
           }
         });
         
-        if (response.data.status === 'success') {
+        console.log('Driver API response:', response.data);
+        
+        if (response.data && response.data.status === 'success' && response.data.drivers) {
           const drivers: Driver[] = response.data.drivers.map((driver: any) => ({
             id: driver.id,
             name: driver.name,
             phone: driver.phone,
             email: driver.email || 'unknown@example.com', // Ensure email is present for type safety
-            vehicleNumber: driver.vehicle || 'Unknown', // Map vehicle field to vehicleNumber for UI
-            vehicle: driver.vehicle || 'Unknown'
+            vehicleNumber: driver.vehicle_number || driver.vehicle || 'Unknown', // Map vehicle field to vehicleNumber for UI
+            vehicle: driver.vehicle_number || driver.vehicle || 'Unknown'
           }));
           setAvailableDrivers(drivers);
         } else {
-          throw new Error(response.data.message || 'Failed to load drivers');
+          throw new Error(response.data?.message || 'Failed to load drivers');
         }
       } catch (error) {
         console.error('Error fetching drivers:', error);
