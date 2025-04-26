@@ -152,6 +152,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $jsonData = file_get_contents('php://input');
             $data = json_decode($jsonData, true);
             
+            error_log('Received data: ' . print_r($data, true));
+            
             if (!$data) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
             }
@@ -211,6 +213,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             );
             
             if ($stmt->execute()) {
+                error_log('Rows affected: ' . $stmt->affected_rows);
                 error_log('Driver update executed: ' . print_r($data, true));
                 // Update documents if provided
                 if (!empty($data['documents'])) {
