@@ -1,4 +1,3 @@
-
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -46,11 +45,10 @@ if (!$driverId && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendResponse(['status' => 'error', 'message' => 'Driver ID is required'], 400);
 }
 
-// Ensure the drivers table exists
 try {
     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'drivers'");
     if ($tableCheckResult->num_rows === 0) {
-        // Create drivers table
+        // Create drivers table with consistent schema
         $createTableSql = "CREATE TABLE drivers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
@@ -68,16 +66,8 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
         
         $conn->query($createTableSql);
-        
-        // Add some sample data for testing
-        $conn->query("INSERT INTO drivers (name, phone, email, license_no, status, total_rides, earnings, rating, vehicle) 
-                      VALUES 
-                      ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Sedan - AP 31 XX 1234'),
-                      ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'busy', 215, 85500, 4.6, 'SUV - AP 32 XX 5678'),
-                      ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'offline', 180, 72000, 4.5, 'Sedan - AP 33 XX 9012')");
     }
 } catch (Exception $e) {
-    // Log error but continue - we'll handle no table case in the specific methods
     error_log("Error checking/creating drivers table: " . $e->getMessage());
 }
 

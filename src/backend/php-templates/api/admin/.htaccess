@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 RewriteBase /api/admin/
@@ -90,3 +89,13 @@ RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
 # Invoice and receipt endpoints
 RewriteRule ^invoice/([0-9]+)$ generate-invoice.php?id=$1 [L,NC,QSA]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [L,NC,QSA]
+
+# CRITICAL: Driver management endpoints
+RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
+RewriteRule ^driver/?$ driver.php [L,NC,QSA]
+RewriteRule ^driver/([0-9]+)/?$ driver.php?id=$1 [L,NC,QSA]
+
+# Invoice endpoints
+RewriteRule ^generate-invoice/?$ generate-invoice.php [L,NC,QSA]
+RewriteRule ^download-invoice/?$ download-invoice.php [L,NC,QSA]
+RewriteRule ^invoice/([0-9]+)/?$ generate-invoice.php?id=$1 [L,NC,QSA]

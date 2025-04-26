@@ -1,4 +1,3 @@
-
 <?php
 // drivers.php - List all drivers and handle new driver creation
 require_once __DIR__ . '/../../config.php';
@@ -41,7 +40,7 @@ try {
 try {
     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'drivers'");
     if ($tableCheckResult->num_rows === 0) {
-        // Create drivers table
+        // Create drivers table with email as NOT NULL
         $createTableSql = "CREATE TABLE drivers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
@@ -60,16 +59,12 @@ try {
         
         $conn->query($createTableSql);
         
-        // Add some sample data for testing
+        // Add sample data for testing
         $conn->query("INSERT INTO drivers (name, phone, email, license_no, status, total_rides, earnings, rating, vehicle) 
                       VALUES 
                       ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Sedan - AP 31 XX 1234'),
                       ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'busy', 215, 85500, 4.6, 'SUV - AP 32 XX 5678'),
                       ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'offline', 180, 72000, 4.5, 'Sedan - AP 33 XX 9012')");
-                      
-        if ($debugMode) {
-            error_log("Created drivers table with sample data");
-        }
     }
 } catch (Exception $e) {
     // Log error but continue - we'll handle no table case in the specific methods
