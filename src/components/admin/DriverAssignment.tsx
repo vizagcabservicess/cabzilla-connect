@@ -11,6 +11,11 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import axios from 'axios';
 
+// Define a local interface that extends Driver to include vehicleNumber
+interface ExtendedDriver extends Driver {
+  vehicleNumber?: string;
+}
+
 interface DriverAssignmentProps {
   booking: Booking;
   onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
@@ -35,7 +40,7 @@ export function DriverAssignment({
   
   const [driverType, setDriverType] = useState<string>('new');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
+  const [availableDrivers, setAvailableDrivers] = useState<ExtendedDriver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -55,10 +60,11 @@ export function DriverAssignment({
         });
         
         if (response.data.status === 'success') {
-          const drivers = response.data.drivers.map((driver: any) => ({
+          const drivers: ExtendedDriver[] = response.data.drivers.map((driver: any) => ({
             id: driver.id,
             name: driver.name,
             phone: driver.phone,
+            email: driver.email || 'unknown@example.com', // Ensure email is present for type safety
             vehicleNumber: driver.vehicle || 'Unknown'
           }));
           setAvailableDrivers(drivers);
@@ -69,12 +75,12 @@ export function DriverAssignment({
         console.error('Error fetching drivers:', error);
         
         // Fallback to mock data if API fails
-        const mockDrivers = [
-          { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
-          { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
-          { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
-          { id: 4, name: "Venkatesh S", phone: "9876543213", vehicleNumber: "AP 34 XX 3456" },
-          { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
+        const mockDrivers: ExtendedDriver[] = [
+          { id: 1, name: "Rajesh Kumar", phone: "9876543210", email: "rajesh@example.com", vehicleNumber: "AP 31 AB 1234" },
+          { id: 2, name: "Suresh Singh", phone: "9876543211", email: "suresh@example.com", vehicleNumber: "AP 31 CD 5678" },
+          { id: 3, name: "Mahesh Reddy", phone: "9876543212", email: "mahesh@example.com", vehicleNumber: "AP 31 EF 9012" },
+          { id: 4, name: "Venkatesh S", phone: "9876543213", email: "venkatesh@example.com", vehicleNumber: "AP 34 XX 3456" },
+          { id: 5, name: "Ramesh Babu", phone: "8765432108", email: "ramesh@example.com", vehicleNumber: "AP 35 XX 7890" }
         ];
         
         if (searchQuery) {
@@ -82,7 +88,7 @@ export function DriverAssignment({
           const filteredDrivers = mockDrivers.filter(driver => 
             driver.name.toLowerCase().includes(lowerQuery) || 
             driver.phone.includes(searchQuery) ||
-            driver.vehicleNumber.toLowerCase().includes(lowerQuery)
+            (driver.vehicleNumber && driver.vehicleNumber.toLowerCase().includes(lowerQuery))
           );
           setAvailableDrivers(filteredDrivers);
         } else {
@@ -117,7 +123,7 @@ export function DriverAssignment({
       setDriverData({
         driverName: selectedDriver.name,
         driverPhone: selectedDriver.phone,
-        vehicleNumber: selectedDriver.vehicleNumber
+        vehicleNumber: selectedDriver.vehicleNumber || ''
       });
       
       setErrors({});
@@ -234,7 +240,7 @@ export function DriverAssignment({
                     ) : availableDrivers.length > 0 ? (
                       availableDrivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id.toString()}>
-                          {driver.name} - {driver.vehicleNumber}
+                          {driver.name} - {driver.vehicleNumber || 'No vehicle'}
                         </SelectItem>
                       ))
                     ) : (

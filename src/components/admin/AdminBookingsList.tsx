@@ -37,7 +37,7 @@ import {
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetails } from './BookingDetails';
-import { getStatusColor } from '@/utils/bookingUtils';
+import { getStatusColorClass } from '@/utils/bookingUtils';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -733,7 +733,7 @@ export function AdminBookingsList() {
                     </TableCell>
                     <TableCell>₹{booking.totalAmount?.toLocaleString('en-IN') || 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(booking.status)}>
+                      <Badge className={getStatusColorClass(booking.status)}>
                         {booking.status}
                       </Badge>
                     </TableCell>
