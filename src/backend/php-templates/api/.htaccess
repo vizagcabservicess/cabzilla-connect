@@ -15,6 +15,15 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
+# Add explicit rule for fix-schema.php
+<Files "fix-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
 # Add explicit rule for users.php and direct-user-data.php
 <Files "users.php">
     SetHandler application/x-httpd-php
@@ -46,6 +55,14 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
+
+# ADD: Fix schema and fix drivers schema endpoints - highest priority
+RewriteRule ^admin/fix-schema$ admin/fix-schema.php [L,QSA]
+RewriteRule ^admin/fix-schema\.php$ admin/fix-schema.php [L,QSA]
+RewriteRule ^fix-schema$ admin/fix-schema.php [L,QSA]
+RewriteRule ^fix-schema\.php$ admin/fix-schema.php [L,QSA]
+RewriteRule ^admin/fix-drivers-schema$ admin/fix-drivers-schema.php [L,QSA]
+RewriteRule ^admin/fix-drivers-schema\.php$ admin/fix-drivers-schema.php [L,QSA]
 
 # Direct access to admin endpoints - highest priority
 RewriteRule ^admin/users$ admin/users.php [L,QSA]

@@ -18,11 +18,12 @@ interface EditDriverDialogProps {
 }
 
 export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitting }: EditDriverDialogProps) {
+  // Initial driver data state with all required fields
   const [formData, setFormData] = useState<Partial<Driver>>({
     name: '',
     phone: '',
     email: '',
-    license_no: '',
+    license_no: '', // Use license_no consistently
     vehicle: '',
     vehicle_id: '',
     status: 'available',
@@ -34,12 +35,15 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   // Initialize form data with driver details only when dialog opens or driver changes
   useEffect(() => {
     if (isOpen && driver) {
+      console.log("Initializing form with driver data:", driver);
       // Ensure we're using license_no consistently
+      const licenseNo = driver.license_no || '';
+      
       setFormData({
         name: driver.name || '',
         phone: driver.phone || '',
         email: driver.email || '',
-        license_no: driver.license_no || '',
+        license_no: licenseNo, // Always use license_no field
         vehicle: driver.vehicle || '',
         vehicle_id: driver.vehicle_id || '',
         status: (['available', 'busy', 'offline'].includes(driver.status as DriverStatus) 
@@ -78,18 +82,6 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       errors.status = 'Status must be Available, Busy, or Offline';
     }
     
-    if (!formData.vehicle?.trim()) {
-      errors.vehicle = 'Vehicle is required';
-    }
-    
-    if (!formData.vehicle_id?.trim()) {
-      errors.vehicle_id = 'Vehicle ID is required';
-    }
-    
-    if (!formData.location?.trim()) {
-      errors.location = 'Location is required';
-    }
-    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -97,15 +89,33 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Submitting driver data:", formData);
+    
     if (!validateForm()) {
       toast.error("Please fix form errors before submitting");
       return;
     }
+    
     try {
       const payload = {
         ...formData,
         id: driver.id
       };
+      
+      // Ensure we're using consistent field name for license
+      if (!payload.license_no) {
+        toast.error("License number is required");
+        setFormErrors(prev => ({...prev, license_no: 'License number is required'}));
+        return;
+      }
+      
+      // Ensure status is valid
+      if (!payload.status || !['available', 'busy', 'offline'].includes(payload.status)) {
+        toast.error("Status must be Available, Busy, or Offline");
+        setFormErrors(prev => ({...prev, status: 'Invalid status value'}));
+        return;
+      }
+      
+      // Log the payload for debugging
       console.log("API payload to be sent:", payload);
       await onSubmit(payload);
     } catch (error) {
@@ -123,6 +133,11 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   };
   
   const handleStatusChange = (value: string) => {
+    if (!['available', 'busy', 'offline'].includes(value)) {
+      setFormErrors(prev => ({ ...prev, status: 'Invalid status value' }));
+      return;
+    }
+    
     setFormData(prev => ({ ...prev, status: value as DriverStatus }));
     if (formErrors.status) {
       setFormErrors(prev => ({ ...prev, status: '' }));

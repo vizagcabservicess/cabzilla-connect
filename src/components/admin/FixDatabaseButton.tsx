@@ -1,39 +1,104 @@
 
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Database } from "lucide-react";
 import { toast } from "sonner";
+import { useToast } from "@/components/ui/use-toast";
 
 export function FixDatabaseButton() {
   const [isFixing, setIsFixing] = useState(false);
+  const { toast: uiToast } = useToast();
 
   const fixSchema = async () => {
     setIsFixing(true);
     try {
+      // Determine API base URL based on environment
       const apiBaseUrl = window.location.hostname.includes('localhost') 
         ? `${window.location.protocol}//${window.location.host}`
         : 'https://vizagup.com';
       
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-schema.php`, {
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      console.log(`Fixing schema at ${apiBaseUrl}/api/admin/fix-schema.php?_t=${timestamp}`);
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/fix-schema.php?_t=${timestamp}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         }
       });
       
       const data = await response.json();
+      console.log('Fix schema response:', data);
       
       if (!response.ok) {
         throw new Error(data.message || 'Failed to fix database schema');
       }
       
-      toast.success('Database schema has been fixed successfully');
-      
-      // Reload the page to reflect changes
-      window.location.reload();
+      if (data.status === 'success') {
+        toast.success('Database schema has been fixed successfully');
+        
+        // Show detailed toast with operations performed
+        if (data.details && data.details.operations && data.details.operations.length > 0) {
+          uiToast({
+            title: 'Schema Fix Operations',
+            description: (
+              <ul className="mt-2 text-sm">
+                {data.details.operations.slice(0, 5).map((op: string, i: number) => (
+                  <li key={i} className="mb-1">✓ {op}</li>
+                ))}
+                {data.details.operations.length > 5 && (
+                  <li>...and {data.details.operations.length - 5} more operations</li>
+                )}
+              </ul>
+            ),
+          });
+        }
+        
+        // Reload the page after a short delay to reflect changes
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else if (data.status === 'partial') {
+        toast.warning('Database schema has been partially fixed with some issues');
+        
+        // Show warning toast with errors
+        if (data.details && data.details.errors && data.details.errors.length > 0) {
+          uiToast({
+            variant: "destructive",
+            title: 'Schema Fix Warnings',
+            description: (
+              <ul className="mt-2 text-sm">
+                {data.details.errors.slice(0, 3).map((err: string, i: number) => (
+                  <li key={i} className="mb-1">⚠️ {err}</li>
+                ))}
+                {data.details.errors.length > 3 && (
+                  <li>...and {data.details.errors.length - 3} more issues</li>
+                )}
+              </ul>
+            ),
+          });
+        }
+        
+        // Still reload after a delay as partial fixes may be sufficient
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        throw new Error(data.message || 'Failed to fix database schema');
+      }
     } catch (error) {
       console.error('Error fixing schema:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fix database schema');
+      
+      uiToast({
+        variant: "destructive",
+        title: 'Database Fix Failed',
+        description: 'There was an error fixing the database schema. Please check the console for details.',
+      });
     } finally {
       setIsFixing(false);
     }
@@ -44,9 +109,14 @@ export function FixDatabaseButton() {
       onClick={fixSchema} 
       disabled={isFixing}
       variant="destructive"
+      className="flex items-center gap-1"
     >
-      {isFixing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      Fix Database Schema
+      {isFixing ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Database className="h-4 w-4" />
+      )}
+      <span>Fix Database Schema</span>
     </Button>
   );
 }
