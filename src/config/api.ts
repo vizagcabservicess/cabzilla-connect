@@ -2,12 +2,18 @@
 // API configuration
 
 // Base API URL - auto-detect between development and production
-export const apiBaseUrl = 'https://vizagup.com';
+export const apiBaseUrl = window.location.hostname.includes('localhost') 
+  ? 'http://localhost' 
+  : window.location.origin;
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {
   // Ensure path starts with a slash if it doesn't already
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Add .php extension if the path is an API endpoint and doesn't already have an extension
+  if (normalizedPath.includes('/api/') && !normalizedPath.includes('.php') && !normalizedPath.endsWith('/')) {
+    return `${apiBaseUrl}${normalizedPath}.php`.replace(/([^:]\/)\/+/g, '$1');
+  }
   // Remove any duplicate slashes that might occur when joining
   const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
   return fullUrl;

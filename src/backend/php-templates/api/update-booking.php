@@ -1,12 +1,17 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/common/db_helper.php';
 
-// CORS Headers
+// CORS Headers - Critical for cross-domain requests
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Helper function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
+    if (ob_get_level()) ob_end_clean();
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
@@ -52,6 +58,8 @@ if (isset($_GET['id'])) {
     $data = json_decode(file_get_contents('php://input'), true);
     if (isset($data['id'])) {
         $bookingId = $data['id'];
+    } else if (isset($data['bookingId'])) {
+        $bookingId = $data['bookingId'];
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
         exit;
@@ -70,15 +78,15 @@ logError("Update booking request data", $data);
 
 // Connect to database
 try {
-    // Try to use getDbConnection from config.php first
-    if (function_exists('getDbConnection')) {
-        $conn = getDbConnection();
+    // Try to use getDbConnectionWithRetry from db_helper.php first
+    if (function_exists('getDbConnectionWithRetry')) {
+        $conn = getDbConnectionWithRetry();
     } else {
         // Direct connection as fallback
         $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
+        $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+        $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+        $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
         
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
@@ -206,7 +214,11 @@ try {
     
     // Dynamically bind parameters
     $bindParams = array_merge([$updateTypes], $updateValues);
-    $updateStmt->bind_param(...$bindParams);
+    
+    // Use call_user_func_array to pass bind_param arguments
+    if ($updateTypes) {
+        call_user_func_array([$updateStmt, 'bind_param'], makeValuesReferenced($bindParams));
+    }
     
     $success = $updateStmt->execute();
     
@@ -247,91 +259,7 @@ try {
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
-    // If status is changed, send a notification email to customer
-    if ($statusUpdated && $newStatus === 'confirmed') {
-        logError("Status updated to confirmed", [
-            'booking_id' => $bookingId,
-            'email' => $updatedBooking['passenger_email']
-        ]);
-        
-        // Include email utilities if needed
-        if (!function_exists('sendEmailWithPHPMailer')) {
-            require_once __DIR__ . '/utils/email.php';
-        }
-        
-        // Try to send status update notification
-        try {
-            // Create email content for status update
-            $emailSubject = "Booking #{$updatedBooking['booking_number']} Confirmed";
-            $htmlContent = <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Booking Confirmed</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; border: 1px solid #ddd; }
-        .details { margin: 20px 0; }
-        .detail-row { display: flex; margin-bottom: 10px; }
-        .detail-label { font-weight: bold; width: 150px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Booking Confirmed!</h1>
-            <p>Your booking #{$updatedBooking['booking_number']} has been confirmed.</p>
-        </div>
-        <div class="content">
-            <p>Dear {$updatedBooking['passenger_name']},</p>
-            <p>We're pleased to inform you that your booking has been confirmed. Your driver details are:</p>
-            
-            <div class="details">
-                <div class="detail-row">
-                    <div class="detail-label">Driver Name:</div>
-                    <div>{$updatedBooking['driver_name'] ?? 'To be assigned'}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Driver Phone:</div>
-                    <div>{$updatedBooking['driver_phone'] ?? 'To be assigned'}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">Vehicle Number:</div>
-                    <div>{$updatedBooking['vehicle_number'] ?? 'To be assigned'}</div>
-                </div>
-            </div>
-            
-            <p>For any questions, please contact us at:</p>
-            <p>Phone: +91 9966363662</p>
-            <p>Email: info@vizagtaxihub.com</p>
-            
-            <p>Thank you for choosing Vizag Taxi Hub!</p>
-        </div>
-    </div>
-</body>
-</html>
-HTML;
-            
-            // Send the email
-            $emailSent = sendEmailAllMethods($updatedBooking['passenger_email'], $emailSubject, $htmlContent);
-            logError("Status update email result", ['sent' => $emailSent ? 'yes' : 'no']);
-            
-            // Add email status to response
-            $booking['emailSent'] = $emailSent;
-            
-        } catch (Exception $emailException) {
-            logError("Failed to send status update email", [
-                'error' => $emailException->getMessage(),
-                'trace' => $emailException->getTraceAsString()
-            ]);
-            // Don't fail the update if email fails
-            $booking['emailSent'] = false;
-        }
-    }
-    
+    // Send success response
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
 } catch (Exception $e) {
@@ -345,4 +273,13 @@ HTML;
 // Close database connection
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
+}
+
+// Helper function to make values referenced for bind_param
+function makeValuesReferenced($arr) {
+    $refs = array();
+    foreach ($arr as $key => $value) {
+        $refs[$key] = &$arr[$key];
+    }
+    return $refs;
 }
