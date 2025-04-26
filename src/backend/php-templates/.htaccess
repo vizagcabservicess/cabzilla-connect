@@ -12,26 +12,20 @@
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
-    # Prevent direct access to PHP files except API endpoints
-    RewriteCond %{REQUEST_URI} !^/api/
-    RewriteRule \.php$ - [F]
+    # Enable error logging for debugging
+    RewriteLog "/var/log/apache2/rewrite.log"
+    RewriteLogLevel 3
     
-    # Handle static assets - don't rewrite if file exists
-    RewriteCond %{REQUEST_FILENAME} -f
-    RewriteRule ^(.*)$ $1 [L]
+    # Redirect API requests to the API directory
+    RewriteRule ^api/(.*)$ api/$1 [L]
     
-    # CRITICAL: Handle frontend routes - redirect all paths to index.php
-    # This ensures React Router can handle these routes
-    RewriteRule ^(admin|login|signup|dashboard|booking|receipt|cabs|tours)($|/) index.php [L]
-    RewriteRule ^admin/.*$ index.php [L]
+    # Exclude actual files and directories from routing to index.php
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
     
-    # API endpoints - direct to API directory
-    RewriteRule ^api/(.*) api/$1 [L]
-    
-    # Redirect everything else to index.php for SPA routing
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php [L]
+    # CRITICAL: Handle all routes by redirecting to index.php
+    RewriteRule ^ index.php [L]
 </IfModule>
 
 # Enable CORS for all domains

@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -29,191 +30,17 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Direct access to admin endpoints - highest priority
-RewriteRule ^admin/users$ admin/users.php [L,QSA]
-RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
-RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
-RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
+# Direct API routes to their PHP handlers
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L]
 
-# Admin booking endpoints - highest priority
-RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
-RewriteRule ^admin/booking\.php$ admin/booking.php [L,QSA]
-RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
-RewriteRule ^admin/drivers$ admin/drivers.php [L,QSA]
-RewriteRule ^admin/drivers\.php$ admin/drivers.php [L,QSA]
-RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/update-booking$ admin/update-booking.php [L,QSA]
-RewriteRule ^admin/update-booking\.php$ admin/update-booking.php [L,QSA]
-RewriteRule ^admin/assign-driver$ admin/assign-driver.php [L,QSA]
-RewriteRule ^admin/assign-driver\.php$ admin/assign-driver.php [L,QSA]
-RewriteRule ^admin/cancel-booking$ admin/cancel-booking.php [L,QSA]
-RewriteRule ^admin/cancel-booking\.php$ admin/cancel-booking.php [L,QSA]
+# Admin API subdirectory handling - if it exists as a directory
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^(.*)$ $1/index.php [L]
 
 # Explicitly handle /admin in the API context
 RewriteRule ^admin$ admin/index.php [L]
 RewriteRule ^admin/$ admin/index.php [L]
-
-# Diagnostic endpoints - highest priority
-RewriteRule ^test-connection$ test-connection.php [L,QSA]
-RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^direct-connection$ test-connection.php [L,QSA]
-
-# HIGHEST PRIORITY: Booking endpoints
-RewriteRule ^book$ book.php [L,QSA]
-RewriteRule ^book\.php$ book.php [L,QSA]
-RewriteRule ^book/$ book.php [L,QSA]
-RewriteRule ^create-booking$ book.php [L,QSA]
-RewriteRule ^create-booking\.php$ book.php [L,QSA]
-
-# HIGHEST PRIORITY: Email confirmation endpoints
-RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
-
-# CRITICAL: Force direct PHP for critical files - ensure JSON content type
-<Files "book.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "test-connection.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "send-booking-confirmation.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "test-email-sending.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-
-# Keep existing routes
-RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^admin/vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
-<Files "login.php">
-    Require all granted
-    SetHandler application/x-httpd-php
-    DirectoryIndex login.php
-</Files>
-<Files "signup.php">
-    Require all granted
-    SetHandler application/x-httpd-php
-    DirectoryIndex signup.php
-</Files>
-RewriteRule ^/login$ /api/login.php [L,QSA]
-RewriteRule ^/signup$ /api/signup.php [L,QSA]
-RewriteRule ^/register$ /api/signup.php [L,QSA]
-RewriteRule ^/?login$ /api/login.php [L,QSA]
-RewriteRule ^/?signup$ /api/signup.php [L,QSA]
-RewriteRule ^/?register$ /api/signup.php [L,QSA]
-RewriteRule ^status$ status.php [L,QSA]
-RewriteRule ^admin/status$ admin/status.php [L,QSA]
-RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
-RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
-RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
-RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
-RewriteRule ^admin/fix-cors\.php$ admin/fix-cors.php [L,QSA]
-RewriteRule ^init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^sync-local-fares$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^local-package-fares$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^admin/local-package-fares$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^admin/local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^user/direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^user/direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^fare-update$ admin/fare-update.php [L,QSA]
-RewriteRule ^fare-update\.php$ admin/fare-update.php [L,QSA]
-RewriteRule ^admin/fare-update$ admin/fare-update.php [L,QSA]
-RewriteRule ^admin/fare-update\.php$ admin/fare-update.php [L,QSA]
-RewriteRule ^outstation-fares-update$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^outstation-fares-update\.php$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^admin/outstation-fares-update$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^admin/outstation-fares-update\.php$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^airport-fares-update$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^airport-fares-update\.php$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^admin/airport-fares-update$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^admin/airport-fares-update\.php$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [L,QSA]
-RewriteRule ^admin/vehicles-update\.php$ admin/vehicles-update.php [L,QSA]
-RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
-RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
-RewriteRule ^direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
-RewriteRule ^vehicles$ vehicles.php [L,QSA]
-RewriteRule ^vehicles/([^/]+)$ vehicles.php?id=$1 [L,QSA]
-RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
-RewriteRule ^bookings$ bookings.php [L,QSA]
-RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
-RewriteRule ^update-booking$ update-booking.php [L,QSA]
-RewriteRule ^update-booking/([^/]+)$ update-booking.php?id=$1 [L,QSA]
-RewriteRule ^search-bookings$ search-bookings.php [L,QSA]
-RewriteRule ^login$ login.php [L,QSA]
-RewriteRule ^register$ register.php [L,QSA]
-RewriteRule ^user$ user.php [L,QSA]
-RewriteRule ^user/([^/]+)$ user.php?id=$1 [L,QSA]
-RewriteRule ^outstation-fares$ fares.php?type=outstation [L,QSA]
-RewriteRule ^local-fares$ fares.php?type=local [L,QSA]
-RewriteRule ^airport-fares$ fares.php?type=airport [L,QSA]
-RewriteRule ^fares$ fares.php [L,QSA]
-RewriteRule ^tours$ tours.php [L,QSA]
-RewriteRule ^tours/([^/]+)$ tours.php?id=$1 [L,QSA]
-RewriteRule ^/api/login$ login.php [L,QSA]
-RewriteRule ^/api/signup$ signup.php [L,QSA]
-Header set X-Requested-Path "%{REQUEST_URI}e"
-Header set X-Query-String "%{QUERY_STRING}e"
-Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-</FilesMatch>
-<Files "*.php">
-    Require all granted
-</Files>
-Options -Indexes
 
 # Add a catch-all to prevent 404 errors for misconfigured API paths
 RewriteCond %{REQUEST_FILENAME} !-f

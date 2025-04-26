@@ -1,4 +1,3 @@
-
 /**
  * Helper functions for API communication
  */
@@ -116,16 +115,9 @@ export function isDevEnvironment(): boolean {
 
 // Helper to get API base URL
 export function getApiBaseUrl(): string {
-  // For development environment, use the development API or specified API URL
-  if (isDevEnvironment()) {
-    console.log("Using development API in development mode");
-    // Use relative URLs in dev mode to avoid CORS issues
-    return '';
-  }
-  
-  // For production, use relative URLs which will resolve to the current domain
+  // For all environments, use relative URLs which will resolve to the current domain
   // This ensures API calls work regardless of domain configuration
-  console.log("Using relative API paths in production mode");
+  console.log("Using relative API paths");
   return '';
 }
 
@@ -141,8 +133,8 @@ export function getApiUrl(endpoint: string): string {
   const fullEndpoint = `${apiPrefix}${cleanEndpoint}`;
   
   // Construct the final URL
-  const fullUrl = baseUrl ? `${baseUrl}/${fullEndpoint}` : `/${fullEndpoint}`;
+  const fullUrl = `/${fullEndpoint}`;
   
-  console.log(`Constructed API URL: ${fullUrl} from baseUrl: ${baseUrl} and endpoint: ${endpoint}`);
+  console.log(`Constructed API URL: ${fullUrl} from endpoint: ${endpoint}`);
   return fullUrl;
 }

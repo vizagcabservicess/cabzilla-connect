@@ -15,8 +15,8 @@ header('Content-Type: application/json');
 $request_uri = $_SERVER['REQUEST_URI'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
 
-// Log the invalid API request
-error_log("API fallback handler: Received {$method} request to unmatched path {$request_uri}");
+// Log the API request
+error_log("API fallback handler: Received {$method} request to path {$request_uri}");
 
 // Return a 200 OK response for OPTIONS requests (CORS preflight)
 if ($method === 'OPTIONS') {
@@ -24,6 +24,16 @@ if ($method === 'OPTIONS') {
     echo json_encode([
         'status' => 'success',
         'message' => 'CORS preflight response'
+    ]);
+    exit;
+}
+
+// For GET requests to the root API path, return a status response
+if ($method === 'GET' && (strpos($request_uri, '/api') === 0 || $request_uri === '/api')) {
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'API system is active',
+        'timestamp' => time()
     ]);
     exit;
 }

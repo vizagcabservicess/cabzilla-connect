@@ -15,6 +15,9 @@ header('Content-Type: application/json');
 $request_uri = $_SERVER['REQUEST_URI'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
 
+// Log request for debugging
+error_log("Admin API request: $method $request_uri");
+
 // Return a 200 OK response for OPTIONS requests (CORS preflight)
 if ($method === 'OPTIONS') {
     http_response_code(200);

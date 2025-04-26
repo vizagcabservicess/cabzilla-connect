@@ -21,7 +21,7 @@ $request_uri = $_SERVER['REQUEST_URI'] ?? '';
 $is_admin_route = preg_match('/^\/admin(\/|$)/', $request_uri);
 
 // Log access for debugging
-error_log("Access to main SPA index.php, URI: " . $request_uri . ", Admin route: " . ($is_admin_route ? 'yes' : 'no'));
+error_log("Access to main SPA index.php, URI: " . $request_uri);
 
 // HTML content for the SPA
 ?><!DOCTYPE html>
