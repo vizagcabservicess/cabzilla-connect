@@ -41,11 +41,11 @@ function validateDriverData($data) {
         $errors[] = 'Invalid email format';
     }
     
-    if (empty($data['license_number'])) {
+    if (empty($data['license_no'])) {
         $errors[] = 'License number is required';
     }
     
-    if (!empty($data['status']) && !in_array($data['status'], ['active', 'inactive', 'on_trip', 'blocked'])) {
+    if (!empty($data['status']) && !in_array($data['status'], ['available', 'busy', 'offline'])) {
         $errors[] = 'Invalid status value';
     }
     
