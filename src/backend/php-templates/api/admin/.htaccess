@@ -30,7 +30,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# Direct access to PHP files - CRITICAL NEW RULE
+# Direct access to PHP files - CRITICAL RULE
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
@@ -39,12 +39,18 @@ RewriteRule ^(.*)$ $1 [R=200,L]
 # Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
 
-# NEW CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
+# CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
 RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
 RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
 RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
 RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
 RewriteRule ^drivers\.php$ drivers.php [L,NC,QSA]
+RewriteRule ^driver\.php$ driver.php [L,NC,QSA]
+RewriteRule ^add-driver\.php$ add-driver.php [L,NC,QSA]
+RewriteRule ^update-driver\.php$ update-driver.php [L,NC,QSA]
+RewriteRule ^delete-driver\.php$ delete-driver.php [L,NC,QSA]
+RewriteRule ^reports\.php$ reports.php [L,NC,QSA]
+RewriteRule ^report-metrics\.php$ report-metrics.php [L,NC,QSA]
 
 # CRITICAL: Explicitly define booking endpoints with highest priority
 RewriteRule ^booking\.php$ booking.php [L,NC,QSA]

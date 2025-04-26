@@ -12,6 +12,7 @@ import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
+import ReportsPage from './pages/ReportsPage';
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +39,10 @@ export const router = createBrowserRouter([
   {
     path: '/admin/database',
     element: <AdminDatabasePage />,
+  },
+  {
+    path: '/admin/reports',
+    element: <ReportsPage />,
   },
   // Add catch-all route for admin to prevent 404s on admin routes
   {

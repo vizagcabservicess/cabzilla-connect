@@ -6,13 +6,22 @@ import { Booking } from '@/types/api';
 import { Loader2, FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: () => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
+}
+
+interface GSTDetails {
+  gstNumber: string;
+  companyName: string;
+  companyAddress: string;
 }
 
 export function BookingInvoice({
@@ -25,6 +34,12 @@ export function BookingInvoice({
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gstEnabled, setGstEnabled] = useState(false);
+  const [gstDetails, setGstDetails] = useState<GSTDetails>({
+    gstNumber: '',
+    companyName: '',
+    companyAddress: ''
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -38,7 +53,7 @@ export function BookingInvoice({
     try {
       setLoading(true);
       setError(null);
-      const result = await onGenerateInvoice();
+      const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
       
       if (result && result.data) {
         setInvoiceData(result.data);
@@ -55,8 +70,25 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    // Open PDF in new tab to trigger download
-    window.open(pdfUrl, '_blank');
+    // Construct PDF URL with GST parameter if enabled
+    const gstParam = gstEnabled ? '&gst=1' : '';
+    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+    
+    const downloadUrl = `${pdfUrl}${gstParam}${gstDetailsParam}`;
+    window.open(downloadUrl, '_blank');
+  };
+
+  const handleGstToggle = (checked: boolean) => {
+    setGstEnabled(checked);
+  };
+
+  const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setGstDetails(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const renderInvoiceContent = () => {
@@ -84,6 +116,64 @@ export function BookingInvoice({
           <div className="mb-4 flex justify-between">
             <h3 className="font-medium">Invoice #{invoiceData.invoiceNumber}</h3>
             <span>Generated: {invoiceData.invoiceDate}</span>
+          </div>
+          
+          <div className="mb-4 p-4 border rounded-md">
+            <div className="flex items-center space-x-2">
+              <Switch 
+                id="gst-toggle"
+                checked={gstEnabled}
+                onCheckedChange={handleGstToggle}
+              />
+              <Label htmlFor="gst-toggle">Include GST (12%)</Label>
+            </div>
+            
+            {gstEnabled && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <Label htmlFor="gstNumber">GST Number</Label>
+                  <Input 
+                    id="gstNumber"
+                    name="gstNumber"
+                    value={gstDetails.gstNumber}
+                    onChange={handleGstDetailsChange}
+                    placeholder="Enter GST number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input 
+                    id="companyName"
+                    name="companyName"
+                    value={gstDetails.companyName}
+                    onChange={handleGstDetailsChange}
+                    placeholder="Enter company name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="companyAddress">Company Address</Label>
+                  <Input 
+                    id="companyAddress"
+                    name="companyAddress"
+                    value={gstDetails.companyAddress}
+                    onChange={handleGstDetailsChange}
+                    placeholder="Enter company address"
+                  />
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-4">
+              <Button 
+                variant="outline" 
+                onClick={handleGenerateInvoice}
+                disabled={loading || isSubmitting}
+                className="w-full"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Regenerate Invoice with Current Settings
+              </Button>
+            </div>
           </div>
           
           <div 

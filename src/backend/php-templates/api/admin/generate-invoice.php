@@ -8,7 +8,7 @@ require_once __DIR__ . '/../common/db_helper.php';
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Debug, *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Debug mode
@@ -54,9 +54,22 @@ try {
 
     // Get booking ID from query parameters or POST data
     $bookingId = null;
+    $gstEnabled = false; 
+    $gstDetails = [
+        'gstNumber' => '',
+        'companyName' => '',
+        'companyAddress' => ''
+    ];
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
+        $gstEnabled = isset($_GET['gst']) && $_GET['gst'] == '1';
+        
+        if ($gstEnabled) {
+            $gstDetails['gstNumber'] = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
+            $gstDetails['companyName'] = isset($_GET['companyName']) ? $_GET['companyName'] : '';
+            $gstDetails['companyAddress'] = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
+        }
     } else {
         // Get JSON input data for POST
         $jsonData = file_get_contents('php://input');
@@ -66,17 +79,31 @@ try {
         error_log("Generate invoice POST data: " . $jsonData);
         
         $bookingId = isset($data['bookingId']) ? (int)$data['bookingId'] : null;
+        $gstEnabled = isset($data['gstEnabled']) && $data['gstEnabled'] === true;
+        
+        if ($gstEnabled && isset($data['gstDetails'])) {
+            $gstDetails = array_merge($gstDetails, $data['gstDetails']);
+        }
         
         // If we couldn't get it from JSON, try regular POST
         if (!$bookingId && isset($_POST['bookingId'])) {
             $bookingId = (int)$_POST['bookingId'];
+            $gstEnabled = isset($_POST['gstEnabled']) && $_POST['gstEnabled'] == '1';
+            
+            if ($gstEnabled) {
+                $gstDetails['gstNumber'] = isset($_POST['gstNumber']) ? $_POST['gstNumber'] : '';
+                $gstDetails['companyName'] = isset($_POST['companyName']) ? $_POST['companyName'] : '';
+                $gstDetails['companyAddress'] = isset($_POST['companyAddress']) ? $_POST['companyAddress'] : '';
+            }
         }
     }
     
     logGenerateInvoiceError("Processing invoice generation for booking ID: " . $bookingId, [
         'method' => $_SERVER['REQUEST_METHOD'],
         'queryString' => $_SERVER['QUERY_STRING'],
-        'jsonData' => $jsonData ?? 'none'
+        'jsonData' => $jsonData ?? 'none',
+        'gstEnabled' => $gstEnabled ? 'Yes' : 'No',
+        'gstDetails' => $gstDetails
     ]);
     
     if (!$bookingId) {
@@ -131,9 +158,27 @@ try {
     $invoiceNumber = 'INV-' . date('Ymd') . '-' . $booking['id'];
     $invoiceDate = date('Y-m-d');
     
-    // Calculate tax components (15% tax)
-    $baseFare = round($booking['total_amount'] * 0.85);
-    $taxAmount = $booking['total_amount'] - $baseFare;
+    // Calculate tax components
+    $totalAmount = (float)$booking['total_amount'];
+    
+    // Add GST if enabled (12%)
+    if ($gstEnabled) {
+        $baseAmount = $totalAmount;
+        $gstAmount = round($baseAmount * 0.12, 2);
+        $totalWithGst = $baseAmount + $gstAmount;
+        
+        $baseFare = round($baseAmount * 0.85, 2);
+        $serviceTaxAmount = $baseAmount - $baseFare;
+        
+        // Updated totals with GST
+        $finalAmount = $totalWithGst;
+    } else {
+        // Original calculation (15% tax)
+        $baseFare = round($totalAmount * 0.85, 2);
+        $serviceTaxAmount = $totalAmount - $baseFare;
+        $gstAmount = 0;
+        $finalAmount = $totalAmount;
+    }
     
     // Create invoice record in invoices table if it exists
     $invoiceData = [
@@ -150,8 +195,13 @@ try {
         'pickup_date' => $booking['pickup_date'],
         'cab_type' => $booking['cab_type'],
         'base_fare' => $baseFare,
-        'tax_amount' => $taxAmount,
-        'total_amount' => $booking['total_amount'],
+        'service_tax_amount' => $serviceTaxAmount,
+        'gst_enabled' => $gstEnabled,
+        'gst_amount' => $gstAmount,
+        'gst_number' => $gstEnabled ? $gstDetails['gstNumber'] : '',
+        'company_name' => $gstEnabled ? $gstDetails['companyName'] : '',
+        'company_address' => $gstEnabled ? $gstDetails['companyAddress'] : '',
+        'total_amount' => $finalAmount,
         'invoice_date' => $invoiceDate,
         'status' => 'generated',
     ];
@@ -176,7 +226,12 @@ try {
                     pickup_date DATETIME NOT NULL,
                     cab_type VARCHAR(50) NOT NULL,
                     base_fare DECIMAL(10,2) NOT NULL,
-                    tax_amount DECIMAL(10,2) NOT NULL,
+                    service_tax_amount DECIMAL(10,2) NOT NULL,
+                    gst_enabled TINYINT(1) DEFAULT 0,
+                    gst_amount DECIMAL(10,2) DEFAULT 0,
+                    gst_number VARCHAR(50),
+                    company_name VARCHAR(100),
+                    company_address TEXT,
                     total_amount DECIMAL(10,2) NOT NULL,
                     invoice_date DATE NOT NULL,
                     status VARCHAR(20) NOT NULL,
@@ -187,6 +242,18 @@ try {
             $conn->query($createInvoicesTableSql);
             if ($conn->error) {
                 logGenerateInvoiceError("Error creating invoices table", ['error' => $conn->error]);
+            }
+        } else {
+            // Check if GST columns exist, add them if they don't
+            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE 'gst_enabled'");
+            if ($checkColumnResult->num_rows === 0) {
+                $conn->query("ALTER TABLE invoices 
+                    ADD COLUMN gst_enabled TINYINT(1) DEFAULT 0,
+                    ADD COLUMN gst_amount DECIMAL(10,2) DEFAULT 0,
+                    ADD COLUMN gst_number VARCHAR(50),
+                    ADD COLUMN company_name VARCHAR(100),
+                    ADD COLUMN company_address TEXT,
+                    CHANGE tax_amount service_tax_amount DECIMAL(10,2) NOT NULL");
             }
         }
     } catch (Exception $e) {
@@ -205,20 +272,47 @@ try {
             $existingInvoice = $invoiceResult->fetch_assoc();
             $invoiceId = $existingInvoice['id'];
             
-            // Update invoice status
-            $updateStmt = $conn->prepare("UPDATE invoices SET status = 'generated', updated_at = NOW() WHERE id = ?");
-            $updateStmt->bind_param("i", $invoiceId);
+            // Update invoice with new GST settings
+            $updateSql = "UPDATE invoices SET 
+                status = 'generated', 
+                gst_enabled = ?, 
+                gst_amount = ?,
+                gst_number = ?,
+                company_name = ?,
+                company_address = ?,
+                base_fare = ?,
+                service_tax_amount = ?,
+                total_amount = ?,
+                updated_at = NOW() 
+                WHERE id = ?";
+            
+            $updateStmt = $conn->prepare($updateSql);
+            $gstEnabledInt = $gstEnabled ? 1 : 0;
+            $updateStmt->bind_param(
+                "idsssdddi",
+                $gstEnabledInt,
+                $invoiceData['gst_amount'],
+                $invoiceData['gst_number'],
+                $invoiceData['company_name'],
+                $invoiceData['company_address'],
+                $invoiceData['base_fare'],
+                $invoiceData['service_tax_amount'],
+                $invoiceData['total_amount'],
+                $invoiceId
+            );
             $updateStmt->execute();
         } else {
             // Insert new invoice
             $insertSql = "INSERT INTO invoices (invoice_number, booking_id, booking_number, passenger_name, passenger_email, 
                         passenger_phone, trip_type, trip_mode, pickup_location, drop_location, pickup_date, cab_type, 
-                        base_fare, tax_amount, total_amount, invoice_date, status) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        base_fare, service_tax_amount, gst_enabled, gst_amount, gst_number, company_name, company_address,
+                        total_amount, invoice_date, status) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $insertStmt = $conn->prepare($insertSql);
+            $gstEnabledInt = $gstEnabled ? 1 : 0;
             $insertStmt->bind_param(
-                "sisssssssssdddss",
+                "sisssssssssddiidssdss",
                 $invoiceData['invoice_number'],
                 $invoiceData['booking_id'],
                 $invoiceData['booking_number'],
@@ -232,7 +326,12 @@ try {
                 $invoiceData['pickup_date'],
                 $invoiceData['cab_type'],
                 $invoiceData['base_fare'],
-                $invoiceData['tax_amount'],
+                $invoiceData['service_tax_amount'],
+                $gstEnabledInt,
+                $invoiceData['gst_amount'],
+                $invoiceData['gst_number'],
+                $invoiceData['company_name'],
+                $invoiceData['company_address'],
                 $invoiceData['total_amount'],
                 $invoiceData['invoice_date'],
                 $invoiceData['status']
@@ -260,8 +359,8 @@ try {
     }
     
     // Add invoice download URL to response
-    $invoiceUrl = "/api/download-invoice.php?id=" . $bookingId;
-    $pdfUrl = "/api/download-invoice.php?id=" . $bookingId . "&format=pdf";
+    $invoiceUrl = "/api/download-invoice.php?id=" . $bookingId . ($gstEnabled ? "&gst=1" : "");
+    $pdfUrl = "/api/download-invoice.php?id=" . $bookingId . "&format=pdf" . ($gstEnabled ? "&gst=1" : "");
     
     // Generate HTML invoice for response
     $invoiceHtml = generateInvoiceHTML($invoiceData);
@@ -283,8 +382,11 @@ try {
             ],
             'fareBreakdown' => [
                 'baseFare' => $baseFare,
-                'taxAmount' => $taxAmount,
-                'totalAmount' => (float)$booking['total_amount']
+                'serviceTax' => $serviceTaxAmount,
+                'gstEnabled' => $gstEnabled,
+                'gstAmount' => $gstAmount,
+                'gstDetails' => $gstEnabled ? $gstDetails : null,
+                'totalAmount' => $finalAmount
             ],
             'downloadUrl' => $invoiceUrl,
             'pdfDownloadUrl' => $pdfUrl,
@@ -301,8 +403,30 @@ try {
     ], 500);
 }
 
-// Function to generate a simple HTML invoice
+// Function to generate HTML invoice
 function generateInvoiceHTML($invoiceData) {
+    $hasGst = $invoiceData['gst_enabled'] && $invoiceData['gst_amount'] > 0;
+    $companyInfo = '';
+    
+    if ($hasGst && !empty($invoiceData['gst_number'])) {
+        $companyInfo = '
+        <div class="company-gst-details">
+            <h3>Billing To:</h3>
+            <p><strong>' . htmlspecialchars($invoiceData['company_name']) . '</strong></p>
+            <p>GST Number: ' . htmlspecialchars($invoiceData['gst_number']) . '</p>
+            <p>' . nl2br(htmlspecialchars($invoiceData['company_address'])) . '</p>
+        </div>';
+    }
+    
+    $gstRow = '';
+    if ($hasGst) {
+        $gstRow = '
+        <tr>
+            <td>GST (12%)</td>
+            <td>₹ ' . number_format($invoiceData['gst_amount'], 2) . '</td>
+        </tr>';
+    }
+    
     $html = '
     <!DOCTYPE html>
     <html>
@@ -333,14 +457,15 @@ function generateInvoiceHTML($invoiceData) {
             }
             .invoice-details {
                 margin-bottom: 40px;
+                overflow: auto;
             }
-            .customer-details {
+            .customer-details, .company-gst-details {
                 float: left;
-                width: 50%;
+                width: 48%;
             }
             .invoice-summary {
                 float: right;
-                width: 45%;
+                width: 48%;
                 text-align: right;
             }
             .booking-details {
@@ -391,11 +516,14 @@ function generateInvoiceHTML($invoiceData) {
             
             <div class="invoice-details">
                 <div class="customer-details">
-                    <h3>Billed To:</h3>
-                    <p>' . $invoiceData['passenger_name'] . '</p>
-                    <p>Phone: ' . $invoiceData['passenger_phone'] . '</p>
-                    <p>Email: ' . $invoiceData['passenger_email'] . '</p>
+                    <h3>Passenger Details:</h3>
+                    <p>' . htmlspecialchars($invoiceData['passenger_name']) . '</p>
+                    <p>Phone: ' . htmlspecialchars($invoiceData['passenger_phone']) . '</p>
+                    <p>Email: ' . htmlspecialchars($invoiceData['passenger_email']) . '</p>
                 </div>
+                
+                ' . $companyInfo . '
+                
                 <div class="invoice-summary">
                     <h3>Trip Summary:</h3>
                     <p><strong>Trip Type:</strong> ' . ucfirst($invoiceData['trip_type']) . ' (' . ucfirst($invoiceData['trip_mode']) . ')</p>
@@ -406,8 +534,8 @@ function generateInvoiceHTML($invoiceData) {
             
             <div class="booking-details">
                 <h3>Trip Details:</h3>
-                <p><strong>Pickup Location:</strong> ' . $invoiceData['pickup_location'] . '</p>
-                ' . ($invoiceData['drop_location'] ? '<p><strong>Drop Location:</strong> ' . $invoiceData['drop_location'] . '</p>' : '') . '
+                <p><strong>Pickup Location:</strong> ' . htmlspecialchars($invoiceData['pickup_location']) . '</p>
+                ' . ($invoiceData['drop_location'] ? '<p><strong>Drop Location:</strong> ' . htmlspecialchars($invoiceData['drop_location']) . '</p>' : '') . '
                 <p><strong>Pickup Date/Time:</strong> ' . date('d M Y, h:i A', strtotime($invoiceData['pickup_date'])) . '</p>
             </div>
             
@@ -423,9 +551,10 @@ function generateInvoiceHTML($invoiceData) {
                         <td>₹ ' . number_format($invoiceData['base_fare'], 2) . '</td>
                     </tr>
                     <tr>
-                        <td>Taxes</td>
-                        <td>₹ ' . number_format($invoiceData['tax_amount'], 2) . '</td>
+                        <td>Service Tax</td>
+                        <td>₹ ' . number_format($invoiceData['service_tax_amount'], 2) . '</td>
                     </tr>
+                    ' . $gstRow . '
                     <tr class="total-row">
                         <td>Total Amount</td>
                         <td>₹ ' . number_format($invoiceData['total_amount'], 2) . '</td>
@@ -436,6 +565,7 @@ function generateInvoiceHTML($invoiceData) {
             <div class="company-info">
                 <p>Thank you for choosing Vishakapatnam Cab Services.</p>
                 <p>For any questions regarding this invoice, please contact support@vizagcabs.com</p>
+                ' . ($hasGst ? '<p><strong>GST Number:</strong> GSTIN27AABCV1234Z1ZA</p>' : '') . '
             </div>
         </div>
     </body>
