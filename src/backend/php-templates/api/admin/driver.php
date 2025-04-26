@@ -186,6 +186,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
                     email = ?, 
                     license_no = ?,
                     vehicle = ?,
+                    vehicle_id = ?,
                     status = ?,
                     location = ?,
                     updated_at = CURRENT_TIMESTAMP
@@ -193,12 +194,13 @@ switch ($_SERVER['REQUEST_METHOD']) {
             ");
             
             $stmt->bind_param(
-                "sssssssi",
+                "sssssss si",
                 $data['name'],
                 $data['phone'],
                 $data['email'],
                 $data['license_no'],
                 $data['vehicle'],
+                $data['vehicle_id'],
                 $data['status'],
                 $data['location'],
                 $driverId

@@ -42,6 +42,7 @@ interface Driver {
   rating: number;
   location: string;
   vehicle: string;
+  vehicle_id: string;
 }
 
 interface DriverFormData {
@@ -49,9 +50,10 @@ interface DriverFormData {
   phone: string;
   email: string;
   license_no: string;
+  vehicle: string;
+  vehicle_id: string;
   status: string;
   location: string;
-  vehicle: string;
 }
 
 export function DriverManagement() {
@@ -83,9 +85,10 @@ export function DriverManagement() {
     phone: '',
     email: '',
     license_no: '',
+    vehicle: '',
+    vehicle_id: '',
     status: 'available',
     location: 'Visakhapatnam',
-    vehicle: '',
   });
 
   useEffect(() => {
@@ -153,7 +156,8 @@ export function DriverManagement() {
         earnings: 120000, 
         rating: 4.8,
         location: 'Hyderabad Central',
-        vehicle: 'Sedan - AP 31 XX 1234'
+        vehicle: 'Sedan - AP 31 XX 1234',
+        vehicle_id: 'AP 31 XX 1234'
       },
       { 
         id: 2, 
@@ -166,7 +170,8 @@ export function DriverManagement() {
         earnings: 85500, 
         rating: 4.6,
         location: 'Gachibowli',
-        vehicle: 'SUV - AP 32 XX 5678'
+        vehicle: 'SUV - AP 32 XX 5678',
+        vehicle_id: 'AP 32 XX 5678'
       },
       { 
         id: 3, 
@@ -179,7 +184,8 @@ export function DriverManagement() {
         earnings: 72000, 
         rating: 4.5,
         location: 'Offline',
-        vehicle: 'Sedan - AP 33 XX 9012'
+        vehicle: 'Sedan - AP 33 XX 9012',
+        vehicle_id: 'AP 33 XX 9012'
       },
       { 
         id: 4, 
@@ -192,7 +198,8 @@ export function DriverManagement() {
         earnings: 110000, 
         rating: 4.7,
         location: 'Kukatpally',
-        vehicle: 'Hatchback - AP 34 XX 3456'
+        vehicle: 'Hatchback - AP 34 XX 3456',
+        vehicle_id: 'AP 34 XX 3456'
       },
       { 
         id: 5, 
@@ -205,7 +212,8 @@ export function DriverManagement() {
         earnings: 65000, 
         rating: 4.4,
         location: 'Ameerpet',
-        vehicle: 'Tempo - AP 35 XX 7890'
+        vehicle: 'Tempo - AP 35 XX 7890',
+        vehicle_id: 'AP 35 XX 7890'
       }
     ];
   };
@@ -281,9 +289,10 @@ export function DriverManagement() {
       phone: '',
       email: '',
       license_no: '',
+      vehicle: '',
+      vehicle_id: '',
       status: 'available',
       location: 'Visakhapatnam',
-      vehicle: '',
     });
     setFormErrors({});
   };
@@ -300,9 +309,10 @@ export function DriverManagement() {
       phone: driver.phone,
       email: driver.email || '',
       license_no: driver.license_no || '',
+      vehicle: driver.vehicle || '',
+      vehicle_id: driver.vehicle_id || '',
       status: driver.status,
       location: driver.location,
-      vehicle: driver.vehicle || '',
     });
     setIsEditDriverDialogOpen(true);
   };
@@ -419,9 +429,10 @@ export function DriverManagement() {
           phone: driverForm.phone,
           email: driverForm.email,
           license_no: driverForm.license_no,
+          vehicle: driverForm.vehicle,
+          vehicle_id: driverForm.vehicle_id,
           status: driverForm.status,
-          location: driverForm.location,
-          vehicle: driverForm.vehicle
+          location: driverForm.location
         })
       });
       
@@ -445,9 +456,10 @@ export function DriverManagement() {
             phone: driverForm.phone,
             email: driverForm.email,
             license_no: driverForm.license_no,
+            vehicle: driverForm.vehicle,
+            vehicle_id: driverForm.vehicle_id,
             status: driverForm.status as 'available' | 'busy' | 'offline',
-            location: driverForm.location,
-            vehicle: driverForm.vehicle
+            location: driverForm.location
           };
         }
         return d;

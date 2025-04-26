@@ -22,6 +22,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     email: '',
     license_no: '',
     vehicle: '',
+    vehicle_id: '',
     status: 'available' as DriverStatus,
     location: ''
   });
@@ -36,6 +37,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       email: driver.email || '',
       license_no: driver.license_no || '',
       vehicle: driver.vehicle || '',
+      vehicle_id: driver.vehicle_id || '',
       status: driver.status,
       location: driver.location || ''
     });
@@ -181,6 +183,21 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                 />
                 {formErrors.vehicle && (
                   <p className="text-xs text-red-500">{formErrors.vehicle}</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="vehicle_id">Vehicle ID</Label>
+                <Input
+                  id="vehicle_id"
+                  name="vehicle_id"
+                  value={formData.vehicle_id}
+                  onChange={handleChange}
+                  disabled={isSubmitting}
+                  className={formErrors.vehicle_id ? "border-red-500" : ""}
+                />
+                {formErrors.vehicle_id && (
+                  <p className="text-xs text-red-500">{formErrors.vehicle_id}</p>
                 )}
               </div>
               
