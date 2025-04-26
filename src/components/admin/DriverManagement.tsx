@@ -26,8 +26,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Driver, DriverStatus } from '@/types/api';
-import { driverAPI } from '@/services/api';
 import { AddDriverDialog } from './AddDriverDialog';
 import { EditDriverDialog } from './EditDriverDialog';
 import { DeleteDriverDialog } from './DeleteDriverDialog';
@@ -60,7 +58,7 @@ export function DriverManagement() {
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<DriverStatus | ''>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +104,7 @@ export function DriverManagement() {
   };
 
   const fetchDrivers = async () => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     
     try {
@@ -138,7 +136,7 @@ export function DriverManagement() {
       setError('Failed to load drivers. Using sample data instead.');
       setDrivers(getMockDrivers());
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -222,11 +220,11 @@ export function DriverManagement() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'available':
-        return <Badge className="bg-green-100 text-green-800">Available</Badge>;
+        return <Badge variant="default">Available</Badge>;
       case 'busy':
-        return <Badge className="bg-red-100 text-red-800">Busy</Badge>;
+        return <Badge variant="destructive">Busy</Badge>;
       case 'offline':
-        return <Badge className="bg-gray-100 text-gray-800">Offline</Badge>;
+        return <Badge variant="secondary">Offline</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -557,14 +555,13 @@ export function DriverManagement() {
         />
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as DriverStatus | '')}
+          onChange={(e) => setStatusFilter(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-3 py-2"
         >
           <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="on_trip">On Trip</option>
-          <option value="blocked">Blocked</option>
+          <option value="available">Available</option>
+          <option value="busy">Busy</option>
+          <option value="offline">Offline</option>
         </select>
       </div>
       
@@ -640,16 +637,7 @@ export function DriverManagement() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        driver.status === 'active' ? 'success' :
-                        driver.status === 'inactive' ? 'secondary' :
-                        driver.status === 'on_trip' ? 'default' :
-                        'destructive'
-                      }
-                    >
-                      {driver.status}
-                    </Badge>
+                    {getStatusBadge(driver.status)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">
