@@ -82,6 +82,8 @@ RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 
 # Other admin API endpoints
 RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]
+RewriteRule ^api/admin/driver/([0-9]+)/?$ /api/admin/driver.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC,QSA]
 RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
