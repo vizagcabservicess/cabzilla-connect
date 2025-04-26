@@ -205,6 +205,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
             );
             
             if ($stmt->execute()) {
+                error_log('Driver update executed: ' . print_r($data, true));
                 // Update documents if provided
                 if (!empty($data['documents'])) {
                     foreach ($data['documents'] as $doc) {
