@@ -10,6 +10,7 @@ header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('X-Frame-Options: DENY');
+header('X-Debug-PHP-Entry: true');
 
 // Enable detailed error reporting during development
 error_reporting(E_ALL);
@@ -20,7 +21,7 @@ $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $is_admin_route = preg_match('/^\/admin(\/|$)/', $request_uri);
 $base_path = '/';
 
-// Log access
+// Log access for debugging
 error_log("SPA entry point accessed: " . $request_uri . ", Admin route: " . ($is_admin_route ? 'yes' : 'no'));
 
 // Setup initial route data for client-side JS
@@ -32,14 +33,10 @@ $route_data = json_encode([
     'debug' => true
 ]);
 
-// Determine proper asset paths
+// Check if we have built assets or are in development mode
+$using_vite_dev = !file_exists('./assets/index.js');
 $asset_prefix = '';
 
-// Check if we have built assets
-$using_vite_dev = true;
-if (file_exists('./assets/index.js')) {
-    $using_vite_dev = false;
-}
 ?><!DOCTYPE html>
 <html lang="en">
   <head>
@@ -48,7 +45,7 @@ if (file_exists('./assets/index.js')) {
     <title><?php echo $is_admin_route ? 'Admin Dashboard - Vizag Cabs' : 'Vizag Cabs - Book Cabs in Visakhapatnam'; ?></title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
     <meta property="og:image" content="/og-image.png" />
-    <!-- Critical for routing - base href MUST be / -->
+    <!-- CRITICAL: base href MUST be / for routing to work -->
     <base href="<?php echo $base_path; ?>">
     
     <?php if (!$using_vite_dev): ?>

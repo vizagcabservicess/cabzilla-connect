@@ -13,9 +13,7 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
-// Get base URL from initialRoute if available
-const baseUrl = window.__initialRoute?.baseUrl || '/';
-console.log('Creating router with base URL:', baseUrl);
+console.log('Creating router...');
 
 // Create routes with proper configuration
 export const router = createBrowserRouter([
@@ -23,6 +21,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
+    errorElement: <NotFound />,
   },
   {
     path: '/login',
@@ -79,11 +78,13 @@ export const router = createBrowserRouter([
     element: <AdminDashboardPage />,
   },
   
-  // Global catch-all redirect to 404 - must be last route
+  // Global catch-all for 404 - must be last route
   {
     path: '*',
     element: <NotFound />,
   },
 ]);
+
+console.log('Router created successfully');
 
 export default router;

@@ -8,14 +8,14 @@
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
     <meta name="author" content="Vizag Cabs" />
     <meta property="og:image" content="/og-image.png" />
-    <!-- Ensure base href is set to root - CRITICAL -->
+    <!-- CRITICAL: DO NOT CHANGE base href -->
     <base href="/" />
   </head>
 
   <body>
     <div id="root"></div>
     
-    <!-- Route data initialization script - Critical for routing -->
+    <!-- Route data initialization script - IMPORTANT -->
     <script>
       window.__initialRoute = {
         path: window.location.pathname,
@@ -34,6 +34,7 @@
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     
+    <!-- Main application entry point -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -14,6 +14,8 @@ function App() {
   const [routeError, setRouteError] = useState<string | null>(null);
   
   useEffect(() => {
+    console.log('App component mounted');
+    
     // Set page title based on route
     const isAdmin = window.location.pathname.startsWith('/admin');
     document.title = isAdmin 
@@ -28,22 +30,24 @@ function App() {
     window.addEventListener('popstate', handleRouteChange);
     
     // Initialize router with short delay to ensure all scripts are loaded
-    try {
-      setTimeout(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        console.log('Mounting router...');
         setIsRouterMounted(true);
         setIsLoading(false);
         console.log('Router mounted successfully');
-      }, 100);
-    } catch (error) {
-      console.error('Error mounting router:', error);
-      setRouteError(error instanceof Error ? error.message : 'Unknown router error');
-      setIsLoading(false);
-      
-      // Show error toast
-      toast.error('Error initializing application. Please refresh the page.');
-    }
+      } catch (error) {
+        console.error('Error mounting router:', error);
+        setRouteError(error instanceof Error ? error.message : 'Unknown router error');
+        setIsLoading(false);
+        
+        // Show error toast
+        toast.error('Error initializing application. Please refresh the page.');
+      }
+    }, 100);
     
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener('popstate', handleRouteChange);
     };
   }, []);
@@ -79,12 +83,20 @@ function App() {
     );
   }
 
-  // Add error boundary
+  // Render app only if router is mounted
   if (!isRouterMounted) {
-    console.log('Router is initializing...');
-    return <div className="p-8">Loading application...</div>;
+    console.log('Router is not yet mounted...');
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Initializing router...</h2>
+          <p className="text-muted-foreground">Please wait</p>
+        </div>
+      </div>
+    );
   }
 
+  console.log('Rendering full application with router');
   return (
     <ThemeProvider defaultTheme="light" storageKey="vizag-cabs-theme">
       <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>

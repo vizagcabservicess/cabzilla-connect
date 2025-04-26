@@ -3,8 +3,10 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
-    # Basic debugging for critical errors
+    # Enable detailed error logging for debugging
     php_flag display_errors On
+    php_value error_reporting E_ALL
+    php_flag log_errors On
     php_value error_log /logs/php_errors.log
     
     # Handle CORS preflight requests first
@@ -15,6 +17,9 @@
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
+    
+    # Debugging header
+    Header always set X-Debug-Server "Main .htaccess processing request to: %{REQUEST_URI}s"
     
     # API paths are handled by their own rewrite rules in /api directory
     RewriteRule ^api(/.*)?$ api$1 [L]
