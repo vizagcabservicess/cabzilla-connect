@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Driver } from '@/types/api';
+import { Driver, DriverStatus } from '@/types/api';
 
 interface EditDriverDialogProps {
   isOpen: boolean;
@@ -110,7 +110,8 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   };
   
   const handleStatusChange = (value: string) => {
-    setFormData(prev => ({ ...prev, status: value }));
+    // Cast the string value to the DriverStatus type
+    setFormData(prev => ({ ...prev, status: value as DriverStatus }));
     // Clear any status errors
     if (formErrors.status) {
       setFormErrors(prev => ({ ...prev, status: '' }));
