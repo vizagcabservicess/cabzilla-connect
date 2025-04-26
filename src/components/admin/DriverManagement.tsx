@@ -366,9 +366,10 @@ export function DriverManagement() {
           phone: formData.phone,
           email: formData.email,
           license_no: formData.license_number,
+          vehicle_number: formData.vehicle_number,
+          vehicle_type: formData.vehicle_type,
           status: formData.status,
-          location: formData.location,
-          vehicle: formData.vehicle_type
+          location: formData.location
         })
       });
       const data = await response.json();
