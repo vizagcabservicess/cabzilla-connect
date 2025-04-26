@@ -355,22 +355,24 @@ export function DriverManagement() {
     setFormSubmitting(true);
     try {
       const apiBaseUrl = getApiBaseUrl();
+      const payload = {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        license_no: formData.license_number,
+        vehicle_number: formData.vehicle_number,
+        vehicle_type: formData.vehicle_type,
+        status: formData.status,
+        location: formData.location
+      };
+      console.log('Submitting driver:', payload);
       const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Force-Refresh': 'true'
         },
-        body: JSON.stringify({
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          license_no: formData.license_number,
-          vehicle_number: formData.vehicle_number,
-          vehicle_type: formData.vehicle_type,
-          status: formData.status,
-          location: formData.location
-        })
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (!response.ok || data.status !== 'success') {
