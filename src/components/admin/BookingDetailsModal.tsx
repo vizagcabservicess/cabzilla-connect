@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BookingDetails } from './BookingDetails';
@@ -26,18 +27,6 @@ export function BookingDetailsModal({
   onStatusChange,
   isSubmitting
 }: BookingDetailsModalProps) {
-  useEffect(() => {
-    if (isOpen) {
-      // Scroll to top when modal opens
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      // Also reset modal scroll position
-      const modalContent = document.querySelector('.booking-details-modal-content');
-      if (modalContent) {
-        modalContent.scrollTop = 0;
-      }
-    }
-  }, [isOpen]);
-
   if (!booking) return null;
 
   return (

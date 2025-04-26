@@ -17,6 +17,14 @@ export interface BookingDetails {
   driverPhone?: string;
   vehicleNumber?: string;
   gstEnabled?: boolean;
+  billingAddress?: string;
+  extraCharges?: {
+    id?: number;
+    description: string;
+    amount: number;
+  }[];
+  totalExtraCharges?: number;
+  finalAmount?: number;
   gstDetails?: {
     gstNumber: string;
     companyName: string;

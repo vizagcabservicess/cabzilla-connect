@@ -1,20 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Booking } from '@/types/api';
-import { AlertCircle } from 'lucide-react';
+import { Booking, Driver } from '@/types/api';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-
-interface Driver {
-  id: number;
-  name: string;
-  phone: string;
-  vehicleNumber: string;
-}
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -44,6 +38,7 @@ export function DriverAssignment({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const closeHandler = onCancel || onClose;
   const submitHandler = onSubmit || onAssign;
@@ -51,7 +46,42 @@ export function DriverAssignment({
   useEffect(() => {
     const fetchDrivers = async () => {
       setLoadingDrivers(true);
+      setFetchError(null);
       try {
+        // Fetch drivers from the backend
+        const response = await fetch('/api/admin/drivers.php');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch drivers: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'error') {
+          throw new Error(data.message || 'Failed to fetch drivers');
+        }
+        
+        if (Array.isArray(data.data)) {
+          // Add vehicleNumber to each driver if missing
+          const driversWithVehicle = data.data.map((driver: Driver) => ({
+            ...driver,
+            vehicleNumber: driver.vehicle_id || 'Not assigned'
+          }));
+          setAvailableDrivers(driversWithVehicle);
+        } else {
+          setAvailableDrivers([]);
+          console.warn('Drivers data is not an array', data);
+        }
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+        setFetchError(error instanceof Error ? error.message : 'Failed to load drivers');
+        toast({
+          variant: "destructive",
+          title: "Failed to load drivers",
+          description: "Please try again or add a driver manually."
+        });
+        
+        // Use mock drivers as fallback
         const mockDrivers = [
           { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
           { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
@@ -59,15 +89,7 @@ export function DriverAssignment({
           { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
           { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
         ];
-        
         setAvailableDrivers(mockDrivers);
-      } catch (error) {
-        console.error('Error fetching drivers:', error);
-        toast({
-          variant: "destructive",
-          title: "Failed to load drivers",
-          description: "Please try again or add a driver manually."
-        });
       } finally {
         setLoadingDrivers(false);
       }
@@ -91,7 +113,7 @@ export function DriverAssignment({
       setDriverData({
         driverName: selectedDriver.name,
         driverPhone: selectedDriver.phone,
-        vehicleNumber: selectedDriver.vehicleNumber
+        vehicleNumber: selectedDriver.vehicleNumber || ''
       });
       
       setErrors({});
@@ -130,6 +152,11 @@ export function DriverAssignment({
       await submitHandler(driverData);
     } catch (error) {
       console.error('Error assigning driver:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to assign driver",
+        description: error instanceof Error ? error.message : "An error occurred while assigning the driver."
+      });
     }
   };
 
@@ -143,14 +170,13 @@ export function DriverAssignment({
           </p>
         </div>
         
-        <Alert variant="default" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Driver Assignment</AlertTitle>
-          <AlertDescription>
-            Since you're assigning a driver manually, you can enter custom driver details below. 
-            In production, these would be fetched from your drivers database.
-          </AlertDescription>
-        </Alert>
+        {fetchError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{fetchError}</AlertDescription>
+          </Alert>
+        )}
         
         <div className="space-y-4">
           <div>
@@ -158,6 +184,7 @@ export function DriverAssignment({
             <Select 
               value={driverType} 
               onValueChange={setDriverType}
+              disabled={isSubmitting}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select driver type" />
@@ -172,16 +199,27 @@ export function DriverAssignment({
           {driverType === 'existing' && (
             <div>
               <Label htmlFor="existingDriver">Select Driver</Label>
-              <Select onValueChange={handleSelectDriver} disabled={loadingDrivers}>
+              <Select onValueChange={handleSelectDriver} disabled={loadingDrivers || isSubmitting}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loadingDrivers ? "Loading drivers..." : "Select a driver"} />
+                  {loadingDrivers ? (
+                    <div className="flex items-center">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <span>Loading drivers...</span>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder={availableDrivers.length > 0 ? "Select a driver" : "No drivers available"} />
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {availableDrivers.map((driver) => (
-                    <SelectItem key={driver.id} value={driver.id.toString()}>
-                      {driver.name} - {driver.vehicleNumber}
-                    </SelectItem>
-                  ))}
+                  {availableDrivers.length > 0 ? (
+                    availableDrivers.map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id.toString()}>
+                        {driver.name} - {driver.vehicleNumber || 'No vehicle'}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No drivers available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -199,6 +237,7 @@ export function DriverAssignment({
               value={driverData.driverName}
               onChange={handleDriverChange}
               className={errors.driverName ? "border-red-500" : ""}
+              disabled={isSubmitting}
             />
             {errors.driverName && (
               <p className="text-red-500 text-xs mt-1">{errors.driverName}</p>
@@ -217,6 +256,7 @@ export function DriverAssignment({
               value={driverData.driverPhone}
               onChange={handleDriverChange}
               className={errors.driverPhone ? "border-red-500" : ""}
+              disabled={isSubmitting}
             />
             {errors.driverPhone && (
               <p className="text-red-500 text-xs mt-1">{errors.driverPhone}</p>
@@ -235,6 +275,7 @@ export function DriverAssignment({
               value={driverData.vehicleNumber}
               onChange={handleDriverChange}
               className={errors.vehicleNumber ? "border-red-500" : ""}
+              disabled={isSubmitting}
             />
             {errors.vehicleNumber && (
               <p className="text-red-500 text-xs mt-1">{errors.vehicleNumber}</p>
@@ -257,7 +298,12 @@ export function DriverAssignment({
             type="submit"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Assigning..." : "Assign Driver"}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Assigning...
+              </>
+            ) : "Assign Driver"}
           </Button>
         </div>
       </div>

@@ -75,7 +75,7 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     // Construct PDF URL with GST parameter if enabled
-    const gstParam = gstEnabled ? '&gst=1' : '';
+    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
@@ -142,6 +142,7 @@ export function BookingInvoice({
                     value={gstDetails.gstNumber}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter GST number"
+                    required={gstEnabled}
                   />
                 </div>
                 <div>
@@ -152,6 +153,7 @@ export function BookingInvoice({
                     value={gstDetails.companyName}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company name"
+                    required={gstEnabled}
                   />
                 </div>
                 <div>
@@ -162,6 +164,7 @@ export function BookingInvoice({
                     value={gstDetails.companyAddress}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company address"
+                    required={gstEnabled}
                   />
                 </div>
               </div>

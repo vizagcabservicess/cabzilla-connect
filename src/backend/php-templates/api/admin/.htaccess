@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 RewriteBase /api/admin/
@@ -29,18 +30,8 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# HIGHEST PRIORITY: Fix schema endpoints
-<Files "fix-schema.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-
-<Files "fix-drivers-schema.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-
-<Files "fix-drivers-table.php">
+# HIGHEST PRIORITY: Fix schema endpoints - direct access for critical files
+<Files ~ "^fix-.*\.php$">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
@@ -52,24 +43,38 @@ RewriteRule ^(.*)$ $1 [R=200,L]
 </Files>
 
 # CRITICAL: Fix schema endpoints with highest priority
+RewriteRule ^fix-schema/?$ fix-schema.php [L,QSA]
 RewriteRule ^fix-schema\.php$ fix-schema.php [L,QSA]
+RewriteRule ^fix-drivers-schema/?$ fix-drivers-schema.php [L,QSA]
 RewriteRule ^fix-drivers-schema\.php$ fix-drivers-schema.php [L,QSA]
+RewriteRule ^fix-drivers-table/?$ fix-drivers-table.php [L,QSA]
 RewriteRule ^fix-drivers-table\.php$ fix-drivers-table.php [L,QSA]
 
 # Test endpoint for API connectivity verification
 RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
 
 # CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
+RewriteRule ^assign-driver/?$ assign-driver.php [L,NC,QSA]
 RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
+RewriteRule ^cancel-booking/?$ cancel-booking.php [L,NC,QSA]
 RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
+RewriteRule ^update-booking/?$ update-booking.php [L,NC,QSA]
 RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
+RewriteRule ^generate-invoice/?$ generate-invoice.php [L,NC,QSA]
 RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
+RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
 RewriteRule ^drivers\.php$ drivers.php [L,NC,QSA]
+RewriteRule ^driver/?$ driver.php [L,NC,QSA]
 RewriteRule ^driver\.php$ driver.php [L,NC,QSA]
+RewriteRule ^add-driver/?$ add-driver.php [L,NC,QSA]
 RewriteRule ^add-driver\.php$ add-driver.php [L,NC,QSA]
+RewriteRule ^update-driver/?$ update-driver.php [L,NC,QSA]
 RewriteRule ^update-driver\.php$ update-driver.php [L,NC,QSA]
+RewriteRule ^delete-driver/?$ delete-driver.php [L,NC,QSA]
 RewriteRule ^delete-driver\.php$ delete-driver.php [L,NC,QSA]
+RewriteRule ^reports/?$ reports.php [L,NC,QSA]
 RewriteRule ^reports\.php$ reports.php [L,NC,QSA]
+RewriteRule ^report-metrics/?$ report-metrics.php [L,NC,QSA]
 RewriteRule ^report-metrics\.php$ report-metrics.php [L,NC,QSA]
 
 # Add aliases for the endpoints to make them accessible via different URL patterns
