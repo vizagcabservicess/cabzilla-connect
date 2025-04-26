@@ -64,6 +64,12 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     console.log('EditDriverDialog isSubmitting:', isSubmitting);
   });
   
+  // Re-validate the form every time formData changes
+  useEffect(() => {
+    validateForm();
+    // eslint-disable-next-line
+  }, [formData]);
+  
   const validateForm = () => {
     const errors: Record<string, string> = {};
     
@@ -273,7 +279,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || Object.keys(formErrors).length > 0}
               onClick={() => { console.log('Save Changes button clicked'); }}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
