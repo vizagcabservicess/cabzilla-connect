@@ -1,12 +1,17 @@
 
 import React from 'react';
-import { AdminLayout } from '@/components/layouts/AdminLayout';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ReportGenerator } from '@/components/admin/ReportGenerator';
 
 export default function ReportsPage() {
+  const [activeTab, setActiveTab] = React.useState<string>("reports");
+
   return (
-    <AdminLayout>
-      <ReportGenerator />
-    </AdminLayout>
+    <div className="flex h-screen bg-gray-100">
+      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main className="flex-1 overflow-y-auto p-8">
+        <ReportGenerator />
+      </main>
+    </div>
   );
 }
