@@ -10,7 +10,11 @@ import { AlertCircle, Search, Loader2 } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import axios from 'axios';
-import { getApiUrl } from '@/config/api';
+
+// Define a local interface that extends Driver to include vehicleNumber
+interface ExtendedDriver extends Driver {
+  vehicleNumber?: string;
+}
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -36,7 +40,7 @@ export function DriverAssignment({
   
   const [driverType, setDriverType] = useState<string>('new');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
+  const [availableDrivers, setAvailableDrivers] = useState<ExtendedDriver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -47,46 +51,36 @@ export function DriverAssignment({
     const fetchDrivers = async () => {
       setLoadingDrivers(true);
       try {
-        // Try to fetch from real API endpoint with proper URL formatting
-        const apiUrl = getApiUrl('/api/admin/get-drivers');
-        console.log('Fetching drivers from:', apiUrl);
-        
-        const response = await axios.get(apiUrl, {
+        // Try to fetch from real API endpoint
+        const response = await axios.get('/api/admin/get-drivers.php', {
           params: {
             status: 'available',
             search: searchQuery || undefined
-          },
-          headers: {
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache'
           }
         });
         
-        console.log('Driver API response:', response.data);
-        
-        if (response.data && response.data.status === 'success' && response.data.drivers) {
-          const drivers: Driver[] = response.data.drivers.map((driver: any) => ({
+        if (response.data.status === 'success') {
+          const drivers: ExtendedDriver[] = response.data.drivers.map((driver: any) => ({
             id: driver.id,
             name: driver.name,
             phone: driver.phone,
             email: driver.email || 'unknown@example.com', // Ensure email is present for type safety
-            vehicleNumber: driver.vehicle_number || driver.vehicle || 'Unknown', // Map vehicle field to vehicleNumber for UI
-            vehicle: driver.vehicle_number || driver.vehicle || 'Unknown'
+            vehicleNumber: driver.vehicle || 'Unknown'
           }));
           setAvailableDrivers(drivers);
         } else {
-          throw new Error(response.data?.message || 'Failed to load drivers');
+          throw new Error(response.data.message || 'Failed to load drivers');
         }
       } catch (error) {
         console.error('Error fetching drivers:', error);
         
         // Fallback to mock data if API fails
-        const mockDrivers: Driver[] = [
-          { id: 1, name: "Rajesh Kumar", phone: "9876543210", email: "rajesh@example.com", vehicleNumber: "AP 31 AB 1234", vehicle: "AP 31 AB 1234" },
-          { id: 2, name: "Suresh Singh", phone: "9876543211", email: "suresh@example.com", vehicleNumber: "AP 31 CD 5678", vehicle: "AP 31 CD 5678" },
-          { id: 3, name: "Mahesh Reddy", phone: "9876543212", email: "mahesh@example.com", vehicleNumber: "AP 31 EF 9012", vehicle: "AP 31 EF 9012" },
-          { id: 4, name: "Venkatesh S", phone: "9876543213", email: "venkatesh@example.com", vehicleNumber: "AP 34 XX 3456", vehicle: "AP 34 XX 3456" },
-          { id: 5, name: "Ramesh Babu", phone: "8765432108", email: "ramesh@example.com", vehicleNumber: "AP 35 XX 7890", vehicle: "AP 35 XX 7890" }
+        const mockDrivers: ExtendedDriver[] = [
+          { id: 1, name: "Rajesh Kumar", phone: "9876543210", email: "rajesh@example.com", vehicleNumber: "AP 31 AB 1234" },
+          { id: 2, name: "Suresh Singh", phone: "9876543211", email: "suresh@example.com", vehicleNumber: "AP 31 CD 5678" },
+          { id: 3, name: "Mahesh Reddy", phone: "9876543212", email: "mahesh@example.com", vehicleNumber: "AP 31 EF 9012" },
+          { id: 4, name: "Venkatesh S", phone: "9876543213", email: "venkatesh@example.com", vehicleNumber: "AP 34 XX 3456" },
+          { id: 5, name: "Ramesh Babu", phone: "8765432108", email: "ramesh@example.com", vehicleNumber: "AP 35 XX 7890" }
         ];
         
         if (searchQuery) {
@@ -129,7 +123,7 @@ export function DriverAssignment({
       setDriverData({
         driverName: selectedDriver.name,
         driverPhone: selectedDriver.phone,
-        vehicleNumber: selectedDriver.vehicleNumber || selectedDriver.vehicle || ''
+        vehicleNumber: selectedDriver.vehicleNumber || ''
       });
       
       setErrors({});
@@ -246,7 +240,7 @@ export function DriverAssignment({
                     ) : availableDrivers.length > 0 ? (
                       availableDrivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id.toString()}>
-                          {driver.name} - {driver.vehicleNumber || driver.vehicle || 'No vehicle'}
+                          {driver.name} - {driver.vehicleNumber || 'No vehicle'}
                         </SelectItem>
                       ))
                     ) : (

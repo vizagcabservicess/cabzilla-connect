@@ -74,7 +74,7 @@ export const getStatusColorClass = (status: BookingStatus): string => {
 
 /**
  * Get status color for admin booking list
- * Alias for getStatusColorClass for backward compatibility
+ * Alias for getStatusColorClass to fix import error
  * @param status - The booking status
  * @returns Tailwind CSS color class
  */

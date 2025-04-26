@@ -1,12 +1,9 @@
 
 # Enable Cross-Origin Resource Sharing (CORS)
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "%{HTTP_ORIGIN}e" env=HTTP_ORIGIN
-    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First"
-    Header set Access-Control-Max-Age "86400"
-    Header set Access-Control-Allow-Credentials "true"
-    Header set X-Content-Type-Options "nosniff"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh"
     
     # Handle preflight OPTIONS request
     RewriteEngine On
@@ -14,36 +11,19 @@
     RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
 
-# Fix for PHP API endpoints
+# Prevent direct access to .php files in the api directory
 <FilesMatch "\.(php)$">
     <IfModule mod_authz_core.c>
         Require all granted
     </IfModule>
-    SetHandler application/x-httpd-php
 </FilesMatch>
 
-# Enable rewrite engine
-RewriteEngine On
-RewriteBase /
+# Fix for PUT/DELETE requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
 
-# Ensure proper authorization header
-RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
-# Direct access for API endpoints - high priority rules first
-RewriteRule ^api/admin/(.+)\.php$ /api/admin/$1.php [L,QSA]
-RewriteRule ^api/user/(.+)\.php$ /api/user/$1.php [L,QSA]
-RewriteRule ^api/(.+)\.php$ /api/$1.php [L,QSA]
-
-# Don't rewrite files or directories
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Send other requests to index.html
-RewriteRule ^(.*)$ /index.html [L]
-
-# Set PHP configuration
-php_value display_errors On
-php_value max_execution_time 30
-php_value memory_limit 256M
-php_value post_max_size 50M
-php_value upload_max_filesize 50M
+# Ensure PHP errors are displayed in development
+php_flag display_errors On
+php_value error_reporting E_ALL

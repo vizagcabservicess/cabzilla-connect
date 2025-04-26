@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Database utility functions for establishing connections
@@ -26,13 +27,14 @@ function logDbConnection($message, $data = []) {
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Disable output buffering
+    // Disable any output buffering to prevent HTML contamination
     if (ob_get_level()) ob_end_clean();
     
-    $dbHost = DB_HOST;
-    $dbName = DB_NAME;
-    $dbUser = DB_USER;
-    $dbPass = DB_PASSWORD;
+    // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
     
     try {
         logDbConnection("Attempting database connection", [
@@ -40,36 +42,32 @@ function getDbConnection() {
             'dbname' => $dbName
         ]);
         
-        // Set connection timeout and enable strict mode
+        // Create connection with error reporting
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 20);
         
+        // Check connection
         if ($conn->connect_error) {
             logDbConnection("Database connection failed", ['error' => $conn->connect_error]);
             throw new Exception("Connection failed: " . $conn->connect_error);
         }
         
-        // Configure connection
+        // Set charset to prevent encoding issues
         $conn->set_charset("utf8mb4");
-        $conn->query("SET SESSION sql_mode = 'STRICT_ALL_TABLES'");
-        $conn->query("SET SESSION wait_timeout = 30");
-        $conn->query("SET SESSION interactive_timeout = 30");
         
-        // Test connection
+        // Test connection with a simple query to ensure it's working
         $testResult = $conn->query("SELECT 1");
         if (!$testResult) {
-            throw new Exception("Database test query failed: " . $conn->error);
+            logDbConnection("Database test query failed", ['error' => $conn->error]);
+            throw new Exception("Database connection test query failed: " . $conn->error);
         }
         
-        logDbConnection("Database connection successful", [
-            'server_info' => $conn->server_info,
-            'client_info' => mysqli_get_client_info()
-        ]);
-        
+        logDbConnection("Database connection successful", ['server_info' => $conn->server_info]);
         return $conn;
     } catch (Exception $e) {
+        // Log error to both custom log and PHP error log
         logDbConnection("Database connection error", ['error' => $e->getMessage()]);
         error_log("Database connection error: " . $e->getMessage());
+        
         return null;
     }
 }
@@ -196,23 +194,90 @@ function testDirectDatabaseConnection() {
             throw new Exception("Test query failed: " . $conn->error);
         }
         
-        // Update result with success
+        // Check if bookings table exists
+        $bookingsTableExists = tableExists($conn, 'bookings');
+        
+        // Try simple insert and delete on bookings table
+        $testInsertSuccess = false;
+        
+        if ($bookingsTableExists) {
+            // Generate test booking number
+            $testBookingNumber = 'TEST' . time() . rand(1000, 9999);
+            
+            // Try insert with MINIMUM required fields only
+            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, pickup_date, cab_type, trip_type, trip_mode, total_amount, passenger_name, passenger_phone, passenger_email) 
+                             VALUES ('$testBookingNumber', 'Test connection', NOW(), 'Test', 'test', 'test', 100, 'Test User', '1234567890', 'test@example.com')";
+            $testInsertResult = $conn->query($testInsertSql);
+            
+            $testInsertSuccess = $testInsertResult !== false;
+            logDbConnection("Test insert result", [
+                'success' => $testInsertSuccess, 
+                'error' => $testInsertSuccess ? null : $conn->error,
+                'sql' => $testInsertSql
+            ]);
+            
+            // Delete test record
+            if ($testInsertSuccess) {
+                $conn->query("DELETE FROM bookings WHERE booking_number = '$testBookingNumber'");
+            }
+        }
+        
+        // Build success response
         $result = [
             'status' => 'success',
-            'message' => 'Database connection test successful',
+            'message' => 'Database connection and query test successful',
             'connection' => true,
             'timestamp' => time(),
-            'server_info' => $conn->server_info
+            'server' => $conn->server_info ?? 'unknown',
+            'php_version' => phpversion(),
+            'bookings_table_exists' => $bookingsTableExists,
+            'test_insert_success' => $testInsertSuccess
         ];
         
-        logDbConnection("Direct connection test successful", $result);
+        logDbConnection("Direct test successful", ['result' => $result]);
+        
+        // Close connection
+        $conn->close();
         
     } catch (Exception $e) {
-        // Log the error
-        logDbConnection("Direct connection test failed", ['error' => $e->getMessage()]);
-        $result['error'] = $e->getMessage();
+        // Log error and build error response
+        logDbConnection("Direct database connection test failed", ['error' => $e->getMessage()]);
+        
+        $result = [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'connection' => false,
+            'timestamp' => time(),
+            'php_version' => phpversion(),
+            'mysql_client_version' => mysqli_get_client_info()
+        ];
     }
     
-    // Return JSON response
-    sendDbJsonResponse($result);
+    return $result;
+}
+
+// Function to verify database integrity
+function verifyDatabaseIntegrity($conn) {
+    if (!$conn) {
+        return ['status' => 'error', 'message' => 'No database connection'];
+    }
+    
+    $requiredTables = ['bookings'];
+    $missingTables = [];
+    
+    foreach ($requiredTables as $table) {
+        if (!tableExists($conn, $table)) {
+            $missingTables[] = $table;
+        }
+    }
+    
+    if (count($missingTables) > 0) {
+        return [
+            'status' => 'warning', 
+            'message' => 'Missing required tables', 
+            'missing_tables' => $missingTables
+        ];
+    }
+    
+    return ['status' => 'success', 'message' => 'Database integrity verified'];
 }

@@ -4,14 +4,12 @@
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 
-// Set all response headers first before any output
+// CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -30,142 +28,132 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Log errors
-function logError($message, $data = []) {
-    error_log("DRIVER API ERROR: $message " . json_encode($data));
-    $logDir = __DIR__ . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
-    }
-    $logFile = $logDir . '/driver_api_errors.log';
-    file_put_contents(
-        $logFile, 
-        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
-        FILE_APPEND
-    );
-}
-
 try {
-    // Only allow GET request
+    // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 
-    // Connect to database with improved error handling
+    // Get filter parameters
+    $status = isset($_GET['status']) ? $_GET['status'] : null;
+    $search = isset($_GET['search']) ? $_GET['search'] : null;
+
+    // Try to connect to database
     try {
         $conn = getDbConnectionWithRetry();
     } catch (Exception $e) {
-        logError('Database connection failed', ['error' => $e->getMessage()]);
-        
-        // Return mock data for now since this is likely a database setup issue
+        // Return mock data if database connection fails
+        error_log("Database connection failed: " . $e->getMessage() . ". Using mock data.");
         $mockDrivers = [
             [
                 'id' => 1,
                 'name' => 'Rajesh Kumar',
                 'phone' => '9876543210',
                 'email' => 'rajesh@example.com',
+                'license_no' => 'DL-1234567890',
+                'status' => 'available',
+                'location' => 'Visakhapatnam Railway Station',
                 'vehicle' => 'AP 31 AB 1234',
-                'status' => 'available'
+                'total_rides' => 352,
+                'rating' => 4.8
             ],
             [
                 'id' => 2,
                 'name' => 'Suresh Singh',
-                'phone' => '9876543211',
+                'phone' => '8765432109',
                 'email' => 'suresh@example.com',
+                'license_no' => 'DL-0987654321',
+                'status' => 'available',
+                'location' => 'Visakhapatnam Airport',
                 'vehicle' => 'AP 31 CD 5678',
-                'status' => 'available'
+                'total_rides' => 215,
+                'rating' => 4.6
             ],
-            // Add more mock drivers here
+            [
+                'id' => 3,
+                'name' => 'Mahesh Reddy',
+                'phone' => '7654321098',
+                'email' => 'mahesh@example.com',
+                'license_no' => 'DL-5678901234',
+                'status' => 'available',
+                'location' => 'Beach Road',
+                'vehicle' => 'AP 31 EF 9012',
+                'total_rides' => 180,
+                'rating' => 4.5
+            ],
+            [
+                'id' => 4,
+                'name' => 'Venkatesh S',
+                'phone' => '6543210987',
+                'email' => 'venkatesh@example.com',
+                'license_no' => 'DL-3456789012',
+                'status' => 'available',
+                'location' => 'RTC Complex',
+                'vehicle' => 'AP 34 XX 3456',
+                'total_rides' => 140,
+                'rating' => 4.7
+            ],
+            [
+                'id' => 5,
+                'name' => 'Ramesh Babu',
+                'phone' => '5432109876',
+                'email' => 'ramesh@example.com',
+                'license_no' => 'DL-6789012345',
+                'status' => 'available',
+                'location' => 'Dwaraka Bus Station',
+                'vehicle' => 'AP 35 XX 7890',
+                'total_rides' => 120,
+                'rating' => 4.4
+            ]
         ];
+        
+        // Filter mock data if needed
+        if ($status) {
+            $mockDrivers = array_filter($mockDrivers, function($driver) use ($status) {
+                return $driver['status'] === $status;
+            });
+        }
+        
+        if ($search) {
+            $search = strtolower($search);
+            $mockDrivers = array_filter($mockDrivers, function($driver) use ($search) {
+                return strpos(strtolower($driver['name']), $search) !== false ||
+                       strpos(strtolower($driver['phone']), $search) !== false ||
+                       strpos(strtolower($driver['email']), $search) !== false ||
+                       strpos(strtolower($driver['location']), $search) !== false;
+            });
+        }
         
         sendJsonResponse([
             'status' => 'success',
-            'message' => 'Mock data returned due to database connection issue',
-            'drivers' => $mockDrivers
+            'message' => 'Drivers retrieved successfully (mock data)',
+            'drivers' => array_values($mockDrivers), // Reset array keys
+            'testing_mode' => true
         ]);
-        exit;
     }
 
-    // Check if drivers table exists, create if not
-    $tableExists = false;
-    $result = $conn->query("SHOW TABLES LIKE 'drivers'");
-    if ($result) {
-        $tableExists = ($result->num_rows > 0);
-    }
-    
-    if (!$tableExists) {
-        // Create drivers table
-        $createTableSQL = "
-            CREATE TABLE drivers (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                phone VARCHAR(20) NOT NULL,
-                email VARCHAR(100),
-                license_number VARCHAR(50),
-                vehicle_number VARCHAR(50),
-                status ENUM('available', 'busy', 'offline') DEFAULT 'available',
-                total_rides INT DEFAULT 0,
-                earnings DECIMAL(10,2) DEFAULT 0.00,
-                rating DECIMAL(3,1) DEFAULT 5.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        
-        $conn->query($createTableSQL);
-        
-        // Insert sample data if newly created
-        $sampleData = [
-            ['Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL123456', 'AP 31 AB 1234', 'available'],
-            ['Suresh Singh', '9876543211', 'suresh@example.com', 'DL789012', 'AP 31 CD 5678', 'available'],
-            ['Mahesh Reddy', '9876543212', 'mahesh@example.com', 'DL345678', 'AP 31 EF 9012', 'available'],
-            ['Venkatesh S', '9876543213', 'venkatesh@example.com', 'DL901234', 'AP 34 XX 3456', 'busy'],
-            ['Ramesh Babu', '8765432108', 'ramesh@example.com', 'DL567890', 'AP 35 XX 7890', 'offline']
-        ];
-        
-        $insertStmt = $conn->prepare("INSERT INTO drivers (name, phone, email, license_number, vehicle_number, status) VALUES (?, ?, ?, ?, ?, ?)");
-        
-        foreach ($sampleData as $driver) {
-            $insertStmt->bind_param("ssssss", $driver[0], $driver[1], $driver[2], $driver[3], $driver[4], $driver[5]);
-            $insertStmt->execute();
-        }
-        
-        logError('Created drivers table and inserted sample data', []);
-    }
-
-    // Get filter parameters
-    $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
-    $searchQuery = isset($_GET['search']) ? $_GET['search'] : '';
-
-    // Build query based on filters
-    $sql = "SELECT * FROM drivers";
-    $whereClauses = [];
+    // Query database for drivers
+    $query = "SELECT * FROM drivers WHERE 1=1";
     $params = [];
     $types = "";
     
-    if ($statusFilter) {
-        $whereClauses[] = "status = ?";
-        $params[] = $statusFilter;
+    if ($status) {
+        $query .= " AND status = ?";
+        $params[] = $status;
         $types .= "s";
     }
     
-    if ($searchQuery) {
-        $searchPattern = "%$searchQuery%";
-        $whereClauses[] = "(name LIKE ? OR phone LIKE ? OR vehicle_number LIKE ?)";
-        $params[] = $searchPattern;
-        $params[] = $searchPattern;
-        $params[] = $searchPattern;
-        $types .= "sss";
+    if ($search) {
+        $query .= " AND (name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?)";
+        $searchParam = "%$search%";
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $types .= "ssss";
     }
     
-    if (!empty($whereClauses)) {
-        $sql .= " WHERE " . implode(" AND ", $whereClauses);
-    }
-    
-    $sql .= " ORDER BY name ASC";
-    
-    // Prepare and execute query
-    $stmt = $conn->prepare($sql);
+    $stmt = $conn->prepare($query);
     
     if (!empty($params)) {
         $stmt->bind_param($types, ...$params);
@@ -176,33 +164,20 @@ try {
     
     $drivers = [];
     while ($row = $result->fetch_assoc()) {
-        $drivers[] = [
-            'id' => (int)$row['id'],
-            'name' => $row['name'],
-            'phone' => $row['phone'],
-            'email' => $row['email'],
-            'license_no' => $row['license_number'],
-            'vehicle' => $row['vehicle_number'],
-            'status' => $row['status'],
-            'total_rides' => (int)$row['total_rides'],
-            'earnings' => (float)$row['earnings'],
-            'rating' => (float)$row['rating']
-        ];
+        $drivers[] = $row;
     }
-
-    // Return success response
+    
     sendJsonResponse([
         'status' => 'success',
+        'message' => 'Drivers retrieved successfully',
         'drivers' => $drivers
     ]);
 
 } catch (Exception $e) {
-    logError("Unhandled error", ['error' => $e->getMessage()]);
-    
-    // Return error response
+    error_log("Error in get-drivers.php: " . $e->getMessage());
     sendJsonResponse([
         'status' => 'error', 
-        'message' => 'Failed to retrieve drivers: ' . $e->getMessage(),
+        'message' => 'Failed to retrieve drivers',
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
 }
