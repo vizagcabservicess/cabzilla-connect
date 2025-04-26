@@ -1,187 +1,141 @@
 
 <?php
 /**
- * Common database helper functions
- * Production-ready database helpers for vizagup.com
+ * Database helper functions for establishing connections with retry logic
  */
 
 /**
- * Get a database connection with retry mechanism
- * 
- * @param int $maxRetries Maximum number of connection attempts
+ * Get database connection with retry logic
+ * @param int $maxRetries Number of connection retry attempts
+ * @param int $retryDelay Delay between retries in milliseconds
  * @return mysqli Database connection
- * @throws Exception If all connection attempts fail
+ * @throws Exception If connection fails after all retries
  */
-function getDbConnectionWithRetry($maxRetries = 3) {
-    $retries = 0;
+function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 500) {
+    $attempts = 0;
     $lastError = null;
     
-    while ($retries < $maxRetries) {
+    while ($attempts < $maxRetries) {
         try {
-            // Database credentials - ensure these match with database.php
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';
-            $dbUser = 'u644605165_usr_be';
-            $dbPass = 'Vizag@1213';
+            if (function_exists('getDbConnection')) {
+                $conn = getDbConnection();
+                return $conn;
+            }
             
-            // Create connection
+            $dbHost = getenv('DB_HOST') ?: 'localhost';
+            $dbName = getenv('DB_NAME') ?: 'cab_bookings';
+            $dbUser = getenv('DB_USER') ?: 'root';
+            $dbPass = getenv('DB_PASS') ?: '';
+            
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
             
-            // Check connection
             if ($conn->connect_error) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);
             }
             
-            // Set proper charset
+            // Set character set
             $conn->set_charset("utf8mb4");
             
-            // Test connection with a simple query
-            $testResult = $conn->query("SELECT 1");
-            if (!$testResult) {
-                throw new Exception("Connection test query failed: " . $conn->error);
-            }
-            
-            error_log("Database connection successful using db_helper");
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
-            $retries++;
-            error_log("Database connection attempt $retries failed: " . $e->getMessage());
+            $attempts++;
             
-            if ($retries < $maxRetries) {
-                sleep(1); // Delay before retry
+            if ($attempts < $maxRetries) {
+                // Wait before retrying
+                usleep($retryDelay * 1000);
             }
         }
     }
     
-    // Log the error details
-    $logDir = dirname(__FILE__) . '/../../logs';
+    // All retries failed
+    throw new Exception("Database connection failed after $maxRetries attempts: " . $lastError->getMessage());
+}
+
+/**
+ * Create mock database response for testing when real DB is unavailable
+ * @param string $entityType Type of entity to mock (booking, driver, etc.)
+ * @param int $id ID of the entity
+ * @return array Mock data
+ */
+function createMockData($entityType, $id = null) {
+    switch ($entityType) {
+        case 'booking':
+            return [
+                'id' => $id ?? rand(1000, 9999),
+                'booking_number' => 'CB' . rand(1000000000, 9999999999),
+                'passenger_name' => 'Test User',
+                'passenger_email' => 'test@example.com',
+                'passenger_phone' => '9876543210',
+                'pickup_location' => 'Test Pickup',
+                'drop_location' => 'Test Destination',
+                'pickup_date' => date('Y-m-d H:i:s'),
+                'cab_type' => 'Sedan',
+                'trip_type' => 'local',
+                'trip_mode' => 'outstation',
+                'total_amount' => 3500,
+                'status' => 'confirmed',
+                'driver_name' => 'Test Driver',
+                'driver_phone' => '9876543210',
+                'vehicle_number' => 'AP 31 AB 1234',
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+            
+        case 'driver':
+            return [
+                'id' => $id ?? rand(1000, 9999),
+                'name' => 'Test Driver',
+                'phone' => '9876543210',
+                'email' => 'driver@example.com',
+                'license_no' => 'DL' . rand(1000000, 9999999),
+                'status' => 'available',
+                'vehicle' => 'AP 31 AB 1234',
+                'location' => 'Visakhapatnam',
+                'total_rides' => rand(100, 500),
+                'rating' => 4.5
+            ];
+            
+        default:
+            return [
+                'id' => $id ?? rand(1000, 9999),
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+    }
+}
+
+/**
+ * Log error to file and PHP error log
+ * @param string $message Error message
+ * @param array $data Additional data to log
+ */
+function logError($message, $data = []) {
+    $logMessage = date('Y-m-d H:i:s') . " - $message - " . json_encode($data);
+    error_log($logMessage);
+    
+    $logDir = __DIR__ . '/../../logs';
     if (!file_exists($logDir)) {
         mkdir($logDir, 0777, true);
     }
     
-    $logFile = $logDir . '/db_connection_errors.log';
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$timestamp] All connection attempts failed: " . ($lastError ? $lastError->getMessage() : 'Unknown error') . "\n", FILE_APPEND);
-    
-    // If we've exhausted all retries, throw the last error
-    if ($lastError) {
-        throw $lastError;
+    $logFile = $logDir . '/api_errors.log';
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+}
+
+/**
+ * Get parameter type for mysqli bind_param
+ * @param mixed $value Value to check
+ * @return string Parameter type (i, d, s, b)
+ */
+function getParameterType($value) {
+    if (is_int($value)) {
+        return 'i'; // integer
+    } elseif (is_double($value) || is_float($value)) {
+        return 'd'; // double/float
+    } elseif (is_string($value)) {
+        return 's'; // string
     } else {
-        throw new Exception("Failed to connect to database after {$maxRetries} attempts");
+        return 's'; // default to string
     }
-}
-
-/**
- * Check database connection and return status
- *
- * @return array Connection status information
- */
-function checkDatabaseConnection() {
-    try {
-        $conn = getDbConnectionWithRetry(2);
-        
-        $isConnected = ($conn instanceof mysqli && !$conn->connect_error);
-        $version = null;
-        $tables = [];
-        
-        if ($isConnected) {
-            // Get database version
-            $versionResult = $conn->query("SELECT VERSION() as version");
-            if ($versionResult && $row = $versionResult->fetch_assoc()) {
-                $version = $row['version'];
-            }
-            
-            // Get list of tables
-            $tablesResult = $conn->query("SHOW TABLES");
-            if ($tablesResult) {
-                while ($row = $tablesResult->fetch_array()) {
-                    $tables[] = $row[0];
-                }
-            }
-            
-            $conn->close();
-        }
-        
-        return [
-            'status' => $isConnected ? 'success' : 'error',
-            'connection' => $isConnected,
-            'version' => $version,
-            'tables' => $tables,
-            'timestamp' => time()
-        ];
-    } catch (Exception $e) {
-        error_log("Database connection check failed: " . $e->getMessage());
-        return [
-            'status' => 'error',
-            'connection' => false,
-            'message' => $e->getMessage(),
-            'timestamp' => time()
-        ];
-    }
-}
-
-/**
- * Log message to a file with timestamp
- * 
- * @param string $message Message to log
- * @param string $logFile Log file name
- * @return void
- */
-function logMessage($message, $logFile = 'api.log') {
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0755, true);
-    }
-    
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logDir . '/' . $logFile, "[$timestamp] " . $message . "\n", FILE_APPEND);
-}
-
-/**
- * Ensure the bookings table exists
- * 
- * @param mysqli $conn Database connection
- * @return bool True if table exists or was created successfully
- */
-function ensureBookingsTableExists($conn) {
-    // Check if the bookings table exists
-    $tableResult = $conn->query("SHOW TABLES LIKE 'bookings'");
-    if ($tableResult->num_rows === 0) {
-        // Create the bookings table if it doesn't exist
-        $createTableSql = "
-        CREATE TABLE bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            booking_number VARCHAR(50) NOT NULL UNIQUE,
-            pickup_location TEXT NOT NULL,
-            drop_location TEXT,
-            pickup_date DATETIME NOT NULL,
-            return_date DATETIME,
-            cab_type VARCHAR(50) NOT NULL,
-            distance DECIMAL(10,2),
-            trip_type VARCHAR(20) NOT NULL,
-            trip_mode VARCHAR(20) NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL,
-            status VARCHAR(20) DEFAULT 'pending',
-            passenger_name VARCHAR(100) NOT NULL,
-            passenger_phone VARCHAR(20) NOT NULL,
-            passenger_email VARCHAR(100) NOT NULL,
-            hourly_package VARCHAR(50),
-            tour_id VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $tableCreationResult = $conn->query($createTableSql);
-        
-        if (!$tableCreationResult) {
-            error_log("Failed to create bookings table: " . $conn->error);
-            return false;
-        }
-        
-        error_log("Created bookings table successfully");
-    }
-    
-    return true;
 }

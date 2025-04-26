@@ -5,23 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Booking } from '@/types/api';
-import { AlertCircle } from 'lucide-react';
+import { Booking, Driver } from '@/types/api';
+import { AlertCircle, Search, Loader2 } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-
-interface Driver {
-  id: number;
-  name: string;
-  phone: string;
-  vehicleNumber: string;
-}
+import axios from 'axios';
 
 interface DriverAssignmentProps {
   booking: Booking;
   onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
-  onAssignDriver?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
-  onSubmit?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onClose?: () => void;
   onCancel?: () => void;
   isSubmitting: boolean;
@@ -30,8 +22,6 @@ interface DriverAssignmentProps {
 export function DriverAssignment({ 
   booking, 
   onAssign,
-  onAssignDriver,
-  onSubmit, 
   onClose, 
   onCancel, 
   isSubmitting 
@@ -47,31 +37,62 @@ export function DriverAssignment({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Use onClose if provided, otherwise fall back to onCancel
   const closeHandler = onCancel || onClose;
-  // Use the first available handler in order of preference
-  const submitHandler = onSubmit || onAssignDriver || onAssign;
 
   useEffect(() => {
     const fetchDrivers = async () => {
       setLoadingDrivers(true);
       try {
+        // Try to fetch from real API endpoint
+        const response = await axios.get('/api/admin/get-drivers.php', {
+          params: {
+            status: 'available',
+            search: searchQuery || undefined
+          }
+        });
+        
+        if (response.data.status === 'success') {
+          const drivers = response.data.drivers.map((driver: any) => ({
+            id: driver.id,
+            name: driver.name,
+            phone: driver.phone,
+            vehicleNumber: driver.vehicle || 'Unknown'
+          }));
+          setAvailableDrivers(drivers);
+        } else {
+          throw new Error(response.data.message || 'Failed to load drivers');
+        }
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+        
+        // Fallback to mock data if API fails
         const mockDrivers = [
           { id: 1, name: "Rajesh Kumar", phone: "9876543210", vehicleNumber: "AP 31 AB 1234" },
           { id: 2, name: "Suresh Singh", phone: "9876543211", vehicleNumber: "AP 31 CD 5678" },
           { id: 3, name: "Mahesh Reddy", phone: "9876543212", vehicleNumber: "AP 31 EF 9012" },
-          { id: 4, name: "Venkatesh S", phone: "9876543211", vehicleNumber: "AP 34 XX 3456" },
+          { id: 4, name: "Venkatesh S", phone: "9876543213", vehicleNumber: "AP 34 XX 3456" },
           { id: 5, name: "Ramesh Babu", phone: "8765432108", vehicleNumber: "AP 35 XX 7890" }
         ];
         
-        setAvailableDrivers(mockDrivers);
-      } catch (error) {
-        console.error('Error fetching drivers:', error);
+        if (searchQuery) {
+          const lowerQuery = searchQuery.toLowerCase();
+          const filteredDrivers = mockDrivers.filter(driver => 
+            driver.name.toLowerCase().includes(lowerQuery) || 
+            driver.phone.includes(searchQuery) ||
+            driver.vehicleNumber.toLowerCase().includes(lowerQuery)
+          );
+          setAvailableDrivers(filteredDrivers);
+        } else {
+          setAvailableDrivers(mockDrivers);
+        }
+        
         toast({
-          variant: "destructive",
-          title: "Failed to load drivers",
-          description: "Please try again or add a driver manually."
+          variant: "default",
+          title: "Using local driver data",
+          description: "Could not connect to server. Using cached driver data."
         });
       } finally {
         setLoadingDrivers(false);
@@ -79,7 +100,7 @@ export function DriverAssignment({
     };
     
     fetchDrivers();
-  }, [toast]);
+  }, [toast, searchQuery]);
 
   const handleDriverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -101,6 +122,10 @@ export function DriverAssignment({
       
       setErrors({});
     }
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
   };
 
   const validate = () => {
@@ -132,9 +157,14 @@ export function DriverAssignment({
     }
     
     try {
-      await submitHandler(driverData);
+      await onAssign(driverData);
     } catch (error) {
       console.error('Error assigning driver:', error);
+      toast({
+        variant: "destructive",
+        title: "Assignment Failed",
+        description: "There was an error assigning the driver. Please try again."
+      });
     }
   };
 
@@ -148,12 +178,11 @@ export function DriverAssignment({
           </p>
         </div>
         
-        <Alert variant="default" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
+        <Alert variant="default" className="mb-4 bg-blue-50 border-blue-200">
+          <AlertCircle className="h-4 w-4 text-blue-500" />
           <AlertTitle>Driver Assignment</AlertTitle>
           <AlertDescription>
-            Since you're assigning a driver manually, you can enter custom driver details below. 
-            In production, these would be fetched from your drivers database.
+            Assign an available driver to this booking or add a new driver.
           </AlertDescription>
         </Alert>
         
@@ -168,28 +197,53 @@ export function DriverAssignment({
                 <SelectValue placeholder="Select driver type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">Add New Driver</SelectItem>
                 <SelectItem value="existing">Select Existing Driver</SelectItem>
+                <SelectItem value="new">Add New Driver</SelectItem>
               </SelectContent>
             </Select>
           </div>
           
           {driverType === 'existing' && (
-            <div>
-              <Label htmlFor="existingDriver">Select Driver</Label>
-              <Select onValueChange={handleSelectDriver} disabled={loadingDrivers}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loadingDrivers ? "Loading drivers..." : "Select a driver"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableDrivers.map((driver) => (
-                    <SelectItem key={driver.id} value={driver.id.toString()}>
-                      {driver.name} - {driver.vehicleNumber}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="relative">
+                <Label htmlFor="driverSearch">Search Drivers</Label>
+                <div className="relative">
+                  <Input
+                    id="driverSearch"
+                    placeholder="Search by name, phone, or vehicle number"
+                    value={searchQuery}
+                    onChange={handleSearch}
+                    className="pl-8"
+                  />
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="existingDriver">Select Driver</Label>
+                <Select onValueChange={handleSelectDriver} disabled={loadingDrivers}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={loadingDrivers ? "Loading drivers..." : "Select a driver"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingDrivers ? (
+                      <div className="flex items-center justify-center py-2">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span>Loading drivers...</span>
+                      </div>
+                    ) : availableDrivers.length > 0 ? (
+                      availableDrivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id.toString()}>
+                          {driver.name} - {driver.vehicleNumber}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-center text-gray-500">No drivers found</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           
           <div>

@@ -7,9 +7,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Plus, X } from "lucide-react";
 import { Booking, BookingStatus } from '@/types/api';
 import { isBookingEditable } from '@/utils/bookingUtils';
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface BookingEditFormProps {
   booking: Booking;
@@ -33,7 +34,16 @@ export function BookingEditForm({
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
     pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
-    billingAddress: booking.billingAddress || '', // This works now that we've added billingAddress to the Booking interface
+    billingAddress: booking.billingAddress || '',
+  });
+
+  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>(
+    booking.extraCharges || []
+  );
+
+  const [newCharge, setNewCharge] = useState<{ amount: number; description: string }>({
+    amount: 0,
+    description: ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -70,6 +80,27 @@ export function BookingEditForm({
     }
   };
 
+  const handleNewChargeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setNewCharge(prev => ({
+      ...prev,
+      [name]: name === 'amount' ? parseFloat(value) || 0 : value
+    }));
+  };
+
+  const addExtraCharge = () => {
+    if (newCharge.description.trim() === '' || newCharge.amount <= 0) {
+      return;
+    }
+    
+    setExtraCharges(prev => [...prev, { ...newCharge }]);
+    setNewCharge({ amount: 0, description: '' });
+  };
+
+  const removeExtraCharge = (index: number) => {
+    setExtraCharges(prev => prev.filter((_, i) => i !== index));
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
@@ -97,6 +128,12 @@ export function BookingEditForm({
     return Object.keys(newErrors).length === 0;
   };
 
+  const calculateTotal = () => {
+    let total = parseFloat(booking.totalAmount.toString()) || 0;
+    const additionalCharges = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
+    return total + additionalCharges;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -111,7 +148,9 @@ export function BookingEditForm({
       pickupLocation: formData.pickupLocation,
       dropLocation: formData.dropLocation,
       pickupDate: formData.pickupDate.toISOString(),
-      billingAddress: formData.billingAddress, // Include billing address in the update
+      billingAddress: formData.billingAddress,
+      extraCharges: extraCharges.length > 0 ? extraCharges : undefined,
+      totalAmount: calculateTotal(),
     };
     
     // Use onSubmit if provided (for backward compatibility), otherwise use onSave
@@ -253,6 +292,91 @@ export function BookingEditForm({
           disabled={!isEditable || isSubmitting}
         />
       </div>
+
+      {/* Extra Charges Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Extra Charges</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            {extraCharges.length > 0 ? (
+              <div className="space-y-2">
+                {extraCharges.map((charge, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
+                    <div>
+                      <span className="font-medium">{charge.description}</span>
+                      <span className="ml-2 text-sm text-gray-500">₹{charge.amount}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeExtraCharge(index)}
+                      disabled={!isEditable || isSubmitting}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">No extra charges added</p>
+            )}
+          </div>
+
+          {isEditable && (
+            <div className="grid grid-cols-3 gap-2 items-end mt-4">
+              <div className="col-span-1">
+                <Label htmlFor="amount">Amount (₹)</Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={newCharge.amount || ''}
+                  onChange={handleNewChargeChange}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="col-span-1">
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  name="description"
+                  value={newCharge.description}
+                  onChange={handleNewChargeChange}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="col-span-1">
+                <Button
+                  type="button"
+                  onClick={addExtraCharge}
+                  disabled={!newCharge.description || newCharge.amount <= 0 || isSubmitting}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 text-right">
+            <p className="text-sm text-gray-500">Base Amount: ₹{booking.totalAmount}</p>
+            {extraCharges.length > 0 && (
+              <p className="text-sm text-gray-500">
+                Additional Charges: ₹{extraCharges.reduce((sum, charge) => sum + charge.amount, 0)}
+              </p>
+            )}
+            <p className="text-lg font-bold">
+              Total Amount: ₹{calculateTotal()}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
       
       <div className="flex justify-end gap-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>

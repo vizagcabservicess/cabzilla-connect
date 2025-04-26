@@ -1,165 +1,121 @@
+
 import React from 'react';
-import { BookingStatus } from '@/types/api';
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  AlertCircle,
-  CheckCircle, 
-  Clock, 
-  FileCheck, 
-  Truck, 
-  Ban 
-} from 'lucide-react';
+import { BookingStatus } from '@/types/api';
+import { CheckCircle, Circle, ArrowRight } from 'lucide-react';
 
 interface BookingStatusFlowProps {
   currentStatus: BookingStatus;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
-  isAdmin?: boolean;
-  isUpdating?: boolean;
-  isSubmitting?: boolean;
-  onClose?: () => void;
-  disabled?: boolean;
+  isSubmitting: boolean; // Added isSubmitting prop
 }
 
 export function BookingStatusFlow({ 
   currentStatus, 
-  onStatusChange, 
-  isAdmin = true,
-  isUpdating = false,
-  isSubmitting = false,
-  onClose = () => {},
-  disabled = false
+  onStatusChange,
+  isSubmitting
 }: BookingStatusFlowProps) {
+  // Define the status flow/order
   const statusFlow: BookingStatus[] = [
     'pending',
     'confirmed',
     'assigned',
-    'completed',
-    'cancelled'
+    'completed'
   ];
-
-  const statusIcons = {
-    pending: Clock,
-    confirmed: FileCheck,
-    assigned: Truck,
-    payment_received: CheckCircle,
-    payment_pending: AlertCircle,
-    completed: CheckCircle,
-    cancelled: Ban,
-    continued: Truck,
-  };
-
-  const getStatusIndex = (status: BookingStatus): number => {
+  
+  const getStatusIndex = (status: BookingStatus) => {
     return statusFlow.indexOf(status);
   };
-
-  const getCurrentIndex = (): number => {
-    return getStatusIndex(currentStatus);
+  
+  const currentIndex = getStatusIndex(currentStatus);
+  
+  // Determine if a status is completed, active, or upcoming
+  const isCompleted = (status: BookingStatus) => {
+    return getStatusIndex(status) < currentIndex;
   };
-
-  const getStatusColor = (status: BookingStatus, isActive: boolean): string => {
-    if (!isActive) return 'bg-gray-100 text-gray-500';
-    
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed': return 'bg-blue-100 text-blue-800';
-      case 'assigned': return 'bg-purple-100 text-purple-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'payment_received': return 'bg-green-100 text-green-800';
-      case 'payment_pending': return 'bg-orange-100 text-orange-800';
-      case 'continued': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+  
+  const isActive = (status: BookingStatus) => {
+    return status === currentStatus;
+  };
+  
+  const isUpcoming = (status: BookingStatus) => {
+    return getStatusIndex(status) > currentIndex;
+  };
+  
+  // Get the next status in the flow
+  const getNextStatus = (): BookingStatus | null => {
+    const nextIndex = currentIndex + 1;
+    return nextIndex < statusFlow.length ? statusFlow[nextIndex] : null;
+  };
+  
+  // Handle advancing to the next status
+  const handleAdvanceStatus = async () => {
+    const nextStatus = getNextStatus();
+    if (nextStatus) {
+      await onStatusChange(nextStatus);
     }
   };
-
-  const isStatusActive = (status: BookingStatus): boolean => {
-    if (status === currentStatus) return true;
-    
-    const currentIdx = getCurrentIndex();
-    const statusIdx = getStatusIndex(status);
-    
-    if (status === 'cancelled') return status === currentStatus;
-    
-    return statusIdx <= currentIdx && currentIdx > -1 && statusIdx > -1;
+  
+  const formatStatusLabel = (status: BookingStatus) => {
+    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
   };
-
-  const canTransitionTo = (status: BookingStatus): boolean => {
-    if (!isAdmin) return false;
-    if (isUpdating || disabled || isSubmitting) return false;
-    if (currentStatus === 'cancelled' || currentStatus === 'completed') return false;
-    
-    const currentIdx = getCurrentIndex();
-    const statusIdx = getStatusIndex(status);
-    
-    if (status === 'cancelled') return true;
-    
-    if (statusIdx < currentIdx) return false;
-    
-    return statusIdx === currentIdx + 1;
-  };
+  
+  const nextStatus = getNextStatus();
 
   return (
-    <div className="space-y-6">
-      <div className="relative flex items-center justify-between">
-        <div className="absolute left-0 top-1/2 w-full h-0.5 -translate-y-1/2 bg-gray-200"></div>
-        
-        <div className="flex justify-between w-full relative z-10">
-          {statusFlow.map((status, index) => {
-            const StatusIcon = statusIcons[status] || Clock;
-            
-            if (status === 'cancelled' && currentStatus !== 'cancelled') return null;
-            
-            const active = isStatusActive(status);
-            const isClickable = canTransitionTo(status);
-            
-            return (
-              <div key={status} className="flex flex-col items-center space-y-2">
-                {isClickable ? (
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    className={`rounded-full w-10 h-10 ${active ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
-                    onClick={() => onStatusChange(status)}
-                    disabled={isUpdating || disabled || isSubmitting}
-                  >
-                    <StatusIcon className="h-5 w-5" />
-                  </Button>
+    <div className="py-3">
+      <div className="flex items-center justify-between w-full">
+        {statusFlow.map((status, index) => (
+          <React.Fragment key={status}>
+            <div className="flex flex-col items-center">
+              <div className={`rounded-full w-10 h-10 flex items-center justify-center border ${
+                isActive(status) 
+                  ? 'bg-blue-100 border-blue-500 text-blue-500' 
+                  : isCompleted(status)
+                    ? 'bg-green-100 border-green-500 text-green-500'
+                    : 'bg-gray-100 border-gray-300 text-gray-400'
+              }`}>
+                {isCompleted(status) ? (
+                  <CheckCircle className="w-6 h-6" />
                 ) : (
-                  <div className={`flex items-center justify-center rounded-full w-10 h-10 ${
-                    active ? 'bg-primary text-primary-foreground' : 'bg-gray-100'
-                  }`}>
-                    <StatusIcon className="h-5 w-5" />
-                  </div>
+                  <Circle className="w-6 h-6" />
                 )}
-                <Badge className={getStatusColor(status, active)}>
-                  {status.replace('_', ' ')}
-                </Badge>
               </div>
-            );
-          })}
-          
-          {currentStatus !== 'cancelled' && isAdmin && (
-            <div className="absolute right-0 top-full mt-2">
-              <Button
-                variant="outline"
-                className="text-red-500 border-red-300 hover:bg-red-50"
-                onClick={() => onStatusChange('cancelled')}
-                disabled={isUpdating || disabled || isSubmitting || currentStatus === 'completed'}
-              >
-                <Ban className="h-4 w-4 mr-2" />
-                Cancel Booking
-              </Button>
+              <span className={`text-xs mt-1 font-medium ${
+                isActive(status) 
+                  ? 'text-blue-500' 
+                  : isCompleted(status)
+                    ? 'text-green-500'
+                    : 'text-gray-400'
+              }`}>
+                {formatStatusLabel(status)}
+              </span>
             </div>
-          )}
-        </div>
+            
+            {index < statusFlow.length - 1 && (
+              <div className={`flex-grow h-0.5 mx-2 ${
+                isCompleted(statusFlow[index + 1]) || isActive(statusFlow[index + 1])
+                  ? 'bg-green-500'
+                  : 'bg-gray-300'
+              }`} />
+            )}
+          </React.Fragment>
+        ))}
       </div>
       
-      <div className="flex justify-end mt-6">
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
-      </div>
+      {nextStatus && currentStatus !== 'cancelled' && (
+        <div className="mt-4 flex justify-end">
+          <Button
+            size="sm"
+            onClick={handleAdvanceStatus}
+            disabled={isSubmitting}
+            className="flex items-center gap-1"
+          >
+            Mark as {formatStatusLabel(nextStatus)}
+            <ArrowRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

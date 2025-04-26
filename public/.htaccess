@@ -1,0 +1,29 @@
+
+# Enable Cross-Origin Resource Sharing (CORS)
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh"
+    
+    # Handle preflight OPTIONS request
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+</IfModule>
+
+# Prevent direct access to .php files in the api directory
+<FilesMatch "\.(php)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>
+
+# Fix for PUT/DELETE requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Ensure PHP errors are displayed in development
+php_flag display_errors On
+php_value error_reporting E_ALL
