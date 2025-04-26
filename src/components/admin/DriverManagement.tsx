@@ -295,6 +295,7 @@ export function DriverManagement() {
     try {
       const apiBaseUrl = getApiBaseUrl();
       const payload = {
+        id: currentDriver.id,
         name: formData.name,
         phone: formData.phone,
         email: formData.email,
@@ -321,14 +322,16 @@ export function DriverManagement() {
       console.log("API response data:", data);
       
       if (!response.ok || data.status !== 'success') {
+        if (data.errors && Array.isArray(data.errors)) {
+          throw new Error(`Validation failed: ${data.errors.join(', ')}`);
+        }
         throw new Error(data.message || 'Failed to update driver');
       }
       
       toast.success("Driver has been updated successfully");
       
-      // Update the driver in the local state
       setDrivers(drivers.map(d => 
-        d.id === currentDriver.id ? { ...d, ...formData } : d
+        d.id === currentDriver.id ? { ...d, ...payload } : d
       ));
       
       setIsEditDriverDialogOpen(false);
@@ -363,7 +366,6 @@ export function DriverManagement() {
       
       toast.success("Driver has been deleted successfully");
       
-      // Remove the driver from the local state
       setDrivers(drivers.filter(d => d.id !== currentDriver.id));
       
       setIsDeleteDialogOpen(false);

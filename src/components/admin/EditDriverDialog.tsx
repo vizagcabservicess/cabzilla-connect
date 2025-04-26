@@ -30,6 +30,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   });
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isDialogOpen, setIsDialogOpen] = useState(isOpen);
   
   // Initialize form data with driver details
   useEffect(() => {
@@ -46,6 +47,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       });
       // Clear any previous form errors when opening the dialog
       setFormErrors({});
+      setIsDialogOpen(isOpen);
     }
   }, [driver, isOpen]);
   
@@ -70,6 +72,10 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     
     if (!formData.license_no?.trim()) {
       errors.license_no = 'License number is required';
+    }
+    
+    if (!formData.status || !['available', 'busy', 'offline'].includes(formData.status as string)) {
+      errors.status = 'Invalid status value';
     }
     
     setFormErrors(errors);
@@ -97,10 +103,18 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear the error for this field when user makes a change
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
   
   const handleStatusChange = (value: string) => {
-    setFormData(prev => ({ ...prev, status: value as 'available' | 'busy' | 'offline' }));
+    setFormData(prev => ({ ...prev, status: value }));
+    // Clear any status errors
+    if (formErrors.status) {
+      setFormErrors(prev => ({ ...prev, status: '' }));
+    }
   };
 
   // Handle the dialog close properly
@@ -117,12 +131,13 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       location: ''
     });
     setFormErrors({});
+    setIsDialogOpen(false);
     // Call the provided onClose handler
     onClose();
   };
   
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isDialogOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Edit Driver</DialogTitle>
@@ -219,11 +234,11 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
-                  value={formData.status}
+                  value={formData.status as string}
                   onValueChange={handleStatusChange}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={formErrors.status ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -232,6 +247,9 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
                     <SelectItem value="offline">Offline</SelectItem>
                   </SelectContent>
                 </Select>
+                {formErrors.status && (
+                  <p className="text-xs text-red-500">{formErrors.status}</p>
+                )}
               </div>
               
               <div className="space-y-2">
