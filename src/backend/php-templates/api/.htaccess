@@ -3,7 +3,7 @@
 RewriteEngine On
 RewriteBase /api/
 
-# CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
+# CRITICAL: Force PHP processing for all .php files
 <FilesMatch "\.php$">
     # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
@@ -24,7 +24,7 @@ RewriteRule .* - [R=200,L]
     # Set CORS headers unconditionally for all responses
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Database-First, X-Debug"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Database-First, X-Debug, *"
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
@@ -34,16 +34,12 @@ RewriteRule .* - [R=200,L]
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.*)$ $1.php [L]
 
-# Admin API subdirectory handling - if it exists as a directory
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^(.*)$ $1/index.php [L]
-
-# Explicitly handle /admin in the API context
+# Admin API subdirectory handling
 RewriteRule ^admin$ admin/index.php [L]
 RewriteRule ^admin/$ admin/index.php [L]
 RewriteRule ^admin/(.*)$ admin/$1 [L]
 
-# Add a catch-all to prevent 404 errors for misconfigured API paths
+# Add a catch-all to prevent 404 errors
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [L,QSA]

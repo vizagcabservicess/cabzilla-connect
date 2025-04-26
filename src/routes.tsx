@@ -1,5 +1,5 @@
 
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
@@ -57,26 +57,21 @@ export const router = createBrowserRouter([
     element: <ToursPage />,
   },
   
-  // Admin routes - IMPORTANT: These must be precise and exact
-  // Admin dashboard root
+  // Admin routes - IMPORTANT: Precise route definitions
   {
     path: '/admin',
     element: <AdminDashboardPage />,
   },
-  
-  // Admin database page
   {
     path: '/admin/database',
     element: <AdminDatabasePage />,
   },
-  
-  // Admin wildcard for nested routes - must be last among admin routes
   {
     path: '/admin/*',
     element: <AdminDashboardPage />,
   },
   
-  // Global 404 - must be last route
+  // Global catch-all redirect to 404 - must be last route
   {
     path: '*',
     element: <NotFound />,

@@ -8,14 +8,14 @@
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
     <meta name="author" content="Vizag Cabs" />
     <meta property="og:image" content="/og-image.png" />
-    <!-- Critical for routing - Base href is set to root -->
+    <!-- Ensure base href is set to root -->
     <base href="/" />
   </head>
 
   <body>
     <div id="root"></div>
     
-    <!-- Critical debugging info for React -->
+    <!-- Route data initialization script - Critical for routing -->
     <script>
       window.__initialRoute = {
         path: window.location.pathname,
@@ -25,22 +25,15 @@
         debug: true
       };
       
-      // Debug logging
-      console.log("Application initializing (local dev)...");
+      console.log("Application initializing...");
       console.log("Current path:", window.location.pathname);
       console.log("Base URL:", document.baseURI);
       console.log("Route data:", window.__initialRoute);
     </script>
     
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     
-    <script>
-      // Debug information for development
-      console.log("Development mode active");
-      console.log("Current path:", window.location.pathname);
-      console.log("Base URL:", document.baseURI);
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

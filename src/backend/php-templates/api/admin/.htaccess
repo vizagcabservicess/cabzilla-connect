@@ -14,11 +14,11 @@ Header always set Access-Control-Max-Age "86400"
 Header always set Access-Control-Expose-Headers "*"
 Header always set X-Content-Type-Options "nosniff"
 
-# Handle OPTIONS preflight requests - CRITICAL: Must be VERY first rule
+# Handle OPTIONS preflight requests - CRITICAL
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
-# Critical PHP settings - must be set early
+# Critical PHP settings
 <FilesMatch "\.php$">
     # Ensure PHP files are recognized and processed correctly
     SetHandler application/x-httpd-php
@@ -30,48 +30,15 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
-# Direct access to PHP files - CRITICAL RULE
+# Direct access to PHP files
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
 </Files>
 
-# Test endpoint for API connectivity verification
-RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
-
-# CRITICAL ENDPOINTS FOR BOOKING MANAGEMENT - DIRECT ACCESS
-RewriteRule ^assign-driver\.php$ assign-driver.php [L,NC,QSA]
-RewriteRule ^cancel-booking\.php$ cancel-booking.php [L,NC,QSA]
-RewriteRule ^update-booking\.php$ update-booking.php [L,NC,QSA]
-RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,NC,QSA]
-RewriteRule ^drivers\.php$ drivers.php [L,NC,QSA]
-
-# CRITICAL: Explicitly define booking endpoints with highest priority
-RewriteRule ^booking\.php$ booking.php [L,NC,QSA]
-RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,NC,QSA]
-
 # Critical: Don't apply rewriting to actual PHP files
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^(.+)\.php$ $1.php [L,QSA]
-
-# CRITICAL ENDPOINT MAPPINGS - Direct mappings for vehicle operations
-RewriteRule ^vehicles/create$ direct-vehicle-create.php [L,QSA]
-RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L,QSA]
-RewriteRule ^add-vehicle$ add-vehicle-simple.php [L,QSA]
-RewriteRule ^vehicle-create$ direct-vehicle-create.php [L,QSA] 
-RewriteRule ^add-vehicle-simple$ add-vehicle-simple.php [L,QSA]
-
-# Vehicle update endpoints
-RewriteRule ^vehicle-update$ direct-vehicle-modify.php [L,QSA]
-RewriteRule ^update-vehicle$ direct-vehicle-modify.php [L,QSA]
-RewriteRule ^vehicles-update$ direct-vehicle-modify.php [L,QSA]
-RewriteRule ^direct-vehicle-update$ direct-vehicle-modify.php [L,QSA]
-
-# Reload endpoints
-RewriteRule ^vehicles/reload$ reload-vehicles.php [L,QSA]
-RewriteRule ^reload$ reload-vehicles.php [L,QSA]
-RewriteRule ^refresh$ reload-vehicles.php [L,QSA]
-RewriteRule ^refresh-vehicles$ reload-vehicles.php [L,QSA]
 
 # Special index.php fallback to catch all undefined routes
 RewriteCond %{REQUEST_FILENAME} !-f

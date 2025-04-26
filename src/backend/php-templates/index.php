@@ -41,8 +41,7 @@ $route_data = json_encode([
 ]);
 
 // Determine proper asset paths based on environment
-$asset_prefix = file_exists('./assets') ? './assets' : '';
-
+$asset_prefix = '';
 ?><!DOCTYPE html>
 <html lang="en">
   <head>
@@ -50,11 +49,11 @@ $asset_prefix = file_exists('./assets') ? './assets' : '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><?php echo $is_admin_route ? 'Admin Dashboard - Vizag Cabs' : 'Vizag Cabs - Book Cabs in Visakhapatnam'; ?></title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
-    <!-- Critical for routing: base href must be / -->
+    <!-- Critical for routing - base href MUST be / -->
     <base href="<?php echo $base_path; ?>">
     
     <?php if (file_exists('./assets/index.css')): ?>
-    <link rel="stylesheet" href="<?php echo $asset_prefix; ?>/index.css">
+    <link rel="stylesheet" href="<?php echo $asset_prefix; ?>assets/index.css">
     <?php else: ?>
     <!-- Fallback styles if needed -->
     <style>
@@ -71,23 +70,22 @@ $asset_prefix = file_exists('./assets') ? './assets' : '';
       window.__initialRoute = <?php echo $route_data; ?>;
       
       // Debug logging 
-      console.log("Application initializing...");
+      console.log("Application initializing from PHP...");
       console.log("Current path:", window.location.pathname);
       console.log("Base URL:", document.baseURI);
       console.log("Route data:", window.__initialRoute);
       
-      // Additional debugging for admin routes
       <?php if($is_admin_route): ?>
       console.log("ADMIN ROUTE DETECTED - initializing admin view");
       <?php endif; ?>
     </script>
     
-    <!-- Lovable script tag must be before the main app bundle -->
+    <!-- Important: Must be before the main app bundle -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     
     <?php if (file_exists('./assets/index.js')): ?>
     <!-- Production bundle -->
-    <script type="module" src="<?php echo $asset_prefix; ?>/index.js"></script>
+    <script type="module" src="<?php echo $asset_prefix; ?>assets/index.js"></script>
     <?php else: ?>
     <!-- Development bundle -->
     <script type="module" src="/src/main.tsx"></script>

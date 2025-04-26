@@ -1,8 +1,8 @@
 
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
 
 // More detailed application initialization logging
 console.log('Application initializing...');
@@ -10,17 +10,23 @@ console.log('Current path:', window.location.pathname);
 console.log('Base URL:', document.baseURI);
 console.log('Environment:', import.meta.env.MODE);
 
-// Get initial route info if provided by server-side rendering
-const initialRoute = window.__initialRoute || {
+// Get initial route info
+const initialRoute = {
   path: window.location.pathname,
-  isAdmin: window.location.pathname.startsWith('/admin')
+  isAdmin: window.location.pathname.startsWith('/admin'),
+  baseUrl: '/',
+  timestamp: Date.now(),
+  debug: true
 };
+
+// Make initial route info available globally
+window.__initialRoute = initialRoute;
 
 console.log('Initial route data:', initialRoute);
 
 // Check if we're on an admin route
 if (initialRoute.isAdmin) {
-  console.log('Initializing admin panel view - path:', initialRoute.path);
+  console.log('ADMIN ROUTE DETECTED - initializing admin view');
   document.title = 'Admin Dashboard - Vizag Cabs';
 } else {
   console.log('Initializing regular customer view - path:', initialRoute.path);
@@ -33,7 +39,7 @@ root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,
-)
+);
 
 // Log for debugging
 console.log('Application rendered successfully');

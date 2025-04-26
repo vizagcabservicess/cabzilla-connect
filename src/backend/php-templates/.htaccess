@@ -16,26 +16,20 @@
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
-    # Handle assets directory directly - bypassing PHP
+    # Handle direct access to assets
     RewriteRule ^assets/(.*)$ assets/$1 [L]
     
-    # Step 1: API requests route to api directory first (highest priority)
-    # This ensures API calls work correctly
+    # API requests route to api directory first (highest priority)
     RewriteRule ^api(/.*)?$ api$1 [L]
     
-    # Step 2: For real files/directories EXCEPT /admin path, serve directly
+    # For real files/directories that exist, serve them directly
+    # BUT SKIP admin path which must go to index.php
     RewriteCond %{REQUEST_URI} !^/admin(/.*)?$
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
     
-    # Step 3: Critical - Special handling for /admin routes (must come before general handling)
-    # This ensures admin routes are handled by the SPA router
-    RewriteCond %{REQUEST_URI} ^/admin(/.*)?$
-    RewriteRule ^ index.php [L]
-    
-    # Step 4: All other requests go to index.php (SPA router)
-    # This ensures React Router handles all frontend routes
+    # All other requests go to index.php (SPA router)
     RewriteRule ^ index.php [L]
 </IfModule>
 
