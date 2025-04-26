@@ -34,8 +34,14 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   useEffect(() => {
     if (isOpen && driver) {
       setFormData({
-        ...driver,
-        status: (['available', 'busy', 'offline'].includes(driver.status) ? driver.status : 'available') as DriverStatus
+        name: driver.name || '',
+        phone: driver.phone || '',
+        email: driver.email || '',
+        license_no: driver.license_no || '',
+        vehicle: driver.vehicle || '',
+        vehicle_id: driver.vehicle_id || '',
+        status: (['available', 'busy', 'offline'].includes(driver.status) ? driver.status : 'available'),
+        location: driver.location || ''
       });
       setFormErrors({});
     }
@@ -86,12 +92,11 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    console.log("Submitting driver data:", formData);
     if (!validateForm()) {
       toast.error("Please fix form errors before submitting");
       return;
     }
-    
     try {
       await onSubmit({
         ...formData,
@@ -119,7 +124,6 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
   };
   
   const handleClose = () => {
-    // Only call onClose, do not reset form here
     onClose();
   };
   
