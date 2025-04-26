@@ -11,6 +11,12 @@
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
+    # CRITICAL: Handle frontend routes - redirect all admin paths to index.php
+    # This ensures React Router can handle these routes
+    RewriteCond %{REQUEST_URI} ^/admin [OR]
+    RewriteCond %{REQUEST_URI} ^/admin/.*
+    RewriteRule ^(.*)$ index.php [L]
+    
     # Prevent direct access to PHP files for security
     # RewriteCond %{REQUEST_URI} !^/api/
     # RewriteRule \.php$ - [F]

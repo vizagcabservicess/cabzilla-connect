@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -35,6 +34,9 @@ RewriteBase /api/
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Explicitly handle /admin in the API context
+RewriteRule ^admin$ admin/index.php [L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>

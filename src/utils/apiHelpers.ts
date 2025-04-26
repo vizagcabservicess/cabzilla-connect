@@ -110,13 +110,15 @@ export function generateMockApiResponse(operation: string, data: any = {}) {
 export function isDevEnvironment(): boolean {
   return window.location.hostname === 'localhost' || 
          window.location.hostname === '127.0.0.1' ||
-         window.location.hostname.includes('lovableproject.com');
+         window.location.hostname.includes('lovable');
 }
 
 // Helper to get API base URL
 export function getApiBaseUrl(): string {
+  // Always return the base URL without a trailing slash
   if (isDevEnvironment()) {
     return 'https://vizagup.com';
   }
+  // For production, use relative URLs which will resolve to the current domain
   return '';
 }
