@@ -26,21 +26,7 @@ import { EditDriverDialog } from './EditDriverDialog';
 import { DeleteDriverDialog } from './DeleteDriverDialog';
 import { AddDriverDialog } from './AddDriverDialog';
 import { toast } from "sonner";
-
-interface Driver {
-  id: number;
-  name: string;
-  phone: string;
-  email: string;
-  license_no?: string;
-  status: 'available' | 'busy' | 'offline';
-  total_rides: number;
-  earnings: number;
-  rating: number;
-  location: string;
-  vehicle: string;
-  vehicle_id: string;
-}
+import { Driver } from '@/types/api';
 
 export function DriverManagement() {
   const { toast: uiToast } = useToast();
@@ -308,13 +294,26 @@ export function DriverManagement() {
     
     try {
       const apiBaseUrl = getApiBaseUrl();
+      const payload = {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        license_no: formData.license_no,
+        vehicle: formData.vehicle,
+        vehicle_id: formData.vehicle_id,
+        status: formData.status,
+        location: formData.location
+      };
+      
+      console.log("API payload:", payload);
+      
       const response = await fetch(`${apiBaseUrl}/api/admin/driver.php?id=${currentDriver.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'X-Force-Refresh': 'true'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       
       console.log("API response status:", response.status);
@@ -333,6 +332,7 @@ export function DriverManagement() {
       ));
       
       setIsEditDriverDialogOpen(false);
+      setCurrentDriver(null);
     } catch (error) {
       console.error('Error updating driver:', error);
       toast.error(error instanceof Error ? error.message : "Failed to update driver");
@@ -367,6 +367,7 @@ export function DriverManagement() {
       setDrivers(drivers.filter(d => d.id !== currentDriver.id));
       
       setIsDeleteDialogOpen(false);
+      setCurrentDriver(null);
     } catch (error) {
       console.error('Error deleting driver:', error);
       toast.error(error instanceof Error ? error.message : "Failed to delete driver");
@@ -546,7 +547,10 @@ export function DriverManagement() {
       {isEditDriverDialogOpen && currentDriver && (
         <EditDriverDialog
           isOpen={isEditDriverDialogOpen}
-          onClose={() => setIsEditDriverDialogOpen(false)}
+          onClose={() => {
+            setIsEditDriverDialogOpen(false);
+            setCurrentDriver(null);
+          }}
           onSubmit={handleEditDriver}
           driver={currentDriver}
           isSubmitting={isSubmitting}
@@ -556,7 +560,10 @@ export function DriverManagement() {
       {isDeleteDialogOpen && currentDriver && (
         <DeleteDriverDialog
           isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
+          onClose={() => {
+            setIsDeleteDialogOpen(false);
+            setCurrentDriver(null);
+          }}
           onConfirm={handleDeleteDriver}
           driver={currentDriver}
           isSubmitting={isSubmitting}

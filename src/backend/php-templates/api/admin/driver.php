@@ -1,4 +1,3 @@
-
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -8,7 +7,7 @@ require_once __DIR__ . '/../common/db_helper.php';
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, PUT, DELETE, OPTIONS, POST');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
 // Handle preflight OPTIONS request
@@ -38,7 +37,9 @@ function validateDriverData($data) {
         $errors[] = 'Invalid phone number format';
     }
     
-    if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+    if (empty($data['email'])) {
+        $errors[] = 'Email is required';
+    } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Invalid email format';
     }
     
@@ -163,7 +164,11 @@ switch ($_SERVER['REQUEST_METHOD']) {
             // Validate input data
             $errors = validateDriverData($data);
             if (!empty($errors)) {
-                sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
+                sendJsonResponse([
+                    'status' => 'error', 
+                    'message' => 'Validation failed', 
+                    'errors' => $errors
+                ], 400);
             }
             
             // Check for duplicate phone and license (excluding current driver)
@@ -189,7 +194,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $locationValue = isset($data['location']) ? $data['location'] : '';
             $emailValue = isset($data['email']) ? $data['email'] : '';
             
-            error_log('Processing driver update with: ' . print_r([
+            // Log the values we're going to use in the update
+            error_log('Driver update values: ' . print_r([
                 'name' => $data['name'],
                 'phone' => $data['phone'],
                 'email' => $emailValue,
@@ -230,35 +236,6 @@ switch ($_SERVER['REQUEST_METHOD']) {
             
             if ($stmt->execute()) {
                 error_log('Driver update executed successfully. Affected rows: ' . $stmt->affected_rows);
-                
-                // Update documents if provided
-                if (!empty($data['documents'])) {
-                    foreach ($data['documents'] as $doc) {
-                        $docStmt = $conn->prepare("
-                            INSERT INTO driver_documents (
-                                driver_id, document_type, document_number, 
-                                expiry_date, document_url, status
-                            ) VALUES (?, ?, ?, ?, ?, ?)
-                            ON DUPLICATE KEY UPDATE
-                                document_number = VALUES(document_number),
-                                expiry_date = VALUES(expiry_date),
-                                document_url = VALUES(document_url),
-                                status = VALUES(status)
-                        ");
-                        
-                        $docStatus = $doc['status'] ?? 'pending';
-                        $docStmt->bind_param(
-                            "isssss",
-                            $driverId,
-                            $doc['type'],
-                            $doc['number'],
-                            $doc['expiry'],
-                            $doc['url'],
-                            $docStatus
-                        );
-                        $docStmt->execute();
-                    }
-                }
                 
                 // Fetch the updated driver to return in response
                 $getStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
