@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
@@ -43,7 +42,6 @@ export function BookingInvoice({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Try to generate invoice when component mounts
     if (booking && booking.id) {
       handleGenerateInvoice();
     }
@@ -55,15 +53,12 @@ export function BookingInvoice({
       setError(null);
       const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
       
-      if (result && result.data) {
+      if (result?.data) {
         setInvoiceData(result.data);
         toast({
-          title: "Invoice Generated",
-          description: "Invoice was generated successfully"
+          title: "Success",
+          description: "Invoice generated successfully"
         });
-      } else {
-        // If no data returned but no error, still remove loading state
-        setInvoiceData(null);
       }
     } catch (error) {
       console.error("Invoice generation error:", error);
@@ -74,12 +69,15 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    // Construct PDF URL with GST parameter if enabled
-    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
-    
-    const downloadUrl = `${pdfUrl}${gstParam}${gstDetailsParam}`;
+    const params = new URLSearchParams();
+    params.append('id', booking.id.toString());
+    if (gstEnabled) {
+      params.append('gstEnabled', '1');
+      params.append('gstNumber', gstDetails.gstNumber);
+      params.append('companyName', gstDetails.companyName);
+      params.append('companyAddress', gstDetails.companyAddress);
+    }
+    const downloadUrl = `${pdfUrl}?${params.toString()}`;
     window.open(downloadUrl, '_blank');
   };
 
