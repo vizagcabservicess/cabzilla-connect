@@ -158,7 +158,7 @@ export function BookingDetails({
         <TabsContent value="driver" className="py-4">
           <DriverAssignment 
             booking={booking}
-            onAssignDriver={onAssignDriver}
+            onAssign={onAssignDriver}
             onCancel={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
           />

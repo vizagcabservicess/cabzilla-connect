@@ -19,6 +19,7 @@ interface Driver {
 interface DriverAssignmentProps {
   booking: Booking;
   onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onAssignDriver?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onSubmit?: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onClose: () => void;
   onCancel?: () => void;
@@ -27,7 +28,8 @@ interface DriverAssignmentProps {
 
 export function DriverAssignment({ 
   booking, 
-  onAssign, 
+  onAssign,
+  onAssignDriver,
   onSubmit, 
   onClose, 
   onCancel, 
@@ -46,7 +48,7 @@ export function DriverAssignment({
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
 
   const closeHandler = onCancel || onClose;
-  const submitHandler = onSubmit || onAssign;
+  const submitHandler = onSubmit || onAssignDriver || onAssign;
 
   useEffect(() => {
     const fetchDrivers = async () => {

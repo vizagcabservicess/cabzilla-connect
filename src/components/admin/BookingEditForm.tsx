@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import { isBookingEditable } from '@/utils/bookingUtils';
 
 interface BookingEditFormProps {
   booking: Booking;
-  onSave: (updatedData: Partial<Booking>) => Promise<void>;
+  onSave?: (updatedData: Partial<Booking>) => Promise<void>;
   onSubmit?: (updatedData: Partial<Booking>) => Promise<void>; // Add for backward compatibility
   onCancel: () => void;
   isSubmitting: boolean;
@@ -33,6 +32,7 @@ export function BookingEditForm({
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
     pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
+    billingAddress: booking.billingAddress || '', // Add billing address field
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -109,12 +109,15 @@ export function BookingEditForm({
       passengerEmail: formData.passengerEmail,
       pickupLocation: formData.pickupLocation,
       dropLocation: formData.dropLocation,
-      pickupDate: formData.pickupDate.toISOString()
+      pickupDate: formData.pickupDate.toISOString(),
+      billingAddress: formData.billingAddress, // Include billing address in the update
     };
     
     // Use onSubmit if provided (for backward compatibility), otherwise use onSave
     const submitHandler = onSubmit || onSave;
-    await submitHandler(updatedData);
+    if (submitHandler) {
+      await submitHandler(updatedData);
+    }
   };
 
   const isEditable = isBookingEditable(booking.status);
@@ -234,6 +237,17 @@ export function BookingEditForm({
           id="dropLocation"
           name="dropLocation"
           value={formData.dropLocation}
+          onChange={handleInputChange}
+          disabled={!isEditable || isSubmitting}
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="billingAddress">Billing Address</Label>
+        <Input
+          id="billingAddress"
+          name="billingAddress"
+          value={formData.billingAddress}
           onChange={handleInputChange}
           disabled={!isEditable || isSubmitting}
         />

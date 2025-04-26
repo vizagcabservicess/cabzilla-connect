@@ -1,4 +1,3 @@
-
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -38,7 +37,7 @@ export interface Driver {
   name: string;
   phone: string;
   email: string;
-  license_no: string;  // Using license_no consistently
+  license_no: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;

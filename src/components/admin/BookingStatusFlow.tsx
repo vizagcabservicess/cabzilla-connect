@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BookingStatus } from '@/types/api';
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +16,9 @@ interface BookingStatusFlowProps {
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isAdmin?: boolean;
   isUpdating?: boolean;
+  isSubmitting?: boolean;
   onClose?: () => void;
-  disabled?: boolean; // Add the disabled prop
+  disabled?: boolean;
 }
 
 export function BookingStatusFlow({ 
@@ -26,10 +26,10 @@ export function BookingStatusFlow({
   onStatusChange, 
   isAdmin = true,
   isUpdating = false,
+  isSubmitting = false,
   onClose = () => {},
   disabled = false
 }: BookingStatusFlowProps) {
-  // Define the status flow
   const statusFlow: BookingStatus[] = [
     'pending',
     'confirmed',
@@ -76,47 +76,38 @@ export function BookingStatusFlow({
   const isStatusActive = (status: BookingStatus): boolean => {
     if (status === currentStatus) return true;
     
-    // States before current state are also active
     const currentIdx = getCurrentIndex();
     const statusIdx = getStatusIndex(status);
     
-    // Special case for cancelled - only active if it's the current status
     if (status === 'cancelled') return status === currentStatus;
     
     return statusIdx <= currentIdx && currentIdx > -1 && statusIdx > -1;
   };
 
-  // Can only move to the next status or cancel
   const canTransitionTo = (status: BookingStatus): boolean => {
     if (!isAdmin) return false;
-    if (isUpdating || disabled) return false; // Consider disabled prop
+    if (isUpdating || disabled || isSubmitting) return false;
     if (currentStatus === 'cancelled' || currentStatus === 'completed') return false;
     
     const currentIdx = getCurrentIndex();
     const statusIdx = getStatusIndex(status);
     
-    // Can always cancel unless already completed
     if (status === 'cancelled') return true;
     
-    // Can't go backward in flow
     if (statusIdx < currentIdx) return false;
     
-    // Can only advance one step at a time
     return statusIdx === currentIdx + 1;
   };
 
   return (
     <div className="space-y-6">
       <div className="relative flex items-center justify-between">
-        {/* Progress line that connects the steps */}
         <div className="absolute left-0 top-1/2 w-full h-0.5 -translate-y-1/2 bg-gray-200"></div>
         
-        {/* Status steps */}
         <div className="flex justify-between w-full relative z-10">
           {statusFlow.map((status, index) => {
             const StatusIcon = statusIcons[status] || Clock;
             
-            // Skip "cancelled" in the flow visualization unless it's the current status
             if (status === 'cancelled' && currentStatus !== 'cancelled') return null;
             
             const active = isStatusActive(status);
@@ -130,7 +121,7 @@ export function BookingStatusFlow({
                     size="icon"
                     className={`rounded-full w-10 h-10 ${active ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
                     onClick={() => onStatusChange(status)}
-                    disabled={isUpdating || disabled}
+                    disabled={isUpdating || disabled || isSubmitting}
                   >
                     <StatusIcon className="h-5 w-5" />
                   </Button>
@@ -148,14 +139,13 @@ export function BookingStatusFlow({
             );
           })}
           
-          {/* Show cancelled as a separate button if not cancelled */}
           {currentStatus !== 'cancelled' && isAdmin && (
             <div className="absolute right-0 top-full mt-2">
               <Button
                 variant="outline"
                 className="text-red-500 border-red-300 hover:bg-red-50"
                 onClick={() => onStatusChange('cancelled')}
-                disabled={isUpdating || disabled || currentStatus === 'completed'}
+                disabled={isUpdating || disabled || isSubmitting || currentStatus === 'completed'}
               >
                 <Ban className="h-4 w-4 mr-2" />
                 Cancel Booking
