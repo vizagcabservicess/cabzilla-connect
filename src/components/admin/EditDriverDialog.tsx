@@ -98,10 +98,12 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       return;
     }
     try {
-      await onSubmit({
+      const payload = {
         ...formData,
         id: driver.id
-      });
+      };
+      console.log("API payload to be sent:", payload);
+      await onSubmit(payload);
     } catch (error) {
       console.error("Error in EditDriverDialog.handleSubmit:", error);
       toast.error(error instanceof Error ? error.message : "Failed to update driver");
