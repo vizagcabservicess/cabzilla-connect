@@ -1,3 +1,4 @@
+
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -47,8 +48,9 @@ function validateDriverData($data) {
         $errors[] = 'License number is required';
     }
     
-    if (!empty($data['status']) && !in_array($data['status'], ['available', 'busy', 'offline'])) {
-        $errors[] = 'Invalid status value';
+    $validStatuses = ['available', 'busy', 'offline'];
+    if (!empty($data['status']) && !in_array($data['status'], $validStatuses)) {
+        $errors[] = 'Invalid status value. Must be one of: ' . implode(', ', $validStatuses);
     }
     
     return $errors;

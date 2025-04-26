@@ -1,4 +1,3 @@
-
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -25,3 +24,23 @@ export interface BookingDetails {
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+
+export type DriverStatus = 'available' | 'busy' | 'offline';
+
+export interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  license_no?: string;
+  license_number?: string;
+  status: DriverStatus;
+  total_rides?: number;
+  earnings?: number;
+  rating?: number;
+  location: string;
+  vehicle?: string;
+  vehicle_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}

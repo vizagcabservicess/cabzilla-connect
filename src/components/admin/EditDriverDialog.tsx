@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -25,7 +24,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     license_no: '',
     vehicle: '',
     vehicle_id: '',
-    status: 'available' as DriverStatus,
+    status: 'available',
     location: ''
   });
   
@@ -36,8 +35,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     if (driver) {
       setFormData({
         ...driver,
-        license_no: driver.license_no || driver.license_number || '',
-        status: (driver.status as DriverStatus) || 'available',
+        status: driver.status || 'available'
       });
       setFormErrors({});
     }
@@ -107,8 +105,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       setFormErrors(prev => ({ ...prev, status: '' }));
     }
   };
-
-  // Handle the dialog close properly
+  
   const handleClose = () => {
     setFormData({
       name: '',
@@ -117,7 +114,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       license_no: '',
       vehicle: '',
       vehicle_id: '',
-      status: 'available' as DriverStatus,
+      status: 'available',
       location: ''
     });
     setFormErrors({});
