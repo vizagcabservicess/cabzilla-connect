@@ -92,6 +92,12 @@ RewriteRule ^api/signup/?$ /api/signup.php [L,NC,QSA]
 RewriteRule ^api/register/?$ /api/signup.php [L,NC,QSA]
 RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
 
+# Invoice and receipt endpoints
+RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
+RewriteRule ^invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
+
 # IMPORTANT: Direct frontend routes to React app
 # These routes should serve the frontend app, not the API
 RewriteRule ^login/?$ /index.html [L]
@@ -102,8 +108,6 @@ RewriteRule ^admin/?$ /index.html [L]
 RewriteRule ^admin/(.*)$ /index.html [L]
 RewriteRule ^booking/(.*)$ /index.html [L]
 RewriteRule ^receipt/(.*)$ /index.html [L]
-RewriteRule ^cabs/?$ /index.html [L]
-RewriteRule ^tours/?$ /index.html [L]
 
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
