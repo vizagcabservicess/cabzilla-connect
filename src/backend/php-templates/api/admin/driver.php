@@ -47,7 +47,6 @@ function validateDriverData($data) {
         $errors[] = 'License number is required';
     }
     
-    // Check if status is provided and valid
     if (!empty($data['status']) && !in_array($data['status'], ['available', 'busy', 'offline'])) {
         $errors[] = 'Invalid status value';
     }
@@ -166,8 +165,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $errors = validateDriverData($data);
             if (!empty($errors)) {
                 sendJsonResponse([
-                    'status' => 'error', 
-                    'message' => 'Validation failed', 
+                    'status' => 'error',
+                    'message' => 'Validation failed',
                     'errors' => $errors
                 ], 400);
             }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -25,29 +24,21 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     license_no: '',
     vehicle: '',
     vehicle_id: '',
-    status: 'available',
+    status: 'available' as DriverStatus,
     location: ''
   });
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [isDialogOpen, setIsDialogOpen] = useState(isOpen);
   
   // Initialize form data with driver details
   useEffect(() => {
-    if (isOpen && driver) {
+    if (driver) {
       setFormData({
-        name: driver.name || '',
-        phone: driver.phone || '',
-        email: driver.email || '',
+        ...driver,
         license_no: driver.license_no || driver.license_number || '',
-        vehicle: driver.vehicle || '',
-        vehicle_id: driver.vehicle_id || '',
-        status: driver.status || 'available',
-        location: driver.location || ''
+        status: (driver.status as DriverStatus) || 'available',
       });
-      // Clear any previous form errors when opening the dialog
       setFormErrors({});
-      setIsDialogOpen(isOpen);
     }
   }, [driver, isOpen]);
   
@@ -74,7 +65,7 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       errors.license_no = 'License number is required';
     }
     
-    if (!formData.status || !['available', 'busy', 'offline'].includes(formData.status as string)) {
+    if (!formData.status || !['available', 'busy', 'offline'].includes(formData.status)) {
       errors.status = 'Invalid status value';
     }
     
@@ -97,22 +88,20 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       });
     } catch (error) {
       console.error("Error in EditDriverDialog.handleSubmit:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to update driver");
     }
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear the error for this field when user makes a change
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
   
   const handleStatusChange = (value: string) => {
-    // Cast the string value to the DriverStatus type
     setFormData(prev => ({ ...prev, status: value as DriverStatus }));
-    // Clear any status errors
     if (formErrors.status) {
       setFormErrors(prev => ({ ...prev, status: '' }));
     }
@@ -120,7 +109,6 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
 
   // Handle the dialog close properly
   const handleClose = () => {
-    // Reset form data and errors
     setFormData({
       name: '',
       phone: '',
@@ -128,12 +116,10 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
       license_no: '',
       vehicle: '',
       vehicle_id: '',
-      status: 'available',
+      status: 'available' as DriverStatus,
       location: ''
     });
     setFormErrors({});
-    setIsDialogOpen(false);
-    // Call the provided onClose handler
     onClose();
   };
   
