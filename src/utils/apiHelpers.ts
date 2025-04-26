@@ -108,6 +108,7 @@ export function generateMockApiResponse(operation: string, data: any = {}) {
 
 // Helper function to detect if running in dev environment
 export function isDevEnvironment(): boolean {
+  // Check if we're in development or preview mode
   return window.location.hostname === 'localhost' || 
          window.location.hostname === '127.0.0.1' ||
          window.location.hostname.includes('lovable');
@@ -115,10 +116,26 @@ export function isDevEnvironment(): boolean {
 
 // Helper to get API base URL
 export function getApiBaseUrl(): string {
-  // Always return the base URL without a trailing slash
+  // For development environment, use the production API
   if (isDevEnvironment()) {
+    console.log("Using vizagup.com API in development mode");
     return 'https://vizagup.com';
   }
+  
   // For production, use relative URLs which will resolve to the current domain
+  console.log("Using relative API paths in production mode");
   return '';
+}
+
+// Helper function to properly construct API URLs
+export function getApiUrl(endpoint: string): string {
+  const baseUrl = getApiBaseUrl();
+  
+  // Log the constructed URL for debugging
+  const fullUrl = baseUrl ? 
+    `${baseUrl}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}` :
+    `/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
+  
+  console.log(`Constructed API URL: ${fullUrl} from baseUrl: ${baseUrl} and endpoint: ${endpoint}`);
+  return fullUrl;
 }

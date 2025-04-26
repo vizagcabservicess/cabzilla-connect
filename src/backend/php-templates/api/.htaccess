@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -37,6 +38,7 @@ RewriteRule .* - [R=200,L]
 
 # Explicitly handle /admin in the API context
 RewriteRule ^admin$ admin/index.php [L]
+RewriteRule ^admin/$ admin/index.php [L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
@@ -54,6 +56,21 @@ RewriteRule ^admin/users$ admin/users.php [L,QSA]
 RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
 RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
+
+# Admin booking endpoints - highest priority
+RewriteRule ^admin/booking$ admin/booking.php [L,QSA]
+RewriteRule ^admin/booking\.php$ admin/booking.php [L,QSA]
+RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [L,QSA]
+RewriteRule ^admin/drivers$ admin/drivers.php [L,QSA]
+RewriteRule ^admin/drivers\.php$ admin/drivers.php [L,QSA]
+RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
+RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
+RewriteRule ^admin/update-booking$ admin/update-booking.php [L,QSA]
+RewriteRule ^admin/update-booking\.php$ admin/update-booking.php [L,QSA]
+RewriteRule ^admin/assign-driver$ admin/assign-driver.php [L,QSA]
+RewriteRule ^admin/assign-driver\.php$ admin/assign-driver.php [L,QSA]
+RewriteRule ^admin/cancel-booking$ admin/cancel-booking.php [L,QSA]
+RewriteRule ^admin/cancel-booking\.php$ admin/cancel-booking.php [L,QSA]
 
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
