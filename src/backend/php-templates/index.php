@@ -3,7 +3,6 @@
 /**
  * Main index.php file for the Vizag Cabs application
  * This file serves as the entry point for the React application
- * All frontend routes are directed here (/, /admin, /booking, etc.)
  */
 
 // Set proper headers
@@ -18,18 +17,11 @@ ini_set('display_errors', 1);
 
 // Get request URI for debugging
 $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
-$current_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 $is_admin_route = preg_match('/^\/admin(\/|$)/', $request_uri);
-
-// Log access for debugging
-error_log("Access to main SPA index.php, URI: " . $request_uri);
-
-// Define base path as / which works with React Router
 $base_path = '/';
 
-// Debug route information
-error_log("Request URI: $request_uri");
-error_log("Is admin route: " . ($is_admin_route ? 'true' : 'false'));
+// Log access
+error_log("SPA entry point accessed: " . $request_uri . ", Admin route: " . ($is_admin_route ? 'yes' : 'no'));
 
 // Setup initial route data for client-side JS
 $route_data = json_encode([
@@ -40,8 +32,14 @@ $route_data = json_encode([
     'debug' => true
 ]);
 
-// Determine proper asset paths based on environment
+// Determine proper asset paths
 $asset_prefix = '';
+
+// Check if we have built assets
+$using_vite_dev = true;
+if (file_exists('./assets/index.js')) {
+    $using_vite_dev = false;
+}
 ?><!DOCTYPE html>
 <html lang="en">
   <head>
@@ -49,27 +47,22 @@ $asset_prefix = '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><?php echo $is_admin_route ? 'Admin Dashboard - Vizag Cabs' : 'Vizag Cabs - Book Cabs in Visakhapatnam'; ?></title>
     <meta name="description" content="Book cabs in Visakhapatnam for local, outstation and airport transfers" />
+    <meta property="og:image" content="/og-image.png" />
     <!-- Critical for routing - base href MUST be / -->
     <base href="<?php echo $base_path; ?>">
     
-    <?php if (file_exists('./assets/index.css')): ?>
+    <?php if (!$using_vite_dev): ?>
     <link rel="stylesheet" href="<?php echo $asset_prefix; ?>assets/index.css">
-    <?php else: ?>
-    <!-- Fallback styles if needed -->
-    <style>
-      body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    </style>
     <?php endif; ?>
   </head>
 
   <body>
     <div id="root"></div>
     
-    <!-- Critical debugging info passed to React -->
+    <!-- Route data initialization script - Critical for routing -->
     <script>
       window.__initialRoute = <?php echo $route_data; ?>;
       
-      // Debug logging 
       console.log("Application initializing from PHP...");
       console.log("Current path:", window.location.pathname);
       console.log("Base URL:", document.baseURI);
@@ -80,10 +73,10 @@ $asset_prefix = '';
       <?php endif; ?>
     </script>
     
-    <!-- Important: Must be before the main app bundle -->
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     
-    <?php if (file_exists('./assets/index.js')): ?>
+    <?php if (!$using_vite_dev): ?>
     <!-- Production bundle -->
     <script type="module" src="<?php echo $asset_prefix; ?>assets/index.js"></script>
     <?php else: ?>

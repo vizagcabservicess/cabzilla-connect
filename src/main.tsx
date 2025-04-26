@@ -10,8 +10,8 @@ console.log('Current path:', window.location.pathname);
 console.log('Base URL:', document.baseURI);
 console.log('Environment:', import.meta.env.MODE);
 
-// Get initial route info
-const initialRoute = {
+// Get initial route info from window.__initialRoute or create one if not available
+const initialRoute = window.__initialRoute || {
   path: window.location.pathname,
   isAdmin: window.location.pathname.startsWith('/admin'),
   baseUrl: '/',
@@ -30,19 +30,26 @@ if (initialRoute.isAdmin) {
   document.title = 'Admin Dashboard - Vizag Cabs';
 } else {
   console.log('Initializing regular customer view - path:', initialRoute.path);
+  document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
 }
 
 // Mount the app with React 18 createRoot API
-const root = ReactDOM.createRoot(document.getElementById('root')!);
+const rootElement = document.getElementById('root');
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
-
-// Log for debugging
-console.log('Application rendered successfully');
+if (!rootElement) {
+  console.error('Root element not found! Cannot mount React application.');
+} else {
+  const root = ReactDOM.createRoot(rootElement);
+  
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+  
+  // Log for debugging
+  console.log('Application rendered successfully');
+}
 
 // Add global type for initialRoute
 declare global {

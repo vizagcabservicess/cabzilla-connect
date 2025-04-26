@@ -3,9 +3,9 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
-    # Enable error logging
-    RewriteLog "/var/log/apache2/rewrite.log"
-    RewriteLogLevel 3
+    # Basic debugging for critical errors
+    php_flag display_errors On
+    php_value error_log /logs/php_errors.log
     
     # Handle CORS preflight requests first
     RewriteCond %{REQUEST_METHOD} OPTIONS
@@ -16,28 +16,27 @@
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
     
-    # Handle direct access to assets
-    RewriteRule ^assets/(.*)$ assets/$1 [L]
-    
-    # API requests route to api directory first (highest priority)
+    # API paths are handled by their own rewrite rules in /api directory
     RewriteRule ^api(/.*)?$ api$1 [L]
     
-    # For real files/directories that exist, serve them directly
-    # BUT SKIP admin path which must go to index.php
+    # Admin API paths 
+    RewriteRule ^api/admin(/.*)?$ api/admin$1 [L]
+    
+    # For real files/directories that exist (except admin paths), serve them directly
     RewriteCond %{REQUEST_URI} !^/admin(/.*)?$
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
     
-    # All other requests go to index.php (SPA router)
-    RewriteRule ^ index.php [L]
+    # All other requests including admin/* go to index.php (SPA router)
+    RewriteRule ^ index.php [L,QSA]
 </IfModule>
 
 # General headers
 <IfModule mod_headers.c>
     # Cache control for HTML and PHP
     <FilesMatch "\.(html|php)$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
     </FilesMatch>
@@ -46,6 +45,10 @@
     <FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
         Header set Cache-Control "public, max-age=86400"
     </FilesMatch>
+    
+    # Security headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
 </IfModule>
 
 # PHP settings
@@ -53,5 +56,4 @@
     php_flag display_errors On
     php_value error_reporting E_ALL
     php_flag log_errors On
-    php_value error_log /tmp/php_errors.log
 </IfModule>

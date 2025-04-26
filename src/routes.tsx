@@ -13,7 +13,11 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 
-// Create routes with proper nesting and path handling
+// Get base URL from initialRoute if available
+const baseUrl = window.__initialRoute?.baseUrl || '/';
+console.log('Creating router with base URL:', baseUrl);
+
+// Create routes with proper configuration
 export const router = createBrowserRouter([
   // Main frontend routes
   {
@@ -57,7 +61,7 @@ export const router = createBrowserRouter([
     element: <ToursPage />,
   },
   
-  // Admin routes - IMPORTANT: Precise route definitions
+  // Admin routes - CRITICAL: precise route definitions
   {
     path: '/admin',
     element: <AdminDashboardPage />,
@@ -65,6 +69,10 @@ export const router = createBrowserRouter([
   {
     path: '/admin/database',
     element: <AdminDatabasePage />,
+  },
+  {
+    path: '/admin/dashboard',
+    element: <Navigate to="/admin" replace />,
   },
   {
     path: '/admin/*',

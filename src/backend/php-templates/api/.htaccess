@@ -15,6 +15,9 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
+# CRITICAL: Debug headers for API responses
+Header always set X-API-Debug "API request handled through /api/.htaccess"
+
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
