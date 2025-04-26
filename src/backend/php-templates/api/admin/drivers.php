@@ -46,7 +46,7 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             phone VARCHAR(20) NOT NULL,
-            email VARCHAR(100),
+            email VARCHAR(100) NOT NULL,
             license_no VARCHAR(50),
             status ENUM('available', 'busy', 'offline') DEFAULT 'available',
             total_rides INT DEFAULT 0,
