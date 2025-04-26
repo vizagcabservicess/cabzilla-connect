@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -46,7 +47,7 @@ function sendJsonResponse($data, $statusCode = 200) {
 }
 
 try {
-    // Allow both GET and POST methods
+    // Allow both GET and POST methods - allow GET without body
     if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
@@ -65,30 +66,35 @@ try {
             error_log("Received POST data: " . json_encode($_POST));
         }
     } else {
+        // For GET requests, extract only from query parameters
         $requestData = $_GET;
         error_log("Received GET data: " . json_encode($_GET));
     }
     
-    // Extract booking ID
+    // Extract booking ID - support both id and bookingId parameters
     $bookingId = isset($requestData['id']) ? (int)$requestData['id'] : 
                  (isset($requestData['bookingId']) ? (int)$requestData['bookingId'] : null);
     
-    // Extract GST details
-    $gstEnabled = isset($requestData['gstEnabled']) ? filter_var($requestData['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
+    // Extract GST details - for both GET and POST methods
+    $gstEnabled = isset($requestData['gstEnabled']) ? filter_var($requestData['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : 
+                  (isset($requestData['gst']) ? filter_var($requestData['gst'], FILTER_VALIDATE_BOOLEAN) : false);
+    
     $gstDetails = [
         'gstNumber' => '',
         'companyName' => '',
         'companyAddress' => ''
     ];
     
-    if ($gstEnabled && isset($requestData['gstDetails'])) {
-        $gstDetails = is_array($requestData['gstDetails']) ? 
-            array_merge($gstDetails, $requestData['gstDetails']) : $gstDetails;
-    } else {
-        // Try individual GST fields
-        $gstDetails['gstNumber'] = $requestData['gstNumber'] ?? '';
-        $gstDetails['companyName'] = $requestData['companyName'] ?? '';
-        $gstDetails['companyAddress'] = $requestData['companyAddress'] ?? '';
+    // Handle GET or POST params for GST details
+    if ($gstEnabled) {
+        if (isset($requestData['gstDetails']) && is_array($requestData['gstDetails'])) {
+            $gstDetails = array_merge($gstDetails, $requestData['gstDetails']);
+        } else {
+            // Try individual GST fields for both GET and POST
+            $gstDetails['gstNumber'] = $requestData['gstNumber'] ?? '';
+            $gstDetails['companyName'] = $requestData['companyName'] ?? '';
+            $gstDetails['companyAddress'] = $requestData['companyAddress'] ?? '';
+        }
     }
     
     // Validate booking ID
@@ -177,75 +183,134 @@ try {
     $invoiceData = [
         'invoice_number' => $invoiceNumber,
         'booking_id' => $booking['id'],
-        'booking_number' => $booking['booking_number'],
-        'passenger_name' => $booking['passenger_name'],
-        'passenger_email' => $booking['passenger_email'],
-        'passenger_phone' => $booking['passenger_phone'],
-        'trip_type' => $booking['trip_type'],
-        'trip_mode' => $booking['trip_mode'],
-        'pickup_location' => $booking['pickup_location'],
-        'drop_location' => $booking['drop_location'],
-        'pickup_date' => $booking['pickup_date'],
-        'cab_type' => $booking['cab_type'],
-        'base_amount' => $baseAmount,
-        'gst_enabled' => $gstEnabled,
+        'invoice_date' => $invoiceDate,
+        'base_amt' => $baseAmount,  // Changed from base_amount to base_amt to match database schema
+        'gst_enabled' => $gstEnabled ? 1 : 0,  // Use 1/0 instead of true/false for MySQL
         'cgst_amount' => $cgstAmount,
         'sgst_amount' => $sgstAmount,
-        'total_gst_amount' => $totalGstAmount,
         'service_charge_amount' => $gstEnabled ? 0 : $serviceChargeAmount,
         'final_amount' => $finalAmount,
-        'invoice_date' => $invoiceDate,
         'gst_number' => $gstEnabled ? $gstDetails['gstNumber'] : '',
         'company_name' => $gstEnabled ? $gstDetails['companyName'] : '',
         'company_address' => $gstEnabled ? $gstDetails['companyAddress'] : ''
     ];
 
+    // Check if invoices table exists, create if not
+    try {
+        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'invoices'");
+        if ($tableCheckResult->num_rows === 0) {
+            // Table doesn't exist, create it
+            $createTableSql = "CREATE TABLE `invoices` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `invoice_number` VARCHAR(50) NOT NULL,
+                `booking_id` INT(11) NOT NULL,
+                `invoice_date` DATE NOT NULL,
+                `base_amt` DECIMAL(10,2) NOT NULL,
+                `gst_enabled` TINYINT(1) NOT NULL DEFAULT '0',
+                `cgst_amount` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+                `sgst_amount` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+                `service_charge_amount` DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+                `final_amount` DECIMAL(10,2) NOT NULL,
+                `gst_number` VARCHAR(50) DEFAULT NULL,
+                `company_name` VARCHAR(100) DEFAULT NULL,
+                `company_address` TEXT DEFAULT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `invoice_number` (`invoice_number`),
+                KEY `booking_id` (`booking_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+            
+            if (!$conn->query($createTableSql)) {
+                throw new Exception("Failed to create invoices table: " . $conn->error);
+            }
+        }
+    } catch (Exception $e) {
+        logGenerateInvoiceError("Error checking/creating invoices table", ['error' => $e->getMessage()]);
+        // Continue execution - don't stop on table creation error
+    }
+
     // Save invoice to database
     try {
-        $stmt = $conn->prepare("
-            INSERT INTO invoices (
-                invoice_number, booking_id, invoice_date, base_amount,
-                gst_enabled, cgst_amount, sgst_amount, service_charge_amount,
-                final_amount, gst_number, company_name, company_address
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                invoice_date = VALUES(invoice_date),
-                base_amount = VALUES(base_amount),
-                gst_enabled = VALUES(gst_enabled),
-                cgst_amount = VALUES(cgst_amount),
-                sgst_amount = VALUES(sgst_amount),
-                service_charge_amount = VALUES(service_charge_amount),
-                final_amount = VALUES(final_amount),
-                gst_number = VALUES(gst_number),
-                company_name = VALUES(company_name),
-                company_address = VALUES(company_address)
-        ");
+        // First check if invoice already exists for this booking
+        $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
+        $checkStmt->bind_param("i", $booking['id']);
+        $checkStmt->execute();
+        $existingResult = $checkStmt->get_result();
         
-        if (!$stmt) {
-            throw new Exception("Failed to prepare invoice insert statement: " . $conn->error);
+        if ($existingResult->num_rows > 0) {
+            // Update existing invoice
+            $existingInvoice = $existingResult->fetch_assoc();
+            $stmt = $conn->prepare("
+                UPDATE invoices SET 
+                    invoice_date = ?,
+                    base_amt = ?,
+                    gst_enabled = ?,
+                    cgst_amount = ?,
+                    sgst_amount = ?,
+                    service_charge_amount = ?,
+                    final_amount = ?,
+                    gst_number = ?,
+                    company_name = ?,
+                    company_address = ?
+                WHERE id = ?
+            ");
+            
+            if (!$stmt) {
+                throw new Exception("Failed to prepare invoice update statement: " . $conn->error);
+            }
+            
+            $stmt->bind_param(
+                "sddddddsssi",
+                $invoiceData['invoice_date'],
+                $invoiceData['base_amt'],
+                $invoiceData['gst_enabled'],
+                $invoiceData['cgst_amount'],
+                $invoiceData['sgst_amount'],
+                $invoiceData['service_charge_amount'],
+                $invoiceData['final_amount'],
+                $invoiceData['gst_number'],
+                $invoiceData['company_name'],
+                $invoiceData['company_address'],
+                $existingInvoice['id']
+            );
+        } else {
+            // Insert new invoice
+            $stmt = $conn->prepare("
+                INSERT INTO invoices (
+                    invoice_number, booking_id, invoice_date, base_amt,
+                    gst_enabled, cgst_amount, sgst_amount, service_charge_amount,
+                    final_amount, gst_number, company_name, company_address
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            if (!$stmt) {
+                throw new Exception("Failed to prepare invoice insert statement: " . $conn->error);
+            }
+            
+            $stmt->bind_param(
+                "sissdddddsss",
+                $invoiceData['invoice_number'],
+                $invoiceData['booking_id'],
+                $invoiceData['invoice_date'],
+                $invoiceData['base_amt'],
+                $invoiceData['gst_enabled'],
+                $invoiceData['cgst_amount'],
+                $invoiceData['sgst_amount'],
+                $invoiceData['service_charge_amount'],
+                $invoiceData['final_amount'],
+                $invoiceData['gst_number'],
+                $invoiceData['company_name'],
+                $invoiceData['company_address']
+            );
         }
-        
-        $stmt->bind_param(
-            "sisidddddssss",
-            $invoiceNumber,
-            $booking['id'],
-            $invoiceDate,
-            $baseAmount,
-            $gstEnabled,
-            $cgstAmount,
-            $sgstAmount,
-            $serviceChargeAmount,
-            $finalAmount,
-            $gstDetails['gstNumber'],
-            $gstDetails['companyName'],
-            $gstDetails['companyAddress']
-        );
         
         if (!$stmt->execute()) {
             throw new Exception("Failed to save invoice: " . $stmt->error);
         }
         
-        $invoiceId = $stmt->insert_id ?: $conn->insert_id;
+        $invoiceId = $existingResult->num_rows > 0 ? 
+                     $existingInvoice['id'] : 
+                     ($stmt->insert_id ?: $conn->insert_id);
         
     } catch (Exception $e) {
         logGenerateInvoiceError("Error saving invoice", [
@@ -260,22 +325,56 @@ try {
         ], 500);
     }
     
-    // Return success response
+    // Generate HTML for invoice preview
+    $invoiceHtml = generateInvoiceHTML([
+        'invoice_number' => $invoiceNumber,
+        'booking_number' => $booking['booking_number'],
+        'passenger_name' => $booking['passenger_name'],
+        'passenger_email' => $booking['passenger_email'],
+        'passenger_phone' => $booking['passenger_phone'],
+        'trip_type' => $booking['trip_type'],
+        'trip_mode' => $booking['trip_mode'] ?? '',
+        'pickup_location' => $booking['pickup_location'],
+        'drop_location' => $booking['drop_location'] ?? '',
+        'pickup_date' => $booking['pickup_date'],
+        'cab_type' => $booking['cab_type'],
+        'base_amount' => $baseAmount,
+        'gst_enabled' => $gstEnabled,
+        'cgst_amount' => $cgstAmount,
+        'sgst_amount' => $sgstAmount,
+        'total_gst_amount' => $totalGstAmount,
+        'service_charge_amount' => $gstEnabled ? 0 : $serviceChargeAmount,
+        'final_amount' => $finalAmount,
+        'invoice_date' => $invoiceDate,
+        'gst_number' => $gstEnabled ? $gstDetails['gstNumber'] : '',
+        'company_name' => $gstEnabled ? $gstDetails['companyName'] : '',
+        'company_address' => $gstEnabled ? $gstDetails['companyAddress'] : ''
+    ]);
+    
+    // Return success response with HTML
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Invoice generated successfully',
         'data' => [
-            'invoice_id' => $invoiceId,
-            'invoice_number' => $invoiceNumber,
-            'invoice_date' => $invoiceDate,
-            'amount_details' => [
-                'base_amount' => $baseAmount,
-                'cgst_amount' => $cgstAmount,
-                'sgst_amount' => $sgstAmount,
-                'service_charge_amount' => $serviceChargeAmount,
-                'final_amount' => $finalAmount
+            'invoiceId' => $invoiceId,
+            'invoiceNumber' => $invoiceNumber,
+            'invoiceDate' => $invoiceDate,
+            'invoiceHtml' => $invoiceHtml,
+            'amountDetails' => [
+                'baseAmount' => $baseAmount,
+                'cgstAmount' => $cgstAmount,
+                'sgstAmount' => $sgstAmount,
+                'serviceChargeAmount' => $serviceChargeAmount,
+                'finalAmount' => $finalAmount
             ],
-            'gst_details' => $gstEnabled ? $gstDetails : null
+            'gstDetails' => $gstEnabled ? $gstDetails : null,
+            'pdfUrl' => "/api/admin/download-invoice.php?id={$booking['id']}" .
+                        ($gstEnabled ? "&gst=1" : "") .
+                        ($gstEnabled && !empty($gstDetails['gstNumber']) ? 
+                            "&gstNumber=" . urlencode($gstDetails['gstNumber']) .
+                            "&companyName=" . urlencode($gstDetails['companyName']) .
+                            "&companyAddress=" . urlencode($gstDetails['companyAddress']) 
+                            : "")
         ]
     ]);
     
@@ -307,7 +406,7 @@ function generateInvoiceHTML($invoiceData) {
     if ($hasGst) {
         $gstRow = '
         <tr>
-            <td>GST (18%)</td>
+            <td>GST (12%)</td>
             <td>₹ ' . number_format($invoiceData['total_gst_amount'], 2) . '</td>
         </tr>';
     }

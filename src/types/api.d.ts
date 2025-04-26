@@ -1,3 +1,4 @@
+
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -21,6 +22,11 @@ export interface BookingDetails {
     companyName: string;
     companyAddress: string;
   };
+  billingAddress?: string;
+  extraCharges?: {
+    amount: number;
+    description: string;
+  }[];
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';

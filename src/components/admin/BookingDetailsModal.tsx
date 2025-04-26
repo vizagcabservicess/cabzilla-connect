@@ -27,13 +27,17 @@ export function BookingDetailsModal({
   onStatusChange,
   isSubmitting
 }: BookingDetailsModalProps) {
+  // Control body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
+      // Prevent body scrolling when modal is open
       document.body.style.overflow = 'hidden';
     } else {
+      // Re-enable body scrolling when modal closes
       document.body.style.overflow = 'unset';
     }
     
+    // Cleanup function to ensure body scroll is restored when component unmounts
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -43,8 +47,8 @@ export function BookingDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
-        <DialogHeader className="sticky top-0 z-50 bg-white pb-4 border-b">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50">
+        <DialogHeader className="sticky top-0 z-[51] bg-white pb-4 border-b">
           <DialogTitle>Booking #{booking.bookingNumber}</DialogTitle>
         </DialogHeader>
         <div className="pt-4">

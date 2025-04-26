@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,11 +83,13 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
+    // Use a proper URL with query parameters (no body in GET request)
+    const baseUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
     const gstParam = gstEnabled ? '&gst=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
-    const downloadUrl = `${pdfUrl}${gstParam}${gstDetailsParam}`;
+    const downloadUrl = `${baseUrl}${gstParam}${gstDetailsParam}`;
     window.open(downloadUrl, '_blank');
   };
 

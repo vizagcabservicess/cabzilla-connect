@@ -1,17 +1,14 @@
+
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Calendar, User, Phone, Mail, Car, IndianRupee, AlertCircle } from 'lucide-react';
-import { Booking, BookingStatus } from '@/types/api';
 import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
+import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
-import { formatBookingDate, getStatusColor } from '@/utils/bookingUtils';
-import { useToast } from "@/components/ui/use-toast";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { formatPrice } from '@/lib/utils';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -19,7 +16,7 @@ interface BookingDetailsProps {
   onEdit: (updatedData: Partial<Booking>) => Promise<void>;
   onAssignDriver: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onCancel: () => Promise<void>;
-  onGenerateInvoice: () => Promise<void>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isSubmitting: boolean;
 }
@@ -35,453 +32,148 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
-  const { toast } = useToast();
-  const [localSubmitting, setLocalSubmitting] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-
-  const getApiBaseUrl = () => {
-    const currentDomain = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    if (currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1')) {
-      return `${protocol}//${currentDomain}${window.location.port ? `:${window.location.port}` : ''}`;
-    }
-    
-    return 'https://vizagup.com';
-  };
-  
-  const apiBaseUrl = getApiBaseUrl();
-  
-  console.log('Current domain:', window.location.hostname);
-  console.log('Using API base URL:', apiBaseUrl);
 
   const handleTabChange = (value: string) => {
-    console.log('Tab changed to:', value);
     setActiveTab(value);
-    setApiError(null);
   };
 
-  const handleBackToDetails = () => {
-    handleTabChange('details');
-  };
+  const isCompleted = booking.status === 'completed';
+  const isCancelled = booking.status === 'cancelled';
 
-  const safeFetch = async (endpoint: string, method: string, body: any) => {
-    setApiError(null);
-    const url = `${apiBaseUrl}${endpoint}`;
-    console.log(`Making ${method} request to: ${url}`);
-    console.log('Request payload:', body);
+  // Determine which tabs should be enabled based on booking status
+  const isEditDisabled = isCancelled;
+  const isDriverDisabled = isCancelled || isCompleted;
+  const isInvoiceDisabled = isCancelled;
 
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true'
-      };
-
-      console.log('Request headers:', headers);
-
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify(body),
-        credentials: 'include',
-      });
-
-      console.log(`Response status: ${response.status}`);
-      
-      const textResponse = await response.text();
-      console.log('Raw response:', textResponse);
-
-      let data;
-      if (!textResponse || textResponse.trim() === '') {
-        console.warn('Empty response received from server');
-        
-        if (response.ok) {
-          return { 
-            status: 'success', 
-            message: 'Operation completed',
-            synthetic: true
-          };
-        } else {
-          throw new Error(`Server returned empty response with status ${response.status}`);
-        }
-      }
-
-      try {
-        data = JSON.parse(textResponse);
-      } catch (parseError) {
-        console.error('Error parsing JSON response:', parseError);
-        throw new Error(`Server response is not valid JSON: ${textResponse.substring(0, 100)}...`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data?.message || `Request failed with status ${response.status}`);
-      }
-
-      console.log('Parsed response data:', data);
-      return data;
-    } catch (error) {
-      console.error(`Error in ${method} request to ${endpoint}:`, error);
-      setApiError(error instanceof Error ? error.message : 'Unknown error occurred');
-      throw error;
-    }
-  };
-
-  const handleAssignDriver = async (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => {
-    try {
-      setLocalSubmitting(true);
-      console.log('Assigning driver:', driverData);
-      
-      if (!driverData.driverName || !driverData.driverPhone || !driverData.vehicleNumber) {
-        throw new Error('All driver fields are required');
-      }
-      
-      let result;
-      try {
-        result = await safeFetch('/api/admin/assign-driver.php', 'POST', {
-          bookingId: booking.id,
-          ...driverData
-        });
-      } catch (firstError) {
-        console.error('First attempt failed, trying alternative endpoint:', firstError);
-        
-        try {
-          result = await safeFetch('/api/admin/update-booking.php', 'POST', {
-            bookingId: booking.id,
-            driverName: driverData.driverName,
-            driverPhone: driverData.driverPhone,
-            vehicleNumber: driverData.vehicleNumber,
-            status: 'assigned'
-          });
-        } catch (secondError) {
-          console.error('Second attempt failed, trying direct request:', secondError);
-          
-          result = await safeFetch(`https://vizagup.com/api/admin/assign-driver.php`, 'POST', {
-            bookingId: booking.id,
-            ...driverData
-          });
-        }
-      }
-
-      if (result.status === 'success') {
-        toast({
-          title: "Driver Assigned",
-          description: "Driver has been successfully assigned to this booking",
-        });
-        
-        await onAssignDriver(driverData);
-        handleBackToDetails();
-      }
-    } catch (error) {
-      console.error('Driver assignment failed:', error);
-      toast({
-        title: "Assignment Failed",
-        description: error instanceof Error ? error.message : "Failed to assign driver",
-        variant: "destructive",
-      });
-    } finally {
-      setLocalSubmitting(false);
-    }
-  };
-
-  const handleCancelBooking = async () => {
-    try {
-      setLocalSubmitting(true);
-      
-      let result;
-      try {
-        result = await safeFetch('/api/admin/cancel-booking.php', 'POST', {
-          bookingId: booking.id
-        });
-      } catch (firstError) {
-        console.error('First cancel attempt failed, trying alternative endpoint:', firstError);
-        
-        try {
-          result = await safeFetch('/api/admin/update-booking.php', 'POST', {
-            bookingId: booking.id,
-            status: 'cancelled'
-          });
-        } catch (secondError) {
-          console.error('Second cancel attempt failed, trying booking status change:', secondError);
-          
-          result = await safeFetch('/api/admin/booking.php?id=' + booking.id, 'POST', {
-            status: 'cancelled'
-          });
-        }
-      }
-
-      if (result.status === 'success') {
-        toast({
-          title: "Booking Cancelled",
-          description: "The booking has been successfully cancelled",
-        });
-        
-        await onCancel();
-        handleBackToDetails();
-      }
-    } catch (error) {
-      console.error('Cancellation failed:', error);
-      toast({
-        title: "Cancellation Failed",
-        description: error instanceof Error ? error.message : "Failed to cancel booking",
-        variant: "destructive",
-      });
-    } finally {
-      setLocalSubmitting(false);
-    }
-  };
-
-  const handleGenerateInvoice = async () => {
-    try {
-      setLocalSubmitting(true);
-      
-      let result;
-      try {
-        console.log('Attempting to generate invoice for booking:', booking.id);
-        result = await safeFetch('/api/admin/generate-invoice.php', 'POST', {
-          bookingId: booking.id
-        });
-      } catch (firstError) {
-        console.error('First generate invoice attempt failed, trying alternative endpoint:', firstError);
-        
-        try {
-          result = await safeFetch(`https://vizagup.com/api/admin/generate-invoice.php`, 'POST', {
-            bookingId: booking.id
-          });
-        } catch (secondError) {
-          console.error('Second generate invoice attempt failed, trying GET method:', secondError);
-          
-          result = await safeFetch(`/api/admin/generate-invoice.php?id=${booking.id}`, 'GET', null);
-        }
-      }
-
-      if (result?.status === 'success') {
-        toast({
-          title: "Invoice Generated",
-          description: "Invoice has been successfully generated",
-        });
-        
-        await onGenerateInvoice();
-        if (activeTab !== 'invoice') {
-          handleTabChange('invoice');
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Invoice generation failed:', error);
-      toast({
-        title: "Invoice Generation Failed",
-        description: error instanceof Error ? error.message : "Failed to generate invoice",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setLocalSubmitting(false);
-    }
-  };
-
-  const handleStatusChange = async (newStatus: BookingStatus) => {
-    try {
-      setLocalSubmitting(true);
-      await onStatusChange(newStatus);
-      toast({
-        title: "Status Updated",
-        description: `Booking status changed to ${newStatus.toUpperCase()}`,
-      });
-    } catch (error) {
-      console.error('Status update failed:', error);
-      toast({
-        title: "Status Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update status",
-        variant: "destructive",
-      });
-    } finally {
-      setLocalSubmitting(false);
-    }
-  };
-
-  const formatTripType = (tripType?: string, tripMode?: string): string => {
-    if (!tripType) return 'Standard';
-    
-    const type = tripType.charAt(0).toUpperCase() + tripType.slice(1);
-    const mode = tripMode ? ` (${tripMode.replace('-', ' ')})` : '';
-    
-    return `${type}${mode}`;
-  };
-  
-  const getInvoiceDownloadUrl = () => {
-    return `${apiBaseUrl}/api/download-invoice.php?id=${booking.id}&format=pdf`;
-  };
+  // Construct the PDF URL for the invoice download
+  const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Badge variant={getStatusColor(booking.status as BookingStatus) as any}>
-            {booking.status?.toUpperCase()}
-          </Badge>
-          <h2 className="text-xl font-bold">{booking.bookingNumber}</h2>
+    <div>
+      <div className="mb-6">
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <h2 className="text-2xl font-bold">Booking #{booking.bookingNumber}</h2>
+            <p className="text-gray-500">
+              {new Date(booking.pickupDate).toLocaleDateString()} · {booking.tripType} · {booking.cabType}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-semibold">₹ {formatPrice(booking.totalAmount)}</p>
+            <div className="inline-block px-2 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-800 mt-1">
+              {booking.status.replace('_', ' ').toUpperCase()}
+            </div>
+          </div>
         </div>
-        <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+
+        <BookingStatusFlow 
+          currentStatus={booking.status} 
+          onStatusChange={onStatusChange}
+          isSubmitting={isSubmitting}
+        />
       </div>
 
-      {apiError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>API Error</AlertTitle>
-          <AlertDescription>{apiError}</AlertDescription>
-        </Alert>
-      )}
-      
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid grid-cols-4 mb-4">
+      <Tabs defaultValue="details" value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full border-b justify-start">
           <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="edit">Edit</TabsTrigger>
-          <TabsTrigger value="driver">Driver</TabsTrigger>
-          <TabsTrigger value="invoice">Invoice</TabsTrigger>
+          <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
+          <TabsTrigger value="driver" disabled={isDriverDisabled}>Driver</TabsTrigger>
+          <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="details" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Booking Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Passenger Information</p>
-                  <div className="flex items-start mt-1 space-x-2">
-                    <User className="h-4 w-4 mt-0.5 text-gray-500" />
-                    <div>
-                      <p className="font-medium">{booking.passengerName}</p>
-                      <div className="flex items-center mt-1">
-                        <Phone className="h-4 w-4 mr-1 text-gray-500" />
-                        <span className="text-sm">{booking.passengerPhone}</span>
-                      </div>
-                      <div className="flex items-center mt-1">
-                        <Mail className="h-4 w-4 mr-1 text-gray-500" />
-                        <span className="text-sm">{booking.passengerEmail}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="border-t pt-4">
-                  <p className="text-sm font-medium text-gray-500">Trip Details</p>
-                  <div className="grid grid-cols-1 gap-3 mt-1">
-                    <div className="flex items-start space-x-2">
-                      <MapPin className="h-4 w-4 mt-0.5 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Pickup Location</p>
-                        <p className="text-sm">{booking.pickupLocation}</p>
-                      </div>
-                    </div>
-                    
-                    {booking.dropLocation && (
-                      <div className="flex items-start space-x-2">
-                        <MapPin className="h-4 w-4 mt-0.5 text-gray-500" />
-                        <div>
-                          <p className="font-medium">Drop Location</p>
-                          <p className="text-sm">{booking.dropLocation}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="flex items-start space-x-2">
-                      <Calendar className="h-4 w-4 mt-0.5 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Pickup Date & Time</p>
-                        <p className="text-sm">{formatBookingDate(booking.pickupDate)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start space-x-2">
-                      <Car className="h-4 w-4 mt-0.5 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Vehicle & Type</p>
-                        <p className="text-sm">{booking.cabType}</p>
-                        <p className="text-xs text-gray-500">{formatTripType(booking.tripType, booking.tripMode)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start space-x-2">
-                      <IndianRupee className="h-4 w-4 mt-0.5 text-gray-500" />
-                      <div>
-                        <p className="font-medium">Amount</p>
-                        <p className="text-sm">₹{booking.totalAmount?.toLocaleString('en-IN')}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {(booking.driverName || booking.driverPhone) && (
-                  <div className="border-t pt-4">
-                    <p className="text-sm font-medium text-gray-500">Assigned Driver</p>
-                    <div className="mt-1">
-                      <p className="font-medium">{booking.driverName || 'Name not provided'}</p>
-                      <p className="text-sm">{booking.driverPhone || 'Phone not provided'}</p>
-                      <p className="text-sm">{booking.vehicleNumber || 'Vehicle number not provided'}</p>
-                    </div>
-                  </div>
+        <TabsContent value="details" className="py-4">
+          <Card className="p-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-semibold mb-2 text-gray-700">Customer Details</h3>
+                <p><span className="font-medium">Name:</span> {booking.passengerName}</p>
+                <p><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
+                <p><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
+                {booking.billingAddress && (
+                  <p><span className="font-medium">Billing Address:</span> {booking.billingAddress}</p>
                 )}
-
               </div>
-            </CardContent>
-          </Card>
-          
-          <div className="flex flex-col space-y-3">
-            <BookingStatusFlow 
-              currentStatus={booking.status as BookingStatus} 
-              onStatusChange={handleStatusChange}
-              isAdmin={true}
-              onClose={handleBackToDetails}
-              disabled={isSubmitting || localSubmitting}
-            />
 
-            {(booking.status !== 'cancelled' && booking.status !== 'completed') && (
-              <Button 
-                variant="destructive"
-                onClick={handleCancelBooking}
-                disabled={isSubmitting || localSubmitting}
-              >
-                Cancel Booking
-              </Button>
+              <div>
+                <h3 className="font-semibold mb-2 text-gray-700">Trip Details</h3>
+                <p><span className="font-medium">Trip Type:</span> {booking.tripType} {booking.tripMode && `(${booking.tripMode})`}</p>
+                <p><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
+                {booking.dropLocation && <p><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
+                <p><span className="font-medium">Pickup Date:</span> {new Date(booking.pickupDate).toLocaleString()}</p>
+                <p><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
+              </div>
+            </div>
+
+            {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
+              <div className="mt-6 border-t pt-4">
+                <h3 className="font-semibold mb-2 text-gray-700">Driver Details</h3>
+                {booking.driverName && <p><span className="font-medium">Name:</span> {booking.driverName}</p>}
+                {booking.driverPhone && <p><span className="font-medium">Phone:</span> {booking.driverPhone}</p>}
+                {booking.vehicleNumber && <p><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>}
+              </div>
             )}
-          </div>
+
+            {booking.extraCharges && booking.extraCharges.length > 0 && (
+              <div className="mt-6 border-t pt-4">
+                <h3 className="font-semibold mb-2 text-gray-700">Extra Charges</h3>
+                {booking.extraCharges.map((charge, index) => (
+                  <div key={index} className="flex justify-between items-center py-1">
+                    <span>{charge.description || 'Additional charge'}</span>
+                    <span>₹{formatPrice(charge.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-between items-center border-t pt-4">
+              <div>
+                <p className="text-sm text-gray-500">Total Amount</p>
+                <p className="font-bold text-xl">₹{formatPrice(booking.totalAmount)}</p>
+              </div>
+
+              <div className="space-x-2">
+                {!isCancelled && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={onCancel}
+                    disabled={isSubmitting || isCompleted}
+                  >
+                    Cancel Booking
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
         </TabsContent>
-        
-        <TabsContent value="edit">
+
+        <TabsContent value="edit" className="py-4">
           <BookingEditForm 
-            booking={booking}
-            onSave={onEdit}
-            onCancel={handleBackToDetails}
-            isSubmitting={isSubmitting || localSubmitting}
+            booking={booking} 
+            onSubmit={onEdit} 
+            onCancel={() => handleTabChange('details')}
+            isSubmitting={isSubmitting}
           />
         </TabsContent>
-        
-        <TabsContent value="driver">
+
+        <TabsContent value="driver" className="py-4">
           <DriverAssignment 
             booking={booking}
-            onAssign={onAssignDriver}
-            onClose={handleBackToDetails}
-            isSubmitting={isSubmitting || localSubmitting}
+            onAssignDriver={onAssignDriver}
+            onCancel={() => handleTabChange('details')}
+            isSubmitting={isSubmitting}
           />
         </TabsContent>
-        
-        <TabsContent value="invoice">
+
+        <TabsContent value="invoice" className="py-4">
           <BookingInvoice 
             booking={booking}
-            onGenerateInvoice={handleGenerateInvoice}
-            onClose={handleBackToDetails}
-            isSubmitting={isSubmitting || localSubmitting}
-            pdfUrl={getInvoiceDownloadUrl()}
+            onGenerateInvoice={onGenerateInvoice}
+            onClose={() => handleTabChange('details')}
+            isSubmitting={isSubmitting}
+            pdfUrl={pdfUrl}
           />
         </TabsContent>
       </Tabs>
-    </>
+    </div>
   );
 }
