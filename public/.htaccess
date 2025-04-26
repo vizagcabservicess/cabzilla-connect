@@ -1,12 +1,12 @@
 
 # Enable Cross-Origin Resource Sharing (CORS)
 <IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First, *"
-    Header always set Access-Control-Max-Age "86400"
-    Header always set Access-Control-Expose-Headers "*"
-    Header always set X-Content-Type-Options "nosniff"
+    Header set Access-Control-Allow-Origin "%{HTTP_ORIGIN}e" env=HTTP_ORIGIN
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First"
+    Header set Access-Control-Max-Age "86400"
+    Header set Access-Control-Allow-Credentials "true"
+    Header set X-Content-Type-Options "nosniff"
     
     # Handle preflight OPTIONS request
     RewriteEngine On
@@ -14,48 +14,36 @@
     RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
 
-# Prevent direct access to .php files in the api directory
+# Fix for PHP API endpoints
 <FilesMatch "\.(php)$">
     <IfModule mod_authz_core.c>
         Require all granted
     </IfModule>
+    SetHandler application/x-httpd-php
 </FilesMatch>
 
-# Fix for PUT/DELETE requests
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-</IfModule>
-
-# Ensure PHP errors are displayed in development
-php_flag display_errors On
-php_value error_reporting E_ALL
-
-# Enable rewrite engine for api routing
+# Enable rewrite engine
 RewriteEngine On
+RewriteBase /
 
-# Direct access to API PHP files
-<Files ~ "\.php$">
-    Order Allow,Deny
-    Allow from all
-    SetHandler application/x-httpd-php
-</Files>
+# Ensure proper authorization header
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-# High priority API endpoints - ensure these work first
-RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
+# Direct access for API endpoints - high priority rules first
+RewriteRule ^api/admin/(.+)\.php$ /api/admin/$1.php [L,QSA]
+RewriteRule ^api/user/(.+)\.php$ /api/user/$1.php [L,QSA]
+RewriteRule ^api/(.+)\.php$ /api/$1.php [L,QSA]
 
-# Invoice and receipt endpoints with high priority
-RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
-
-# Don't apply rewriting to actual files or directories
+# Don't rewrite files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
-# Send all other requests to index.html for React to handle
+# Send other requests to index.html
 RewriteRule ^(.*)$ /index.html [L]
+
+# Set PHP configuration
+php_value display_errors On
+php_value max_execution_time 30
+php_value memory_limit 256M
+php_value post_max_size 50M
+php_value upload_max_filesize 50M

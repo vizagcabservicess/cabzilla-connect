@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Database utility functions for establishing connections
@@ -27,14 +26,13 @@ function logDbConnection($message, $data = []) {
 
 // Get database connection with improved error handling
 function getDbConnection() {
-    // Disable any output buffering to prevent HTML contamination
+    // Disable output buffering
     if (ob_get_level()) ob_end_clean();
     
-    // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    $dbHost = DB_HOST;
+    $dbName = DB_NAME;
+    $dbUser = DB_USER;
+    $dbPass = DB_PASSWORD;
     
     try {
         logDbConnection("Attempting database connection", [
@@ -42,32 +40,36 @@ function getDbConnection() {
             'dbname' => $dbName
         ]);
         
-        // Create connection with error reporting
+        // Set connection timeout and enable strict mode
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 20);
         
-        // Check connection
         if ($conn->connect_error) {
             logDbConnection("Database connection failed", ['error' => $conn->connect_error]);
             throw new Exception("Connection failed: " . $conn->connect_error);
         }
         
-        // Set charset to prevent encoding issues
+        // Configure connection
         $conn->set_charset("utf8mb4");
+        $conn->query("SET SESSION sql_mode = 'STRICT_ALL_TABLES'");
+        $conn->query("SET SESSION wait_timeout = 30");
+        $conn->query("SET SESSION interactive_timeout = 30");
         
-        // Test connection with a simple query to ensure it's working
+        // Test connection
         $testResult = $conn->query("SELECT 1");
         if (!$testResult) {
-            logDbConnection("Database test query failed", ['error' => $conn->error]);
-            throw new Exception("Database connection test query failed: " . $conn->error);
+            throw new Exception("Database test query failed: " . $conn->error);
         }
         
-        logDbConnection("Database connection successful", ['server_info' => $conn->server_info]);
+        logDbConnection("Database connection successful", [
+            'server_info' => $conn->server_info,
+            'client_info' => mysqli_get_client_info()
+        ]);
+        
         return $conn;
     } catch (Exception $e) {
-        // Log error to both custom log and PHP error log
         logDbConnection("Database connection error", ['error' => $e->getMessage()]);
         error_log("Database connection error: " . $e->getMessage());
-        
         return null;
     }
 }
