@@ -22,7 +22,7 @@ export function AddDriverDialog({ isOpen, onClose, onSubmit, isSubmitting }: Add
     license_number: '',
     vehicle_number: '',
     vehicle_type: '',
-    status: 'inactive' as DriverStatus,
+    status: 'available' as DriverStatus,
     location: ''
   });
   
@@ -202,10 +202,9 @@ export function AddDriverDialog({ isOpen, onClose, onSubmit, isSubmitting }: Add
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="on_trip">On Trip</SelectItem>
-                    <SelectItem value="blocked">Blocked</SelectItem>
+                    <SelectItem value="available">Available</SelectItem>
+                    <SelectItem value="busy">Busy</SelectItem>
+                    <SelectItem value="offline">Offline</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
