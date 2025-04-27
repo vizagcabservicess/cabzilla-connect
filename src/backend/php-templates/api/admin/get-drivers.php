@@ -2,9 +2,27 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 
+// Always set headers first to avoid "headers already sent" errors
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    sendJsonResponse(['status' => 'success'], 200);
+    http_response_code(200);
+    exit;
+}
+
+// Common function for JSON responses
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    
+    // Clear output buffer to prevent issues
+    if (ob_get_level()) ob_end_clean();
+    
+    echo json_encode($data);
     exit;
 }
 
@@ -12,7 +30,6 @@ try {
     // Only allow GET request
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
-        exit;
     }
 
     // Connect to database with retry mechanism
@@ -23,11 +40,11 @@ try {
     $searchQuery = isset($_GET['search']) ? $_GET['search'] : '';
     
     // Log the request parameters for debugging
-    logError("Get Drivers Request", [
+    error_log("Get Drivers Request: " . json_encode([
         'status' => $statusFilter,
         'search' => $searchQuery,
         'method' => $_SERVER['REQUEST_METHOD']
-    ]);
+    ]));
     
     // Build query based on filters
     $sql = "SELECT * FROM drivers";
@@ -54,14 +71,11 @@ try {
     
     $sql .= " ORDER BY name ASC";
     
-    // Log SQL query
-    logError("Get Drivers SQL", ['sql' => $sql, 'params' => json_encode($params)]);
-    
     // Check if drivers table exists
     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'drivers'");
     if ($tableCheckResult->num_rows === 0) {
         // Create sample data if table doesn't exist
-        logError("Creating drivers table", ['action' => 'create_table']);
+        error_log("Creating drivers table");
         
         $createTableSql = "CREATE TABLE drivers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -87,7 +101,7 @@ try {
                       ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'AP 32 XX 5678', 'busy', 215, 85500, 4.6),
                       ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'AP 33 XX 9012', 'offline', 180, 72000, 4.5)");
         
-        logError("Inserted sample driver data", ['count' => 3]);
+        error_log("Inserted sample driver data");
     }
     
     // Prepare and execute query
@@ -126,7 +140,7 @@ try {
     }
 
 } catch (Exception $e) {
-    logError("Driver API Error", ['error' => $e->getMessage()]);
+    error_log("Driver API Error: " . $e->getMessage());
     sendJsonResponse([
         'status' => 'error', 
         'message' => 'Failed to retrieve drivers: ' . $e->getMessage()
