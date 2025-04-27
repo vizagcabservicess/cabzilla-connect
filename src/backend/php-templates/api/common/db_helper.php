@@ -40,7 +40,7 @@ function getDbConnection() {
     $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
     $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
     $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
-    $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
+    $dbPass = defined('DB_PASSWORD') ? DB_PASS : 'Vizag@1213';
     
     // Create connection
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
