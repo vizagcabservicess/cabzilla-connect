@@ -16,28 +16,28 @@ define('DB_NAME', 'u644605165_db_be');
 define('DB_USER', 'u644605165_usr_be');
 define('DB_PASS', 'Vizag@1213');
 
-// Increase timeout values for better stability
-ini_set('mysql.connect_timeout', '120');  // Increased from 60
-ini_set('default_socket_timeout', '120'); // Increased from 60
-ini_set('max_execution_time', '300');    // Increased from 120
+// Database Connection Settings - Increased timeouts for stability
+ini_set('mysql.connect_timeout', '30');
+ini_set('default_socket_timeout', '30');
+ini_set('max_execution_time', '60');
 
-// Force errors to be logged, not displayed
-error_reporting(E_ALL);
-ini_set('display_errors', 0);  // Never display PHP errors in API response
-ini_set('log_errors', 1);      // Always log errors
+// Error Reporting Configuration
+if (APP_DEBUG) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    error_reporting(0);
+    ini_set('display_errors', 0);
+}
 
 // Session Security Configuration
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
-ini_set('session.gc_maxlifetime', 7200); // 2 hours session timeout
+// Only set secure if HTTPS
 if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
     ini_set('session.cookie_secure', 1);
 }
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start();
 
 // Directory Settings
 define('ROOT_PATH', realpath(__DIR__));
@@ -55,124 +55,120 @@ foreach ($directories as $dir) {
     }
 }
 
-// Enhanced database connection function with retry mechanism and better error handling
-function getDbConnection($retries = 5) {
-    $attempt = 0;
-    $lastError = null;
-    
-    // Log connection attempt
-    $logMessage = "Attempting database connection to " . DB_HOST . ", database: " . DB_NAME;
-    error_log($logMessage);
-    
-    while ($attempt < $retries) {
-        try {
-            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-            
-            if (!$conn->connect_error) {
-                $conn->set_charset("utf8mb4");
-                $conn->query("SET session wait_timeout=1200");  // 20 minutes
-                $conn->query("SET session interactive_timeout=1200");
-                
-                // Test connection with simple query
-                $testResult = $conn->query("SELECT 1");
-                if ($testResult === false) {
-                    throw new Exception("Database connection test query failed: " . $conn->error);
-                }
-                
-                return $conn;
-            }
-            
-            $lastError = $conn->connect_error;
-        } catch (Exception $e) {
-            $lastError = $e->getMessage();
+// Enhanced database connection function
+function getDbConnection() {
+    try {
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
-        error_log("Database connection attempt " . ($attempt + 1) . " failed: " . $lastError);
+        // Set proper charset and collation
+        $conn->set_charset("utf8mb4");
+        $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
         
-        $attempt++;
-        if ($attempt < $retries) {
-            sleep(1 * $attempt);  // Exponential backoff: wait longer with each retry
-        }
+        // Set session timeouts - increased for stability
+        $conn->query("SET session wait_timeout=180");
+        $conn->query("SET session interactive_timeout=180");
+        
+        return $conn;
+    } catch (Exception $e) {
+        // Log error with timestamp
+        $timestamp = date('Y-m-d H:i:s');
+        $logMessage = "[$timestamp] Database connection error: " . $e->getMessage() . "\n";
+        file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
+        
+        return null;
     }
-    
-    // Log the failure with details
-    $errorMessage = "Database connection failed after $retries attempts. Last error: $lastError";
-    error_log($errorMessage);
-    
-    throw new Exception($errorMessage);
 }
 
-// Standardized JSON Response Helper with better error handling
-function sendJsonResponse($data, $statusCode = 200) {
-    // Clear any output buffers to prevent contamination
-    while (ob_get_level()) ob_end_clean();
-    
-    // CRITICAL: Set essential headers
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store, must-revalidate');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    
-    // CORS headers
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-    
-    http_response_code($statusCode);
-    
-    // Ensure proper JSON encoding with error handling
-    try {
-        $jsonOutput = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        if ($jsonOutput === false) {
-            throw new Exception("Failed to encode response as JSON: " . json_last_error_msg());
-        }
-        echo $jsonOutput;
-    } catch (Exception $e) {
-        error_log("JSON encoding error: " . $e->getMessage());
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Internal server error: Failed to encode response'
-        ]);
+// JSON Response Helper with CORS headers
+if (!function_exists('sendJsonResponse')) {
+    function sendJsonResponse($data, $statusCode = 200) {
+        // Clear output buffer to prevent content contamination
+        if (ob_get_level()) ob_end_clean();
+        
+        // Set essential headers
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        
+        http_response_code($statusCode);
+        echo json_encode($data, JSON_PRETTY_PRINT);
+        exit;
     }
-    exit;
 }
 
 // Enhanced Error Logging
-function logError($message, $context = []) {
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message";
-    
-    if (!empty($context)) {
-        // Only encode context if it's not already a string
-        if (is_array($context) || is_object($context)) {
-            $logEntry .= " Context: " . json_encode($context, JSON_UNESCAPED_UNICODE);
-        } else {
-            $logEntry .= " Context: " . (string)$context;
+if (!function_exists('logError')) {
+    function logError($message, $context = []) {
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[$timestamp] $message";
+        
+        if (!empty($context)) {
+            $logEntry .= " - " . json_encode($context);
         }
+        
+        $logEntry .= "\n";
+        $logFile = LOG_DIR . '/api_error_' . date('Y-m-d') . '.log';
+        file_put_contents($logFile, $logEntry, FILE_APPEND);
     }
-    
-    $logEntry .= "\n";
-    $logFile = LOG_DIR . '/api_error_' . date('Y-m-d') . '.log';
-    file_put_contents($logFile, $logEntry, FILE_APPEND);
-    
-    // Also log to PHP error log
-    error_log($message . (is_array($context) ? " - " . json_encode($context, JSON_UNESCAPED_UNICODE) : ""));
 }
 
-// Function to verify JWT token (placeholder implementation)
-function verifyJwtToken($token) {
-    // This is a placeholder - in a real application you would verify the token properly
-    if (empty($token)) {
-        return false;
+// JWT Token Generation
+if (!function_exists('generateJwtToken')) {
+    function generateJwtToken($userId, $email, $role) {
+        $issuedAt = time();
+        $expire = $issuedAt + 30 * 24 * 60 * 60; // 30 days
+        
+        $payload = [
+            'iat' => $issuedAt,
+            'exp' => $expire,
+            'userId' => $userId,
+            'email' => $email,
+            'role' => $role
+        ];
+        
+        $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = base64_encode(json_encode($payload));
+        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'your_secret_key', true));
+        
+        return "$header.$payload.$signature";
     }
-    
-    // For demo purposes, we'll accept any token and return dummy user data
-    // Replace this with actual JWT verification in production
-    return [
-        'user_id' => 1,
-        'name' => 'Test User',
-        'email' => 'test@example.com',
-        'role' => 'admin'
-    ];
+}
+
+// Database connection with retry mechanism
+if (!function_exists('getDbConnectionWithRetry')) {
+    function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
+        $attempts = 0;
+        $lastError = null;
+        
+        while ($attempts < $maxRetries) {
+            try {
+                $conn = getDbConnection();
+                if ($conn && $conn->ping()) {
+                    return $conn; // Successful connection
+                }
+            } catch (Exception $e) {
+                $lastError = $e;
+                logError("Database connection attempt " . ($attempts + 1) . " failed: " . $e->getMessage());
+            }
+            
+            $attempts++;
+            
+            if ($attempts < $maxRetries) {
+                // Wait before retrying (increasing delay with each attempt)
+                usleep($retryDelayMs * 1000 * $attempts);
+            }
+        }
+        
+        // All retries failed
+        throw new Exception("Failed to connect to database after $maxRetries attempts. Last error: " . 
+            ($lastError ? $lastError->getMessage() : "Unknown error"));
+    }
 }

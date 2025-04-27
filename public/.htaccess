@@ -7,37 +7,51 @@
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
+    
+    # Handle preflight OPTIONS request
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
 
-# Handle preflight OPTIONS request
-RewriteEngine On
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
+# Prevent direct access to .php files in the api directory
+<FilesMatch "\.(php)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>
 
 # Fix for PUT/DELETE requests
 <IfModule mod_rewrite.c>
+    RewriteEngine On
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
 
-# Ensure proper PHP handling
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-    Require all granted
-</FilesMatch>
+# Ensure PHP errors are displayed in development
+php_flag display_errors On
+php_value error_reporting E_ALL
+
+# Enable rewrite engine for api routing
+RewriteEngine On
 
 # Direct access to API PHP files
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
+    SetHandler application/x-httpd-php
 </Files>
 
-# Critical Admin API endpoints
-RewriteRule ^api/admin/get-drivers$ api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/bookings$ api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/booking$ api/admin/booking.php [L,NC,QSA]
-RewriteRule ^api/admin/booking/([0-9]+)$ api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/bookings/([0-9]+)$ api/admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^api/admin/drivers$ api/admin/drivers.php [L,NC,QSA]
+# High priority API endpoints - ensure these work first
+RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
+
+# Invoice and receipt endpoints with high priority
+RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
 
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f

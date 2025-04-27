@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -6,10 +7,16 @@ require_once __DIR__ . '/../../config.php';
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First, *');
-header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Debug mode - to diagnose problems
+$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
+
+// Log request info
+error_log("Admin booking endpoint request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
 
 // Always use JSON response helper
 function sendJsonResponse($data, $statusCode = 200) {
@@ -32,14 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Debug mode - to diagnose problems
-$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
-
-// Log request info
-error_log("Admin booking endpoint request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
-
+// Connect to database with improved error handling
 try {
-    // Direct database connection for maximum reliability
+    // Direct connection as fallback since we need maximum reliability
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
@@ -53,51 +55,23 @@ try {
     // Set character set
     $conn->set_charset("utf8mb4");
     
-    // Check if bookings table exists and create it if it doesn't
-    $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
-    if ($tableCheck->num_rows === 0) {
-        // Create the bookings table
-        $createTableSql = "
-        CREATE TABLE bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            booking_number VARCHAR(50) NOT NULL,
-            pickup_location TEXT NOT NULL,
-            drop_location TEXT,
-            pickup_date DATETIME NOT NULL,
-            return_date DATETIME,
-            cab_type VARCHAR(50) NOT NULL,
-            distance DECIMAL(10,2),
-            trip_type VARCHAR(20) NOT NULL,
-            trip_mode VARCHAR(20) NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL,
-            status VARCHAR(20) DEFAULT 'pending',
-            passenger_name VARCHAR(100) NOT NULL,
-            passenger_phone VARCHAR(20) NOT NULL,
-            passenger_email VARCHAR(100) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $conn->query($createTableSql);
-        
-        // Add sample data
-        $sampleBookingSql = "INSERT INTO bookings 
-            (booking_number, pickup_location, drop_location, pickup_date, cab_type, distance, 
-            trip_type, trip_mode, total_amount, status, passenger_name, passenger_phone, passenger_email) 
-            VALUES 
-            ('BK00001', 'Vizag Airport', 'Taj Hotel Visakhapatnam', '2025-04-28 10:00:00', 'sedan', 12.5, 
-            'airport', 'one-way', 1250.00, 'pending', 'John Smith', '9876543210', 'john@example.com'),
-            
-            ('BK00002', 'RK Beach', 'Araku Valley', '2025-04-29 08:00:00', 'innova_crysta', 116.0, 
-            'outstation', 'round-trip', 4500.00, 'confirmed', 'Mary Johnson', '8765432109', 'mary@example.com'),
-            
-            ('BK00003', 'Hotel Daspalla', 'Kailasagiri', '2025-04-30 14:00:00', 'sedan', 8.0, 
-            'local', 'one-way', 800.00, 'completed', 'Raj Kumar', '7654321098', 'raj@example.com')";
-            
-        $conn->query($sampleBookingSql);
+    // Test the connection
+    if (!$conn->ping()) {
+        throw new Exception("Database connection is not active");
     }
+} catch (Exception $e) {
+    error_log("Database connection failed in booking.php: " . $e->getMessage());
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Database connection failed: ' . $e->getMessage(),
+        'error_details' => $debugMode ? [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ] : null
+    ], 500);
+}
 
+try {
     // Check if this is a request for a specific booking or all bookings
     if (isset($_GET['id'])) {
         // Get booking by ID
@@ -227,6 +201,45 @@ try {
     } else {
         // This is a request for all bookings
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // Check if bookings table exists and create it if it doesn't
+            $tableCheck = $conn->query("SHOW TABLES LIKE 'bookings'");
+            if ($tableCheck->num_rows === 0) {
+                // Create the bookings table if it doesn't exist
+                $createTableSql = "
+                CREATE TABLE bookings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT,
+                    booking_number VARCHAR(50) NOT NULL UNIQUE,
+                    pickup_location TEXT NOT NULL,
+                    drop_location TEXT,
+                    pickup_date DATETIME NOT NULL,
+                    return_date DATETIME,
+                    cab_type VARCHAR(50) NOT NULL,
+                    distance DECIMAL(10,2),
+                    trip_type VARCHAR(20) NOT NULL,
+                    trip_mode VARCHAR(20) NOT NULL,
+                    total_amount DECIMAL(10,2) NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    passenger_name VARCHAR(100) NOT NULL,
+                    passenger_phone VARCHAR(20) NOT NULL,
+                    passenger_email VARCHAR(100) NOT NULL,
+                    hourly_package VARCHAR(50),
+                    tour_id VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ";
+                $createTableResult = $conn->query($createTableSql);
+                if ($createTableResult === false) {
+                    throw new Exception("Failed to create bookings table: " . $conn->error);
+                }
+                error_log("Created bookings table in admin/booking.php");
+                
+                // Return empty bookings array since we just created the table
+                sendJsonResponse(['status' => 'success', 'bookings' => []]);
+                exit;
+            }
+            
             // Get status filter if provided
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
@@ -294,7 +307,11 @@ try {
                 sendJsonResponse([
                     'status' => 'error', 
                     'message' => 'Database query error: ' . $e->getMessage(),
-                    'bookings' => []
+                    'bookings' => [],
+                    'debug' => $debugMode ? [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ] : null
                 ], 500);
             }
         } else {
@@ -305,7 +322,11 @@ try {
     error_log("Error in admin booking endpoint: " . $e->getMessage());
     sendJsonResponse([
         'status' => 'error', 
-        'message' => 'Failed to process request: ' . $e->getMessage()
+        'message' => 'Failed to process request: ' . $e->getMessage(),
+        'debug' => $debugMode ? [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ] : null
     ], 500);
 }
 
