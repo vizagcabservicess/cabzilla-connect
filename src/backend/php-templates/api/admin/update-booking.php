@@ -10,7 +10,7 @@ ob_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Debug mode
@@ -89,7 +89,6 @@ try {
                 'driver_name' => $data['driverName'] ?? null,
                 'driver_phone' => $data['driverPhone'] ?? null,
                 'vehicle_number' => $data['vehicleNumber'] ?? null,
-                'billing_address' => $data['billingAddress'] ?? null,
                 'updated_at' => date('Y-m-d H:i:s')
             ];
             
@@ -129,13 +128,12 @@ try {
         'status' => 'status',
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
-        'vehicleNumber' => 'vehicle_number',
-        'billingAddress' => 'billing_address'
+        'vehicleNumber' => 'vehicle_number'
     ];
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
-        if (isset($data[$requestField]) || array_key_exists($requestField, $data)) {
+        if (isset($data[$requestField]) && $data[$requestField] !== null) {
             $updateFields[] = "$dbField = ?";
             $types .= getTypeForField($data[$requestField]);
             $params[] = $data[$requestField];
@@ -161,10 +159,6 @@ try {
     // Prepare and execute the update query
     $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
     $updateStmt = $conn->prepare($sql);
-    
-    if (!$updateStmt) {
-        throw new Exception("Failed to prepare statement: " . $conn->error);
-    }
     
     // Use a helper function to properly reference values for bind_param
     function refValues($arr) {
@@ -213,7 +207,6 @@ try {
         'driverName' => $updatedBooking['driver_name'],
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
-        'billingAddress' => $updatedBooking['billing_address'] ?? '',
         'updatedAt' => $updatedBooking['updated_at']
     ];
     

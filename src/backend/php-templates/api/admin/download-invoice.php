@@ -6,10 +6,13 @@ require_once __DIR__ . '/../../config.php';
 // Clear any buffer
 if (ob_get_level()) ob_end_clean();
 
-// CRITICAL: Set headers ONLY for PDF content (moved from GET request processing to here)
+// IMPORTANT: Don't set application/json content-type here
+// Let this script set it based on PDF output
+
+// Handle CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
 // Handle OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -27,14 +30,12 @@ try {
     // Get GST details from query params
     $gstEnabled = isset($_GET['gstEnabled']) && $_GET['gstEnabled'] == '1';
     $gstDetails = null;
-    $isIGST = isset($_GET['isIGST']) && $_GET['isIGST'] == '1';
     
     if ($gstEnabled) {
         $gstDetails = [
             'gstNumber' => isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '',
             'companyName' => isset($_GET['companyName']) ? $_GET['companyName'] : '',
             'companyAddress' => isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '',
-            'isIGST' => $isIGST
         ];
     }
     
@@ -47,7 +48,7 @@ try {
         exit;
     }
     
-    // Get invoice HTML from generate-invoice.php
+    // Get invoice HTML first using the generate-invoice.php script
     $apiUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
     
     // Add all parameters to the URL
@@ -62,9 +63,6 @@ try {
         }
         if (isset($gstDetails['companyAddress'])) {
             $apiUrl .= '&companyAddress=' . urlencode($gstDetails['companyAddress']);
-        }
-        if ($isIGST) {
-            $apiUrl .= '&isIGST=1';
         }
     }
     
@@ -91,68 +89,52 @@ try {
     $htmlContent = $invoiceData['data']['invoiceHtml'];
     $invoiceNumber = $invoiceData['data']['invoiceNumber'];
     
-    // CRITICAL: Set PDF download headers correctly BEFORE any output
+    // Set headers for PDF download
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // Output HTML that will be rendered as PDF
+    // Use a library to convert HTML to PDF
+    // For this implementation, we'll use a simple method just returning the HTML
+    // In a real application, you would use a library like mPDF, DOMPDF, or TCPDF
+    // Example of integrating mPDF is commented below
+    
+    /*
+    // Using mPDF (you would need to install it via composer)
+    require_once __DIR__ . '/../../vendor/autoload.php';
+    $mpdf = new \Mpdf\Mpdf();
+    $mpdf->WriteHTML($htmlContent);
+    $mpdf->Output('invoice_' . $invoiceNumber . '.pdf', 'D');
+    */
+    
+    // Since we don't have a PDF library installed, we'll return HTML with proper headers
+    // In a real application, you would use a proper PDF library
+    
+    // For now, provide a fallback that returns the HTML that looks like a PDF
+    header('Content-Type: text/html');
     echo '<!DOCTYPE html>
 <html>
 <head>
     <title>Invoice ' . $invoiceNumber . '</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            color: #333;
-        }
-        .invoice-container {
+        body { font-family: Arial, sans-serif; }
+        .pdf-notice { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border: 1px solid #ddd; 
+            margin: 20px; 
+            text-align: center;
             max-width: 800px;
             margin: 20px auto;
-            border: 1px solid #ddd;
-            padding: 30px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .invoice-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-            overflow: auto;
-        }
-        .invoice-header div:first-child {
-            float: left;
-        }
-        .invoice-header div:last-child {
-            float: right;
-            text-align: right;
-        }
-        @media print {
-            body {
-                margin: 0;
-                padding: 0;
-            }
-            .invoice-container {
-                box-shadow: none;
-                border: none;
-                padding: 10px;
-                max-width: 100%;
-                margin: 0;
-            }
         }
     </style>
 </head>
 <body>
+    <div class="pdf-notice">
+        <h2>PDF Download Simulation</h2>
+        <p>In a production environment, this would be a PDF download.</p>
+        <p>Below is the invoice that would be converted to PDF:</p>
+    </div>
     ' . $htmlContent . '
-    <script>
-        window.onload = function() {
-            setTimeout(function() { 
-                window.print();
-            }, 500);
-        };
-    </script>
 </body>
 </html>';
 

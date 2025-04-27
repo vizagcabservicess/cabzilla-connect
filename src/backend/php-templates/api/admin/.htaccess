@@ -30,11 +30,35 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
+# HIGHEST PRIORITY: Fix schema endpoints
+<Files "fix-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+<Files "fix-drivers-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+<Files "fix-drivers-table.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
 # Direct access to PHP files - CRITICAL RULE
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
 </Files>
+
+# CRITICAL: Fix schema endpoints with highest priority
+RewriteRule ^fix-schema\.php$ fix-schema.php [L,QSA]
+RewriteRule ^fix-drivers-schema\.php$ fix-drivers-schema.php [L,QSA]
+RewriteRule ^fix-drivers-table\.php$ fix-drivers-table.php [L,QSA]
+
+# Test endpoint for API connectivity verification
+RewriteRule ^test-booking-api\.php$ test-booking-api.php [L,QSA]
 
 # SPECIAL HANDLING FOR INVOICE GENERATION
 <Files "generate-invoice.php">
@@ -67,15 +91,8 @@ RewriteRule ^get-drivers\.php$ get-drivers.php [L,NC,QSA]
 RewriteRule ^add-driver\.php$ add-driver.php [L,NC,QSA]
 RewriteRule ^update-driver\.php$ update-driver.php [L,NC,QSA]
 RewriteRule ^delete-driver\.php$ delete-driver.php [L,NC,QSA]
-
-# Add direct access for get-drivers.php with highest priority
-<Files "get-drivers.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
+RewriteRule ^reports\.php$ reports.php [L,NC,QSA]
+RewriteRule ^report-metrics\.php$ report-metrics.php [L,NC,QSA]
 
 # Add aliases for the endpoints to make them accessible via different URL patterns
 RewriteRule ^drivers/?$ drivers.php [L,NC,QSA]
@@ -102,3 +119,6 @@ RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
 RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
 RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
 RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
+
+# CRITICAL ENDPOINT MAPPINGS - Keep existing direct mappings
+# ... keep existing code (Vehicle operations and other endpoints)

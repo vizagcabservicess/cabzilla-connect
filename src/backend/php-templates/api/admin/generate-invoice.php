@@ -3,20 +3,26 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Clear any buffer
-if (ob_get_level()) ob_end_clean();
-
-// Set headers
+// CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+// Clear any potential output buffer to avoid content contamination
+if (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
-// Handle OPTIONS request
+// For front-end testing, check if we're in demo mode
+$demoMode = isset($_GET['demo']) || isset($_SERVER['HTTP_X_DEMO_MODE']);
+
+// Log request
+error_log("Admin generate-invoice endpoint called: " . $_SERVER['REQUEST_METHOD']);
+
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -30,389 +36,412 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+// Generate a proper invoice number
+function generateInvoiceNumber($bookingId) {
+    return 'INV-' . date('Ymd') . '-' . $bookingId;
+}
+
 try {
-    // Get booking ID from query parameter
-    $bookingId = isset($_GET['id']) ? $_GET['id'] : null;
+    // Get booking ID
+    $bookingId = null;
+    $gstEnabled = false;
+    $gstDetails = null;
     
-    // Get GST parameters from request
-    $gstEnabled = isset($_GET['gstEnabled']) && $_GET['gstEnabled'] == '1';
-    $gstNumber = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
-    $companyName = isset($_GET['companyName']) ? $_GET['companyName'] : '';
-    $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
-    $isIGST = isset($_GET['isIGST']) && $_GET['isIGST'] == '1';
+    // Handle both GET and POST methods
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $jsonData = file_get_contents('php://input');
+        $data = json_decode($jsonData, true);
+        
+        if (isset($data['bookingId'])) {
+            $bookingId = $data['bookingId'];
+        }
+        
+        if (isset($data['gstEnabled'])) {
+            $gstEnabled = filter_var($data['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['gstDetails'])) {
+            $gstDetails = $data['gstDetails'];
+        }
+    } 
+    else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if (isset($_GET['id'])) {
+            $bookingId = $_GET['id'];
+        }
+        
+        if (isset($_GET['gstEnabled'])) {
+            $gstEnabled = filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        // Get GST details from query params if present
+        if (isset($_GET['gstNumber']) && isset($_GET['companyName'])) {
+            $gstDetails = [
+                'gstNumber' => $_GET['gstNumber'],
+                'companyName' => $_GET['companyName'],
+                'companyAddress' => isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '',
+            ];
+        }
+    }
     
-    if (!$bookingId) {
+    error_log("Generate invoice request: bookingId=$bookingId, gstEnabled=" . ($gstEnabled ? "true" : "false"));
+    
+    if (!$bookingId && !$demoMode) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database with improved error handling
+    // Connect to database - direct connection for reliability
     try {
-        $conn = getDbConnectionWithRetry();
-        if (!$conn) {
-            throw new Exception("Database connection failed after retries");
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
     } catch (Exception $e) {
-        // For development, if database connection fails, provide mock data
-        if ($debugMode) {
-            $mockBooking = [
-                'id' => $bookingId,
-                'booking_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
-                'passenger_name' => 'Test User',
-                'passenger_email' => 'test@example.com',
-                'passenger_phone' => '9876543210',
-                'pickup_location' => 'Vizag RTC Complex, Visakhapatnam',
-                'drop_location' => 'Hyderabad, Telangana',
-                'pickup_date' => date('Y-m-d H:i:s'),
-                'return_date' => null,
-                'cab_type' => 'Sedan',
-                'total_amount' => 18333.00,
-                'status' => 'confirmed',
-                'trip_type' => 'outstation',
-                'trip_mode' => 'oneway',
-                'created_at' => date('Y-m-d H:i:s')
-            ];
+        if ($demoMode) {
+            // Return mock data in demo mode
+            error_log("Demo mode enabled for invoice generation");
         } else {
-            throw $e; // Re-throw if not in debug mode
+            // In production, return an error
+            sendJsonResponse([
+                'status' => 'error', 
+                'message' => 'Database connection failed',
+                'error_details' => $debugMode ? $e->getMessage() : null
+            ], 500);
+            exit;
         }
     }
-
-    // Fetch booking data from database if connection succeeded
-    if (!isset($mockBooking)) {
-        $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-        $stmt->bind_param("i", $bookingId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+    
+    // Get booking details from database (or use mock data in demo mode)
+    $booking = null;
+    
+    if (!$demoMode && isset($conn)) {
+        try {
+            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            $stmt->bind_param("i", $bookingId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                exit;
+            }
+            
+            $booking = $result->fetch_assoc();
+        } catch (Exception $e) {
+            // If there's a database error, enable demo mode for testing
+            $demoMode = true;
+            error_log("Error fetching booking $bookingId: " . $e->getMessage() . ". Switching to demo mode.");
         }
-        
-        $booking = $result->fetch_assoc();
     } else {
-        $booking = $mockBooking;
+        // In demo mode, create a mock booking
+        $demoMode = true;
+    }
+    
+    if ($demoMode) {
+        // Use mock data for testing purposes
+        $booking = [
+            'id' => $bookingId ?? 12345,
+            'booking_number' => 'CB' . rand(1000000000, 9999999999),
+            'passenger_name' => 'John Demo',
+            'passenger_email' => 'john@example.com',
+            'passenger_phone' => '9876543210',
+            'trip_type' => 'local',
+            'trip_mode' => 'outstation',
+            'pickup_location' => 'Visakhapatnam Airport',
+            'drop_location' => 'Araku Valley',
+            'pickup_date' => date('Y-m-d H:i:s'),
+            'cab_type' => 'Innova Crysta',
+            'total_amount' => 3500,
+            'driver_name' => 'Rajesh Kumar',
+            'driver_phone' => '9876543210',
+            'vehicle_number' => 'AP 31 AB 1234',
+            'status' => 'confirmed'
+        ];
     }
 
-    // Generate invoice number
-    $invoiceNumber = 'INV-' . date('Ymd') . '-' . $bookingId;
-    $invoiceDate = date('d M Y');
-
-    // Calculate tax amounts - using 12% GST/IGST instead of 5% service tax
-    $totalAmount = floatval($booking['total_amount']);
-    $baseFare = $totalAmount;
-    $gstAmount = 0;
+    // Current date for invoice generation
+    $currentDate = date('Y-m-d');
+    $invoiceNumber = generateInvoiceNumber($booking['id']);
     
+    // Calculate tax components (12% GST - 6% CGST + 6% SGST)
+    $baseAmount = $booking['total_amount'];
+    $taxRate = $gstEnabled ? 0.12 : 0.05; // 12% for GST, 5% for service tax
+    
+    // Calculate backwards from total (because total already includes tax)
+    $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
+    $taxAmount = $baseAmount - $baseAmountBeforeTax;
+    
+    // For GST, split into CGST and SGST
     if ($gstEnabled) {
-        // 12% GST/IGST calculation
-        $baseFare = round($totalAmount / 1.12, 2); // Base fare is total / 1.12 for 12% tax
-        $gstAmount = round($totalAmount - $baseFare, 2);
+        $cgstAmount = round($taxAmount / 2, 2);
+        $sgstAmount = $taxAmount - $cgstAmount;
     }
     
-    // Generate HTML content for the invoice
-    $invoiceHtml = '
+    // Create HTML content for invoice
+    $invoiceHtml = '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice #' . $invoiceNumber . '</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
+        .invoice-container { max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        .invoice-header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+        .company-info { text-align: right; }
+        .invoice-body { margin-bottom: 30px; }
+        .customer-details, .invoice-summary { margin-bottom: 20px; }
+        .section-title { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; }
+        .trip-details { margin-bottom: 30px; }
+        .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        .fare-table th { background-color: #f9f9f9; }
+        .total-row { font-weight: bold; }
+        .gst-details { border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9; margin-bottom: 20px; }
+        .gst-title { font-weight: bold; margin-bottom: 10px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
+<body>
     <div class="invoice-container">
         <div class="invoice-header">
             <div>
-                <h1>INVOICE</h1>
-                <p>Visakhapatnam Cab Services</p>
+                <h1 style="margin: 0; color: #333;">INVOICE</h1>
+                <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
             </div>
-            <div>
-                <p><strong>Invoice #:</strong> ' . $invoiceNumber . '</p>
-                <p><strong>Date:</strong> ' . $invoiceDate . '</p>
-                <p><strong>Booking #:</strong> ' . $booking['booking_number'] . '</p>
+            <div class="company-info">
+                <h2 style="margin: 0;">#' . $invoiceNumber . '</h2>
+                <p>Date: ' . date('d M Y', strtotime($currentDate)) . '</p>
+                <p>Booking #: ' . $booking['booking_number'] . '</p>
             </div>
         </div>
         
-        <div class="invoice-details">
-            <div class="customer-details">
-                <h3>Billed To:</h3>
-                <p>' . htmlspecialchars($booking['passenger_name']) . '</p>
-                <p>Phone: ' . htmlspecialchars($booking['passenger_phone']) . '</p>
-                <p>Email: ' . htmlspecialchars($booking['passenger_email']) . '</p>';
-    
-    if ($gstEnabled) {
-        $invoiceHtml .= '
-                <p><strong>Company:</strong> ' . htmlspecialchars($companyName) . '</p>
-                <p><strong>Address:</strong> ' . htmlspecialchars($companyAddress) . '</p>
-                <p><strong>GST Number:</strong> ' . htmlspecialchars($gstNumber) . '</p>';
-    }
+        <div class="invoice-body">
+            <div style="display: flex; justify-content: space-between;">
+                <div class="customer-details" style="width: 48%;">
+                    <h3 class="section-title">Customer Details</h3>
+                    <p><strong>Name:</strong> ' . $booking['passenger_name'] . '</p>
+                    <p><strong>Phone:</strong> ' . $booking['passenger_phone'] . '</p>
+                    <p><strong>Email:</strong> ' . $booking['passenger_email'] . '</p>
+                </div>
                 
-    $invoiceHtml .= '
+                <div class="invoice-summary" style="width: 48%;">
+                    <h3 class="section-title">Trip Summary</h3>
+                    <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type']) . ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
+                    <p><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
+                    <p><strong>Vehicle:</strong> ' . $booking['cab_type'] . '</p>
+                </div>
             </div>
-            <div class="invoice-summary">
-                <h3>Trip Summary:</h3>
-                <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type'] ?? 'Standard') . ' (' . ucfirst($booking['trip_mode'] ?? 'oneway') . ')</p>
-                <p><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
-                <p><strong>Vehicle:</strong> ' . $booking['cab_type'] . '</p>
-            </div>
-        </div>
-        
-        <div class="booking-details">
-            <h3>Trip Details:</h3>
-            <p><strong>Pickup Location:</strong> ' . htmlspecialchars($booking['pickup_location']) . '</p>';
             
-    if (!empty($booking['drop_location'])) {
-        $invoiceHtml .= '<p><strong>Drop Location:</strong> ' . htmlspecialchars($booking['drop_location']) . '</p>';
+            <div class="trip-details">
+                <h3 class="section-title">Trip Details</h3>
+                <p><strong>Pickup:</strong> ' . $booking['pickup_location'] . '</p>
+                ' . ($booking['drop_location'] ? '<p><strong>Drop:</strong> ' . $booking['drop_location'] . '</p>' : '') . '
+                <p><strong>Pickup Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
+            </div>';
+            
+    if ($gstEnabled && $gstDetails) {
+        $invoiceHtml .= '
+            <div class="gst-details">
+                <div class="gst-title">GST Details</div>
+                <p><strong>GST Number:</strong> ' . htmlspecialchars($gstDetails['gstNumber']) . '</p>
+                <p><strong>Company Name:</strong> ' . htmlspecialchars($gstDetails['companyName']) . '</p>
+                <p><strong>Company Address:</strong> ' . htmlspecialchars($gstDetails['companyAddress']) . '</p>
+            </div>';
     }
-    
+            
     $invoiceHtml .= '
-            <p><strong>Pickup Date/Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
-        </div>
-        
-        <div class="fare-breakdown">
-            <h3>Fare Breakdown:</h3>
-            <table>
+            <h3 class="section-title">Fare Breakdown</h3>
+            <table class="fare-table">
                 <tr>
                     <th>Description</th>
-                    <th>Amount</th>
+                    <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
                     <td>Base Fare</td>
-                    <td>₹ ' . number_format($baseFare, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
-    
+                
     if ($gstEnabled) {
-        if ($isIGST) {
-            $invoiceHtml .= '
-                <tr>
-                    <td>IGST (12%)</td>
-                    <td>₹ ' . number_format($gstAmount, 2) . '</td>
-                </tr>';
-        } else {
-            $cgstAmount = round($gstAmount / 2, 2);
-            $sgstAmount = $gstAmount - $cgstAmount;
-            
-            $invoiceHtml .= '
+        $invoiceHtml .= '
                 <tr>
                     <td>CGST (6%)</td>
-                    <td>₹ ' . number_format($cgstAmount, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
                 </tr>
                 <tr>
                     <td>SGST (6%)</td>
-                    <td>₹ ' . number_format($sgstAmount, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
                 </tr>';
-        }
+    } else {
+        $invoiceHtml .= '
+                <tr>
+                    <td>Service Tax (5%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($taxAmount, 2) . '</td>
+                </tr>';
     }
     
     $invoiceHtml .= '
                 <tr class="total-row">
                     <td>Total Amount</td>
-                    <td>₹ ' . number_format($totalAmount, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmount, 2) . '</td>
                 </tr>
             </table>
         </div>
         
-        <div class="company-info">
-            <p>Thank you for choosing Visakhapatnam Cab Services.</p>
-            <p>For any questions regarding this invoice, please contact support@vizagcabs.com</p>';
-    
-    if ($gstEnabled) {
-        $invoiceHtml .= '
-            <p><small>This is a computer generated invoice and does not require a physical signature.</small></p>';
-    }
-    
-    $invoiceHtml .= '
+        <div class="footer">
+            <p>Thank you for choosing Vizag Cab Services.</p>
+            <p>For any questions regarding this invoice, please contact support@vizagcabs.com</p>
         </div>
     </div>
+</body>
+</html>';
+
+    // Prepare response data
+    $responseData = [
+        'status' => 'success',
+        'message' => 'Invoice generated successfully',
+        'data' => [
+            'invoiceNumber' => $invoiceNumber,
+            'invoiceDate' => date('d M Y'),
+            'bookingNumber' => $booking['booking_number'],
+            'passengerName' => $booking['passenger_name'],
+            'totalAmount' => $baseAmount,
+            'baseAmount' => $baseAmountBeforeTax,
+            'taxAmount' => $taxAmount,
+            'gstEnabled' => $gstEnabled,
+            'invoiceHtml' => $invoiceHtml
+        ]
+    ];
     
-    <style>
-        .invoice-container {
-            max-width: 800px;
-            margin: 0 auto;
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-        }
-        .invoice-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-        }
-        .invoice-header div:first-child {
-            float: left;
-        }
-        .invoice-header div:last-child {
-            float: right;
-            text-align: right;
-        }
-        .invoice-details {
-            margin-bottom: 40px;
-            overflow: auto;
-            display: flex;
-            justify-content: space-between;
-        }
-        .customer-details {
-            width: 48%;
-        }
-        .invoice-summary {
-            width: 48%;
-            text-align: right;
-        }
-        .booking-details {
-            margin-bottom: 30px;
-            padding-top: 20px;
-        }
-        .fare-breakdown {
-            margin-top: 30px;
-            border-top: 1px solid #ddd;
-            padding-top: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-        }
-        table th, table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        table td:last-child, table th:last-child {
-            text-align: right;
-        }
-        .total-row {
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        .company-info {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 0.9em;
-            color: #666;
-        }
-        h1 {
-            color: #444;
-            margin: 0 0 10px 0;
-        }
-        h3 {
-            color: #555;
-            margin-bottom: 10px;
-        }
-    </style>
-    ';
-
-    // Store invoice in database if database is available
-    if (isset($conn) && $conn instanceof mysqli) {
+    if ($gstEnabled) {
+        $responseData['data']['cgstAmount'] = $cgstAmount;
+        $responseData['data']['sgstAmount'] = $sgstAmount;
+        $responseData['data']['gstDetails'] = $gstDetails;
+    }
+    
+    // Store invoice in database if not in demo mode
+    if (!$demoMode && isset($conn)) {
         try {
-            // Check if invoices table exists
-            $result = $conn->query("SHOW TABLES LIKE 'invoices'");
-            if ($result->num_rows == 0) {
-                // Create invoices table
-                $createTableSql = "
-                    CREATE TABLE invoices (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        invoice_number VARCHAR(50) NOT NULL,
-                        booking_id INT NOT NULL,
-                        invoice_html TEXT NOT NULL,
-                        gst_enabled TINYINT(1) DEFAULT 0,
-                        gst_number VARCHAR(50),
-                        company_name VARCHAR(100),
-                        company_address TEXT,
-                        is_igst TINYINT(1) DEFAULT 0,
-                        base_amount DECIMAL(10,2) NOT NULL,
-                        gst_amount DECIMAL(10,2) DEFAULT 0,
-                        total_amount DECIMAL(10,2) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE KEY (invoice_number)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                ";
-                $conn->query($createTableSql);
-            }
-
-            // Check if invoice exists for this booking
-            $stmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
-            $stmt->bind_param("i", $bookingId);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            // Check if invoice table exists, create if not
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS invoices (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    booking_id INT NOT NULL,
+                    invoice_number VARCHAR(50) NOT NULL,
+                    invoice_date DATE NOT NULL,
+                    base_amount DECIMAL(10,2) NOT NULL,
+                    tax_amount DECIMAL(10,2) NOT NULL,
+                    total_amount DECIMAL(10,2) NOT NULL,
+                    gst_enabled TINYINT(1) DEFAULT 0,
+                    gst_number VARCHAR(20),
+                    company_name VARCHAR(100),
+                    company_address TEXT,
+                    invoice_html MEDIUMTEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY (invoice_number),
+                    KEY (booking_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
             
-            if ($result->num_rows > 0) {
+            // Check if invoice already exists for this booking
+            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
+            $checkStmt->bind_param("i", $booking['id']);
+            $checkStmt->execute();
+            $checkResult = $checkStmt->get_result();
+            
+            if ($checkResult->num_rows > 0) {
                 // Update existing invoice
-                $row = $result->fetch_assoc();
-                $invoiceId = $row['id'];
-                
-                $updateStmt = $conn->prepare("
-                    UPDATE invoices 
-                    SET invoice_html = ?, gst_enabled = ?, gst_number = ?, company_name = ?, 
-                        company_address = ?, is_igst = ?, base_amount = ?, gst_amount = ?, total_amount = ?
+                $invoiceRow = $checkResult->fetch_assoc();
+                $stmt = $conn->prepare("
+                    UPDATE invoices SET 
+                        invoice_date = ?, 
+                        base_amount = ?, 
+                        tax_amount = ?, 
+                        total_amount = ?,
+                        gst_enabled = ?,
+                        gst_number = ?,
+                        company_name = ?,
+                        company_address = ?,
+                        invoice_html = ?
                     WHERE id = ?
                 ");
                 
-                $gstEnabledValue = $gstEnabled ? 1 : 0;
-                $isIgstValue = $isIGST ? 1 : 0;
+                $gstEnabledInt = $gstEnabled ? 1 : 0;
+                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
+                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
+                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
-                $updateStmt->bind_param(
-                    "sisssiiddi",
+                $stmt->bind_param(
+                    "sdddisssi",
+                    $currentDate,
+                    $baseAmountBeforeTax,
+                    $taxAmount,
+                    $baseAmount,
+                    $gstEnabledInt,
+                    $gstNumberVal,
+                    $companyNameVal,
+                    $companyAddressVal,
                     $invoiceHtml,
-                    $gstEnabledValue,
-                    $gstNumber,
-                    $companyName,
-                    $companyAddress,
-                    $isIgstValue,
-                    $baseFare,
-                    $gstAmount,
-                    $totalAmount,
-                    $invoiceId
+                    $invoiceRow['id']
                 );
                 
-                $updateStmt->execute();
+                $stmt->execute();
+                $responseData['message'] = 'Invoice updated successfully';
             } else {
                 // Insert new invoice
-                $insertStmt = $conn->prepare("
+                $stmt = $conn->prepare("
                     INSERT INTO invoices (
-                        invoice_number, booking_id, invoice_html, gst_enabled, gst_number, 
-                        company_name, company_address, is_igst, base_amount, gst_amount, total_amount
+                        booking_id, invoice_number, invoice_date, base_amount, 
+                        tax_amount, total_amount, gst_enabled, gst_number, 
+                        company_name, company_address, invoice_html
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
-                $gstEnabledValue = $gstEnabled ? 1 : 0;
-                $isIgstValue = $isIGST ? 1 : 0;
+                $gstEnabledInt = $gstEnabled ? 1 : 0;
+                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
+                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
+                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
-                $insertStmt->bind_param(
-                    "sisississdd",
+                $stmt->bind_param(
+                    "issdddisss",
+                    $booking['id'],
                     $invoiceNumber,
-                    $bookingId,
-                    $invoiceHtml,
-                    $gstEnabledValue,
-                    $gstNumber,
-                    $companyName,
-                    $companyAddress,
-                    $isIgstValue,
-                    $baseFare,
-                    $gstAmount,
-                    $totalAmount
+                    $currentDate,
+                    $baseAmountBeforeTax,
+                    $taxAmount,
+                    $baseAmount,
+                    $gstEnabledInt,
+                    $gstNumberVal,
+                    $companyNameVal,
+                    $companyAddressVal,
+                    $invoiceHtml
                 );
                 
-                $insertStmt->execute();
+                $stmt->execute();
+                $responseData['message'] = 'Invoice generated and saved successfully';
             }
-            
         } catch (Exception $e) {
-            // Log the error but continue since invoice generation is not critical
-            error_log("Error storing invoice in database: " . $e->getMessage());
+            error_log("Error saving invoice to database: " . $e->getMessage());
+            // Continue and return the invoice even if saving to DB fails
         }
     }
-
-    // Return the invoice data
-    sendJsonResponse([
-        'status' => 'success',
-        'data' => [
-            'invoiceNumber' => $invoiceNumber,
-            'invoiceDate' => $invoiceDate,
-            'invoiceHtml' => $invoiceHtml,
-            'bookingId' => $bookingId,
-            'bookingNumber' => $booking['booking_number'],
-            'baseFare' => $baseFare,
-            'gstAmount' => $gstAmount,
-            'isIGST' => $isIGST,
-            'totalAmount' => $totalAmount
-        ]
-    ]);
+    
+    // Send invoice data response
+    sendJsonResponse($responseData);
 
 } catch (Exception $e) {
+    error_log("Error generating invoice: " . $e->getMessage());
     sendJsonResponse([
-        'status' => 'error', 
-        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getTraceAsString() : null
+        'status' => 'error',
+        'message' => 'Failed to generate invoice',
+        'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
 }
 

@@ -70,66 +70,41 @@ try {
                 'name' => 'Rajesh Kumar',
                 'phone' => '9876543210',
                 'email' => 'rajesh@example.com',
-                'license_no' => 'DL-1234567890',
-                'vehicle' => 'AP 31 XX 1234',
-                'status' => 'available',
-                'total_rides' => 120,
-                'earnings' => 25000,
-                'rating' => 4.8,
-                'location' => 'Hyderabad Central'
+                'vehicle' => 'AP 31 AB 1234',
+                'status' => 'available'
             ],
             [
                 'id' => 2,
-                'name' => 'Pavan Reddy',
-                'phone' => '8765432109',
-                'email' => 'pavan@example.com',
-                'license_no' => 'DL-0987654321',
-                'vehicle' => 'AP 32 XX 5678',
-                'status' => 'busy',
-                'total_rides' => 85,
-                'earnings' => 18000,
-                'rating' => 4.5,
-                'location' => 'Gachibowli'
+                'name' => 'Suresh Singh',
+                'phone' => '9876543211',
+                'email' => 'suresh@example.com',
+                'vehicle' => 'AP 31 CD 5678',
+                'status' => 'available'
             ],
             [
                 'id' => 3,
-                'name' => 'Suresh Verma',
-                'phone' => '7654321098',
-                'email' => 'suresh@example.com',
-                'license_no' => 'DL-5678901234',
-                'vehicle' => 'AP 33 XX 9012',
-                'status' => 'offline',
-                'total_rides' => 180,
-                'earnings' => 72000,
-                'rating' => 4.5,
-                'location' => 'Offline'
+                'name' => 'Mahesh Reddy',
+                'phone' => '9876543212',
+                'email' => 'mahesh@example.com',
+                'vehicle' => 'AP 31 EF 9012',
+                'status' => 'available'
             ],
             [
                 'id' => 4,
                 'name' => 'Venkatesh S',
-                'phone' => '9876543211',
-                'email' => 'venkat@example.com',
-                'license_no' => 'DL-4321098765',
+                'phone' => '9876543213',
+                'email' => 'venkatesh@example.com',
                 'vehicle' => 'AP 34 XX 3456',
-                'status' => 'available',
-                'total_rides' => 95,
-                'earnings' => 32000,
-                'rating' => 4.7,
-                'location' => 'Kukatpally'
+                'status' => 'busy'
             ],
             [
                 'id' => 5,
                 'name' => 'Ramesh Babu',
                 'phone' => '8765432108',
                 'email' => 'ramesh@example.com',
-                'license_no' => 'DL-2345678901',
                 'vehicle' => 'AP 35 XX 7890',
-                'status' => 'busy',
-                'total_rides' => 150,
-                'earnings' => 48000,
-                'rating' => 4.6,
-                'location' => 'Ameerpet'
-            ]
+                'status' => 'offline'
+            ],
         ];
         
         sendJsonResponse([
@@ -160,33 +135,26 @@ try {
                 total_rides INT DEFAULT 0,
                 earnings DECIMAL(10,2) DEFAULT 0.00,
                 rating DECIMAL(3,1) DEFAULT 5.0,
-                location VARCHAR(255) DEFAULT 'Visakhapatnam',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         
-        if (!$conn->query($createTableSQL)) {
-            throw new Exception("Failed to create drivers table: " . $conn->error);
-        }
+        $conn->query($createTableSQL);
         
         // Insert sample data if newly created
         $sampleData = [
-            ['Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'AP 31 XX 1234', 'available', 'Hyderabad Central'],
-            ['Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'AP 32 XX 5678', 'busy', 'Gachibowli'],
-            ['Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'AP 33 XX 9012', 'offline', 'Offline'],
-            ['Venkatesh S', '9876543211', 'venkat@example.com', 'DL-4321098765', 'AP 34 XX 3456', 'available', 'Kukatpally'],
-            ['Ramesh Babu', '8765432108', 'ramesh@example.com', 'DL-2345678901', 'AP 35 XX 7890', 'busy', 'Ameerpet']
+            ['Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL123456', 'AP 31 AB 1234', 'available'],
+            ['Suresh Singh', '9876543211', 'suresh@example.com', 'DL789012', 'AP 31 CD 5678', 'available'],
+            ['Mahesh Reddy', '9876543212', 'mahesh@example.com', 'DL345678', 'AP 31 EF 9012', 'available'],
+            ['Venkatesh S', '9876543213', 'venkatesh@example.com', 'DL901234', 'AP 34 XX 3456', 'busy'],
+            ['Ramesh Babu', '8765432108', 'ramesh@example.com', 'DL567890', 'AP 35 XX 7890', 'offline']
         ];
         
-        $insertStmt = $conn->prepare("INSERT INTO drivers (name, phone, email, license_number, vehicle_number, status, location) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        
-        if (!$insertStmt) {
-            throw new Exception("Failed to prepare insert statement: " . $conn->error);
-        }
+        $insertStmt = $conn->prepare("INSERT INTO drivers (name, phone, email, license_number, vehicle_number, status) VALUES (?, ?, ?, ?, ?, ?)");
         
         foreach ($sampleData as $driver) {
-            $insertStmt->bind_param("sssssss", $driver[0], $driver[1], $driver[2], $driver[3], $driver[4], $driver[5], $driver[6]);
+            $insertStmt->bind_param("ssssss", $driver[0], $driver[1], $driver[2], $driver[3], $driver[4], $driver[5]);
             $insertStmt->execute();
         }
         
@@ -211,12 +179,11 @@ try {
     
     if ($searchQuery) {
         $searchPattern = "%$searchQuery%";
-        $whereClauses[] = "(name LIKE ? OR phone LIKE ? OR vehicle_number LIKE ? OR location LIKE ?)";
+        $whereClauses[] = "(name LIKE ? OR phone LIKE ? OR vehicle_number LIKE ?)";
         $params[] = $searchPattern;
         $params[] = $searchPattern;
         $params[] = $searchPattern;
-        $params[] = $searchPattern;
-        $types .= "ssss";
+        $types .= "sss";
     }
     
     if (!empty($whereClauses)) {
@@ -229,27 +196,10 @@ try {
     $stmt = $conn->prepare($sql);
     
     if (!empty($params)) {
-        // Use a helper function to properly reference values for bind_param
-        function refValues($arr) {
-            $refs = array();
-            foreach($arr as $key => $value) {
-                $refs[$key] = &$arr[$key];
-            }
-            return $refs;
-        }
-        
-        $bindParams = array($types);
-        foreach ($params as $key => $value) {
-            $bindParams[] = $params[$key];
-        }
-        
-        call_user_func_array(array($stmt, 'bind_param'), refValues($bindParams));
+        $stmt->bind_param($types, ...$params);
     }
     
-    if (!$stmt->execute()) {
-        throw new Exception("Failed to execute drivers query: " . $stmt->error);
-    }
-    
+    $stmt->execute();
     $result = $stmt->get_result();
     
     $drivers = [];
@@ -264,8 +214,7 @@ try {
             'status' => $row['status'],
             'total_rides' => (int)$row['total_rides'],
             'earnings' => (float)$row['earnings'],
-            'rating' => (float)$row['rating'],
-            'location' => $row['location']
+            'rating' => (float)$row['rating']
         ];
     }
 
@@ -285,33 +234,32 @@ try {
             'name' => 'Rajesh Kumar (Fallback)',
             'phone' => '9876543210',
             'email' => 'rajesh@example.com',
-            'license_no' => 'DL-1234567890',
-            'vehicle' => 'AP 31 XX 1234',
+            'license_no' => 'DL123456',
+            'vehicle' => 'AP 31 AB 1234',
             'status' => 'available',
             'total_rides' => 120,
             'earnings' => 25000,
-            'rating' => 4.8,
-            'location' => 'Hyderabad Central'
+            'rating' => 4.8
         ],
         [
             'id' => 2,
-            'name' => 'Pavan Reddy (Fallback)',
-            'phone' => '8765432109',
-            'email' => 'pavan@example.com',
-            'license_no' => 'DL-0987654321',
-            'vehicle' => 'AP 32 XX 5678',
-            'status' => 'busy',
+            'name' => 'Suresh Singh (Fallback)',
+            'phone' => '9876543211',
+            'email' => 'suresh@example.com',
+            'license_no' => 'DL789012',
+            'vehicle' => 'AP 31 CD 5678',
+            'status' => 'available',
             'total_rides' => 85,
             'earnings' => 18000,
-            'rating' => 4.5,
-            'location' => 'Gachibowli'
+            'rating' => 4.5
         ]
     ];
     
     // Return error response with mock data as fallback
     sendJsonResponse([
-        'status' => 'success', 
-        'message' => 'Fallback data returned due to error: ' . $e->getMessage(),
+        'status' => 'error', 
+        'message' => 'Failed to retrieve drivers: ' . $e->getMessage(),
+        'error_details' => $debugMode ? $e->getMessage() : null,
         'drivers' => $mockDrivers // Provide fallback data
     ], 200); // Still return 200 to ensure frontend gets usable data
 }
