@@ -138,32 +138,23 @@ try {
     
     if (!$bookingId && !$demoMode) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
-        exit;
     }
 
-    // Connect to database using db_helper.php if available
+    // Connect to database - direct connection for reliability
     try {
-        if (file_exists(__DIR__ . '/../common/db_helper.php')) {
-            require_once __DIR__ . '/../common/db_helper.php';
-            $conn = getDbConnectionWithRetry();
-            logInvoiceError("Using db_helper.php for database connection");
-        } else {
-            // Direct connection as fallback
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_db_be';
-            $dbUser = 'u644605165_usr_be';
-            $dbPass = 'Vizag@1213';
-            
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
-            }
-            
-            // Set character set
-            $conn->set_charset("utf8mb4");
-            logInvoiceError("Using direct database connection");
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
         logInvoiceError("Database connection successful");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
@@ -174,7 +165,7 @@ try {
             // In production, return an error
             sendJsonResponse([
                 'status' => 'error', 
-                'message' => 'Database connection failed: ' . $e->getMessage(),
+                'message' => 'Database connection failed',
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
             exit;
@@ -187,9 +178,6 @@ try {
     if (!$demoMode && isset($conn)) {
         try {
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-            if (!$stmt) {
-                throw new Exception("Failed to prepare statement: " . $conn->error);
-            }
             $stmt->bind_param("i", $bookingId);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -238,42 +226,42 @@ try {
     $currentDate = date('Y-m-d');
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
-    // Calculate tax components based on includeTax setting and GST type
-    $totalAmount = (float)$booking['total_amount'];
-    $baseAmount = 0;
-    $taxAmount = 0;
-    $cgstAmount = 0;
-    $sgstAmount = 0;
-    $igstAmount = 0;
-    $taxRate = $gstEnabled ? 0.12 : 0; // 12% GST or 0% if disabled
+    // Calculate tax components based on includeTax setting
+    $baseAmount = $booking['total_amount'];
+    $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
     
     if ($includeTax) {
-        // Price is tax inclusive, calculate base amount by removing tax
-        $baseAmount = round($totalAmount / (1 + $taxRate), 2);
-        $taxAmount = $totalAmount - $baseAmount;
+        // If tax is included in total (calculate base by removing tax)
+        $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
+        $taxAmount = $baseAmount - $baseAmountBeforeTax;
+        $totalAmount = $baseAmount;
     } else {
-        // Price is tax exclusive, calculate tax on top of base
-        $baseAmount = $totalAmount;
+        // If tax is excluded (calculate tax on top of the base)
+        $baseAmountBeforeTax = $baseAmount;
         $taxAmount = round($baseAmount * $taxRate, 2);
         $totalAmount = $baseAmount + $taxAmount;
     }
     
-    // Calculate CGST, SGST, or IGST based on selection
+    // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
         if ($isIGST) {
-            // Interstate - IGST (12%)
+            // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
             $cgstAmount = round($taxAmount / 2, 2);
-            $sgstAmount = $taxAmount - $cgstAmount; // Ensure exact total
+            $sgstAmount = $taxAmount - $cgstAmount;
             $igstAmount = 0;
         }
+    } else {
+        $cgstAmount = 0;
+        $sgstAmount = 0;
+        $igstAmount = 0;
     }
     
-    // Create HTML content for invoice with proper GST display
+    // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
 <html>
 <head>
@@ -355,7 +343,7 @@ try {
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($baseAmount, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
     if ($gstEnabled) {
@@ -411,7 +399,7 @@ try {
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
             'totalAmount' => $totalAmount,
-            'baseAmount' => $baseAmount,
+            'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
@@ -495,7 +483,7 @@ try {
                     "ssdddiiisssi",
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmount,
+                    $baseAmountBeforeTax,
                     $taxAmount,
                     $totalAmount,
                     $gstEnabledInt,
@@ -536,7 +524,7 @@ try {
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmount,
+                    $baseAmountBeforeTax,
                     $taxAmount,
                     $totalAmount,
                     $gstEnabledInt,
@@ -571,7 +559,6 @@ try {
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
-    exit;
 }
 
 // Close database connection

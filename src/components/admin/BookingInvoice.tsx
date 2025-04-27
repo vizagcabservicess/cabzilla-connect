@@ -49,7 +49,6 @@ export function BookingInvoice({
 
   useEffect(() => {
     if (booking && booking.id) {
-      console.log("BookingInvoice: Initial load for booking ID:", booking.id);
       handleGenerateInvoice();
     }
   }, [booking?.id]);
@@ -70,65 +69,27 @@ export function BookingInvoice({
       }
       
       console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST, 'Include Tax:', includeTax, 'Custom Invoice Number:', customInvoiceNumber);
-      
-      // Use a direct fetch with proper error handling instead of the prop
-      const apiUrl = getApiUrl(`/api/admin/generate-invoice.php`);
-      const params = new URLSearchParams({
-        id: booking.id.toString(),
-        gstEnabled: gstEnabled ? '1' : '0',
-        isIGST: isIGST ? '1' : '0',
-        includeTax: includeTax ? '1' : '0'
-      });
-      
-      if (customInvoiceNumber) {
-        params.append('invoiceNumber', customInvoiceNumber);
-      }
-      
-      if (gstEnabled) {
-        params.append('gstNumber', gstDetails.gstNumber);
-        params.append('companyName', gstDetails.companyName);
-        params.append('companyAddress', gstDetails.companyAddress);
-      }
-      
-      console.log('API URL:', `${apiUrl}?${params.toString()}`);
-      
-      const response = await fetch(`${apiUrl}?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('Invoice API error response:', text);
-        throw new Error(`API returned status ${response.status}: ${text.substring(0, 100)}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Invalid content type:', contentType, 'Response:', text.substring(0, 200));
-        throw new Error(`Expected JSON but got ${contentType || 'unknown'}`);
-      }
-      
-      const result = await response.json();
-      
-      if (!result || !result.data) {
-        console.error('Invalid response structure:', result);
-        throw new Error('No invoice data returned from the server');
-      }
-      
+      const result = await onGenerateInvoice(
+        gstEnabled, 
+        gstEnabled ? gstDetails : undefined, 
+        isIGST,
+        includeTax,
+        customInvoiceNumber.trim() || undefined
+      );
       console.log('Invoice generation result:', result);
       
-      setInvoiceData(result.data);
-      toast({
-        title: "Invoice Generated",
-        description: "Invoice was generated successfully"
-      });
+      if (result && result.data) {
+        setInvoiceData(result.data);
+        toast({
+          title: "Invoice Generated",
+          description: "Invoice was generated successfully"
+        });
+      } else {
+        setInvoiceData(null);
+        throw new Error('No invoice data returned from the server');
+      }
     } catch (error) {
       console.error("Invoice generation error:", error);
-      setInvoiceData(null);
       setError(error instanceof Error ? error.message : "Failed to generate invoice");
       toast({
         variant: "destructive",
@@ -141,45 +102,19 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    try {
-      // Use a proper URL with query parameters (no body in GET request)
-      const baseUrl = getApiUrl(`/api/admin/download-invoice.php`);
-      const params = new URLSearchParams({
-        id: booking.id.toString(),
-        gstEnabled: gstEnabled ? '1' : '0',
-        isIGST: isIGST ? '1' : '0',
-        includeTax: includeTax ? '1' : '0',
-        format: 'pdf'
-      });
-      
-      if (customInvoiceNumber.trim()) {
-        params.append('invoiceNumber', customInvoiceNumber.trim());
-      }
-      
-      if (gstEnabled && gstDetails.gstNumber) {
-        params.append('gstNumber', gstDetails.gstNumber);
-        params.append('companyName', gstDetails.companyName);
-        params.append('companyAddress', gstDetails.companyAddress);
-      }
-      
-      const downloadUrl = `${baseUrl}?${params.toString()}`;
-      console.log('Download invoice URL:', downloadUrl);
-      
-      // Open in a new window instead of iframe for better browser compatibility
-      window.open(downloadUrl, '_blank');
-      
-      toast({
-        title: "Invoice PDF",
-        description: "Your invoice PDF has been opened in a new tab"
-      });
-    } catch (error) {
-      console.error("PDF download error:", error);
-      toast({
-        variant: "destructive",
-        title: "Download Failed",
-        description: "Failed to download PDF. Please try again."
-      });
-    }
+    // Use a proper URL with query parameters (no body in GET request)
+    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
+    const bookingIdParam = `?id=${booking.id}`;
+    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+    const igstParam = isIGST ? '&isIGST=1' : '';
+    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+    
+    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+    console.log('Download invoice URL:', downloadUrl);
+    window.open(downloadUrl, '_blank');
   };
 
   const handleGstToggle = (checked: boolean) => {
@@ -254,7 +189,7 @@ export function BookingInvoice({
             </div>
             
             {gstEnabled && (
-              <div className="space-y-3 p-3 border rounded bg-gray-50">
+              <div className="space-y-3">
                 <div>
                   <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
                   <Input 

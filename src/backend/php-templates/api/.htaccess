@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -14,24 +13,6 @@ RewriteBase /api/
     Header set Pragma "no-cache"
     Header set Expires "0"
 </FilesMatch>
-
-# SPECIAL RULE - Generate invoice and download invoice need special handling
-<Files "generate-invoice.php">
-    SetHandler application/x-httpd-php
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
-
-<Files "download-invoice.php">
-    # Don't set Content-Type here, let the script handle it
-    SetEnv no_content_type 1
-    Header unset Content-Type env=no_content_type
-    SetHandler application/x-httpd-php
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</Files>
 
 # Add explicit rule for fix-schema.php with highest priority
 <Files "fix-schema.php">
@@ -64,6 +45,25 @@ RewriteBase /api/
     Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*" 
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# SPECIAL RULE - Generate invoice and download invoice need special handling
+<Files "generate-invoice.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "download-invoice.php">
+    # Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
@@ -105,9 +105,6 @@ RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
 RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
-
-# Critical download invoice endpoint with format parameter - highest priority
-RewriteRule ^admin/download-invoice/pdf$ admin/download-invoice.php?format=pdf [L,QSA]
 
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
@@ -155,14 +152,13 @@ RewriteRule ^invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA]
 RewriteRule ^admin/receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
 RewriteRule ^receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
 
-# Direct download invoice with PDF format
-RewriteRule ^admin/invoice-pdf/([0-9]+)/?$ admin/download-invoice.php?id=$1&format=pdf [L,NC,QSA]
-RewriteRule ^invoice-pdf/([0-9]+)/?$ admin/download-invoice.php?id=$1&format=pdf [L,NC,QSA]
-
 # CRITICAL BOOKING API ENDPOINTS
 RewriteRule ^admin/assign-driver/?$ admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^admin/cancel-booking/?$ admin/cancel-booking.php [L,NC,QSA]
 RewriteRule ^admin/update-booking/?$ admin/update-booking.php [L,NC,QSA]
+RewriteRule ^admin/generate-invoice/?$ admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^admin/download-invoice/?$ admin/download-invoice.php [L,NC,QSA]
+RewriteRule ^download-invoice/?$ admin/download-invoice.php [L,NC,QSA]
 RewriteRule ^admin/booking/?$ admin/booking.php [L,NC,QSA]
 RewriteRule ^admin/booking/([0-9]+)/?$ admin/booking.php?id=$1 [L,NC,QSA]
 RewriteRule ^admin/bookings/?$ admin/booking.php [L,NC,QSA]
