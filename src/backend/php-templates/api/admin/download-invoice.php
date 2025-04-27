@@ -223,39 +223,62 @@ try {
     if (empty($invoiceHtml)) {
         throw new Exception("No invoice HTML content generated");
     }
+
+    // EXTREMELY CRITICAL: Set content type BEFORE any HTML output
+    // This must be text/html initially, the page will print as PDF
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // CRITICAL: Set Content-Type for PDF output before any HTML output
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
-    
-    // Return invoice HTML with JavaScript to trigger printing as PDF
+    // Output the HTML with PDF auto-printing capabilities
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Invoice #' . $invoiceNumber . '</title>
-    <script>
-        window.onload = function() {
-            // Force PDF print dialog immediately
-            window.print();
-            // After print is triggered, show success message
-            setTimeout(function() {
-                document.querySelector("body").innerHTML = "<h1>Your invoice has been downloaded. You may close this window.</h1>";
-            }, 1000);
-        };
-    </script>
     <style>
         @media print {
             body { margin: 0; padding: 0; }
             @page { size: auto; margin: 10mm; }
         }
         body { font-family: Arial, sans-serif; }
+        /* Adding print-specific styles */
+        @media print {
+            .no-print { display: none; }
+            body { font-size: 12pt; }
+            .invoice-container { border: none !important; box-shadow: none !important; }
+        }
     </style>
+    <script>
+        window.onload = function() {
+            // Force immediate printing
+            window.print();
+            
+            // Show message after print dialog is shown
+            setTimeout(function() {
+                var messageDiv = document.createElement("div");
+                messageDiv.className = "no-print";
+                messageDiv.style.position = "fixed";
+                messageDiv.style.top = "20px";
+                messageDiv.style.left = "0";
+                messageDiv.style.width = "100%";
+                messageDiv.style.textAlign = "center";
+                messageDiv.style.padding = "20px";
+                messageDiv.style.backgroundColor = "#f0f9ff";
+                messageDiv.style.borderBottom = "1px solid #bae6fd";
+                messageDiv.style.color = "#0c4a6e";
+                messageDiv.style.zIndex = "9999";
+                messageDiv.innerHTML = "<h2>Your invoice has been prepared for download</h2>" + 
+                                      "<p>If the print dialog didn\'t appear automatically, please click the Print button in your browser.</p>" +
+                                      "<p>After printing to PDF, you may close this window.</p>";
+                document.body.insertBefore(messageDiv, document.body.firstChild);
+            }, 1000);
+        };
+    </script>
 </head>
 <body>' . $invoiceHtml . '</body>
 </html>';
     
-    logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
+    logInvoiceError("Invoice HTML sent successfully", ['invoice_number' => $invoiceNumber]);
     exit; // Important to prevent any additional output
 
 } catch (Exception $e) {

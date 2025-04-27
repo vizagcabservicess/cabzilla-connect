@@ -133,7 +133,8 @@ try {
         'gstEnabled' => $gstEnabled ? "true" : "false",
         'isIGST' => $isIGST ? "true" : "false",
         'includeTax' => $includeTax ? "true" : "false",
-        'customInvoiceNumber' => $customInvoiceNumber
+        'customInvoiceNumber' => $customInvoiceNumber,
+        'hasGstDetails' => !empty($gstDetails) ? "yes" : "no"
     ]);
     
     if (!$bookingId && !$demoMode) {
@@ -232,15 +233,19 @@ try {
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
     
-    if ($includeTax) {
-        // If tax is included in total amount (default)
+    if ($includeTax && $gstEnabled) {
+        // If tax is included in total amount (default), calculate base amount
+        // Formula: baseAmount = totalAmount / (1 + taxRate)
         $baseAmountBeforeTax = round($totalAmount / (1 + $gstRate), 2);
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = round($totalAmount - $baseAmountBeforeTax, 2);
     } else {
-        // If tax is excluded from the base amount
+        // If tax is excluded from the base amount, or no GST
         $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = round($totalAmount * $gstRate, 2);
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        $taxAmount = $gstEnabled ? round($totalAmount * $gstRate, 2) : 0;
+        // If tax is excluded, we need to add it to get the final amount
+        if (!$includeTax && $gstEnabled) {
+            $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        }
     }
     
     // For GST, split into CGST and SGST or use IGST
@@ -262,7 +267,20 @@ try {
         $igstAmount = 0;
     }
     
-    // Create HTML content for invoice
+    // Log tax calculations for debugging
+    logInvoiceError("Tax calculations", [
+        'totalAmount' => $totalAmount,
+        'baseAmountBeforeTax' => $baseAmountBeforeTax,
+        'taxAmount' => $taxAmount,
+        'gstEnabled' => $gstEnabled,
+        'isIGST' => $isIGST,
+        'includeTax' => $includeTax,
+        'igstAmount' => $igstAmount,
+        'cgstAmount' => $cgstAmount,
+        'sgstAmount' => $sgstAmount
+    ]);
+    
+    // Create HTML content for invoice with proper tax handling
     $invoiceHtml = '<!DOCTYPE html>
 <html>
 <head>
@@ -348,7 +366,7 @@ try {
                     <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
-                    <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
+                    <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
                     <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
@@ -374,14 +392,19 @@ try {
     
     $invoiceHtml .= '
                 <tr class="total-row">
-                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
+                    <td>Total Amount</td>
                     <td style="text-align: right;">₹ ' . number_format($totalAmount, 2) . '</td>
                 </tr>
             </table>';
             
-    if (!$includeTax) {
-        $invoiceHtml .= '
-            <p class="tax-note">Note: This invoice shows amounts excluding tax. Taxes will be charged separately.</p>';
+    if ($gstEnabled) {
+        if ($includeTax) {
+            $invoiceHtml .= '
+                <p class="tax-note">Note: This invoice shows the fare inclusive of all applicable taxes.</p>';
+        } else {
+            $invoiceHtml .= '
+                <p class="tax-note">Note: This invoice shows the base fare with taxes calculated separately.</p>';
+        }
     }
             
     $invoiceHtml .= '

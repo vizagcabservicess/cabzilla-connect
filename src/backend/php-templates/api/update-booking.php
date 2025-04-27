@@ -12,6 +12,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Clear any output buffer to avoid contamination
+if (ob_get_level()) ob_end_clean();
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -54,26 +57,32 @@ if (isset($_GET['id'])) {
     $bookingId = $_GET['id'];
 } else {
     // Get data from request body
-    $data = json_decode(file_get_contents('php://input'), true);
+    $jsonInput = file_get_contents('php://input');
+    $data = json_decode($jsonInput, true);
     if (isset($data['id'])) {
         $bookingId = $data['id'];
     } else if (isset($data['bookingId'])) {
         $bookingId = $data['bookingId'];
-    } else {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
-        exit;
     }
 }
 
+// If still no booking ID found, return error
+if (!$bookingId) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+    exit;
+}
+
 // Get data from request body
-$data = json_decode(file_get_contents('php://input'), true);
-if (!$data) {
+$jsonInput = file_get_contents('php://input');
+$data = json_decode($jsonInput, true);
+if (!$data && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+    logError("Invalid JSON input", ['raw_input' => $jsonInput]);
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
     exit;
 }
 
 // Debug log the incoming data
-logError("Update booking request data", $data);
+logError("Update booking request data", ['booking_id' => $bookingId, 'data' => $data]);
 
 // Connect to database
 try {
@@ -146,6 +155,40 @@ try {
     }
     
     $booking = $result->fetch_assoc();
+    
+    // If this is a GET request, just return the booking
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Format the response
+        $formattedBooking = [
+            'id' => (int)$booking['id'],
+            'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
+            'bookingNumber' => $booking['booking_number'],
+            'pickupLocation' => $booking['pickup_location'],
+            'dropLocation' => $booking['drop_location'],
+            'pickupDate' => $booking['pickup_date'],
+            'returnDate' => $booking['return_date'],
+            'cabType' => $booking['cab_type'],
+            'distance' => (float)$booking['distance'],
+            'tripType' => $booking['trip_type'],
+            'tripMode' => $booking['trip_mode'],
+            'totalAmount' => (float)$booking['total_amount'],
+            'status' => $booking['status'],
+            'passengerName' => $booking['passenger_name'],
+            'passengerPhone' => $booking['passenger_phone'],
+            'passengerEmail' => $booking['passenger_email'],
+            'driverName' => $booking['driver_name'],
+            'driverPhone' => $booking['driver_phone'],
+            'vehicleNumber' => $booking['vehicle_number'],
+            'adminNotes' => $booking['admin_notes'],
+            'createdAt' => $booking['created_at'],
+            'updatedAt' => $booking['updated_at']
+        ];
+        
+        sendJsonResponse(['status' => 'success', 'data' => $formattedBooking]);
+        exit;
+    }
+    
+    // For PUT and POST, proceed with update
     
     // Build the update query based on provided fields
     $updateFields = [];

@@ -45,6 +45,7 @@ export function BookingInvoice({
     companyName: '',
     companyAddress: ''
   });
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -102,21 +103,52 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-    const bookingIdParam = `?id=${booking.id}`;
-    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-    const igstParam = isIGST ? '&isIGST=1' : '';
-    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
-    
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
-    console.log('Download invoice URL:', downloadUrl);
-    
-    // Open in a new window/tab for PDF download
-    window.open(downloadUrl, '_blank');
+    try {
+      setPdfDownloading(true);
+      
+      // Use a proper URL with query parameters (no body in GET request)
+      const baseUrl = getApiUrl(`/api/admin/download-invoice`);
+      const bookingIdParam = `?id=${booking.id}`;
+      const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+      const igstParam = isIGST ? '&isIGST=1' : '';
+      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+      const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+      const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+        `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+      
+      const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      console.log('Download invoice URL:', downloadUrl);
+      
+      // Open in a new window/tab for PDF download
+      const newWindow = window.open(downloadUrl, '_blank');
+      
+      if (!newWindow) {
+        toast({
+          variant: "destructive",
+          title: "PDF Download Blocked",
+          description: "Pop-up blocker may be preventing the PDF from opening. Please allow pop-ups for this site."
+        });
+      } else {
+        toast({
+          title: "PDF Generated",
+          description: "The invoice PDF has opened in a new tab."
+        });
+      }
+      
+      // Set timeout to ensure we show downloading state briefly even if it's fast
+      setTimeout(() => {
+        setPdfDownloading(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('PDF download error:', error);
+      toast({
+        variant: "destructive",
+        title: "PDF Download Failed",
+        description: error instanceof Error ? error.message : "Failed to download PDF invoice"
+      });
+      setPdfDownloading(false);
+    }
   };
 
   const handleGstToggle = (checked: boolean) => {
@@ -204,12 +236,14 @@ export function BookingInvoice({
                 id="tax-toggle"
                 checked={includeTax}
                 onCheckedChange={setIncludeTax}
+                disabled={!gstEnabled} // Only enable if GST is enabled
               />
               <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
             </div>
             
             {gstEnabled && (
-              <div className="space-y-3">
+              <div className="space-y-3 border-t pt-3">
+                <h4 className="font-medium">GST Details</h4>
                 <div>
                   <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
                   <Input 
@@ -289,6 +323,29 @@ export function BookingInvoice({
               sandbox="allow-same-origin"
             />
           </div>
+          
+          {invoiceData.gstEnabled && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-md text-sm">
+              <h4 className="font-medium mb-2">Tax breakdown:</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <div>Base Amount: ₹{parseFloat(invoiceData.baseAmount).toFixed(2)}</div>
+                {invoiceData.isIGST ? (
+                  <div>IGST (12%): ₹{parseFloat(invoiceData.igstAmount || invoiceData.taxAmount).toFixed(2)}</div>
+                ) : (
+                  <>
+                    <div>CGST (6%): ₹{parseFloat(invoiceData.cgstAmount || (invoiceData.taxAmount / 2)).toFixed(2)}</div>
+                    <div>SGST (6%): ₹{parseFloat(invoiceData.sgstAmount || (invoiceData.taxAmount / 2)).toFixed(2)}</div>
+                  </>
+                )}
+                <div>Total: ₹{parseFloat(invoiceData.totalAmount).toFixed(2)}</div>
+              </div>
+              <div className="mt-2 text-xs text-gray-600">
+                {invoiceData.includeTax ? 
+                  "* Total amount includes taxes" : 
+                  "* Taxes shown separately from base amount"}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -326,10 +383,19 @@ export function BookingInvoice({
                 
                 <Button
                   onClick={handleDownloadPdf}
-                  disabled={loading || isSubmitting}
+                  disabled={loading || isSubmitting || pdfDownloading}
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download PDF
+                  {pdfDownloading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download PDF
+                    </>
+                  )}
                 </Button>
               </>
             )}
