@@ -3,7 +3,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Clear all output buffers first to ensure clean output
+// CRITICAL: Clear all buffers before ANY output
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
@@ -224,7 +224,7 @@ try {
         throw new Exception("No invoice HTML content generated");
     }
     
-    // Format for PDF output
+    // CRITICAL: Set Content-Type for PDF output before any HTML output
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
     
@@ -236,7 +236,12 @@ try {
     <title>Invoice #' . $invoiceNumber . '</title>
     <script>
         window.onload = function() {
+            // Force PDF print dialog immediately
             window.print();
+            // After print is triggered, show success message
+            setTimeout(function() {
+                document.querySelector("body").innerHTML = "<h1>Your invoice has been downloaded. You may close this window.</h1>";
+            }, 1000);
         };
     </script>
     <style>

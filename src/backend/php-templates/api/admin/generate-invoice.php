@@ -228,16 +228,18 @@ try {
     
     // Calculate tax components based on includeTax setting
     $totalAmount = (float)$booking['total_amount'];
-    $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
+    
+    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+    $gstRate = $gstEnabled ? 0.12 : 0; 
     
     if ($includeTax) {
         // If tax is included in total amount (default)
-        $baseAmountBeforeTax = round($totalAmount / (1 + $taxRate), 2);
+        $baseAmountBeforeTax = round($totalAmount / (1 + $gstRate), 2);
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
     } else {
         // If tax is excluded from the base amount
         $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = round($totalAmount * $taxRate, 2);
+        $taxAmount = round($totalAmount * $gstRate, 2);
         $totalAmount = $baseAmountBeforeTax + $taxAmount;
     }
     
@@ -251,7 +253,7 @@ try {
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
             $cgstAmount = round($taxAmount / 2, 2);
-            $sgstAmount = $taxAmount - $cgstAmount;
+            $sgstAmount = $taxAmount - $cgstAmount;  // Ensure exact total by calculating difference
             $igstAmount = 0;
         }
     } else {
@@ -452,7 +454,7 @@ try {
             ");
             
             // Check if invoice already exists for this booking
-            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
+            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
             $checkStmt->bind_param("i", $booking['id']);
             $checkStmt->execute();
             $checkResult = $checkStmt->get_result();

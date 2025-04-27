@@ -121,6 +121,14 @@ export function BookingInvoice({
 
   const handleGstToggle = (checked: boolean) => {
     setGstEnabled(checked);
+    if (checked && !includeTax) {
+      // When enabling GST, ensure we default to include tax
+      setIncludeTax(true);
+      toast({
+        title: "Tax Inclusion Enabled",
+        description: "Enabling GST defaults to include tax in the price"
+      });
+    }
   };
 
   const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,6 +137,16 @@ export function BookingInvoice({
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleRegenerateInvoice = () => {
+    if (loading || isSubmitting) return;
+    
+    // Force a re-generation
+    setInvoiceData(null);
+    setTimeout(() => {
+      handleGenerateInvoice();
+    }, 100);
   };
 
   const renderInvoiceContent = () => {
@@ -249,7 +267,7 @@ export function BookingInvoice({
             <div>
               <Button 
                 variant="outline" 
-                onClick={handleGenerateInvoice}
+                onClick={handleRegenerateInvoice}
                 disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 className="w-full"
               >
@@ -299,7 +317,7 @@ export function BookingInvoice({
               <>
                 <Button 
                   variant="outline" 
-                  onClick={handleGenerateInvoice}
+                  onClick={handleRegenerateInvoice}
                   disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />

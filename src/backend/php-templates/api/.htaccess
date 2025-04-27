@@ -58,8 +58,19 @@ RewriteBase /api/
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
+# CRITICAL: Download invoice needs the PHP handler but NO content type header
 <Files "download-invoice.php">
-    # Don't set Content-Type here, let the script handle it
+    # Critical - Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "download-invoice">
+    # Critical - Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
@@ -106,6 +117,9 @@ RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
 RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
+# Public invoice endpoints
+RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
+RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
 
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]

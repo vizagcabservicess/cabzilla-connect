@@ -103,6 +103,3 @@ RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
 RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
 RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
 RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
-
-# CRITICAL ENDPOINT MAPPINGS - Keep existing direct mappings
-# ... keep existing code (Vehicle operations and other endpoints)
