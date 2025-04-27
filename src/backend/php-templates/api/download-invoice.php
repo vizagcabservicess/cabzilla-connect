@@ -66,17 +66,22 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
-    logInvoiceError("Public invoice download requested", [
-        'booking_id' => $bookingId,
-        'gst_enabled' => $gstEnabled ? 'true' : 'false',
-        'is_igst' => $isIGST ? 'true' : 'false',
-        'include_tax' => $includeTax ? 'true' : 'false',
-        'custom_invoice_number' => $customInvoiceNumber
-    ]);
-
     // Connect to database with improved error handling
     try {
-        $conn = getDbConnectionWithRetry();
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+        
         logInvoiceError("Public invoice download: Database connection established successfully");
     } catch (Exception $e) {
         logInvoiceError("Database connection error in public download-invoice", ['error' => $e->getMessage()]);
@@ -124,23 +129,59 @@ try {
         }
     }
     
-    // Forward the request to the admin download-invoice.php endpoint
-    $downloadInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
-    $queryParams = http_build_query([
-        'id' => $bookingId,
-        'gstEnabled' => $gstEnabled ? '1' : '0',
-        'isIGST' => $isIGST ? '1' : '0',
-        'includeTax' => $includeTax ? '1' : '0',
-        'gstNumber' => $gstNumber,
-        'companyName' => $companyName,
-        'companyAddress' => $companyAddress,
-        'invoiceNumber' => $customInvoiceNumber
-    ]);
+    // Forward request to admin endpoint
+    $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
+    $queryParams = http_build_query($_GET);
     
-    logInvoiceError("Forwarding to admin download-invoice", ['url' => $downloadInvoiceUrl . '?' . $queryParams]);
+    $ch = curl_init($adminUrl . '?' . $queryParams);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
-    // Directly include the admin version to avoid HTTP issues
-    include_once __DIR__ . '/admin/download-invoice.php';
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    
+    // Split headers and body
+    $headers = substr($response, 0, $headerSize);
+    $body = substr($response, $headerSize);
+    
+    curl_close($ch);
+    
+    if ($curlError) {
+        logInvoiceError("Error forwarding to admin download-invoice.php", [
+            'curl_error' => $curlError,
+            'http_code' => $httpCode
+        ]);
+        throw new Exception("Failed to generate invoice: $curlError");
+    }
+    
+    // Extract content type from headers
+    $contentType = null;
+    if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
+        $contentType = $matches[1];
+    }
+    
+    // Set appropriate content type (default to HTML if not found)
+    if ($contentType) {
+        header("Content-Type: $contentType");
+    } else {
+        header("Content-Type: text/html");
+    }
+    
+    // Pass through Content-Disposition for download
+    if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
+        header("Content-Disposition: {$matches[1]}");
+    } else {
+        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
+    }
+    
+    // Output the response body
+    echo $body;
+    
+    logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
     exit;
 
 } catch (Exception $e) {

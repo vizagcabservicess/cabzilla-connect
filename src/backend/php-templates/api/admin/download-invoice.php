@@ -2,7 +2,6 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Clear all buffers before ANY output
 while (ob_get_level()) ob_end_clean();
@@ -70,9 +69,22 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
-    // Connect to database
+    // Connect to database with improved error handling
     try {
-        $conn = getDbConnectionWithRetry();
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+        
         logInvoiceError("Database connection established successfully");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
@@ -120,55 +132,105 @@ try {
         }
     }
     
-    // Generate the invoice using generate-invoice.php
-    $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
-    $queryParams = http_build_query([
-        'id' => $bookingId,
-        'gstEnabled' => $gstEnabled ? '1' : '0',
-        'isIGST' => $isIGST ? '1' : '0',
-        'includeTax' => $includeTax ? '1' : '0',
-        'format' => 'json',
-        'gstNumber' => $gstNumber,
-        'companyName' => $companyName,
-        'companyAddress' => $companyAddress,
-        'invoiceNumber' => $customInvoiceNumber
-    ]);
+    // Retrieve the invoice data
+    $invoiceExists = false;
+    $invoiceData = null;
     
-    logInvoiceError("Generating invoice with URL", ['url' => $generateInvoiceUrl . '?' . $queryParams]);
-    
-    $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HEADER, false);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    
-    $generateResponse = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($curlError) {
-        logInvoiceError("Error calling generate-invoice.php", [
-            'curl_error' => $curlError,
-            'http_code' => $httpCode
-        ]);
-        throw new Exception("Failed to generate invoice: $curlError");
+    // First try to get from invoices table
+    if ($tableExists) {
+        try {
+            $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+            if ($invoiceStmt) {
+                $invoiceStmt->bind_param("i", $bookingId);
+                $invoiceStmt->execute();
+                $invoiceResult = $invoiceStmt->get_result();
+                
+                if ($invoiceResult && $invoiceResult->num_rows > 0) {
+                    $invoiceExists = true;
+                    $invoiceData = $invoiceResult->fetch_assoc();
+                    logInvoiceError("Found existing invoice", ['invoice_id' => $invoiceData['id']]);
+                } else {
+                    logInvoiceError("No existing invoice found for booking_id: $bookingId");
+                }
+                
+                $invoiceStmt->close();
+            }
+        } catch (Exception $e) {
+            logInvoiceError("Error checking for existing invoice", ['error' => $e->getMessage()]);
+        }
     }
     
-    $generatedData = json_decode($generateResponse, true);
-    if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
-        logInvoiceError("Invalid response from generate-invoice.php", [
-            'response' => substr($generateResponse, 0, 1000),
-            'http_code' => $httpCode
+    // If no invoice record or if parameters have changed, generate a new one
+    $invoiceHtml = '';
+    if (!$invoiceExists || 
+        $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
+        $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
+        $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
+        ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''))) {
+        
+        logInvoiceError("No invoice found or parameters changed, generating new invoice", [
+            'gstEnabled' => $gstEnabled ? 'true' : 'false',
+            'isIGST' => $isIGST ? 'true' : 'false',
+            'includeTax' => $includeTax ? 'true' : 'false',
+            'customInvoiceNumber' => $customInvoiceNumber
         ]);
-        throw new Exception("Invalid invoice data received from generator");
+        
+        // Generate invoice on-the-fly via the generate-invoice API
+        $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
+        $queryParams = http_build_query([
+            'id' => $bookingId,
+            'gstEnabled' => $gstEnabled ? '1' : '0',
+            'isIGST' => $isIGST ? '1' : '0',
+            'includeTax' => $includeTax ? '1' : '0',
+            'format' => 'json',
+            'gstNumber' => $gstNumber,
+            'companyName' => $companyName,
+            'companyAddress' => $companyAddress,
+            'invoiceNumber' => $customInvoiceNumber
+        ]);
+        
+        $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $generateResponse = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($curlError) {
+            logInvoiceError("Error calling generate-invoice.php", [
+                'curl_error' => $curlError,
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Failed to generate invoice: $curlError");
+        }
+        
+        $generatedData = json_decode($generateResponse, true);
+        if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
+            logInvoiceError("Invalid response from generate-invoice.php", [
+                'response' => substr($generateResponse, 0, 1000),
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Invalid invoice data received from generator");
+        }
+        
+        $invoiceHtml = $generatedData['data']['invoiceHtml'];
+        $invoiceNumber = $generatedData['data']['invoiceNumber'];
+    } else {
+        // Use stored HTML
+        $invoiceHtml = $invoiceData['invoice_html'];
+        $invoiceNumber = $invoiceData['invoice_number'];
     }
     
-    $invoiceHtml = $generatedData['data']['invoiceHtml'];
-    $invoiceNumber = $generatedData['data']['invoiceNumber'];
+    if (empty($invoiceHtml)) {
+        throw new Exception("No invoice HTML content generated");
+    }
     
-    // CRITICAL: Set Content-Type for HTML output
-    header('Content-Type: text/html; charset=utf-8');
+    // CRITICAL: Set Content-Type for PDF output before any HTML output
+    header('Content-Type: text/html');
     header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     
     // Return invoice HTML with improved styling and JavaScript for better printing
@@ -206,7 +268,7 @@ try {
         <div class="print-header no-print">
             <h1>Invoice #' . $invoiceNumber . '</h1>
             <p>Your invoice is being prepared for printing.</p>
-            <p>If printing doesn\'t start automatically, please use the print button below.</p>
+            <p>If printing doesn\'t start automatically, please use the print button in your browser.</p>
             <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
         </div>
         <div class="invoice-container">

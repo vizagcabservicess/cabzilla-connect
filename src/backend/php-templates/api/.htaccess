@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -14,17 +15,61 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
-# SPECIAL RULE FOR INVOICE GENERATION
+# Add explicit rule for fix-schema.php with highest priority
+<Files "fix-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS, GET"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "fix-drivers-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS, GET"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# Add explicit rule for users.php and direct-user-data.php
+<Files "users.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "direct-user-data.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*" 
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# SPECIAL RULE - Generate invoice and download invoice need special handling
 <Files "generate-invoice.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
 # CRITICAL: Download invoice needs the PHP handler but NO content type header
 <Files "download-invoice.php">
+    # Critical - Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "download-invoice">
     # Critical - Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
@@ -49,22 +94,6 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Critical invoice endpoints - highest priority
-RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
-RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
-
-# Public invoice endpoints
-RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
-RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
-
-# SPECIAL HANDLING FOR INVOICE AND RECEIPT ENDPOINTS
-RewriteRule ^admin/invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA] 
-RewriteRule ^invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA]
-RewriteRule ^admin/receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-RewriteRule ^receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-
 # HIGHEST PRIORITY: Fix schema endpoints - must come first
 RewriteRule ^admin/fix-schema$ admin/fix-schema.php [L,QSA]
 RewriteRule ^admin/fix-schema\.php$ admin/fix-schema.php [L,QSA]
@@ -82,6 +111,15 @@ RewriteRule ^admin/users$ admin/users.php [L,QSA]
 RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
 RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
+
+# Critical invoice endpoints - highest priority
+RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
+RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
+RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
+RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
+# Public invoice endpoints
+RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
+RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
 
 # Diagnostic endpoints - highest priority
 RewriteRule ^test-connection$ test-connection.php [L,QSA]
@@ -104,6 +142,30 @@ RewriteRule ^create-booking\.php$ book.php [L,QSA]
 RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
 RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
 RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
+
+# CRITICAL: Force direct PHP for critical files - ensure JSON content type
+<Files "book.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "test-connection.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "send-booking-confirmation.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "test-email-sending.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+
+# SPECIAL HANDLING FOR INVOICE AND RECEIPT ENDPOINTS
+RewriteRule ^admin/invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA] 
+RewriteRule ^invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^admin/receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
+RewriteRule ^receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
 
 # CRITICAL BOOKING API ENDPOINTS
 RewriteRule ^admin/assign-driver/?$ admin/assign-driver.php [L,NC,QSA]

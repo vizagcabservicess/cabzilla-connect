@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 RewriteBase /api/admin/
@@ -54,12 +55,6 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Allow from all
 </Files>
 
-# Add explicit rules for invoice generation
-RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
-RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
-RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
-RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
-
 # CRITICAL: Fix schema endpoints with highest priority
 RewriteRule ^fix-schema\.php$ fix-schema.php [L,QSA]
 RewriteRule ^fix-drivers-schema\.php$ fix-drivers-schema.php [L,QSA]
@@ -102,3 +97,9 @@ RewriteRule ^(.+)\.php$ $1.php [L,QSA]
 RewriteRule ^generate-invoice/?$ generate-invoice.php [L,NC,QSA]
 RewriteRule ^download-invoice/?$ download-invoice.php [L,NC,QSA]
 RewriteRule ^invoice/([0-9]+)/?$ generate-invoice.php?id=$1 [L,NC,QSA]
+
+# Add explicit rules for invoice generation
+RewriteRule ^generate-invoice$ generate-invoice.php [L,QSA]
+RewriteRule ^generate-invoice\.php$ generate-invoice.php [L,QSA]
+RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
+RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
