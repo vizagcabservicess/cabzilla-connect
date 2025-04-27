@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     if (ob_get_level()) ob_end_clean();
-    echo json_encode($data, JSON_PRETTY_PRINT);
+    echo json_encode($data);
     exit;
 }
 

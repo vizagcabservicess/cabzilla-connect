@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -11,8 +11,7 @@ import {
   BarChart3, 
   Settings,
   LogOut,
-  User,
-  Database
+  User
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -21,30 +20,15 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
-  const navigate = useNavigate();
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin?tab=bookings' },
-    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin?tab=vehicles' },
-    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin?tab=fares' },
-    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin?tab=users' },
-    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin?tab=drivers' },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
-    { id: 'database', label: 'Database', icon: <Database size={20} />, path: '/admin/database' }
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} /> },
+    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} /> },
+    { id: 'fares', label: 'Fares', icon: <Map size={20} /> },
+    { id: 'users', label: 'Users', icon: <Users size={20} /> },
+    { id: 'drivers', label: 'Drivers', icon: <Users size={20} /> },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} /> },
   ];
-
-  // Handle menu item click
-  const handleMenuItemClick = (id: string, path: string) => {
-    setActiveTab(id);
-    navigate(path);
-  };
-
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('authToken');
-    navigate('/login');
-  };
 
   return (
     <aside className="w-64 bg-gray-900 text-white hidden md:flex md:flex-col">
@@ -70,7 +54,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
                   ? 'bg-gray-800 text-white' 
                   : 'text-gray-400 hover:bg-gray-800 hover:text-white'
               }`}
-              onClick={() => handleMenuItemClick(item.id, item.path)}
+              onClick={() => setActiveTab(item.id)}
             >
               <span className="mr-3">{item.icon}</span>
               {item.label}
@@ -93,7 +77,6 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
         <Button 
           variant="outline" 
           className="w-full justify-start text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-white"
-          onClick={handleLogout}
         >
           <LogOut size={18} className="mr-2" />
           Logout

@@ -75,16 +75,6 @@ RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,NC,QSA]
 RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
 
-# CRITICAL: Admin route handling - add these rules before the catch-all rule
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^admin/?(.*)$ /index.html [L]
-
-# CRITICAL: Report route handling - add these rules before the catch-all rule
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^admin/reports/?(.*)$ /index.html [L]
-
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

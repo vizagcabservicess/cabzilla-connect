@@ -3,10 +3,6 @@
 RewriteEngine On
 RewriteBase /api/
 
-# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
-
 # CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
 <FilesMatch "\.php$">
     # Ensure PHP files are processed correctly
@@ -19,6 +15,49 @@ RewriteRule .* - [R=200,L]
     Header set Expires "0"
 </FilesMatch>
 
+# Add explicit rule for fix-schema.php with highest priority
+<Files "fix-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS, GET"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "fix-drivers-schema.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "POST, OPTIONS, GET"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# Add explicit rule for users.php and direct-user-data.php
+<Files "users.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+<Files "direct-user-data.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*" 
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# SPECIAL RULE - Generate invoice and download invoice need special handling
+<Files "generate-invoice.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
 # CRITICAL: Download invoice needs the PHP handler but NO content type header
 <Files "download-invoice.php">
     # Critical - Don't set Content-Type here, let the script handle it
@@ -29,6 +68,20 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
 </Files>
+
+<Files "download-invoice">
+    # Critical - Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
@@ -73,13 +126,10 @@ RewriteRule ^test-connection$ test-connection.php [L,QSA]
 RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
 RewriteRule ^direct-connection$ test-connection.php [L,QSA]
 
-# BOOKING API ENDPOINTS - CRITICAL
-RewriteRule ^update-booking$ update-booking.php [L,QSA]
-RewriteRule ^update-booking\.php$ update-booking.php [L,QSA]
-RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [L,QSA]
-RewriteRule ^admin/update-booking$ admin/update-booking.php [L,QSA]
-RewriteRule ^admin/update-booking\.php$ admin/update-booking.php [L,QSA]
-RewriteRule ^admin/update-booking/([0-9]+)$ admin/update-booking.php?id=$1 [L,QSA]
+# ADD: Test email endpoints - high priority with multiple URLs
+RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
+RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
+RewriteRule ^test-email$ test-email-sending.php [L,QSA]
 
 # HIGHEST PRIORITY: Booking endpoints
 RewriteRule ^book$ book.php [L,QSA]
@@ -88,9 +138,28 @@ RewriteRule ^book/$ book.php [L,QSA]
 RewriteRule ^create-booking$ book.php [L,QSA]
 RewriteRule ^create-booking\.php$ book.php [L,QSA]
 
-# Special case for drivers
-RewriteRule ^admin/get-drivers$ admin/get-drivers.php [L,QSA]
-RewriteRule ^admin/get-drivers\.php$ admin/get-drivers.php [L,QSA]
+# HIGHEST PRIORITY: Email confirmation endpoints
+RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
+RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
+RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
+
+# CRITICAL: Force direct PHP for critical files - ensure JSON content type
+<Files "book.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "test-connection.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "send-booking-confirmation.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
+<Files "test-email-sending.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+</Files>
 
 # SPECIAL HANDLING FOR INVOICE AND RECEIPT ENDPOINTS
 RewriteRule ^admin/invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA] 
