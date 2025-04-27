@@ -67,6 +67,24 @@ RewriteBase /api/
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
+# CRITICAL: Handle drivers.php explicitly
+<Files "drivers.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# CRITICAL: Handle get-drivers.php explicitly
+<Files "get-drivers.php">
+    SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
@@ -106,66 +124,21 @@ RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
 RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
 
-# Diagnostic endpoints - highest priority
-RewriteRule ^test-connection$ test-connection.php [L,QSA]
-RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^direct-connection$ test-connection.php [L,QSA]
+# NEW: Admin API Routes - Add priority routes for get-drivers and booking endpoints
+RewriteRule ^admin/get-drivers$ admin/get-drivers.php [L,QSA]
+RewriteRule ^admin/get-drivers\.php$ admin/get-drivers.php [L,QSA]
+RewriteRule ^admin/bookings$ admin/booking.php [L,QSA]
+RewriteRule ^admin/bookings\.php$ admin/booking.php [L,QSA]
 
-# ADD: Test email endpoints - high priority with multiple URLs
-RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email$ test-email-sending.php [L,QSA]
-
-# HIGHEST PRIORITY: Booking endpoints
-RewriteRule ^book$ book.php [L,QSA]
-RewriteRule ^book\.php$ book.php [L,QSA]
-RewriteRule ^book/$ book.php [L,QSA]
-RewriteRule ^create-booking$ book.php [L,QSA]
-RewriteRule ^create-booking\.php$ book.php [L,QSA]
-
-# HIGHEST PRIORITY: Email confirmation endpoints
-RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
-
-# CRITICAL: Force direct PHP for critical files - ensure JSON content type
-<Files "book.php">
+# CRITICAL: Ensure bookings and drivers are directly accessible
+<Files "booking.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
-<Files "test-connection.php">
+<Files "get-drivers.php">
     SetHandler application/x-httpd-php
     Header always set Content-Type "application/json"
 </Files>
-<Files "send-booking-confirmation.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "test-email-sending.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-
-# SPECIAL HANDLING FOR INVOICE AND RECEIPT ENDPOINTS
-RewriteRule ^admin/invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA] 
-RewriteRule ^invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA]
-RewriteRule ^admin/receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-RewriteRule ^receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-
-# CRITICAL BOOKING API ENDPOINTS
-RewriteRule ^admin/assign-driver/?$ admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^admin/cancel-booking/?$ admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^admin/update-booking/?$ admin/update-booking.php [L,NC,QSA]
-RewriteRule ^admin/generate-invoice/?$ admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^admin/download-invoice/?$ admin/download-invoice.php [L,NC,QSA]
-RewriteRule ^download-invoice/?$ admin/download-invoice.php [L,NC,QSA]
-RewriteRule ^admin/booking/?$ admin/booking.php [L,NC,QSA]
-RewriteRule ^admin/booking/([0-9]+)/?$ admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^admin/bookings/?$ admin/booking.php [L,NC,QSA]
-RewriteRule ^admin/bookings/([0-9]+)/?$ admin/booking.php?id=$1 [L,NC,QSA]
-RewriteRule ^admin/drivers/?$ admin/drivers.php [L,NC,QSA]
-RewriteRule ^admin/driver/?$ admin/driver.php [L,NC,QSA]
-RewriteRule ^admin/driver/([0-9]+)/?$ admin/driver.php?id=$1 [L,NC,QSA]
 
 # Keep existing routes
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
