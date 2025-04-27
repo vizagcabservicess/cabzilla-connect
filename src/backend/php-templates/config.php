@@ -1,37 +1,58 @@
 
 <?php
 /**
- * Global configuration file
+ * Global Configuration File
  */
 
-// Database configuration
+// Application Configuration
+define('APP_NAME', 'Vizag Cab Services');
+define('APP_URL', 'https://vizagup.com');
+define('APP_VERSION', '1.0.0');
+define('APP_DEBUG', true);
+
+// Database Configuration
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'u644605165_db_be');
 define('DB_USER', 'u644605165_usr_be');
 define('DB_PASS', 'Vizag@1213');
 
-// API settings
-define('API_DEBUG', true);
+// Database Connection Settings
+ini_set('mysql.connect_timeout', '20');
+ini_set('default_socket_timeout', '20');
+ini_set('max_execution_time', '30');
 
-// Directory settings
-define('LOG_DIR', __DIR__ . '/logs');
-define('CACHE_DIR', __DIR__ . '/cache');
-define('DATA_DIR', __DIR__ . '/data');
-
-// Create necessary directories if they don't exist
-if (!file_exists(LOG_DIR)) {
-    mkdir(LOG_DIR, 0777, true);
+// Error Reporting Configuration
+if (APP_DEBUG) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    error_reporting(0);
+    ini_set('display_errors', 0);
 }
 
-if (!file_exists(CACHE_DIR)) {
-    mkdir(CACHE_DIR, 0777, true);
+// Session Security Configuration
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_secure', 1);
+session_start();
+
+// Directory Settings
+define('ROOT_PATH', realpath(__DIR__));
+define('API_PATH', ROOT_PATH . '/api');
+define('LOG_DIR', ROOT_PATH . '/logs');
+define('CACHE_DIR', ROOT_PATH . '/cache');
+define('DATA_DIR', ROOT_PATH . '/data');
+define('UPLOADS_PATH', ROOT_PATH . '/uploads');
+
+// Create necessary directories
+$directories = [LOG_DIR, CACHE_DIR, DATA_DIR, UPLOADS_PATH];
+foreach ($directories as $dir) {
+    if (!file_exists($dir)) {
+        mkdir($dir, 0777, true);
+    }
 }
 
-if (!file_exists(DATA_DIR)) {
-    mkdir(DATA_DIR, 0777, true);
-}
-
-// Function to get database connection
+// Enhanced database connection function
 function getDbConnection() {
     try {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
@@ -40,31 +61,37 @@ function getDbConnection() {
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
+        // Set proper charset and collation
         $conn->set_charset("utf8mb4");
-        
-        // Set collation to ensure consistency
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+        
+        // Set session timeouts
+        $conn->query("SET session wait_timeout=60");
+        $conn->query("SET session interactive_timeout=60");
         
         return $conn;
     } catch (Exception $e) {
-        // Log error
+        // Log error with timestamp
         $timestamp = date('Y-m-d H:i:s');
-        file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', "[$timestamp] " . $e->getMessage() . "\n", FILE_APPEND);
+        $logMessage = "[$timestamp] Database connection error: " . $e->getMessage() . "\n";
+        file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
+        
         return null;
     }
 }
 
-// Essential response functions
+// JSON Response Helper
 if (!function_exists('sendJsonResponse')) {
     function sendJsonResponse($data, $statusCode = 200) {
         header('Content-Type: application/json');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
         http_response_code($statusCode);
         echo json_encode($data);
         exit;
     }
 }
 
-// Define logging function if it doesn't exist
+// Enhanced Error Logging
 if (!function_exists('logError')) {
     function logError($message, $context = []) {
         $timestamp = date('Y-m-d H:i:s');
@@ -75,13 +102,12 @@ if (!function_exists('logError')) {
         }
         
         $logEntry .= "\n";
-        
         $logFile = LOG_DIR . '/api_error_' . date('Y-m-d') . '.log';
         file_put_contents($logFile, $logEntry, FILE_APPEND);
     }
 }
 
-// JWT token generation function
+// JWT Token Generation
 if (!function_exists('generateJwtToken')) {
     function generateJwtToken($userId, $email, $role) {
         $issuedAt = time();
@@ -95,7 +121,6 @@ if (!function_exists('generateJwtToken')) {
             'role' => $role
         ];
         
-        // Simple JWT implementation (for production, use a proper JWT library)
         $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
         $payload = base64_encode(json_encode($payload));
         $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'your_secret_key', true));
