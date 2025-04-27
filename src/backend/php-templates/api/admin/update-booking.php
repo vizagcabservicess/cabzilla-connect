@@ -128,12 +128,13 @@ try {
         'status' => 'status',
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
-        'vehicleNumber' => 'vehicle_number'
+        'vehicleNumber' => 'vehicle_number',
+        'billingAddress' => 'billing_address'
     ];
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
-        if (isset($data[$requestField]) && $data[$requestField] !== null) {
+        if (isset($data[$requestField])) {
             $updateFields[] = "$dbField = ?";
             $types .= getTypeForField($data[$requestField]);
             $params[] = $data[$requestField];
@@ -159,6 +160,10 @@ try {
     // Prepare and execute the update query
     $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
     $updateStmt = $conn->prepare($sql);
+    
+    if (!$updateStmt) {
+        throw new Exception("Failed to prepare statement: " . $conn->error);
+    }
     
     // Use a helper function to properly reference values for bind_param
     function refValues($arr) {
@@ -207,6 +212,7 @@ try {
         'driverName' => $updatedBooking['driver_name'],
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
+        'billingAddress' => $updatedBooking['billing_address'] ?? '',
         'updatedAt' => $updatedBooking['updated_at']
     ];
     

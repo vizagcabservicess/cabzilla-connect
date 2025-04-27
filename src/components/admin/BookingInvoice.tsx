@@ -23,6 +23,7 @@ interface GSTDetails {
   gstNumber: string;
   companyName: string;
   companyAddress: string;
+  isIGST?: boolean;
 }
 
 export function BookingInvoice({
@@ -36,10 +37,12 @@ export function BookingInvoice({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gstEnabled, setGstEnabled] = useState(false);
+  const [isIGST, setIsIGST] = useState(false);
   const [gstDetails, setGstDetails] = useState<GSTDetails>({
     gstNumber: '',
     companyName: '',
-    companyAddress: ''
+    companyAddress: '',
+    isIGST: false
   });
   const { toast } = useToast();
 
@@ -64,8 +67,12 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled);
-      const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
+      const gstWithIGST = gstEnabled 
+        ? { ...gstDetails, isIGST: isIGST } 
+        : undefined;
+      
+      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST);
+      const result = await onGenerateInvoice(gstEnabled, gstWithIGST);
       console.log('Invoice generation result:', result);
       
       if (result && result.data) {
@@ -96,16 +103,29 @@ export function BookingInvoice({
     const baseUrl = getApiUrl(`/api/admin/download-invoice`);
     const bookingIdParam = `?id=${booking.id}`;
     const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+    const igstParam = isIGST ? '&isIGST=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${gstDetailsParam}`;
+    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${gstDetailsParam}`;
     console.log('Download invoice URL:', downloadUrl);
     window.open(downloadUrl, '_blank');
   };
 
   const handleGstToggle = (checked: boolean) => {
     setGstEnabled(checked);
+    // Reset IGST when GST is disabled
+    if (!checked) {
+      setIsIGST(false);
+    }
+  };
+
+  const handleIGSTToggle = (checked: boolean) => {
+    setIsIGST(checked);
+    setGstDetails(prev => ({
+      ...prev,
+      isIGST: checked
+    }));
   };
 
   const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,41 +174,52 @@ export function BookingInvoice({
             </div>
             
             {gstEnabled && (
-              <div className="mt-4 space-y-3">
-                <div>
-                  <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
-                  <Input 
-                    id="gstNumber"
-                    name="gstNumber"
-                    value={gstDetails.gstNumber}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter GST number"
-                    required
+              <>
+                <div className="flex items-center space-x-2 mt-2">
+                  <Switch 
+                    id="igst-toggle"
+                    checked={isIGST}
+                    onCheckedChange={handleIGSTToggle}
                   />
+                  <Label htmlFor="igst-toggle">Apply IGST (for interstate billing)</Label>
                 </div>
-                <div>
-                  <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
-                  <Input 
-                    id="companyName"
-                    name="companyName"
-                    value={gstDetails.companyName}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter company name"
-                    required
-                  />
+
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
+                    <Input 
+                      id="gstNumber"
+                      name="gstNumber"
+                      value={gstDetails.gstNumber}
+                      onChange={handleGstDetailsChange}
+                      placeholder="Enter GST number"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
+                    <Input 
+                      id="companyName"
+                      name="companyName"
+                      value={gstDetails.companyName}
+                      onChange={handleGstDetailsChange}
+                      placeholder="Enter company name"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="companyAddress">Company Address<span className="text-red-500">*</span></Label>
+                    <Input 
+                      id="companyAddress"
+                      name="companyAddress"
+                      value={gstDetails.companyAddress}
+                      onChange={handleGstDetailsChange}
+                      placeholder="Enter company address"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="companyAddress">Company Address<span className="text-red-500">*</span></Label>
-                  <Input 
-                    id="companyAddress"
-                    name="companyAddress"
-                    value={gstDetails.companyAddress}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter company address"
-                    required
-                  />
-                </div>
-              </div>
+              </>
             )}
             
             <div className="mt-4">

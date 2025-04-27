@@ -30,12 +30,14 @@ try {
     // Get GST details from query params
     $gstEnabled = isset($_GET['gstEnabled']) && $_GET['gstEnabled'] == '1';
     $gstDetails = null;
+    $isIGST = isset($_GET['isIGST']) && $_GET['isIGST'] == '1';
     
     if ($gstEnabled) {
         $gstDetails = [
             'gstNumber' => isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '',
             'companyName' => isset($_GET['companyName']) ? $_GET['companyName'] : '',
             'companyAddress' => isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '',
+            'isIGST' => $isIGST
         ];
     }
     
@@ -48,7 +50,7 @@ try {
         exit;
     }
     
-    // Get invoice HTML first using the generate-invoice.php script
+    // Get invoice HTML from generate-invoice.php
     $apiUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
     
     // Add all parameters to the URL
@@ -63,6 +65,9 @@ try {
         }
         if (isset($gstDetails['companyAddress'])) {
             $apiUrl .= '&companyAddress=' . urlencode($gstDetails['companyAddress']);
+        }
+        if ($isIGST) {
+            $apiUrl .= '&isIGST=1';
         }
     }
     
@@ -93,48 +98,49 @@ try {
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // Use a library to convert HTML to PDF
-    // For this implementation, we'll use a simple method just returning the HTML
-    // In a real application, you would use a library like mPDF, DOMPDF, or TCPDF
-    // Example of integrating mPDF is commented below
-    
-    /*
-    // Using mPDF (you would need to install it via composer)
-    require_once __DIR__ . '/../../vendor/autoload.php';
-    $mpdf = new \Mpdf\Mpdf();
-    $mpdf->WriteHTML($htmlContent);
-    $mpdf->Output('invoice_' . $invoiceNumber . '.pdf', 'D');
-    */
-    
-    // Since we don't have a PDF library installed, we'll return HTML with proper headers
-    // In a real application, you would use a proper PDF library
-    
-    // For now, provide a fallback that returns the HTML that looks like a PDF
-    header('Content-Type: text/html');
+    // Output HTML that looks like a PDF for now
+    // In production, use a library like mPDF or TCPDF
     echo '<!DOCTYPE html>
 <html>
 <head>
     <title>Invoice ' . $invoiceNumber . '</title>
     <style>
-        body { font-family: Arial, sans-serif; }
-        .pdf-notice { 
-            background: #f8f9fa; 
-            padding: 20px; 
-            border: 1px solid #ddd; 
-            margin: 20px; 
-            text-align: center;
+        body { 
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .invoice-container {
             max-width: 800px;
             margin: 20px auto;
+            border: 1px solid #ddd;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+            overflow: auto;
+        }
+        .invoice-header div:first-child {
+            float: left;
+        }
+        .invoice-header div:last-child {
+            float: right;
+            text-align: right;
         }
     </style>
 </head>
 <body>
-    <div class="pdf-notice">
-        <h2>PDF Download Simulation</h2>
-        <p>In a production environment, this would be a PDF download.</p>
-        <p>Below is the invoice that would be converted to PDF:</p>
-    </div>
     ' . $htmlContent . '
+    <script>
+        window.onload = function() {
+            window.print();
+        };
+    </script>
 </body>
 </html>';
 
