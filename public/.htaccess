@@ -60,6 +60,17 @@ RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
 
+# PDF Download endpoints with special handling
+RewriteRule ^api/admin/invoice-pdf/([0-9]+)/?$ /api/admin/download-invoice.php?id=$1&format=pdf [L,NC,QSA]
+RewriteRule ^api/invoice-pdf/([0-9]+)/?$ /api/admin/download-invoice.php?id=$1&format=pdf [L,NC,QSA]
+
+# Special rule for download-invoice.php with format=pdf parameter
+<FilesMatch "download-invoice\.php">
+    # Allow the script to set its own Content-Type
+    SetEnvIf Request_URI "format=pdf" no_content_type=1
+    Header unset Content-Type env=no_content_type
+</FilesMatch>
+
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

@@ -140,21 +140,29 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database - direct connection for reliability
+    // Connect to database using db_helper.php if available
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
+        if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+            require_once __DIR__ . '/../common/db_helper.php';
+            $conn = getDbConnectionWithRetry();
+            logInvoiceError("Using db_helper.php for database connection");
+        } else {
+            // Direct connection as fallback
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            // Set character set
+            $conn->set_charset("utf8mb4");
+            logInvoiceError("Using direct database connection");
         }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
         logInvoiceError("Database connection successful");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
@@ -226,42 +234,42 @@ try {
     $currentDate = date('Y-m-d');
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
-    // Calculate tax components based on includeTax setting
-    $baseAmount = $booking['total_amount'];
-    $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
+    // Calculate tax components based on includeTax setting and GST type
+    $totalAmount = $booking['total_amount'];
+    $baseAmount = 0;
+    $taxAmount = 0;
+    $cgstAmount = 0;
+    $sgstAmount = 0;
+    $igstAmount = 0;
+    $taxRate = $gstEnabled ? 0.12 : 0; // 12% GST or 0% if disabled
     
     if ($includeTax) {
-        // If tax is included in total (calculate base by removing tax)
-        $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
-        $taxAmount = $baseAmount - $baseAmountBeforeTax;
-        $totalAmount = $baseAmount;
+        // Price is tax inclusive, calculate base amount by removing tax
+        $baseAmount = round($totalAmount / (1 + $taxRate), 2);
+        $taxAmount = $totalAmount - $baseAmount;
     } else {
-        // If tax is excluded (calculate tax on top of the base)
-        $baseAmountBeforeTax = $baseAmount;
+        // Price is tax exclusive, calculate tax on top of base
+        $baseAmount = $totalAmount;
         $taxAmount = round($baseAmount * $taxRate, 2);
         $totalAmount = $baseAmount + $taxAmount;
     }
     
-    // For GST, split into CGST and SGST or use IGST
+    // Calculate CGST, SGST, or IGST based on selection
     if ($gstEnabled) {
         if ($isIGST) {
-            // Interstate - Use IGST (12%)
+            // Interstate - IGST (12%)
             $igstAmount = $taxAmount;
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
             $cgstAmount = round($taxAmount / 2, 2);
-            $sgstAmount = $taxAmount - $cgstAmount;
+            $sgstAmount = $taxAmount - $cgstAmount; // Ensure exact total
             $igstAmount = 0;
         }
-    } else {
-        $cgstAmount = 0;
-        $sgstAmount = 0;
-        $igstAmount = 0;
     }
     
-    // Create HTML content for invoice
+    // Create HTML content for invoice with proper GST display
     $invoiceHtml = '<!DOCTYPE html>
 <html>
 <head>
@@ -343,7 +351,7 @@ try {
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmount, 2) . '</td>
                 </tr>';
                 
     if ($gstEnabled) {
@@ -399,7 +407,7 @@ try {
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
             'totalAmount' => $totalAmount,
-            'baseAmount' => $baseAmountBeforeTax,
+            'baseAmount' => $baseAmount,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
@@ -483,7 +491,7 @@ try {
                     "ssdddiiisssi",
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmountBeforeTax,
+                    $baseAmount,
                     $taxAmount,
                     $totalAmount,
                     $gstEnabledInt,
@@ -524,7 +532,7 @@ try {
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmountBeforeTax,
+                    $baseAmount,
                     $taxAmount,
                     $totalAmount,
                     $gstEnabledInt,

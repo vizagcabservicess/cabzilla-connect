@@ -102,19 +102,48 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
-    // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-    const bookingIdParam = `?id=${booking.id}`;
-    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-    const igstParam = isIGST ? '&isIGST=1' : '';
-    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
-    
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
-    console.log('Download invoice URL:', downloadUrl);
-    window.open(downloadUrl, '_blank');
+    // Direct download approach using iframe
+    try {
+      // Use a proper URL with query parameters (no body in GET request)
+      const baseUrl = getApiUrl(`/api/admin/download-invoice`);
+      const bookingIdParam = `?id=${booking.id}`;
+      const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+      const igstParam = isIGST ? '&isIGST=1' : '';
+      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+      const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+      const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+        `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+      const formatParam = '&format=pdf';
+      
+      const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}${formatParam}`;
+      console.log('Download invoice URL:', downloadUrl);
+      
+      // Create and use a hidden iframe for download
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = downloadUrl;
+      document.body.appendChild(iframe);
+      
+      // Show success toast
+      toast({
+        title: "Invoice Downloaded",
+        description: "Your invoice PDF is being downloaded"
+      });
+      
+      // Remove the iframe after a delay
+      setTimeout(() => {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 5000);
+    } catch (error) {
+      console.error("PDF download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download PDF. Please try again."
+      });
+    }
   };
 
   const handleGstToggle = (checked: boolean) => {

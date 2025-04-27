@@ -54,27 +54,41 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 
-    // Connect to the database with improved error handling
-    try {
-        // Direct database connection for maximum reliability
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
+    // Try to use db_helper if available
+    if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+        require_once __DIR__ . '/../common/db_helper.php';
+        try {
+            $conn = getDbConnectionWithRetry();
+            logDriversError("Database connection established using db_helper");
+        } catch (Exception $e) {
+            logDriversError("Error connecting via db_helper", ['error' => $e->getMessage()]);
+            // Fall back to direct connection below
         }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        
-        logDriversError("Database connection established successfully");
-    } catch (Exception $e) {
-        logDriversError("Database connection error", ['error' => $e->getMessage()]);
-        throw new Exception("Database connection failed: " . $e->getMessage());
+    }
+
+    // If conn is not set from db_helper, create a direct connection
+    if (!isset($conn) || !$conn) {
+        try {
+            // Direct database connection for maximum reliability
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            // Set character set
+            $conn->set_charset("utf8mb4");
+            
+            logDriversError("Database connection established directly");
+        } catch (Exception $e) {
+            logDriversError("Database connection error", ['error' => $e->getMessage()]);
+            throw new Exception("Database connection failed: " . $e->getMessage());
+        }
     }
     
     // Check if drivers table exists
@@ -113,7 +127,11 @@ try {
         }
         
         // Insert some sample data if we just created the table
-        $sampleDataExists = $conn->query("SELECT COUNT(*) as count FROM drivers")->fetch_assoc()['count'] > 0;
+        $sampleDataExists = false;
+        $countResult = $conn->query("SELECT COUNT(*) as count FROM drivers");
+        if ($countResult) {
+            $sampleDataExists = $countResult->fetch_assoc()['count'] > 0;
+        }
         
         if (!$sampleDataExists) {
             logDriversError("Adding sample data to drivers table");
