@@ -138,6 +138,7 @@ try {
     
     if (!$bookingId && !$demoMode) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
+        exit;
     }
 
     // Connect to database using db_helper.php if available
@@ -173,7 +174,7 @@ try {
             // In production, return an error
             sendJsonResponse([
                 'status' => 'error', 
-                'message' => 'Database connection failed',
+                'message' => 'Database connection failed: ' . $e->getMessage(),
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
             exit;
@@ -186,6 +187,9 @@ try {
     if (!$demoMode && isset($conn)) {
         try {
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Failed to prepare statement: " . $conn->error);
+            }
             $stmt->bind_param("i", $bookingId);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -235,7 +239,7 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting and GST type
-    $totalAmount = $booking['total_amount'];
+    $totalAmount = (float)$booking['total_amount'];
     $baseAmount = 0;
     $taxAmount = 0;
     $cgstAmount = 0;
@@ -567,6 +571,7 @@ try {
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
+    exit;
 }
 
 // Close database connection

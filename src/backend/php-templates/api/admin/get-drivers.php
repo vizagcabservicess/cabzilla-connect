@@ -87,7 +87,8 @@ try {
             logDriversError("Database connection established directly");
         } catch (Exception $e) {
             logDriversError("Database connection error", ['error' => $e->getMessage()]);
-            throw new Exception("Database connection failed: " . $e->getMessage());
+            sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
+            exit;
         }
     }
     
@@ -123,7 +124,8 @@ try {
         
         if ($conn->error) {
             logDriversError("Error creating drivers table", ['error' => $conn->error]);
-            throw new Exception("Failed to create drivers table: " . $conn->error);
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create drivers table: ' . $conn->error], 500);
+            exit;
         }
         
         // Insert some sample data if we just created the table
@@ -202,12 +204,14 @@ try {
             
         } catch (Exception $e) {
             logDriversError("Error fetching drivers", ['error' => $e->getMessage()]);
-            throw $e;
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve drivers: ' . $e->getMessage()], 500);
+            exit;
         }
     } else {
         // Should never reach here as we create the table above
         logDriversError("Drivers table does not exist after creation attempt");
-        throw new Exception("Failed to verify drivers table existence");
+        sendJsonResponse(['status' => 'error', 'message' => 'Failed to verify drivers table existence'], 500);
+        exit;
     }
 
 } catch (Exception $e) {

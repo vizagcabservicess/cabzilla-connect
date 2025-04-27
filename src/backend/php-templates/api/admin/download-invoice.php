@@ -45,10 +45,21 @@ function logInvoiceError($message, $data = []) {
     );
 }
 
+// Helper function to get API URL
+function getApiUrl($path) {
+    $serverName = $_SERVER['SERVER_NAME'];
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
+    $port = $_SERVER['SERVER_PORT'];
+    $portStr = ($isSecure && $port == 443) || (!$isSecure && $port == 80) ? '' : ":$port";
+    $protocol = $isSecure ? 'https' : 'http';
+    return "$protocol://$serverName$portStr/$path";
+}
+
 try {
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        exit;
     }
 
     // Get booking ID from query parameters
@@ -56,6 +67,7 @@ try {
     
     if (!$bookingId) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
+        exit;
     }
     
     logInvoiceError("Processing invoice download for booking ID: $bookingId", $_GET);
@@ -78,11 +90,8 @@ try {
             logInvoiceError("Database connection established using db_helper");
         } catch (Exception $e) {
             logInvoiceError("Error connecting via db_helper", ['error' => $e->getMessage()]);
-            throw new Exception("Database connection failed: " . $e->getMessage());
-        }
-    } else {
-        // Connect to database with direct connection
-        try {
+            
+            // Fall back to direct connection
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
@@ -96,191 +105,81 @@ try {
             
             // Set character set
             $conn->set_charset("utf8mb4");
-            
-            logInvoiceError("Database connection established successfully (direct)");
-        } catch (Exception $e) {
-            logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
-            throw new Exception("Database connection failed: " . $e->getMessage());
         }
+    } else {
+        // Connect to database with direct connection
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+        
+        logInvoiceError("Database connection established successfully (direct)");
     }
     
-    // First check if invoices table exists
-    $tableExists = false;
-    $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
+    // Generate invoice directly in this script for maximum reliability
+    // Call generate-invoice.php to get invoice content
+    $apiUrl = "generate-invoice.php";
+    $queryParams = http_build_query([
+        'id' => $bookingId,
+        'gstEnabled' => $gstEnabled ? '1' : '0',
+        'isIGST' => $isIGST ? '1' : '0',
+        'includeTax' => $includeTax ? '1' : '0',
+        'invoiceNumber' => $customInvoiceNumber,
+        'gstNumber' => $gstNumber,
+        'companyName' => $companyName,
+        'companyAddress' => $companyAddress
+    ]);
     
-    if ($checkTableResult) {
-        $tableExists = $checkTableResult->num_rows > 0;
-    }
+    // Use direct inclusion instead of cURL to avoid issues
+    ob_start();
+    $_GET['id'] = $bookingId;
+    $_GET['gstEnabled'] = $gstEnabled ? '1' : '0';
+    $_GET['isIGST'] = $isIGST ? '1' : '0';
+    $_GET['includeTax'] = $includeTax ? '1' : '0';
+    $_GET['invoiceNumber'] = $customInvoiceNumber;
+    $_GET['gstNumber'] = $gstNumber;
+    $_GET['companyName'] = $companyName;
+    $_GET['companyAddress'] = $companyAddress;
     
-    // Create invoices table if it doesn't exist
-    if (!$tableExists) {
-        logInvoiceError("Creating invoices table as it doesn't exist");
-        
-        $createTableQuery = "
-            CREATE TABLE IF NOT EXISTS invoices (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                booking_id INT NOT NULL,
-                invoice_number VARCHAR(50) NOT NULL,
-                invoice_date DATE NOT NULL,
-                base_amount DECIMAL(10,2) NOT NULL,
-                tax_amount DECIMAL(10,2) NOT NULL,
-                total_amount DECIMAL(10,2) NOT NULL,
-                gst_enabled TINYINT(1) DEFAULT 0,
-                is_igst TINYINT(1) DEFAULT 0,
-                include_tax TINYINT(1) DEFAULT 1,
-                gst_number VARCHAR(20),
-                company_name VARCHAR(100),
-                company_address TEXT,
-                invoice_html MEDIUMTEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY (invoice_number),
-                KEY (booking_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-        
-        $conn->query($createTableQuery);
-        
-        if ($conn->error) {
-            logInvoiceError("Error creating invoices table", ['error' => $conn->error]);
-        }
-    }
+    // Include generate-invoice.php directly
+    include(__DIR__ . '/generate-invoice.php');
+    $response = ob_get_clean();
     
-    // Check if invoice exists for this booking or if parameters have changed
-    // Use the latest invoice by ID (DESC)
-    $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
-    $invoiceExists = false;
-    $invoiceData = null;
-    $invoiceHtml = null;
+    // Parse JSON response
+    $result = json_decode($response, true);
     
-    if ($invoiceStmt) {
-        $invoiceStmt->bind_param("i", $bookingId);
-        $invoiceStmt->execute();
-        $invoiceResult = $invoiceStmt->get_result();
-        
-        if ($invoiceResult && $invoiceResult->num_rows > 0) {
-            $invoiceExists = true;
-            $invoiceData = $invoiceResult->fetch_assoc();
-            
-            // Check if parameters match
-            $parametersChanged = 
-                $gstEnabled != filter_var($invoiceData['gst_enabled'], FILTER_VALIDATE_BOOLEAN) ||
-                $isIGST != filter_var($invoiceData['is_igst'], FILTER_VALIDATE_BOOLEAN) ||
-                $includeTax != filter_var($invoiceData['include_tax'], FILTER_VALIDATE_BOOLEAN) ||
-                ($customInvoiceNumber && $customInvoiceNumber !== $invoiceData['invoice_number']);
-                
-            if (!$parametersChanged) {
-                // Use existing invoice HTML
-                $invoiceHtml = $invoiceData['invoice_html'];
-                logInvoiceError("Using existing invoice", ['invoice_id' => $invoiceData['id']]);
-            } else {
-                logInvoiceError("Parameters changed, regenerating invoice");
-                $invoiceExists = false; // Force regeneration
-            }
-        }
-    }
-    
-    // If no matching invoice exists or parameters changed, generate a new one
-    if (!$invoiceExists || !$invoiceHtml) {
-        logInvoiceError("Generating new invoice for download");
-        
-        // Get booking details
-        $bookingStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-        if (!$bookingStmt) {
-            throw new Exception("Failed to prepare booking statement: " . $conn->error);
-        }
-        
-        $bookingStmt->bind_param("i", $bookingId);
-        $bookingStmt->execute();
-        $bookingResult = $bookingStmt->get_result();
-        
-        if ($bookingResult->num_rows === 0) {
-            logInvoiceError("Booking not found", ['booking_id' => $bookingId]);
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-        }
-        
-        $booking = $bookingResult->fetch_assoc();
-        
-        // Call generate-invoice.php via internal mechanism to get invoice HTML
-        $apiUrl = getApiUrl('admin/generate-invoice.php');
-        $queryParams = http_build_query([
-            'id' => $bookingId,
-            'gstEnabled' => $gstEnabled ? '1' : '0',
-            'isIGST' => $isIGST ? '1' : '0',
-            'includeTax' => $includeTax ? '1' : '0',
-            'invoiceNumber' => $customInvoiceNumber,
-            'gstNumber' => $gstNumber,
-            'companyName' => $companyName,
-            'companyAddress' => $companyAddress,
-            'format' => 'json'
+    if (!$result || !isset($result['data']['invoiceHtml'])) {
+        logInvoiceError("Invalid response from generate-invoice", [
+            'response' => substr($response, 0, 500)
         ]);
-        
-        // Create the URL with proper base
-        $serverName = $_SERVER['SERVER_NAME'];
-        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
-        $port = $_SERVER['SERVER_PORT'];
-        $portStr = ($isSecure && $port == 443) || (!$isSecure && $port == 80) ? '' : ":$port";
-        $protocol = $isSecure ? 'https' : 'http';
-        $baseUrl = "$protocol://$serverName$portStr";
-        
-        // Form the full URL for the API call
-        $fullApiUrl = "$baseUrl/api/admin/generate-invoice.php?$queryParams";
-        logInvoiceError("Calling generate-invoice API", ['url' => $fullApiUrl]);
-        
-        // Make the API call using curl
-        $ch = curl_init($fullApiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($curlError) {
-            logInvoiceError("Curl error when calling generate-invoice", [
-                'error' => $curlError, 
-                'http_code' => $httpCode
-            ]);
-            throw new Exception("Failed to generate invoice: $curlError");
-        }
-        
-        if ($httpCode != 200) {
-            logInvoiceError("HTTP error when calling generate-invoice", [
-                'http_code' => $httpCode,
-                'response' => substr($response, 0, 500)
-            ]);
-            throw new Exception("Generate invoice API returned code $httpCode");
-        }
-        
-        $result = json_decode($response, true);
-        
-        if (!$result || !isset($result['data']['invoiceHtml'])) {
-            logInvoiceError("Invalid response from generate-invoice", [
-                'response' => substr($response, 0, 500)
-            ]);
-            throw new Exception("Invalid invoice data received");
-        }
-        
-        $invoiceHtml = $result['data']['invoiceHtml'];
+        throw new Exception("Failed to generate invoice: Invalid response");
     }
+    
+    $invoiceHtml = $result['data']['invoiceHtml'];
+    $invoiceNumber = $result['data']['invoiceNumber'];
     
     // Output invoice based on requested format
     if ($format === 'pdf') {
-        // Set PDF Content-Type and Content-Disposition headers
+        // IMPORTANT: Set PDF headers - these override any previous headers
         header('Content-Type: application/pdf');
-        header('Content-Disposition: attachment; filename="invoice_' . 
-            (isset($invoiceData['invoice_number']) ? $invoiceData['invoice_number'] : 'invoice') . '.pdf"');
+        header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
         
-        // Generate pdf-friendly HTML that will use browser's PDF capabilities
+        // Create better PDF-ready HTML
         echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Invoice PDF</title>
     <style>
-        /* PDF-specific styles */
         @page {
             margin: 10mm;
         }
@@ -290,7 +189,6 @@ try {
             padding: 0;
             color: #333;
         }
-        /* Remove JavaScript from the invoice HTML */
     </style>
 </head>
 <body>
@@ -327,6 +225,7 @@ try {
             'error_details' => $debugMode ? $e->getMessage() : null
         ], 500);
     }
+    exit;
 }
 
 // Close database connection
