@@ -31,7 +31,7 @@ export const router = createBrowserRouter([
     path: '/dashboard',
     element: <DashboardPage />,
   },
-  // Main admin route
+  // Main admin routes - make sure these are defined properly
   {
     path: '/admin',
     element: <AdminDashboardPage />,
@@ -43,6 +43,27 @@ export const router = createBrowserRouter([
   {
     path: '/admin/reports',
     element: <ReportsPage />,
+  },
+  // Add more specific admin routes to ensure they're matched before the catch-all
+  {
+    path: '/admin/bookings',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/vehicles',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/fares',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/users',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/drivers',
+    element: <AdminDashboardPage />,
   },
   // Add catch-all route for admin to prevent 404s on admin routes
   {

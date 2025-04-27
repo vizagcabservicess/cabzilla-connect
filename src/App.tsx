@@ -15,6 +15,11 @@ function App() {
     // Log navigation for debugging routes
     const handleRouteChange = () => {
       console.log('Route changed to:', window.location.pathname);
+      
+      // Special handling for admin routes
+      if (window.location.pathname.startsWith('/admin')) {
+        console.log('Admin route detected:', window.location.pathname);
+      }
     };
     
     window.addEventListener('popstate', handleRouteChange);
