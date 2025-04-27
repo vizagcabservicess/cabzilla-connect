@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Global configuration file
@@ -12,40 +13,10 @@ define('DB_PASS', 'Vizag@1213');
 // API settings
 define('API_DEBUG', true);
 
-// Application Configuration
-define('APP_NAME', 'Vizag Cab Services');
-define('APP_URL', 'https://vizagcab.com');
-define('APP_VERSION', '1.0.0');
-define('APP_DEBUG', true);  // Set to false in production
-
-// Email Configuration
-define('EMAIL_FROM', 'noreply@vizagcab.com');
-define('EMAIL_NAME', 'Vizag Cab Services');
-
-// Payment Gateway Configuration
-define('PAYMENT_MODE', 'test'); // 'test' or 'live'
-define('RAZORPAY_KEY_ID', 'rzp_test_key');
-define('RAZORPAY_KEY_SECRET', 'rzp_test_secret');
-
-// Time zone setting
-date_default_timezone_set('Asia/Kolkata');
-
-// Error Reporting
-if (APP_DEBUG) {
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-} else {
-    error_reporting(0);
-    ini_set('display_errors', 0);
-}
-
 // Directory settings
 define('LOG_DIR', __DIR__ . '/logs');
 define('CACHE_DIR', __DIR__ . '/cache');
 define('DATA_DIR', __DIR__ . '/data');
-define('ROOT_PATH', realpath(__DIR__));
-define('API_PATH', ROOT_PATH . '/api');
-define('UPLOADS_PATH', ROOT_PATH . '/uploads');
 
 // Create necessary directories if they don't exist
 if (!file_exists(LOG_DIR)) {
@@ -59,15 +30,6 @@ if (!file_exists(CACHE_DIR)) {
 if (!file_exists(DATA_DIR)) {
     mkdir(DATA_DIR, 0777, true);
 }
-
-if (!file_exists(UPLOADS_PATH)) {
-    mkdir(UPLOADS_PATH, 0777, true);
-}
-
-// Session Configuration
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-session_start();
 
 // Function to get database connection
 function getDbConnection() {
