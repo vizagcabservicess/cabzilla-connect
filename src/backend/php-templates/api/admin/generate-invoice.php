@@ -46,6 +46,7 @@ try {
     $bookingId = null;
     $gstEnabled = false;
     $gstDetails = null;
+    $isIGST = false;
     
     // Handle both GET and POST methods
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -58,6 +59,10 @@ try {
         
         if (isset($data['gstEnabled'])) {
             $gstEnabled = filter_var($data['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['isIGST'])) {
+            $isIGST = filter_var($data['isIGST'], FILTER_VALIDATE_BOOLEAN);
         }
         
         if (isset($data['gstDetails'])) {
@@ -73,6 +78,10 @@ try {
             $gstEnabled = filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
         }
         
+        if (isset($_GET['isIGST'])) {
+            $isIGST = filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
         // Get GST details from query params if present
         if (isset($_GET['gstNumber']) && isset($_GET['companyName'])) {
             $gstDetails = [
@@ -83,7 +92,7 @@ try {
         }
     }
     
-    error_log("Generate invoice request: bookingId=$bookingId, gstEnabled=" . ($gstEnabled ? "true" : "false"));
+    error_log("Generate invoice request: bookingId=$bookingId, gstEnabled=" . ($gstEnabled ? "true" : "false") . ", isIGST=" . ($isIGST ? "true" : "false"));
     
     if (!$bookingId && !$demoMode) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
@@ -171,18 +180,31 @@ try {
     $currentDate = date('Y-m-d');
     $invoiceNumber = generateInvoiceNumber($booking['id']);
     
-    // Calculate tax components (12% GST - 6% CGST + 6% SGST)
+    // Calculate tax components (12% GST - either IGST or CGST+SGST)
     $baseAmount = $booking['total_amount'];
-    $taxRate = $gstEnabled ? 0.12 : 0.05; // 12% for GST, 5% for service tax
+    $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
     
     // Calculate backwards from total (because total already includes tax)
     $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
     $taxAmount = $baseAmount - $baseAmountBeforeTax;
     
-    // For GST, split into CGST and SGST
+    // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
-        $cgstAmount = round($taxAmount / 2, 2);
-        $sgstAmount = $taxAmount - $cgstAmount;
+        if ($isIGST) {
+            // Interstate - Use IGST (12%)
+            $igstAmount = $taxAmount;
+            $cgstAmount = 0;
+            $sgstAmount = 0;
+        } else {
+            // Intrastate - Split into CGST (6%) and SGST (6%)
+            $cgstAmount = round($taxAmount / 2, 2);
+            $sgstAmount = $taxAmount - $cgstAmount;
+            $igstAmount = 0;
+        }
+    } else {
+        $cgstAmount = 0;
+        $sgstAmount = 0;
+        $igstAmount = 0;
     }
     
     // Create HTML content for invoice
@@ -270,7 +292,14 @@ try {
                 </tr>';
                 
     if ($gstEnabled) {
-        $invoiceHtml .= '
+        if ($isIGST) {
+            $invoiceHtml .= '
+                <tr>
+                    <td>IGST (12%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>
+                </tr>';
+        } else {
+            $invoiceHtml .= '
                 <tr>
                     <td>CGST (6%)</td>
                     <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
@@ -279,12 +308,7 @@ try {
                     <td>SGST (6%)</td>
                     <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
                 </tr>';
-    } else {
-        $invoiceHtml .= '
-                <tr>
-                    <td>Service Tax (5%)</td>
-                    <td style="text-align: right;">₹ ' . number_format($taxAmount, 2) . '</td>
-                </tr>';
+        }
     }
     
     $invoiceHtml .= '
@@ -316,13 +340,18 @@ try {
             'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
+            'isIGST' => $isIGST,
             'invoiceHtml' => $invoiceHtml
         ]
     ];
     
     if ($gstEnabled) {
-        $responseData['data']['cgstAmount'] = $cgstAmount;
-        $responseData['data']['sgstAmount'] = $sgstAmount;
+        if ($isIGST) {
+            $responseData['data']['igstAmount'] = $igstAmount;
+        } else {
+            $responseData['data']['cgstAmount'] = $cgstAmount;
+            $responseData['data']['sgstAmount'] = $sgstAmount;
+        }
         $responseData['data']['gstDetails'] = $gstDetails;
     }
     
@@ -340,6 +369,7 @@ try {
                     tax_amount DECIMAL(10,2) NOT NULL,
                     total_amount DECIMAL(10,2) NOT NULL,
                     gst_enabled TINYINT(1) DEFAULT 0,
+                    is_igst TINYINT(1) DEFAULT 0,
                     gst_number VARCHAR(20),
                     company_name VARCHAR(100),
                     company_address TEXT,
@@ -366,6 +396,7 @@ try {
                         tax_amount = ?, 
                         total_amount = ?,
                         gst_enabled = ?,
+                        is_igst = ?,
                         gst_number = ?,
                         company_name = ?,
                         company_address = ?,
@@ -374,17 +405,19 @@ try {
                 ");
                 
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
+                $isIgstInt = $isIGST ? 1 : 0;
                 $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "sdddisssi",
+                    "sdddiiisssi",
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
                     $baseAmount,
                     $gstEnabledInt,
+                    $isIgstInt,
                     $gstNumberVal,
                     $companyNameVal,
                     $companyAddressVal,
@@ -399,18 +432,19 @@ try {
                 $stmt = $conn->prepare("
                     INSERT INTO invoices (
                         booking_id, invoice_number, invoice_date, base_amount, 
-                        tax_amount, total_amount, gst_enabled, gst_number, 
+                        tax_amount, total_amount, gst_enabled, is_igst, gst_number, 
                         company_name, company_address, invoice_html
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
+                $isIgstInt = $isIGST ? 1 : 0;
                 $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "issdddisss",
+                    "issdddiisss",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
@@ -418,6 +452,7 @@ try {
                     $taxAmount,
                     $baseAmount,
                     $gstEnabledInt,
+                    $isIgstInt,
                     $gstNumberVal,
                     $companyNameVal,
                     $companyAddressVal,

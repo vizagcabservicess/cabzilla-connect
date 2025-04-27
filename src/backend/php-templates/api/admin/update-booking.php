@@ -34,6 +34,22 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+// Function to log detailed errors
+function logError($message, $data = []) {
+    error_log("UPDATE BOOKING ERROR: $message " . json_encode($data));
+    // Also log to file if needed
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    $logFile = $logDir . '/booking_errors.log';
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
+}
+
 try {
     // Only allow POST or PUT requests
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
@@ -53,16 +69,48 @@ try {
 
     // Connect to database with improved error handling
     try {
-        $conn = getDbConnectionWithRetry();
-        if (!$conn) {
-            throw new Exception("Database connection failed after retries");
+        // Direct database connection for maximum reliability
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
     } catch (Exception $e) {
+        logError("Database connection failed", ['error' => $e->getMessage()]);
         throw new Exception("Database connection failed: " . $e->getMessage());
     }
     
     // Extract booking ID
     $bookingId = $data['bookingId'];
+    
+    // Ensure bookings table has all required fields
+    try {
+        // Check if the billing_address field exists
+        $checkColumn = $conn->query("SHOW COLUMNS FROM bookings LIKE 'billing_address'");
+        
+        if ($checkColumn->num_rows === 0) {
+            // Add billing_address field if it doesn't exist
+            $alterTable = "ALTER TABLE bookings ADD COLUMN billing_address TEXT AFTER passenger_email";
+            $conn->query($alterTable);
+            
+            if ($conn->error) {
+                logError("Failed to add billing_address column", ['error' => $conn->error]);
+            } else {
+                error_log("Added billing_address column to bookings table");
+            }
+        }
+    } catch (Exception $e) {
+        logError("Error checking/updating table schema", ['error' => $e->getMessage()]);
+        // Continue execution - non-fatal error
+    }
     
     // Verify booking exists
     $checkStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -79,6 +127,7 @@ try {
                 'passenger_name' => $data['passengerName'] ?? 'Test User',
                 'passenger_phone' => $data['passengerPhone'] ?? '9876543210',
                 'passenger_email' => $data['passengerEmail'] ?? 'test@example.com',
+                'billing_address' => $data['billingAddress'] ?? null,
                 'pickup_location' => $data['pickupLocation'] ?? 'Test Pickup',
                 'drop_location' => $data['dropLocation'] ?? 'Test Drop',
                 'pickup_date' => $data['pickupDate'] ?? date('Y-m-d H:i:s'),
@@ -119,6 +168,7 @@ try {
         'passengerName' => 'passenger_name',
         'passengerPhone' => 'passenger_phone',
         'passengerEmail' => 'passenger_email',
+        'billingAddress' => 'billing_address',
         'pickupLocation' => 'pickup_location',
         'dropLocation' => 'drop_location',
         'pickupDate' => 'pickup_date',
@@ -128,12 +178,13 @@ try {
         'status' => 'status',
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
-        'vehicleNumber' => 'vehicle_number'
+        'vehicleNumber' => 'vehicle_number',
+        'adminNotes' => 'admin_notes'
     ];
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
-        if (isset($data[$requestField]) && $data[$requestField] !== null) {
+        if (array_key_exists($requestField, $data)) {
             $updateFields[] = "$dbField = ?";
             $types .= getTypeForField($data[$requestField]);
             $params[] = $data[$requestField];
@@ -156,9 +207,20 @@ try {
     $types .= "i";
     $params[] = $bookingId;
     
+    // Log the update query for debugging
+    logError("Update query details", [
+        'fields' => $updateFields,
+        'types' => $types,
+        'params' => $params
+    ]);
+    
     // Prepare and execute the update query
     $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
     $updateStmt = $conn->prepare($sql);
+    
+    if (!$updateStmt) {
+        throw new Exception("Failed to prepare update statement: " . $conn->error);
+    }
     
     // Use a helper function to properly reference values for bind_param
     function refValues($arr) {
@@ -180,7 +242,7 @@ try {
     $success = $updateStmt->execute();
     
     if (!$success) {
-        throw new Exception("Failed to update booking: " . $conn->error);
+        throw new Exception("Failed to update booking: " . $updateStmt->error);
     }
     
     // Fetch the updated booking
@@ -204,9 +266,11 @@ try {
         'passengerName' => $updatedBooking['passenger_name'],
         'passengerPhone' => $updatedBooking['passenger_phone'],
         'passengerEmail' => $updatedBooking['passenger_email'],
+        'billingAddress' => isset($updatedBooking['billing_address']) ? $updatedBooking['billing_address'] : null,
         'driverName' => $updatedBooking['driver_name'],
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
+        'adminNotes' => isset($updatedBooking['admin_notes']) ? $updatedBooking['admin_notes'] : null,
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
@@ -218,7 +282,11 @@ try {
     ]);
 
 } catch (Exception $e) {
-    error_log("Error in update-booking.php: " . $e->getMessage());
+    logError("Exception in update-booking.php", [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
+    
     sendJsonResponse([
         'status' => 'error', 
         'message' => 'Failed to update booking: ' . $e->getMessage(),
@@ -228,6 +296,7 @@ try {
 
 // Helper function to determine parameter type
 function getTypeForField($value) {
+    if (is_null($value)) return "s"; // treat null as string (will be NULL in SQL)
     if (is_int($value)) return "i"; // integer
     if (is_float($value)) return "d"; // double/float
     return "s"; // string (default)

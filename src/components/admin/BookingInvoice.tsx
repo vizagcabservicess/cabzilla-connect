@@ -10,10 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails) => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails, isIGST?: boolean) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
@@ -36,6 +37,7 @@ export function BookingInvoice({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gstEnabled, setGstEnabled] = useState(false);
+  const [isIGST, setIsIGST] = useState(false);
   const [gstDetails, setGstDetails] = useState<GSTDetails>({
     gstNumber: '',
     companyName: '',
@@ -64,8 +66,8 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled);
-      const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined);
+      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST);
+      const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined, isIGST);
       console.log('Invoice generation result:', result);
       
       if (result && result.data) {
@@ -96,10 +98,11 @@ export function BookingInvoice({
     const baseUrl = getApiUrl(`/api/admin/download-invoice`);
     const bookingIdParam = `?id=${booking.id}`;
     const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+    const igstParam = isIGST ? '&isIGST=1' : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${gstDetailsParam}`;
+    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${gstDetailsParam}`;
     console.log('Download invoice URL:', downloadUrl);
     window.open(downloadUrl, '_blank');
   };
@@ -187,6 +190,24 @@ export function BookingInvoice({
                     placeholder="Enter company address"
                     required
                   />
+                </div>
+                
+                <div className="mt-4">
+                  <Label>GST Type</Label>
+                  <RadioGroup 
+                    value={isIGST ? "igst" : "cgst-sgst"} 
+                    onValueChange={(value) => setIsIGST(value === "igst")}
+                    className="mt-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
+                      <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="igst" id="igst" />
+                      <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
               </div>
             )}

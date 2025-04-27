@@ -26,7 +26,7 @@ RewriteRule .* - [R=200,L]
     # Ensure proper PHP handling
     SetHandler application/x-httpd-php
     # For API responses
-    Header always set Content-Type "application/json" env=API_RESPONSE
+    Header always set Content-Type "application/json" env=!no_content_type
     # No caching
     Header set Cache-Control "no-cache, no-store, must-revalidate"
 </FilesMatch>
@@ -41,7 +41,7 @@ RewriteRule .* - [R=200,L]
 <FilesMatch "download-invoice\.php$">
     # Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
-    Header unset Content-Type
+    Header unset Content-Type env=no_content_type
 </FilesMatch>
 
 # PDF Download Fix - CRITICAL - Address the PDF download issue
@@ -57,7 +57,8 @@ RewriteRule ^api/admin/assign-driver/?$ /api/admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^api/admin/cancel-booking/?$ /api/admin/cancel-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/update-booking/?$ /api/admin/update-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/generate-invoice/?$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/download-invoice/?$ /api/admin/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice/?$ /api/admin/download-invoice.php [L,NC,QSA]
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
@@ -66,6 +67,10 @@ RewriteRule ^api/admin/booking/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QS
 RewriteRule ^api/admin/bookings/?$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
+
+# HIGHEST PRIORITY: Ensure proper access to get-drivers.php
+RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
 
 # Add direct access to the book endpoint - HIGHEST PRIORITY
 RewriteRule ^api/book/?$ /api/book.php [L,NC,QSA]
