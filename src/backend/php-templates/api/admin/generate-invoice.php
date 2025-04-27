@@ -2,7 +2,6 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
@@ -10,6 +9,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+// Clear any potential output buffer to avoid content contamination
+if (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -87,9 +89,21 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database
+    // Connect to database - direct connection for reliability
     try {
-        $conn = getDbConnectionWithRetry();
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
     } catch (Exception $e) {
         if ($demoMode) {
             // Return mock data in demo mode
@@ -101,6 +115,7 @@ try {
                 'message' => 'Database connection failed',
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
+            exit;
         }
     }
     
@@ -116,6 +131,7 @@ try {
             
             if ($result->num_rows === 0) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                exit;
             }
             
             $booking = $result->fetch_assoc();

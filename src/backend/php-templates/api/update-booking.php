@@ -2,7 +2,6 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/common/db_helper.php';
 
 // CORS Headers - Critical for cross-domain requests
 header('Access-Control-Allow-Origin: *');
@@ -78,25 +77,20 @@ logError("Update booking request data", $data);
 
 // Connect to database
 try {
-    // Try to use getDbConnectionWithRetry from db_helper.php first
-    if (function_exists('getDbConnectionWithRetry')) {
-        $conn = getDbConnectionWithRetry();
-    } else {
-        // Direct connection as fallback
-        $dbHost = 'localhost';
-        $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
-        $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
-        $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
+    // Direct database connection for maximum reliability
+    $dbHost = 'localhost';
+    $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+    $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+    $dbPass = defined('DB_PASS') ? DB_PASS : 'Vizag@1213';
+    
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
+    
+    // Set character set
+    $conn->set_charset("utf8mb4");
 } catch (Exception $e) {
     logError("Database connection failed", ['error' => $e->getMessage()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
@@ -171,7 +165,9 @@ try {
         'driver_name' => 'driverName',
         'driver_phone' => 'driverPhone',
         'vehicle_number' => 'vehicleNumber',
-        'admin_notes' => 'adminNotes'
+        'admin_notes' => 'adminNotes',
+        'total_amount' => 'totalAmount',
+        'cab_type' => 'cabType'
     ];
     
     // Track if status is being updated
@@ -181,7 +177,7 @@ try {
     
     // Map API field names to database field names
     foreach ($allowedFields as $dbField => $apiField) {
-        if (isset($data[$apiField])) {
+        if (isset($data[$apiField]) && $data[$apiField] !== null) {
             $updateFields[] = "$dbField = ?";
             $updateValues[] = $data[$apiField];
             $updateTypes .= "s"; // Assume all fields are strings for simplicity
@@ -201,7 +197,8 @@ try {
     logError("Update query fields", [
         'fields' => $updateFields,
         'values' => $updateValues,
-        'types' => $updateTypes
+        'types' => $updateTypes,
+        'bookingId' => $bookingId
     ]);
     
     // Update the booking
@@ -212,13 +209,22 @@ try {
         throw new Exception("Prepare failed: " . $conn->error);
     }
     
-    // Dynamically bind parameters
-    $bindParams = array_merge([$updateTypes], $updateValues);
-    
-    // Use call_user_func_array to pass bind_param arguments
-    if ($updateTypes) {
-        call_user_func_array([$updateStmt, 'bind_param'], makeValuesReferenced($bindParams));
+    // Use a helper function to properly reference values for bind_param
+    function refValues($arr) {
+        $refs = array();
+        foreach($arr as $key => $value) {
+            $refs[$key] = &$arr[$key];
+        }
+        return $refs;
     }
+    
+    // Dynamically bind parameters with proper referencing
+    $bindParams = array($updateTypes);
+    foreach ($updateValues as $key => $value) {
+        $bindParams[] = $updateValues[$key];
+    }
+    
+    call_user_func_array(array($updateStmt, 'bind_param'), refValues($bindParams));
     
     $success = $updateStmt->execute();
     
@@ -273,13 +279,4 @@ try {
 // Close database connection
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
-}
-
-// Helper function to make values referenced for bind_param
-function makeValuesReferenced($arr) {
-    $refs = array();
-    foreach ($arr as $key => $value) {
-        $refs[$key] = &$arr[$key];
-    }
-    return $refs;
 }

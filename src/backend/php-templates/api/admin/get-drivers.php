@@ -2,9 +2,8 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
 
-// Set all response headers first before any output
+// CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -53,7 +52,10 @@ try {
 
     // Connect to database with improved error handling
     try {
-        $conn = getDbConnectionWithRetry();
+        $conn = getDbConnection();
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
     } catch (Exception $e) {
         logError('Database connection failed', ['error' => $e->getMessage()]);
         
@@ -75,7 +77,6 @@ try {
                 'vehicle' => 'AP 31 CD 5678',
                 'status' => 'available'
             ],
-            // Add more mock drivers here
         ];
         
         sendJsonResponse([

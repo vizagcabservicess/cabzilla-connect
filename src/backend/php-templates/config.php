@@ -16,10 +16,10 @@ define('DB_NAME', 'u644605165_db_be');
 define('DB_USER', 'u644605165_usr_be');
 define('DB_PASS', 'Vizag@1213');
 
-// Database Connection Settings
-ini_set('mysql.connect_timeout', '20');
-ini_set('default_socket_timeout', '20');
-ini_set('max_execution_time', '30');
+// Database Connection Settings - Increased timeouts for stability
+ini_set('mysql.connect_timeout', '30');
+ini_set('default_socket_timeout', '30');
+ini_set('max_execution_time', '60');
 
 // Error Reporting Configuration
 if (APP_DEBUG) {
@@ -33,7 +33,10 @@ if (APP_DEBUG) {
 // Session Security Configuration
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
-ini_set('session.cookie_secure', 1);
+// Only set secure if HTTPS
+if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+    ini_set('session.cookie_secure', 1);
+}
 session_start();
 
 // Directory Settings
@@ -65,9 +68,9 @@ function getDbConnection() {
         $conn->set_charset("utf8mb4");
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
         
-        // Set session timeouts
-        $conn->query("SET session wait_timeout=60");
-        $conn->query("SET session interactive_timeout=60");
+        // Set session timeouts - increased for stability
+        $conn->query("SET session wait_timeout=180");
+        $conn->query("SET session interactive_timeout=180");
         
         return $conn;
     } catch (Exception $e) {
@@ -80,13 +83,23 @@ function getDbConnection() {
     }
 }
 
-// JSON Response Helper
+// JSON Response Helper with CORS headers
 if (!function_exists('sendJsonResponse')) {
     function sendJsonResponse($data, $statusCode = 200) {
+        // Clear output buffer to prevent content contamination
+        if (ob_get_level()) ob_end_clean();
+        
+        // Set essential headers
         header('Content-Type: application/json');
-        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        
         http_response_code($statusCode);
-        echo json_encode($data);
+        echo json_encode($data, JSON_PRETTY_PRINT);
         exit;
     }
 }
@@ -126,5 +139,36 @@ if (!function_exists('generateJwtToken')) {
         $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'your_secret_key', true));
         
         return "$header.$payload.$signature";
+    }
+}
+
+// Database connection with retry mechanism
+if (!function_exists('getDbConnectionWithRetry')) {
+    function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
+        $attempts = 0;
+        $lastError = null;
+        
+        while ($attempts < $maxRetries) {
+            try {
+                $conn = getDbConnection();
+                if ($conn && $conn->ping()) {
+                    return $conn; // Successful connection
+                }
+            } catch (Exception $e) {
+                $lastError = $e;
+                logError("Database connection attempt " . ($attempts + 1) . " failed: " . $e->getMessage());
+            }
+            
+            $attempts++;
+            
+            if ($attempts < $maxRetries) {
+                // Wait before retrying (increasing delay with each attempt)
+                usleep($retryDelayMs * 1000 * $attempts);
+            }
+        }
+        
+        // All retries failed
+        throw new Exception("Failed to connect to database after $maxRetries attempts. Last error: " . 
+            ($lastError ? $lastError->getMessage() : "Unknown error"));
     }
 }

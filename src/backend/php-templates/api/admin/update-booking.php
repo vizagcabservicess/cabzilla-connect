@@ -2,7 +2,6 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
@@ -49,7 +48,24 @@ try {
     }
 
     // Connect to database with improved error handling
-    $conn = getDbConnectionWithRetry();
+    try {
+        // Direct database connection for maximum reliability
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
+    } catch (Exception $e) {
+        throw new Exception("Database connection failed: " . $e->getMessage());
+    }
     
     // Extract booking ID
     $bookingId = $data['bookingId'];
@@ -87,12 +103,15 @@ try {
         'returnDate' => 'return_date',
         'cabType' => 'cab_type',
         'totalAmount' => 'total_amount',
-        'status' => 'status'
+        'status' => 'status',
+        'driverName' => 'driver_name',
+        'driverPhone' => 'driver_phone',
+        'vehicleNumber' => 'vehicle_number'
     ];
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
-        if (isset($data[$requestField])) {
+        if (isset($data[$requestField]) && $data[$requestField] !== null) {
             $updateFields[] = "$dbField = ?";
             $types .= getTypeForField($data[$requestField]);
             $params[] = $data[$requestField];
@@ -115,9 +134,23 @@ try {
     $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
     $updateStmt = $conn->prepare($sql);
     
-    // Dynamically bind parameters
-    $bindParams = array_merge([$types], $params);
-    $updateStmt->bind_param(...$bindParams);
+    // Use a helper function to properly reference values for bind_param
+    function refValues($arr) {
+        $refs = array();
+        foreach($arr as $key => $value) {
+            $refs[$key] = &$arr[$key];
+        }
+        return $refs;
+    }
+    
+    // Dynamically bind parameters with proper referencing
+    $bindParams = array($types);
+    foreach ($params as $key => $value) {
+        $bindParams[] = $params[$key];
+    }
+    
+    call_user_func_array(array($updateStmt, 'bind_param'), refValues($bindParams));
+    
     $success = $updateStmt->execute();
     
     if (!$success) {
@@ -145,6 +178,9 @@ try {
         'passengerName' => $updatedBooking['passenger_name'],
         'passengerPhone' => $updatedBooking['passenger_phone'],
         'passengerEmail' => $updatedBooking['passenger_email'],
+        'driverName' => $updatedBooking['driver_name'],
+        'driverPhone' => $updatedBooking['driver_phone'],
+        'vehicleNumber' => $updatedBooking['vehicle_number'],
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
