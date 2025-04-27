@@ -1,15 +1,13 @@
 <?php
 /**
- * Main Configuration File
- * 
- * This file contains all configuration settings for the application.
+ * Global configuration file
  */
 
-// Database Configuration
-define('DB_HOST', 'localhost');          // Database host
-define('DB_NAME', 'u644605165_db_be');   // Database name
-define('DB_USER', 'u644605165_usr_be');  // Database username
-define('DB_PASS', 'Vizag@1213');         // Database password
+// Database configuration
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'u644605165_db_be');
+define('DB_USER', 'u644605165_usr_be');
+define('DB_PASS', 'Vizag@1213');
 
 // API settings
 define('API_DEBUG', true);
@@ -49,7 +47,7 @@ define('ROOT_PATH', realpath(__DIR__));
 define('API_PATH', ROOT_PATH . '/api');
 define('UPLOADS_PATH', ROOT_PATH . '/uploads');
 
-// Ensure directories exist
+// Create necessary directories if they don't exist
 if (!file_exists(LOG_DIR)) {
     mkdir(LOG_DIR, 0777, true);
 }
