@@ -4,24 +4,13 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 
-// CRITICAL: Clear all buffers first - this is essential for PDF output
+// CRITICAL: Clear all output buffers first
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
-// CRITICAL: Set CORS headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
-// JSON response in case of error
+// JSON response function
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     header('Content-Type: application/json');
@@ -57,7 +46,7 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Forward request to admin endpoint
+    // Forward request to admin endpoint with all parameters
     $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
     $queryParams = http_build_query($_GET);
     
@@ -71,7 +60,6 @@ try {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HEADER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
     $response = curl_exec($ch);
     $curlError = curl_error($ch);
@@ -98,7 +86,7 @@ try {
         $contentType = $matches[1];
     }
     
-    // Set appropriate content type (default to text/html if not found)
+    // Set appropriate content type
     if ($contentType) {
         header("Content-Type: $contentType");
     } else {
@@ -108,27 +96,18 @@ try {
     // Pass through Content-Disposition for download
     if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
         header("Content-Disposition: {$matches[1]}");
-    } else {
-        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.pdf\"");
     }
     
     // Output the response body
     echo $body;
-    
-    logInvoiceError("Successfully forwarded invoice response", [
-        'content_type' => $contentType,
-        'body_length' => strlen($body)
-    ]);
-    
     exit;
 
 } catch (Exception $e) {
     logInvoiceError("Critical error in public download-invoice.php", [
-        'error' => $e->getMessage(), 
+        'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
     ]);
     
-    // For errors, ensure we return JSON
     header('Content-Type: application/json');
     sendJsonResponse([
         'status' => 'error',
@@ -137,7 +116,3 @@ try {
     ], 500);
 }
 
-// Close database connection
-if (isset($conn) && $conn instanceof mysqli) {
-    $conn->close();
-}

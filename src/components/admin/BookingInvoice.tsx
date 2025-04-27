@@ -106,20 +106,29 @@ export function BookingInvoice({
     try {
       setPdfDownloading(true);
       
-      // Use a proper URL with query parameters (no body in GET request)
+      // Build URL with all parameters
       const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-      const bookingIdParam = `?id=${booking.id}`;
-      const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-      const igstParam = isIGST ? '&isIGST=1' : '';
-      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-      const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-      const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-        `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0'
+      });
       
-      const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
+      }
+      
+      if (gstEnabled && gstDetails.gstNumber) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      const downloadUrl = `${baseUrl}?${params.toString()}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      // Open in a new window/tab for PDF download
+      // Open in new window for PDF generation
       const newWindow = window.open(downloadUrl, '_blank');
       
       if (!newWindow) {
@@ -131,14 +140,11 @@ export function BookingInvoice({
       } else {
         toast({
           title: "PDF Generated",
-          description: "The invoice PDF has opened in a new tab."
+          description: "The invoice PDF has opened in a new tab. Use your browser's print function to save it."
         });
       }
       
-      // Set timeout to ensure we show downloading state briefly even if it's fast
-      setTimeout(() => {
-        setPdfDownloading(false);
-      }, 1500);
+      setTimeout(() => setPdfDownloading(false), 1500);
       
     } catch (error) {
       console.error('PDF download error:', error);
