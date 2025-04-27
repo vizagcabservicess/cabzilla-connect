@@ -98,6 +98,8 @@ export function BookingInvoice({
       }
       
       console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST, 'Include Tax:', includeTax, 'Custom Invoice Number:', customInvoiceNumber);
+      
+      // Force a new generation with current parameters
       const result = await onGenerateInvoice(
         gstEnabled, 
         gstEnabled ? gstDetails : undefined, 
@@ -105,6 +107,7 @@ export function BookingInvoice({
         includeTax,
         customInvoiceNumber.trim() || undefined
       );
+      
       console.log('Invoice generation result:', result);
       
       if (result && result.data) {
@@ -146,7 +149,7 @@ export function BookingInvoice({
       const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      // Open in a new window/tab for PDF download
+      // Open in a new window/tab for print-based PDF download
       window.open(downloadUrl, '_blank');
       
       toast({

@@ -66,22 +66,17 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
+    logInvoiceError("Public invoice download requested", [
+        'booking_id' => $bookingId,
+        'gst_enabled' => $gstEnabled ? 'true' : 'false',
+        'is_igst' => $isIGST ? 'true' : 'false',
+        'include_tax' => $includeTax ? 'true' : 'false',
+        'custom_invoice_number' => $customInvoiceNumber
+    ]);
+
     // Connect to database with improved error handling
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        
+        $conn = getDbConnectionWithRetry();
         logInvoiceError("Public invoice download: Database connection established successfully");
     } catch (Exception $e) {
         logInvoiceError("Database connection error in public download-invoice", ['error' => $e->getMessage()]);
@@ -129,60 +124,136 @@ try {
         }
     }
     
-    // Forward request to admin endpoint
-    $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
-    $queryParams = http_build_query($_GET);
-    
-    $ch = curl_init($adminUrl . '?' . $queryParams);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HEADER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    
-    $response = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    
-    // Split headers and body
-    $headers = substr($response, 0, $headerSize);
-    $body = substr($response, $headerSize);
-    
-    curl_close($ch);
-    
-    if ($curlError) {
-        logInvoiceError("Error forwarding to admin download-invoice.php", [
-            'curl_error' => $curlError,
-            'http_code' => $httpCode
+    // Generate invoice directly instead of forwarding the request
+    // This ensures we have control over the entire process
+    try {
+        // Check if an invoice exists in the database for this booking
+        $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+        if ($invoiceStmt) {
+            $invoiceStmt->bind_param("i", $bookingId);
+            $invoiceStmt->execute();
+            $invoiceResult = $invoiceStmt->get_result();
+            
+            $invoiceExists = false;
+            $invoiceData = null;
+            
+            if ($invoiceResult && $invoiceResult->num_rows > 0) {
+                $invoiceExists = true;
+                $invoiceData = $invoiceResult->fetch_assoc();
+                logInvoiceError("Found existing invoice", [
+                    'invoice_id' => $invoiceData['id'], 
+                    'invoice_number' => $invoiceData['invoice_number']
+                ]);
+            } else {
+                logInvoiceError("No existing invoice found for booking_id: $bookingId");
+            }
+            
+            $invoiceStmt->close();
+        }
+        
+        // Generate the invoice from scratch since parameter values may have changed
+        $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
+        $queryParams = http_build_query([
+            'id' => $bookingId,
+            'gstEnabled' => $gstEnabled ? '1' : '0',
+            'isIGST' => $isIGST ? '1' : '0',
+            'includeTax' => $includeTax ? '1' : '0',
+            'format' => 'json',
+            'gstNumber' => $gstNumber,
+            'companyName' => $companyName,
+            'companyAddress' => $companyAddress,
+            'invoiceNumber' => $customInvoiceNumber
         ]);
-        throw new Exception("Failed to generate invoice: $curlError");
+        
+        logInvoiceError("Generating invoice", ['url' => $generateInvoiceUrl . '?' . $queryParams]);
+        
+        $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $generateResponse = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($curlError) {
+            logInvoiceError("Error calling generate-invoice.php", [
+                'curl_error' => $curlError,
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Failed to generate invoice: $curlError");
+        }
+        
+        $generatedData = json_decode($generateResponse, true);
+        if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
+            logInvoiceError("Invalid response from generate-invoice.php", [
+                'response' => substr($generateResponse, 0, 1000),
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Invalid invoice data received from generator");
+        }
+        
+        $invoiceHtml = $generatedData['data']['invoiceHtml'];
+        $invoiceNumber = $generatedData['data']['invoiceNumber'];
+        
+        // CRITICAL: Set Content-Type for HTML output
+        header('Content-Type: text/html; charset=utf-8');
+        header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
+        
+        // Return invoice HTML with improved styling and JavaScript for better printing
+        echo '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice #' . $invoiceNumber . '</title>
+    <script>
+        window.onload = function() {
+            // Force print dialog immediately after a slight delay
+            setTimeout(function() {
+                window.print();
+                // After print is triggered, show success message
+                setTimeout(function() {
+                    document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been downloaded.</h1><p>You may close this window.</p></div>";
+                }, 1000);
+            }, 500);
+        };
+    </script>
+    <style>
+        @media print {
+            body { margin: 0; padding: 0; }
+            @page { size: A4; margin: 10mm; }
+            .no-print { display: none !important; }
+        }
+        body { font-family: Arial, sans-serif; }
+        .print-container { max-width: 800px; margin: 0 auto; }
+        .print-header { text-align: center; margin: 20px 0; }
+        .invoice-container { padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <div class="print-header no-print">
+            <h1>Invoice #' . $invoiceNumber . '</h1>
+            <p>Your invoice is being prepared for printing.</p>
+            <p>If printing doesn\'t start automatically, please use the print button below.</p>
+            <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
+        </div>
+        <div class="invoice-container">
+        ' . $invoiceHtml . '
+        </div>
+    </div>
+</body>
+</html>';
+        
+        logInvoiceError("Invoice sent successfully for printing", ['invoice_number' => $invoiceNumber]);
+        exit; // Important to prevent any additional output
+        
+    } catch (Exception $e) {
+        logInvoiceError("Error generating invoice directly", ['error' => $e->getMessage()]);
+        throw $e;
     }
-    
-    // Extract content type from headers
-    $contentType = null;
-    if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
-        $contentType = $matches[1];
-    }
-    
-    // Set appropriate content type (default to HTML if not found)
-    if ($contentType) {
-        header("Content-Type: $contentType");
-    } else {
-        header("Content-Type: text/html");
-    }
-    
-    // Pass through Content-Disposition for download
-    if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
-        header("Content-Disposition: {$matches[1]}");
-    } else {
-        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
-    }
-    
-    // Output the response body
-    echo $body;
-    
-    logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
-    exit;
 
 } catch (Exception $e) {
     logInvoiceError("Critical error in public download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);

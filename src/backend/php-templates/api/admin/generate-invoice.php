@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
@@ -140,21 +141,9 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database - direct connection for reliability
+    // Connect to database
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
+        $conn = getDbConnectionWithRetry();
         logInvoiceError("Database connection successful");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
@@ -232,19 +221,25 @@ try {
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
     
-    if ($includeTax) {
+    if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
         // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = $totalAmount / 1.12;
         $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
         $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
     } else {
-        // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        if ($gstEnabled) {
+            // If tax is excluded from the base amount
+            $baseAmountBeforeTax = $totalAmount;
+            $taxAmount = $totalAmount * $gstRate;
+            $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+            $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        } else {
+            // No GST, no tax
+            $baseAmountBeforeTax = $totalAmount;
+            $taxAmount = 0;
+        }
     }
     
     // For GST, split into CGST and SGST or use IGST
@@ -257,7 +252,6 @@ try {
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
-            // Split tax amount exactly in half
             $cgstAmount = $taxAmount / 2;
             $cgstAmount = round($cgstAmount, 2);
             $sgstAmount = $taxAmount - $cgstAmount;  // Calculate the difference to ensure exact total
@@ -474,6 +468,12 @@ try {
             if ($checkResult->num_rows > 0) {
                 // Update existing invoice
                 $invoiceRow = $checkResult->fetch_assoc();
+                
+                logInvoiceError("Found existing invoice", [
+                    'invoice_id' => $invoiceRow['id'],
+                    'booking_id' => $booking['id']
+                ]);
+                
                 $stmt = $conn->prepare("
                     UPDATE invoices SET 
                         invoice_number = ?,
@@ -534,6 +534,10 @@ try {
                 }
             } else {
                 // Insert new invoice
+                logInvoiceError("No existing invoice found, creating new", [
+                    'booking_id' => $booking['id']
+                ]);
+                
                 $stmt = $conn->prepare("
                     INSERT INTO invoices (
                         booking_id, invoice_number, invoice_date, base_amount, 
