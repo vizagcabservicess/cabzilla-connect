@@ -7,7 +7,7 @@ RewriteBase /api/
     # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
     # Set JSON content type for API responses
-    Header always set Content-Type "application/json"
+    Header always set Content-Type "application/json" env=!no_content_type
     # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
@@ -60,7 +60,7 @@ RewriteBase /api/
 <Files "download-invoice.php">
     # Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
-    Header unset Content-Type
+    Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
@@ -166,6 +166,7 @@ RewriteRule ^admin/bookings/([0-9]+)/?$ admin/booking.php?id=$1 [L,NC,QSA]
 RewriteRule ^admin/drivers/?$ admin/drivers.php [L,NC,QSA]
 RewriteRule ^admin/driver/?$ admin/driver.php [L,NC,QSA]
 RewriteRule ^admin/driver/([0-9]+)/?$ admin/driver.php?id=$1 [L,NC,QSA]
+RewriteRule ^admin/get-drivers/?$ admin/get-drivers.php [L,NC,QSA]
 
 # Keep existing routes
 RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]

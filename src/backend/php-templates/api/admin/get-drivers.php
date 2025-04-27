@@ -105,7 +105,7 @@ try {
                 UNIQUE KEY (phone)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         
-        $conn->query($createTableQuery);
+        $createResult = $conn->query($createTableQuery);
         
         if ($conn->error) {
             logDriversError("Error creating drivers table", ['error' => $conn->error]);
@@ -113,114 +113,91 @@ try {
         }
         
         // Insert some sample data if we just created the table
-        $insertSampleData = "
-            INSERT INTO drivers (name, phone, license_number, vehicle_type, vehicle_number, status, date_joined) 
-            VALUES 
-            ('Rajesh Kumar', '9876543210', 'AP12345678901234', 'sedan', 'AP 31 AB 1234', 'active', '2023-01-15'),
-            ('Suresh Reddy', '8765432109', 'AP98765432109876', 'suv', 'AP 32 BC 5678', 'on_trip', '2023-02-20'),
-            ('Mahesh Babu', '7654321098', 'AP45678901234567', 'hatchback', 'AP 33 CD 9012', 'active', '2023-03-10')
-        ";
+        $sampleDataExists = $conn->query("SELECT COUNT(*) as count FROM drivers")->fetch_assoc()['count'] > 0;
         
-        $conn->query($insertSampleData);
-        
-        if ($conn->error) {
-            logDriversError("Error inserting sample data", ['error' => $conn->error]);
-            // Non-fatal error, continue execution
+        if (!$sampleDataExists) {
+            logDriversError("Adding sample data to drivers table");
+            
+            $insertSampleData = "
+                INSERT INTO drivers (name, phone, license_number, vehicle_type, vehicle_number, status, address, date_joined) 
+                VALUES 
+                ('Rajesh Kumar', '9876543210', 'AP12345678901234', 'sedan', 'AP 31 AB 1234', 'active', 'Visakhapatnam', '2023-01-15'),
+                ('Suresh Reddy', '8765432109', 'AP98765432109876', 'suv', 'AP 32 BC 5678', 'on_trip', 'Visakhapatnam', '2023-02-20'),
+                ('Mahesh Babu', '7654321098', 'AP45678901234567', 'hatchback', 'AP 33 CD 9012', 'active', 'Visakhapatnam', '2023-03-10')
+            ";
+            
+            $insertResult = $conn->query($insertSampleData);
+            
+            if ($conn->error) {
+                logDriversError("Error inserting sample data", ['error' => $conn->error]);
+                // Non-fatal error, continue execution
+            } else {
+                logDriversError("Sample data inserted successfully");
+            }
         }
+        
+        $tableExists = true; // Table should now exist
     }
     
     // Get all drivers
-    try {
-        $result = $conn->query("SELECT * FROM drivers ORDER BY name ASC");
-        
-        if (!$result) {
-            throw new Exception("Query failed: " . $conn->error);
-        }
-        
-        $drivers = [];
-        while ($row = $result->fetch_assoc()) {
-            $drivers[] = [
-                'id' => (int)$row['id'],
-                'name' => $row['name'],
-                'phone' => $row['phone'],
-                'licenseNumber' => $row['license_number'],
-                'vehicleType' => $row['vehicle_type'],
-                'vehicleNumber' => $row['vehicle_number'],
-                'status' => $row['status'],
-                'address' => $row['address'] ?? '',
-                'dateJoined' => $row['date_joined'] ?? ''
-            ];
-        }
-        
-        // If no drivers found, check if we need sample data
-        if (empty($drivers)) {
-            logDriversError("No drivers found in the database");
+    if ($tableExists) {
+        try {
+            $result = $conn->query("SELECT * FROM drivers ORDER BY name ASC");
             
-            // Return an empty array, not sample data
-            sendJsonResponse([
-                'status' => 'success',
-                'message' => 'No drivers found',
-                'data' => []
-            ]);
+            if (!$result) {
+                throw new Exception("Query failed: " . $conn->error);
+            }
+            
+            $drivers = [];
+            while ($row = $result->fetch_assoc()) {
+                $drivers[] = [
+                    'id' => (int)$row['id'],
+                    'name' => $row['name'],
+                    'phone' => $row['phone'],
+                    'licenseNumber' => $row['license_number'],
+                    'vehicleType' => $row['vehicle_type'],
+                    'vehicleNumber' => $row['vehicle_number'],
+                    'status' => $row['status'],
+                    'address' => $row['address'] ?? '',
+                    'dateJoined' => $row['date_joined'] ?? ''
+                ];
+            }
+            
+            // If no drivers found, log but return empty array, not sample data
+            if (empty($drivers)) {
+                logDriversError("No drivers found in the database");
+                
+                // Return a success message but with an empty array
+                sendJsonResponse([
+                    'status' => 'success',
+                    'message' => 'No drivers found',
+                    'data' => []
+                ]);
+            } else {
+                // Return all drivers
+                sendJsonResponse([
+                    'status' => 'success',
+                    'message' => 'Drivers retrieved successfully',
+                    'data' => $drivers
+                ]);
+            }
+            
+        } catch (Exception $e) {
+            logDriversError("Error fetching drivers", ['error' => $e->getMessage()]);
+            throw $e;
         }
-        
-        // Return all drivers
-        sendJsonResponse([
-            'status' => 'success',
-            'message' => 'Drivers retrieved successfully',
-            'data' => $drivers
-        ]);
-        
-    } catch (Exception $e) {
-        logDriversError("Error fetching drivers", ['error' => $e->getMessage()]);
-        throw $e;
+    } else {
+        // Should never reach here as we create the table above
+        logDriversError("Drivers table does not exist after creation attempt");
+        throw new Exception("Failed to verify drivers table existence");
     }
 
 } catch (Exception $e) {
     logDriversError("Critical error in get-drivers.php", ['error' => $e->getMessage()]);
     
-    // Sample data for fallback only if database fails completely
-    $sampleDrivers = [
-        [
-            'id' => 1,
-            'name' => 'Rajesh Kumar',
-            'phone' => '9876543210',
-            'licenseNumber' => 'AP12345678901234',
-            'vehicleType' => 'sedan',
-            'vehicleNumber' => 'AP 31 AB 1234',
-            'status' => 'active',
-            'address' => 'Visakhapatnam',
-            'dateJoined' => '2023-01-15'
-        ],
-        [
-            'id' => 2,
-            'name' => 'Suresh Reddy',
-            'phone' => '8765432109',
-            'licenseNumber' => 'AP98765432109876',
-            'vehicleType' => 'suv',
-            'vehicleNumber' => 'AP 32 BC 5678',
-            'status' => 'on_trip',
-            'address' => 'Visakhapatnam',
-            'dateJoined' => '2023-02-20'
-        ],
-        [
-            'id' => 3,
-            'name' => 'Mahesh Babu',
-            'phone' => '7654321098',
-            'licenseNumber' => 'AP45678901234567',
-            'vehicleType' => 'hatchback',
-            'vehicleNumber' => 'AP 33 CD 9012',
-            'status' => 'active',
-            'address' => 'Visakhapatnam',
-            'dateJoined' => '2023-03-10'
-        ]
-    ];
-    
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to retrieve drivers from database: ' . $e->getMessage(),
-        'data' => $sampleDrivers,
-        'using_sample_data' => true,
         'error_details' => $debugMode ? $e->getTraceAsString() : null
     ], 500);
 }

@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails, isIGST?: boolean) => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
@@ -38,6 +38,8 @@ export function BookingInvoice({
   const [error, setError] = useState<string | null>(null);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [isIGST, setIsIGST] = useState(false);
+  const [includeTax, setIncludeTax] = useState(true);
+  const [customInvoiceNumber, setCustomInvoiceNumber] = useState('');
   const [gstDetails, setGstDetails] = useState<GSTDetails>({
     gstNumber: '',
     companyName: '',
@@ -66,8 +68,14 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST);
-      const result = await onGenerateInvoice(gstEnabled, gstEnabled ? gstDetails : undefined, isIGST);
+      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST, 'Include Tax:', includeTax, 'Custom Invoice Number:', customInvoiceNumber);
+      const result = await onGenerateInvoice(
+        gstEnabled, 
+        gstEnabled ? gstDetails : undefined, 
+        isIGST,
+        includeTax,
+        customInvoiceNumber.trim() || undefined
+      );
       console.log('Invoice generation result:', result);
       
       if (result && result.data) {
@@ -99,10 +107,12 @@ export function BookingInvoice({
     const bookingIdParam = `?id=${booking.id}`;
     const gstParam = gstEnabled ? '&gstEnabled=1' : '';
     const igstParam = isIGST ? '&isIGST=1' : '';
+    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
     const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
       `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
     
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${gstDetailsParam}`;
+    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
     console.log('Download invoice URL:', downloadUrl);
     window.open(downloadUrl, '_blank');
   };
@@ -146,7 +156,20 @@ export function BookingInvoice({
             <span>Generated: {invoiceData.invoiceDate}</span>
           </div>
           
-          <div className="mb-4 p-4 border rounded-md">
+          <div className="mb-4 p-4 border rounded-md space-y-4">
+            <div>
+              <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
+              <Input 
+                id="custom-invoice"
+                value={customInvoiceNumber}
+                onChange={(e) => setCustomInvoiceNumber(e.target.value)}
+                placeholder="Optional - Leave blank for auto-generated number"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                If provided, this will replace the auto-generated invoice number
+              </p>
+            </div>
+
             <div className="flex items-center space-x-2">
               <Switch 
                 id="gst-toggle"
@@ -156,8 +179,17 @@ export function BookingInvoice({
               <Label htmlFor="gst-toggle">Include GST (12%)</Label>
             </div>
             
+            <div className="flex items-center space-x-2">
+              <Switch 
+                id="tax-toggle"
+                checked={includeTax}
+                onCheckedChange={setIncludeTax}
+              />
+              <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
+            </div>
+            
             {gstEnabled && (
-              <div className="mt-4 space-y-3">
+              <div className="space-y-3">
                 <div>
                   <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
                   <Input 
@@ -212,7 +244,7 @@ export function BookingInvoice({
               </div>
             )}
             
-            <div className="mt-4">
+            <div>
               <Button 
                 variant="outline" 
                 onClick={handleGenerateInvoice}

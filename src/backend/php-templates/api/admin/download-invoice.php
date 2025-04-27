@@ -2,9 +2,8 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../api/common/db_helper.php';
 
-// Clear all output buffers first
+// Clear all output buffers first to ensure clean output
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
@@ -31,7 +30,7 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Log error function
+// Log error function with more details
 function logInvoiceError($message, $data = []) {
     error_log("INVOICE ERROR: $message " . json_encode($data));
     $logFile = __DIR__ . '/../../logs/invoice_errors.log';
@@ -67,6 +66,8 @@ try {
     $companyName = isset($_GET['companyName']) ? $_GET['companyName'] : '';
     $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
+    $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
+    $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
     // Connect to database with improved error handling
     try {
@@ -113,6 +114,7 @@ try {
                 total_amount DECIMAL(10,2) NOT NULL,
                 gst_enabled TINYINT(1) DEFAULT 0,
                 is_igst TINYINT(1) DEFAULT 0,
+                include_tax TINYINT(1) DEFAULT 1,
                 gst_number VARCHAR(20),
                 company_name VARCHAR(100),
                 company_address TEXT,
@@ -135,7 +137,7 @@ try {
     
     if ($tableExists) {
         try {
-            $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ?");
+            $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
             if ($invoiceStmt) {
                 $invoiceStmt->bind_param("i", $bookingId);
                 $invoiceStmt->execute();
@@ -156,9 +158,14 @@ try {
         }
     }
     
-    // If no invoice record, get booking details
-    if (!$invoiceExists) {
-        logInvoiceError("No invoice found, fetching booking details");
+    // If no invoice record or if parameters have changed, generate a new one
+    if (!$invoiceExists || 
+        $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
+        $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
+        $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
+        ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''))) {
+        
+        logInvoiceError("No invoice found or parameters changed, fetching booking details");
         
         try {
             $bookingStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -182,12 +189,23 @@ try {
             ]);
             
             // Generate invoice data from booking
-            $invoiceNumber = 'INV-' . date('Ymd') . '-' . $booking['id'];
+            $invoiceNumber = $customInvoiceNumber ?: ('INV-' . date('Ymd') . '-' . $booking['id']);
             $invoiceDate = date('Y-m-d');
             
-            // Calculate tax components (12% tax - GST or IGST)
-            $baseFare = round($booking['total_amount'] / 1.12, 2); // Base fare excluding tax
-            $taxAmount = $booking['total_amount'] - $baseFare;
+            // Calculate tax components based on includeTax setting
+            if ($includeTax) {
+                // If tax is included in total amount, calculate backwards
+                $totalAmount = $booking['total_amount'];
+                $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
+                $baseAmount = round($totalAmount / (1 + $taxRate), 2);
+                $taxAmount = $totalAmount - $baseAmount;
+            } else {
+                // If tax is excluded, calculate forward
+                $baseAmount = $booking['total_amount'];
+                $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
+                $taxAmount = round($baseAmount * $taxRate, 2);
+                $totalAmount = $baseAmount + $taxAmount;
+            }
             
             $invoiceData = [
                 'invoice_number' => $invoiceNumber,
@@ -202,12 +220,13 @@ try {
                 'drop_location' => $booking['drop_location'],
                 'pickup_date' => $booking['pickup_date'],
                 'cab_type' => $booking['cab_type'],
-                'base_fare' => $baseFare,
+                'base_fare' => $baseAmount,
                 'tax_amount' => $taxAmount,
-                'total_amount' => $booking['total_amount'],
+                'total_amount' => $totalAmount,
                 'invoice_date' => $invoiceDate,
                 'status' => 'generated',
-                'is_igst' => $isIGST ? 1 : 0
+                'is_igst' => $isIGST ? 1 : 0,
+                'include_tax' => $includeTax ? 1 : 0
             ];
 
             // When building $invoiceData, override GST fields if provided
@@ -222,7 +241,8 @@ try {
             logInvoiceError("Generating invoice on-the-fly", [
                 'invoice_number' => $invoiceNumber,
                 'gst_enabled' => $gstEnabled,
-                'is_igst' => $isIGST
+                'is_igst' => $isIGST,
+                'include_tax' => $includeTax
             ]);
             
             // Call generate-invoice.php via internal mechanism rather than HTTP
@@ -231,30 +251,38 @@ try {
                 'id' => $bookingId,
                 'gstEnabled' => $gstEnabled ? '1' : '0',
                 'isIGST' => $isIGST ? '1' : '0',
+                'includeTax' => $includeTax ? '1' : '0',
                 'format' => 'json',
                 'gstNumber' => $gstNumber,
                 'companyName' => $companyName,
-                'companyAddress' => $companyAddress
+                'companyAddress' => $companyAddress,
+                'invoiceNumber' => $customInvoiceNumber
             ]);
             
             $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HEADER, false);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             
             $generateResponse = curl_exec($ch);
             $curlError = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
             
             if ($curlError) {
-                logInvoiceError("Error calling generate-invoice.php", ['curl_error' => $curlError]);
+                logInvoiceError("Error calling generate-invoice.php", [
+                    'curl_error' => $curlError,
+                    'http_code' => $httpCode
+                ]);
                 throw new Exception("Failed to generate invoice: $curlError");
             }
             
             $generatedData = json_decode($generateResponse, true);
             if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
                 logInvoiceError("Invalid response from generate-invoice.php", [
-                    'response' => $generateResponse
+                    'response' => substr($generateResponse, 0, 1000),
+                    'http_code' => $httpCode
                 ]);
                 throw new Exception("Invalid invoice data received from generator");
             }

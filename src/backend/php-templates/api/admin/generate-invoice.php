@@ -37,8 +37,26 @@ function sendJsonResponse($data, $statusCode = 200) {
 }
 
 // Generate a proper invoice number
-function generateInvoiceNumber($bookingId) {
+function generateInvoiceNumber($bookingId, $customNumber = '') {
+    if (!empty($customNumber)) {
+        return $customNumber;
+    }
     return 'INV-' . date('Ymd') . '-' . $bookingId;
+}
+
+// Log error function
+function logInvoiceError($message, $data = []) {
+    error_log("INVOICE ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../../logs/invoice_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
 }
 
 try {
@@ -47,6 +65,8 @@ try {
     $gstEnabled = false;
     $gstDetails = null;
     $isIGST = false;
+    $includeTax = true;
+    $customInvoiceNumber = '';
     
     // Handle both GET and POST methods
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -63,6 +83,14 @@ try {
         
         if (isset($data['isIGST'])) {
             $isIGST = filter_var($data['isIGST'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['includeTax'])) {
+            $includeTax = filter_var($data['includeTax'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['invoiceNumber'])) {
+            $customInvoiceNumber = $data['invoiceNumber'];
         }
         
         if (isset($data['gstDetails'])) {
@@ -82,6 +110,14 @@ try {
             $isIGST = filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN);
         }
         
+        if (isset($_GET['includeTax'])) {
+            $includeTax = filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($_GET['invoiceNumber'])) {
+            $customInvoiceNumber = $_GET['invoiceNumber'];
+        }
+        
         // Get GST details from query params if present
         if (isset($_GET['gstNumber']) && isset($_GET['companyName'])) {
             $gstDetails = [
@@ -92,7 +128,13 @@ try {
         }
     }
     
-    error_log("Generate invoice request: bookingId=$bookingId, gstEnabled=" . ($gstEnabled ? "true" : "false") . ", isIGST=" . ($isIGST ? "true" : "false"));
+    logInvoiceError("Generate invoice request", [
+        'bookingId' => $bookingId, 
+        'gstEnabled' => $gstEnabled ? "true" : "false",
+        'isIGST' => $isIGST ? "true" : "false",
+        'includeTax' => $includeTax ? "true" : "false",
+        'customInvoiceNumber' => $customInvoiceNumber
+    ]);
     
     if (!$bookingId && !$demoMode) {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
@@ -113,7 +155,9 @@ try {
         
         // Set character set
         $conn->set_charset("utf8mb4");
+        logInvoiceError("Database connection successful");
     } catch (Exception $e) {
+        logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
         if ($demoMode) {
             // Return mock data in demo mode
             error_log("Demo mode enabled for invoice generation");
@@ -144,9 +188,11 @@ try {
             }
             
             $booking = $result->fetch_assoc();
+            logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'amount' => $booking['total_amount']]);
         } catch (Exception $e) {
             // If there's a database error, enable demo mode for testing
             $demoMode = true;
+            logInvoiceError("Error fetching booking", ['bookingId' => $bookingId, 'error' => $e->getMessage()]);
             error_log("Error fetching booking $bookingId: " . $e->getMessage() . ". Switching to demo mode.");
         }
     } else {
@@ -178,15 +224,23 @@ try {
 
     // Current date for invoice generation
     $currentDate = date('Y-m-d');
-    $invoiceNumber = generateInvoiceNumber($booking['id']);
+    $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
-    // Calculate tax components (12% GST - either IGST or CGST+SGST)
+    // Calculate tax components based on includeTax setting
     $baseAmount = $booking['total_amount'];
     $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
     
-    // Calculate backwards from total (because total already includes tax)
-    $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
-    $taxAmount = $baseAmount - $baseAmountBeforeTax;
+    if ($includeTax) {
+        // If tax is included in total (calculate base by removing tax)
+        $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
+        $taxAmount = $baseAmount - $baseAmountBeforeTax;
+        $totalAmount = $baseAmount;
+    } else {
+        // If tax is excluded (calculate tax on top of the base)
+        $baseAmountBeforeTax = $baseAmount;
+        $taxAmount = round($baseAmount * $taxRate, 2);
+        $totalAmount = $baseAmount + $taxAmount;
+    }
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
@@ -229,6 +283,7 @@ try {
         .gst-details { border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9; margin-bottom: 20px; }
         .gst-title { font-weight: bold; margin-bottom: 10px; }
         .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
+        .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -287,7 +342,7 @@ try {
                     <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
-                    <td>Base Fare</td>
+                    <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
                     <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
@@ -313,10 +368,17 @@ try {
     
     $invoiceHtml .= '
                 <tr class="total-row">
-                    <td>Total Amount</td>
-                    <td style="text-align: right;">₹ ' . number_format($baseAmount, 2) . '</td>
+                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($totalAmount, 2) . '</td>
                 </tr>
-            </table>
+            </table>';
+            
+    if (!$includeTax) {
+        $invoiceHtml .= '
+            <p class="tax-note">Note: This invoice shows amounts excluding tax. Taxes will be charged separately.</p>';
+    }
+            
+    $invoiceHtml .= '
         </div>
         
         <div class="footer">
@@ -336,11 +398,12 @@ try {
             'invoiceDate' => date('d M Y'),
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
-            'totalAmount' => $baseAmount,
+            'totalAmount' => $totalAmount,
             'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
+            'includeTax' => $includeTax,
             'invoiceHtml' => $invoiceHtml
         ]
     ];
@@ -352,7 +415,9 @@ try {
             $responseData['data']['cgstAmount'] = $cgstAmount;
             $responseData['data']['sgstAmount'] = $sgstAmount;
         }
-        $responseData['data']['gstDetails'] = $gstDetails;
+        if ($gstDetails) {
+            $responseData['data']['gstDetails'] = $gstDetails;
+        }
     }
     
     // Store invoice in database if not in demo mode
@@ -370,6 +435,7 @@ try {
                     total_amount DECIMAL(10,2) NOT NULL,
                     gst_enabled TINYINT(1) DEFAULT 0,
                     is_igst TINYINT(1) DEFAULT 0,
+                    include_tax TINYINT(1) DEFAULT 1,
                     gst_number VARCHAR(20),
                     company_name VARCHAR(100),
                     company_address TEXT,
@@ -391,12 +457,14 @@ try {
                 $invoiceRow = $checkResult->fetch_assoc();
                 $stmt = $conn->prepare("
                     UPDATE invoices SET 
+                        invoice_number = ?,
                         invoice_date = ?, 
                         base_amount = ?, 
                         tax_amount = ?, 
                         total_amount = ?,
                         gst_enabled = ?,
                         is_igst = ?,
+                        include_tax = ?,
                         gst_number = ?,
                         company_name = ?,
                         company_address = ?,
@@ -406,18 +474,21 @@ try {
                 
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
+                $includeTaxInt = $includeTax ? 1 : 0;
                 $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "sdddiiisssi",
+                    "ssdddiiisssi",
+                    $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $baseAmount,
+                    $totalAmount,
                     $gstEnabledInt,
                     $isIgstInt,
+                    $includeTaxInt,
                     $gstNumberVal,
                     $companyNameVal,
                     $companyAddressVal,
@@ -426,33 +497,39 @@ try {
                 );
                 
                 $stmt->execute();
-                $responseData['message'] = 'Invoice updated successfully';
+                if ($stmt->error) {
+                    logInvoiceError("Error updating invoice", ['error' => $stmt->error]);
+                } else {
+                    $responseData['message'] = 'Invoice updated successfully';
+                }
             } else {
                 // Insert new invoice
                 $stmt = $conn->prepare("
                     INSERT INTO invoices (
                         booking_id, invoice_number, invoice_date, base_amount, 
-                        tax_amount, total_amount, gst_enabled, is_igst, gst_number, 
-                        company_name, company_address, invoice_html
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
+                        gst_number, company_name, company_address, invoice_html
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
+                $includeTaxInt = $includeTax ? 1 : 0;
                 $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "issdddiisss",
+                    "issdddiissss",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $baseAmount,
+                    $totalAmount,
                     $gstEnabledInt,
                     $isIgstInt,
+                    $includeTaxInt,
                     $gstNumberVal,
                     $companyNameVal,
                     $companyAddressVal,
@@ -460,10 +537,14 @@ try {
                 );
                 
                 $stmt->execute();
-                $responseData['message'] = 'Invoice generated and saved successfully';
+                if ($stmt->error) {
+                    logInvoiceError("Error inserting invoice", ['error' => $stmt->error]);
+                } else {
+                    $responseData['message'] = 'Invoice generated and saved successfully';
+                }
             }
         } catch (Exception $e) {
-            error_log("Error saving invoice to database: " . $e->getMessage());
+            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage()]);
             // Continue and return the invoice even if saving to DB fails
         }
     }
@@ -472,10 +553,10 @@ try {
     sendJsonResponse($responseData);
 
 } catch (Exception $e) {
-    error_log("Error generating invoice: " . $e->getMessage());
+    logInvoiceError("Error generating invoice", ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error',
-        'message' => 'Failed to generate invoice',
+        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
 }
