@@ -234,12 +234,16 @@ try {
     
     if ($includeTax) {
         // If tax is included in total amount (default)
-        $baseAmountBeforeTax = round($totalAmount / (1 + $gstRate), 2);
+        // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
+        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
     } else {
         // If tax is excluded from the base amount
         $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = round($totalAmount * $gstRate, 2);
+        $taxAmount = $totalAmount * $gstRate;
+        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
         $totalAmount = $baseAmountBeforeTax + $taxAmount;
     }
     
@@ -248,12 +252,16 @@ try {
         if ($isIGST) {
             // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
+            $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
-            $cgstAmount = round($taxAmount / 2, 2);
-            $sgstAmount = $taxAmount - $cgstAmount;  // Ensure exact total by calculating difference
+            // Split tax amount exactly in half
+            $cgstAmount = $taxAmount / 2;
+            $cgstAmount = round($cgstAmount, 2);
+            $sgstAmount = $taxAmount - $cgstAmount;  // Calculate the difference to ensure exact total
+            $sgstAmount = round($sgstAmount, 2);
             $igstAmount = 0;
         }
     } else {
@@ -261,6 +269,10 @@ try {
         $sgstAmount = 0;
         $igstAmount = 0;
     }
+    
+    // Ensure final total adds up correctly after rounding
+    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
+    $finalTotal = round($finalTotal, 2);
     
     // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
@@ -375,7 +387,7 @@ try {
     $invoiceHtml .= '
                 <tr class="total-row">
                     <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($totalAmount, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
                 </tr>
             </table>';
             
@@ -404,7 +416,7 @@ try {
             'invoiceDate' => date('d M Y'),
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
-            'totalAmount' => $totalAmount,
+            'totalAmount' => $finalTotal,
             'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
@@ -493,7 +505,7 @@ try {
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $totalAmount,
+                    $finalTotal,
                     $gstEnabledInt,
                     $isIgstInt,
                     $includeTaxInt,
@@ -504,12 +516,21 @@ try {
                     $invoiceRow['id']
                 );
                 
-                $stmt->execute();
-                if ($stmt->error) {
-                    logInvoiceError("Error updating invoice", ['error' => $stmt->error]);
+                $success = $stmt->execute();
+                
+                if (!$success || $stmt->error) {
+                    logInvoiceError("Error updating invoice", [
+                        'error' => $stmt->error,
+                        'id' => $invoiceRow['id'],
+                        'success' => $success ? 'true' : 'false'
+                    ]);
                 } else {
                     $responseData['message'] = 'Invoice updated successfully';
-                    logInvoiceError("Invoice updated successfully", ['invoice_id' => $invoiceRow['id']]);
+                    logInvoiceError("Invoice updated successfully", [
+                        'invoice_id' => $invoiceRow['id'],
+                        'invoice_number' => $invoiceNumber,
+                        'rows_affected' => $stmt->affected_rows
+                    ]);
                 }
             } else {
                 // Insert new invoice
@@ -535,7 +556,7 @@ try {
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $totalAmount,
+                    $finalTotal,
                     $gstEnabledInt,
                     $isIgstInt,
                     $includeTaxInt,
@@ -545,16 +566,25 @@ try {
                     $invoiceHtml
                 );
                 
-                $stmt->execute();
-                if ($stmt->error) {
-                    logInvoiceError("Error inserting invoice", ['error' => $stmt->error]);
+                $success = $stmt->execute();
+                
+                if (!$success || $stmt->error) {
+                    logInvoiceError("Error inserting invoice", [
+                        'error' => $stmt->error, 
+                        'success' => $success ? 'true' : 'false'
+                    ]);
                 } else {
                     $responseData['message'] = 'Invoice generated and saved successfully';
-                    logInvoiceError("New invoice created", ['booking_id' => $booking['id'], 'invoice_number' => $invoiceNumber]);
+                    $newId = $stmt->insert_id;
+                    logInvoiceError("New invoice created", [
+                        'booking_id' => $booking['id'], 
+                        'invoice_id' => $newId,
+                        'invoice_number' => $invoiceNumber
+                    ]);
                 }
             }
         } catch (Exception $e) {
-            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage()]);
+            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Continue and return the invoice even if saving to DB fails
         }
     }
@@ -563,7 +593,7 @@ try {
     sendJsonResponse($responseData);
 
 } catch (Exception $e) {
-    logInvoiceError("Error generating invoice", ['error' => $e->getMessage()]);
+    logInvoiceError("Error generating invoice", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),

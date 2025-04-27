@@ -168,7 +168,12 @@ try {
         $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
         ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''))) {
         
-        logInvoiceError("No invoice found or parameters changed, generating new invoice");
+        logInvoiceError("No invoice found or parameters changed, generating new invoice", [
+            'gstEnabled' => $gstEnabled ? 'true' : 'false',
+            'isIGST' => $isIGST ? 'true' : 'false',
+            'includeTax' => $includeTax ? 'true' : 'false',
+            'customInvoiceNumber' => $customInvoiceNumber
+        ]);
         
         // Generate invoice on-the-fly via the generate-invoice API
         $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
@@ -226,7 +231,7 @@ try {
     
     // CRITICAL: Set Content-Type for PDF output before any HTML output
     header('Content-Type: text/html');
-    header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.pdf"');
+    header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     
     // Return invoice HTML with improved styling and JavaScript for better printing
     echo '<!DOCTYPE html>
@@ -236,7 +241,7 @@ try {
     <title>Invoice #' . $invoiceNumber . '</title>
     <script>
         window.onload = function() {
-            // Force PDF print dialog immediately
+            // Force PDF print dialog immediately after a slight delay
             setTimeout(function() {
                 window.print();
                 // After print is triggered, show success message
@@ -255,6 +260,7 @@ try {
         body { font-family: Arial, sans-serif; }
         .print-container { max-width: 800px; margin: 0 auto; }
         .print-header { text-align: center; margin: 20px 0; }
+        .invoice-container { padding: 20px; }
     </style>
 </head>
 <body>
@@ -265,7 +271,9 @@ try {
             <p>If printing doesn\'t start automatically, please use the print button in your browser.</p>
             <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
         </div>
+        <div class="invoice-container">
         ' . $invoiceHtml . '
+        </div>
     </div>
 </body>
 </html>';

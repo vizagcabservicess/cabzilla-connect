@@ -175,11 +175,13 @@ try {
     if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
         header("Content-Disposition: {$matches[1]}");
     } else {
-        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.pdf\"");
+        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
     }
     
     // Output the response body
     echo $body;
+    
+    logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
     exit;
 
 } catch (Exception $e) {

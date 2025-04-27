@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Spinner } from "@/components/ui/spinner";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -35,6 +36,7 @@ export function BookingInvoice({
 }: BookingInvoiceProps) {
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [isIGST, setIsIGST] = useState(false);
@@ -53,17 +55,44 @@ export function BookingInvoice({
     }
   }, [booking?.id]);
 
+  const validateGSTDetails = () => {
+    if (gstEnabled) {
+      if (!gstDetails.gstNumber || gstDetails.gstNumber.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing GST Number",
+          description: "Please enter a valid GST number"
+        });
+        return false;
+      }
+      
+      if (!gstDetails.companyName || gstDetails.companyName.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing Company Name",
+          description: "Please enter the company name"
+        });
+        return false;
+      }
+      
+      if (!gstDetails.companyAddress || gstDetails.companyAddress.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing Company Address",
+          description: "Please enter the company address"
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleGenerateInvoice = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      if (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress)) {
-        toast({
-          variant: "destructive",
-          title: "Missing GST Details",
-          description: "Please fill in all GST details"
-        });
+      if (!validateGSTDetails()) {
         setLoading(false);
         return;
       }
@@ -98,25 +127,40 @@ export function BookingInvoice({
       });
     } finally {
       setLoading(false);
+      setRegenerating(false);
     }
   };
 
   const handleDownloadPdf = () => {
-    // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-    const bookingIdParam = `?id=${booking.id}`;
-    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-    const igstParam = isIGST ? '&isIGST=1' : '';
-    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
-    
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
-    console.log('Download invoice URL:', downloadUrl);
-    
-    // Open in a new window/tab for PDF download
-    window.open(downloadUrl, '_blank');
+    try {
+      // Use a proper URL with query parameters (no body in GET request)
+      const baseUrl = getApiUrl(`/api/admin/download-invoice`);
+      const bookingIdParam = `?id=${booking.id}`;
+      const gstParam = gstEnabled ? '&gstEnabled=1' : '';
+      const igstParam = isIGST ? '&isIGST=1' : '';
+      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+      const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+      const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
+        `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+      
+      const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      console.log('Download invoice URL:', downloadUrl);
+      
+      // Open in a new window/tab for PDF download
+      window.open(downloadUrl, '_blank');
+      
+      toast({
+        title: "Invoice Download Started",
+        description: "Your invoice is being prepared in a new tab"
+      });
+    } catch (error) {
+      console.error("Invoice download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download invoice. Please try again."
+      });
+    }
   };
 
   const handleGstToggle = (checked: boolean) => {
@@ -142,8 +186,11 @@ export function BookingInvoice({
   const handleRegenerateInvoice = () => {
     if (loading || isSubmitting) return;
     
-    // Force a re-generation
+    // Set regenerating flag to show appropriate feedback
+    setRegenerating(true);
     setInvoiceData(null);
+    
+    // Force a re-generation after a short delay to ensure state updates
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);
@@ -153,7 +200,7 @@ export function BookingInvoice({
     if (loading || isSubmitting) {
       return (
         <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+          <Spinner size="lg" className="mb-4" />
           <p>Generating invoice...</p>
         </div>
       );
@@ -165,6 +212,15 @@ export function BookingInvoice({
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      );
+    }
+
+    if (regenerating) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Spinner size="lg" className="mb-4" />
+          <p>Regenerating invoice with new settings...</p>
+        </div>
       );
     }
 
@@ -268,10 +324,10 @@ export function BookingInvoice({
               <Button 
                 variant="outline" 
                 onClick={handleRegenerateInvoice}
-                disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 className="w-full"
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
                 Regenerate Invoice with Current Settings
               </Button>
             </div>
@@ -318,15 +374,15 @@ export function BookingInvoice({
                 <Button 
                   variant="outline" 
                   onClick={handleRegenerateInvoice}
-                  disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                  disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
                 
                 <Button
                   onClick={handleDownloadPdf}
-                  disabled={loading || isSubmitting}
+                  disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download PDF
