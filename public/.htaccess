@@ -21,6 +21,11 @@
     </IfModule>
 </FilesMatch>
 
+# Special rule for download-invoice.php - don't set default content-type
+<FilesMatch "download-invoice\.php$">
+    Header unset Content-Type
+</FilesMatch>
+
 # Fix for PUT/DELETE requests
 <IfModule mod_rewrite.c>
     RewriteEngine On

@@ -6,13 +6,10 @@ require_once __DIR__ . '/../../config.php';
 // Clear any buffer
 if (ob_get_level()) ob_end_clean();
 
-// IMPORTANT: Don't set application/json content-type here
-// Let this script set it based on PDF output
-
-// Handle CORS
+// CRITICAL: Set headers ONLY for PDF content (moved from GET request processing to here)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 
 // Handle OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -94,12 +91,11 @@ try {
     $htmlContent = $invoiceData['data']['invoiceHtml'];
     $invoiceNumber = $invoiceData['data']['invoiceNumber'];
     
-    // Set headers for PDF download
+    // CRITICAL: Set PDF download headers correctly BEFORE any output
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // Output HTML that looks like a PDF for now
-    // In production, use a library like mPDF or TCPDF
+    // Output HTML that will be rendered as PDF
     echo '<!DOCTYPE html>
 <html>
 <head>
@@ -109,6 +105,7 @@ try {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
+            color: #333;
         }
         .invoice-container {
             max-width: 800px;
@@ -132,13 +129,28 @@ try {
             float: right;
             text-align: right;
         }
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .invoice-container {
+                box-shadow: none;
+                border: none;
+                padding: 10px;
+                max-width: 100%;
+                margin: 0;
+            }
+        }
     </style>
 </head>
 <body>
     ' . $htmlContent . '
     <script>
         window.onload = function() {
-            window.print();
+            setTimeout(function() { 
+                window.print();
+            }, 500);
         };
     </script>
 </body>

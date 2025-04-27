@@ -99,6 +99,15 @@ export function BookingInvoice({
   };
 
   const handleDownloadPdf = () => {
+    if (!booking?.id) {
+      toast({
+        variant: "destructive",
+        title: "Missing Booking ID",
+        description: "Cannot download invoice without booking ID"
+      });
+      return;
+    }
+    
     // Use a proper URL with query parameters (no body in GET request)
     const baseUrl = getApiUrl(`/api/admin/download-invoice`);
     const bookingIdParam = `?id=${booking.id}`;
@@ -109,6 +118,8 @@ export function BookingInvoice({
     
     const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${gstDetailsParam}`;
     console.log('Download invoice URL:', downloadUrl);
+    
+    // Open in new tab for PDF download
     window.open(downloadUrl, '_blank');
   };
 

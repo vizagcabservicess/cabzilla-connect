@@ -1,3 +1,4 @@
+
 # Enable URL rewriting
 RewriteEngine On
 
@@ -47,7 +48,7 @@ RewriteRule .* - [R=200,L]
 # PDF Download Fix - CRITICAL - Address the PDF download issue
 <Files "download-invoice.php">
     # Allow the script to set its own content type
-    SetEnvIf Request_URI "format=pdf" pdf_download=1
+    SetEnvIf Request_URI "download-invoice\.php" pdf_download=1
     Header always unset Content-Type env=pdf_download
     Header always set X-Content-Type-Options "nosniff" env=pdf_download
 </Files>
@@ -57,7 +58,8 @@ RewriteRule ^api/admin/assign-driver/?$ /api/admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^api/admin/cancel-booking/?$ /api/admin/cancel-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/update-booking/?$ /api/admin/update-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/generate-invoice/?$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/download-invoice/?$ /api/admin/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice/?$ /api/admin/download-invoice.php [L,NC,QSA]
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
@@ -66,6 +68,12 @@ RewriteRule ^api/admin/booking/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QS
 RewriteRule ^api/admin/bookings/?$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
+
+# CRITICAL: Driver API endpoints
+RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/get-drivers/?$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]
+RewriteRule ^api/admin/driver/([0-9]+)/?$ /api/admin/driver.php?id=$1 [L,NC,QSA]
 
 # Add direct access to the book endpoint - HIGHEST PRIORITY
 RewriteRule ^api/book/?$ /api/book.php [L,NC,QSA]
@@ -80,9 +88,6 @@ RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 
 # Other admin API endpoints
-RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]
-RewriteRule ^api/admin/driver/([0-9]+)/?$ /api/admin/driver.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC,QSA]
 RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
@@ -116,70 +121,3 @@ RewriteCond %{REQUEST_FILENAME} !-d
 
 # Send all other requests to index.html for React to handle
 RewriteRule ^(.*)$ /index.html [L]
-
-# Set PHP settings for this directory
-<IfModule mod_php7.c>
-    php_flag display_errors Off
-    php_value error_reporting 32767
-</IfModule>
-
-# Prevent direct access to sensitive files
-<FilesMatch "\.(htaccess|htpasswd|ini)$">
-    Require all denied
-</FilesMatch>
-
-# Handle errors
-ErrorDocument 404 /api/error.php
-ErrorDocument 500 /api/error.php
-
-# Force proper MIME type for PHP files to ensure they're executed correctly
-AddType application/x-httpd-php .php
-
-# Enable rewrite engine
-RewriteEngine On
-
-# Set CORS headers for all responses
-Header set Access-Control-Allow-Origin "*"
-Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Debug"
-Header set Access-Control-Max-Age "3600"
-
-# Handle OPTIONS preflight requests
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Prevent direct access to PHP files
-RewriteCond %{REQUEST_URI} !^/api/
-RewriteRule \.php$ - [F]
-
-# API Routes
-RewriteRule ^api/admin/generate-invoice/?$ api/admin/generate-invoice.php [QSA,L]
-RewriteRule ^api/admin/download-invoice/?$ api/admin/download-invoice.php [QSA,L]
-RewriteRule ^api/admin/drivers/?$ api/admin/drivers.php [QSA,L]
-RewriteRule ^api/admin/driver/([0-9]+)/?$ api/admin/driver.php?id=$1 [QSA,L]
-
-# Prevent directory listing
-Options -Indexes
-
-# Set default character set
-AddDefaultCharset UTF-8
-
-# Enable compression
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
-</IfModule>
-
-# Set security headers
-Header set X-Content-Type-Options "nosniff"
-Header set X-Frame-Options "SAMEORIGIN"
-Header set X-XSS-Protection "1; mode=block"
-Header set Referrer-Policy "strict-origin-when-cross-origin"
-
-# Cache control
-<FilesMatch "\.(html|htm|php)$">
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-</FilesMatch>
-
-<FilesMatch "\.(js|css|jpg|jpeg|png|gif|ico)$">
-    Header set Cache-Control "public, max-age=31536000"
-</FilesMatch>

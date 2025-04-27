@@ -10,7 +10,7 @@ if (ob_get_level()) ob_end_clean();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Debug mode
@@ -96,7 +96,7 @@ try {
     $invoiceNumber = 'INV-' . date('Ymd') . '-' . $bookingId;
     $invoiceDate = date('d M Y');
 
-    // Calculate tax amounts - no more 5% service tax, use GST/IGST instead
+    // Calculate tax amounts - using 12% GST/IGST instead of 5% service tax
     $totalAmount = floatval($booking['total_amount']);
     $baseFare = $totalAmount;
     $gstAmount = 0;

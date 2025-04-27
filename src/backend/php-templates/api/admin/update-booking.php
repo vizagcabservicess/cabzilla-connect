@@ -10,7 +10,7 @@ ob_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Debug mode
@@ -89,6 +89,7 @@ try {
                 'driver_name' => $data['driverName'] ?? null,
                 'driver_phone' => $data['driverPhone'] ?? null,
                 'vehicle_number' => $data['vehicleNumber'] ?? null,
+                'billing_address' => $data['billingAddress'] ?? null,
                 'updated_at' => date('Y-m-d H:i:s')
             ];
             
@@ -134,7 +135,7 @@ try {
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
-        if (isset($data[$requestField])) {
+        if (isset($data[$requestField]) || array_key_exists($requestField, $data)) {
             $updateFields[] = "$dbField = ?";
             $types .= getTypeForField($data[$requestField]);
             $params[] = $data[$requestField];

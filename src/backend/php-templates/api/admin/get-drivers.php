@@ -166,7 +166,9 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         
-        $conn->query($createTableSQL);
+        if (!$conn->query($createTableSQL)) {
+            throw new Exception("Failed to create drivers table: " . $conn->error);
+        }
         
         // Insert sample data if newly created
         $sampleData = [
@@ -178,6 +180,10 @@ try {
         ];
         
         $insertStmt = $conn->prepare("INSERT INTO drivers (name, phone, email, license_number, vehicle_number, status, location) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        
+        if (!$insertStmt) {
+            throw new Exception("Failed to prepare insert statement: " . $conn->error);
+        }
         
         foreach ($sampleData as $driver) {
             $insertStmt->bind_param("sssssss", $driver[0], $driver[1], $driver[2], $driver[3], $driver[4], $driver[5], $driver[6]);
@@ -223,10 +229,27 @@ try {
     $stmt = $conn->prepare($sql);
     
     if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
+        // Use a helper function to properly reference values for bind_param
+        function refValues($arr) {
+            $refs = array();
+            foreach($arr as $key => $value) {
+                $refs[$key] = &$arr[$key];
+            }
+            return $refs;
+        }
+        
+        $bindParams = array($types);
+        foreach ($params as $key => $value) {
+            $bindParams[] = $params[$key];
+        }
+        
+        call_user_func_array(array($stmt, 'bind_param'), refValues($bindParams));
     }
     
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        throw new Exception("Failed to execute drivers query: " . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
     
     $drivers = [];
