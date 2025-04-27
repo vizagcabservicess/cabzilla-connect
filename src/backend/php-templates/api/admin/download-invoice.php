@@ -225,10 +225,10 @@ try {
     }
     
     // CRITICAL: Set Content-Type for PDF output before any HTML output
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
+    header('Content-Type: text/html');
+    header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // Return invoice HTML with JavaScript to trigger printing as PDF
+    // Return invoice HTML with improved styling and JavaScript for better printing
     echo '<!DOCTYPE html>
 <html>
 <head>
@@ -237,25 +237,40 @@ try {
     <script>
         window.onload = function() {
             // Force PDF print dialog immediately
-            window.print();
-            // After print is triggered, show success message
             setTimeout(function() {
-                document.querySelector("body").innerHTML = "<h1>Your invoice has been downloaded. You may close this window.</h1>";
-            }, 1000);
+                window.print();
+                // After print is triggered, show success message
+                setTimeout(function() {
+                    document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been downloaded.</h1><p>You may close this window.</p></div>";
+                }, 1000);
+            }, 500);
         };
     </script>
     <style>
         @media print {
             body { margin: 0; padding: 0; }
-            @page { size: auto; margin: 10mm; }
+            @page { size: A4; margin: 10mm; }
+            .no-print { display: none !important; }
         }
         body { font-family: Arial, sans-serif; }
+        .print-container { max-width: 800px; margin: 0 auto; }
+        .print-header { text-align: center; margin: 20px 0; }
     </style>
 </head>
-<body>' . $invoiceHtml . '</body>
+<body>
+    <div class="print-container">
+        <div class="print-header no-print">
+            <h1>Invoice #' . $invoiceNumber . '</h1>
+            <p>Your invoice is being prepared for printing.</p>
+            <p>If printing doesn\'t start automatically, please use the print button in your browser.</p>
+            <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
+        </div>
+        ' . $invoiceHtml . '
+    </div>
+</body>
 </html>';
     
-    logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
+    logInvoiceError("Invoice sent successfully for printing", ['invoice_number' => $invoiceNumber]);
     exit; // Important to prevent any additional output
 
 } catch (Exception $e) {

@@ -164,18 +164,18 @@ try {
         $contentType = $matches[1];
     }
     
-    // Set appropriate content type (default to PDF if not found)
+    // Set appropriate content type (default to HTML if not found)
     if ($contentType) {
         header("Content-Type: $contentType");
     } else {
-        header("Content-Type: application/pdf");
+        header("Content-Type: text/html");
     }
     
     // Pass through Content-Disposition for download
     if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
         header("Content-Disposition: {$matches[1]}");
     } else {
-        header("Content-Disposition: attachment; filename=\"invoice_{$bookingId}.pdf\"");
+        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.pdf\"");
     }
     
     // Output the response body
