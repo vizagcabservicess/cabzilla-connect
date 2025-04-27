@@ -29,8 +29,8 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin?tab=fares' },
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin?tab=users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin?tab=drivers' },
-    { id: 'reports', label: 'Reports', icon: <BarChart3size={20} />, path: '/admin/reports' },
-    { id: 'database', label: 'Database', icon: <Database size={20} />, path: '/admin/database' },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
+    { id: 'database', label: 'Database', icon: <Database size={20} />, path: '/admin/database' }
   ];
 
   // Handle menu item click
