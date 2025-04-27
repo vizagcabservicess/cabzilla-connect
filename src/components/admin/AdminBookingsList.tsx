@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -38,6 +37,7 @@ import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetails } from './BookingDetails';
 import { getStatusColorClass } from '@/utils/bookingUtils';
+import { getApiUrl } from '@/config/api';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -352,11 +352,14 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      console.log('Booking update response:', response);
       
-      // Update the bookings list
+      // Update the bookings list with the updated data from the response
+      const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
+      
       const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, ...updatedData } : booking
+        booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -381,11 +384,14 @@ export function AdminBookingsList() {
         status: 'assigned' as BookingStatus
       };
       
-      await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      console.log('Driver assignment response:', response);
       
-      // Update the bookings list
+      // Update the bookings list with the updated data from the response
+      const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
+      
       const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, ...updatedData } : booking
+        booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -447,17 +453,59 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleGenerateInvoice = async () => {
-    if (!selectedBooking) return;
+  const handleGenerateInvoice = async (gstEnabled?: boolean, gstDetails?: any) => {
+    if (!selectedBooking) return null;
     
     setIsSubmitting(true);
     try {
-      // Implement invoice generation logic here
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulating API call
-      toast.success("Invoice generated successfully");
+      console.log('Generating invoice for booking:', selectedBooking.id);
+      
+      const requestData = {
+        bookingId: selectedBooking.id,
+        gstEnabled: gstEnabled || false,
+        gstDetails: gstDetails || {}
+      };
+      
+      const apiUrl = getApiUrl('/api/admin/generate-invoice');
+      console.log('Invoice API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        body: JSON.stringify(requestData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Invoice generation error response:', errorText);
+        throw new Error(`Failed to generate invoice: ${response.status} ${response.statusText}`);
+      }
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error('Invoice API returned non-JSON response:', textResponse);
+        throw new Error('Invoice API returned non-JSON response');
+      }
+      
+      const data = await response.json();
+      console.log('Invoice generation response:', data);
+      
+      if (data.status === 'success') {
+        toast.success("Invoice generated successfully");
+        return data;
+      } else {
+        throw new Error(data.message || 'Unknown error generating invoice');
+      }
     } catch (error) {
       console.error('Error generating invoice:', error);
-      toast.error("Failed to generate invoice");
+      toast.error("Failed to generate invoice: " + (error instanceof Error ? error.message : 'Unknown error'));
+      return null;
     } finally {
       setIsSubmitting(false);
     }

@@ -41,13 +41,20 @@ RewriteEngine On
     SetHandler application/x-httpd-php
 </Files>
 
+# API Test Endpoint - highest priority
+RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
+
 # High priority API endpoints - ensure these work first
+RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
 RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
 RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
 RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
 RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
 
 # Invoice and receipt endpoints with high priority
 RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]

@@ -81,6 +81,11 @@ export function BookingInvoice({
     } catch (error) {
       console.error("Invoice generation error:", error);
       setError(error instanceof Error ? error.message : "Failed to generate invoice");
+      toast({
+        variant: "destructive",
+        title: "Invoice Generation Failed",
+        description: error instanceof Error ? error.message : "Failed to generate invoice"
+      });
     } finally {
       setLoading(false);
     }
@@ -208,6 +213,7 @@ export function BookingInvoice({
               title="Invoice Preview" 
               className="w-full h-full"
               style={{ border: 'none' }}
+              sandbox="allow-same-origin"
             />
           </div>
         </div>
