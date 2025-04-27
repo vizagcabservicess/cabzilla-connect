@@ -120,6 +120,7 @@ try {
                 company_address TEXT,
                 invoice_html MEDIUMTEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY (invoice_number),
                 KEY (booking_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
@@ -131,10 +132,11 @@ try {
         }
     }
     
-    // Check if invoice exists for this booking
+    // Retrieve the invoice data
     $invoiceExists = false;
     $invoiceData = null;
     
+    // First try to get from invoices table
     if ($tableExists) {
         try {
             $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
@@ -159,192 +161,103 @@ try {
     }
     
     // If no invoice record or if parameters have changed, generate a new one
+    $invoiceHtml = '';
     if (!$invoiceExists || 
         $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
         $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
         $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
         ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''))) {
         
-        logInvoiceError("No invoice found or parameters changed, fetching booking details");
+        logInvoiceError("No invoice found or parameters changed, generating new invoice");
         
-        try {
-            $bookingStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-            if (!$bookingStmt) {
-                throw new Exception("Failed to prepare booking query: " . $conn->error);
-            }
-            
-            $bookingStmt->bind_param("i", $bookingId);
-            $bookingStmt->execute();
-            $bookingResult = $bookingStmt->get_result();
-            
-            if ($bookingResult->num_rows === 0) {
-                logInvoiceError("Booking not found", ['booking_id' => $bookingId]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-            }
-            
-            $booking = $bookingResult->fetch_assoc();
-            logInvoiceError("Booking found", [
-                'booking_id' => $booking['id'],
-                'booking_number' => $booking['booking_number']
+        // Generate invoice on-the-fly via the generate-invoice API
+        $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
+        $queryParams = http_build_query([
+            'id' => $bookingId,
+            'gstEnabled' => $gstEnabled ? '1' : '0',
+            'isIGST' => $isIGST ? '1' : '0',
+            'includeTax' => $includeTax ? '1' : '0',
+            'format' => 'json',
+            'gstNumber' => $gstNumber,
+            'companyName' => $companyName,
+            'companyAddress' => $companyAddress,
+            'invoiceNumber' => $customInvoiceNumber
+        ]);
+        
+        $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $generateResponse = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($curlError) {
+            logInvoiceError("Error calling generate-invoice.php", [
+                'curl_error' => $curlError,
+                'http_code' => $httpCode
             ]);
-            
-            // Generate invoice data from booking
-            $invoiceNumber = $customInvoiceNumber ?: ('INV-' . date('Ymd') . '-' . $booking['id']);
-            $invoiceDate = date('Y-m-d');
-            
-            // Calculate tax components based on includeTax setting
-            if ($includeTax) {
-                // If tax is included in total amount, calculate backwards
-                $totalAmount = $booking['total_amount'];
-                $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
-                $baseAmount = round($totalAmount / (1 + $taxRate), 2);
-                $taxAmount = $totalAmount - $baseAmount;
-            } else {
-                // If tax is excluded, calculate forward
-                $baseAmount = $booking['total_amount'];
-                $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
-                $taxAmount = round($baseAmount * $taxRate, 2);
-                $totalAmount = $baseAmount + $taxAmount;
-            }
-            
-            $invoiceData = [
-                'invoice_number' => $invoiceNumber,
-                'booking_id' => $booking['id'],
-                'booking_number' => $booking['booking_number'],
-                'passenger_name' => $booking['passenger_name'],
-                'passenger_email' => $booking['passenger_email'],
-                'passenger_phone' => $booking['passenger_phone'],
-                'trip_type' => $booking['trip_type'] ?? 'local',
-                'trip_mode' => $booking['trip_mode'] ?? 'outstation',
-                'pickup_location' => $booking['pickup_location'],
-                'drop_location' => $booking['drop_location'],
-                'pickup_date' => $booking['pickup_date'],
-                'cab_type' => $booking['cab_type'],
-                'base_fare' => $baseAmount,
-                'tax_amount' => $taxAmount,
-                'total_amount' => $totalAmount,
-                'invoice_date' => $invoiceDate,
-                'status' => 'generated',
-                'is_igst' => $isIGST ? 1 : 0,
-                'include_tax' => $includeTax ? 1 : 0
-            ];
-
-            // When building $invoiceData, override GST fields if provided
-            if ($gstEnabled) {
-                $invoiceData['gst_enabled'] = true;
-                $invoiceData['gst_number'] = $gstNumber ?: ($invoiceData['gst_number'] ?? '');
-                $invoiceData['company_name'] = $companyName ?: ($invoiceData['company_name'] ?? '');
-                $invoiceData['company_address'] = $companyAddress ?: ($invoiceData['company_address'] ?? '');
-            }
-            
-            // Generate the invoice on-the-fly
-            logInvoiceError("Generating invoice on-the-fly", [
-                'invoice_number' => $invoiceNumber,
-                'gst_enabled' => $gstEnabled,
-                'is_igst' => $isIGST,
-                'include_tax' => $includeTax
-            ]);
-            
-            // Call generate-invoice.php via internal mechanism rather than HTTP
-            $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
-            $queryParams = http_build_query([
-                'id' => $bookingId,
-                'gstEnabled' => $gstEnabled ? '1' : '0',
-                'isIGST' => $isIGST ? '1' : '0',
-                'includeTax' => $includeTax ? '1' : '0',
-                'format' => 'json',
-                'gstNumber' => $gstNumber,
-                'companyName' => $companyName,
-                'companyAddress' => $companyAddress,
-                'invoiceNumber' => $customInvoiceNumber
-            ]);
-            
-            $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HEADER, false);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            
-            $generateResponse = curl_exec($ch);
-            $curlError = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($curlError) {
-                logInvoiceError("Error calling generate-invoice.php", [
-                    'curl_error' => $curlError,
-                    'http_code' => $httpCode
-                ]);
-                throw new Exception("Failed to generate invoice: $curlError");
-            }
-            
-            $generatedData = json_decode($generateResponse, true);
-            if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
-                logInvoiceError("Invalid response from generate-invoice.php", [
-                    'response' => substr($generateResponse, 0, 1000),
-                    'http_code' => $httpCode
-                ]);
-                throw new Exception("Invalid invoice data received from generator");
-            }
-            
-            // Use the HTML from generate-invoice.php
-            $invoiceData['invoice_html'] = $generatedData['data']['invoiceHtml'];
-        } catch (Exception $e) {
-            logInvoiceError("Error processing booking data", ['error' => $e->getMessage()]);
-            throw $e;
+            throw new Exception("Failed to generate invoice: $curlError");
         }
+        
+        $generatedData = json_decode($generateResponse, true);
+        if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
+            logInvoiceError("Invalid response from generate-invoice.php", [
+                'response' => substr($generateResponse, 0, 1000),
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Invalid invoice data received from generator");
+        }
+        
+        $invoiceHtml = $generatedData['data']['invoiceHtml'];
+        $invoiceNumber = $generatedData['data']['invoiceNumber'];
+    } else {
+        // Use stored HTML
+        $invoiceHtml = $invoiceData['invoice_html'];
+        $invoiceNumber = $invoiceData['invoice_number'];
     }
     
-    if (!isset($invoiceData['invoice_html']) || empty($invoiceData['invoice_html'])) {
-        throw new Exception("Missing invoice HTML content");
+    if (empty($invoiceHtml)) {
+        throw new Exception("No invoice HTML content generated");
     }
     
     // Format for PDF output
-    $invoiceHtml = $invoiceData['invoice_html'];
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
     
-    // Decide how to output the invoice - HTML or PDF
-    $format = isset($_GET['format']) ? $_GET['format'] : 'pdf';
+    // Return invoice HTML with JavaScript to trigger printing as PDF
+    echo '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice #' . $invoiceNumber . '</title>
+    <script>
+        window.onload = function() {
+            window.print();
+        };
+    </script>
+    <style>
+        @media print {
+            body { margin: 0; padding: 0; }
+            @page { size: auto; margin: 10mm; }
+        }
+        body { font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>' . $invoiceHtml . '</body>
+</html>';
     
-    // Set the appropriate Content-Type header based on the format
-    if ($format === 'pdf') {
-        // Send PDF headers BEFORE any content
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: attachment; filename="invoice_' . 
-            (isset($invoiceData['invoice_number']) ? $invoiceData['invoice_number'] : 'download') . '.pdf"');
-        
-        // Simple HTML to PDF using browser print capabilities
-        echo '<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Invoice #' . (isset($invoiceData['invoice_number']) ? $invoiceData['invoice_number'] : 'Invoice') . '</title>
-            <script>
-                window.onload = function() {
-                    window.print();
-                    setTimeout(function() {
-                        document.querySelector("body").innerHTML = "<h1>Your invoice has been downloaded. You may close this window.</h1>";
-                    }, 1000);
-                };
-            </script>
-            <style>
-                @media print {
-                    body { margin: 0; padding: 0; }
-                    @page { size: auto; margin: 0; }
-                }
-            </style>
-        </head>
-        <body>' . $invoiceHtml . '</body>
-        </html>';
-    } else {
-        // For HTML output
-        header('Content-Type: text/html; charset=UTF-8');
-        echo $invoiceHtml;
-    }
-    
+    logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
     exit; // Important to prevent any additional output
 
 } catch (Exception $e) {
-    logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage()]);
+    logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    
+    // For errors, we MUST change content type back to JSON
+    header('Content-Type: application/json');
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),

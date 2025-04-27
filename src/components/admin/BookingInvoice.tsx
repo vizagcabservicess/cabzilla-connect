@@ -114,6 +114,8 @@ export function BookingInvoice({
     
     const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
     console.log('Download invoice URL:', downloadUrl);
+    
+    // Open in a new window/tab for PDF download
     window.open(downloadUrl, '_blank');
   };
 

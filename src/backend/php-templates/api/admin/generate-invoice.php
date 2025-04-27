@@ -74,7 +74,7 @@ try {
         $data = json_decode($jsonData, true);
         
         if (isset($data['bookingId'])) {
-            $bookingId = $data['bookingId'];
+            $bookingId = (int)$data['bookingId'];
         }
         
         if (isset($data['gstEnabled'])) {
@@ -99,7 +99,7 @@ try {
     } 
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (isset($_GET['id'])) {
-            $bookingId = $_GET['id'];
+            $bookingId = (int)$_GET['id'];
         }
         
         if (isset($_GET['gstEnabled'])) {
@@ -227,19 +227,18 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
-    $baseAmount = $booking['total_amount'];
+    $totalAmount = (float)$booking['total_amount'];
     $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
     
     if ($includeTax) {
-        // If tax is included in total (calculate base by removing tax)
-        $baseAmountBeforeTax = round($baseAmount / (1 + $taxRate), 2);
-        $taxAmount = $baseAmount - $baseAmountBeforeTax;
-        $totalAmount = $baseAmount;
+        // If tax is included in total amount (default)
+        $baseAmountBeforeTax = round($totalAmount / (1 + $taxRate), 2);
+        $taxAmount = $totalAmount - $baseAmountBeforeTax;
     } else {
-        // If tax is excluded (calculate tax on top of the base)
-        $baseAmountBeforeTax = $baseAmount;
-        $taxAmount = round($baseAmount * $taxRate, 2);
-        $totalAmount = $baseAmount + $taxAmount;
+        // If tax is excluded from the base amount
+        $baseAmountBeforeTax = $totalAmount;
+        $taxAmount = round($totalAmount * $taxRate, 2);
+        $totalAmount = $baseAmountBeforeTax + $taxAmount;
     }
     
     // For GST, split into CGST and SGST or use IGST
@@ -284,6 +283,11 @@ try {
         .gst-title { font-weight: bold; margin-bottom: 10px; }
         .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
         .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
+        @media print {
+            body { margin: 0; padding: 0; }
+            .invoice-container { box-shadow: none; border: none; padding: 20px; }
+            @page { size: A4; margin: 10mm; }
+        }
     </style>
 </head>
 <body>
@@ -441,6 +445,7 @@ try {
                     company_address TEXT,
                     invoice_html MEDIUMTEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     UNIQUE KEY (invoice_number),
                     KEY (booking_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -468,7 +473,8 @@ try {
                         gst_number = ?,
                         company_name = ?,
                         company_address = ?,
-                        invoice_html = ?
+                        invoice_html = ?,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ");
                 
@@ -501,6 +507,7 @@ try {
                     logInvoiceError("Error updating invoice", ['error' => $stmt->error]);
                 } else {
                     $responseData['message'] = 'Invoice updated successfully';
+                    logInvoiceError("Invoice updated successfully", ['invoice_id' => $invoiceRow['id']]);
                 }
             } else {
                 // Insert new invoice
@@ -541,6 +548,7 @@ try {
                     logInvoiceError("Error inserting invoice", ['error' => $stmt->error]);
                 } else {
                     $responseData['message'] = 'Invoice generated and saved successfully';
+                    logInvoiceError("New invoice created", ['booking_id' => $booking['id'], 'invoice_number' => $invoiceNumber]);
                 }
             }
         } catch (Exception $e) {
