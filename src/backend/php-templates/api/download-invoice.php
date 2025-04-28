@@ -1,15 +1,17 @@
 
 <?php
 // Include configuration file
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/common/db_helper.php';
 
-// Require Composer's autoloader
-require_once __DIR__ . '/../../vendor/autoload.php';
+// Check if vendor directory exists and autoload is available
+$autoloaderPath = __DIR__ . '/../vendor/autoload.php';
+$vendorExists = file_exists($autoloaderPath);
 
-// Import DomPDF classes
-use Dompdf\Dompdf;
-use Dompdf\Options;
+if ($vendorExists) {
+    // Require Composer's autoloader if it exists
+    require_once $autoloaderPath;
+}
 
 // CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
@@ -171,6 +173,33 @@ try {
     $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
     $finalTotal = round($finalTotal, 2);
 
+    // Get CSS content - FIXED PATH
+    $cssFilePath = __DIR__ . '/../css/invoice-print.css';
+    if (!file_exists($cssFilePath)) {
+        // If CSS file doesn't exist at expected path, try alternate paths
+        $cssFilePath = __DIR__ . '/../../css/invoice-print.css';
+        if (!file_exists($cssFilePath)) {
+            // If still not found, use inline minimal CSS
+            $cssContent = "
+            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+            .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
+            .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+            .invoice-header div { display: table-cell; }
+            .company-info { text-align: right; }
+            .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+            .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
+            .total-row { font-weight: bold; background-color: #f9f9f9; }
+            h1, h2, h3 { margin-top: 0; }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
+            ";
+        } else {
+            $cssContent = file_get_contents($cssFilePath);
+        }
+    } else {
+        $cssContent = file_get_contents($cssFilePath);
+    }
+
     // Create HTML content for the invoice
     $content = '
     <!DOCTYPE html>
@@ -179,7 +208,7 @@ try {
         <meta charset="utf-8">
         <title>Invoice #'.$invoiceNumber.'</title>
         <style>
-            '.file_get_contents(__DIR__ . '/../../css/invoice-print.css').'
+            '.$cssContent.'
         </style>
     </head>
     <body>
@@ -295,42 +324,52 @@ try {
         exit;
     }
 
-    // For PDF output using DomPDF
-    try {
-        // Configure DomPDF options
-        $options = new Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', false); // Security: disable PHP in HTML
-        $options->set('isFontSubsettingEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
+    // For PDF output, check if we can use DomPDF
+    if ($vendorExists && class_exists('Dompdf\Dompdf')) {
+        try {
+            // Import DomPDF classes
+            use Dompdf\Dompdf;
+            use Dompdf\Options;
+            
+            // Configure DomPDF options
+            $options = new Options();
+            $options->set('isRemoteEnabled', true);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', false); // Security: disable PHP in HTML
+            $options->set('isFontSubsettingEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
 
-        // Create DomPDF instance
-        $dompdf = new Dompdf($options);
-        $dompdf->setPaper('A4', 'portrait');
+            // Create DomPDF instance
+            $dompdf = new Dompdf($options);
+            $dompdf->setPaper('A4', 'portrait');
 
-        // Load HTML content
-        $dompdf->loadHtml($content);
+            // Load HTML content
+            $dompdf->loadHtml($content);
 
-        // Render the PDF
-        $dompdf->render();
+            // Render the PDF
+            $dompdf->render();
 
-        // Set appropriate headers
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="Invoice_'.$invoiceNumber.'.pdf"');
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: 0');
+            // Set appropriate headers
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="Invoice_'.$invoiceNumber.'.pdf"');
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: 0');
 
-        // Output the generated PDF
-        echo $dompdf->output();
-        
-        logInvoiceError("PDF generated successfully", ['invoice_number' => $invoiceNumber]);
-        
-    } catch (Exception $e) {
-        logInvoiceError("PDF generation error", ['error' => $e->getMessage()]);
-        
-        // If PDF generation fails, fall back to HTML output
+            // Output the generated PDF
+            echo $dompdf->output();
+            
+            logInvoiceError("PDF generated successfully", ['invoice_number' => $invoiceNumber]);
+        } catch (Exception $e) {
+            logInvoiceError("PDF generation error", ['error' => $e->getMessage()]);
+            
+            // If PDF generation fails, fall back to HTML output
+            header('Content-Type: text/html; charset=utf-8');
+            echo $content;
+        }
+    } else {
+        // DomPDF not available, return HTML content
+        logInvoiceError("DomPDF not available, falling back to HTML", ['vendor_exists' => $vendorExists ? 'true' : 'false']);
         header('Content-Type: text/html; charset=utf-8');
         echo $content;
     }
