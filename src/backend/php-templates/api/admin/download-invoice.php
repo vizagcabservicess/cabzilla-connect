@@ -131,18 +131,17 @@ try {
     
     if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
-        // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
         $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
+        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+        $taxAmount = round($taxAmount, 2);
     } else if (!$includeTax && $gstEnabled) {
         // If tax is excluded from the base amount
         $baseAmountBeforeTax = $totalAmount;
         $taxAmount = $totalAmount * $gstRate;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+        $taxAmount = round($taxAmount, 2);
         $totalAmount = $baseAmountBeforeTax + $taxAmount;
-        $totalAmount = round($totalAmount, 2); // Round to ensure consistency
+        $totalAmount = round($totalAmount, 2);
     } else {
         // No tax case
         $baseAmountBeforeTax = $totalAmount;
@@ -154,15 +153,14 @@ try {
         if ($isIGST) {
             // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
-            $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
+            $igstAmount = round($igstAmount, 2);
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
-            // Use exact division to ensure totals match
             $halfTax = $taxAmount / 2;
             $cgstAmount = round($halfTax, 2);
-            $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
+            $sgstAmount = round($taxAmount - $cgstAmount, 2);
             $igstAmount = 0;
         }
     } else {
@@ -170,17 +168,139 @@ try {
         $sgstAmount = 0;
         $igstAmount = 0;
     }
-    
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
-    $finalTotal = round($finalTotal, 2);
-    
-    // Create HTML content for invoice
-    $invoiceHtml = '<!DOCTYPE html>
+
+    // For PDF output - create a more detailed PDF
+    if ($isPdfOutput) {
+        // Set the Content-Type header to application/pdf
+        header('Content-Type: application/pdf');
+        
+        // Use attachment disposition for force download, or inline for viewing
+        $disposition = $directDownload ? 'attachment' : 'inline';
+        header('Content-Disposition: ' . $disposition . '; filename="invoice_' . $invoiceNumber . '.pdf"');
+        
+        // Add headers to prevent caching
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('X-Content-Type-Options: nosniff');
+
+        // Create a more detailed PDF file
+        $pdfContent = "%PDF-1.7\n";
+        
+        // PDF Objects
+        $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
+        $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
+        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>\nendobj\n";
+        
+        // Font
+        $pdfContent .= "5 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>\nendobj\n";
+        
+        // Content
+        $content = "BT /F1 24 Tf 200 700 Td (Invoice #{$invoiceNumber}) Tj ET\n";
+        
+        // Invoice header
+        $content .= "BT /F1 14 Tf 450 680 Td (Date: " . date('d M Y') . ") Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 680 Td (Vizag Cab Services) Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 660 Td (Booking #: " . ($booking['booking_number'] ?? 'N/A') . ") Tj ET\n";
+        
+        // Draw a line
+        $content .= "0.5 w 100 640 m 500 640 l S\n";
+        
+        // Customer details
+        $content .= "BT /F1 16 Tf 100 620 Td (Customer Details) Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 600 Td (Name: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 580 Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 560 Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
+        
+        // Trip details
+        $content .= "BT /F1 16 Tf 100 520 Td (Trip Details) Tj ET\n";
+        $tripTypeDisplay = ucfirst($booking['trip_type'] ?? 'N/A');
+        if (isset($booking['trip_mode']) && !empty($booking['trip_mode'])) {
+            $tripModeDisplay = ucfirst($booking['trip_mode']);
+            $tripTypeDisplay .= " (" . $tripModeDisplay . ")";
+        }
+        $content .= "BT /F1 12 Tf 100 500 Td (Trip Type: " . $tripTypeDisplay . ") Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 480 Td (Pickup: " . ($booking['pickup_location'] ?? 'N/A') . ") Tj ET\n";
+        if (isset($booking['drop_location']) && !empty($booking['drop_location'])) {
+            $content .= "BT /F1 12 Tf 100 460 Td (Drop: " . $booking['drop_location'] . ") Tj ET\n";
+        }
+        
+        $pickupDate = isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A';
+        $content .= "BT /F1 12 Tf 100 440 Td (Pickup Time: " . $pickupDate . ") Tj ET\n";
+        $content .= "BT /F1 12 Tf 100 420 Td (Vehicle: " . ($booking['cab_type'] ?? 'N/A') . ") Tj ET\n";
+        
+        // GST details if applicable
+        $yPos = 380;
+        if ($gstEnabled && !empty($gstNumber)) {
+            $content .= "BT /F1 14 Tf 100 {$yPos} Td (GST Details) Tj ET\n";
+            $yPos -= 20;
+            $content .= "BT /F1 12 Tf 100 {$yPos} Td (GST Number: " . $gstNumber . ") Tj ET\n";
+            $yPos -= 20;
+            $content .= "BT /F1 12 Tf 100 {$yPos} Td (Company: " . $companyName . ") Tj ET\n";
+            $yPos -= 20;
+            if (!empty($companyAddress)) {
+                $content .= "BT /F1 12 Tf 100 {$yPos} Td (Address: " . $companyAddress . ") Tj ET\n";
+                $yPos -= 20;
+            }
+            $yPos -= 10; // Extra space before fare details
+        }
+        
+        // Fare breakdown
+        $content .= "BT /F1 16 Tf 100 {$yPos} Td (Fare Breakdown) Tj ET\n";
+        $yPos -= 20;
+        
+        $taxText = $includeTax && $gstEnabled ? ' (excluding tax)' : '';
+        $content .= "BT /F1 12 Tf 100 {$yPos} Td (Base Fare{$taxText}: ₹" . number_format($baseAmountBeforeTax, 2) . ") Tj ET\n";
+        $yPos -= 20;
+        
+        if ($gstEnabled) {
+            if ($isIGST) {
+                $content .= "BT /F1 12 Tf 100 {$yPos} Td (IGST (12%): ₹" . number_format($igstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+            } else {
+                $content .= "BT /F1 12 Tf 100 {$yPos} Td (CGST (6%): ₹" . number_format($cgstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+                $content .= "BT /F1 12 Tf 100 {$yPos} Td (SGST (6%): ₹" . number_format($sgstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+            }
+        }
+        
+        // Draw a line before total
+        $content .= "0.5 w 100 " . ($yPos - 5) . " m 300 " . ($yPos - 5) . " l S\n";
+        $yPos -= 20;
+        
+        $totalText = $includeTax ? ' (including tax)' : ' (excluding tax)';
+        $content .= "BT /F1 14 Tf 100 {$yPos} Td (Total Amount{$totalText}: ₹" . number_format($totalAmount, 2) . ") Tj ET\n";
+        
+        // Footer
+        $content .= "BT /F1 10 Tf 100 100 Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
+        $content .= "BT /F1 10 Tf 100 80 Td (For inquiries, please contact: info@vizagcabs.com | +91 9876543210) Tj ET\n";
+        $content .= "BT /F1 10 Tf 100 60 Td (Generated on: " . date('d M Y H:i:s') . ") Tj ET\n";
+        
+        $contentLength = strlen($content);
+        $pdfContent .= "4 0 obj\n<</Length $contentLength>>\nstream\n$content\nendstream\nendobj\n";
+        
+        // End of PDF
+        $pdfContent .= "xref\n0 6\n0000000000 65535 f\n";
+        $pdfContent .= "0000000010 00000 n\n";
+        $pdfContent .= "0000000056 00000 n\n";
+        $pdfContent .= "0000000111 00000 n\n";
+        $pdfContent .= "0000000212 00000 n\n";
+        $pdfContent .= "0000000434 00000 n\n";
+        $pdfContent .= "trailer\n<</Size 6 /Root 1 0 R>>\nstartxref\n" . (strlen($pdfContent) + 100) . "\n%%EOF";
+
+        // Output the PDF data
+        echo $pdfContent;
+        
+        logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
+        exit; 
+    } else {
+        // For HTML output
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="application/pdf">
     <title>Invoice #' . $invoiceNumber . '</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
@@ -241,21 +361,21 @@ try {
             <div class="trip-details">
                 <h3 class="section-title">Trip Details</h3>
                 <p><strong>Pickup:</strong> ' . ($booking['pickup_location'] ?? 'N/A') . '</p>
-                ' . (isset($booking['drop_location']) ? '<p><strong>Drop:</strong> ' . $booking['drop_location'] . '</p>' : '') . '
+                ' . (isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p><strong>Drop:</strong> ' . $booking['drop_location'] . '</p>' : '') . '
                 <p><strong>Pickup Time:</strong> ' . (isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A') . '</p>
             </div>';
             
-    if ($gstEnabled && $gstDetails) {
-        $invoiceHtml .= '
+        if ($gstEnabled && !empty($gstNumber)) {
+            echo '
             <div class="gst-details">
                 <div class="gst-title">GST Details</div>
                 <p><strong>GST Number:</strong> ' . htmlspecialchars($gstNumber) . '</p>
                 <p><strong>Company Name:</strong> ' . htmlspecialchars($companyName) . '</p>
-                <p><strong>Company Address:</strong> ' . htmlspecialchars($companyAddress) . '</p>
+                ' . (!empty($companyAddress) ? '<p><strong>Company Address:</strong> ' . htmlspecialchars($companyAddress) . '</p>' : '') . '
             </div>';
-    }
+        }
             
-    $invoiceHtml .= '
+        echo '
             <h3 class="section-title">Fare Breakdown</h3>
             <table class="fare-table">
                 <tr>
@@ -267,15 +387,15 @@ try {
                     <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
-    if ($gstEnabled) {
-        if ($isIGST) {
-            $invoiceHtml .= '
+        if ($gstEnabled) {
+            if ($isIGST) {
+                echo '
                 <tr>
                     <td>IGST (12%)</td>
                     <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>
                 </tr>';
-        } else {
-            $invoiceHtml .= '
+            } else {
+                echo '
                 <tr>
                     <td>CGST (6%)</td>
                     <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
@@ -284,23 +404,23 @@ try {
                     <td>SGST (6%)</td>
                     <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
                 </tr>';
+            }
         }
-    }
-    
-    $invoiceHtml .= '
+        
+        echo '
                 <tr class="total-row">
                     <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($totalAmount, 2) . '</td>
                 </tr>
             </table>';
             
-    if ($gstEnabled) {
-        $invoiceHtml .= '
+        if ($gstEnabled) {
+            echo '
             <p class="tax-note">This invoice includes GST as per applicable rates. ' . 
             ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . ' has been applied.</p>';
-    }
+        }
             
-    $invoiceHtml .= '
+        echo '
         </div>
         
         <div class="footer">
@@ -310,44 +430,6 @@ try {
     </div>
 </body>
 </html>';
-
-    // For PDF output - only send the raw PDF data, no HTML
-    if ($isPdfOutput) {
-        // Set the Content-Type header to application/pdf
-        header('Content-Type: application/pdf');
-        
-        // Use attachment disposition for force download, or inline for viewing
-        $disposition = $directDownload ? 'attachment' : 'inline';
-        header('Content-Disposition: ' . $disposition . '; filename="invoice_' . $invoiceNumber . '.pdf"');
-        
-        // Add headers to prevent caching
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        
-        // Explicitly force PDF content type
-        header('X-Content-Type-Options: nosniff');
-
-        // Create a simple PDF file content
-        $pdfContent = "%PDF-1.7\n";
-        $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
-        $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
-        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R>>\nendobj\n";
-        $pdfContent .= "4 0 obj\n<</Length " . strlen("Invoice #$invoiceNumber") . ">>\nstream\nBT /F1 24 Tf 100 700 Td (Invoice #$invoiceNumber) Tj ET\nendstream\nendobj\n";
-        $pdfContent .= "trailer\n<</Size 5 /Root 1 0 R>>\nstartxref\n0\n%%EOF";
-
-        // Send PDF data
-        echo $pdfContent;
-        
-        // NOTE: You may need to implement or use a proper PDF library to generate real PDFs
-        // The above is just a minimal valid PDF structure to force browsers to treat it as PDF
-        
-        logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
-        exit; 
-    } else {
-        // For HTML output
-        header('Content-Type: text/html; charset=utf-8');
-        echo $invoiceHtml;
         exit;
     }
 

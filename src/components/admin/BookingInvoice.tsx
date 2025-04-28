@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -163,14 +164,15 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
+      // Method 1: Using iframe for seamless download
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
       iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
       document.body.appendChild(iframe);
       
       toast({
-        title: "Invoice Download Started",
-        description: "Your invoice is being downloaded via iframe"
+        title: "PDF Download Started",
+        description: "Your invoice is being downloaded"
       });
       
       setTimeout(() => {
@@ -183,7 +185,7 @@ export function BookingInvoice({
       toast({
         variant: "destructive",
         title: "Download Failed",
-        description: "Failed to download invoice. Please try again."
+        description: "Failed to download invoice. Please try an alternative download method."
       });
     }
   };
@@ -214,6 +216,7 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
+      // Method 2: Direct window.open for PDF
       window.open(getApiUrl(`/api/admin/download-invoice.php?${params.toString()}`), '_blank');
       
       toast({
@@ -225,7 +228,7 @@ export function BookingInvoice({
       toast({
         variant: "destructive",
         title: "Alternative Download Failed",
-        description: "Failed with alternative method. Please try again."
+        description: "Please try the client-side PDF generation"
       });
     }
   };
@@ -262,6 +265,27 @@ export function BookingInvoice({
 
   const handleDataUriDownload = () => {
     try {
+      // Define PDF content
+      const content = `Invoice #${customInvoiceNumber || booking.id}
+
+Customer: ${booking.passengerName || 'N/A'}
+Phone: ${booking.passengerPhone || 'N/A'}
+Email: ${booking.passengerEmail || 'N/A'}
+
+Trip Details:
+Trip Type: ${booking.tripType ? (booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)) : 'N/A'} ${booking.tripMode ? `(${booking.tripMode})` : ''}
+Pickup: ${booking.pickupLocation || 'N/A'}
+Drop: ${booking.dropLocation || 'N/A'}
+Date: ${booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
+Vehicle: ${booking.cabType || 'N/A'}
+
+Amount: ₹${booking.totalAmount || '0'}
+
+Thank you for choosing Vizag Cab Services!
+Generated on: ${new Date().toLocaleString()}
+`;
+      
+      // Create minimal PDF structure with content
       const pdfContent = `%PDF-1.7
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
@@ -270,41 +294,56 @@ endobj
 <</Type /Pages /Kids [3 0 R] /Count 1>>
 endobj
 3 0 obj
-<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R>>
+<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>
+endobj
+5 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
 endobj
 4 0 obj
-<</Length 44>>
+<</Length ${content.length + 100}>>
 stream
-BT /F1 24 Tf 100 700 Td (Invoice #${booking.id}) Tj ET
+BT /F1 12 Tf 50 700 Td (${content.replace(/\n/g, ') Tj ET\nBT /F1 12 Tf 50 ')}) Tj ET
 endstream
 endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n
+0000000056 00000 n
+0000000111 00000 n
+0000000212 00000 n
+0000000434 00000 n
 trailer
-<</Size 5 /Root 1 0 R>>
+<</Size 6 /Root 1 0 R>>
 startxref
-0
+1000
 %%EOF`;
 
+      // Create blob and trigger download
       const blob = new Blob([pdfContent], { type: 'application/pdf' });
-      
       const url = URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = url;
-      link.download = `invoice_${booking.id}.pdf`;
+      link.download = `invoice_${booking.id}_client.pdf`;
+      document.body.appendChild(link);
       link.click();
       
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      // Clean up
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 100);
       
       toast({
         title: "Client-Side PDF Generated",
-        description: "Basic PDF generated in browser (test only)"
+        description: "Basic PDF generated in browser"
       });
     } catch (error) {
-      console.error("Data URI download error:", error);
+      console.error("Client-side PDF generation error:", error);
       toast({
         variant: "destructive",
         title: "Client-Side Generation Failed",
-        description: "Failed to generate client-side PDF"
+        description: "Failed to generate PDF in browser"
       });
     }
   };
