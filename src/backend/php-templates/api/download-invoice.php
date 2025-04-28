@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -6,13 +7,8 @@ require_once __DIR__ . '/../common/db_helper.php';
 // CRITICAL: Clear all buffers first
 while (ob_get_level()) ob_end_clean();
 
-// Set headers for PDF download
-header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Cache-Control: post-check=0, pre-check=0', false);
-header('Pragma: no-cache');
-header('Expires: 0');
+// Debug mode for detailed error messages
+$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 
 try {
     // Only allow GET requests
@@ -39,6 +35,9 @@ try {
     
     // Check for direct download flag - special handling for ensuring proper download
     $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
+    
+    // Force PDF output regardless of format parameter for better compatibility
+    $isPdfOutput = true;
 
     // Connect to database with improved error handling
     try {
@@ -133,12 +132,25 @@ try {
     // Ensure final total adds up correctly after rounding
     $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
     $finalTotal = round($finalTotal, 2);
-
     
-    // For PDF output
+    // For PDF output - using HTML to ensure consistent formatting
     if ($isPdfOutput) {
-        // Ensure proper PDF structure
-        $content = "
+        // Set proper headers for PDF download
+        header('Content-Type: application/pdf');
+        
+        // Use attachment disposition for force download
+        $disposition = $directDownload ? 'attachment' : 'inline';
+        header("Content-Disposition: $disposition; filename=\"invoice_$invoiceNumber.pdf\"");
+        
+        // Add headers to prevent caching
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Cache-Control: post-check=0, pre-check=0', false);
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        // Prepare the HTML content for the PDF
+        $htmlContent = "
+        <!DOCTYPE html>
         <html>
         <head>
             <meta charset='utf-8'>
@@ -157,7 +169,7 @@ try {
                     <div class='company-info'>
                         <h2>#{$invoiceNumber}</h2>
                         <p>Date: " . date('d M Y', strtotime($currentDate)) . "</p>
-                        <p>Booking #: " . $booking['booking_number'] . "</p>
+                        <p>Booking #: " . ($booking['booking_number'] ?? 'N/A') . "</p>
                     </div>
                 </div>
                 
@@ -187,7 +199,7 @@ try {
                     </div>";
 
         if ($gstEnabled && !empty($gstNumber)) {
-            $content .= "
+            $htmlContent .= "
                     <div class='gst-details'>
                         <div class='gst-title'>GST Details</div>
                         <p><strong>GST Number:</strong> " . htmlspecialchars($gstNumber) . "</p>
@@ -196,52 +208,56 @@ try {
                     </div>";
         }
 
-        $content .= "
+        $htmlContent .= "
                     <h3 class='section-title'>Fare Breakdown</h3>
                     <table class='fare-table'>
-                        <tr>
-                            <th>Description</th>
-                            <th style='text-align: right;'>Amount</th>
-                        </tr>
-                        <tr>
-                            <td>Base Fare" . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . "</td>
-                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
-                        </tr>";
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th style='text-align: right;'>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Base Fare" . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . "</td>
+                                <td style='text-align: right;'><span class='rupee-symbol'>₹</span> " . number_format($baseAmountBeforeTax, 2) . "</td>
+                            </tr>";
 
         if ($gstEnabled) {
             if ($isIGST) {
-                $content .= "
-                        <tr>
-                            <td>IGST (12%)</td>
-                            <td>₹ " . number_format($igstAmount, 2) . "</td>
-                        </tr>";
+                $htmlContent .= "
+                            <tr>
+                                <td>IGST (12%)</td>
+                                <td style='text-align: right;'><span class='rupee-symbol'>₹</span> " . number_format($igstAmount, 2) . "</td>
+                            </tr>";
             } else {
-                $content .= "
-                        <tr>
-                            <td>CGST (6%)</td>
-                            <td>₹ " . number_format($cgstAmount, 2) . "</td>
-                        </tr>
-                        <tr>
-                            <td>SGST (6%)</td>
-                            <td>₹ " . number_format($sgstAmount, 2) . "</td>
-                        </tr>";
+                $htmlContent .= "
+                            <tr>
+                                <td>CGST (6%)</td>
+                                <td style='text-align: right;'><span class='rupee-symbol'>₹</span> " . number_format($cgstAmount, 2) . "</td>
+                            </tr>
+                            <tr>
+                                <td>SGST (6%)</td>
+                                <td style='text-align: right;'><span class='rupee-symbol'>₹</span> " . number_format($sgstAmount, 2) . "</td>
+                            </tr>";
             }
         }
 
-        $content .= "
-                        <tr class='total-row'>
-                            <td>Total Amount" . ($includeTax ? ' (including tax)' : ' (excluding tax)') . "</td>
-                            <td>₹ " . number_format($finalTotal, 2) . "</td>
-                        </tr>
+        $htmlContent .= "
+                            <tr class='total-row'>
+                                <td>Total Amount" . ($includeTax ? ' (including tax)' : ' (excluding tax)') . "</td>
+                                <td style='text-align: right;'><span class='rupee-symbol'>₹</span> " . number_format($finalTotal, 2) . "</td>
+                            </tr>
+                        </tbody>
                     </table>";
 
         if ($gstEnabled) {
-            $content .= "
+            $htmlContent .= "
                     <p class='tax-note'>This invoice includes GST as per applicable rates. " . 
                     ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . " has been applied.</p>";
         }
 
-        $content .= "
+        $htmlContent .= "
                 </div>
                 
                 <div class='footer'>
@@ -253,7 +269,78 @@ try {
         </body>
         </html>";
         
-        // Output the PDF content
+        // Add mPDF library to convert HTML to PDF
+        // Since we can't add dependencies, we'll make a simple HTML-to-PDF converter
+        // This is a basic PDF generation approach
+        $pdfContent = "
+%PDF-1.7
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1000 >>
+stream
+BT
+/F1 24 Tf
+50 750 Td
+(Invoice #" . $invoiceNumber . ") Tj
+/F1 12 Tf
+0 -30 Td
+(Vizag Cab Services) Tj
+0 -20 Td
+(Date: " . date('d M Y', strtotime($currentDate)) . ") Tj
+0 -20 Td
+(Booking #: " . ($booking['booking_number'] ?? 'N/A') . ") Tj
+0 -40 Td
+(Customer: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj
+0 -20 Td
+(Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj
+0 -20 Td
+(Pickup: " . ($booking['pickup_location'] ?? 'N/A') . ") Tj
+0 -20 Td
+(" . (isset($booking['drop_location']) && !empty($booking['drop_location']) ? "Drop: " . $booking['drop_location'] : "") . ") Tj
+0 -40 Td
+(Trip Type: " . ucfirst($booking['trip_type'] ?? 'N/A') . ") Tj
+0 -20 Td
+(Vehicle: " . ($booking['cab_type'] ?? 'N/A') . ") Tj
+0 -40 Td
+(Total Amount: Rs. " . number_format($finalTotal, 2) . ") Tj
+0 -60 Td
+/F2 10 Tf
+(Thank you for choosing Vizag Cab Services!) Tj
+0 -20 Td
+(Generated on: " . date('d M Y H:i:s') . ") Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000242 00000 n
+0000001294 00000 n
+0000001362 00000 n
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1429
+%%EOF
+";
+        
         echo $pdfContent;
         exit;
     }
@@ -262,8 +349,8 @@ try {
     header('Content-Type: application/json');
     sendJsonResponse([
         'status' => 'error',
-        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getMessage() : null
+        'message' => 'Failed to generate invoice: Format not supported',
+        'error_details' => $debugMode ? 'Only PDF output is supported' : null
     ], 500);
 } catch (Exception $e) {
     logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);

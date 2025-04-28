@@ -17,6 +17,7 @@ body {
   margin: 0 auto;
   padding: 30px;
   background-color: #fff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .invoice-header {
@@ -77,6 +78,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   margin: 20px 0;
+  border: 1px solid #ddd;
 }
 
 .fare-table th,
@@ -90,6 +92,7 @@ body {
   background-color: #f9f9f9 !important;
   font-weight: bold;
   color: #333;
+  border-bottom: 2px solid #ddd;
 }
 
 .fare-table td:last-child,
@@ -100,6 +103,7 @@ body {
 .total-row {
   font-weight: bold;
   background-color: #f9f9f9 !important;
+  border-top: 2px solid #ddd;
 }
 
 .tax-note {
@@ -118,47 +122,17 @@ body {
   padding-top: 20px;
 }
 
-/* Print-specific styles */
-@media print {
-  @page {
-    size: A4;
-    margin: 0;
-  }
-
-  body {
-    margin: 0;
-    padding: 0;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  .invoice-container {
-    width: 100%;
-    max-width: none;
-    padding: 20mm;
-    margin: 0;
-    box-shadow: none;
-    border: none;
-  }
-
-  .fare-table th,
-  .total-row,
-  .gst-details {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    background-color: #f9f9f9 !important;
-  }
-}
-
 /* Typography */
 h1, h2, h3 {
-  margin: 0;
+  margin: 0 0 10px 0;
   color: #333;
 }
 
-h1 { font-size: 24px; }
+h1 { 
+  font-size: 24px; 
+  color: #0066cc; 
+}
+
 h2 { font-size: 20px; }
 h3 { font-size: 16px; }
 
@@ -173,5 +147,49 @@ strong {
 /* Fix rupee symbol */
 .rupee-symbol {
   font-family: Arial, sans-serif;
+  display: inline-block;
+  margin-right: 2px;
 }
 
+/* Print-specific styles */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  .invoice-container {
+    width: 100%;
+    max-width: none;
+    padding: 10mm;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .fare-table th,
+  .total-row,
+  .gst-details {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    background-color: #f9f9f9 !important;
+  }
+  
+  .fare-table {
+    page-break-inside: avoid;
+    border: 1px solid #ddd !important;
+  }
+  
+  .footer {
+    margin-top: 30px;
+  }
+}
