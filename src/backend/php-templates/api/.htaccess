@@ -56,6 +56,8 @@ RewriteBase /api/
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
+    # Ensure proper JSON content type for generate-invoice
+    Header always set Content-Type "application/json" env=!no_content_type
 </Files>
 
 # CRITICAL: Download invoice needs the PHP handler but NO content type header

@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Clear all buffers before ANY output - essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
@@ -69,20 +70,7 @@ try {
 
     // Connect to database with improved error handling
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        
+        $conn = getDbConnectionWithRetry();
         logInvoiceError("Database connection established successfully");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
