@@ -12,6 +12,7 @@ function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
     
     while ($attempts < $maxRetries) {
         try {
+            // Use the getDbConnection from config.php instead of declaring it again
             $conn = getDbConnection();
             if ($conn && $conn->ping()) {
                 return $conn; // Successful connection
@@ -34,33 +35,8 @@ function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
         ($lastError ? $lastError->getMessage() : "Unknown error"));
 }
 
-// Base function to get DB connection
-function getDbConnection() {
-    // Use configuration from config.php if available
-    $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
-    $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
-    $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
-    $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
-    
-    // Create connection
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    
-    // Check connection
-    if ($conn->connect_error) {
-        throw new Exception("Connection failed: " . $conn->connect_error);
-    }
-    
-    // Set character set
-    $conn->set_charset("utf8mb4");
-    
-    // Test the connection with a simple query
-    $testResult = $conn->query("SELECT 1");
-    if (!$testResult) {
-        throw new Exception("Database connection test query failed: " . $conn->error);
-    }
-    
-    return $conn;
-}
+// REMOVED: The duplicate getDbConnection() function has been removed
+// Use the function from config.php instead
 
 // Function to execute a query with error handling
 function executeQuery($sql, $params = [], $types = "") {

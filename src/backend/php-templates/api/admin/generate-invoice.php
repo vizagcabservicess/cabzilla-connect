@@ -561,7 +561,7 @@ try {
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
-                // FIX: Corrected the type definition string to match the number of parameters
+                // Fix: Corrected the bind_param type string to match all 13 parameters
                 $stmt->bind_param(
                     "issdddiiiisss",
                     $booking['id'],
