@@ -75,26 +75,10 @@ RewriteBase /api/
     Header always set Expires "0"
 </Files>
 
-<Files "download-invoice">
-    # Critical - Don't set Content-Type here, let the script handle it
-    SetEnv no_content_type 1
-    SetHandler application/x-httpd-php
-    Header always unset Content-Type
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # Ensure no caching for PDF files
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# EXPLICITLY SET PDF MIME TYPE for PDFs
+# EXPLICITLY SET PDF MIME TYPE for PDFs - Critical fix
 <FilesMatch "\.pdf$">
     ForceType application/pdf
     Header always set Content-Type application/pdf
-    Header always unset Content-Disposition
-    Header always set Content-Disposition "attachment"
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 

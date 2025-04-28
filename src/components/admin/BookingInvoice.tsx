@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -138,59 +137,66 @@ export function BookingInvoice({
     }
   };
 
-  // IMPROVED: Much more reliable PDF download function
   const handleDownloadPdf = () => {
     try {
       setDownloadCount(prev => prev + 1);
       
-      // Create an iframe to handle the download
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-      
-      // Add a timestamp to cache-bust the request
       const timestamp = new Date().getTime();
       const randomStr = Math.random().toString(36).substring(2);
-      const cacheBuster = `&v=${downloadCount}-${timestamp}-${randomStr}`;
+      const cacheBuster = `cb=${downloadCount}-${timestamp}-${randomStr}`;
       
-      // Construct the URL
       const baseUrl = getApiUrl(`/api/download-invoice.php`);
-      const queryParams = new URLSearchParams({
+      
+      const form = document.createElement('form');
+      form.method = 'GET';
+      form.action = baseUrl;
+      form.target = '_blank';
+      
+      const params = {
         id: booking.id.toString(),
         gstEnabled: gstEnabled ? '1' : '0',
         isIGST: isIGST ? '1' : '0',
         includeTax: includeTax ? '1' : '0',
         format: 'pdf',
-        direct_download: '1'
-      });
+        direct_download: '1',
+        v: downloadCount.toString(),
+        t: timestamp.toString(),
+        r: randomStr
+      };
       
       if (customInvoiceNumber.trim()) {
-        queryParams.set('invoiceNumber', customInvoiceNumber.trim());
+        params['invoiceNumber'] = customInvoiceNumber.trim();
       }
       
       if (gstEnabled) {
-        queryParams.set('gstNumber', gstDetails.gstNumber);
-        queryParams.set('companyName', gstDetails.companyName);
-        queryParams.set('companyAddress', gstDetails.companyAddress);
+        params['gstNumber'] = gstDetails.gstNumber;
+        params['companyName'] = gstDetails.companyName; 
+        params['companyAddress'] = gstDetails.companyAddress;
       }
       
-      // Complete download URL
-      const downloadUrl = `${baseUrl}?${queryParams.toString()}${cacheBuster}`;
-      console.log('Download invoice URL:', downloadUrl);
+      Object.entries(params).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
       
-      // Set the src and load the PDF in the iframe
-      iframe.src = downloadUrl;
+      document.body.appendChild(form);
+      form.submit();
       
-      // Open in new window as fallback
       setTimeout(() => {
-        window.open(downloadUrl, '_blank');
-        // Cleanup iframe after a delay
-        setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 2000);
+        document.body.removeChild(form);
       }, 1000);
+      
+      setTimeout(() => {
+        const directUrl = `${baseUrl}?${new URLSearchParams(params).toString()}&${cacheBuster}`;
+        const link = document.createElement('a');
+        link.href = directUrl;
+        link.download = `invoice_${booking.id}.pdf`;
+        link.target = '_blank';
+        link.click();
+      }, 2000);
       
       toast({
         title: "Invoice Download Started",
@@ -210,7 +216,6 @@ export function BookingInvoice({
     try {
       setDownloadCount(prev => prev + 1);
       
-      // Create an alternative download method using a form
       const form = document.createElement('form');
       form.method = 'GET';
       form.action = getApiUrl(`/api/download-invoice.php`);
@@ -267,17 +272,16 @@ export function BookingInvoice({
     }
   };
 
-  // Add a more direct approach to getting the PDF
   const handleAlternativeDownload = () => {
     try {
-      // Direct browser to API endpoint with proper parameters
-      const baseUrl = getApiUrl(`/api/admin/generate-invoice.php`);
+      const baseUrl = getApiUrl(`/api/admin/download-invoice.php`);
       const queryParams = new URLSearchParams({
         id: booking.id.toString(),
         gstEnabled: gstEnabled ? '1' : '0',
         isIGST: isIGST ? '1' : '0',
         includeTax: includeTax ? '1' : '0',
         format: 'pdf',
+        direct: '1',
         download: '1'
       });
       
@@ -291,15 +295,15 @@ export function BookingInvoice({
         queryParams.set('companyAddress', gstDetails.companyAddress);
       }
       
-      // Add cache buster
       queryParams.set('_t', Date.now().toString());
+      queryParams.set('_r', Math.random().toString(36).substring(2));
       
       const url = `${baseUrl}?${queryParams.toString()}`;
       window.open(url, '_blank');
       
       toast({
         title: "Alternative Download Method",
-        description: "Trying alternative download method"
+        description: "Trying direct download method"
       });
     } catch (error) {
       console.error("Alternative download error:", error);
@@ -526,7 +530,7 @@ export function BookingInvoice({
                 </Button>
                 
                 <Button
-                  onClick={handleDirectPdfDownload}
+                  onClick={handleDownloadPdf}
                   disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />

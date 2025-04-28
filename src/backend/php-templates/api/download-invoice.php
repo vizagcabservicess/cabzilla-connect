@@ -130,33 +130,31 @@ try {
     }
     
     // Forward request to admin endpoint with all query parameters plus a pdf format flag
-    $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
-    $_GET['format'] = 'pdf'; // Force PDF output format
+    $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
     $queryParams = http_build_query($_GET);
     
-    // Add a special PDF generation flag and random cache buster 
-    $queryParams .= '&pdf_direct=1&nocache=' . rand(10000, 99999);
+    // Add special PDF flags and cache buster
+    $queryParams .= '&format=pdf&pdf_direct=1&nocache=' . rand(10000, 99999);
     
     // Set up curl with explicit Accept header for PDF content
     $ch = curl_init($adminUrl . '?' . $queryParams);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HEADER, true); 
+    curl_setopt($ch, CURLOPT_HEADER, false); 
+    curl_setopt($ch, CURLOPT_BINARYTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Accept: application/pdf',
-        'X-Requested-With: XMLHttpRequest'
+        'X-Requested-With: XMLHttpRequest',
+        'X-PDF-Download: true',
+        'X-Force-PDF: true'
     ]);
     
     // Execute the request
-    $response = curl_exec($ch);
+    $body = curl_exec($ch);
     $curlError = curl_error($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    
-    // Split headers and body
-    $headers = substr($response, 0, $headerSize);
-    $body = substr($response, $headerSize);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
     
     curl_close($ch);
     
@@ -170,32 +168,25 @@ try {
 
     logInvoiceError("Response received from admin endpoint", [
         'http_code' => $httpCode,
-        'header_size' => $headerSize,
-        'body_length' => strlen($body),
-        'headers_substr' => substr($headers, 0, 200)
+        'content_type' => $contentType,
+        'body_length' => strlen($body)
     ]);
     
-    // Extract content type from headers
-    $contentType = null;
-    if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
-        $contentType = $matches[1];
-        logInvoiceError("Content-Type from response", ['content_type' => $contentType]);
-    }
-    
-    // Check for HTML or error response
-    if (stripos($contentType, 'application/json') !== false || stripos($body, '{"status":"error"') !== false) {
-        // JSON error response - pass through
+    // Check for JSON error response
+    if (substr($body, 0, 1) === '{' && stripos($body, '"status":"error"') !== false) {
         header("Content-Type: application/json");
         echo $body;
         exit;
-    } else if (stripos($body, 'Fatal error') !== false || stripos($body, 'Warning') !== false || stripos($body, 'Notice') !== false) {
-        // PHP error output - return as error
+    }
+    
+    // Check for PHP error output
+    if (stripos($body, 'Fatal error') !== false || stripos($body, 'Warning') !== false || stripos($body, 'Notice') !== false) {
         logInvoiceError("PHP error in admin download-invoice.php response", ['body' => substr($body, 0, 500)]);
         throw new Exception("Server error generating invoice: " . strip_tags($body));
     }
     
     // Check if the PDF seems valid - at least check for PDF signature
-    $isPdfValid = (stripos($body, '%PDF-') === 0);
+    $isPdfValid = (substr($body, 0, 4) === '%PDF');
     
     if (!$isPdfValid) {
         logInvoiceError("Invalid PDF data received", [
@@ -203,24 +194,29 @@ try {
             'length' => strlen($body)
         ]);
         
-        // If we got HTML instead of PDF, check if it contains the printing JavaScript
-        if (stripos($body, '<!DOCTYPE html>') !== false && stripos($body, '<html') !== false) {
-            // Force PDF Content-Type anyway to try to make browser interpret it as PDF
-            header("Content-Type: application/pdf");
-            
-            // Stronger directive to force browser to treat as PDF
-            header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.pdf\"");
-            header("X-Content-Type-Options: nosniff");
-            
-            // Add extra headers to tell browser it's actually a PDF
-            header("Content-Transfer-Encoding: binary");
-            
-            // Try to convert the HTML to PDF using wkhtmltopdf or similar if available
-            // For now, just output the HTML with hope browser renders it
-            echo $body;
-            exit;
+        // Try direct approach to generate PDF
+        $directUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
+        $directCh = curl_init($directUrl . '?' . $queryParams . '&direct=1');
+        curl_setopt($directCh, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($directCh, CURLOPT_HEADER, false);
+        curl_setopt($directCh, CURLOPT_BINARYTRANSFER, true);
+        curl_setopt($directCh, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($directCh, CURLOPT_TIMEOUT, 30);
+        curl_setopt($directCh, CURLOPT_HTTPHEADER, [
+            'Accept: application/pdf',
+            'X-PDF-Download: true',
+            'X-Force-PDF: true'
+        ]);
+        
+        $directBody = curl_exec($directCh);
+        curl_close($directCh);
+        
+        if (substr($directBody, 0, 4) === '%PDF') {
+            $body = $directBody;
+            $isPdfValid = true;
+            logInvoiceError("Successfully obtained PDF using direct method");
         } else {
-            throw new Exception("Invalid PDF data received from server");
+            throw new Exception("Unable to generate valid PDF data");
         }
     }
     
@@ -243,6 +239,9 @@ try {
     
     // Force content length to ensure complete download
     header("Content-Length: " . strlen($body));
+    
+    // Force browser to treat as PDF
+    header("X-Content-Type-Options: nosniff");
     
     // Output the PDF data
     echo $body;
