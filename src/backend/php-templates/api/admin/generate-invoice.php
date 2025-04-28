@@ -168,6 +168,7 @@ try {
                 'message' => 'Database connection failed',
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
+            exit;
         }
     }
     
@@ -183,6 +184,7 @@ try {
             
             if ($result->num_rows === 0) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                exit;
             }
             
             $booking = $result->fetch_assoc();
@@ -226,38 +228,17 @@ try {
     
     // Calculate tax components based on includeTax setting
     $totalAmount = (float)$booking['total_amount'];
+    $taxRate = $gstEnabled ? 0.12 : 0; // 12% for GST, 0% if not enabled
     
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
-    
-    // Convert string to number if needed
-    if (!is_numeric($totalAmount)) {
-        $totalAmount = floatval($totalAmount);
-    }
-    
-    // Ensure we have a valid amount
-    if ($totalAmount <= 0) {
-        $totalAmount = 0;
-    }
-    
-    if ($includeTax && $gstEnabled) {
+    if ($includeTax) {
         // If tax is included in total amount (default)
-        // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
+        $baseAmountBeforeTax = round($totalAmount / (1 + $taxRate), 2);
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-    } else if (!$includeTax && $gstEnabled) {
+    } else {
         // If tax is excluded from the base amount
         $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+        $taxAmount = round($totalAmount * $taxRate, 2);
         $totalAmount = $baseAmountBeforeTax + $taxAmount;
-        $totalAmount = round($totalAmount, 2); // Round to ensure consistency
-    } else {
-        // No tax case
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = 0;
     }
     
     // For GST, split into CGST and SGST or use IGST
@@ -265,15 +246,12 @@ try {
         if ($isIGST) {
             // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
-            $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
-            // Use exact division to ensure totals match
-            $halfTax = $taxAmount / 2;
-            $cgstAmount = round($halfTax, 2);
-            $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
+            $cgstAmount = round($taxAmount / 2, 2);
+            $sgstAmount = $taxAmount - $cgstAmount;
             $igstAmount = 0;
         }
     } else {
@@ -281,10 +259,6 @@ try {
         $sgstAmount = 0;
         $igstAmount = 0;
     }
-    
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
-    $finalTotal = round($finalTotal, 2);
     
     // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
@@ -372,7 +346,7 @@ try {
                     <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
-                    <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
+                    <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
                     <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
@@ -399,13 +373,13 @@ try {
     $invoiceHtml .= '
                 <tr class="total-row">
                     <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($totalAmount, 2) . '</td>
                 </tr>
             </table>';
             
-    if (!$includeTax && $gstEnabled) {
+    if (!$includeTax) {
         $invoiceHtml .= '
-            <p class="tax-note">Note: This invoice shows base amounts excluding tax. Taxes will be charged separately.</p>';
+            <p class="tax-note">Note: This invoice shows amounts excluding tax. Taxes will be charged separately.</p>';
     }
             
     $invoiceHtml .= '
@@ -428,7 +402,7 @@ try {
             'invoiceDate' => date('d M Y'),
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
-            'totalAmount' => $finalTotal,
+            'totalAmount' => $totalAmount,
             'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
@@ -478,7 +452,7 @@ try {
             ");
             
             // Check if invoice already exists for this booking
-            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ?");
             $checkStmt->bind_param("i", $booking['id']);
             $checkStmt->execute();
             $checkResult = $checkStmt->get_result();
@@ -517,7 +491,7 @@ try {
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $finalTotal,
+                    $totalAmount,
                     $gstEnabledInt,
                     $isIgstInt,
                     $includeTaxInt,
@@ -528,21 +502,12 @@ try {
                     $invoiceRow['id']
                 );
                 
-                $success = $stmt->execute();
-                
-                if (!$success || $stmt->error) {
-                    logInvoiceError("Error updating invoice", [
-                        'error' => $stmt->error,
-                        'id' => $invoiceRow['id'],
-                        'success' => $success ? 'true' : 'false'
-                    ]);
+                $stmt->execute();
+                if ($stmt->error) {
+                    logInvoiceError("Error updating invoice", ['error' => $stmt->error]);
                 } else {
                     $responseData['message'] = 'Invoice updated successfully';
-                    logInvoiceError("Invoice updated successfully", [
-                        'invoice_id' => $invoiceRow['id'],
-                        'invoice_number' => $invoiceNumber,
-                        'rows_affected' => $stmt->affected_rows
-                    ]);
+                    logInvoiceError("Invoice updated successfully", ['invoice_id' => $invoiceRow['id']]);
                 }
             } else {
                 // Insert new invoice
@@ -568,7 +533,7 @@ try {
                     $currentDate,
                     $baseAmountBeforeTax,
                     $taxAmount,
-                    $finalTotal,
+                    $totalAmount,
                     $gstEnabledInt,
                     $isIgstInt,
                     $includeTaxInt,
@@ -578,25 +543,16 @@ try {
                     $invoiceHtml
                 );
                 
-                $success = $stmt->execute();
-                
-                if (!$success || $stmt->error) {
-                    logInvoiceError("Error inserting invoice", [
-                        'error' => $stmt->error, 
-                        'success' => $success ? 'true' : 'false'
-                    ]);
+                $stmt->execute();
+                if ($stmt->error) {
+                    logInvoiceError("Error inserting invoice", ['error' => $stmt->error]);
                 } else {
                     $responseData['message'] = 'Invoice generated and saved successfully';
-                    $newId = $stmt->insert_id;
-                    logInvoiceError("New invoice created", [
-                        'booking_id' => $booking['id'], 
-                        'invoice_id' => $newId,
-                        'invoice_number' => $invoiceNumber
-                    ]);
+                    logInvoiceError("New invoice created", ['booking_id' => $booking['id'], 'invoice_number' => $invoiceNumber]);
                 }
             }
         } catch (Exception $e) {
-            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage()]);
             // Continue and return the invoice even if saving to DB fails
         }
     }
@@ -605,7 +561,7 @@ try {
     sendJsonResponse($responseData);
 
 } catch (Exception $e) {
-    logInvoiceError("Error generating invoice", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logInvoiceError("Error generating invoice", ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),
