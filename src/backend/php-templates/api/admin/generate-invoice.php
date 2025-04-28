@@ -563,7 +563,7 @@ try {
                 
                 // FIX: Corrected the type definition string to match the number of parameters
                 $stmt->bind_param(
-                    "issdddiiisss",
+                    "issdddiiiisss",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
