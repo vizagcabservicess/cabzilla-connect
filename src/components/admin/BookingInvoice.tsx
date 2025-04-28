@@ -164,22 +164,13 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
-      // Method 1: Using iframe for seamless download
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
-      document.body.appendChild(iframe);
+      // Open the PDF in a new tab
+      window.open(getApiUrl(`/api/download-invoice.php?${params.toString()}`), '_blank');
       
       toast({
-        title: "PDF Download Started",
-        description: "Your invoice is being downloaded"
+        title: "PDF Opened in New Tab",
+        description: "Your invoice should open in a new browser tab"
       });
-      
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
     } catch (error) {
       console.error("Invoice download error:", error);
       toast({
@@ -190,7 +181,60 @@ export function BookingInvoice({
     }
   };
 
-  const handleAlternativeDownload = () => {
+  const handleForceDownload = () => {
+    try {
+      setDownloadCount(prev => prev + 1);
+      
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        direct_download: '1', // Force direct download
+        v: downloadCount.toString(),
+        t: new Date().getTime().toString(),
+        r: Math.random().toString(36).substring(2)
+      });
+      
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
+      }
+      
+      if (gstEnabled) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      // Create a hidden iframe for download
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
+      document.body.appendChild(iframe);
+      
+      toast({
+        title: "Download Started",
+        description: "Your invoice download should begin shortly"
+      });
+      
+      // Remove the iframe after a delay
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 5000);
+    } catch (error) {
+      console.error("Force download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Force Download Failed",
+        description: "Failed to force download. Try the normal download option."
+      });
+    }
+  };
+
+  const handleAdminDownload = () => {
     try {
       setDownloadCount(prev => prev + 1);
       
@@ -216,19 +260,19 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
-      // Method 2: Direct window.open for PDF
+      // Use admin endpoint instead
       window.open(getApiUrl(`/api/admin/download-invoice.php?${params.toString()}`), '_blank');
       
       toast({
-        title: "Alternative Download Method",
-        description: "PDF should open in a new tab"
+        title: "Admin PDF Download",
+        description: "Using admin endpoint to download PDF"
       });
     } catch (error) {
-      console.error("Alternative download error:", error);
+      console.error("Admin download error:", error);
       toast({
         variant: "destructive",
-        title: "Alternative Download Failed",
-        description: "Please try the client-side PDF generation"
+        title: "Admin Download Failed",
+        description: "Failed to use admin download. Try another method."
       });
     }
   };
@@ -261,91 +305,6 @@ export function BookingInvoice({
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);
-  };
-
-  const handleDataUriDownload = () => {
-    try {
-      // Define PDF content
-      const content = `Invoice #${customInvoiceNumber || booking.id}
-
-Customer: ${booking.passengerName || 'N/A'}
-Phone: ${booking.passengerPhone || 'N/A'}
-Email: ${booking.passengerEmail || 'N/A'}
-
-Trip Details:
-Trip Type: ${booking.tripType ? (booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)) : 'N/A'} ${booking.tripMode ? `(${booking.tripMode})` : ''}
-Pickup: ${booking.pickupLocation || 'N/A'}
-Drop: ${booking.dropLocation || 'N/A'}
-Date: ${booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
-Vehicle: ${booking.cabType || 'N/A'}
-
-Amount: ₹${booking.totalAmount || '0'}
-
-Thank you for choosing Vizag Cab Services!
-Generated on: ${new Date().toLocaleString()}
-`;
-      
-      // Create minimal PDF structure with content
-      const pdfContent = `%PDF-1.7
-1 0 obj
-<</Type /Catalog /Pages 2 0 R>>
-endobj
-2 0 obj
-<</Type /Pages /Kids [3 0 R] /Count 1>>
-endobj
-3 0 obj
-<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>
-endobj
-5 0 obj
-<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
-endobj
-4 0 obj
-<</Length ${content.length + 100}>>
-stream
-BT /F1 12 Tf 50 700 Td (${content.replace(/\n/g, ') Tj ET\nBT /F1 12 Tf 50 ')}) Tj ET
-endstream
-endobj
-xref
-0 6
-0000000000 65535 f 
-0000000010 00000 n
-0000000056 00000 n
-0000000111 00000 n
-0000000212 00000 n
-0000000434 00000 n
-trailer
-<</Size 6 /Root 1 0 R>>
-startxref
-1000
-%%EOF`;
-
-      // Create blob and trigger download
-      const blob = new Blob([pdfContent], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `invoice_${booking.id}_client.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      
-      // Clean up
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-      }, 100);
-      
-      toast({
-        title: "Client-Side PDF Generated",
-        description: "Basic PDF generated in browser"
-      });
-    } catch (error) {
-      console.error("Client-side PDF generation error:", error);
-      toast({
-        variant: "destructive",
-        title: "Client-Side Generation Failed",
-        description: "Failed to generate PDF in browser"
-      });
-    }
   };
 
   const renderInvoiceContent = () => {
@@ -537,25 +496,25 @@ startxref
                   disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Download PDF
+                  Open PDF
                 </Button>
                 
                 <Button
                   variant="secondary"
-                  onClick={handleAlternativeDownload}
+                  onClick={handleForceDownload}
                   disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Alt Download
+                  Download PDF
                 </Button>
                 
                 <Button
                   variant="outline"
-                  onClick={handleDataUriDownload}
+                  onClick={handleAdminDownload}
                   disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Client PDF
+                  Admin PDF
                 </Button>
               </>
             )}

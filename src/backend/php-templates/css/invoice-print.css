@@ -1,31 +1,33 @@
 
-/* Invoice Print Styles */
+/* Invoice Print Styles - DomPDF Compatible */
 body {
-  font-family: Arial, sans-serif;
+  font-family: DejaVu Sans, Arial, sans-serif;
   line-height: 1.6;
   margin: 0;
   padding: 20px;
   color: #333;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-  color-adjust: exact !important;
+  font-size: 12pt;
 }
 
 .invoice-container {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
   border: 1px solid #ddd;
   padding: 30px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   background-color: #fff;
 }
 
 .invoice-header {
-  display: flex;
-  justify-content: space-between;
+  width: 100%;
+  display: table;
   margin-bottom: 30px;
   border-bottom: 2px solid #eee;
   padding-bottom: 20px;
+}
+
+.invoice-header div {
+  display: table-cell;
 }
 
 .company-info {
@@ -36,14 +38,20 @@ body {
   margin-bottom: 30px;
 }
 
-.customer-details, .invoice-summary {
-  width: 48%;
-  float: left;
+.customer-section {
+  width: 100%;
+  display: table;
   margin-bottom: 20px;
 }
 
+.customer-details, .invoice-summary {
+  width: 48%;
+  display: table-cell;
+  vertical-align: top;
+}
+
 .invoice-summary {
-  float: right;
+  text-align: right;
 }
 
 .section-title {
@@ -51,20 +59,16 @@ body {
   border-bottom: 1px solid #eee;
   padding-bottom: 5px;
   margin-bottom: 15px;
-  font-size: 1.1em;
+  font-size: 14pt;
   font-weight: bold;
 }
 
 .trip-details {
-  clear: both;
   margin-bottom: 30px;
 }
 
 .gst-details {
-  background-color: #f9f9f9 !important;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-  color-adjust: exact !important;
+  background-color: #f9f9f9;
   border: 1px solid #ddd;
   padding: 15px;
   margin-bottom: 20px;
@@ -91,10 +95,7 @@ body {
 }
 
 .fare-table th {
-  background-color: #f9f9f9 !important;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-  color-adjust: exact !important;
+  background-color: #f9f9f9;
   font-weight: bold;
   color: #333;
 }
@@ -106,93 +107,53 @@ body {
 
 .total-row {
   font-weight: bold;
-  background-color: #f9f9f9 !important;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-  color-adjust: exact !important;
+  background-color: #f9f9f9;
 }
 
 .tax-note {
   font-style: italic;
   color: #666;
-  font-size: 0.9em;
+  font-size: 10pt;
   margin-top: 10px;
 }
 
 .footer {
   margin-top: 40px;
   text-align: center;
-  font-size: 0.9em;
+  font-size: 10pt;
   color: #666;
   border-top: 1px solid #eee;
   padding-top: 20px;
 }
 
 /* Print-specific styles */
-@media print {
-  body {
-    margin: 0;
-    padding: 0;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  @page {
-    size: A4;
-    margin: 10mm;
-  }
-
-  .invoice-container {
-    border: none !important;
-    box-shadow: none !important;
-    padding: 10mm;
-    max-width: 100%;
-  }
-
-  .gst-details {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    background-color: #f9f9f9 !important;
-  }
-
-  .fare-table th,
-  .total-row {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    background-color: #f9f9f9 !important;
-  }
-
-  table { page-break-inside: avoid; }
-  tr { page-break-inside: avoid; }
-  thead { display: table-header-group; }
-  tfoot { display: table-footer-group; }
+@page {
+  size: A4;
+  margin: 10mm;
 }
 
 /* Fix for PDF rendering */
 .invoice-container * {
   box-sizing: border-box;
-  font-family: Arial, sans-serif;
+  font-family: DejaVu Sans, Arial, sans-serif;
 }
 
 h1 {
   margin: 0;
   color: #333;
-  font-size: 24px;
+  font-size: 24pt;
 }
 
 h2 {
   margin: 0;
   color: #333;
-  font-size: 20px;
+  font-size: 18pt;
 }
 
 h3 {
   color: #555;
   margin-bottom: 10px;
-  font-size: 16px;
+  font-size: 14pt;
 }
 
 p {
@@ -201,4 +162,16 @@ p {
 
 strong {
   color: #333;
+}
+
+.clearfix::after {
+  content: "";
+  clear: both;
+  display: table;
+}
+
+/* DomPDF specific fixes */
+.rupee-symbol::before {
+  content: "\20B9";
+  font-family: DejaVu Sans;
 }
