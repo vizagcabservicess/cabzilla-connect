@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,7 +65,6 @@ export function BookingInvoice({
         });
         return false;
       }
-      
       if (!gstDetails.companyName || gstDetails.companyName.trim() === '') {
         toast({
           variant: "destructive",
@@ -73,7 +73,6 @@ export function BookingInvoice({
         });
         return false;
       }
-      
       if (!gstDetails.companyAddress || gstDetails.companyAddress.trim() === '') {
         toast({
           variant: "destructive",
@@ -101,13 +100,13 @@ export function BookingInvoice({
         gstEnabled,
         isIGST,
         includeTax,
-        customInvoiceNumber,
+        customInvoiceNumber: customInvoiceNumber.trim(),
         gstDetails: gstEnabled ? gstDetails : undefined
       });
       
       const result = await onGenerateInvoice(
-        gstEnabled, 
-        gstEnabled ? gstDetails : undefined, 
+        gstEnabled,
+        gstEnabled ? gstDetails : undefined,
         isIGST,
         includeTax,
         customInvoiceNumber.trim() || undefined
@@ -138,7 +137,7 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     try {
-      const baseUrl = getApiUrl(`/api/download-invoice`);
+      const baseUrl = getApiUrl('/api/download-invoice');
       const params = new URLSearchParams({
         id: booking.id.toString(),
         gstEnabled: gstEnabled ? '1' : '0',
@@ -159,7 +158,11 @@ export function BookingInvoice({
       const downloadUrl = `${baseUrl}?${params.toString()}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      window.open(downloadUrl, '_blank');
+      // Open in new tab for preview/print
+      const newWindow = window.open(downloadUrl, '_blank');
+      if (newWindow) {
+        newWindow.focus();
+      }
       
       toast({
         title: "Invoice Download Started",
