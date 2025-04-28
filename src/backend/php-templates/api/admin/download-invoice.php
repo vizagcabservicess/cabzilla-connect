@@ -97,7 +97,7 @@ try {
         $tableExists = $checkTableResult->num_rows > 0;
     }
     
-    // Create invoices table if it doesn't exist
+    // Create invoices table if it doesn't exist with CORRECT STRUCTURE
     if (!$tableExists) {
         logInvoiceError("Creating invoices table as it doesn't exist");
         
@@ -123,10 +123,74 @@ try {
                 KEY (booking_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         
-        $conn->query($createTableQuery);
+        $result = $conn->query($createTableQuery);
         
-        if ($conn->error) {
-            logInvoiceError("Error creating invoices table", ['error' => $conn->error]);
+        if (!$result) {
+            logInvoiceError("Error creating invoices table", ['error' => $conn->error, 'query' => $createTableQuery]);
+            throw new Exception("Failed to create invoices table: " . $conn->error);
+        } else {
+            logInvoiceError("Successfully created invoices table");
+            $tableExists = true;
+        }
+    }
+    
+    // Verify table structure to ensure it has all required columns
+    $missingColumns = [];
+    $requiredColumns = [
+        'id', 'booking_id', 'invoice_number', 'invoice_date', 'base_amount',
+        'tax_amount', 'total_amount', 'gst_enabled', 'is_igst', 'include_tax',
+        'gst_number', 'company_name', 'company_address', 'invoice_html',
+        'created_at', 'updated_at'
+    ];
+    
+    // Check for required columns
+    if ($tableExists) {
+        $columnsResult = $conn->query("SHOW COLUMNS FROM invoices");
+        if ($columnsResult) {
+            $existingColumns = [];
+            while ($col = $columnsResult->fetch_assoc()) {
+                $existingColumns[] = $col['Field'];
+            }
+            
+            foreach ($requiredColumns as $col) {
+                if (!in_array($col, $existingColumns)) {
+                    $missingColumns[] = $col;
+                }
+            }
+        }
+    }
+    
+    // If any columns are missing, alter table to add them
+    if (!empty($missingColumns)) {
+        logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
+        
+        // Add missing columns
+        foreach ($missingColumns as $col) {
+            $alterQuery = "";
+            switch ($col) {
+                case 'tax_amount':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
+                    break;
+                case 'is_igst':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
+                    break;
+                case 'include_tax':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
+                    break;
+                case 'invoice_html':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN invoice_html MEDIUMTEXT AFTER company_address";
+                    break;
+                // Add other column definitions as needed
+            }
+            
+            if ($alterQuery) {
+                $alterResult = $conn->query($alterQuery);
+                if (!$alterResult) {
+                    logInvoiceError("Failed to add column $col", ['error' => $conn->error]);
+                } else {
+                    logInvoiceError("Successfully added column $col");
+                }
+            }
         }
     }
     
@@ -221,6 +285,113 @@ try {
         
         $invoiceHtml = $generatedData['data']['invoiceHtml'];
         $invoiceNumber = $generatedData['data']['invoiceNumber'];
+        
+        // Try to save the invoice to the database directly from here (redundant safety)
+        if ($tableExists && isset($generatedData['data'])) {
+            try {
+                $data = $generatedData['data'];
+                $baseAmount = floatval($data['baseAmount'] ?? 0);
+                $taxAmount = floatval($data['taxAmount'] ?? 0);
+                $totalAmount = floatval($data['totalAmount'] ?? 0);
+                $gstEnabledInt = $gstEnabled ? 1 : 0;
+                $isIgstInt = $isIGST ? 1 : 0;
+                $includeTaxInt = $includeTax ? 1 : 0;
+                $currentDate = date('Y-m-d');
+                $gstNumberVal = $gstNumber ?: null;
+                $companyNameVal = $companyName ?: null;
+                $companyAddressVal = $companyAddress ?: null;
+                
+                // Check if invoice already exists for this booking
+                $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+                $checkStmt->bind_param("i", $bookingId);
+                $checkStmt->execute();
+                $checkResult = $checkStmt->get_result();
+                
+                if ($checkResult->num_rows > 0) {
+                    // Update existing invoice
+                    $invoiceRow = $checkResult->fetch_assoc();
+                    $updateStmt = $conn->prepare("
+                        UPDATE invoices SET 
+                            invoice_number = ?,
+                            invoice_date = ?, 
+                            base_amount = ?, 
+                            tax_amount = ?, 
+                            total_amount = ?,
+                            gst_enabled = ?,
+                            is_igst = ?,
+                            include_tax = ?,
+                            gst_number = ?,
+                            company_name = ?,
+                            company_address = ?,
+                            invoice_html = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+                    
+                    $updateStmt->bind_param(
+                        "ssdddiiisssi",
+                        $invoiceNumber,
+                        $currentDate,
+                        $baseAmount,
+                        $taxAmount,
+                        $totalAmount,
+                        $gstEnabledInt,
+                        $isIgstInt,
+                        $includeTaxInt,
+                        $gstNumberVal,
+                        $companyNameVal,
+                        $companyAddressVal,
+                        $invoiceHtml,
+                        $invoiceRow['id']
+                    );
+                    
+                    $updateStmt->execute();
+                    logInvoiceError("Updated existing invoice", [
+                        'id' => $invoiceRow['id'],
+                        'invoice_number' => $invoiceNumber
+                    ]);
+                } else {
+                    // Insert new invoice
+                    $insertStmt = $conn->prepare("
+                        INSERT INTO invoices (
+                            booking_id, invoice_number, invoice_date, base_amount, 
+                            tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
+                            gst_number, company_name, company_address, invoice_html
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    $insertStmt->bind_param(
+                        "issdddiissss",
+                        $bookingId,
+                        $invoiceNumber,
+                        $currentDate,
+                        $baseAmount,
+                        $taxAmount,
+                        $totalAmount,
+                        $gstEnabledInt,
+                        $isIgstInt,
+                        $includeTaxInt,
+                        $gstNumberVal,
+                        $companyNameVal,
+                        $companyAddressVal,
+                        $invoiceHtml
+                    );
+                    
+                    $insertStmt->execute();
+                    $newId = $insertStmt->insert_id;
+                    logInvoiceError("Created new invoice record", [
+                        'id' => $newId,
+                        'invoice_number' => $invoiceNumber
+                    ]);
+                }
+            } catch (Exception $e) {
+                logInvoiceError("Error saving invoice from download script", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                // Continue even if saving fails - we'll use the HTML directly
+            }
+        }
     } else {
         // Use stored HTML
         $invoiceHtml = $invoiceData['invoice_html'];
@@ -232,7 +403,7 @@ try {
     }
     
     // CRITICAL: Set Content-Type for HTML output before any HTML output
-    header('Content-Type: text/html');
+    header('Content-Type: text/html; charset=utf-8');
     header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     
     // Return invoice HTML with improved styling and JavaScript for better printing

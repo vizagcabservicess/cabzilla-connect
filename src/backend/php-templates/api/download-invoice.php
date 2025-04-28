@@ -66,6 +66,13 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
+    logInvoiceError("Public invoice download starting", [
+        'booking_id' => $bookingId, 
+        'gstEnabled' => $gstEnabled ? 'true' : 'false',
+        'gstNumber' => $gstNumber,
+        'companyName' => $companyName
+    ]);
+
     // Connect to database with improved error handling
     try {
         $dbHost = 'localhost';
@@ -96,7 +103,7 @@ try {
         $tableExists = $checkTableResult->num_rows > 0;
     }
     
-    // Create invoices table if it doesn't exist
+    // Create invoices table if it doesn't exist with CORRECT STRUCTURE
     if (!$tableExists) {
         logInvoiceError("Creating invoices table in public download-invoice");
         
@@ -122,10 +129,13 @@ try {
                 KEY (booking_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         
-        $conn->query($createTableQuery);
+        $result = $conn->query($createTableQuery);
         
-        if ($conn->error) {
+        if (!$result) {
             logInvoiceError("Error creating invoices table in public download", ['error' => $conn->error]);
+            // We'll continue even if table creation fails as the admin endpoint may handle it
+        } else {
+            logInvoiceError("Successfully created invoices table in public endpoint");
         }
     }
     
@@ -168,7 +178,7 @@ try {
     if ($contentType) {
         header("Content-Type: $contentType");
     } else {
-        header("Content-Type: text/html");
+        header("Content-Type: text/html; charset=utf-8");
     }
     
     // Pass through Content-Disposition for download

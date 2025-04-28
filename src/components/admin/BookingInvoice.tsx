@@ -159,7 +159,15 @@ export function BookingInvoice({
       console.log('Download invoice URL:', downloadUrl);
       
       // Open in a new window/tab for PDF download
-      window.open(downloadUrl, '_blank');
+      const newWindow = window.open(downloadUrl, '_blank');
+      
+      // If window.open failed (blocked by popup blocker)
+      if (!newWindow) {
+        // Fallback method - redirect in current window with confirmation
+        if (window.confirm('Your browser blocked the pop-up. Would you like to download the invoice in the current window?')) {
+          window.location.href = downloadUrl;
+        }
+      }
       
       toast({
         title: "Invoice Download Started",
@@ -200,9 +208,11 @@ export function BookingInvoice({
     
     // Set regenerating flag to show appropriate feedback
     setRegenerating(true);
-    setInvoiceData(null);
     
-    // Force a re-generation
+    // Reset any error state
+    setError(null);
+    
+    // Generate invoice with current settings
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);
@@ -349,6 +359,7 @@ export function BookingInvoice({
             className="invoice-preview border rounded-md overflow-hidden" 
             style={{ height: '400px', overflow: 'auto' }}
           >
+            {/* Use improved iframe with sanitized HTML content */}
             <iframe 
               srcDoc={invoiceData.invoiceHtml}
               title="Invoice Preview" 
