@@ -11,9 +11,12 @@ import { Spinner } from "@/components/ui/spinner";
 interface BookingInvoiceProps {
   booking: Booking;
   onClose: () => void;
+  onGenerateInvoice?: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
+  isSubmitting?: boolean;
+  pdfUrl?: string;
 }
 
-export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
+export function BookingInvoice({ booking, onClose, onGenerateInvoice, isSubmitting, pdfUrl }: BookingInvoiceProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -21,7 +24,8 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     try {
       setLoading(true);
       
-      const response = await fetch(getApiUrl(`/api/download-invoice.php?id=${booking.id}`));
+      const downloadUrl = pdfUrl || getApiUrl(`/api/download-invoice.php?id=${booking.id}`);
+      const response = await fetch(downloadUrl);
       
       if (!response.ok) {
         throw new Error(`Failed to download PDF: ${response.status}`);
@@ -58,7 +62,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       // Fallback method using iframe
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
-      iframe.src = getApiUrl(`/api/download-invoice.php?id=${booking.id}`);
+      iframe.src = pdfUrl || getApiUrl(`/api/download-invoice.php?id=${booking.id}`);
       document.body.appendChild(iframe);
       
       setTimeout(() => {
@@ -79,8 +83,8 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
             Click the button below to download the invoice for booking #{booking.id}
           </p>
           <div className="flex space-x-4">
-            <Button onClick={handleDownloadPdf} disabled={loading}>
-              {loading ? <Spinner className="mr-2" /> : <Download className="mr-2 h-4 w-4" />}
+            <Button onClick={handleDownloadPdf} disabled={loading || isSubmitting}>
+              {(loading || isSubmitting) ? <Spinner className="mr-2" /> : <Download className="mr-2 h-4 w-4" />}
               Download PDF
             </Button>
             <Button variant="outline" onClick={onClose}>
