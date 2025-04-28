@@ -45,6 +45,13 @@ function logInvoiceError($message, $data = []) {
 }
 
 try {
+    logInvoiceError("Public invoice download starting", [
+        'booking_id' => $_GET['id'] ?? null,
+        'gstEnabled' => $_GET['gstEnabled'] ?? 'false',
+        'gstNumber' => $_GET['gstNumber'] ?? '',
+        'companyName' => $_GET['companyName'] ?? ''
+    ]);
+
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
@@ -68,20 +75,7 @@ try {
 
     // Connect to database with improved error handling
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        
+        $conn = getDbConnectionWithRetry();
         logInvoiceError("Public invoice download: Database connection established successfully");
     } catch (Exception $e) {
         logInvoiceError("Database connection error in public download-invoice", ['error' => $e->getMessage()]);
@@ -127,6 +121,47 @@ try {
         if ($conn->error) {
             logInvoiceError("Error creating invoices table in public download", ['error' => $conn->error]);
         }
+    } else {
+        // Check if all required columns exist
+        $missingColumns = [];
+        $requiredColumns = ['tax_amount', 'is_igst', 'include_tax'];
+        
+        foreach ($requiredColumns as $column) {
+            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE '$column'");
+            if ($checkColumnResult->num_rows === 0) {
+                $missingColumns[] = $column;
+            }
+        }
+        
+        if (!empty($missingColumns)) {
+            logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
+            
+            // Add missing columns
+            foreach ($missingColumns as $column) {
+                $alterQuery = "";
+                
+                switch ($column) {
+                    case 'tax_amount':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
+                        break;
+                    case 'is_igst':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
+                        break;
+                    case 'include_tax':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
+                        break;
+                }
+                
+                if (!empty($alterQuery)) {
+                    $conn->query($alterQuery);
+                    if (!$conn->error) {
+                        logInvoiceError("Successfully added column $column");
+                    } else {
+                        logInvoiceError("Error adding column $column", ['error' => $conn->error]);
+                    }
+                }
+            }
+        }
     }
     
     // Forward request to admin endpoint with all query parameters
@@ -162,6 +197,25 @@ try {
     $contentType = null;
     if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
         $contentType = $matches[1];
+    }
+    
+    // Check for HTML or error response
+    if (stripos($body, '<html') !== false || stripos($body, '<!DOCTYPE html') !== false) {
+        // Valid HTML response - output as is
+        header("Content-Type: text/html");
+        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
+        echo $body;
+        logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
+        exit;
+    } else if (stripos($body, 'Fatal error') !== false || stripos($body, 'Warning') !== false || stripos($body, 'Notice') !== false) {
+        // PHP error output - return as error
+        logInvoiceError("PHP error in admin download-invoice.php response", ['body' => substr($body, 0, 500)]);
+        throw new Exception("Server error generating invoice: " . strip_tags($body));
+    } else if (stripos($body, '{"status":"error"') !== false) {
+        // JSON error response - pass through
+        header("Content-Type: application/json");
+        echo $body;
+        exit;
     }
     
     // Set appropriate content type (default to HTML if not found)

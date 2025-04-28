@@ -512,7 +512,7 @@ try {
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "ssdddiiisssi",
+                    "ssdddiiiisssi",
                     $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
@@ -562,7 +562,7 @@ try {
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "issdddiissss",
+                    "issdddiiisss",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,

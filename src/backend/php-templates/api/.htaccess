@@ -51,8 +51,8 @@ RewriteBase /api/
 
 # SPECIAL RULE - Generate invoice and download invoice need special handling
 <Files "generate-invoice.php">
+    SetEnv no_content_type 1
     SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -62,7 +62,6 @@ RewriteBase /api/
 <Files "download-invoice.php">
     # Critical - Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
-    Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
@@ -72,7 +71,6 @@ RewriteBase /api/
 <Files "download-invoice">
     # Critical - Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
-    Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"

@@ -89,7 +89,7 @@ try {
         throw new Exception("Database connection failed: " . $e->getMessage());
     }
     
-    // First check if invoices table exists
+    // Check if invoices table exists and create it if needed
     $tableExists = false;
     $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
     
@@ -127,6 +127,47 @@ try {
         
         if ($conn->error) {
             logInvoiceError("Error creating invoices table", ['error' => $conn->error]);
+        }
+    } else {
+        // Check if all required columns exist
+        $missingColumns = [];
+        $requiredColumns = ['tax_amount', 'is_igst', 'include_tax'];
+        
+        foreach ($requiredColumns as $column) {
+            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE '$column'");
+            if ($checkColumnResult->num_rows === 0) {
+                $missingColumns[] = $column;
+            }
+        }
+        
+        if (!empty($missingColumns)) {
+            logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
+            
+            // Add missing columns
+            foreach ($missingColumns as $column) {
+                $alterQuery = "";
+                
+                switch ($column) {
+                    case 'tax_amount':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
+                        break;
+                    case 'is_igst':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
+                        break;
+                    case 'include_tax':
+                        $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
+                        break;
+                }
+                
+                if (!empty($alterQuery)) {
+                    $conn->query($alterQuery);
+                    if (!$conn->error) {
+                        logInvoiceError("Successfully added column $column");
+                    } else {
+                        logInvoiceError("Error adding column $column", ['error' => $conn->error]);
+                    }
+                }
+            }
         }
     }
     
@@ -210,10 +251,24 @@ try {
             throw new Exception("Failed to generate invoice: $curlError");
         }
         
+        // Check if response contains PHP error messages
+        if (stripos($generateResponse, 'Fatal error') !== false || 
+            stripos($generateResponse, 'Warning') !== false || 
+            stripos($generateResponse, 'Notice') !== false) {
+            
+            logInvoiceError("Invalid response from generate-invoice.php", [
+                'response' => substr($generateResponse, 0, 500),
+                'http_code' => $httpCode
+            ]);
+            throw new Exception("Invalid invoice data received from generator");
+        }
+        
+        // Try to parse as JSON
         $generatedData = json_decode($generateResponse, true);
+        
         if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
             logInvoiceError("Invalid response from generate-invoice.php", [
-                'response' => substr($generateResponse, 0, 1000),
+                'response' => substr($generateResponse, 0, 500),
                 'http_code' => $httpCode
             ]);
             throw new Exception("Invalid invoice data received from generator");
