@@ -1,15 +1,11 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
 
 # CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
 <FilesMatch "\.php$">
-    # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
     Header always set Content-Type "application/json" env=!no_content_type
-    # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
