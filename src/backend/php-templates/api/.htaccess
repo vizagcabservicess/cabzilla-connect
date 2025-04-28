@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -6,8 +7,6 @@ RewriteBase /api/
 <FilesMatch "\.php$">
     # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
-    Header always set Content-Type "application/json" env=!no_content_type
     # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
@@ -31,6 +30,23 @@ RewriteBase /api/
     Header always set Pragma "no-cache"
     Header always set Expires "0"
 </Files>
+
+# Special handling for test-pdf.php
+<Files "test-pdf.php">
+    SetEnv no_content_type 1
+    SetHandler application/x-httpd-php
+    # Force allow all CORS headers
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
+# PDF MimeType handling
+<FilesMatch "\.pdf$">
+    ForceType application/pdf
+    Header always set Content-Type application/pdf
+    Header always set X-Content-Type-Options "nosniff"
+</FilesMatch>
 
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS

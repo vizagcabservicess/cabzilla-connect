@@ -10,13 +10,45 @@ error_reporting(E_ALL);
 // Clear any output buffer
 while (ob_get_level()) ob_end_clean();
 
-// Check for autoloader in multiple possible locations
+// Enable debug mode
+$debug = true;
+
+echo "<h1>PDF Generation Test</h1>";
+echo "<p>Server time: " . date('Y-m-d H:i:s') . "</p>";
+echo "<p>PHP Version: " . phpversion() . "</p>";
+
+// Create logs directory if it doesn't exist
+$logsDir = dirname(dirname(__FILE__)) . '/logs';
+if (!is_dir($logsDir)) {
+    echo "<p>Creating logs directory at: " . htmlspecialchars($logsDir) . "</p>";
+    $success = @mkdir($logsDir, 0755, true);
+    echo "<p>Directory creation " . ($success ? "successful" : "failed") . "</p>";
+} else {
+    echo "<p>Logs directory already exists at: " . htmlspecialchars($logsDir) . "</p>";
+}
+
+// Test if we can write to logs
+$testLogFile = $logsDir . '/test_log.txt';
+$logWriteTest = @file_put_contents($testLogFile, date('Y-m-d H:i:s') . " - Test log entry\n", FILE_APPEND);
+echo "<p>Log write test: " . ($logWriteTest !== false ? "successful" : "failed") . "</p>";
+
+// Store the server's document root and script paths
+$docRoot = $_SERVER['DOCUMENT_ROOT'];
+echo "<p>Document Root: " . htmlspecialchars($docRoot) . "</p>";
+echo "<p>Current script path: " . htmlspecialchars(__FILE__) . "</p>";
+echo "<p>Directory of current script: " . htmlspecialchars(dirname(__FILE__)) . "</p>";
+echo "<p>Parent directory: " . htmlspecialchars(dirname(dirname(__FILE__))) . "</p>";
+
+// Check for autoloader in multiple possible locations with absolute paths
 $autoloaderPaths = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../vendor/autoload.php',
+    $docRoot . '/vendor/autoload.php',
+    dirname($docRoot) . '/vendor/autoload.php',
     dirname(dirname(__FILE__)) . '/vendor/autoload.php',
     dirname(dirname(dirname(__FILE__))) . '/vendor/autoload.php',
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
+    dirname(dirname(dirname(dirname(__FILE__)))) . '/vendor/autoload.php',
+    // More specific to common project structures
+    $docRoot . '/src/backend/vendor/autoload.php',
+    dirname(dirname(__FILE__)) . '/../../vendor/autoload.php'
 ];
 
 $autoloaderPath = null;
@@ -27,7 +59,8 @@ foreach ($autoloaderPaths as $path) {
     $exists = file_exists($path);
     $autloaderCheckResults[] = [
         'path' => $path,
-        'exists' => $exists
+        'exists' => $exists,
+        'readable' => $exists ? is_readable($path) : false
     ];
     
     if ($exists) {
@@ -37,52 +70,86 @@ foreach ($autoloaderPaths as $path) {
     }
 }
 
-echo "<h1>PDF Generation Test</h1>";
-echo "<p>Server time: " . date('Y-m-d H:i:s') . "</p>";
-echo "<p>PHP Version: " . phpversion() . "</p>";
+echo "<h2>Autoloader Check</h2>";
+echo "<ul>";
+foreach ($autloaderCheckResults as $result) {
+    echo "<li>" . htmlspecialchars($result['path']) . " - " . 
+         ($result['exists'] ? 
+            "<span style='color:green'>Exists" . ($result['readable'] ? ", Readable" : ", NOT READABLE") . "</span>" : 
+            "<span style='color:red'>Not found</span>") . "</li>";
+}
+echo "</ul>";
 
+// If no autoloader was found, look for the vendor directory and dompdf specifically
 if (!$vendorExists) {
-    echo "<p style='color:red; font-weight:bold;'>ERROR: Composer autoloader not found. Checked paths:</p><ul>";
-    foreach ($autloaderCheckResults as $result) {
-        echo "<li>" . htmlspecialchars($result['path']) . " - " . ($result['exists'] ? "<span style='color:green'>Exists</span>" : "<span style='color:red'>Not found</span>") . "</li>";
-    }
-    echo "</ul>";
+    echo "<p style='color:red; font-weight:bold;'>ERROR: Composer autoloader not found.</p>";
     
     // Look for vendor directory
-    echo "<h2>Searching for vendor directory...</h2>";
+    echo "<h2>Searching for vendor directory and DomPDF...</h2>";
     $possibleVendorDirs = [
-        __DIR__ . '/../vendor',
-        __DIR__ . '/../../vendor',
+        $docRoot . '/vendor',
+        dirname($docRoot) . '/vendor',
         dirname(dirname(__FILE__)) . '/vendor',
         dirname(dirname(dirname(__FILE__))) . '/vendor',
-        $_SERVER['DOCUMENT_ROOT'] . '/vendor'
+        $docRoot . '/src/backend/vendor'
     ];
     
     echo "<ul>";
     foreach ($possibleVendorDirs as $dir) {
-        echo "<li>" . htmlspecialchars($dir) . " - " . (is_dir($dir) ? "<span style='color:green'>Directory exists</span>" : "<span style='color:red'>Directory not found</span>") . "</li>";
+        $dirExists = is_dir($dir);
+        $dompdfExists = $dirExists && is_dir($dir . '/dompdf');
         
-        if (is_dir($dir) && is_dir($dir . '/dompdf')) {
-            echo " <span style='color:green'>DomPDF directory found inside this vendor folder!</span>";
+        echo "<li>" . htmlspecialchars($dir) . " - " . 
+             ($dirExists ? 
+                "<span style='color:green'>Directory exists</span>" : 
+                "<span style='color:red'>Directory not found</span>");
+        
+        if ($dirExists) {
+            if ($dompdfExists) {
+                echo " <span style='color:green'>DomPDF directory found!</span>";
+                // Check if we have the main dompdf.php file
+                if (file_exists($dir . '/dompdf/src/Dompdf.php')) {
+                    echo " <span style='color:green'>Dompdf.php exists!</span>";
+                } else {
+                    echo " <span style='color:red'>Dompdf.php missing!</span>";
+                }
+            } else {
+                echo " <span style='color:red'>No DomPDF directory</span>";
+                // List contents to help debugging
+                $contents = scandir($dir);
+                echo "<ul>";
+                foreach ($contents as $item) {
+                    if ($item != "." && $item != "..") {
+                        echo "<li>" . htmlspecialchars($item) . "</li>";
+                    }
+                }
+                echo "</ul>";
+            }
         }
+        echo "</li>";
     }
     echo "</ul>";
     
     echo "<h2>Looking for composer.json...</h2>";
     $possibleComposerFiles = [
-        __DIR__ . '/../composer.json',
-        __DIR__ . '/../../composer.json',
+        $docRoot . '/composer.json',
+        dirname($docRoot) . '/composer.json',
         dirname(dirname(__FILE__)) . '/composer.json',
-        dirname(dirname(dirname(__FILE__))) . '/composer.json',
-        $_SERVER['DOCUMENT_ROOT'] . '/composer.json'
+        dirname(dirname(dirname(__FILE__))) . '/composer.json'
     ];
     
     echo "<ul>";
     foreach ($possibleComposerFiles as $file) {
-        echo "<li>" . htmlspecialchars($file) . " - " . (file_exists($file) ? "<span style='color:green'>File exists</span>" : "<span style='color:red'>File not found</span>") . "</li>";
+        echo "<li>" . htmlspecialchars($file) . " - " . 
+             (file_exists($file) ? 
+                "<span style='color:green'>File exists</span>" : 
+                "<span style='color:red'>File not found</span>") . "</li>";
         
         if (file_exists($file)) {
             $contents = file_get_contents($file);
+            echo "<pre>" . htmlspecialchars(substr($contents, 0, 500)) . 
+                 (strlen($contents) > 500 ? "..." : "") . "</pre>";
+            
             if (strpos($contents, 'dompdf') !== false) {
                 echo " <span style='color:green'>This composer.json includes DomPDF!</span>";
             } else {
@@ -92,14 +159,12 @@ if (!$vendorExists) {
     }
     echo "</ul>";
     
-    echo "<p>Please ensure the vendor directory with all dependencies is uploaded correctly. You need to run these commands:</p>";
+    echo "<p>Please run these commands in your project root:</p>";
     echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd;'>
+composer require dompdf/dompdf:^2.0
 composer install
-# or if a composer.lock file exists:
-composer update
 </pre>";
     
-    echo "<p>If you've already run these commands and are still seeing this error, please check the file permissions.</p>";
     exit;
 }
 
@@ -134,7 +199,7 @@ if (!class_exists('Dompdf\Dompdf')) {
     
     // Display installed packages
     echo "<h2>Installed Packages:</h2>";
-    $composerJson = file_get_contents(dirname($autoloaderPath) . '/composer/installed.json');
+    $composerJson = @file_get_contents(dirname($autoloaderPath) . '/composer/installed.json');
     if ($composerJson) {
         $packages = json_decode($composerJson, true);
         echo "<ul>";
@@ -157,6 +222,12 @@ if (!class_exists('Dompdf\Dompdf')) {
     } else {
         echo "<p>Could not read installed packages.</p>";
     }
+    
+    echo "<p>Please verify DomPDF is correctly installed. Try running:</p>";
+    echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd;'>
+composer require dompdf/dompdf:^2.0
+composer install
+</pre>";
     exit;
 }
 
@@ -174,6 +245,7 @@ try {
     $options = new Options();
     $options->set('isRemoteEnabled', true);
     $options->set('isHtml5ParserEnabled', true);
+    $options->set('defaultFont', 'DejaVu Sans');
     
     // Create DomPDF instance
     $dompdf = new Dompdf($options);
@@ -360,8 +432,9 @@ function checkPermission($path) {
 // Check a few important directories and files
 $importantPaths = [
     $folderToCheck,
+    dirname($folderToCheck) . '/dompdf',
     $folderToCheck . '/dompdf',
-    $folderToCheck . '/autoload.php',
+    $autoloaderPath,
     sys_get_temp_dir()
 ];
 
@@ -395,7 +468,7 @@ echo "</table>";
 
 // Check for error logs
 echo "<h2>Recent Error Logs:</h2>";
-$logFile = __DIR__ . '/../logs/invoice_errors.log';
+$logFile = dirname(dirname(__FILE__)) . '/logs/invoice_errors.log';
 if (file_exists($logFile) && is_readable($logFile)) {
     echo "<p>Found invoice error log file at: " . htmlspecialchars($logFile) . "</p>";
     echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd; max-height: 300px; overflow: auto;'>";
@@ -407,6 +480,17 @@ if (file_exists($logFile) && is_readable($logFile)) {
     echo "</pre>";
 } else {
     echo "<p>No invoice error log file found at: " . htmlspecialchars($logFile) . "</p>";
+    echo "<p>Creating a sample log file for testing...</p>";
+    
+    // Try to create the log file
+    $testContent = date('Y-m-d H:i:s') . " - Test log entry created from test-pdf.php\n";
+    $writeResult = @file_put_contents($logFile, $testContent);
+    
+    if ($writeResult !== false) {
+        echo "<p style='color:green;'>Successfully created test log file.</p>";
+    } else {
+        echo "<p style='color:red;'>Failed to create test log file. Check permissions.</p>";
+    }
 }
 
 // PHP error log location
@@ -415,11 +499,11 @@ echo "<p>PHP error log path: " . htmlspecialchars($phpErrorLogPath ?: 'Not confi
 
 echo "<h2>Next Steps for Troubleshooting</h2>";
 echo "<ol>";
-echo "<li>Run `composer require dompdf/dompdf:^2.0` in your project root directory</li>";
-echo "<li>Make sure the vendor directory has proper permissions</li>";
-echo "<li>Check PHP errors in the server error log</li>";
-echo "<li>Ensure all required PHP extensions are enabled (GD, mbstring)</li>";
-echo "<li>Verify temporary directory is writable: " . htmlspecialchars(sys_get_temp_dir()) . "</li>";
+echo "<li>Make sure DomPDF is installed properly: <code>composer require dompdf/dompdf:^2.0</code></li>";
+echo "<li>Check that the vendor directory has proper permissions</li>";
+echo "<li>Verify all required PHP extensions are enabled (GD, mbstring)</li>";
+echo "<li>Create a logs directory with proper permissions: <code>mkdir -p " . htmlspecialchars(dirname(dirname(__FILE__))) . "/logs</code> with permission 0755</li>";
+echo "<li>Try the direct PDF test link above to isolate issues</li>";
 echo "</ol>";
 
 // Show a footer with links

@@ -1,23 +1,36 @@
 
 <?php
-// Include configuration file
+// Include configuration file - use absolute path with __DIR__
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 
-// CRITICAL: Improved autoloader detection - check multiple possible paths
+// CRITICAL: Create logs directory if it doesn't exist
+$logsDir = __DIR__ . '/../../logs';
+if (!is_dir($logsDir)) {
+    @mkdir($logsDir, 0755, true);
+}
+
+// CRITICAL: Improved autoloader detection with absolute paths
 $autoloaderPaths = [
-    __DIR__ . '/../../vendor/autoload.php',                // Standard vendor location
-    __DIR__ . '/../../../vendor/autoload.php',             // One level up
-    dirname(dirname(__DIR__)) . '/vendor/autoload.php',    // Alternative path
+    __DIR__ . '/../../vendor/autoload.php',                   // Standard vendor location
+    __DIR__ . '/../../../vendor/autoload.php',                // One level up
+    dirname(dirname(__DIR__)) . '/vendor/autoload.php',       // Alternative path
     dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php', // Project root
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',    // Document root
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',       // Document root
+    realpath(__DIR__ . '/../../../../vendor/autoload.php')    // Try with realpath
 ];
 
 $vendorExists = false;
 $autoloaderPath = null;
+$autoloaderSearchResults = [];
 
 foreach ($autoloaderPaths as $path) {
-    if (file_exists($path)) {
+    $autoloaderSearchResults[$path] = [
+        'exists' => file_exists($path),
+        'readable' => is_readable($path)
+    ];
+    
+    if (file_exists($path) && is_readable($path)) {
         $autoloaderPath = $path;
         $vendorExists = true;
         break;
@@ -30,7 +43,8 @@ if ($vendorExists) {
     require_once $autoloaderPath;
     error_log("Admin: Found composer autoloader at: " . $autoloaderPath);
 } else {
-    error_log("Admin: CRITICAL ERROR: No composer autoloader found!");
+    // Log detailed error about autoloader search
+    error_log("Admin: CRITICAL ERROR: No composer autoloader found! Search results: " . json_encode($autoloaderSearchResults));
 }
 
 // Debug mode
@@ -66,10 +80,10 @@ function logInvoiceError($message, $data = []) {
     $logFile = __DIR__ . '/../../logs/invoice_errors.log';
     $dir = dirname($logFile);
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        @mkdir($dir, 0755, true);
     }
     
-    file_put_contents(
+    @file_put_contents(
         $logFile,
         date('Y-m-d H:i:s') . " - ADMIN - $message - " . $formattedData . "\n",
         FILE_APPEND
@@ -109,7 +123,9 @@ try {
         'format' => $format,
         'isPdf' => $isPdfOutput ? 'true' : 'false',
         'directDownload' => $directDownload ? 'true' : 'false',
-        'autoloaderPath' => $autoloaderPath
+        'autoloaderPath' => $autoloaderPath,
+        'script_path' => __FILE__,
+        'document_root' => $_SERVER['DOCUMENT_ROOT']
     ]);
 
     // Get GST parameters from GET
@@ -210,47 +226,20 @@ try {
         $igstAmount = 0;
     }
 
-    // IMPROVED: Get CSS content from multiple possible locations
-    $cssContent = null;
-    $possiblePaths = [
-        // Document root paths
-        $_SERVER['DOCUMENT_ROOT'] . '/css/invoice-print.css',
-        $_SERVER['DOCUMENT_ROOT'] . '/api/css/invoice-print.css',
-        // Relative to current script
-        __DIR__ . '/../../css/invoice-print.css',
-        __DIR__ . '/../../../css/invoice-print.css',
-        dirname(__DIR__) . '/css/invoice-print.css',
-        dirname(dirname(__DIR__)) . '/css/invoice-print.css',
-        dirname(dirname(dirname(__DIR__))) . '/css/invoice-print.css',
-    ];
-    
-    foreach ($possiblePaths as $path) {
-        if (file_exists($path)) {
-            $cssContent = file_get_contents($path);
-            logInvoiceError("Admin: CSS file found at path: " . $path);
-            break;
-        } else {
-            logInvoiceError("Admin: CSS file check: " . $path . " - Not found");
-        }
-    }
-    
-    // If CSS file not found, use inline minimal CSS
-    if ($cssContent === null) {
-        logInvoiceError("Admin: CSS file not found at any of the expected paths, using inline CSS");
-        $cssContent = "
-        body { font-family: DejaVu Sans, Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-        .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
-        .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-        .invoice-header div { display: table-cell; }
-        .company-info { text-align: right; }
-        .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
-        .total-row { font-weight: bold; background-color: #f9f9f9; }
-        h1, h2, h3 { margin-top: 0; }
-        .footer { margin-top: 40px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
-        ";
-    }
+    // Use inline CSS for reliability instead of searching for CSS files
+    $cssContent = "
+    body { font-family: DejaVu Sans, Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+    .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
+    .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+    .invoice-header div { display: table-cell; }
+    .company-info { text-align: right; }
+    .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+    .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
+    .total-row { font-weight: bold; background-color: #f9f9f9; }
+    h1, h2, h3 { margin-top: 0; }
+    .footer { margin-top: 40px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
+    ";
     
     // Create HTML content for the invoice
     $content = '
@@ -278,15 +267,15 @@ try {
             </div>
             
             <div class="invoice-body">
-                <div class="customer-section clearfix">
-                    <div class="customer-details">
+                <div class="customer-section" style="display: table; width: 100%; margin-bottom: 20px;">
+                    <div style="display: table-cell; width: 50%;">
                         <h3 class="section-title">Customer Details</h3>
                         <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
                         <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
                         <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
                     </div>
                     
-                    <div class="invoice-summary">
+                    <div style="display: table-cell; width: 50%;">
                         <h3 class="section-title">Trip Summary</h3>
                         <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
                         (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
@@ -304,8 +293,8 @@ try {
 
     if ($gstEnabled && !empty($gstNumber)) {
         $content .= '
-                <div class="gst-details">
-                    <div class="gst-title">GST Details</div>
+                <div class="gst-details" style="margin: 20px 0; padding: 10px; border: 1px solid #eee; background: #f9f9f9;">
+                    <h3 class="section-title">GST Details</h3>
                     <p><strong>GST Number:</strong> '.htmlspecialchars($gstNumber).'</p>
                     <p><strong>Company Name:</strong> '.htmlspecialchars($companyName).'</p>
                     '.(!empty($companyAddress) ? '<p><strong>Company Address:</strong> '.htmlspecialchars($companyAddress).'</p>' : '').'
@@ -321,7 +310,7 @@ try {
                     </tr>
                     <tr>
                         <td>Base Fare'.($includeTax && $gstEnabled ? ' (excluding tax)' : '').'</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($baseAmountBeforeTax, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
                     </tr>';
 
     if ($gstEnabled) {
@@ -329,17 +318,17 @@ try {
             $content .= '
                     <tr>
                         <td>IGST (12%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($igstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($igstAmount, 2).'</td>
                     </tr>';
         } else {
             $content .= '
                     <tr>
                         <td>CGST (6%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($cgstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($cgstAmount, 2).'</td>
                     </tr>
                     <tr>
                         <td>SGST (6%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($sgstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($sgstAmount, 2).'</td>
                     </tr>';
         }
     }
@@ -347,13 +336,13 @@ try {
     $content .= '
                     <tr class="total-row">
                         <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($totalAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
                     </tr>
                 </table>';
 
     if ($gstEnabled) {
         $content .= '
-                <p class="tax-note">This invoice includes GST as per applicable rates. '.
+                <p class="tax-note" style="font-size: 0.9em; color: #666;">This invoice includes GST as per applicable rates. '.
                 ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%').' has been applied.</p>';
     }
 
@@ -370,7 +359,7 @@ try {
     </html>';
 
     // For HTML output
-    if ($format === 'html') {
+    if ($format === 'html' || isset($_GET['show_html'])) {
         header('Content-Type: text/html; charset=utf-8');
         echo $content;
         exit;
@@ -451,6 +440,7 @@ try {
             <body>
                 <div class="error-banner">
                     <p><strong>PDF Generation Failed:</strong> Falling back to HTML view. Error: ' . htmlspecialchars($e->getMessage()) . '</p>
+                    <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
                 </div>
                 ' . $content . '
             </body>
@@ -461,7 +451,8 @@ try {
         logInvoiceError("Admin: DomPDF not available, falling back to HTML", [
             'vendorExists' => $vendorExists ? 'true' : 'false',
             'class_exists' => class_exists('Dompdf\Dompdf') ? 'true' : 'false',
-            'autoloader_path' => $autoloaderPath
+            'autoloader_path' => $autoloaderPath,
+            'search_results' => $autoloaderSearchResults
         ]);
         header('Content-Type: text/html; charset=utf-8');
         echo '<!DOCTYPE html>
@@ -474,7 +465,9 @@ try {
         </head>
         <body>
             <div class="warning-banner">
-                <p><strong>PDF Generation Unavailable:</strong> The PDF generation library is not installed or configured correctly. Please contact your administrator.</p>
+                <p><strong>PDF Generation Unavailable:</strong> The PDF generation library is not installed or configured correctly.</p>
+                <p>Please run <code>composer require dompdf/dompdf:^2.0</code> and then <code>composer install</code> in your project root.</p>
+                <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
             </div>
             ' . $content . '
         </body>
@@ -525,17 +518,28 @@ try {
             <div class="error-container">
                 <h1>Invoice Generation Error</h1>
                 <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
-                <p>Error: ' . htmlspecialchars($e->getMessage()) . '</p>
+                <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
                 
-                ' . ($debugMode ? '<h3>Technical Details:</h3>
                 <div class="error-details">
+                    <h3>Troubleshooting Steps:</h3>
+                    <ol>
+                        <li>Make sure <code>composer install</code> has been run to install all dependencies</li>
+                        <li>Verify that DomPDF is installed by running <code>composer require dompdf/dompdf:^2.0</code></li>
+                        <li>Check that the vendor directory exists and has proper permissions</li>
+                        <li>Create a logs directory with write permissions</li>
+                        <li>Try viewing our test page to diagnose any issues</li>
+                    </ol>
+                </div>
+                
+                ' . ($debugMode ? '<div class="error-details">
+                    <h3>Technical Details:</h3>
                     <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
                 </div>' : '') . '
                 
                 <div class="actions">
                     <a href="javascript:history.back()">Go Back</a>
+                    <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
                     <a href="javascript:location.reload()" class="secondary">Try Again</a>
-                    <a href="/api/test-pdf.php" class="secondary">Test PDF Generation</a>
                 </div>
             </div>
         </body>
