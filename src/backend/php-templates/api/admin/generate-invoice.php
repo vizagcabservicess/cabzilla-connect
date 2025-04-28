@@ -168,7 +168,6 @@ try {
                 'message' => 'Database connection failed',
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
-            exit;
         }
     }
     
@@ -184,7 +183,6 @@ try {
             
             if ($result->num_rows === 0) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-                exit;
             }
             
             $booking = $result->fetch_assoc();
@@ -232,19 +230,34 @@ try {
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
     
-    if ($includeTax) {
+    // Convert string to number if needed
+    if (!is_numeric($totalAmount)) {
+        $totalAmount = floatval($totalAmount);
+    }
+    
+    // Ensure we have a valid amount
+    if ($totalAmount <= 0) {
+        $totalAmount = 0;
+    }
+    
+    if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
         // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
         $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
         $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
         $taxAmount = $totalAmount - $baseAmountBeforeTax;
         $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-    } else {
+    } else if (!$includeTax && $gstEnabled) {
         // If tax is excluded from the base amount
         $baseAmountBeforeTax = $totalAmount;
         $taxAmount = $totalAmount * $gstRate;
         $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
         $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        $totalAmount = round($totalAmount, 2); // Round to ensure consistency
+    } else {
+        // No tax case
+        $baseAmountBeforeTax = $totalAmount;
+        $taxAmount = 0;
     }
     
     // For GST, split into CGST and SGST or use IGST
@@ -257,11 +270,10 @@ try {
             $sgstAmount = 0;
         } else {
             // Intrastate - Split into CGST (6%) and SGST (6%)
-            // Split tax amount exactly in half
-            $cgstAmount = $taxAmount / 2;
-            $cgstAmount = round($cgstAmount, 2);
-            $sgstAmount = $taxAmount - $cgstAmount;  // Calculate the difference to ensure exact total
-            $sgstAmount = round($sgstAmount, 2);
+            // Use exact division to ensure totals match
+            $halfTax = $taxAmount / 2;
+            $cgstAmount = round($halfTax, 2);
+            $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
             $igstAmount = 0;
         }
     } else {
@@ -360,7 +372,7 @@ try {
                     <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
-                    <td>Base Fare' . ($includeTax ? ' (excluding tax)' : '') . '</td>
+                    <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
                     <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
                 
@@ -391,9 +403,9 @@ try {
                 </tr>
             </table>';
             
-    if (!$includeTax) {
+    if (!$includeTax && $gstEnabled) {
         $invoiceHtml .= '
-            <p class="tax-note">Note: This invoice shows amounts excluding tax. Taxes will be charged separately.</p>';
+            <p class="tax-note">Note: This invoice shows base amounts excluding tax. Taxes will be charged separately.</p>';
     }
             
     $invoiceHtml .= '

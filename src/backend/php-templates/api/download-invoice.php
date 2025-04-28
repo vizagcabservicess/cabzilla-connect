@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 
-// CRITICAL: Clear all buffers first - this is essential for PDF output
+// CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
@@ -129,7 +129,7 @@ try {
         }
     }
     
-    // Forward request to admin endpoint
+    // Forward request to admin endpoint with all query parameters
     $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
     $queryParams = http_build_query($_GET);
     

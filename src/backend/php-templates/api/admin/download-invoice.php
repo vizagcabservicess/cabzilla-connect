@@ -3,13 +3,11 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CRITICAL: Clear all buffers before ANY output
+// CRITICAL: Clear all buffers before ANY output - essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
-
-// DO NOT set content-type headers here - they'll be set based on output format
 
 // CRITICAL: Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -160,21 +158,25 @@ try {
         }
     }
     
-    // If no invoice record or if parameters have changed, generate a new one
+    // Always generate a new invoice if parameters have changed
     $invoiceHtml = '';
-    if (!$invoiceExists || 
+    $needNewInvoice = !$invoiceExists || 
         $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
         $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
         $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
-        ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''))) {
-        
-        logInvoiceError("No invoice found or parameters changed, generating new invoice", [
-            'gstEnabled' => $gstEnabled ? 'true' : 'false',
-            'isIGST' => $isIGST ? 'true' : 'false',
-            'includeTax' => $includeTax ? 'true' : 'false',
-            'customInvoiceNumber' => $customInvoiceNumber
-        ]);
-        
+        ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''));
+    
+    // Log parameters to help with debugging
+    logInvoiceError("Invoice generation parameters", [
+        'needNewInvoice' => $needNewInvoice ? 'true' : 'false',
+        'invoiceExists' => $invoiceExists ? 'true' : 'false',
+        'gstEnabled' => $gstEnabled ? 'true' : 'false',
+        'isIGST' => $isIGST ? 'true' : 'false',
+        'includeTax' => $includeTax ? 'true' : 'false',
+        'customInvoiceNumber' => $customInvoiceNumber
+    ]);
+    
+    if ($needNewInvoice) {
         // Generate invoice on-the-fly via the generate-invoice API
         $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
         $queryParams = http_build_query([
@@ -229,7 +231,7 @@ try {
         throw new Exception("No invoice HTML content generated");
     }
     
-    // CRITICAL: Set Content-Type for PDF output before any HTML output
+    // CRITICAL: Set Content-Type for HTML output before any HTML output
     header('Content-Type: text/html');
     header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     

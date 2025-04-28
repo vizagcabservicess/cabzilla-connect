@@ -97,7 +97,12 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST, 'Include Tax:', includeTax, 'Custom Invoice Number:', customInvoiceNumber);
+      console.log('Generating invoice for booking:', booking.id, 
+                 'with GST:', gstEnabled, 
+                 'IGST:', isIGST, 
+                 'Include Tax:', includeTax, 
+                 'Custom Invoice Number:', customInvoiceNumber);
+                 
       const result = await onGenerateInvoice(
         gstEnabled, 
         gstEnabled ? gstDetails : undefined, 
@@ -105,6 +110,7 @@ export function BookingInvoice({
         includeTax,
         customInvoiceNumber.trim() || undefined
       );
+      
       console.log('Invoice generation result:', result);
       
       if (result && result.data) {
@@ -133,17 +139,23 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     try {
-      // Use a proper URL with query parameters (no body in GET request)
-      const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-      const bookingIdParam = `?id=${booking.id}`;
-      const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-      const igstParam = isIGST ? '&isIGST=1' : '';
+      // Use a proper URL with query parameters for invoice download
+      const baseUrl = getApiUrl(`/api/download-invoice`);
+      const bookingIdParam = `id=${booking.id}`;
+      const gstParam = gstEnabled ? '&gstEnabled=1' : '&gstEnabled=0';
+      const igstParam = isIGST ? '&isIGST=1' : '&isIGST=0';
       const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-      const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-      const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-        `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
+      const invoiceNumberParam = customInvoiceNumber.trim() ? 
+        `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
       
-      const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      let gstDetailsParam = '';
+      if (gstEnabled) {
+        gstDetailsParam = `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}`
+          + `&companyName=${encodeURIComponent(gstDetails.companyName)}`
+          + `&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}`;
+      }
+      
+      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
       console.log('Download invoice URL:', downloadUrl);
       
       // Open in a new window/tab for PDF download
@@ -190,7 +202,7 @@ export function BookingInvoice({
     setRegenerating(true);
     setInvoiceData(null);
     
-    // Force a re-generation after a short delay to ensure state updates
+    // Force a re-generation
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);
