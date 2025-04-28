@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -27,6 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Function to send JSON response
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    if (ob_get_level()) ob_end_clean();
+    echo json_encode($data, JSON_PRETTY_PRINT);
+    exit;
+}
+
 // Generate a proper invoice number
 function generateInvoiceNumber($bookingId, $customNumber = '') {
     if (!empty($customNumber)) {
@@ -50,32 +59,75 @@ function logInvoiceError($message, $data = []) {
     );
 }
 
-// Helper to get parameters from POST or GET
-function getParam($key, $default = null) {
+try {
+    // Get booking ID
+    $bookingId = null;
+    $gstEnabled = false;
+    $gstDetails = null;
+    $isIGST = false;
+    $includeTax = true;
+    $customInvoiceNumber = '';
+    
+    // Handle both GET and POST methods
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $jsonData = file_get_contents('php://input');
         $data = json_decode($jsonData, true);
-        return $data[$key] ?? $_POST[$key] ?? $_GET[$key] ?? $default;
+        
+        if (isset($data['bookingId'])) {
+            $bookingId = (int)$data['bookingId'];
+        }
+        
+        if (isset($data['gstEnabled'])) {
+            $gstEnabled = filter_var($data['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['isIGST'])) {
+            $isIGST = filter_var($data['isIGST'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['includeTax'])) {
+            $includeTax = filter_var($data['includeTax'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($data['invoiceNumber'])) {
+            $customInvoiceNumber = $data['invoiceNumber'];
+        }
+        
+        if (isset($data['gstDetails'])) {
+            $gstDetails = $data['gstDetails'];
+        }
+    } 
+    else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if (isset($_GET['id'])) {
+            $bookingId = (int)$_GET['id'];
+        }
+        
+        if (isset($_GET['gstEnabled'])) {
+            $gstEnabled = filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($_GET['isIGST'])) {
+            $isIGST = filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($_GET['includeTax'])) {
+            $includeTax = filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN);
+        }
+        
+        if (isset($_GET['invoiceNumber'])) {
+            $customInvoiceNumber = $_GET['invoiceNumber'];
+        }
+        
+        // Get GST details from query params if present
+        if (isset($_GET['gstNumber']) && isset($_GET['companyName'])) {
+            $gstDetails = [
+                'gstNumber' => $_GET['gstNumber'],
+                'companyName' => $_GET['companyName'],
+                'companyAddress' => isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '',
+            ];
+        }
     }
-    return $_POST[$key] ?? $_GET[$key] ?? $default;
-}
-
-try {
-    // Use getParam for all parameters
-    $bookingId = (int)getParam('id', getParam('bookingId'));
-    $gstEnabled = filter_var(getParam('gstEnabled', false), FILTER_VALIDATE_BOOLEAN);
-    $isIGST = filter_var(getParam('isIGST', false), FILTER_VALIDATE_BOOLEAN);
-    $includeTax = filter_var(getParam('includeTax', true), FILTER_VALIDATE_BOOLEAN);
-    $customInvoiceNumber = trim(getParam('invoiceNumber', ''));
-    $gstDetails = null;
-    if ($gstEnabled) {
-        $gstDetails = [
-            'gstNumber' => getParam('gstNumber', ''),
-            'companyName' => getParam('companyName', ''),
-            'companyAddress' => getParam('companyAddress', '')
-        ];
-    }
-
+    
     logInvoiceError("Generate invoice request", [
         'bookingId' => $bookingId, 
         'gstEnabled' => $gstEnabled ? "true" : "false",
@@ -88,9 +140,21 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database using config helper
+    // Connect to database - direct connection for reliability
     try {
-        $conn = getDbConnectionWithRetry();
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
+        }
+        
+        // Set character set
+        $conn->set_charset("utf8mb4");
         logInvoiceError("Database connection successful");
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
