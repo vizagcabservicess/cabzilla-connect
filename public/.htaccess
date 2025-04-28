@@ -7,19 +7,91 @@
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
+    
+    # Handle preflight OPTIONS request
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
 
-# Handle preflight OPTIONS requests
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
+# Prevent direct access to .php files in the api directory
+<FilesMatch "\.(php)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>
 
-# Send all API requests to the PHP backend
-RewriteRule ^api/(.*) /api/$1 [L,QSA]
+# Fix for PUT/DELETE requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Ensure PHP errors are displayed in development
+php_flag display_errors On
+php_value error_reporting E_ALL
+
+# Enable rewrite engine for api routing
+RewriteEngine On
+
+# Direct access to API PHP files
+<Files ~ "\.php$">
+    Order Allow,Deny
+    Allow from all
+    SetHandler application/x-httpd-php
+</Files>
+
+# CRITICAL: Special handling for download-invoice.php - no content type header
+<Files "download-invoice.php">
+    # Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+    # No caching for PDF files
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+</Files>
+
+# IMPORTANT: MIME type handling for PDFs - STRONGER DIRECTIVE
+<FilesMatch "\.pdf$">
+    ForceType application/pdf
+    Header always set Content-Type "application/pdf"
+    Header always set X-Content-Type-Options "nosniff"
+    # Force browser to download PDF rather than display inline
+    Header set Content-Disposition "attachment"
+</FilesMatch>
+
+# API Test Endpoint - highest priority
+RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
+
+# High priority API endpoints - ensure these work first
+RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
+RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
+RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
+RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
+RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
+
+# Add public download-invoice endpoint with special handling for PDFs
+RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,NC,QSA]
+
+# Invoice and receipt endpoints with high priority
+RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^api/receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
 
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
-# Send all other requests to index.html for React routing
+# Send all other requests to index.html for React to handle
 RewriteRule ^(.*)$ /index.html [L]
 

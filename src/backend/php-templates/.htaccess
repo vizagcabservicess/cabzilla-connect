@@ -38,7 +38,7 @@ RewriteRule .* - [R=200,L]
     SetHandler application/x-httpd-php
 </Files>
 
-# CRITICAL: Special handling for PDF files and downloads
+# SPECIAL RULES FOR PDF FILES - Critical for proper PDF downloads
 <FilesMatch "\.(pdf)$">
     ForceType application/pdf
     Header set Content-Type application/pdf
@@ -47,8 +47,8 @@ RewriteRule .* - [R=200,L]
     Header set Cache-Control "must-revalidate"
 </FilesMatch>
 
-# SPECIAL HANDLING FOR INVOICE DOWNLOAD - Override Content-Type for this file only
-<Files "download-invoice.php">
+# SPECIAL RULE FOR INVOICE DOWNLOAD - Override Content-Type for this file only
+<FilesMatch "download-invoice\.php$">
     # Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
@@ -56,10 +56,7 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
+</FilesMatch>
 
 # PDF Download Fix - CRITICAL - Address the PDF download issue
 <Files "download-invoice.php">
