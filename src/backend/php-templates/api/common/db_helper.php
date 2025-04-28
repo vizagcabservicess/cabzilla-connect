@@ -40,7 +40,7 @@ function getDbConnection() {
     $dbHost = defined('DB_HOST') ? DB_HOST : 'localhost';
     $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
     $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
-    $dbPass = defined('DB_PASSWORD') ? DB_PASS : 'Vizag@1213';
+    $dbPass = defined('DB_PASSWORD') ? DB_PASSWORD : 'Vizag@1213';
     
     // Create connection
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
@@ -53,6 +53,12 @@ function getDbConnection() {
     // Set character set
     $conn->set_charset("utf8mb4");
     
+    // Test the connection with a simple query
+    $testResult = $conn->query("SELECT 1");
+    if (!$testResult) {
+        throw new Exception("Database connection test query failed: " . $conn->error);
+    }
+    
     return $conn;
 }
 
@@ -60,24 +66,29 @@ function getDbConnection() {
 function executeQuery($sql, $params = [], $types = "") {
     $conn = getDbConnectionWithRetry();
     
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Query preparation failed: " . $conn->error);
+    try {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Query preparation failed: " . $conn->error);
+        }
+        
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        $success = $stmt->execute();
+        if (!$success) {
+            throw new Exception("Query execution failed: " . $stmt->error);
+        }
+        
+        $result = $stmt->get_result();
+        $stmt->close();
+        
+        return $result;
+    } catch (Exception $e) {
+        error_log("DB query error: " . $e->getMessage() . " - SQL: " . $sql);
+        throw $e;
     }
-    
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    $success = $stmt->execute();
-    if (!$success) {
-        throw new Exception("Query execution failed: " . $stmt->error);
-    }
-    
-    $result = $stmt->get_result();
-    $stmt->close();
-    
-    return $result;
 }
 
 // Function to fetch a single row
@@ -103,46 +114,56 @@ function fetchAll($sql, $params = [], $types = "") {
 function insertData($sql, $params = [], $types = "") {
     $conn = getDbConnectionWithRetry();
     
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Insert preparation failed: " . $conn->error);
+    try {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Insert preparation failed: " . $conn->error);
+        }
+        
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        $success = $stmt->execute();
+        if (!$success) {
+            throw new Exception("Insert execution failed: " . $stmt->error);
+        }
+        
+        $insertId = $conn->insert_id;
+        $stmt->close();
+        
+        return $insertId;
+    } catch (Exception $e) {
+        error_log("DB insert error: " . $e->getMessage() . " - SQL: " . $sql);
+        throw $e;
     }
-    
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    $success = $stmt->execute();
-    if (!$success) {
-        throw new Exception("Insert execution failed: " . $stmt->error);
-    }
-    
-    $insertId = $conn->insert_id;
-    $stmt->close();
-    
-    return $insertId;
 }
 
 // Function to update data and return affected rows
 function updateData($sql, $params = [], $types = "") {
     $conn = getDbConnectionWithRetry();
     
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Update preparation failed: " . $conn->error);
+    try {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Update preparation failed: " . $conn->error);
+        }
+        
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        $success = $stmt->execute();
+        if (!$success) {
+            throw new Exception("Update execution failed: " . $stmt->error);
+        }
+        
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+        
+        return $affectedRows;
+    } catch (Exception $e) {
+        error_log("DB update error: " . $e->getMessage() . " - SQL: " . $sql);
+        throw $e;
     }
-    
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    $success = $stmt->execute();
-    if (!$success) {
-        throw new Exception("Update execution failed: " . $stmt->error);
-    }
-    
-    $affectedRows = $stmt->affected_rows;
-    $stmt->close();
-    
-    return $affectedRows;
 }
