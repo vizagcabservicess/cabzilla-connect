@@ -141,3 +141,34 @@ if (!function_exists('generateJwtToken')) {
         return "$header.$payload.$signature";
     }
 }
+
+// Database connection with retry mechanism
+if (!function_exists('getDbConnectionWithRetry')) {
+    function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
+        $attempts = 0;
+        $lastError = null;
+        
+        while ($attempts < $maxRetries) {
+            try {
+                $conn = getDbConnection();
+                if ($conn && $conn->ping()) {
+                    return $conn; // Successful connection
+                }
+            } catch (Exception $e) {
+                $lastError = $e;
+                logError("Database connection attempt " . ($attempts + 1) . " failed: " . $e->getMessage());
+            }
+            
+            $attempts++;
+            
+            if ($attempts < $maxRetries) {
+                // Wait before retrying (increasing delay with each attempt)
+                usleep($retryDelayMs * 1000 * $attempts);
+            }
+        }
+        
+        // All retries failed
+        throw new Exception("Failed to connect to database after $maxRetries attempts. Last error: " . 
+            ($lastError ? $lastError->getMessage() : "Unknown error"));
+    }
+}
