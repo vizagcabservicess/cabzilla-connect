@@ -2,26 +2,35 @@
 <?php
 // Simple test script to verify PDF generation works
 
-// Clear any output buffer
-while (ob_get_level()) ob_end_clean();
-
 // Set headers for better error reporting
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+// Clear any output buffer
+while (ob_get_level()) ob_end_clean();
+
 // Check for autoloader in multiple possible locations
 $autoloaderPaths = [
     __DIR__ . '/../vendor/autoload.php',
     __DIR__ . '/../../vendor/autoload.php',
-    dirname(dirname(dirname(__FILE__))) . '/vendor/autoload.php'
+    dirname(dirname(__FILE__)) . '/vendor/autoload.php',
+    dirname(dirname(dirname(__FILE__))) . '/vendor/autoload.php',
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
 ];
 
 $autoloaderPath = null;
 $vendorExists = false;
+$autloaderCheckResults = [];
 
 foreach ($autoloaderPaths as $path) {
-    if (file_exists($path)) {
+    $exists = file_exists($path);
+    $autloaderCheckResults[] = [
+        'path' => $path,
+        'exists' => $exists
+    ];
+    
+    if ($exists) {
         $autoloaderPath = $path;
         $vendorExists = true;
         break;
@@ -29,14 +38,68 @@ foreach ($autoloaderPaths as $path) {
 }
 
 echo "<h1>PDF Generation Test</h1>";
+echo "<p>Server time: " . date('Y-m-d H:i:s') . "</p>";
+echo "<p>PHP Version: " . phpversion() . "</p>";
 
 if (!$vendorExists) {
-    echo "<p style='color:red;'>ERROR: Composer autoloader not found. Checked paths:</p><ul>";
-    foreach ($autoloaderPaths as $path) {
-        echo "<li>" . htmlspecialchars($path) . " - " . (file_exists($path) ? "Exists" : "Not found") . "</li>";
+    echo "<p style='color:red; font-weight:bold;'>ERROR: Composer autoloader not found. Checked paths:</p><ul>";
+    foreach ($autloaderCheckResults as $result) {
+        echo "<li>" . htmlspecialchars($result['path']) . " - " . ($result['exists'] ? "<span style='color:green'>Exists</span>" : "<span style='color:red'>Not found</span>") . "</li>";
     }
     echo "</ul>";
-    echo "<p>Please ensure the vendor directory with all dependencies is uploaded correctly.</p>";
+    
+    // Look for vendor directory
+    echo "<h2>Searching for vendor directory...</h2>";
+    $possibleVendorDirs = [
+        __DIR__ . '/../vendor',
+        __DIR__ . '/../../vendor',
+        dirname(dirname(__FILE__)) . '/vendor',
+        dirname(dirname(dirname(__FILE__))) . '/vendor',
+        $_SERVER['DOCUMENT_ROOT'] . '/vendor'
+    ];
+    
+    echo "<ul>";
+    foreach ($possibleVendorDirs as $dir) {
+        echo "<li>" . htmlspecialchars($dir) . " - " . (is_dir($dir) ? "<span style='color:green'>Directory exists</span>" : "<span style='color:red'>Directory not found</span>") . "</li>";
+        
+        if (is_dir($dir) && is_dir($dir . '/dompdf')) {
+            echo " <span style='color:green'>DomPDF directory found inside this vendor folder!</span>";
+        }
+    }
+    echo "</ul>";
+    
+    echo "<h2>Looking for composer.json...</h2>";
+    $possibleComposerFiles = [
+        __DIR__ . '/../composer.json',
+        __DIR__ . '/../../composer.json',
+        dirname(dirname(__FILE__)) . '/composer.json',
+        dirname(dirname(dirname(__FILE__))) . '/composer.json',
+        $_SERVER['DOCUMENT_ROOT'] . '/composer.json'
+    ];
+    
+    echo "<ul>";
+    foreach ($possibleComposerFiles as $file) {
+        echo "<li>" . htmlspecialchars($file) . " - " . (file_exists($file) ? "<span style='color:green'>File exists</span>" : "<span style='color:red'>File not found</span>") . "</li>";
+        
+        if (file_exists($file)) {
+            $contents = file_get_contents($file);
+            if (strpos($contents, 'dompdf') !== false) {
+                echo " <span style='color:green'>This composer.json includes DomPDF!</span>";
+            } else {
+                echo " <span style='color:orange'>This composer.json does not seem to include DomPDF.</span>";
+            }
+        }
+    }
+    echo "</ul>";
+    
+    echo "<p>Please ensure the vendor directory with all dependencies is uploaded correctly. You need to run these commands:</p>";
+    echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd;'>
+composer install
+# or if a composer.lock file exists:
+composer update
+</pre>";
+    
+    echo "<p>If you've already run these commands and are still seeing this error, please check the file permissions.</p>";
     exit;
 }
 
@@ -55,12 +118,42 @@ try {
 if (!class_exists('Dompdf\Dompdf')) {
     echo "<p style='color:red;'>ERROR: DomPDF class not found. The package may not be installed correctly.</p>";
     
+    // Check inside vendor directory
+    echo "<p>Checking vendor directory structure...</p>";
+    $dompdfPath = dirname($autoloaderPath) . '/dompdf';
+    
+    if (is_dir($dompdfPath)) {
+        echo "<p style='color:green;'>DomPDF directory found at: " . htmlspecialchars($dompdfPath) . "</p>";
+        echo "<p>Files in DomPDF directory:</p>";
+        echo "<pre>";
+        print_r(scandir($dompdfPath));
+        echo "</pre>";
+    } else {
+        echo "<p style='color:red;'>DomPDF directory not found at expected location: " . htmlspecialchars($dompdfPath) . "</p>";
+    }
+    
     // Display installed packages
     echo "<h2>Installed Packages:</h2>";
     $composerJson = file_get_contents(dirname($autoloaderPath) . '/composer/installed.json');
     if ($composerJson) {
         $packages = json_decode($composerJson, true);
-        echo "<pre>" . htmlspecialchars(print_r($packages, true)) . "</pre>";
+        echo "<ul>";
+        if (is_array($packages)) {
+            if (isset($packages['packages'])) {
+                // Newer composer structure
+                foreach ($packages['packages'] as $package) {
+                    echo "<li>" . htmlspecialchars($package['name'] ?? 'Unknown') . " - " . htmlspecialchars($package['version'] ?? 'Unknown version') . "</li>";
+                }
+            } else {
+                // Older composer structure
+                foreach ($packages as $package) {
+                    echo "<li>" . htmlspecialchars($package['name'] ?? 'Unknown') . " - " . htmlspecialchars($package['version'] ?? 'Unknown version') . "</li>";
+                }
+            }
+        } else {
+            echo "<li>Error parsing composer packages.</li>";
+        }
+        echo "</ul>";
     } else {
         echo "<p>Could not read installed packages.</p>";
     }
@@ -100,6 +193,9 @@ try {
             .container { max-width: 800px; margin: 0 auto; padding: 20px; }
             h1 { color: #333; }
             .success { color: green; }
+            .info-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .info-table th, .info-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            .info-table th { background-color: #f2f2f2; }
         </style>
     </head>
     <body>
@@ -107,6 +203,30 @@ try {
             <h1>PDF Generation Test</h1>
             <p class="success">If you can see this PDF, DomPDF is working correctly!</p>
             <p>Generated on: ' . date('Y-m-d H:i:s') . '</p>
+            
+            <h2>System Information</h2>
+            <table class="info-table">
+                <tr>
+                    <th>PHP Version</th>
+                    <td>' . phpversion() . '</td>
+                </tr>
+                <tr>
+                    <th>DomPDF Version</th>
+                    <td>' . (defined('Dompdf\Dompdf::VERSION') ? Dompdf\Dompdf::VERSION : 'Unknown') . '</td>
+                </tr>
+                <tr>
+                    <th>Server</th>
+                    <td>' . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown') . '</td>
+                </tr>
+                <tr>
+                    <th>Document Root</th>
+                    <td>' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Unknown') . '</td>
+                </tr>
+                <tr>
+                    <th>Autoloader Path</th>
+                    <td>' . $autoloaderPath . '</td>
+                </tr>
+            </table>
         </div>
     </body>
     </html>';
@@ -120,7 +240,15 @@ try {
     echo "<p style='color:green;'>PDF rendered successfully.</p>";
     
     // Display link to download PDF
-    echo "<p><a href='?download=1' style='display:inline-block; padding:10px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;'>Download Test PDF</a></p>";
+    echo "<div style='text-align:center; margin:30px;'>";
+    echo "<a href='?download=1' style='display:inline-block; padding:15px 30px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px; font-size:18px;'>Download Test PDF</a>";
+    echo "</div>";
+    
+    echo "<h2>PDF Generation Testing Tools</h2>";
+    echo "<div style='display:flex; justify-content:center; gap:10px; margin-bottom:20px;'>";
+    echo "<a href='?download=1&debug=1' style='padding:10px; background:#2196F3; color:white; text-decoration:none; border-radius:4px;'>Debug Mode PDF</a>";
+    echo "<a href='/api/download-invoice.php?id=1&debug=1' style='padding:10px; background:#FF9800; color:white; text-decoration:none; border-radius:4px;'>Test Invoice Endpoint</a>";
+    echo "</div>";
     
     // If download parameter is set, output the PDF
     if (isset($_GET['download'])) {
@@ -137,7 +265,7 @@ try {
     
 } catch (Exception $e) {
     echo "<p style='color:red;'>ERROR creating PDF: " . htmlspecialchars($e->getMessage()) . "</p>";
-    echo "<p>Trace: <pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre></p>";
+    echo "<p>Trace: <pre style='background-color:#fff8f8; padding:10px; overflow:auto; max-height:400px; border:1px solid #f5c6cb;'>" . htmlspecialchars($e->getTraceAsString()) . "</pre></p>";
 }
 
 // Display PHP info for debugging
@@ -146,7 +274,157 @@ echo "<p>PHP Version: " . phpversion() . "</p>";
 echo "<p>Extensions loaded: " . implode(', ', get_loaded_extensions()) . "</p>";
 
 // GD is required for DomPDF
-echo "<p>GD Info: " . (function_exists('gd_info') ? "Installed" : "Not installed") . "</p>";
+echo "<p>GD Info: " . (function_exists('gd_info') ? "<span style='color:green;'>Installed</span>" : "<span style='color:red;'>Not installed</span>") . "</p>";
 if (function_exists('gd_info')) {
-    echo "<pre>" . htmlspecialchars(print_r(gd_info(), true)) . "</pre>";
+    $gdInfo = gd_info();
+    echo "<table style='border-collapse: collapse; width: 100%; margin-top: 10px;'>";
+    echo "<tr style='background-color: #f2f2f2;'><th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Feature</th><th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Status</th></tr>";
+    
+    foreach ($gdInfo as $key => $value) {
+        echo "<tr>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . htmlspecialchars($key) . "</td>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . (is_bool($value) ? ($value ? 'Yes' : 'No') : htmlspecialchars($value)) . "</td>";
+        echo "</tr>";
+    }
+    echo "</table>";
 }
+
+// Check mbstring extension
+echo "<p>mbstring Extension: " . (extension_loaded('mbstring') ? "<span style='color:green;'>Installed</span>" : "<span style='color:red;'>Not installed</span>") . "</p>";
+
+// Check file permissions
+echo "<h2>File Permissions Check:</h2>";
+$folderToCheck = dirname($autoloaderPath);
+echo "<p>Checking folder: " . htmlspecialchars($folderToCheck) . "</p>";
+
+function checkPermission($path) {
+    if (file_exists($path)) {
+        $perms = fileperms($path);
+        $readable = is_readable($path) ? "<span style='color:green;'>Yes</span>" : "<span style='color:red;'>No</span>";
+        $writable = is_writable($path) ? "<span style='color:green;'>Yes</span>" : "<span style='color:red;'>No</span>";
+        $type = is_dir($path) ? "Directory" : "File";
+        
+        $symbolic = '';
+        
+        if (($perms & 0xC000) == 0xC000) {
+            $symbolic = 's';
+        } elseif (($perms & 0xA000) == 0xA000) {
+            $symbolic = 'l';
+        } elseif (($perms & 0x8000) == 0x8000) {
+            $symbolic = '-';
+        } elseif (($perms & 0x6000) == 0x6000) {
+            $symbolic = 'b';
+        } elseif (($perms & 0x4000) == 0x4000) {
+            $symbolic = 'd';
+        } elseif (($perms & 0x2000) == 0x2000) {
+            $symbolic = 'c';
+        } elseif (($perms & 0x1000) == 0x1000) {
+            $symbolic = 'p';
+        } else {
+            $symbolic = 'u';
+        }
+
+        // Owner
+        $symbolic .= (($perms & 0x0100) ? 'r' : '-');
+        $symbolic .= (($perms & 0x0080) ? 'w' : '-');
+        $symbolic .= (($perms & 0x0040) ?
+                    (($perms & 0x0800) ? 's' : 'x' ) :
+                    (($perms & 0x0800) ? 'S' : '-'));
+
+        // Group
+        $symbolic .= (($perms & 0x0020) ? 'r' : '-');
+        $symbolic .= (($perms & 0x0010) ? 'w' : '-');
+        $symbolic .= (($perms & 0x0008) ?
+                    (($perms & 0x0400) ? 's' : 'x' ) :
+                    (($perms & 0x0400) ? 'S' : '-'));
+
+        // World
+        $symbolic .= (($perms & 0x0004) ? 'r' : '-');
+        $symbolic .= (($perms & 0x0002) ? 'w' : '-');
+        $symbolic .= (($perms & 0x0001) ?
+                    (($perms & 0x0200) ? 't' : 'x' ) :
+                    (($perms & 0x0200) ? 'T' : '-'));
+                    
+        return [
+            'type' => $type,
+            'perms' => $symbolic,
+            'octal' => substr(sprintf('%o', $perms), -4),
+            'readable' => $readable,
+            'writable' => $writable
+        ];
+    }
+    
+    return null;
+}
+
+// Check a few important directories and files
+$importantPaths = [
+    $folderToCheck,
+    $folderToCheck . '/dompdf',
+    $folderToCheck . '/autoload.php',
+    sys_get_temp_dir()
+];
+
+echo "<table style='border-collapse: collapse; width: 100%; margin-top: 10px;'>";
+echo "<tr style='background-color: #f2f2f2;'>";
+echo "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Path</th>";
+echo "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Type</th>";
+echo "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Permissions</th>";
+echo "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Readable</th>";
+echo "<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>Writable</th>";
+echo "</tr>";
+
+foreach ($importantPaths as $path) {
+    $permInfo = checkPermission($path);
+    if ($permInfo) {
+        echo "<tr>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . htmlspecialchars($path) . "</td>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . $permInfo['type'] . "</td>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . $permInfo['perms'] . " (" . $permInfo['octal'] . ")</td>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . $permInfo['readable'] . "</td>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . $permInfo['writable'] . "</td>";
+        echo "</tr>";
+    } else {
+        echo "<tr>";
+        echo "<td style='border: 1px solid #ddd; padding: 8px;'>" . htmlspecialchars($path) . "</td>";
+        echo "<td colspan='4' style='border: 1px solid #ddd; padding: 8px; color: red;'>Path does not exist</td>";
+        echo "</tr>";
+    }
+}
+echo "</table>";
+
+// Check for error logs
+echo "<h2>Recent Error Logs:</h2>";
+$logFile = __DIR__ . '/../logs/invoice_errors.log';
+if (file_exists($logFile) && is_readable($logFile)) {
+    echo "<p>Found invoice error log file at: " . htmlspecialchars($logFile) . "</p>";
+    echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd; max-height: 300px; overflow: auto;'>";
+    // Get last 50 lines of the log file
+    $logContent = file_get_contents($logFile);
+    $lines = explode("\n", $logContent);
+    $lines = array_slice($lines, -50);
+    echo htmlspecialchars(implode("\n", $lines));
+    echo "</pre>";
+} else {
+    echo "<p>No invoice error log file found at: " . htmlspecialchars($logFile) . "</p>";
+}
+
+// PHP error log location
+$phpErrorLogPath = ini_get('error_log');
+echo "<p>PHP error log path: " . htmlspecialchars($phpErrorLogPath ?: 'Not configured') . "</p>";
+
+echo "<h2>Next Steps for Troubleshooting</h2>";
+echo "<ol>";
+echo "<li>Run `composer require dompdf/dompdf:^2.0` in your project root directory</li>";
+echo "<li>Make sure the vendor directory has proper permissions</li>";
+echo "<li>Check PHP errors in the server error log</li>";
+echo "<li>Ensure all required PHP extensions are enabled (GD, mbstring)</li>";
+echo "<li>Verify temporary directory is writable: " . htmlspecialchars(sys_get_temp_dir()) . "</li>";
+echo "</ol>";
+
+// Show a footer with links
+echo "<div style='margin-top:30px; padding-top:20px; border-top:1px solid #ddd; text-align:center;'>";
+echo "<p>Other test links:</p>";
+echo "<a href='/api/download-invoice.php?id=1' style='display:inline-block; margin:0 10px; padding:8px 15px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;'>Test Invoice Download</a>";
+echo "<a href='/' style='display:inline-block; margin:0 10px; padding:8px 15px; background:#607D8B; color:white; text-decoration:none; border-radius:5px;'>Return to Home</a>";
+echo "</div>";

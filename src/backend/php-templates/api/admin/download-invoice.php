@@ -4,13 +4,33 @@
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 
-// Check if vendor directory exists and autoload is available
-$autoloaderPath = __DIR__ . '/../../vendor/autoload.php';
-$vendorExists = file_exists($autoloaderPath);
+// CRITICAL: Improved autoloader detection - check multiple possible paths
+$autoloaderPaths = [
+    __DIR__ . '/../../vendor/autoload.php',                // Standard vendor location
+    __DIR__ . '/../../../vendor/autoload.php',             // One level up
+    dirname(dirname(__DIR__)) . '/vendor/autoload.php',    // Alternative path
+    dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php', // Project root
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',    // Document root
+];
 
+$vendorExists = false;
+$autoloaderPath = null;
+
+foreach ($autoloaderPaths as $path) {
+    if (file_exists($path)) {
+        $autoloaderPath = $path;
+        $vendorExists = true;
+        break;
+    }
+}
+
+// Log whether we found the autoloader or not
 if ($vendorExists) {
     // Require Composer's autoloader if it exists
     require_once $autoloaderPath;
+    error_log("Admin: Found composer autoloader at: " . $autoloaderPath);
+} else {
+    error_log("Admin: CRITICAL ERROR: No composer autoloader found!");
 }
 
 // Debug mode
@@ -38,20 +58,33 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Log error function with more details
+// Improved error logging function with file path
 function logInvoiceError($message, $data = []) {
-    error_log("INVOICE ERROR: $message " . json_encode($data));
+    $formattedData = is_array($data) ? json_encode($data) : (string)$data;
+    error_log("ADMIN INVOICE ERROR: $message " . $formattedData);
+    
     $logFile = __DIR__ . '/../../logs/invoice_errors.log';
     $dir = dirname($logFile);
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
+    
     file_put_contents(
         $logFile,
-        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        date('Y-m-d H:i:s') . " - ADMIN - $message - " . $formattedData . "\n",
         FILE_APPEND
     );
 }
+
+// Enhanced error handling for the entire script
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    logInvoiceError("PHP Error", [
+        'error' => $errstr,
+        'file' => $errfile,
+        'line' => $errline,
+        'type' => $errno
+    ]);
+}, E_ALL);
 
 try {
     // Only allow GET requests
@@ -75,7 +108,8 @@ try {
     logInvoiceError("Processing invoice download for booking ID: $bookingId", [
         'format' => $format,
         'isPdf' => $isPdfOutput ? 'true' : 'false',
-        'directDownload' => $directDownload ? 'true' : 'false'
+        'directDownload' => $directDownload ? 'true' : 'false',
+        'autoloaderPath' => $autoloaderPath
     ]);
 
     // Get GST parameters from GET
@@ -176,20 +210,18 @@ try {
         $igstAmount = 0;
     }
 
-    // Get CSS content - IMPROVED PATH RESOLUTION FOR PRODUCTION
-    // Try multiple possible paths for CSS in order of likelihood
+    // IMPROVED: Get CSS content from multiple possible locations
     $cssContent = null;
     $possiblePaths = [
-        // Public CSS directory (most likely in production)
+        // Document root paths
         $_SERVER['DOCUMENT_ROOT'] . '/css/invoice-print.css',
-        // Project root CSS directory
         $_SERVER['DOCUMENT_ROOT'] . '/api/css/invoice-print.css',
         // Relative to current script
         __DIR__ . '/../../css/invoice-print.css',
-        // One level up
         __DIR__ . '/../../../css/invoice-print.css',
-        // Two levels up
-        __DIR__ . '/../../../../css/invoice-print.css',
+        dirname(__DIR__) . '/css/invoice-print.css',
+        dirname(dirname(__DIR__)) . '/css/invoice-print.css',
+        dirname(dirname(dirname(__DIR__))) . '/css/invoice-print.css',
     ];
     
     foreach ($possiblePaths as $path) {
@@ -197,6 +229,8 @@ try {
             $cssContent = file_get_contents($path);
             logInvoiceError("Admin: CSS file found at path: " . $path);
             break;
+        } else {
+            logInvoiceError("Admin: CSS file check: " . $path . " - Not found");
         }
     }
     
@@ -204,7 +238,7 @@ try {
     if ($cssContent === null) {
         logInvoiceError("Admin: CSS file not found at any of the expected paths, using inline CSS");
         $cssContent = "
-        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+        body { font-family: DejaVu Sans, Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
         .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
         .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
         .invoice-header div { display: table-cell; }
@@ -214,7 +248,7 @@ try {
         .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
         .total-row { font-weight: bold; background-color: #f9f9f9; }
         h1, h2, h3 { margin-top: 0; }
-        .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
+        .footer { margin-top: 40px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
         ";
     }
     
@@ -342,12 +376,14 @@ try {
         exit;
     }
 
-    // For PDF output, check if we can use DomPDF
+    // For PDF output, check if we can use DomPDF with enhanced error handling
     if ($vendorExists && class_exists('Dompdf\Dompdf')) {
         try {
             // Import DomPDF classes
             use Dompdf\Dompdf;
             use Dompdf\Options;
+            
+            logInvoiceError("Admin: DomPDF class found, attempting to generate PDF");
             
             // Configure DomPDF options
             $options = new Options();
@@ -360,12 +396,27 @@ try {
             // Create DomPDF instance
             $dompdf = new Dompdf($options);
             $dompdf->setPaper('A4', 'portrait');
+            
+            logInvoiceError("Admin: DomPDF instance created successfully");
 
             // Load HTML content
             $dompdf->loadHtml($content);
+            logInvoiceError("Admin: HTML loaded into DomPDF");
 
             // Render the PDF
             $dompdf->render();
+            logInvoiceError("Admin: PDF rendering complete");
+
+            // CRITICAL: Clear any previous headers and output buffers
+            while (ob_get_level()) ob_end_clean();
+            
+            // Check if headers already sent
+            if (headers_sent($file, $line)) {
+                logInvoiceError("Admin: WARNING: Headers already sent before PDF output", [
+                    'file' => $file,
+                    'line' => $line
+                ]);
+            }
 
             // Set appropriate headers
             header('Content-Type: application/pdf');
@@ -377,32 +428,123 @@ try {
             // Output the generated PDF
             echo $dompdf->output();
             
-            logInvoiceError("Admin PDF generated successfully", ['invoice_number' => $invoiceNumber]);
+            logInvoiceError("Admin: PDF generated and output successfully");
         } catch (Exception $e) {
-            logInvoiceError("Admin PDF generation error", ['error' => $e->getMessage()]);
+            logInvoiceError("Admin: PDF generation error", [
+                'error' => $e->getMessage(), 
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
             
-            // If PDF generation fails, fall back to HTML output
+            // If PDF generation fails, fall back to HTML output with warning
+            logInvoiceError("Admin: Falling back to HTML output due to PDF generation error");
             header('Content-Type: text/html; charset=utf-8');
-            echo $content;
+            echo '<!DOCTYPE html>
+            <html>
+            <head>
+                <title>Invoice (HTML Fallback)</title>
+                <style>
+                    .error-banner { background-color: #ffdddd; border: 1px solid #ff0000; padding: 10px; margin-bottom: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="error-banner">
+                    <p><strong>PDF Generation Failed:</strong> Falling back to HTML view. Error: ' . htmlspecialchars($e->getMessage()) . '</p>
+                </div>
+                ' . $content . '
+            </body>
+            </html>';
         }
     } else {
-        // DomPDF not available, return HTML content
-        logInvoiceError("DomPDF not available, falling back to HTML", ['vendor_exists' => $vendorExists ? 'true' : 'false']);
+        // DomPDF not available, return HTML content with warning
+        logInvoiceError("Admin: DomPDF not available, falling back to HTML", [
+            'vendorExists' => $vendorExists ? 'true' : 'false',
+            'class_exists' => class_exists('Dompdf\Dompdf') ? 'true' : 'false',
+            'autoloader_path' => $autoloaderPath
+        ]);
         header('Content-Type: text/html; charset=utf-8');
-        echo $content;
+        echo '<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Invoice (HTML Only)</title>
+            <style>
+                .warning-banner { background-color: #ffffdd; border: 1px solid #ffcc00; padding: 10px; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="warning-banner">
+                <p><strong>PDF Generation Unavailable:</strong> The PDF generation library is not installed or configured correctly. Please contact your administrator.</p>
+            </div>
+            ' . $content . '
+        </body>
+        </html>';
     }
 
 } catch (Exception $e) {
-    logInvoiceError("Critical error in admin download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logInvoiceError("Admin: Critical error in download-invoice.php", [
+        'error' => $e->getMessage(), 
+        'trace' => $e->getTraceAsString(),
+        'line' => $e->getLine(),
+        'file' => $e->getFile()
+    ]);
     
-    // For errors, ensure we return JSON
-    header('Content-Type: application/json');
-    sendJsonResponse([
-        'status' => 'error',
-        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getMessage() : null
-    ], 500);
+    // For errors, ensure we return either JSON or user-friendly HTML based on Accept header
+    $acceptHeader = isset($_SERVER['HTTP_ACCEPT']) ? $_SERVER['HTTP_ACCEPT'] : '';
+    $wantsJson = strpos($acceptHeader, 'application/json') !== false;
+    
+    if ($wantsJson) {
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'Failed to generate invoice: ' . $e->getMessage(),
+            'error_details' => $debugMode ? [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile()
+            ] : null
+        ], 500);
+    } else {
+        // Return user-friendly error page
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html>
+        <html>
+        <head>
+            <title>Invoice Generation Error</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+                .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
+                h1 { color: #cc0000; }
+                .error-details { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; overflow: auto; }
+                .actions { margin-top: 20px; }
+                .actions a { display: inline-block; margin-right: 10px; padding: 8px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
+                .actions a.secondary { background-color: #607d8b; }
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>Invoice Generation Error</h1>
+                <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
+                <p>Error: ' . htmlspecialchars($e->getMessage()) . '</p>
+                
+                ' . ($debugMode ? '<h3>Technical Details:</h3>
+                <div class="error-details">
+                    <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
+                </div>' : '') . '
+                
+                <div class="actions">
+                    <a href="javascript:history.back()">Go Back</a>
+                    <a href="javascript:location.reload()" class="secondary">Try Again</a>
+                    <a href="/api/test-pdf.php" class="secondary">Test PDF Generation</a>
+                </div>
+            </div>
+        </body>
+        </html>';
+    }
 }
+
+// Restore normal error handler
+restore_error_handler();
 
 // Close database connection
 if (isset($conn) && $conn instanceof mysqli) {
