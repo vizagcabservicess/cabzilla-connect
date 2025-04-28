@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -138,7 +137,7 @@ export function BookingInvoice({
     }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     try {
       setDownloadCount(prev => prev + 1);
       
@@ -148,10 +147,7 @@ export function BookingInvoice({
         isIGST: isIGST ? '1' : '0',
         includeTax: includeTax ? '1' : '0',
         format: 'pdf',
-        direct_download: '1',
-        v: downloadCount.toString(),
-        t: new Date().getTime().toString(),
-        r: Math.random().toString(36).substring(2)
+        direct_download: '1'
       });
       
       if (customInvoiceNumber.trim()) {
@@ -163,29 +159,28 @@ export function BookingInvoice({
         params.append('companyName', gstDetails.companyName);
         params.append('companyAddress', gstDetails.companyAddress);
       }
+
+      const url = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
       
-      // Method 1: Using iframe for seamless download
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
-      document.body.appendChild(iframe);
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.download = `invoice_${booking.id}.pdf`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       toast({
-        title: "PDF Download Started",
+        title: "Download Started",
         description: "Your invoice is being downloaded"
       });
-      
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
     } catch (error) {
-      console.error("Invoice download error:", error);
+      console.error("Download error:", error);
       toast({
         variant: "destructive",
         title: "Download Failed",
-        description: "Failed to download invoice. Please try an alternative download method."
+        description: "Failed to download the invoice. Please try again."
       });
     }
   };
@@ -216,7 +211,6 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
-      // Method 2: Direct window.open for PDF
       window.open(getApiUrl(`/api/admin/download-invoice.php?${params.toString()}`), '_blank');
       
       toast({
@@ -265,7 +259,6 @@ export function BookingInvoice({
 
   const handleDataUriDownload = () => {
     try {
-      // Define PDF content
       const content = `Invoice #${customInvoiceNumber || booking.id}
 
 Customer: ${booking.passengerName || 'N/A'}
@@ -285,7 +278,6 @@ Thank you for choosing Vizag Cab Services!
 Generated on: ${new Date().toLocaleString()}
 `;
       
-      // Create minimal PDF structure with content
       const pdfContent = `%PDF-1.7
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
@@ -319,7 +311,6 @@ startxref
 1000
 %%EOF`;
 
-      // Create blob and trigger download
       const blob = new Blob([pdfContent], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -328,7 +319,6 @@ startxref
       document.body.appendChild(link);
       link.click();
       
-      // Clean up
       setTimeout(() => {
         URL.revokeObjectURL(url);
         document.body.removeChild(link);

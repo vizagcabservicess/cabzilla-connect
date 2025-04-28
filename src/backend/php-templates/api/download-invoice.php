@@ -1,48 +1,18 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 
-// CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
+// CRITICAL: Clear all buffers first
 while (ob_get_level()) ob_end_clean();
 
-// Debug mode
-$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
-
-// CRITICAL: Set CORS headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
-// JSON response in case of error
-function sendJsonResponse($data, $statusCode = 200) {
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
-    echo json_encode($data, JSON_PRETTY_PRINT);
-    exit;
-}
-
-// Log error function
-function logInvoiceError($message, $data = []) {
-    error_log("INVOICE ERROR: $message " . json_encode($data));
-    $logFile = __DIR__ . '/../logs/invoice_errors.log';
-    $dir = dirname($logFile);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
-    file_put_contents(
-        $logFile,
-        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
-        FILE_APPEND
-    );
-}
+// Set headers for PDF download
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: post-check=0, pre-check=0', false);
+header('Pragma: no-cache');
+header('Expires: 0');
 
 try {
     // Only allow GET requests
@@ -164,135 +134,137 @@ try {
     $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
     $finalTotal = round($finalTotal, 2);
 
-    // Create PDF content with matching styles
-    $content = "
-    <html>
-    <head>
-        <meta charset='utf-8'>
-        <title>Invoice #{$invoiceNumber}</title>
-        <style>
-            " . file_get_contents(__DIR__ . '/../css/invoice-print.css') . "
-        </style>
-    </head>
-    <body>
-        <div class='invoice-container'>
-            <div class='invoice-header'>
-                <div>
-                    <h1>INVOICE</h1>
-                    <p style='margin-top: 5px; color: #777;'>Vizag Cab Services</p>
-                </div>
-                <div class='company-info'>
-                    <h2>#{$invoiceNumber}</h2>
-                    <p>Date: " . date('d M Y', strtotime($currentDate)) . "</p>
-                    <p>Booking #: " . $booking['booking_number'] . "</p>
-                </div>
-            </div>
-            
-            <div class='invoice-body'>
-                <div style='overflow: hidden;'>
-                    <div class='customer-details'>
-                        <h3 class='section-title'>Customer Details</h3>
-                        <p><strong>Name:</strong> " . ($booking['passenger_name'] ?? 'N/A') . "</p>
-                        <p><strong>Phone:</strong> " . ($booking['passenger_phone'] ?? 'N/A') . "</p>
-                        <p><strong>Email:</strong> " . ($booking['passenger_email'] ?? 'N/A') . "</p>
+    
+    // For PDF output
+    if ($isPdfOutput) {
+        // Ensure proper PDF structure
+        $content = "
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <title>Invoice #{$invoiceNumber}</title>
+            <style>
+                " . file_get_contents(__DIR__ . '/../css/invoice-print.css') . "
+            </style>
+        </head>
+        <body>
+            <div class='invoice-container'>
+                <div class='invoice-header'>
+                    <div>
+                        <h1>INVOICE</h1>
+                        <p style='margin-top: 5px; color: #777;'>Vizag Cab Services</p>
                     </div>
-                    
-                    <div class='invoice-summary'>
-                        <h3 class='section-title'>Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type'] ?? 'N/A') . 
-                        (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . "</p>
-                        <p><strong>Date:</strong> " . (isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
-                        <p><strong>Vehicle:</strong> " . ($booking['cab_type'] ?? 'N/A') . "</p>
+                    <div class='company-info'>
+                        <h2>#{$invoiceNumber}</h2>
+                        <p>Date: " . date('d M Y', strtotime($currentDate)) . "</p>
+                        <p>Booking #: " . $booking['booking_number'] . "</p>
                     </div>
                 </div>
                 
-                <div class='trip-details'>
-                    <h3 class='section-title'>Trip Details</h3>
-                    <p><strong>Pickup:</strong> " . ($booking['pickup_location'] ?? 'N/A') . "</p>
-                    " . (isset($booking['drop_location']) && !empty($booking['drop_location']) ? "<p><strong>Drop:</strong> " . $booking['drop_location'] . "</p>" : "") . "
-                    <p><strong>Pickup Time:</strong> " . (isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
-                </div>";
+                <div class='invoice-body'>
+                    <div style='overflow: hidden;'>
+                        <div class='customer-details'>
+                            <h3 class='section-title'>Customer Details</h3>
+                            <p><strong>Name:</strong> " . ($booking['passenger_name'] ?? 'N/A') . "</p>
+                            <p><strong>Phone:</strong> " . ($booking['passenger_phone'] ?? 'N/A') . "</p>
+                            <p><strong>Email:</strong> " . ($booking['passenger_email'] ?? 'N/A') . "</p>
+                        </div>
+                        
+                        <div class='invoice-summary'>
+                            <h3 class='section-title'>Trip Summary</h3>
+                            <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type'] ?? 'N/A') . 
+                            (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . "</p>
+                            <p><strong>Date:</strong> " . (isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
+                            <p><strong>Vehicle:</strong> " . ($booking['cab_type'] ?? 'N/A') . "</p>
+                        </div>
+                    </div>
+                    
+                    <div class='trip-details'>
+                        <h3 class='section-title'>Trip Details</h3>
+                        <p><strong>Pickup:</strong> " . ($booking['pickup_location'] ?? 'N/A') . "</p>
+                        " . (isset($booking['drop_location']) && !empty($booking['drop_location']) ? "<p><strong>Drop:</strong> " . $booking['drop_location'] . "</p>" : "") . "
+                        <p><strong>Pickup Time:</strong> " . (isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
+                    </div>";
 
-    if ($gstEnabled && !empty($gstNumber)) {
-        $content .= "
-                <div class='gst-details'>
-                    <div class='gst-title'>GST Details</div>
-                    <p><strong>GST Number:</strong> " . htmlspecialchars($gstNumber) . "</p>
-                    <p><strong>Company Name:</strong> " . htmlspecialchars($companyName) . "</p>
-                    " . (!empty($companyAddress) ? "<p><strong>Company Address:</strong> " . htmlspecialchars($companyAddress) . "</p>" : "") . "
-                </div>";
-    }
-
-    $content .= "
-                <h3 class='section-title'>Fare Breakdown</h3>
-                <table class='fare-table'>
-                    <tr>
-                        <th>Description</th>
-                        <th style='text-align: right;'>Amount</th>
-                    </tr>
-                    <tr>
-                        <td>Base Fare" . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . "</td>
-                        <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
-                    </tr>";
-
-    if ($gstEnabled) {
-        if ($isIGST) {
+        if ($gstEnabled && !empty($gstNumber)) {
             $content .= "
-                    <tr>
-                        <td>IGST (12%)</td>
-                        <td>₹ " . number_format($igstAmount, 2) . "</td>
-                    </tr>";
-        } else {
-            $content .= "
-                    <tr>
-                        <td>CGST (6%)</td>
-                        <td>₹ " . number_format($cgstAmount, 2) . "</td>
-                    </tr>
-                    <tr>
-                        <td>SGST (6%)</td>
-                        <td>₹ " . number_format($sgstAmount, 2) . "</td>
-                    </tr>";
+                    <div class='gst-details'>
+                        <div class='gst-title'>GST Details</div>
+                        <p><strong>GST Number:</strong> " . htmlspecialchars($gstNumber) . "</p>
+                        <p><strong>Company Name:</strong> " . htmlspecialchars($companyName) . "</p>
+                        " . (!empty($companyAddress) ? "<p><strong>Company Address:</strong> " . htmlspecialchars($companyAddress) . "</p>" : "") . "
+                    </div>";
         }
-    }
 
-    $content .= "
-                    <tr class='total-row'>
-                        <td>Total Amount" . ($includeTax ? ' (including tax)' : ' (excluding tax)') . "</td>
-                        <td>₹ " . number_format($finalTotal, 2) . "</td>
-                    </tr>
-                </table>";
-
-    if ($gstEnabled) {
         $content .= "
-                <p class='tax-note'>This invoice includes GST as per applicable rates. " . 
-                ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . " has been applied.</p>";
-    }
+                    <h3 class='section-title'>Fare Breakdown</h3>
+                    <table class='fare-table'>
+                        <tr>
+                            <th>Description</th>
+                            <th style='text-align: right;'>Amount</th>
+                        </tr>
+                        <tr>
+                            <td>Base Fare" . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . "</td>
+                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                        </tr>";
 
-    $content .= "
+        if ($gstEnabled) {
+            if ($isIGST) {
+                $content .= "
+                        <tr>
+                            <td>IGST (12%)</td>
+                            <td>₹ " . number_format($igstAmount, 2) . "</td>
+                        </tr>";
+            } else {
+                $content .= "
+                        <tr>
+                            <td>CGST (6%)</td>
+                            <td>₹ " . number_format($cgstAmount, 2) . "</td>
+                        </tr>
+                        <tr>
+                            <td>SGST (6%)</td>
+                            <td>₹ " . number_format($sgstAmount, 2) . "</td>
+                        </tr>";
+            }
+        }
+
+        $content .= "
+                        <tr class='total-row'>
+                            <td>Total Amount" . ($includeTax ? ' (including tax)' : ' (excluding tax)') . "</td>
+                            <td>₹ " . number_format($finalTotal, 2) . "</td>
+                        </tr>
+                    </table>";
+
+        if ($gstEnabled) {
+            $content .= "
+                    <p class='tax-note'>This invoice includes GST as per applicable rates. " . 
+                    ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . " has been applied.</p>";
+        }
+
+        $content .= "
+                </div>
+                
+                <div class='footer'>
+                    <p>Thank you for choosing Vizag Cab Services!</p>
+                    <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
+                    <p>Generated on: " . date('d M Y H:i:s') . "</p>
+                </div>
             </div>
-            
-            <div class='footer'>
-                <p>Thank you for choosing Vizag Cab Services!</p>
-                <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
-                <p>Generated on: " . date('d M Y H:i:s') . "</p>
-            </div>
-        </div>
-    </body>
-    </html>";
-
-    // Set appropriate headers based on format
-    if ($format === 'pdf') {
-        // For PDF output, set appropriate headers
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="invoice_' . $invoiceNumber . '.pdf"');
-    } else {
-        // For HTML output
-        header('Content-Type: text/html; charset=utf-8');
+        </body>
+        </html>";
+        
+        // Output the PDF content
+        echo $pdfContent;
+        exit;
     }
-
-    // Output the HTML content
-    echo $content;
-
+    
+    // For errors, ensure we return JSON
+    header('Content-Type: application/json');
+    sendJsonResponse([
+        'status' => 'error',
+        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
+        'error_details' => $debugMode ? $e->getMessage() : null
+    ], 500);
 } catch (Exception $e) {
     logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     
@@ -309,3 +281,27 @@ try {
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
 }
+
+// JSON response in case of error
+function sendJsonResponse($data, $statusCode = 200) {
+    header('Content-Type: application/json');
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_PRETTY_PRINT);
+    exit;
+}
+
+// Log error function
+function logInvoiceError($message, $data = []) {
+    error_log("INVOICE ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../logs/invoice_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
+}
+?>
