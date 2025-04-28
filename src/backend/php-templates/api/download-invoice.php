@@ -6,7 +6,10 @@ require_once __DIR__ . '/../config.php';
 // CRITICAL: Clear all buffers before ANY output
 while (ob_get_level()) ob_end_clean();
 
-// Set essential headers first
+// Debug mode
+$debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
+
+// CRITICAL: Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -17,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// JSON response helper for errors
+// JSON response in case of error
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     header('Content-Type: application/json');
@@ -25,13 +28,19 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Log error function (use config.php's LOG_DIR)
+// Log error function
 function logInvoiceError($message, $data = []) {
-    $logFile = LOG_DIR . '/invoice_errors.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message - " . json_encode($data) . "\n";
-    file_put_contents($logFile, $logEntry, FILE_APPEND);
     error_log("INVOICE ERROR: $message " . json_encode($data));
+    $logFile = __DIR__ . '/../logs/invoice_errors.log';
+    $dir = dirname($logFile);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(
+        $logFile,
+        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        FILE_APPEND
+    );
 }
 
 try {
@@ -43,16 +52,7 @@ try {
     $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
-    $customInvoiceNumber = isset($_GET['invoiceNumber']) ? trim($_GET['invoiceNumber']) : '';
-
-    // Log incoming request
-    logInvoiceError("Download invoice request received", [
-        'booking_id' => $bookingId,
-        'gst_enabled' => $gstEnabled,
-        'is_igst' => $isIGST,
-        'include_tax' => $includeTax,
-        'custom_invoice' => $customInvoiceNumber
-    ]);
+    $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
 
     // Forward request to admin endpoint with all parameters
     $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
@@ -73,10 +73,6 @@ try {
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     
     $response = curl_exec($ch);
-    if (curl_errno($ch)) {
-        throw new Exception("cURL Error: " . curl_error($ch));
-    }
-    
     $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     $headers = substr($response, 0, $headerSize);
     $body = substr($response, $headerSize);
@@ -86,9 +82,6 @@ try {
     // Extract and set content type from response headers
     if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
         header('Content-Type: ' . $matches[1]);
-    } else {
-        // Default to HTML if no content type is set
-        header('Content-Type: text/html');
     }
     
     // Set content disposition for proper download
@@ -101,11 +94,7 @@ try {
     exit;
 
 } catch (Exception $e) {
-    logInvoiceError("Error in public download-invoice.php", [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ]);
-    
+    logInvoiceError("Error in public download-invoice.php", ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to download invoice: ' . $e->getMessage()
