@@ -166,6 +166,9 @@ try {
         $igstAmount = 0;
     }
 
+    // Format the date properly
+    $pickupDateStr = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
+
     // Create a more complete PDF file
     if ($format === 'pdf') {
         // CRITICAL: Set correct PDF content type headers
@@ -181,69 +184,117 @@ try {
         header("Expires: 0");
         header("X-Content-Type-Options: nosniff");
         
-        // Create a more detailed PDF
+        // Create PDF content using a simplified structure that matches the dashboard view
+        // Simplified invoice PDF that mimics the dashboard view
         $pdfContent = "%PDF-1.7\n";
         
         // PDF Objects
         $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
         $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
-        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>\nendobj\n";
+        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R>> >> >>\nendobj\n";
         
-        // Font
+        // Fonts - Regular and Bold
         $pdfContent .= "5 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>\nendobj\n";
+        $pdfContent .= "6 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>\nendobj\n";
         
-        // Content
-        $content = "BT /F1 24 Tf 200 700 Td (Invoice #{$invoiceNumber}) Tj ET\n";
+        // Start content stream
+        $content = "";
         
-        // Customer data
-        $content .= "BT /F1 12 Tf 100 650 Td (Customer: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 630 Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 610 Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
+        // Centered invoice title at the top
+        $invoiceTitle = "Invoice #{$invoiceNumber}";
+        $content .= "BT /F2 18 Tf 180 720 Td ($invoiceTitle) Tj ET\n";
         
-        // Trip details
-        $content .= "BT /F1 14 Tf 100 550 Td (Trip Details) Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 520 Td (Trip Type: " . ucfirst($booking['trip_type'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 500 Td (Pickup: " . ($booking['pickup_location'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 480 Td (Drop: " . ($booking['drop_location'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 460 Td (Date: " . date('d M Y', strtotime($booking['pickup_date'] ?? 'now')) . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 440 Td (Vehicle: " . ($booking['cab_type'] ?? 'N/A') . ") Tj ET\n";
+        // Customer details - Left aligned
+        $yPos = 680;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Customer: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
         
-        // Fare breakdown
-        $content .= "BT /F1 14 Tf 100 380 Td (Fare Details) Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 350 Td (Base Amount: ₹" . number_format($baseAmountBeforeTax, 2) . ") Tj ET\n";
+        // Trip Details Section
+        $yPos -= 40;
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Trip Details) Tj ET\n";
+        $yPos -= 30;
         
-        $y = 330;
+        // Trip Type
+        $tripType = ucfirst($booking['trip_type'] ?? 'N/A');
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Trip Type: {$tripType}) Tj ET\n";
+        $yPos -= 20;
+        
+        // Pickup Location
+        $pickupLocation = $booking['pickup_location'] ?? 'N/A';
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Pickup: {$pickupLocation}) Tj ET\n";
+        $yPos -= 20;
+        
+        // Drop Location if available
+        if (!empty($booking['drop_location'])) {
+            $content .= "BT /F1 12 Tf 80 {$yPos} Td (Drop: " . $booking['drop_location'] . ") Tj ET\n";
+            $yPos -= 20;
+        }
+        
+        // Date
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Date: {$pickupDateStr}) Tj ET\n";
+        $yPos -= 20;
+        
+        // Vehicle
+        $vehicle = $booking['cab_type'] ?? 'N/A';
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Vehicle: {$vehicle}) Tj ET\n";
+        
+        // Fare Details Section
+        $yPos -= 40;
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Fare Details) Tj ET\n";
+        $yPos -= 30;
+        
+        // Base Amount
+        $formattedBaseAmount = number_format($baseAmountBeforeTax, 2);
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Base Amount: \u20B9{$formattedBaseAmount}) Tj ET\n";
+        $yPos -= 20;
+        
+        // GST components if applicable
         if ($gstEnabled) {
             if ($isIGST) {
-                $content .= "BT /F1 12 Tf 100 {$y} Td (IGST (12%): ₹" . number_format($igstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
+                $formattedIgst = number_format($igstAmount, 2);
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (IGST (12%): \u20B9{$formattedIgst}) Tj ET\n";
+                $yPos -= 20;
             } else {
-                $content .= "BT /F1 12 Tf 100 {$y} Td (CGST (6%): ₹" . number_format($cgstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
-                $content .= "BT /F1 12 Tf 100 {$y} Td (SGST (6%): ₹" . number_format($sgstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
+                $formattedCgst = number_format($cgstAmount, 2);
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (CGST (6%): \u20B9{$formattedCgst}) Tj ET\n";
+                $yPos -= 20;
+                
+                $formattedSgst = number_format($sgstAmount, 2);
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (SGST (6%): \u20B9{$formattedSgst}) Tj ET\n";
+                $yPos -= 20;
             }
         }
         
-        // Total
-        $content .= "BT /F1 14 Tf 100 " . ($y - 20) . " Td (Total Amount: ₹" . number_format($totalAmount, 2) . ") Tj ET\n";
+        // Total Amount - Bold
+        $yPos -= 10;
+        $formattedTotal = number_format($totalAmount, 2);
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Total Amount: \u20B9{$formattedTotal}) Tj ET\n";
         
         // Footer
-        $content .= "BT /F1 10 Tf 100 100 Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
-        $content .= "BT /F1 10 Tf 100 80 Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET\n";
-        $content .= "BT /F1 10 Tf 100 60 Td (Generated on: " . date('d M Y H:i:s') . ") Tj ET\n";
+        $yPos = 120;
+        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET\n";
+        $yPos -= 20;
+        $generatedDate = date('d M Y H:i:s');
+        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Generated on: {$generatedDate}) Tj ET\n";
         
+        // Add content stream to PDF
         $contentLength = strlen($content);
         $pdfContent .= "4 0 obj\n<</Length $contentLength>>\nstream\n$content\nendstream\nendobj\n";
         
         // End of PDF
-        $pdfContent .= "xref\n0 6\n0000000000 65535 f\n";
+        $pdfContent .= "xref\n0 7\n0000000000 65535 f\n";
         $pdfContent .= "0000000010 00000 n\n";
         $pdfContent .= "0000000056 00000 n\n";
         $pdfContent .= "0000000111 00000 n\n";
         $pdfContent .= "0000000212 00000 n\n";
         $pdfContent .= "0000000434 00000 n\n";
-        $pdfContent .= "trailer\n<</Size 6 /Root 1 0 R>>\nstartxref\n" . (strlen($pdfContent) + 100) . "\n%%EOF";
+        $pdfContent .= "0000000500 00000 n\n";
+        $pdfContent .= "trailer\n<</Size 7 /Root 1 0 R>>\nstartxref\n" . (strlen($pdfContent) + 100) . "\n%%EOF";
         
         // Force content length to ensure complete download
         header("Content-Length: " . strlen($pdfContent));

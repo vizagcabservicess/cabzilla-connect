@@ -265,28 +265,28 @@ export function BookingInvoice({
 
   const handleDataUriDownload = () => {
     try {
-      // Define PDF content
-      const content = `Invoice #${customInvoiceNumber || booking.id}
-
-Customer: ${booking.passengerName || 'N/A'}
-Phone: ${booking.passengerPhone || 'N/A'}
-Email: ${booking.passengerEmail || 'N/A'}
-
-Trip Details:
-Trip Type: ${booking.tripType ? (booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)) : 'N/A'} ${booking.tripMode ? `(${booking.tripMode})` : ''}
-Pickup: ${booking.pickupLocation || 'N/A'}
-Drop: ${booking.dropLocation || 'N/A'}
-Date: ${booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
-Vehicle: ${booking.cabType || 'N/A'}
-
-Amount: ₹${booking.totalAmount || '0'}
-
-Thank you for choosing Vizag Cab Services!
-Generated on: ${new Date().toLocaleString()}
-`;
+      // Format date for display in the PDF
+      const formattedDate = booking.pickupDate ? new Date(booking.pickupDate).toLocaleDateString('en-IN', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric'
+      }) : 'N/A';
       
-      // Create minimal PDF structure with content
-      const pdfContent = `%PDF-1.7
+      // Calculate basic fare details
+      let baseAmount = 0;
+      let taxAmount = 0;
+      let totalAmount = 0;
+      
+      if (booking.totalAmount) {
+        totalAmount = parseFloat(booking.totalAmount.toString());
+        baseAmount = gstEnabled ? totalAmount / 1.12 : totalAmount;
+        baseAmount = Math.round(baseAmount);
+        taxAmount = totalAmount - baseAmount;
+      }
+      
+      // Create a more visually appealing PDF that matches the dashboard design
+      const content = `
+%PDF-1.7
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
 endobj
@@ -294,37 +294,73 @@ endobj
 <</Type /Pages /Kids [3 0 R] /Count 1>>
 endobj
 3 0 obj
-<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>
+<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R>> >> >>
 endobj
 5 0 obj
 <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
 endobj
+6 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>
+endobj
 4 0 obj
-<</Length ${content.length + 100}>>
+<</Length 2000>>
 stream
-BT /F1 12 Tf 50 700 Td (${content.replace(/\n/g, ') Tj ET\nBT /F1 12 Tf 50 ')}) Tj ET
+BT /F2 18 Tf 180 720 Td (Invoice #${customInvoiceNumber || `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${booking.id}`}) Tj ET
+
+BT /F1 12 Tf 80 680 Td (Customer: ${booking.passengerName || 'N/A'}) Tj ET
+BT /F1 12 Tf 80 660 Td (Phone: ${booking.passengerPhone || 'N/A'}) Tj ET
+BT /F1 12 Tf 80 640 Td (Email: ${booking.passengerEmail || 'N/A'}) Tj ET
+
+BT /F2 14 Tf 80 600 Td (Trip Details) Tj ET
+BT /F1 12 Tf 80 580 Td (Trip Type: ${booking.tripType ? (booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)) : 'N/A'}) Tj ET
+BT /F1 12 Tf 80 560 Td (Pickup: ${booking.pickupLocation || 'N/A'}) Tj ET
+${booking.dropLocation ? `BT /F1 12 Tf 80 540 Td (Drop: ${booking.dropLocation}) Tj ET` : ''}
+BT /F1 12 Tf 80 ${booking.dropLocation ? '520' : '540'} Td (Date: ${formattedDate}) Tj ET
+BT /F1 12 Tf 80 ${booking.dropLocation ? '500' : '520'} Td (Vehicle: ${booking.cabType || 'N/A'}) Tj ET
+
+BT /F2 14 Tf 80 460 Td (Fare Details) Tj ET
+BT /F1 12 Tf 80 440 Td (Base Amount: \u20B9${baseAmount.toFixed(2)}) Tj ET
+${gstEnabled ? isIGST ? 
+    `BT /F1 12 Tf 80 420 Td (IGST (12%): \u20B9${taxAmount.toFixed(2)}) Tj ET` : 
+    `BT /F1 12 Tf 80 420 Td (CGST (6%): \u20B9${(taxAmount/2).toFixed(2)}) Tj ET
+     BT /F1 12 Tf 80 400 Td (SGST (6%): \u20B9${(taxAmount/2).toFixed(2)}) Tj ET` : ''}
+
+BT /F2 14 Tf 80 ${gstEnabled ? '380' : '420'} Td (Total Amount: \u20B9${totalAmount.toFixed(2)}) Tj ET
+
+BT /F1 10 Tf 80 120 Td (Thank you for choosing Vizag Cab Services!) Tj ET
+BT /F1 10 Tf 80 100 Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET
+BT /F1 10 Tf 80 80 Td (Generated on: ${new Date().toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })}) Tj ET
 endstream
 endobj
 xref
-0 6
+0 7
 0000000000 65535 f 
 0000000010 00000 n
 0000000056 00000 n
 0000000111 00000 n
 0000000212 00000 n
 0000000434 00000 n
+0000000500 00000 n
 trailer
-<</Size 6 /Root 1 0 R>>
+<</Size 7 /Root 1 0 R>>
 startxref
 1000
-%%EOF`;
+%%EOF
+`;
 
       // Create blob and trigger download
-      const blob = new Blob([pdfContent], { type: 'application/pdf' });
+      const blob = new Blob([content], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `invoice_${booking.id}_client.pdf`;
+      link.download = `invoice_${booking.id}_${customInvoiceNumber || 'client'}.pdf`;
       document.body.appendChild(link);
       link.click();
       
@@ -336,7 +372,7 @@ startxref
       
       toast({
         title: "Client-Side PDF Generated",
-        description: "Basic PDF generated in browser"
+        description: "PDF generated in browser to match dashboard design"
       });
     } catch (error) {
       console.error("Client-side PDF generation error:", error);
