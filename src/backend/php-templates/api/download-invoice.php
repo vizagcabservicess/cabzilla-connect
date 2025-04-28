@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file only
 require_once __DIR__ . '/../config.php';
@@ -8,20 +7,12 @@ while (ob_get_level()) ob_end_clean();
 
 // Set essential headers first
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    exit;
-}
-
-// JSON response helper for errors
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    header('Content-Type: application/json');
-    echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -34,16 +25,21 @@ function logInvoiceError($message, $data = []) {
     error_log("INVOICE ERROR: $message " . json_encode($data));
 }
 
+// Helper to get parameters from POST or GET
+function getParam($key, $default = null) {
+    return $_POST[$key] ?? $_GET[$key] ?? $default;
+}
+
 try {
-    // Get booking ID and parameters from query string
-    $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
-    $gstEnabled = isset($_GET['gstEnabled']) ? filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
-    $gstNumber = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
-    $companyName = isset($_GET['companyName']) ? $_GET['companyName'] : '';
-    $companyAddress = isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '';
-    $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
-    $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
-    $customInvoiceNumber = isset($_GET['invoiceNumber']) ? trim($_GET['invoiceNumber']) : '';
+    // Use getParam for all parameters
+    $bookingId = (int)getParam('id');
+    $gstEnabled = filter_var(getParam('gstEnabled', false), FILTER_VALIDATE_BOOLEAN);
+    $gstNumber = getParam('gstNumber', '');
+    $companyName = getParam('companyName', '');
+    $companyAddress = getParam('companyAddress', '');
+    $isIGST = filter_var(getParam('isIGST', false), FILTER_VALIDATE_BOOLEAN);
+    $includeTax = filter_var(getParam('includeTax', true), FILTER_VALIDATE_BOOLEAN);
+    $customInvoiceNumber = trim(getParam('invoiceNumber', ''));
 
     // Log incoming request
     logInvoiceError("Download invoice request received", [

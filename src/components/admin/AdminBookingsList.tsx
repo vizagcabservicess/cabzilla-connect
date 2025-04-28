@@ -453,22 +453,33 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleGenerateInvoice = async (gstEnabled?: boolean, gstDetails?: any) => {
+  const handleGenerateInvoice = async (
+    gstEnabled?: boolean,
+    gstDetails?: any,
+    isIGST?: boolean,
+    includeTax?: boolean,
+    customInvoiceNumber?: string
+  ) => {
     if (!selectedBooking) return null;
-    
+
     setIsSubmitting(true);
     try {
       console.log('Generating invoice for booking:', selectedBooking.id);
-      
-      const requestData = {
+
+      const requestData: any = {
         bookingId: selectedBooking.id,
         gstEnabled: gstEnabled || false,
         gstDetails: gstDetails || {}
       };
-      
+
+      // Add new parameters if provided
+      if (typeof isIGST !== 'undefined') requestData.isIGST = isIGST;
+      if (typeof includeTax !== 'undefined') requestData.includeTax = includeTax;
+      if (customInvoiceNumber) requestData.invoiceNumber = customInvoiceNumber;
+
       const apiUrl = getApiUrl('/api/admin/generate-invoice');
-      console.log('Invoice API URL:', apiUrl);
-      
+      console.log('Invoice API URL:', apiUrl, requestData);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -478,24 +489,23 @@ export function AdminBookingsList() {
         },
         body: JSON.stringify(requestData)
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Invoice generation error response:', errorText);
         throw new Error(`Failed to generate invoice: ${response.status} ${response.statusText}`);
       }
-      
-      // Check if response is JSON
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const textResponse = await response.text();
         console.error('Invoice API returned non-JSON response:', textResponse);
         throw new Error('Invoice API returned non-JSON response');
       }
-      
+
       const data = await response.json();
       console.log('Invoice generation response:', data);
-      
+
       if (data.status === 'success') {
         toast.success("Invoice generated successfully");
         return data;

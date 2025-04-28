@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -8,7 +7,7 @@ while (ob_get_level()) ob_end_clean();
 
 // Set essential headers first
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
 // Handle preflight OPTIONS request
@@ -26,21 +25,24 @@ function logInvoiceError($message, $data = []) {
     error_log("INVOICE ERROR: $message " . json_encode($data));
 }
 
+// Helper to get parameters from POST or GET
+function getParam($key, $default = null) {
+    return $_POST[$key] ?? $_GET[$key] ?? $default;
+}
+
 try {
-    // Get all parameters
-    $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
-    $gstEnabled = isset($_GET['gstEnabled']) ? filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
-    $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
-    $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
-    $customInvoiceNumber = isset($_GET['invoiceNumber']) ? trim($_GET['invoiceNumber']) : '';
-    
-    // Get GST details if enabled
+    // Use getParam for all parameters
+    $bookingId = (int)getParam('id');
+    $gstEnabled = filter_var(getParam('gstEnabled', false), FILTER_VALIDATE_BOOLEAN);
+    $isIGST = filter_var(getParam('isIGST', false), FILTER_VALIDATE_BOOLEAN);
+    $includeTax = filter_var(getParam('includeTax', true), FILTER_VALIDATE_BOOLEAN);
+    $customInvoiceNumber = trim(getParam('invoiceNumber', ''));
     $gstDetails = null;
     if ($gstEnabled) {
         $gstDetails = [
-            'gstNumber' => $_GET['gstNumber'] ?? '',
-            'companyName' => $_GET['companyName'] ?? '',
-            'companyAddress' => $_GET['companyAddress'] ?? ''
+            'gstNumber' => getParam('gstNumber', ''),
+            'companyName' => getParam('companyName', ''),
+            'companyAddress' => getParam('companyAddress', '')
         ];
     }
 
