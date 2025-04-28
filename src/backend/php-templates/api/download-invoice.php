@@ -1,8 +1,7 @@
-
 <?php
 // Include configuration file
-require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/common/db_helper.php';
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
 
 // CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
@@ -45,15 +44,6 @@ function logInvoiceError($message, $data = []) {
 }
 
 try {
-    logInvoiceError("Public invoice download starting", [
-        'booking_id' => $_GET['id'] ?? null,
-        'gstEnabled' => $_GET['gstEnabled'] ?? 'false',
-        'gstNumber' => $_GET['gstNumber'] ?? '',
-        'companyName' => $_GET['companyName'] ?? '',
-        'format' => $_GET['format'] ?? 'pdf',
-        'direct_download' => $_GET['direct_download'] ?? '0'
-    ]);
-
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
@@ -166,106 +156,127 @@ try {
         $igstAmount = 0;
     }
 
-    // Create a more complete PDF file
-    if ($format === 'pdf') {
-        // CRITICAL: Set correct PDF content type headers
-        header("Content-Type: application/pdf");
-        
-        // Strong content disposition for forcing download
-        $disposition = $directDownload ? "attachment" : "inline";
-        header("Content-Disposition: {$disposition}; filename=\"{$invoiceNumber}.pdf\"");
-        
-        // Set additional headers to prevent caching
-        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-        header("Pragma: no-cache");
-        header("Expires: 0");
-        header("X-Content-Type-Options: nosniff");
-        
-        // Create a more detailed PDF
-        $pdfContent = "%PDF-1.7\n";
-        
-        // PDF Objects
-        $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
-        $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
-        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>> >> >>\nendobj\n";
-        
-        // Font
-        $pdfContent .= "5 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>\nendobj\n";
-        
-        // Content
-        $content = "BT /F1 24 Tf 200 700 Td (Invoice #{$invoiceNumber}) Tj ET\n";
-        
-        // Customer data
-        $content .= "BT /F1 12 Tf 100 650 Td (Customer: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 630 Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 610 Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
-        
-        // Trip details
-        $content .= "BT /F1 14 Tf 100 550 Td (Trip Details) Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 520 Td (Trip Type: " . ucfirst($booking['trip_type'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 500 Td (Pickup: " . ($booking['pickup_location'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 480 Td (Drop: " . ($booking['drop_location'] ?? 'N/A') . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 460 Td (Date: " . date('d M Y', strtotime($booking['pickup_date'] ?? 'now')) . ") Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 440 Td (Vehicle: " . ($booking['cab_type'] ?? 'N/A') . ") Tj ET\n";
-        
-        // Fare breakdown
-        $content .= "BT /F1 14 Tf 100 380 Td (Fare Details) Tj ET\n";
-        $content .= "BT /F1 12 Tf 100 350 Td (Base Amount: ₹" . number_format($baseAmountBeforeTax, 2) . ") Tj ET\n";
-        
-        $y = 330;
-        if ($gstEnabled) {
-            if ($isIGST) {
-                $content .= "BT /F1 12 Tf 100 {$y} Td (IGST (12%): ₹" . number_format($igstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
-            } else {
-                $content .= "BT /F1 12 Tf 100 {$y} Td (CGST (6%): ₹" . number_format($cgstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
-                $content .= "BT /F1 12 Tf 100 {$y} Td (SGST (6%): ₹" . number_format($sgstAmount, 2) . ") Tj ET\n";
-                $y -= 20;
-            }
-        }
-        
-        // Total
-        $content .= "BT /F1 14 Tf 100 " . ($y - 20) . " Td (Total Amount: ₹" . number_format($totalAmount, 2) . ") Tj ET\n";
-        
-        // Footer
-        $content .= "BT /F1 10 Tf 100 100 Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
-        $content .= "BT /F1 10 Tf 100 80 Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET\n";
-        $content .= "BT /F1 10 Tf 100 60 Td (Generated on: " . date('d M Y H:i:s') . ") Tj ET\n";
-        
-        $contentLength = strlen($content);
-        $pdfContent .= "4 0 obj\n<</Length $contentLength>>\nstream\n$content\nendstream\nendobj\n";
-        
-        // End of PDF
-        $pdfContent .= "xref\n0 6\n0000000000 65535 f\n";
-        $pdfContent .= "0000000010 00000 n\n";
-        $pdfContent .= "0000000056 00000 n\n";
-        $pdfContent .= "0000000111 00000 n\n";
-        $pdfContent .= "0000000212 00000 n\n";
-        $pdfContent .= "0000000434 00000 n\n";
-        $pdfContent .= "trailer\n<</Size 6 /Root 1 0 R>>\nstartxref\n" . (strlen($pdfContent) + 100) . "\n%%EOF";
-        
-        // Force content length to ensure complete download
-        header("Content-Length: " . strlen($pdfContent));
-        
-        // Output the PDF data
-        echo $pdfContent;
-        
-        logInvoiceError("Public invoice download completed successfully", [
-            'booking_id' => $bookingId,
-            'content_type_sent' => 'application/pdf'
-        ]);
-        exit;
-    }
-    else {
-        // For non-PDF formats, redirect to admin endpoint
-        $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
-        header("Location: $adminUrl?" . http_build_query($_GET));
-        exit;
+    // Create PDF content with matching styles
+    $content = "
+    <html>
+    <head>
+        <meta charset='utf-8'>
+        <title>Invoice #{$invoiceNumber}</title>
+        <style>
+            " . file_get_contents(__DIR__ . '/../css/invoice-print.css') . "
+        </style>
+    </head>
+    <body>
+        <div class='invoice-container'>
+            <div class='invoice-header'>
+                <div>
+                    <h1>INVOICE</h1>
+                    <p style='margin-top: 5px; color: #777;'>Vizag Cab Services</p>
+                </div>
+                <div class='company-info'>
+                    <h2>#{$invoiceNumber}</h2>
+                    <p>Date: " . date('d M Y', strtotime($currentDate)) . "</p>
+                    <p>Booking #: " . $booking['booking_number'] . "</p>
+                </div>
+            </div>
+            
+            <div class='invoice-body'>
+                <div style='overflow: hidden;'>
+                    <div class='customer-details'>
+                        <h3 class='section-title'>Customer Details</h3>
+                        <p><strong>Name:</strong> " . $booking['passenger_name'] . "</p>
+                        <p><strong>Phone:</strong> " . $booking['passenger_phone'] . "</p>
+                        <p><strong>Email:</strong> " . $booking['passenger_email'] . "</p>
+                    </div>
+                    
+                    <div class='invoice-summary'>
+                        <h3 class='section-title'>Trip Summary</h3>
+                        <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type']) . 
+                        ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . "</p>
+                        <p><strong>Date:</strong> " . date('d M Y', strtotime($booking['pickup_date'])) . "</p>
+                        <p><strong>Vehicle:</strong> " . $booking['cab_type'] . "</p>
+                    </div>
+                </div>
+                
+                <div class='trip-details'>
+                    <h3 class='section-title'>Trip Details</h3>
+                    <p><strong>Pickup:</strong> " . $booking['pickup_location'] . "</p>
+                    " . ($booking['drop_location'] ? "<p><strong>Drop:</strong> " . $booking['drop_location'] . "</p>" : "") . "
+                    <p><strong>Pickup Time:</strong> " . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . "</p>
+                </div>";
+
+    if ($gstEnabled && $gstDetails) {
+        $content .= "
+                <div class='gst-details'>
+                    <div class='gst-title'>GST Details</div>
+                    <p><strong>GST Number:</strong> " . htmlspecialchars($gstDetails['gstNumber']) . "</p>
+                    <p><strong>Company Name:</strong> " . htmlspecialchars($gstDetails['companyName']) . "</p>
+                    <p><strong>Company Address:</strong> " . htmlspecialchars($gstDetails['companyAddress']) . "</p>
+                </div>";
     }
 
+    $content .= "
+                <h3 class='section-title'>Fare Breakdown</h3>
+                <table class='fare-table'>
+                    <tr>
+                        <th>Description</th>
+                        <th style='text-align: right;'>Amount</th>
+                    </tr>
+                    <tr>
+                        <td>Base Fare" . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . "</td>
+                        <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                    </tr>";
+
+    if ($gstEnabled) {
+        if ($isIGST) {
+            $content .= "
+                    <tr>
+                        <td>IGST (12%)</td>
+                        <td>₹ " . number_format($igstAmount, 2) . "</td>
+                    </tr>";
+        } else {
+            $content .= "
+                    <tr>
+                        <td>CGST (6%)</td>
+                        <td>₹ " . number_format($cgstAmount, 2) . "</td>
+                    </tr>
+                    <tr>
+                        <td>SGST (6%)</td>
+                        <td>₹ " . number_format($sgstAmount, 2) . "</td>
+                    </tr>";
+        }
+    }
+
+    $content .= "
+                    <tr class='total-row'>
+                        <td>Total Amount" . ($includeTax ? ' (including tax)' : ' (excluding tax)') . "</td>
+                        <td>₹ " . number_format($finalTotal, 2) . "</td>
+                    </tr>
+                </table>";
+
+    if ($gstEnabled) {
+        $content .= "
+                <p class='tax-note'>This invoice includes GST as per applicable rates. " . 
+                ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . " has been applied.</p>";
+    }
+
+    $content .= "
+            </div>
+            
+            <div class='footer'>
+                <p>Thank you for choosing Vizag Cab Services!</p>
+                <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
+                <p>Generated on: " . date('d M Y H:i:s') . "</p>
+            </div>
+        </div>
+    </body>
+    </html>";
+
+    // Output the HTML content
+    echo $content;
+
 } catch (Exception $e) {
-    logInvoiceError("Critical error in public download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     
     // For errors, ensure we return JSON
     header('Content-Type: application/json');
