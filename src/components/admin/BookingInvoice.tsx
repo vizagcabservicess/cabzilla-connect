@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
-import { toast as sonnerToast } from "sonner";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -50,8 +49,6 @@ export function BookingInvoice({
   });
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
-  const [downloadInProgress, setDownloadInProgress] = useState(false);
-  const [downloadAttempts, setDownloadAttempts] = useState(0);
 
   useEffect(() => {
     if (booking && booking.id) {
@@ -141,86 +138,54 @@ export function BookingInvoice({
     }
   };
 
-  const getDownloadUrl = () => {
-    const timestamp = new Date().getTime();
-    const randomId = Math.random().toString(36).substring(2);
-    
-    const params = new URLSearchParams({
-      id: booking.id.toString(),
-      gstEnabled: gstEnabled ? '1' : '0',
-      isIGST: isIGST ? '1' : '0',
-      includeTax: includeTax ? '1' : '0',
-      format: 'pdf',
-      direct_download: '1',
-      v: downloadCount.toString(),
-      t: timestamp.toString(),
-      r: randomId
-    });
-    
-    if (customInvoiceNumber.trim()) {
-      params.append('invoiceNumber', customInvoiceNumber.trim());
-    }
-    
-    if (gstEnabled) {
-      params.append('gstNumber', gstDetails.gstNumber);
-      params.append('companyName', gstDetails.companyName);
-      params.append('companyAddress', gstDetails.companyAddress);
-    }
-    
-    // Try admin endpoint first, with fallback to public
-    const baseUrl = window.location.hostname === 'localhost' ? 
-      '/api/download-invoice.php' : 
-      '/api/download-invoice.php';
-    
-    return getApiUrl(`${baseUrl}?${params.toString()}`);
-  };
-
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = () => {
     try {
-      if (downloadInProgress) return;
-      
-      setDownloadInProgress(true);
       setDownloadCount(prev => prev + 1);
-      setDownloadAttempts(prev => prev + 1);
       
-      const url = getDownloadUrl();
-      console.log("Download URL:", url);
-      
-      // Method 1: Using iframe approach (most reliable cross-browser)
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      
-      sonnerToast.success("Download started", {
-        description: "Your invoice is being downloaded",
-        duration: 3000
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        direct_download: '1',
+        v: downloadCount.toString(),
+        t: new Date().getTime().toString(),
+        r: Math.random().toString(36).substring(2)
       });
       
-      // Clean up iframe after some delay
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        setDownloadInProgress(false);
-        
-        // After a delay, try backup method if user reports issues
-        setTimeout(() => {
-          if (downloadAttempts > 2) {
-            sonnerToast.info("Having trouble downloading?", {
-              description: "Try using the Alternative Download button",
-              duration: 5000
-            });
-          }
-        }, 3000);
-        
-      }, 2000);
-    } catch (error) {
-      console.error("Download error:", error);
-      setDownloadInProgress(false);
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
+      }
       
+      if (gstEnabled) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      // Method 1: Using iframe for seamless download
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
+      document.body.appendChild(iframe);
+      
+      toast({
+        title: "PDF Download Started",
+        description: "Your invoice is being downloaded"
+      });
+      
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 5000);
+    } catch (error) {
+      console.error("Invoice download error:", error);
       toast({
         variant: "destructive",
         title: "Download Failed",
-        description: "Please try the alternative download method"
+        description: "Failed to download invoice. Please try an alternative download method."
       });
     }
   };
@@ -228,10 +193,31 @@ export function BookingInvoice({
   const handleAlternativeDownload = () => {
     try {
       setDownloadCount(prev => prev + 1);
-      const url = getDownloadUrl();
       
-      // Method 2: Open in new tab
-      window.open(url, '_blank');
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        direct_download: '1',
+        v: downloadCount.toString(),
+        t: new Date().getTime().toString(),
+        r: Math.random().toString(36).substring(2)
+      });
+      
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
+      }
+      
+      if (gstEnabled) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      // Method 2: Direct window.open for PDF
+      window.open(getApiUrl(`/api/admin/download-invoice.php?${params.toString()}`), '_blank');
       
       toast({
         title: "Alternative Download Method",
@@ -243,35 +229,6 @@ export function BookingInvoice({
         variant: "destructive",
         title: "Alternative Download Failed",
         description: "Please try the client-side PDF generation"
-      });
-    }
-  };
-
-  const handleDirectLinkDownload = () => {
-    try {
-      setDownloadCount(prev => prev + 1);
-      
-      const url = getDownloadUrl();
-      
-      // Method 3: Direct link click with download attribute
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `invoice_${booking.id}.pdf`);
-      link.setAttribute('target', '_blank');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast({
-        title: "Direct Download Started",
-        description: "Your PDF is being downloaded directly"
-      });
-    } catch (error) {
-      console.error("Direct link download error:", error);
-      toast({
-        variant: "destructive",
-        title: "Direct Download Failed",
-        description: "Please try another download method"
       });
     }
   };
@@ -308,6 +265,7 @@ export function BookingInvoice({
 
   const handleDataUriDownload = () => {
     try {
+      // Define PDF content
       const content = `Invoice #${customInvoiceNumber || booking.id}
 
 Customer: ${booking.passengerName || 'N/A'}
@@ -327,6 +285,7 @@ Thank you for choosing Vizag Cab Services!
 Generated on: ${new Date().toLocaleString()}
 `;
       
+      // Create minimal PDF structure with content
       const pdfContent = `%PDF-1.7
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
@@ -360,6 +319,7 @@ startxref
 1000
 %%EOF`;
 
+      // Create blob and trigger download
       const blob = new Blob([pdfContent], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -368,6 +328,7 @@ startxref
       document.body.appendChild(link);
       link.click();
       
+      // Clean up
       setTimeout(() => {
         URL.revokeObjectURL(url);
         document.body.removeChild(link);
@@ -559,7 +520,7 @@ startxref
             Back
           </Button>
           
-          <div className="flex flex-wrap gap-2 justify-end">
+          <div className="flex space-x-2">
             {invoiceData && (
               <>
                 <Button 
@@ -573,11 +534,10 @@ startxref
                 
                 <Button
                   onClick={handleDownloadPdf}
-                  disabled={loading || isSubmitting || regenerating || downloadInProgress}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  {downloadInProgress ? 'Downloading...' : 'Download PDF'}
+                  Download PDF
                 </Button>
                 
                 <Button
@@ -587,15 +547,6 @@ startxref
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Alt Download
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={handleDirectLinkDownload}
-                  disabled={loading || isSubmitting || regenerating}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Direct Link
                 </Button>
                 
                 <Button
