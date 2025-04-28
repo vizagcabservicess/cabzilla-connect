@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // JSON response in case of error
 function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
     header('Content-Type: application/json');
+    http_response_code($statusCode);
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
@@ -60,10 +60,12 @@ try {
     // Get output format - default to PDF
     $format = isset($_GET['format']) ? strtolower($_GET['format']) : 'pdf';
     $isPdfOutput = ($format === 'pdf');
+    $directPdf = isset($_GET['pdf_direct']) && $_GET['pdf_direct'] === '1';
     
     logInvoiceError("Processing invoice download for booking ID: $bookingId", [
         'format' => $format,
-        'isPdf' => $isPdfOutput ? 'true' : 'false'
+        'isPdf' => $isPdfOutput ? 'true' : 'false',
+        'directPdf' => $directPdf ? 'true' : 'false'
     ]);
 
     // Get GST parameters from GET
@@ -285,6 +287,10 @@ try {
     if ($isPdfOutput) {
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
+        // Add headers to ensure no caching
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
     } else {
         // For HTML output
         header('Content-Type: text/html');

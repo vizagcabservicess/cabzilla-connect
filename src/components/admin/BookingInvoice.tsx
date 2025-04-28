@@ -48,6 +48,7 @@ export function BookingInvoice({
     companyAddress: ''
   });
   const { toast } = useToast();
+  const [downloadCount, setDownloadCount] = useState(0);
 
   useEffect(() => {
     if (booking && booking.id) {
@@ -139,12 +140,16 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     try {
+      setDownloadCount(prev => prev + 1);
+      
       // Use a proper URL with query parameters for invoice download
       const baseUrl = getApiUrl(`/api/download-invoice`);
       const bookingIdParam = `id=${booking.id}`;
       const gstParam = gstEnabled ? '&gstEnabled=1' : '&gstEnabled=0';
       const igstParam = isIGST ? '&isIGST=1' : '&isIGST=0';
       const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
+      // Add cache buster to prevent browsers from serving cached version
+      const cacheBuster = `&v=${downloadCount}&t=${new Date().getTime()}`;
       const invoiceNumberParam = customInvoiceNumber.trim() ? 
         `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
       
@@ -155,11 +160,24 @@ export function BookingInvoice({
           + `&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}`;
       }
       
-      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}${cacheBuster}`;
       console.log('Download invoice URL:', downloadUrl);
       
       // Open in a new window/tab for PDF download
-      window.open(downloadUrl, '_blank');
+      const newWindow = window.open(downloadUrl, '_blank');
+      
+      if (newWindow) {
+        // Force reload of the window to avoid cache issues
+        setTimeout(() => {
+          try {
+            if (!newWindow.closed) {
+              newWindow.location.href = downloadUrl;
+            }
+          } catch (e) {
+            console.error('Error forcing reload:', e);
+          }
+        }, 100);
+      }
       
       toast({
         title: "Invoice Download Started",
@@ -167,6 +185,65 @@ export function BookingInvoice({
       });
     } catch (error) {
       console.error("Invoice download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download invoice. Please try again."
+      });
+    }
+  };
+
+  const handleDirectPdfDownload = () => {
+    try {
+      setDownloadCount(prev => prev + 1);
+      
+      // Create form and submit to force proper download
+      const form = document.createElement('form');
+      form.method = 'GET';
+      form.action = getApiUrl(`/api/download-invoice`);
+      form.target = '_blank';
+      
+      // Add all parameters as hidden fields
+      const params: Record<string, string> = {
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        v: downloadCount.toString(),
+        t: new Date().getTime().toString(),
+      };
+      
+      if (customInvoiceNumber.trim()) {
+        params.invoiceNumber = customInvoiceNumber.trim();
+      }
+      
+      if (gstEnabled) {
+        params.gstNumber = gstDetails.gstNumber;
+        params.companyName = gstDetails.companyName;
+        params.companyAddress = gstDetails.companyAddress;
+      }
+      
+      // Add all parameters as hidden fields
+      Object.entries(params).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+      
+      // Add form to body, submit it, then remove it
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      
+      toast({
+        title: "Invoice Download Started",
+        description: "Your invoice is being prepared for download"
+      });
+    } catch (error) {
+      console.error("Direct PDF download error:", error);
       toast({
         variant: "destructive",
         title: "Download Failed",
@@ -393,7 +470,7 @@ export function BookingInvoice({
                 </Button>
                 
                 <Button
-                  onClick={handleDownloadPdf}
+                  onClick={handleDirectPdfDownload}
                   disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />

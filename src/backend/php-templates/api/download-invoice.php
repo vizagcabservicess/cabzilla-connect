@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // JSON response in case of error
 function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
     header('Content-Type: application/json');
+    http_response_code($statusCode);
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
@@ -72,7 +72,7 @@ try {
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
-    $format = isset($_GET['format']) ? $_GET['format'] : 'html';
+    $format = isset($_GET['format']) ? $_GET['format'] : 'pdf'; // Default to PDF format
 
     // Connect to database with improved error handling
     try {
@@ -170,12 +170,21 @@ try {
     $_GET['format'] = 'pdf'; // Force PDF output format
     $queryParams = http_build_query($_GET);
     
+    // Add a special PDF generation flag and random cache buster 
+    $queryParams .= '&pdf_direct=1&nocache=' . rand(10000, 99999);
+    
+    // Set up curl with explicit Accept header for PDF content
     $ch = curl_init($adminUrl . '?' . $queryParams);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true); 
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/pdf',
+        'X-Requested-With: XMLHttpRequest'
+    ]);
     
+    // Execute the request
     $response = curl_exec($ch);
     $curlError = curl_error($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -194,11 +203,19 @@ try {
         ]);
         throw new Exception("Failed to generate invoice: $curlError");
     }
+
+    logInvoiceError("Response received from admin endpoint", [
+        'http_code' => $httpCode,
+        'header_size' => $headerSize,
+        'body_length' => strlen($body),
+        'headers_substr' => substr($headers, 0, 200)
+    ]);
     
     // Extract content type from headers
     $contentType = null;
     if (preg_match('/Content-Type: ([^\r\n]+)/i', $headers, $matches)) {
         $contentType = $matches[1];
+        logInvoiceError("Content-Type from response", ['content_type' => $contentType]);
     }
     
     // Check for HTML or error response
@@ -213,12 +230,8 @@ try {
         throw new Exception("Server error generating invoice: " . strip_tags($body));
     }
     
-    // Set appropriate content type (default to PDF if not found)
-    if ($contentType) {
-        header("Content-Type: $contentType");
-    } else {
-        header("Content-Type: text/html");
-    }
+    // CRITICAL: Set correct PDF content type headers
+    header("Content-Type: application/pdf");
     
     // Pass through Content-Disposition for download
     if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
@@ -228,10 +241,19 @@ try {
         header("Content-Disposition: attachment; filename=\"$invoiceNumber.pdf\"");
     }
     
-    // Output the response body
+    // Set additional headers to prevent caching
+    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    header("Pragma: no-cache");
+    header("Expires: 0");
+    
+    // Output the PDF data
     echo $body;
     
-    logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
+    logInvoiceError("Public invoice download completed successfully", [
+        'booking_id' => $bookingId,
+        'content_type_sent' => 'application/pdf',
+        'body_size' => strlen($body)
+    ]);
     exit;
 
 } catch (Exception $e) {

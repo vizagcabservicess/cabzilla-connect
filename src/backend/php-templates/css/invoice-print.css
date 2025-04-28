@@ -29,6 +29,10 @@ body {
   .no-print {
     display: none !important;
   }
+
+  .print-header {
+    display: none !important;
+  }
 }
 
 .invoice-container {
@@ -37,6 +41,7 @@ body {
   border: 1px solid #ddd;
   padding: 30px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
 }
 
 .invoice-header {
@@ -99,6 +104,7 @@ table th, table td {
 .total-row {
   font-weight: bold;
   font-size: 1.1em;
+  background-color: #f9f9f9;
 }
 
 .company-info {
@@ -131,4 +137,35 @@ h3 {
 
 button {
   cursor: pointer;
+}
+
+/* Fix for PDF rendering */
+.invoice-container * {
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+/* Improve visual separation */
+.section-title {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+  margin-bottom: 15px;
+  color: #555;
+}
+
+/* Ensure proper page breaks */
+@media print {
+  .invoice-header {
+    page-break-after: avoid;
+  }
+  .fare-breakdown {
+    page-break-before: avoid;
+  }
+  table {
+    page-break-inside: avoid;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
 }

@@ -50,7 +50,18 @@ RewriteEngine On
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
+    # No caching for PDF files
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
 </Files>
+
+# IMPORTANT: Explicitly set PDF content type when PDF extension is detected
+<FilesMatch "\.pdf$">
+    ForceType application/pdf
+    Header always set Content-Type application/pdf
+    Header always set X-Content-Type-Options "nosniff"
+</FilesMatch>
 
 # API Test Endpoint - highest priority
 RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
