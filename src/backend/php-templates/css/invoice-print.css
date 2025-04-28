@@ -1,11 +1,12 @@
 
 /* Invoice Print Styles */
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
   margin: 0;
   padding: 20px;
   color: #333;
+  background-color: #f9fafb;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
   color-adjust: exact !important;
@@ -15,6 +16,7 @@ body {
   body {
     margin: 0;
     padding: 0;
+    background-color: #fff;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
@@ -22,182 +24,226 @@ body {
   
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 15mm;
   }
   
   .invoice-container {
     border: none !important;
     box-shadow: none !important;
-    padding: 10mm;
+    padding: 20px;
     max-width: 100%;
+    margin: 0;
     page-break-inside: avoid;
   }
   
   .no-print {
     display: none !important;
   }
-
-  .print-header {
-    display: none !important;
-  }
-  
-  table {
-    page-break-inside: avoid;
-  }
-
-  tr {
-    page-break-inside: avoid;
-  }
-  
-  thead {
-    display: table-header-group;
-  }
-
-  tfoot {
-    display: table-footer-group;
-  }
 }
 
-/* Main container styles - simplified design matching dashboard */
+/* Main container styles - matching dashboard */
 .invoice-container {
   max-width: 800px;
-  margin: 0 auto;
+  margin: 20px auto;
   padding: 40px;
   background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   page-break-inside: avoid;
 }
 
-/* Invoice header with title - centered styling */
-.invoice-header {
+/* Company branding section */
+.company-branding {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 40px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f1f5f9;
 }
 
-.invoice-header h1 {
+.company-logo {
+  max-width: 150px;
+  margin-bottom: 15px;
+}
+
+.company-name {
   font-size: 24px;
-  color: #333;
-  margin: 0 0 15px 0;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+/* Invoice header with number and date */
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+}
+
+.invoice-title {
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.invoice-details {
+  text-align: right;
+  color: #64748b;
+}
+
+.invoice-number {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 5px;
+}
+
+.invoice-date {
+  font-size: 14px;
+  margin: 0;
 }
 
 /* Customer details section */
 .customer-details {
-  margin-bottom: 30px;
-}
-
-.customer-details p {
-  margin: 5px 0;
-}
-
-/* Trip details section */
-.trip-details {
-  margin-bottom: 30px;
+  margin-bottom: 40px;
+  padding: 20px;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
 .section-title {
   font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 15px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 5px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.trip-details p {
-  margin: 5px 0;
+.customer-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.info-group {
+  margin: 0;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.info-value {
+  font-size: 15px;
+  color: #1e293b;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Trip details section */
+.trip-details {
+  margin-bottom: 40px;
+  padding: 20px;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
 /* Fare breakdown section */
 .fare-breakdown {
-  margin-bottom: 30px;
+  margin-bottom: 40px;
+  padding: 20px;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
 .fare-item {
   display: flex;
   justify-content: space-between;
-  margin: 5px 0;
-  padding: 5px 0;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.fare-item:last-child {
+  border-bottom: none;
 }
 
 .fare-label {
-  font-weight: normal;
+  color: #64748b;
+  font-size: 15px;
 }
 
 .fare-value {
-  text-align: right;
+  color: #1e293b;
+  font-weight: 500;
+  font-size: 15px;
 }
 
 .total-row {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 2px solid #e2e8f0;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 600;
+}
+
+.total-row .fare-label {
+  color: #0f172a;
+}
+
+.total-row .fare-value {
+  color: #0f172a;
+}
+
+/* GST details section */
+.gst-details {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+}
+
+.gst-title {
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 15px;
+}
+
+.gst-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
 }
 
 /* Footer section */
 .footer {
-  margin-top: 50px;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 2px solid #f1f5f9;
   text-align: center;
-  color: #666;
-  font-size: 14px;
+  color: #64748b;
 }
 
 .footer p {
   margin: 5px 0;
+  font-size: 14px;
 }
 
-/* GST details if shown */
-.gst-details {
-  background-color: #f9f9f9;
-  padding: 15px;
-  margin-bottom: 20px;
-  border-radius: 4px;
+/* Terms and notes section */
+.terms-notes {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #64748b;
 }
 
-.gst-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-/* Better styles for client-side generated PDFs */
-.pdf-body {
-  font-family: Helvetica, Arial, sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
-.pdf-page {
-  width: 210mm;
-  min-height: 297mm;
-  padding: 20mm;
-  margin: 10mm auto;
-  background: white;
-}
-
-.pdf-title {
-  text-align: center;
-  font-size: 24pt;
-  margin-bottom: 30pt;
-}
-
-.pdf-section {
-  margin-bottom: 20pt;
-}
-
-.pdf-label {
-  font-weight: bold;
-}
-
-.pdf-total {
-  font-size: 14pt;
-  font-weight: bold;
-  margin-top: 10pt;
-  border-top: 1pt solid #ccc;
-  padding-top: 5pt;
-}
-
-.pdf-footer {
-  margin-top: 50pt;
-  font-size: 9pt;
-  color: #666;
-  text-align: center;
-}

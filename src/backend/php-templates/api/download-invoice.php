@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -169,23 +168,112 @@ try {
     // Format the date properly
     $pickupDateStr = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
 
-    // Create a more complete PDF file
+    // Create a more visually appealing PDF that matches the dashboard design
     if ($format === 'pdf') {
-        // CRITICAL: Set correct PDF content type headers
         header("Content-Type: application/pdf");
-        
-        // Strong content disposition for forcing download
         $disposition = $directDownload ? "attachment" : "inline";
         header("Content-Disposition: {$disposition}; filename=\"{$invoiceNumber}.pdf\"");
-        
-        // Set additional headers to prevent caching
         header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
         header("Pragma: no-cache");
         header("Expires: 0");
-        header("X-Content-Type-Options: nosniff");
         
-        // Create PDF content using a simplified structure that matches the dashboard view
-        // Simplified invoice PDF that mimics the dashboard view
+        // Create a more visually appealing PDF that matches the dashboard design
+        $content = "";
+        
+        // Company branding
+        $content .= "BT /F2 24 Tf 180 750 Td (Vizag Cab Services) Tj ET\n";
+        
+        // Invoice header
+        $yPos = 700;
+        $content .= "BT /F2 20 Tf 80 {$yPos} Td (INVOICE #{$invoiceNumber}) Tj ET\n";
+        $content .= "BT /F1 12 Tf 400 {$yPos} Td (Date: " . date('d M Y') . ") Tj ET\n";
+        
+        // Customer details section with box
+        $yPos = 650;
+        drawBox($content, 60, $yPos - 100, 500, 80);
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Customer Details) Tj ET\n";
+        $yPos -= 25;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Name: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
+        
+        // Trip details section with box
+        $yPos -= 40;
+        drawBox($content, 60, $yPos - 120, 500, 100);
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Trip Details) Tj ET\n";
+        $yPos -= 25;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Trip Type: " . ucfirst($booking['trip_type'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Pickup: " . ($booking['pickup_location'] ?? 'N/A') . ") Tj ET\n";
+        $yPos -= 20;
+        if (!empty($booking['drop_location'])) {
+            $content .= "BT /F1 12 Tf 80 {$yPos} Td (Drop: " . $booking['drop_location'] . ") Tj ET\n";
+            $yPos -= 20;
+        }
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Date: {$pickupDateStr}) Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Vehicle: " . ($booking['cab_type'] ?? 'N/A') . ") Tj ET\n";
+        
+        // Fare breakdown section with box
+        $yPos -= 40;
+        drawBox($content, 60, $yPos - 120, 500, 100);
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Fare Details) Tj ET\n";
+        $yPos -= 25;
+        
+        // Base amount
+        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Base Amount:) Tj ET\n";
+        $content .= "BT /F1 12 Tf 450 {$yPos} Td (\u20B9" . number_format($baseAmountBeforeTax, 2) . ") Tj ET\n";
+        $yPos -= 20;
+        
+        // GST details if enabled
+        if ($gstEnabled) {
+            if ($isIGST) {
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (IGST (12%):) Tj ET\n";
+                $content .= "BT /F1 12 Tf 450 {$yPos} Td (\u20B9" . number_format($igstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+            } else {
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (CGST (6%):) Tj ET\n";
+                $content .= "BT /F1 12 Tf 450 {$yPos} Td (\u20B9" . number_format($cgstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+                $content .= "BT /F1 12 Tf 80 {$yPos} Td (SGST (6%):) Tj ET\n";
+                $content .= "BT /F1 12 Tf 450 {$yPos} Td (\u20B9" . number_format($sgstAmount, 2) . ") Tj ET\n";
+                $yPos -= 20;
+            }
+        }
+        
+        // Draw line for total
+        $content .= "0.5 w\n";
+        $content .= "60 " . ($yPos + 10) . " m\n";
+        $content .= "560 " . ($yPos + 10) . " l\n";
+        $content .= "S\n";
+        
+        // Total amount
+        $yPos -= 20;
+        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Total Amount:) Tj ET\n";
+        $content .= "BT /F2 14 Tf 450 {$yPos} Td (\u20B9" . number_format($totalAmount, 2) . ") Tj ET\n";
+        
+        // Footer
+        $yPos = 120;
+        $content .= "BT /F2 12 Tf 80 {$yPos} Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET\n";
+        $yPos -= 20;
+        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Generated on: " . date('d M Y H:i:s') . ") Tj ET\n";
+        
+        // Helper function to draw boxes
+        function drawBox(&$content, $x, $y, $width, $height) {
+            $content .= "0.5 w\n";  // Set line width
+            $content .= "{$x} {$y} m\n";  // Move to start point
+            $content .= "{$x} " . ($y + $height) . " l\n";  // Draw left line
+            $content .= ($x + $width) . " " . ($y + $height) . " l\n";  // Draw top line
+            $content .= ($x + $width) . " {$y} l\n";  // Draw right line
+            $content .= "{$x} {$y} l\n";  // Draw bottom line
+            $content .= "S\n";  // Stroke the path
+        }
+        
+        // Create complete PDF with refined styling
         $pdfContent = "%PDF-1.7\n";
         
         // PDF Objects
@@ -198,91 +286,6 @@ try {
         $pdfContent .= "6 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>\nendobj\n";
         
         // Start content stream
-        $content = "";
-        
-        // Centered invoice title at the top
-        $invoiceTitle = "Invoice #{$invoiceNumber}";
-        $content .= "BT /F2 18 Tf 180 720 Td ($invoiceTitle) Tj ET\n";
-        
-        // Customer details - Left aligned
-        $yPos = 680;
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Customer: " . ($booking['passenger_name'] ?? 'N/A') . ") Tj ET\n";
-        $yPos -= 20;
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Phone: " . ($booking['passenger_phone'] ?? 'N/A') . ") Tj ET\n";
-        $yPos -= 20;
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Email: " . ($booking['passenger_email'] ?? 'N/A') . ") Tj ET\n";
-        
-        // Trip Details Section
-        $yPos -= 40;
-        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Trip Details) Tj ET\n";
-        $yPos -= 30;
-        
-        // Trip Type
-        $tripType = ucfirst($booking['trip_type'] ?? 'N/A');
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Trip Type: {$tripType}) Tj ET\n";
-        $yPos -= 20;
-        
-        // Pickup Location
-        $pickupLocation = $booking['pickup_location'] ?? 'N/A';
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Pickup: {$pickupLocation}) Tj ET\n";
-        $yPos -= 20;
-        
-        // Drop Location if available
-        if (!empty($booking['drop_location'])) {
-            $content .= "BT /F1 12 Tf 80 {$yPos} Td (Drop: " . $booking['drop_location'] . ") Tj ET\n";
-            $yPos -= 20;
-        }
-        
-        // Date
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Date: {$pickupDateStr}) Tj ET\n";
-        $yPos -= 20;
-        
-        // Vehicle
-        $vehicle = $booking['cab_type'] ?? 'N/A';
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Vehicle: {$vehicle}) Tj ET\n";
-        
-        // Fare Details Section
-        $yPos -= 40;
-        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Fare Details) Tj ET\n";
-        $yPos -= 30;
-        
-        // Base Amount
-        $formattedBaseAmount = number_format($baseAmountBeforeTax, 2);
-        $content .= "BT /F1 12 Tf 80 {$yPos} Td (Base Amount: \u20B9{$formattedBaseAmount}) Tj ET\n";
-        $yPos -= 20;
-        
-        // GST components if applicable
-        if ($gstEnabled) {
-            if ($isIGST) {
-                $formattedIgst = number_format($igstAmount, 2);
-                $content .= "BT /F1 12 Tf 80 {$yPos} Td (IGST (12%): \u20B9{$formattedIgst}) Tj ET\n";
-                $yPos -= 20;
-            } else {
-                $formattedCgst = number_format($cgstAmount, 2);
-                $content .= "BT /F1 12 Tf 80 {$yPos} Td (CGST (6%): \u20B9{$formattedCgst}) Tj ET\n";
-                $yPos -= 20;
-                
-                $formattedSgst = number_format($sgstAmount, 2);
-                $content .= "BT /F1 12 Tf 80 {$yPos} Td (SGST (6%): \u20B9{$formattedSgst}) Tj ET\n";
-                $yPos -= 20;
-            }
-        }
-        
-        // Total Amount - Bold
-        $yPos -= 10;
-        $formattedTotal = number_format($totalAmount, 2);
-        $content .= "BT /F2 14 Tf 80 {$yPos} Td (Total Amount: \u20B9{$formattedTotal}) Tj ET\n";
-        
-        // Footer
-        $yPos = 120;
-        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Thank you for choosing Vizag Cab Services!) Tj ET\n";
-        $yPos -= 20;
-        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Contact: +91 9876543210 | Email: info@vizagcabs.com) Tj ET\n";
-        $yPos -= 20;
-        $generatedDate = date('d M Y H:i:s');
-        $content .= "BT /F1 10 Tf 80 {$yPos} Td (Generated on: {$generatedDate}) Tj ET\n";
-        
-        // Add content stream to PDF
         $contentLength = strlen($content);
         $pdfContent .= "4 0 obj\n<</Length $contentLength>>\nstream\n$content\nendstream\nendobj\n";
         
