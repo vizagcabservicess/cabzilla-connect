@@ -41,6 +41,17 @@ RewriteEngine On
     SetHandler application/x-httpd-php
 </Files>
 
+# CRITICAL: Special handling for download-invoice.php - no content type header
+<Files "download-invoice.php">
+    # Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+</Files>
+
 # API Test Endpoint - highest priority
 RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
 
@@ -55,6 +66,10 @@ RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L
 RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
 RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
+
+# Add public download-invoice endpoint
+RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,NC,QSA]
 
 # Invoice and receipt endpoints with high priority
 RewriteRule ^api/invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]

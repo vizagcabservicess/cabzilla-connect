@@ -1,9 +1,8 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { Loader2, FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Spinner } from "@/components/ui/spinner";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -35,6 +35,7 @@ export function BookingInvoice({
 }: BookingInvoiceProps) {
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gstEnabled, setGstEnabled] = useState(false);
   const [isIGST, setIsIGST] = useState(false);
@@ -53,22 +54,57 @@ export function BookingInvoice({
     }
   }, [booking?.id]);
 
+  const validateGSTDetails = () => {
+    if (gstEnabled) {
+      if (!gstDetails.gstNumber || gstDetails.gstNumber.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing GST Number",
+          description: "Please enter a valid GST number"
+        });
+        return false;
+      }
+      
+      if (!gstDetails.companyName || gstDetails.companyName.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing Company Name",
+          description: "Please enter the company name"
+        });
+        return false;
+      }
+      
+      if (!gstDetails.companyAddress || gstDetails.companyAddress.trim() === '') {
+        toast({
+          variant: "destructive",
+          title: "Missing Company Address",
+          description: "Please enter the company address"
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleGenerateInvoice = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      if (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress)) {
-        toast({
-          variant: "destructive",
-          title: "Missing GST Details",
-          description: "Please fill in all GST details"
-        });
+      if (!validateGSTDetails()) {
         setLoading(false);
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 'with GST:', gstEnabled, 'IGST:', isIGST, 'Include Tax:', includeTax, 'Custom Invoice Number:', customInvoiceNumber);
+      console.log('Generating invoice with params:', {
+        bookingId: booking.id,
+        gstEnabled,
+        isIGST,
+        includeTax,
+        customInvoiceNumber,
+        gstDetails: gstEnabled ? gstDetails : undefined
+      });
+      
       const result = await onGenerateInvoice(
         gstEnabled, 
         gstEnabled ? gstDetails : undefined, 
@@ -76,7 +112,6 @@ export function BookingInvoice({
         includeTax,
         customInvoiceNumber.trim() || undefined
       );
-      console.log('Invoice generation result:', result);
       
       if (result && result.data) {
         setInvoiceData(result.data);
@@ -85,7 +120,6 @@ export function BookingInvoice({
           description: "Invoice was generated successfully"
         });
       } else {
-        setInvoiceData(null);
         throw new Error('No invoice data returned from the server');
       }
     } catch (error) {
@@ -98,29 +132,59 @@ export function BookingInvoice({
       });
     } finally {
       setLoading(false);
+      setRegenerating(false);
     }
   };
 
   const handleDownloadPdf = () => {
-    // Use a proper URL with query parameters (no body in GET request)
-    const baseUrl = getApiUrl(`/api/admin/download-invoice`);
-    const bookingIdParam = `?id=${booking.id}`;
-    const gstParam = gstEnabled ? '&gstEnabled=1' : '';
-    const igstParam = isIGST ? '&isIGST=1' : '';
-    const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-    const invoiceNumberParam = customInvoiceNumber.trim() ? `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
-    const gstDetailsParam = gstEnabled && gstDetails.gstNumber ? 
-      `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}&companyName=${encodeURIComponent(gstDetails.companyName)}&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}` : '';
-    
-    const downloadUrl = `${baseUrl}${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
-    console.log('Download invoice URL:', downloadUrl);
-    
-    // Open in a new window/tab for PDF download
-    window.open(downloadUrl, '_blank');
+    try {
+      const baseUrl = getApiUrl(`/api/download-invoice`);
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0'
+      });
+      
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
+      }
+      
+      if (gstEnabled) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      const downloadUrl = `${baseUrl}?${params.toString()}`;
+      console.log('Download invoice URL:', downloadUrl);
+      
+      window.open(downloadUrl, '_blank');
+      
+      toast({
+        title: "Invoice Download Started",
+        description: "Your invoice is being prepared in a new tab"
+      });
+    } catch (error) {
+      console.error("Invoice download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download invoice. Please try again."
+      });
+    }
   };
 
   const handleGstToggle = (checked: boolean) => {
     setGstEnabled(checked);
+    if (!checked) {
+      setIsIGST(false);
+      setGstDetails({
+        gstNumber: '',
+        companyName: '',
+        companyAddress: ''
+      });
+    }
   };
 
   const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,11 +195,19 @@ export function BookingInvoice({
     }));
   };
 
+  const handleRegenerateInvoice = () => {
+    if (loading || isSubmitting) return;
+    
+    setRegenerating(true);
+    setInvoiceData(null);
+    handleGenerateInvoice();
+  };
+
   const renderInvoiceContent = () => {
     if (loading || isSubmitting) {
       return (
         <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+          <Spinner size="lg" className="mb-4" />
           <p>Generating invoice...</p>
         </div>
       );
@@ -147,6 +219,15 @@ export function BookingInvoice({
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      );
+    }
+
+    if (regenerating) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Spinner size="lg" className="mb-4" />
+          <p>Regenerating invoice with new settings...</p>
+        </div>
       );
     }
 
@@ -249,11 +330,11 @@ export function BookingInvoice({
             <div>
               <Button 
                 variant="outline" 
-                onClick={handleGenerateInvoice}
-                disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                onClick={handleRegenerateInvoice}
+                disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 className="w-full"
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
                 Regenerate Invoice with Current Settings
               </Button>
             </div>
@@ -299,16 +380,16 @@ export function BookingInvoice({
               <>
                 <Button 
                   variant="outline" 
-                  onClick={handleGenerateInvoice}
-                  disabled={loading || isSubmitting || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                  onClick={handleRegenerateInvoice}
+                  disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
                 
                 <Button
                   onClick={handleDownloadPdf}
-                  disabled={loading || isSubmitting}
+                  disabled={loading || isSubmitting || regenerating}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download PDF
