@@ -6,24 +6,31 @@ body {
   margin: 0;
   padding: 20px;
   color: #333;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
 }
 
 @media print {
   body {
     margin: 0;
     padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
   
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 10mm;
   }
   
   .invoice-container {
-    border: none;
-    box-shadow: none;
+    border: none !important;
+    box-shadow: none !important;
     padding: 10mm;
     max-width: 100%;
+    page-break-inside: avoid;
   }
   
   .no-print {
@@ -32,6 +39,22 @@ body {
 
   .print-header {
     display: none !important;
+  }
+  
+  table {
+    page-break-inside: avoid;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
   }
 }
 
@@ -42,6 +65,7 @@ body {
   padding: 30px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   background-color: #fff;
+  page-break-inside: avoid;
 }
 
 .invoice-header {
@@ -168,4 +192,30 @@ button {
     page-break-inside: avoid;
     page-break-after: auto;
   }
+}
+
+/* Ensure the PDF is correctly rendered */
+.gst-details {
+  background-color: #f9f9f9 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.tax-note {
+  font-style: italic;
+  color: #666;
+  margin-top: 10px;
+  font-size: 0.9em;
+}
+
+/* Fix for tables in PDF */
+.fare-table th {
+  background-color: #f8f9fa !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  font-weight: bold;
 }

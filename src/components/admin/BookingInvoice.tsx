@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -142,14 +141,12 @@ export function BookingInvoice({
     try {
       setDownloadCount(prev => prev + 1);
       
-      // Use a proper URL with query parameters for invoice download
-      const baseUrl = getApiUrl(`/api/download-invoice`);
+      const baseUrl = getApiUrl(`/api/download-invoice.php`);
       const bookingIdParam = `id=${booking.id}`;
       const gstParam = gstEnabled ? '&gstEnabled=1' : '&gstEnabled=0';
       const igstParam = isIGST ? '&isIGST=1' : '&isIGST=0';
       const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-      // Add cache buster to prevent browsers from serving cached version
-      const cacheBuster = `&v=${downloadCount}&t=${new Date().getTime()}`;
+      const cacheBuster = `&v=${downloadCount}-${new Date().getTime()}-${Math.random().toString(36).substring(2, 15)}`;
       const invoiceNumberParam = customInvoiceNumber.trim() ? 
         `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
       
@@ -160,28 +157,16 @@ export function BookingInvoice({
           + `&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}`;
       }
       
-      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}${cacheBuster}`;
+      const formatParam = '&format=pdf';
+      
+      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}${formatParam}${cacheBuster}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      // Open in a new window/tab for PDF download
-      const newWindow = window.open(downloadUrl, '_blank');
-      
-      if (newWindow) {
-        // Force reload of the window to avoid cache issues
-        setTimeout(() => {
-          try {
-            if (!newWindow.closed) {
-              newWindow.location.href = downloadUrl;
-            }
-          } catch (e) {
-            console.error('Error forcing reload:', e);
-          }
-        }, 100);
-      }
+      handleDirectPdfDownload();
       
       toast({
         title: "Invoice Download Started",
-        description: "Your invoice is being prepared in a new tab"
+        description: "Your invoice is being prepared for download"
       });
     } catch (error) {
       console.error("Invoice download error:", error);
@@ -197,13 +182,11 @@ export function BookingInvoice({
     try {
       setDownloadCount(prev => prev + 1);
       
-      // Create form and submit to force proper download
       const form = document.createElement('form');
       form.method = 'GET';
-      form.action = getApiUrl(`/api/download-invoice`);
+      form.action = getApiUrl(`/api/download-invoice.php`);
       form.target = '_blank';
       
-      // Add all parameters as hidden fields
       const params: Record<string, string> = {
         id: booking.id.toString(),
         gstEnabled: gstEnabled ? '1' : '0',
@@ -212,6 +195,8 @@ export function BookingInvoice({
         format: 'pdf',
         v: downloadCount.toString(),
         t: new Date().getTime().toString(),
+        r: Math.random().toString(36).substring(2, 15),
+        direct_download: '1',
       };
       
       if (customInvoiceNumber.trim()) {
@@ -224,7 +209,6 @@ export function BookingInvoice({
         params.companyAddress = gstDetails.companyAddress;
       }
       
-      // Add all parameters as hidden fields
       Object.entries(params).forEach(([key, value]) => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -233,10 +217,12 @@ export function BookingInvoice({
         form.appendChild(input);
       });
       
-      // Add form to body, submit it, then remove it
       document.body.appendChild(form);
       form.submit();
-      document.body.removeChild(form);
+      
+      setTimeout(() => {
+        document.body.removeChild(form);
+      }, 1000);
       
       toast({
         title: "Invoice Download Started",
@@ -255,7 +241,6 @@ export function BookingInvoice({
   const handleGstToggle = (checked: boolean) => {
     setGstEnabled(checked);
     if (checked && !includeTax) {
-      // When enabling GST, ensure we default to include tax
       setIncludeTax(true);
       toast({
         title: "Tax Inclusion Enabled",
@@ -275,11 +260,9 @@ export function BookingInvoice({
   const handleRegenerateInvoice = () => {
     if (loading || isSubmitting) return;
     
-    // Set regenerating flag to show appropriate feedback
     setRegenerating(true);
     setInvoiceData(null);
     
-    // Force a re-generation
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);

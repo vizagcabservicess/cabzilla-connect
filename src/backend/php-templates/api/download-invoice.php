@@ -49,7 +49,9 @@ try {
         'booking_id' => $_GET['id'] ?? null,
         'gstEnabled' => $_GET['gstEnabled'] ?? 'false',
         'gstNumber' => $_GET['gstNumber'] ?? '',
-        'companyName' => $_GET['companyName'] ?? ''
+        'companyName' => $_GET['companyName'] ?? '',
+        'format' => $_GET['format'] ?? 'pdf',
+        'direct_download' => $_GET['direct_download'] ?? '0'
     ]);
 
     // Only allow GET requests
@@ -73,6 +75,9 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
     $format = isset($_GET['format']) ? $_GET['format'] : 'pdf'; // Default to PDF format
+    
+    // Check for direct download flag - special handling for ensuring proper download
+    $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
 
     // Connect to database with improved error handling
     try {
@@ -121,47 +126,6 @@ try {
         
         if ($conn->error) {
             logInvoiceError("Error creating invoices table in public download", ['error' => $conn->error]);
-        }
-    } else {
-        // Check if all required columns exist
-        $missingColumns = [];
-        $requiredColumns = ['tax_amount', 'is_igst', 'include_tax'];
-        
-        foreach ($requiredColumns as $column) {
-            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE '$column'");
-            if ($checkColumnResult->num_rows === 0) {
-                $missingColumns[] = $column;
-            }
-        }
-        
-        if (!empty($missingColumns)) {
-            logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
-            
-            // Add missing columns
-            foreach ($missingColumns as $column) {
-                $alterQuery = "";
-                
-                switch ($column) {
-                    case 'tax_amount':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
-                        break;
-                    case 'is_igst':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
-                        break;
-                    case 'include_tax':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
-                        break;
-                }
-                
-                if (!empty($alterQuery)) {
-                    $conn->query($alterQuery);
-                    if (!$conn->error) {
-                        logInvoiceError("Successfully added column $column");
-                    } else {
-                        logInvoiceError("Error adding column $column", ['error' => $conn->error]);
-                    }
-                }
-            }
         }
     }
     
@@ -230,21 +194,45 @@ try {
         throw new Exception("Server error generating invoice: " . strip_tags($body));
     }
     
+    // Check if the PDF seems valid - at least check for PDF signature
+    $isPdfValid = (stripos($body, '%PDF-') === 0);
+    
+    if (!$isPdfValid) {
+        logInvoiceError("Invalid PDF data received", [
+            'first_bytes' => bin2hex(substr($body, 0, 20)),
+            'length' => strlen($body)
+        ]);
+        
+        // If we got HTML instead of PDF, check if it contains the printing JavaScript
+        if (stripos($body, '<!DOCTYPE html>') !== false && stripos($body, '<html') !== false) {
+            // We can serve the HTML directly for printing instead since it has auto-print functionality
+            header("Content-Type: text/html; charset=utf-8");
+            echo $body;
+            exit;
+        } else {
+            throw new Exception("Invalid PDF data received from server");
+        }
+    }
+    
     // CRITICAL: Set correct PDF content type headers
     header("Content-Type: application/pdf");
     
-    // Pass through Content-Disposition for download
-    if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
-        header("Content-Disposition: {$matches[1]}");
-    } else {
-        $invoiceNumber = "invoice_{$bookingId}";
-        header("Content-Disposition: attachment; filename=\"$invoiceNumber.pdf\"");
-    }
+    // Strong content disposition for forcing download
+    $invoiceNumber = isset($_GET['invoiceNumber']) && !empty($_GET['invoiceNumber']) 
+        ? $_GET['invoiceNumber'] 
+        : "invoice_{$bookingId}";
+        
+    // Use attachment disposition for direct downloads, inline otherwise
+    $disposition = $directDownload ? "attachment" : "inline";
+    header("Content-Disposition: {$disposition}; filename=\"{$invoiceNumber}.pdf\"");
     
     // Set additional headers to prevent caching
     header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
     header("Pragma: no-cache");
     header("Expires: 0");
+    
+    // Force content length to ensure complete download
+    header("Content-Length: " . strlen($body));
     
     // Output the PDF data
     echo $body;
@@ -252,7 +240,8 @@ try {
     logInvoiceError("Public invoice download completed successfully", [
         'booking_id' => $bookingId,
         'content_type_sent' => 'application/pdf',
-        'body_size' => strlen($body)
+        'body_size' => strlen($body),
+        'is_pdf_valid' => $isPdfValid ? 'true' : 'false'
     ]);
     exit;
 

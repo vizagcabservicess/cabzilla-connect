@@ -61,11 +61,14 @@ try {
     $format = isset($_GET['format']) ? strtolower($_GET['format']) : 'pdf';
     $isPdfOutput = ($format === 'pdf');
     $directPdf = isset($_GET['pdf_direct']) && $_GET['pdf_direct'] === '1';
+    // Check for direct download flag
+    $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
     
     logInvoiceError("Processing invoice download for booking ID: $bookingId", [
         'format' => $format,
         'isPdf' => $isPdfOutput ? 'true' : 'false',
-        'directPdf' => $directPdf ? 'true' : 'false'
+        'directPdf' => $directPdf ? 'true' : 'false',
+        'directDownload' => $directDownload ? 'true' : 'false'
     ]);
 
     // Get GST parameters from GET
@@ -125,47 +128,6 @@ try {
         if ($conn->error) {
             logInvoiceError("Error creating invoices table", ['error' => $conn->error]);
         }
-    } else {
-        // Check if all required columns exist
-        $missingColumns = [];
-        $requiredColumns = ['tax_amount', 'is_igst', 'include_tax'];
-        
-        foreach ($requiredColumns as $column) {
-            $checkColumnResult = $conn->query("SHOW COLUMNS FROM invoices LIKE '$column'");
-            if ($checkColumnResult->num_rows === 0) {
-                $missingColumns[] = $column;
-            }
-        }
-        
-        if (!empty($missingColumns)) {
-            logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
-            
-            // Add missing columns
-            foreach ($missingColumns as $column) {
-                $alterQuery = "";
-                
-                switch ($column) {
-                    case 'tax_amount':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
-                        break;
-                    case 'is_igst':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
-                        break;
-                    case 'include_tax':
-                        $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
-                        break;
-                }
-                
-                if (!empty($alterQuery)) {
-                    $conn->query($alterQuery);
-                    if (!$conn->error) {
-                        logInvoiceError("Successfully added column $column");
-                    } else {
-                        logInvoiceError("Error adding column $column", ['error' => $conn->error]);
-                    }
-                }
-            }
-        }
     }
     
     // Retrieve the invoice data
@@ -204,16 +166,6 @@ try {
         $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
         ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''));
     
-    // Log parameters to help with debugging
-    logInvoiceError("Invoice generation parameters", [
-        'needNewInvoice' => $needNewInvoice ? 'true' : 'false',
-        'invoiceExists' => $invoiceExists ? 'true' : 'false',
-        'gstEnabled' => $gstEnabled ? 'true' : 'false',
-        'isIGST' => $isIGST ? 'true' : 'false',
-        'includeTax' => $includeTax ? 'true' : 'false',
-        'customInvoiceNumber' => $customInvoiceNumber
-    ]);
-    
     if ($needNewInvoice) {
         // Generate invoice on-the-fly via the generate-invoice API
         $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
@@ -226,7 +178,8 @@ try {
             'gstNumber' => $gstNumber,
             'companyName' => $companyName,
             'companyAddress' => $companyAddress,
-            'invoiceNumber' => $customInvoiceNumber
+            'invoiceNumber' => $customInvoiceNumber,
+            'nocache' => rand(10000, 99999) // Add cache buster
         ]);
         
         $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
@@ -234,6 +187,11 @@ try {
         curl_setopt($ch, CURLOPT_HEADER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'X-Requested-With: XMLHttpRequest'
+        ]);
         
         $generateResponse = curl_exec($ch);
         $curlError = curl_error($ch);
@@ -286,14 +244,21 @@ try {
     // CRITICAL: Set Content-Type and other headers for PDF output
     if ($isPdfOutput) {
         header('Content-Type: application/pdf');
-        header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
+        
+        // Use attachment disposition to force download, or inline for viewing
+        $disposition = $directDownload ? 'attachment' : 'inline';
+        header('Content-Disposition: ' . $disposition . '; filename="invoice_' . $invoiceNumber . '.pdf"');
+        
         // Add headers to ensure no caching
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
+        
+        // Additional header to prevent MIME sniffing
+        header('X-Content-Type-Options: nosniff');
     } else {
         // For HTML output
-        header('Content-Type: text/html');
+        header('Content-Type: text/html; charset=utf-8');
         header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     }
     
@@ -314,25 +279,26 @@ try {
         ';
     }
     
+    // Enhanced PDF printing capabilities
+    $enhancedPrintJs = '
+    window.onload = function() {
+        // Force PDF print dialog immediately
+        window.print();
+        
+        // After print is triggered, show success message
+        window.addEventListener("afterprint", function() {
+            document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been processed.</h1><p>You may close this window.</p></div>";
+        });
+    };';
+    
     // Return enhanced invoice HTML with improved printing capabilities
-    echo '<!DOCTYPE html>
+    $fullHtml = '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Invoice #' . $invoiceNumber . '</title>
     <style>' . $invoiceCSS . '</style>
-    <script>
-        window.onload = function() {
-            // Force PDF print dialog immediately after a slight delay
-            setTimeout(function() {
-                window.print();
-                // After print is triggered, show success message
-                setTimeout(function() {
-                    document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been downloaded.</h1><p>You may close this window.</p></div>";
-                }, 1000);
-            }, 500);
-        };
-    </script>
+    <script>' . $enhancedPrintJs . '</script>
 </head>
 <body>
     <div class="print-container">
@@ -348,6 +314,21 @@ try {
     </div>
 </body>
 </html>';
+    
+    // For PDF output, convert HTML to PDF
+    if ($isPdfOutput) {
+        // Log what we're sending
+        logInvoiceError("HTML content ready for PDF conversion", [
+            'invoice_number' => $invoiceNumber, 
+            'html_length' => strlen($fullHtml)
+        ]);
+        
+        // Just output the HTML for browser-based PDF generation
+        // The browser will render this as PDF based on content headers
+        echo $fullHtml;
+    } else {
+        echo $fullHtml;
+    }
     
     logInvoiceError("Invoice sent successfully for printing", ['invoice_number' => $invoiceNumber]);
     exit; // Important to prevent any additional output

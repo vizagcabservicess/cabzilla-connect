@@ -56,11 +56,13 @@ RewriteEngine On
     Header always set Expires "0"
 </Files>
 
-# IMPORTANT: Explicitly set PDF content type when PDF extension is detected
+# IMPORTANT: MIME type handling for PDFs
 <FilesMatch "\.pdf$">
     ForceType application/pdf
     Header always set Content-Type application/pdf
     Header always set X-Content-Type-Options "nosniff"
+    # Force browser to download PDF rather than display inline
+    Header set Content-Disposition "attachment"
 </FilesMatch>
 
 # API Test Endpoint - highest priority
