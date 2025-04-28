@@ -3,14 +3,32 @@
 // Include configuration file
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
+require_once __DIR__ . '/utils/response.php';
 
 // Check if vendor directory exists and autoload is available
-$autoloaderPath = __DIR__ . '/../vendor/autoload.php';
-$vendorExists = file_exists($autoloaderPath);
+$autoloaderPaths = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+    dirname(dirname(dirname(__FILE__))) . '/vendor/autoload.php'
+];
+
+$vendorExists = false;
+$autoloaderPath = null;
+
+foreach ($autoloaderPaths as $path) {
+    if (file_exists($path)) {
+        $autoloaderPath = $path;
+        $vendorExists = true;
+        break;
+    }
+}
 
 if ($vendorExists) {
     // Require Composer's autoloader if it exists
     require_once $autoloaderPath;
+    error_log("Found composer autoloader at: " . $autoloaderPath);
+} else {
+    error_log("CRITICAL ERROR: No composer autoloader found!");
 }
 
 // CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
@@ -30,25 +48,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// JSON response in case of error
-function sendJsonResponse($data, $statusCode = 200) {
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
-    echo json_encode($data, JSON_PRETTY_PRINT);
-    exit;
-}
-
-// Log error function
+// Log error function with improved details
 function logInvoiceError($message, $data = []) {
-    error_log("INVOICE ERROR: $message " . json_encode($data));
+    $formattedData = is_array($data) ? json_encode($data) : (string)$data;
+    error_log("INVOICE ERROR: $message " . $formattedData);
+    
     $logFile = __DIR__ . '/../logs/invoice_errors.log';
     $dir = dirname($logFile);
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
+    
     file_put_contents(
         $logFile,
-        date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
+        date('Y-m-d H:i:s') . " - $message - " . $formattedData . "\n",
         FILE_APPEND
     );
 }
@@ -56,14 +69,14 @@ function logInvoiceError($message, $data = []) {
 try {
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        sendErrorResponse('Method not allowed', [], 405);
     }
 
     // Get booking ID from query parameters
     $bookingId = isset($_GET['id']) ? (int)$_GET['id'] : null;
     
     if (!$bookingId) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
+        sendErrorResponse('Missing booking ID', [], 400);
     }
 
     // Get GST parameters from GET
@@ -78,6 +91,13 @@ try {
     
     // Check for direct download flag - special handling for ensuring proper download
     $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
+
+    logInvoiceError("Starting invoice download process", [
+        'bookingId' => $bookingId,
+        'format' => $format,
+        'directDownload' => $directDownload,
+        'dompdfAvailable' => $vendorExists ? 'Yes' : 'No',
+    ]);
 
     // Connect to database with improved error handling
     try {
@@ -97,7 +117,7 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+            sendErrorResponse('Booking not found', [], 404);
         }
         
         $booking = $result->fetch_assoc();
@@ -173,20 +193,20 @@ try {
     $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
     $finalTotal = round($finalTotal, 2);
 
-    // Get CSS content - IMPROVED PATH RESOLUTION FOR PRODUCTION
-    // Try multiple possible paths for CSS in order of likelihood
+    // Get CSS content from multiple possible locations
     $cssContent = null;
     $possiblePaths = [
         // Public CSS directory (most likely in production)
         $_SERVER['DOCUMENT_ROOT'] . '/css/invoice-print.css',
+        dirname($_SERVER['DOCUMENT_ROOT']) . '/css/invoice-print.css',
+        // Direct path
+        __DIR__ . '/../../css/invoice-print.css',
         // Project root CSS directory
-        $_SERVER['DOCUMENT_ROOT'] . '/api/css/invoice-print.css',
+        dirname(__DIR__, 3) . '/css/invoice-print.css',
         // Relative to current script
         __DIR__ . '/../css/invoice-print.css',
-        // One level up
-        __DIR__ . '/../../css/invoice-print.css',
-        // Two levels up
-        __DIR__ . '/../../../css/invoice-print.css',
+        // One level up for admin
+        dirname(dirname(__DIR__)) . '/css/invoice-print.css',
     ];
     
     foreach ($possiblePaths as $path) {
@@ -194,6 +214,8 @@ try {
             $cssContent = file_get_contents($path);
             logInvoiceError("CSS file found at path: " . $path);
             break;
+        } else {
+            logInvoiceError("CSS not found at: " . $path);
         }
     }
     
@@ -284,7 +306,7 @@ try {
                     </tr>
                     <tr>
                         <td>Base Fare'.($includeTax && $gstEnabled ? ' (excluding tax)' : '').'</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($baseAmountBeforeTax, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
                     </tr>';
 
     if ($gstEnabled) {
@@ -292,17 +314,17 @@ try {
             $content .= '
                     <tr>
                         <td>IGST (12%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($igstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($igstAmount, 2).'</td>
                     </tr>';
         } else {
             $content .= '
                     <tr>
                         <td>CGST (6%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($cgstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($cgstAmount, 2).'</td>
                     </tr>
                     <tr>
                         <td>SGST (6%)</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($sgstAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($sgstAmount, 2).'</td>
                     </tr>';
         }
     }
@@ -310,7 +332,7 @@ try {
     $content .= '
                     <tr class="total-row">
                         <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol"></span> '.number_format($finalTotal, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($finalTotal, 2).'</td>
                     </tr>
                 </table>';
 
@@ -346,6 +368,8 @@ try {
             use Dompdf\Dompdf;
             use Dompdf\Options;
             
+            logInvoiceError("DomPDF class found, attempting to generate PDF");
+            
             // Configure DomPDF options
             $options = new Options();
             $options->set('isRemoteEnabled', true);
@@ -357,14 +381,23 @@ try {
             // Create DomPDF instance
             $dompdf = new Dompdf($options);
             $dompdf->setPaper('A4', 'portrait');
+            
+            logInvoiceError("DomPDF instance created successfully");
 
             // Load HTML content
             $dompdf->loadHtml($content);
+            logInvoiceError("HTML loaded into DomPDF");
 
             // Render the PDF
             $dompdf->render();
+            logInvoiceError("PDF rendering complete");
 
-            // Set appropriate headers
+            // CRITICAL: Clear any previous headers
+            if (headers_sent()) {
+                logInvoiceError("WARNING: Headers already sent before PDF output");
+            }
+            
+            // CRITICAL: Set appropriate headers for PDF
             header('Content-Type: application/pdf');
             header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="Invoice_'.$invoiceNumber.'.pdf"');
             header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -374,30 +407,43 @@ try {
             // Output the generated PDF
             echo $dompdf->output();
             
-            logInvoiceError("PDF generated successfully", ['invoice_number' => $invoiceNumber]);
+            logInvoiceError("PDF generated and output successfully");
         } catch (Exception $e) {
-            logInvoiceError("PDF generation error", ['error' => $e->getMessage()]);
+            logInvoiceError("PDF generation error", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             
             // If PDF generation fails, fall back to HTML output
             header('Content-Type: text/html; charset=utf-8');
             echo $content;
+            logInvoiceError("Falling back to HTML output due to PDF generation error");
         }
     } else {
         // DomPDF not available, return HTML content
-        logInvoiceError("DomPDF not available, falling back to HTML", ['vendor_exists' => $vendorExists ? 'true' : 'false']);
+        logInvoiceError("DomPDF not available, falling back to HTML", [
+            'vendorExists' => $vendorExists ? 'true' : 'false',
+            'class_exists' => class_exists('Dompdf\Dompdf') ? 'true' : 'false',
+            'autoloader_path' => $autoloaderPath
+        ]);
         header('Content-Type: text/html; charset=utf-8');
         echo $content;
     }
 
 } catch (Exception $e) {
-    logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logInvoiceError("Critical error in download-invoice.php", [
+        'error' => $e->getMessage(), 
+        'trace' => $e->getTraceAsString(),
+        'line' => $e->getLine(),
+        'file' => $e->getFile()
+    ]);
     
     // For errors, ensure we return JSON
     header('Content-Type: application/json');
-    sendJsonResponse([
-        'status' => 'error',
-        'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getMessage() : null
+    sendErrorResponse('Failed to generate invoice: ' . $e->getMessage(), [
+        'error_details' => $debugMode ? [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ] : null
     ], 500);
 }
 

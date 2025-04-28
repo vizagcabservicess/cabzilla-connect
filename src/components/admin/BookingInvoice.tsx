@@ -75,15 +75,6 @@ export function BookingInvoice({
         });
         return false;
       }
-      
-      if (!gstDetails.companyAddress || gstDetails.companyAddress.trim() === '') {
-        toast({
-          variant: "destructive",
-          title: "Missing Company Address",
-          description: "Please enter the company address"
-        });
-        return false;
-      }
     }
     return true;
   };
@@ -138,34 +129,47 @@ export function BookingInvoice({
     }
   };
 
+  // Create a dynamic and unique URL for PDF download
+  const createPdfUrl = (directDownload = false, useAdminEndpoint = false) => {
+    const timestamp = new Date().getTime();
+    const randomPart = Math.random().toString(36).substring(2, 8);
+    
+    const endpoint = useAdminEndpoint 
+      ? `/api/admin/download-invoice.php` 
+      : `/api/download-invoice.php`;
+      
+    const params = new URLSearchParams({
+      id: booking.id.toString(),
+      gstEnabled: gstEnabled ? '1' : '0',
+      isIGST: isIGST ? '1' : '0',
+      includeTax: includeTax ? '1' : '0',
+      format: 'pdf',
+      direct_download: directDownload ? '1' : '0',
+      v: downloadCount.toString(),
+      t: timestamp.toString(),
+      r: randomPart
+    });
+    
+    if (customInvoiceNumber.trim()) {
+      params.append('invoiceNumber', customInvoiceNumber.trim());
+    }
+    
+    if (gstEnabled) {
+      params.append('gstNumber', gstDetails.gstNumber);
+      params.append('companyName', gstDetails.companyName);
+      params.append('companyAddress', gstDetails.companyAddress || '');
+    }
+    
+    return getApiUrl(`${endpoint}?${params.toString()}`);
+  };
+
   const handleDownloadPdf = () => {
     try {
       setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(false);
       
-      const params = new URLSearchParams({
-        id: booking.id.toString(),
-        gstEnabled: gstEnabled ? '1' : '0',
-        isIGST: isIGST ? '1' : '0',
-        includeTax: includeTax ? '1' : '0',
-        format: 'pdf',
-        direct_download: '1',
-        v: downloadCount.toString(),
-        t: new Date().getTime().toString(),
-        r: Math.random().toString(36).substring(2)
-      });
-      
-      if (customInvoiceNumber.trim()) {
-        params.append('invoiceNumber', customInvoiceNumber.trim());
-      }
-      
-      if (gstEnabled) {
-        params.append('gstNumber', gstDetails.gstNumber);
-        params.append('companyName', gstDetails.companyName);
-        params.append('companyAddress', gstDetails.companyAddress);
-      }
-      
-      // Open the PDF in a new tab
-      window.open(getApiUrl(`/api/download-invoice.php?${params.toString()}`), '_blank');
+      // Open in new tab with browser's PDF viewer
+      window.open(pdfUrl, '_blank');
       
       toast({
         title: "PDF Opened in New Tab",
@@ -184,46 +188,21 @@ export function BookingInvoice({
   const handleForceDownload = () => {
     try {
       setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(true);
       
-      const params = new URLSearchParams({
-        id: booking.id.toString(),
-        gstEnabled: gstEnabled ? '1' : '0',
-        isIGST: isIGST ? '1' : '0',
-        includeTax: includeTax ? '1' : '0',
-        format: 'pdf',
-        direct_download: '1', // Force direct download
-        v: downloadCount.toString(),
-        t: new Date().getTime().toString(),
-        r: Math.random().toString(36).substring(2)
-      });
-      
-      if (customInvoiceNumber.trim()) {
-        params.append('invoiceNumber', customInvoiceNumber.trim());
-      }
-      
-      if (gstEnabled) {
-        params.append('gstNumber', gstDetails.gstNumber);
-        params.append('companyName', gstDetails.companyName);
-        params.append('companyAddress', gstDetails.companyAddress);
-      }
-      
-      // Create a hidden iframe for download
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
-      document.body.appendChild(iframe);
+      // Use download attribute to force download
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = `Invoice_${booking.id}_${new Date().getTime()}.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       toast({
         title: "Download Started",
         description: "Your invoice download should begin shortly"
       });
-      
-      // Remove the iframe after a delay
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
     } catch (error) {
       console.error("Force download error:", error);
       toast({
@@ -237,31 +216,9 @@ export function BookingInvoice({
   const handleAdminDownload = () => {
     try {
       setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(true, true); // true for direct download, true for admin endpoint
       
-      const params = new URLSearchParams({
-        id: booking.id.toString(),
-        gstEnabled: gstEnabled ? '1' : '0',
-        isIGST: isIGST ? '1' : '0',
-        includeTax: includeTax ? '1' : '0',
-        format: 'pdf',
-        direct_download: '1',
-        v: downloadCount.toString(),
-        t: new Date().getTime().toString(),
-        r: Math.random().toString(36).substring(2)
-      });
-      
-      if (customInvoiceNumber.trim()) {
-        params.append('invoiceNumber', customInvoiceNumber.trim());
-      }
-      
-      if (gstEnabled) {
-        params.append('gstNumber', gstDetails.gstNumber);
-        params.append('companyName', gstDetails.companyName);
-        params.append('companyAddress', gstDetails.companyAddress);
-      }
-      
-      // Use admin endpoint instead
-      window.open(getApiUrl(`/api/admin/download-invoice.php?${params.toString()}`), '_blank');
+      window.open(pdfUrl, '_blank');
       
       toast({
         title: "Admin PDF Download",
@@ -273,6 +230,25 @@ export function BookingInvoice({
         variant: "destructive",
         title: "Admin Download Failed",
         description: "Failed to use admin download. Try another method."
+      });
+    }
+  };
+
+  const handleTestPdfDownload = () => {
+    try {
+      const testUrl = getApiUrl(`/api/test-pdf.php?download=1&t=${new Date().getTime()}`);
+      window.open(testUrl, '_blank');
+      
+      toast({
+        title: "Testing PDF Generation",
+        description: "Opening test PDF to verify if PDF generation works"
+      });
+    } catch (error) {
+      console.error("Test PDF error:", error);
+      toast({
+        variant: "destructive",
+        title: "Test PDF Failed",
+        description: "Failed to open test PDF"
       });
     }
   };
@@ -400,14 +376,13 @@ export function BookingInvoice({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="companyAddress">Company Address<span className="text-red-500">*</span></Label>
+                  <Label htmlFor="companyAddress">Company Address</Label>
                   <Input 
                     id="companyAddress"
                     name="companyAddress"
                     value={gstDetails.companyAddress}
                     onChange={handleGstDetailsChange}
                     placeholder="Enter company address"
-                    required
                   />
                 </div>
                 
@@ -435,7 +410,7 @@ export function BookingInvoice({
               <Button 
                 variant="outline" 
                 onClick={handleRegenerateInvoice}
-                disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
                 className="w-full"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
@@ -485,7 +460,7 @@ export function BookingInvoice({
                 <Button 
                   variant="outline" 
                   onClick={handleRegenerateInvoice}
-                  disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName || !gstDetails.companyAddress))}
+                  disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
                   Refresh
@@ -518,6 +493,14 @@ export function BookingInvoice({
                 </Button>
               </>
             )}
+            
+            <Button
+              variant="outline"
+              onClick={handleTestPdfDownload}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Test PDF
+            </Button>
           </div>
         </div>
       </CardContent>

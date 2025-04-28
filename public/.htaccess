@@ -41,12 +41,13 @@ RewriteEngine On
     SetHandler application/x-httpd-php
 </Files>
 
-# CRITICAL: Special handling for download-invoice.php - no content type header
+# CRITICAL: Special handling for download-invoice.php - let the script handle content type
 <Files "download-invoice.php">
     # Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
+    # Force allow all CORS headers
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -56,17 +57,22 @@ RewriteEngine On
     Header always set Expires "0"
 </Files>
 
-# IMPORTANT: MIME type handling for PDFs - STRONGER DIRECTIVE
+# Special handling for test-pdf.php
+<Files "test-pdf.php">
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
+    SetHandler application/x-httpd-php
+</Files>
+
+# PDF MimeType handling - no Content-Type override
 <FilesMatch "\.pdf$">
     ForceType application/pdf
-    Header always set Content-Type "application/pdf"
     Header always set X-Content-Type-Options "nosniff"
-    # Force browser to download PDF rather than display inline
-    Header set Content-Disposition "attachment"
 </FilesMatch>
 
 # API Test Endpoint - highest priority
 RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
+RewriteRule ^api/test-pdf$ /api/test-pdf.php [L,NC,QSA]
 
 # High priority API endpoints - ensure these work first
 RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
@@ -94,4 +100,3 @@ RewriteCond %{REQUEST_FILENAME} !-d
 
 # Send all other requests to index.html for React to handle
 RewriteRule ^(.*)$ /index.html [L]
-

@@ -15,12 +15,15 @@ RewriteBase /api/
     Header set Expires "0"
 </FilesMatch>
 
-# CRITICAL: Special handling for download-invoice.php
+# CRITICAL: Special handling for download-invoice.php - explicitly clear Content-Type
 <Files "download-invoice.php">
-    # Critical - Don't set Content-Type here, let the script handle it
+    # Remove all output buffering before processing
+    php_flag output_buffering off
+    # Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
+    # Ensure PHP processing
     SetHandler application/x-httpd-php
-    Header always unset Content-Type
+    # Force allow all CORS headers
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -29,13 +32,6 @@ RewriteBase /api/
     Header always set Pragma "no-cache"
     Header always set Expires "0"
 </Files>
-
-# SPECIAL PDF FILES - CRITICAL for proper PDF handling
-<FilesMatch "\.(pdf)$">
-    ForceType application/pdf
-    Header always set Content-Type application/pdf
-    Header always set X-Content-Type-Options "nosniff"
-</FilesMatch>
 
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
@@ -62,13 +58,6 @@ RewriteRule ^download-invoice$ /api/download-invoice.php [L,NC,QSA]
     Allow from all
     SetHandler application/x-httpd-php
 </Files>
-
-# EXPLICITLY SET PDF MIME TYPE for PDFs - Critical fix
-<FilesMatch "\.pdf$">
-    ForceType application/pdf
-    Header always set Content-Type application/pdf
-    Header always set X-Content-Type-Options "nosniff"
-</FilesMatch>
 
 # Invoice and receipt endpoints with high priority
 RewriteRule ^invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
