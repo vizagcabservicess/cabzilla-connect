@@ -9,62 +9,17 @@
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# CRITICAL: Handle PDF files properly
-<FilesMatch "\.(pdf)$">
-    ForceType application/pdf
-    Header always set Content-Type application/pdf
-    Header always set X-Content-Type-Options "nosniff"
-    Header always unset Content-Disposition
-</FilesMatch>
-
-# CRITICAL: Special handling for download-invoice.php
-<Files "download-invoice.php">
-    SetEnv no_content_type 1
-    SetHandler application/x-httpd-php
-    Header always unset Content-Type env=no_content_type
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# Direct access to API PHP files in the api directory
-<FilesMatch "\.(php)$">
-    <IfModule mod_authz_core.c>
-        Require all granted
-    </IfModule>
-</FilesMatch>
-
-# Enable rewrite engine for api routing
-RewriteEngine On
-
 # Handle preflight OPTIONS requests
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
+RewriteRule .* - [R=200,L]
 
-# API Test Endpoint - highest priority
-RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
+# Send all API requests to the PHP backend
+RewriteRule ^api/(.*) /api/$1 [L,QSA]
 
-# High priority API endpoints - ensure these work first
-RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
-RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
-RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
-
-# Add public download-invoice endpoint with special handling
-RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
-RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,NC,QSA]
-
-# Don't rewrite files or directories
+# Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
 # Send all other requests to index.html for React routing
 RewriteRule ^(.*)$ /index.html [L]
+
