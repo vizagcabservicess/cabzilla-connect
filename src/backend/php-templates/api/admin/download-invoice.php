@@ -108,7 +108,7 @@ try {
                 invoice_number VARCHAR(50) NOT NULL,
                 invoice_date DATE NOT NULL,
                 base_amount DECIMAL(10,2) NOT NULL,
-                tax_amount DECIMAL(10,2) NOT NULL,
+                tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
                 total_amount DECIMAL(10,2) NOT NULL,
                 gst_enabled TINYINT(1) DEFAULT 0,
                 is_igst TINYINT(1) DEFAULT 0,
@@ -224,6 +224,7 @@ try {
     
     // Always generate a new invoice if parameters have changed
     $invoiceHtml = '';
+    $invoiceNumber = '';
     $needNewInvoice = !$invoiceExists || 
         $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
         $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
@@ -274,7 +275,27 @@ try {
             throw new Exception("Failed to generate invoice: $curlError");
         }
         
+        // Debug log the raw response
+        if ($debugMode) {
+            logInvoiceError("Raw response from generate-invoice.php", [
+                'response_length' => strlen($generateResponse),
+                'first_100_chars' => substr($generateResponse, 0, 100)
+            ]);
+        }
+        
+        // Try to parse the response as JSON, with error handling
+        $jsonError = null;
         $generatedData = json_decode($generateResponse, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $jsonError = json_last_error_msg();
+            logInvoiceError("Invalid response from generate-invoice.php", [
+                'response' => substr($generateResponse, 0, 1000),
+                'http_code' => $httpCode,
+                'json_error' => $jsonError
+            ]);
+            throw new Exception("Invalid invoice data: JSON parse error: $jsonError");
+        }
+        
         if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
             logInvoiceError("Invalid response from generate-invoice.php", [
                 'response' => substr($generateResponse, 0, 1000),
@@ -286,116 +307,13 @@ try {
         $invoiceHtml = $generatedData['data']['invoiceHtml'];
         $invoiceNumber = $generatedData['data']['invoiceNumber'];
         
-        // Try to save the invoice to the database directly from here (redundant safety)
-        if ($tableExists && isset($generatedData['data'])) {
-            try {
-                $data = $generatedData['data'];
-                $baseAmount = floatval($data['baseAmount'] ?? 0);
-                $taxAmount = floatval($data['taxAmount'] ?? 0);
-                $totalAmount = floatval($data['totalAmount'] ?? 0);
-                $gstEnabledInt = $gstEnabled ? 1 : 0;
-                $isIgstInt = $isIGST ? 1 : 0;
-                $includeTaxInt = $includeTax ? 1 : 0;
-                $currentDate = date('Y-m-d');
-                $gstNumberVal = $gstNumber ?: null;
-                $companyNameVal = $companyName ?: null;
-                $companyAddressVal = $companyAddress ?: null;
-                
-                // Check if invoice already exists for this booking
-                $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
-                $checkStmt->bind_param("i", $bookingId);
-                $checkStmt->execute();
-                $checkResult = $checkStmt->get_result();
-                
-                if ($checkResult->num_rows > 0) {
-                    // Update existing invoice
-                    $invoiceRow = $checkResult->fetch_assoc();
-                    $updateStmt = $conn->prepare("
-                        UPDATE invoices SET 
-                            invoice_number = ?,
-                            invoice_date = ?, 
-                            base_amount = ?, 
-                            tax_amount = ?, 
-                            total_amount = ?,
-                            gst_enabled = ?,
-                            is_igst = ?,
-                            include_tax = ?,
-                            gst_number = ?,
-                            company_name = ?,
-                            company_address = ?,
-                            invoice_html = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    ");
-                    
-                    $updateStmt->bind_param(
-                        "ssdddiiisssi",
-                        $invoiceNumber,
-                        $currentDate,
-                        $baseAmount,
-                        $taxAmount,
-                        $totalAmount,
-                        $gstEnabledInt,
-                        $isIgstInt,
-                        $includeTaxInt,
-                        $gstNumberVal,
-                        $companyNameVal,
-                        $companyAddressVal,
-                        $invoiceHtml,
-                        $invoiceRow['id']
-                    );
-                    
-                    $updateStmt->execute();
-                    logInvoiceError("Updated existing invoice", [
-                        'id' => $invoiceRow['id'],
-                        'invoice_number' => $invoiceNumber
-                    ]);
-                } else {
-                    // Insert new invoice
-                    $insertStmt = $conn->prepare("
-                        INSERT INTO invoices (
-                            booking_id, invoice_number, invoice_date, base_amount, 
-                            tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
-                            gst_number, company_name, company_address, invoice_html
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    
-                    $insertStmt->bind_param(
-                        "issdddiissss",
-                        $bookingId,
-                        $invoiceNumber,
-                        $currentDate,
-                        $baseAmount,
-                        $taxAmount,
-                        $totalAmount,
-                        $gstEnabledInt,
-                        $isIgstInt,
-                        $includeTaxInt,
-                        $gstNumberVal,
-                        $companyNameVal,
-                        $companyAddressVal,
-                        $invoiceHtml
-                    );
-                    
-                    $insertStmt->execute();
-                    $newId = $insertStmt->insert_id;
-                    logInvoiceError("Created new invoice record", [
-                        'id' => $newId,
-                        'invoice_number' => $invoiceNumber
-                    ]);
-                }
-            } catch (Exception $e) {
-                logInvoiceError("Error saving invoice from download script", [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                // Continue even if saving fails - we'll use the HTML directly
-            }
-        }
-    } else {
+        // Use the invoice that was just generated, data is already saved to the database from generate-invoice.php
+    } else if ($invoiceExists && isset($invoiceData['invoice_html'])) {
         // Use stored HTML
         $invoiceHtml = $invoiceData['invoice_html'];
         $invoiceNumber = $invoiceData['invoice_number'];
+    } else {
+        throw new Exception("No invoice HTML content available");
     }
     
     if (empty($invoiceHtml)) {

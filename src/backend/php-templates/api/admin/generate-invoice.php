@@ -461,7 +461,7 @@ try {
                     invoice_number VARCHAR(50) NOT NULL,
                     invoice_date DATE NOT NULL,
                     base_amount DECIMAL(10,2) NOT NULL,
-                    tax_amount DECIMAL(10,2) NOT NULL,
+                    tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
                     total_amount DECIMAL(10,2) NOT NULL,
                     gst_enabled TINYINT(1) DEFAULT 0,
                     is_igst TINYINT(1) DEFAULT 0,
@@ -483,6 +483,14 @@ try {
             $checkStmt->execute();
             $checkResult = $checkStmt->get_result();
             
+            // Variables for prepared statement
+            $gstEnabledInt = $gstEnabled ? 1 : 0;
+            $isIgstInt = $isIGST ? 1 : 0;
+            $includeTaxInt = $includeTax ? 1 : 0;
+            $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
+            $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
+            $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
+            
             if ($checkResult->num_rows > 0) {
                 // Update existing invoice
                 $invoiceRow = $checkResult->fetch_assoc();
@@ -503,13 +511,6 @@ try {
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ");
-                
-                $gstEnabledInt = $gstEnabled ? 1 : 0;
-                $isIgstInt = $isIGST ? 1 : 0;
-                $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
                     "ssdddiiisssi",
@@ -553,13 +554,6 @@ try {
                         gst_number, company_name, company_address, invoice_html
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
-                
-                $gstEnabledInt = $gstEnabled ? 1 : 0;
-                $isIgstInt = $isIGST ? 1 : 0;
-                $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
                     "issdddiissss",

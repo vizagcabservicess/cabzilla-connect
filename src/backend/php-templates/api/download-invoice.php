@@ -114,7 +114,7 @@ try {
                 invoice_number VARCHAR(50) NOT NULL,
                 invoice_date DATE NOT NULL,
                 base_amount DECIMAL(10,2) NOT NULL,
-                tax_amount DECIMAL(10,2) NOT NULL,
+                tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
                 total_amount DECIMAL(10,2) NOT NULL,
                 gst_enabled TINYINT(1) DEFAULT 0,
                 is_igst TINYINT(1) DEFAULT 0,
@@ -136,6 +136,66 @@ try {
             // We'll continue even if table creation fails as the admin endpoint may handle it
         } else {
             logInvoiceError("Successfully created invoices table in public endpoint");
+        }
+    }
+    
+    // Verify table structure to ensure it has all required columns
+    $missingColumns = [];
+    $requiredColumns = [
+        'id', 'booking_id', 'invoice_number', 'invoice_date', 'base_amount',
+        'tax_amount', 'total_amount', 'gst_enabled', 'is_igst', 'include_tax',
+        'gst_number', 'company_name', 'company_address', 'invoice_html',
+        'created_at', 'updated_at'
+    ];
+    
+    // Check for required columns
+    if ($tableExists) {
+        $columnsResult = $conn->query("SHOW COLUMNS FROM invoices");
+        if ($columnsResult) {
+            $existingColumns = [];
+            while ($col = $columnsResult->fetch_assoc()) {
+                $existingColumns[] = $col['Field'];
+            }
+            
+            foreach ($requiredColumns as $col) {
+                if (!in_array($col, $existingColumns)) {
+                    $missingColumns[] = $col;
+                }
+            }
+        }
+    }
+    
+    // If any columns are missing, alter table to add them
+    if (!empty($missingColumns)) {
+        logInvoiceError("Missing columns in invoices table", ['missing' => $missingColumns]);
+        
+        // Add missing columns
+        foreach ($missingColumns as $col) {
+            $alterQuery = "";
+            switch ($col) {
+                case 'tax_amount':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER base_amount";
+                    break;
+                case 'is_igst':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN is_igst TINYINT(1) DEFAULT 0 AFTER gst_enabled";
+                    break;
+                case 'include_tax':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN include_tax TINYINT(1) DEFAULT 1 AFTER is_igst";
+                    break;
+                case 'invoice_html':
+                    $alterQuery = "ALTER TABLE invoices ADD COLUMN invoice_html MEDIUMTEXT AFTER company_address";
+                    break;
+                // Add other column definitions as needed
+            }
+            
+            if ($alterQuery) {
+                $alterResult = $conn->query($alterQuery);
+                if (!$alterResult) {
+                    logInvoiceError("Failed to add column $col", ['error' => $conn->error]);
+                } else {
+                    logInvoiceError("Successfully added column $col");
+                }
+            }
         }
     }
     
@@ -188,7 +248,51 @@ try {
         header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
     }
     
-    // Output the response body
+    // Check if the response is an error message (likely JSON)
+    $isJson = (strpos($body, '{') === 0 && strpos($body, '}') > 0);
+    $isHtml = (strpos($body, '<!DOCTYPE html>') !== false || strpos($body, '<html') !== false);
+    
+    // If we got JSON when expecting HTML, generate a simple error page
+    if ($isJson && !$isHtml) {
+        $jsonData = json_decode($body, true);
+        if (json_last_error() === JSON_ERROR_NONE && isset($jsonData['status']) && $jsonData['status'] === 'error') {
+            // CRITICAL: Reset Content-Type for HTML error page
+            header('Content-Type: text/html; charset=utf-8');
+            $errorMessage = isset($jsonData['message']) ? htmlspecialchars($jsonData['message']) : "Unknown error";
+            
+            // Display a user-friendly error page
+            echo '<!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Invoice Generation Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
+                    .error-container { max-width: 800px; margin: 50px auto; padding: 30px; border: 1px solid #f5c6cb; border-radius: 4px; background-color: #f8d7da; color: #721c24; }
+                    h1 { margin-top: 0; color: #721c24; }
+                    .back-link { margin-top: 20px; }
+                    .back-link a { color: #0056b3; text-decoration: none; }
+                    .back-link a:hover { text-decoration: underline; }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <h1>Invoice Generation Error</h1>
+                    <p>Sorry, we couldn\'t generate your invoice due to the following error:</p>
+                    <p><strong>' . $errorMessage . '</strong></p>
+                    <p>Please try again later or contact customer support for assistance.</p>
+                    <div class="back-link">
+                        <a href="javascript:history.back()">← Go Back</a>
+                    </div>
+                </div>
+            </body>
+            </html>';
+            
+            exit;
+        }
+    }
+    
+    // Output the response body (either HTML or JSON error)
     echo $body;
     
     logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
