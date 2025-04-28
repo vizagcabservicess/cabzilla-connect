@@ -64,6 +64,7 @@ body {
   background-color: #f9f9f9 !important;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
+  color-adjust: exact !important;
   border: 1px solid #ddd;
   padding: 15px;
   margin-bottom: 20px;
@@ -93,6 +94,7 @@ body {
   background-color: #f9f9f9 !important;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
+  color-adjust: exact !important;
   font-weight: bold;
   color: #333;
 }
@@ -107,6 +109,7 @@ body {
   background-color: #f9f9f9 !important;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
+  color-adjust: exact !important;
 }
 
 .tax-note {
@@ -150,6 +153,7 @@ body {
   .gst-details {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
     background-color: #f9f9f9 !important;
   }
 
@@ -157,6 +161,7 @@ body {
   .total-row {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
     background-color: #f9f9f9 !important;
   }
 

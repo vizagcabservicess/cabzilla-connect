@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -100,6 +101,9 @@ try {
     // Generate invoice number
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
 
+    // Current date for invoice generation
+    $currentDate = date('Y-m-d');
+
     // Calculate tax components based on includeTax setting
     $totalAmount = (float)$booking['total_amount'];
     
@@ -155,6 +159,10 @@ try {
         $sgstAmount = 0;
         $igstAmount = 0;
     }
+    
+    // Ensure final total adds up correctly after rounding
+    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
+    $finalTotal = round($finalTotal, 2);
 
     // Create PDF content with matching styles
     $content = "
@@ -184,34 +192,34 @@ try {
                 <div style='overflow: hidden;'>
                     <div class='customer-details'>
                         <h3 class='section-title'>Customer Details</h3>
-                        <p><strong>Name:</strong> " . $booking['passenger_name'] . "</p>
-                        <p><strong>Phone:</strong> " . $booking['passenger_phone'] . "</p>
-                        <p><strong>Email:</strong> " . $booking['passenger_email'] . "</p>
+                        <p><strong>Name:</strong> " . ($booking['passenger_name'] ?? 'N/A') . "</p>
+                        <p><strong>Phone:</strong> " . ($booking['passenger_phone'] ?? 'N/A') . "</p>
+                        <p><strong>Email:</strong> " . ($booking['passenger_email'] ?? 'N/A') . "</p>
                     </div>
                     
                     <div class='invoice-summary'>
                         <h3 class='section-title'>Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type']) . 
-                        ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . "</p>
-                        <p><strong>Date:</strong> " . date('d M Y', strtotime($booking['pickup_date'])) . "</p>
-                        <p><strong>Vehicle:</strong> " . $booking['cab_type'] . "</p>
+                        <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type'] ?? 'N/A') . 
+                        (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . "</p>
+                        <p><strong>Date:</strong> " . (isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
+                        <p><strong>Vehicle:</strong> " . ($booking['cab_type'] ?? 'N/A') . "</p>
                     </div>
                 </div>
                 
                 <div class='trip-details'>
                     <h3 class='section-title'>Trip Details</h3>
-                    <p><strong>Pickup:</strong> " . $booking['pickup_location'] . "</p>
-                    " . ($booking['drop_location'] ? "<p><strong>Drop:</strong> " . $booking['drop_location'] . "</p>" : "") . "
-                    <p><strong>Pickup Time:</strong> " . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . "</p>
+                    <p><strong>Pickup:</strong> " . ($booking['pickup_location'] ?? 'N/A') . "</p>
+                    " . (isset($booking['drop_location']) && !empty($booking['drop_location']) ? "<p><strong>Drop:</strong> " . $booking['drop_location'] . "</p>" : "") . "
+                    <p><strong>Pickup Time:</strong> " . (isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A') . "</p>
                 </div>";
 
-    if ($gstEnabled && $gstDetails) {
+    if ($gstEnabled && !empty($gstNumber)) {
         $content .= "
                 <div class='gst-details'>
                     <div class='gst-title'>GST Details</div>
-                    <p><strong>GST Number:</strong> " . htmlspecialchars($gstDetails['gstNumber']) . "</p>
-                    <p><strong>Company Name:</strong> " . htmlspecialchars($gstDetails['companyName']) . "</p>
-                    <p><strong>Company Address:</strong> " . htmlspecialchars($gstDetails['companyAddress']) . "</p>
+                    <p><strong>GST Number:</strong> " . htmlspecialchars($gstNumber) . "</p>
+                    <p><strong>Company Name:</strong> " . htmlspecialchars($companyName) . "</p>
+                    " . (!empty($companyAddress) ? "<p><strong>Company Address:</strong> " . htmlspecialchars($companyAddress) . "</p>" : "") . "
                 </div>";
     }
 
@@ -271,6 +279,16 @@ try {
         </div>
     </body>
     </html>";
+
+    // Set appropriate headers based on format
+    if ($format === 'pdf') {
+        // For PDF output, set appropriate headers
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="invoice_' . $invoiceNumber . '.pdf"');
+    } else {
+        // For HTML output
+        header('Content-Type: text/html; charset=utf-8');
+    }
 
     // Output the HTML content
     echo $content;
