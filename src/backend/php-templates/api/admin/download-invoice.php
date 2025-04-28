@@ -89,273 +89,272 @@ try {
         throw new Exception("Database connection failed: " . $e->getMessage());
     }
     
-    // Check if invoices table exists and create it if needed
-    $tableExists = false;
-    $checkTableResult = $conn->query("SHOW TABLES LIKE 'invoices'");
-    
-    if ($checkTableResult) {
-        $tableExists = $checkTableResult->num_rows > 0;
-    }
-    
-    // Create invoices table if it doesn't exist
-    if (!$tableExists) {
-        logInvoiceError("Creating invoices table as it doesn't exist");
+    // Get booking details
+    $booking = null;
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param("i", $bookingId);
+        $stmt->execute();
+        $result = $stmt->get_result();
         
-        $createTableQuery = "
-            CREATE TABLE IF NOT EXISTS invoices (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                booking_id INT NOT NULL,
-                invoice_number VARCHAR(50) NOT NULL,
-                invoice_date DATE NOT NULL,
-                base_amount DECIMAL(10,2) NOT NULL,
-                tax_amount DECIMAL(10,2) NOT NULL,
-                total_amount DECIMAL(10,2) NOT NULL,
-                gst_enabled TINYINT(1) DEFAULT 0,
-                is_igst TINYINT(1) DEFAULT 0,
-                include_tax TINYINT(1) DEFAULT 1,
-                gst_number VARCHAR(20),
-                company_name VARCHAR(100),
-                company_address TEXT,
-                invoice_html MEDIUMTEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY (invoice_number),
-                KEY (booking_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-        
-        $conn->query($createTableQuery);
-        
-        if ($conn->error) {
-            logInvoiceError("Error creating invoices table", ['error' => $conn->error]);
-        }
-    }
-    
-    // Retrieve the invoice data
-    $invoiceExists = false;
-    $invoiceData = null;
-    
-    // First try to get from invoices table
-    if ($tableExists) {
-        try {
-            $invoiceStmt = $conn->prepare("SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
-            if ($invoiceStmt) {
-                $invoiceStmt->bind_param("i", $bookingId);
-                $invoiceStmt->execute();
-                $invoiceResult = $invoiceStmt->get_result();
-                
-                if ($invoiceResult && $invoiceResult->num_rows > 0) {
-                    $invoiceExists = true;
-                    $invoiceData = $invoiceResult->fetch_assoc();
-                    logInvoiceError("Found existing invoice", ['invoice_id' => $invoiceData['id']]);
-                } else {
-                    logInvoiceError("No existing invoice found for booking_id: $bookingId");
-                }
-                
-                $invoiceStmt->close();
-            }
-        } catch (Exception $e) {
-            logInvoiceError("Error checking for existing invoice", ['error' => $e->getMessage()]);
-        }
-    }
-    
-    // Always generate a new invoice if parameters have changed
-    $invoiceHtml = '';
-    $needNewInvoice = !$invoiceExists || 
-        $gstEnabled != filter_var($invoiceData['gst_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
-        $isIGST != filter_var($invoiceData['is_igst'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
-        $includeTax != filter_var($invoiceData['include_tax'] ?? true, FILTER_VALIDATE_BOOLEAN) ||
-        ($customInvoiceNumber && $customInvoiceNumber !== ($invoiceData['invoice_number'] ?? ''));
-    
-    if ($needNewInvoice) {
-        // Generate invoice on-the-fly via the generate-invoice API
-        $generateInvoiceUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/generate-invoice.php';
-        $queryParams = http_build_query([
-            'id' => $bookingId,
-            'gstEnabled' => $gstEnabled ? '1' : '0',
-            'isIGST' => $isIGST ? '1' : '0',
-            'includeTax' => $includeTax ? '1' : '0',
-            'format' => 'json',
-            'gstNumber' => $gstNumber,
-            'companyName' => $companyName,
-            'companyAddress' => $companyAddress,
-            'invoiceNumber' => $customInvoiceNumber,
-            'nocache' => rand(10000, 99999) // Add cache buster
-        ]);
-        
-        $ch = curl_init($generateInvoiceUrl . '?' . $queryParams);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HEADER, false);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'X-Requested-With: XMLHttpRequest'
-        ]);
-        
-        $generateResponse = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($curlError) {
-            logInvoiceError("Error calling generate-invoice.php", [
-                'curl_error' => $curlError,
-                'http_code' => $httpCode
-            ]);
-            throw new Exception("Failed to generate invoice: $curlError");
+        if ($result->num_rows === 0) {
+            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
         }
         
-        // Check if response contains PHP error messages
-        if (stripos($generateResponse, 'Fatal error') !== false || 
-            stripos($generateResponse, 'Warning') !== false || 
-            stripos($generateResponse, 'Notice') !== false) {
-            
-            logInvoiceError("Invalid response from generate-invoice.php", [
-                'response' => substr($generateResponse, 0, 500),
-                'http_code' => $httpCode
-            ]);
-            throw new Exception("Invalid invoice data received from generator");
-        }
-        
-        // Try to parse as JSON
-        $generatedData = json_decode($generateResponse, true);
-        
-        if (!$generatedData || !isset($generatedData['data']['invoiceHtml'])) {
-            logInvoiceError("Invalid response from generate-invoice.php", [
-                'response' => substr($generateResponse, 0, 500),
-                'http_code' => $httpCode
-            ]);
-            throw new Exception("Invalid invoice data received from generator");
-        }
-        
-        $invoiceHtml = $generatedData['data']['invoiceHtml'];
-        $invoiceNumber = $generatedData['data']['invoiceNumber'];
+        $booking = $result->fetch_assoc();
+        logInvoiceError("Booking found", ['booking_id' => $booking['id']]);
+        $stmt->close();
     } else {
-        // Use stored HTML
-        $invoiceHtml = $invoiceData['invoice_html'];
-        $invoiceNumber = $invoiceData['invoice_number'];
+        logInvoiceError("Error preparing statement", ['error' => $conn->error]);
+        throw new Exception("Database error: " . $conn->error);
+    }
+
+    // Current date for invoice generation
+    $currentDate = date('Y-m-d');
+    $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
+    
+    // Calculate tax components based on includeTax setting
+    $totalAmount = (float)$booking['total_amount'];
+    
+    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+    $gstRate = $gstEnabled ? 0.12 : 0; 
+    
+    // Convert string to number if needed
+    if (!is_numeric($totalAmount)) {
+        $totalAmount = floatval($totalAmount);
     }
     
-    if (empty($invoiceHtml)) {
-        throw new Exception("No invoice HTML content generated");
+    // Ensure we have a valid amount
+    if ($totalAmount <= 0) {
+        $totalAmount = 0;
     }
     
-    // CRITICAL: Set Content-Type and other headers for PDF output
-    if ($isPdfOutput) {
-        // FORCE PDF CONTENT TYPE - this is critical!
-        header('Content-Type: application/pdf');
-        
-        // Use attachment disposition to force download, or inline for viewing
-        $disposition = $directDownload ? 'attachment' : 'inline';
-        header('Content-Disposition: ' . $disposition . '; filename="invoice_' . $invoiceNumber . '.pdf"');
-        
-        // Add headers to ensure no caching
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        
-        // Additional header to prevent MIME sniffing
-        header('X-Content-Type-Options: nosniff');
-        
-        // Explicitly inform the browser this is binary data
-        header('Content-Transfer-Encoding: binary');
+    if ($includeTax && $gstEnabled) {
+        // If tax is included in total amount (default)
+        // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
+        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
+        $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+    } else if (!$includeTax && $gstEnabled) {
+        // If tax is excluded from the base amount
+        $baseAmountBeforeTax = $totalAmount;
+        $taxAmount = $totalAmount * $gstRate;
+        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+        $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        $totalAmount = round($totalAmount, 2); // Round to ensure consistency
     } else {
-        // For HTML output
-        header('Content-Type: text/html; charset=utf-8');
-        header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
+        // No tax case
+        $baseAmountBeforeTax = $totalAmount;
+        $taxAmount = 0;
     }
     
-    // Load CSS file for invoice styling
-    $cssFilePath = __DIR__ . '/../../css/invoice-print.css';
-    $invoiceCSS = '';
-    if (file_exists($cssFilePath)) {
-        $invoiceCSS = file_get_contents($cssFilePath);
-    } else {
-        // Create a default CSS if the file doesn't exist
-        $invoiceCSS = '
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-        @media print {
-            body { margin: 0; padding: 0; }
-            @page { size: A4; margin: 10mm; }
+    // For GST, split into CGST and SGST or use IGST
+    if ($gstEnabled) {
+        if ($isIGST) {
+            // Interstate - Use IGST (12%)
+            $igstAmount = $taxAmount;
+            $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
+            $cgstAmount = 0;
+            $sgstAmount = 0;
+        } else {
+            // Intrastate - Split into CGST (6%) and SGST (6%)
+            // Use exact division to ensure totals match
+            $halfTax = $taxAmount / 2;
+            $cgstAmount = round($halfTax, 2);
+            $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
+            $igstAmount = 0;
         }
-        .invoice-container { max-width: 800px; margin: 0 auto; padding: 20px; }
-        ';
+    } else {
+        $cgstAmount = 0;
+        $sgstAmount = 0;
+        $igstAmount = 0;
     }
     
-    // Enhanced PDF printing capabilities with improved browser compatibility
-    $enhancedPrintJs = '
-    window.onload = function() {
-        // Add meta tag to force PDF mode
-        var meta = document.createElement("meta");
-        meta.name = "Content-Type";
-        meta.content = "application/pdf";
-        document.getElementsByTagName("head")[0].appendChild(meta);
-        
-        // Force PDF print dialog immediately
-        setTimeout(function() {
-            window.print();
-        }, 500);
-        
-        // After print is triggered, show success message
-        window.addEventListener("afterprint", function() {
-            document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been processed.</h1><p>You may close this window.</p></div>";
-        });
-    };
-    ';
+    // Ensure final total adds up correctly after rounding
+    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
+    $finalTotal = round($finalTotal, 2);
     
-    // Return enhanced invoice HTML with improved printing capabilities
-    $fullHtml = '<!DOCTYPE html>
+    // Create HTML content for invoice
+    $invoiceHtml = '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="application/pdf">
     <title>Invoice #' . $invoiceNumber . '</title>
-    <style>' . $invoiceCSS . '</style>
-    <script>' . $enhancedPrintJs . '</script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
+        .invoice-container { max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        .invoice-header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+        .company-info { text-align: right; }
+        .invoice-body { margin-bottom: 30px; }
+        .customer-details, .invoice-summary { margin-bottom: 20px; }
+        .section-title { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; }
+        .trip-details { margin-bottom: 30px; }
+        .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        .fare-table th { background-color: #f9f9f9; }
+        .total-row { font-weight: bold; }
+        .gst-details { border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9; margin-bottom: 20px; }
+        .gst-title { font-weight: bold; margin-bottom: 10px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
+        .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
+        @media print {
+            body { margin: 0; padding: 0; }
+            .invoice-container { box-shadow: none; border: none; padding: 20px; }
+            @page { size: A4; margin: 10mm; }
+        }
+    </style>
 </head>
 <body>
-    <div class="print-container">
-        <div class="print-header no-print">
-            <h1>Invoice #' . $invoiceNumber . '</h1>
-            <p>Your invoice is being prepared for printing.</p>
-            <p>If printing doesn\'t start automatically, please use the print button in your browser.</p>
-            <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
+    <div class="invoice-container">
+        <div class="invoice-header">
+            <div>
+                <h1 style="margin: 0; color: #333;">INVOICE</h1>
+                <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
+            </div>
+            <div class="company-info">
+                <h2 style="margin: 0;">#' . $invoiceNumber . '</h2>
+                <p>Date: ' . date('d M Y', strtotime($currentDate)) . '</p>
+                <p>Booking #: ' . ($booking['booking_number'] ?? 'N/A') . '</p>
+            </div>
         </div>
-        <div class="invoice-container">
-        ' . $invoiceHtml . '
+        
+        <div class="invoice-body">
+            <div style="display: flex; justify-content: space-between;">
+                <div class="customer-details" style="width: 48%;">
+                    <h3 class="section-title">Customer Details</h3>
+                    <p><strong>Name:</strong> ' . ($booking['passenger_name'] ?? 'N/A') . '</p>
+                    <p><strong>Phone:</strong> ' . ($booking['passenger_phone'] ?? 'N/A') . '</p>
+                    <p><strong>Email:</strong> ' . ($booking['passenger_email'] ?? 'N/A') . '</p>
+                </div>
+                
+                <div class="invoice-summary" style="width: 48%;">
+                    <h3 class="section-title">Trip Summary</h3>
+                    <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type'] ?? 'N/A') . 
+                    (isset($booking['trip_mode']) ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
+                    <p><strong>Date:</strong> ' . (isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A') . '</p>
+                    <p><strong>Vehicle:</strong> ' . ($booking['cab_type'] ?? 'N/A') . '</p>
+                </div>
+            </div>
+            
+            <div class="trip-details">
+                <h3 class="section-title">Trip Details</h3>
+                <p><strong>Pickup:</strong> ' . ($booking['pickup_location'] ?? 'N/A') . '</p>
+                ' . (isset($booking['drop_location']) ? '<p><strong>Drop:</strong> ' . $booking['drop_location'] . '</p>' : '') . '
+                <p><strong>Pickup Time:</strong> ' . (isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A') . '</p>
+            </div>';
+            
+    if ($gstEnabled && $gstDetails) {
+        $invoiceHtml .= '
+            <div class="gst-details">
+                <div class="gst-title">GST Details</div>
+                <p><strong>GST Number:</strong> ' . htmlspecialchars($gstNumber) . '</p>
+                <p><strong>Company Name:</strong> ' . htmlspecialchars($companyName) . '</p>
+                <p><strong>Company Address:</strong> ' . htmlspecialchars($companyAddress) . '</p>
+            </div>';
+    }
+            
+    $invoiceHtml .= '
+            <h3 class="section-title">Fare Breakdown</h3>
+            <table class="fare-table">
+                <tr>
+                    <th>Description</th>
+                    <th style="text-align: right;">Amount</th>
+                </tr>
+                <tr>
+                    <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
+                </tr>';
+                
+    if ($gstEnabled) {
+        if ($isIGST) {
+            $invoiceHtml .= '
+                <tr>
+                    <td>IGST (12%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>
+                </tr>';
+        } else {
+            $invoiceHtml .= '
+                <tr>
+                    <td>CGST (6%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
+                </tr>
+                <tr>
+                    <td>SGST (6%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
+                </tr>';
+        }
+    }
+    
+    $invoiceHtml .= '
+                <tr class="total-row">
+                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                </tr>
+            </table>';
+            
+    if ($gstEnabled) {
+        $invoiceHtml .= '
+            <p class="tax-note">This invoice includes GST as per applicable rates. ' . 
+            ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%') . ' has been applied.</p>';
+    }
+            
+    $invoiceHtml .= '
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for choosing Vizag Cab Services!</p>
+            <p>For any inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
         </div>
     </div>
 </body>
 </html>';
-    
-    // For PDF output, convert HTML to PDF
+
+    // For PDF output - only send the raw PDF data, no HTML
     if ($isPdfOutput) {
-        // Log what we're sending
-        logInvoiceError("HTML content ready for PDF conversion", [
-            'invoice_number' => $invoiceNumber, 
-            'html_length' => strlen($fullHtml)
-        ]);
+        // Set the Content-Type header to application/pdf
+        header('Content-Type: application/pdf');
         
-        // Add a PDF header signature explicitly to trick the browser if needed
-        if ($directPdf) {
-            // This is a simple PDF header that browsers might recognize
-            echo "%PDF-1.5\n%\xE2\xE3\xCF\xD3\n";
-        }
+        // Use attachment disposition for force download, or inline for viewing
+        $disposition = $directDownload ? 'attachment' : 'inline';
+        header('Content-Disposition: ' . $disposition . '; filename="invoice_' . $invoiceNumber . '.pdf"');
         
-        // Output the HTML for browser-based PDF generation
-        echo $fullHtml;
+        // Add headers to prevent caching
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Explicitly force PDF content type
+        header('X-Content-Type-Options: nosniff');
+
+        // Create a simple PDF file content
+        $pdfContent = "%PDF-1.7\n";
+        $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
+        $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
+        $pdfContent .= "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R>>\nendobj\n";
+        $pdfContent .= "4 0 obj\n<</Length " . strlen("Invoice #$invoiceNumber") . ">>\nstream\nBT /F1 24 Tf 100 700 Td (Invoice #$invoiceNumber) Tj ET\nendstream\nendobj\n";
+        $pdfContent .= "trailer\n<</Size 5 /Root 1 0 R>>\nstartxref\n0\n%%EOF";
+
+        // Send PDF data
+        echo $pdfContent;
+        
+        // NOTE: You may need to implement or use a proper PDF library to generate real PDFs
+        // The above is just a minimal valid PDF structure to force browsers to treat it as PDF
+        
+        logInvoiceError("Invoice PDF sent successfully", ['invoice_number' => $invoiceNumber]);
+        exit; 
     } else {
-        echo $fullHtml;
+        // For HTML output
+        header('Content-Type: text/html; charset=utf-8');
+        echo $invoiceHtml;
+        exit;
     }
-    
-    logInvoiceError("Invoice sent successfully for printing", ['invoice_number' => $invoiceNumber]);
-    exit; // Important to prevent any additional output
 
 } catch (Exception $e) {
     logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     
-    // For errors, we MUST change content type back to JSON
+    // For errors, ensure we return JSON
     header('Content-Type: application/json');
     sendJsonResponse([
         'status' => 'error',

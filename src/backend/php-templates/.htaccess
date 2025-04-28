@@ -1,4 +1,3 @@
-
 # Enable URL rewriting
 RewriteEngine On
 
@@ -39,6 +38,15 @@ RewriteRule .* - [R=200,L]
     SetHandler application/x-httpd-php
 </Files>
 
+# SPECIAL RULES FOR PDF FILES - Critical for proper PDF downloads
+<FilesMatch "\.(pdf)$">
+    ForceType application/pdf
+    Header set Content-Type application/pdf
+    Header set Content-Disposition attachment
+    Header set X-Content-Type-Options "nosniff"
+    Header set Cache-Control "must-revalidate"
+</FilesMatch>
+
 # SPECIAL RULE FOR INVOICE DOWNLOAD - Override Content-Type for this file only
 <FilesMatch "download-invoice\.php$">
     # Don't set Content-Type here, let the script handle it
@@ -66,11 +74,11 @@ RewriteRule ^api/admin/generate-invoice/?$ /api/admin/generate-invoice.php [L,NC
 RewriteRule ^api/admin/download-invoice/?$ /api/admin/download-invoice.php [L,NC,QSA]
 RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
 
-# PDF content type handling - CRITICAL FIX
+# Special handling for PDF files - direct linking
 <FilesMatch "\.pdf$">
     ForceType application/pdf
     Header always set Content-Type application/pdf
-    Header set X-Content-Type-Options "nosniff"
+    Header always set Content-Disposition attachment
 </FilesMatch>
 
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
@@ -148,3 +156,4 @@ RewriteRule ^(.*)$ /index.html [L]
 
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php
+AddType application/pdf .pdf
