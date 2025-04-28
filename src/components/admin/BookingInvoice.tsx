@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { Loader2, FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, FileText, Download, RefreshCw, AlertCircle, FileIcon } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -49,6 +50,8 @@ export function BookingInvoice({
   });
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
+  const [activeTab, setActiveTab] = useState<string>("settings");
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
 
   useEffect(() => {
     if (booking && booking.id) {
@@ -111,6 +114,9 @@ export function BookingInvoice({
           title: "Invoice Generated",
           description: "Invoice was generated successfully"
         });
+        
+        // Load HTML content in the background for HTML tab
+        fetchHtmlInvoice();
       } else {
         setInvoiceData(null);
         throw new Error('No invoice data returned from the server');
@@ -129,8 +135,26 @@ export function BookingInvoice({
     }
   };
 
+  // Fetch HTML version of invoice
+  const fetchHtmlInvoice = async () => {
+    try {
+      const htmlUrl = createPdfUrl(false, false, true);
+      const response = await fetch(htmlUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch HTML: ${response.status} ${response.statusText}`);
+      }
+      
+      const html = await response.text();
+      setHtmlContent(html);
+    } catch (error) {
+      console.error("HTML fetch error:", error);
+      // Don't show toast for this - it's a background operation
+    }
+  };
+
   // Create a dynamic and unique URL for PDF download
-  const createPdfUrl = (directDownload = false, useAdminEndpoint = false) => {
+  const createPdfUrl = (directDownload = false, useAdminEndpoint = false, htmlFormat = false) => {
     const timestamp = new Date().getTime();
     const randomPart = Math.random().toString(36).substring(2, 8);
     
@@ -143,7 +167,7 @@ export function BookingInvoice({
       gstEnabled: gstEnabled ? '1' : '0',
       isIGST: isIGST ? '1' : '0',
       includeTax: includeTax ? '1' : '0',
-      format: 'pdf',
+      format: htmlFormat ? 'html' : 'pdf',
       direct_download: directDownload ? '1' : '0',
       v: downloadCount.toString(),
       t: timestamp.toString(),
@@ -181,6 +205,25 @@ export function BookingInvoice({
         variant: "destructive",
         title: "Download Failed",
         description: "Failed to download invoice. Please try an alternative download method."
+      });
+    }
+  };
+
+  const handleViewHtml = () => {
+    try {
+      const htmlUrl = createPdfUrl(false, false, true);
+      window.open(htmlUrl, '_blank');
+      
+      toast({
+        title: "HTML Invoice",
+        description: "HTML version of the invoice opened in a new tab"
+      });
+    } catch (error) {
+      console.error("HTML view error:", error);
+      toast({
+        variant: "destructive",
+        title: "HTML View Failed",
+        description: "Failed to open HTML invoice"
       });
     }
   };
@@ -277,10 +320,169 @@ export function BookingInvoice({
     
     setRegenerating(true);
     setInvoiceData(null);
+    setHtmlContent(null);
     
     setTimeout(() => {
       handleGenerateInvoice();
     }, 100);
+  };
+
+  const renderInvoiceSettings = () => {
+    return (
+      <div className="p-4 border rounded-md space-y-4">
+        <div>
+          <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
+          <Input 
+            id="custom-invoice"
+            value={customInvoiceNumber}
+            onChange={(e) => setCustomInvoiceNumber(e.target.value)}
+            placeholder="Optional - Leave blank for auto-generated number"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            If provided, this will replace the auto-generated invoice number
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="gst-toggle"
+            checked={gstEnabled}
+            onCheckedChange={handleGstToggle}
+          />
+          <Label htmlFor="gst-toggle">Include GST (12%)</Label>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="tax-toggle"
+            checked={includeTax}
+            onCheckedChange={setIncludeTax}
+          />
+          <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
+        </div>
+        
+        {gstEnabled && (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
+              <Input 
+                id="gstNumber"
+                name="gstNumber"
+                value={gstDetails.gstNumber}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter GST number"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
+              <Input 
+                id="companyName"
+                name="companyName"
+                value={gstDetails.companyName}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter company name"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="companyAddress">Company Address</Label>
+              <Input 
+                id="companyAddress"
+                name="companyAddress"
+                value={gstDetails.companyAddress}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter company address"
+              />
+            </div>
+            
+            <div className="mt-4">
+              <Label>GST Type</Label>
+              <RadioGroup 
+                value={isIGST ? "igst" : "cgst-sgst"} 
+                onValueChange={(value) => setIsIGST(value === "igst")}
+                className="mt-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
+                  <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="igst" id="igst" />
+                  <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+        )}
+        
+        <div>
+          <Button 
+            variant="outline" 
+            onClick={handleRegenerateInvoice}
+            disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
+            className="w-full"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+            Regenerate Invoice with Current Settings
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderInvoicePreview = () => {
+    if (!invoiceData?.invoiceHtml) {
+      return (
+        <div className="text-center py-8 border rounded-md">
+          <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <p className="mb-4">No invoice preview available.</p>
+          <Button onClick={handleGenerateInvoice} disabled={loading || isSubmitting}>Generate Invoice</Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className="invoice-preview border rounded-md overflow-hidden" 
+        style={{ height: '400px', overflow: 'auto' }}
+      >
+        <iframe 
+          srcDoc={invoiceData.invoiceHtml}
+          title="Invoice Preview" 
+          className="w-full h-full"
+          style={{ border: 'none' }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    );
+  };
+
+  const renderHtmlView = () => {
+    if (!htmlContent) {
+      return (
+        <div className="text-center py-8 border rounded-md">
+          <FileIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <p className="mb-4">HTML invoice has not been loaded yet.</p>
+          <Button onClick={fetchHtmlInvoice} disabled={loading || isSubmitting}>Load HTML Invoice</Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className="html-preview border rounded-md overflow-hidden" 
+        style={{ height: '400px', overflow: 'auto' }}
+      >
+        <iframe 
+          srcDoc={htmlContent}
+          title="HTML Invoice" 
+          className="w-full h-full"
+          style={{ border: 'none' }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    );
   };
 
   const renderInvoiceContent = () => {
@@ -319,118 +521,25 @@ export function BookingInvoice({
             <span>Generated: {invoiceData.invoiceDate}</span>
           </div>
           
-          <div className="mb-4 p-4 border rounded-md space-y-4">
-            <div>
-              <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
-              <Input 
-                id="custom-invoice"
-                value={customInvoiceNumber}
-                onChange={(e) => setCustomInvoiceNumber(e.target.value)}
-                placeholder="Optional - Leave blank for auto-generated number"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                If provided, this will replace the auto-generated invoice number
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch 
-                id="gst-toggle"
-                checked={gstEnabled}
-                onCheckedChange={handleGstToggle}
-              />
-              <Label htmlFor="gst-toggle">Include GST (12%)</Label>
-            </div>
+          <Tabs defaultValue="settings" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full mb-4">
+              <TabsTrigger value="settings" className="flex-1">Settings</TabsTrigger>
+              <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
+              <TabsTrigger value="html" className="flex-1">HTML</TabsTrigger>
+            </TabsList>
             
-            <div className="flex items-center space-x-2">
-              <Switch 
-                id="tax-toggle"
-                checked={includeTax}
-                onCheckedChange={setIncludeTax}
-              />
-              <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
-            </div>
+            <TabsContent value="settings">
+              {renderInvoiceSettings()}
+            </TabsContent>
             
-            {gstEnabled && (
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
-                  <Input 
-                    id="gstNumber"
-                    name="gstNumber"
-                    value={gstDetails.gstNumber}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter GST number"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
-                  <Input 
-                    id="companyName"
-                    name="companyName"
-                    value={gstDetails.companyName}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter company name"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="companyAddress">Company Address</Label>
-                  <Input 
-                    id="companyAddress"
-                    name="companyAddress"
-                    value={gstDetails.companyAddress}
-                    onChange={handleGstDetailsChange}
-                    placeholder="Enter company address"
-                  />
-                </div>
-                
-                <div className="mt-4">
-                  <Label>GST Type</Label>
-                  <RadioGroup 
-                    value={isIGST ? "igst" : "cgst-sgst"} 
-                    onValueChange={(value) => setIsIGST(value === "igst")}
-                    className="mt-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
-                      <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="igst" id="igst" />
-                      <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </div>
-            )}
+            <TabsContent value="preview">
+              {renderInvoicePreview()}
+            </TabsContent>
             
-            <div>
-              <Button 
-                variant="outline" 
-                onClick={handleRegenerateInvoice}
-                disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
-                className="w-full"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
-                Regenerate Invoice with Current Settings
-              </Button>
-            </div>
-          </div>
-          
-          <div 
-            className="invoice-preview border rounded-md overflow-hidden" 
-            style={{ height: '400px', overflow: 'auto' }}
-          >
-            <iframe 
-              srcDoc={invoiceData.invoiceHtml}
-              title="Invoice Preview" 
-              className="w-full h-full"
-              style={{ border: 'none' }}
-              sandbox="allow-same-origin"
-            />
-          </div>
+            <TabsContent value="html">
+              {renderHtmlView()}
+            </TabsContent>
+          </Tabs>
         </div>
       );
     }
@@ -467,6 +576,15 @@ export function BookingInvoice({
                 </Button>
                 
                 <Button
+                  onClick={handleViewHtml}
+                  disabled={loading || isSubmitting || regenerating}
+                  variant="outline"
+                >
+                  <FileIcon className="h-4 w-4 mr-2" />
+                  HTML
+                </Button>
+                
+                <Button
                   onClick={handleDownloadPdf}
                   disabled={loading || isSubmitting || regenerating}
                 >
@@ -481,15 +599,6 @@ export function BookingInvoice({
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download PDF
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={handleAdminDownload}
-                  disabled={loading || isSubmitting || regenerating}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Admin PDF
                 </Button>
               </>
             )}

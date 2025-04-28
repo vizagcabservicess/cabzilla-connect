@@ -11,48 +11,15 @@ if (!is_dir($logsDir)) {
     @mkdir($logsDir, 0755, true);
 }
 
-// CRITICAL: Improved autoloader detection with absolute paths
-$autoloaderPaths = [
-    __DIR__ . '/../vendor/autoload.php',                      // Standard vendor location
-    __DIR__ . '/../../vendor/autoload.php',                   // One level up
-    dirname(__DIR__) . '/vendor/autoload.php',                // Alternative path
-    dirname(dirname(__DIR__)) . '/vendor/autoload.php',      // Project root
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',      // Document root
-    realpath(__DIR__ . '/../../../vendor/autoload.php')       // Try with realpath
-];
-
-$vendorExists = false;
-$autoloaderPath = null;
-$autoloaderSearchResults = [];
-
-foreach ($autoloaderPaths as $path) {
-    $autoloaderSearchResults[$path] = [
-        'exists' => file_exists($path),
-        'readable' => is_readable($path)
-    ];
-    
-    if (file_exists($path) && is_readable($path)) {
-        $autoloaderPath = $path;
-        $vendorExists = true;
-        break;
-    }
-}
-
-// Log whether we found the autoloader or not
-if ($vendorExists) {
-    // Require Composer's autoloader if it exists
-    require_once $autoloaderPath;
-    error_log("Found composer autoloader at: " . $autoloaderPath);
-} else {
-    // Detailed error logging about autoloader search
-    error_log("CRITICAL ERROR: No composer autoloader found! Search results: " . json_encode($autoloaderSearchResults));
-}
-
 // CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
 while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
+
+// Get output format - default to PDF
+$format = isset($_GET['format']) ? strtolower($_GET['format']) : 'pdf';
+$isPdfOutput = ($format === 'pdf');
 
 // CRITICAL: Set CORS headers
 header('Access-Control-Allow-Origin: *');
@@ -98,7 +65,13 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 try {
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        sendErrorResponse('Method not allowed', [], 405);
+        if (!$isPdfOutput) {
+            sendErrorResponse('Method not allowed', [], 405);
+        } else {
+            header('Content-Type: text/plain');
+            echo "Error 405: Method not allowed. Only GET requests are accepted.";
+            exit;
+        }
     }
 
     // Get booking ID from query parameters
@@ -106,7 +79,13 @@ try {
     
     if (!$bookingId) {
         logInvoiceError("Missing booking ID", ['get_params' => $_GET]);
-        sendErrorResponse('Missing booking ID', [], 400);
+        if (!$isPdfOutput) {
+            sendErrorResponse('Missing booking ID', [], 400);
+        } else {
+            header('Content-Type: text/plain');
+            echo "Error 400: Missing booking ID parameter.";
+            exit;
+        }
     }
 
     // Get GST parameters from GET
@@ -117,27 +96,44 @@ try {
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
-    $format = isset($_GET['format']) ? $_GET['format'] : 'pdf'; // Default to PDF format
     
     // Check for direct download flag - special handling for ensuring proper download
     $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
 
-    logInvoiceError("Starting invoice download process", [
+    logInvoiceError("Starting invoice generation process", [
         'bookingId' => $bookingId,
         'format' => $format,
-        'directDownload' => $directDownload,
-        'dompdfAvailable' => $vendorExists && class_exists('Dompdf\Dompdf') ? 'Yes' : 'No',
-        'autoloaderPath' => $autoloaderPath,
-        'script_path' => __FILE__,
-        'document_root' => $_SERVER['DOCUMENT_ROOT']
+        'directDownload' => $directDownload
     ]);
+
+    // CRITICAL: Improved autoloader detection with absolute paths
+    $autoloaderPaths = [
+        __DIR__ . '/../vendor/autoload.php',                      // Standard vendor location
+        __DIR__ . '/../../vendor/autoload.php',                   // One level up
+        dirname(__DIR__) . '/vendor/autoload.php',                // Alternative path
+        dirname(dirname(__DIR__)) . '/vendor/autoload.php',      // Project root
+        $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',      // Document root
+        realpath(__DIR__ . '/../../../vendor/autoload.php')       // Try with realpath
+    ];
+
+    $vendorExists = false;
+    $autoloaderPath = null;
+
+    foreach ($autoloaderPaths as $path) {
+        if (file_exists($path) && is_readable($path)) {
+            $autoloaderPath = $path;
+            $vendorExists = true;
+            logInvoiceError("Found composer autoloader", ['path' => $path]);
+            break;
+        }
+    }
 
     // Connect to database with improved error handling
     try {
         $conn = getDbConnectionWithRetry();
-        logInvoiceError("Public invoice download: Database connection established successfully");
+        logInvoiceError("Database connection established successfully");
     } catch (Exception $e) {
-        logInvoiceError("Database connection error in public download-invoice", ['error' => $e->getMessage()]);
+        logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
         throw new Exception("Database connection failed: " . $e->getMessage());
     }
     
@@ -150,7 +146,13 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
-            sendErrorResponse('Booking not found', [], 404);
+            if (!$isPdfOutput) {
+                sendErrorResponse('Booking not found', [], 404);
+            } else {
+                header('Content-Type: text/plain');
+                echo "Error 404: Booking not found.";
+                exit;
+            }
         }
         
         $booking = $result->fetch_assoc();
@@ -336,7 +338,7 @@ try {
     $content .= '
                     <tr class="total-row">
                         <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($finalTotal, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
                     </tr>
                 </table>';
 
@@ -358,48 +360,44 @@ try {
     </body>
     </html>';
 
-    // For HTML output or if debug is requested
+    // For HTML output
     if ($format === 'html' || isset($_GET['show_html'])) {
         header('Content-Type: text/html; charset=utf-8');
         echo $content;
         exit;
     }
 
-    // For PDF output, check if we can use DomPDF with enhanced error handling
+    // For PDF output, check if we can use DomPDF
     if ($vendorExists && class_exists('Dompdf\Dompdf')) {
         try {
+            // Try to include the autoloader
+            if (!class_exists('Dompdf\Dompdf')) {
+                require_once $autoloaderPath;
+            }
+            
             // Import DomPDF classes
             use Dompdf\Dompdf;
             use Dompdf\Options;
             
-            logInvoiceError("DomPDF class found, attempting to generate PDF");
+            logInvoiceError("DomPDF class found, generating PDF");
             
             // Configure DomPDF options
             $options = new Options();
             $options->set('isRemoteEnabled', true);
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isPhpEnabled', false); // Security: disable PHP in HTML
-            $options->set('isFontSubsettingEnabled', true);
             $options->set('defaultFont', 'DejaVu Sans');
-            
-            // Set temp directory explicitly if needed
-            // $options->set('tempDir', __DIR__ . '/../temp');
-            // $options->set('fontDir', __DIR__ . '/../font');
 
             // Create DomPDF instance
             $dompdf = new Dompdf($options);
             $dompdf->setPaper('A4', 'portrait');
             
-            logInvoiceError("DomPDF instance created successfully");
-
             // Load HTML content
             $dompdf->loadHtml($content);
-            logInvoiceError("HTML loaded into DomPDF");
-
+            
             // Render the PDF
             $dompdf->render();
-            logInvoiceError("PDF rendering complete");
-
+            
             // CRITICAL: Clear any previous headers and output buffers
             while (ob_get_level()) ob_end_clean();
             
@@ -422,16 +420,14 @@ try {
             echo $dompdf->output();
             
             logInvoiceError("PDF generated and output successfully");
+            
         } catch (Exception $e) {
             logInvoiceError("PDF generation error", [
                 'error' => $e->getMessage(), 
-                'trace' => $e->getTraceAsString(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'trace' => $e->getTraceAsString()
             ]);
             
             // If PDF generation fails, fall back to HTML output with warning
-            logInvoiceError("Falling back to HTML output due to PDF generation error");
             header('Content-Type: text/html; charset=utf-8');
             echo '<!DOCTYPE html>
             <html>
@@ -452,12 +448,7 @@ try {
         }
     } else {
         // DomPDF not available, return HTML content with warning
-        logInvoiceError("DomPDF not available, falling back to HTML", [
-            'vendorExists' => $vendorExists ? 'true' : 'false',
-            'class_exists' => class_exists('Dompdf\Dompdf') ? 'true' : 'false',
-            'autoloader_path' => $autoloaderPath,
-            'search_results' => $autoloaderSearchResults
-        ]);
+        logInvoiceError("DomPDF not available, falling back to HTML");
         header('Content-Type: text/html; charset=utf-8');
         echo '<!DOCTYPE html>
         <html>
@@ -481,75 +472,53 @@ try {
 } catch (Exception $e) {
     logInvoiceError("Critical error in download-invoice.php", [
         'error' => $e->getMessage(), 
-        'trace' => $e->getTraceAsString(),
-        'line' => $e->getLine(),
-        'file' => $e->getFile()
+        'trace' => $e->getTraceAsString()
     ]);
     
-    // For errors, ensure we return either JSON or user-friendly HTML based on Accept header
-    $acceptHeader = isset($_SERVER['HTTP_ACCEPT']) ? $_SERVER['HTTP_ACCEPT'] : '';
-    $wantsJson = strpos($acceptHeader, 'application/json') !== false;
-    
-    if ($wantsJson) {
-        header('Content-Type: application/json');
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-            'error_details' => $debugMode ? [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'line' => $e->getLine(),
-                'file' => $e->getFile()
-            ] : null
-        ]);
-    } else {
-        // Return user-friendly error page
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Invoice Generation Error</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-                .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
-                h1 { color: #cc0000; }
-                .error-details { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; overflow: auto; margin-top: 20px; }
-                .actions { margin-top: 20px; }
-                .actions a { display: inline-block; margin-right: 10px; padding: 8px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
-                .actions a.secondary { background-color: #607d8b; }
-            </style>
-        </head>
-        <body>
-            <div class="error-container">
-                <h1>Invoice Generation Error</h1>
-                <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
-                <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
-                
-                <div class="error-details">
-                    <h3>Troubleshooting Steps:</h3>
-                    <ol>
-                        <li>Make sure <code>composer install</code> has been run to install all dependencies</li>
-                        <li>Verify that DomPDF is installed by running <code>composer require dompdf/dompdf:^2.0</code></li>
-                        <li>Check that the vendor directory exists and has proper permissions</li>
-                        <li>Create a logs directory with write permissions</li>
-                        <li>Try viewing our test page to diagnose any issues</li>
-                    </ol>
-                </div>
-                
-                ' . ($debugMode ? '<div class="error-details">
-                    <h3>Technical Details:</h3>
-                    <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
-                </div>' : '') . '
-                
-                <div class="actions">
-                    <a href="javascript:history.back()">Go Back</a>
-                    <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
-                    <a href="javascript:location.reload()" class="secondary">Try Again</a>
-                </div>
+    // Return user-friendly error page
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Invoice Generation Error</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+            .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
+            h1 { color: #cc0000; }
+            .error-details { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; overflow: auto; }
+            .actions { margin-top: 20px; }
+            .actions a { display: inline-block; margin-right: 10px; padding: 8px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
+            .actions a.secondary { background-color: #607d8b; }
+        </style>
+    </head>
+    <body>
+        <div class="error-container">
+            <h1>Invoice Generation Error</h1>
+            <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
+            <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
+            
+            <div class="error-details">
+                <h3>Troubleshooting Steps:</h3>
+                <ol>
+                    <li>Try viewing the HTML version instead: <a href="?format=html&id=' . $bookingId . '">View HTML Version</a></li>
+                    <li>Make sure composer packages are installed correctly</li>
+                    <li>Check our diagnostic page to verify PDF functionality</li>
+                </ol>
             </div>
-        </body>
-        </html>';
-    }
+            
+            ' . ($debugMode ? '<div class="error-details">
+                <h3>Technical Details:</h3>
+                <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
+            </div>' : '') . '
+            
+            <div class="actions">
+                <a href="javascript:history.back()">Go Back</a>
+                <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
+                <a href="?format=html&id=' . $bookingId . '" class="secondary">View HTML Version</a>
+            </div>
+        </div>
+    </body>
+    </html>';
 }
 
 // Restore normal error handler

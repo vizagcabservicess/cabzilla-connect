@@ -17,8 +17,8 @@ RewriteBase /api/
 <Files "download-invoice.php">
     # Remove all output buffering before processing
     php_flag output_buffering off
-    # Don't set Content-Type here, let the script handle it
-    SetEnv no_content_type 1
+    # Remove Content-Type header to let PHP script set it
+    Header unset Content-Type
     # Ensure PHP processing
     SetHandler application/x-httpd-php
     # Force allow all CORS headers
@@ -33,7 +33,8 @@ RewriteBase /api/
 
 # Special handling for test-pdf.php
 <Files "test-pdf.php">
-    SetEnv no_content_type 1
+    # Remove Content-Type header to let PHP script set it
+    Header unset Content-Type
     SetHandler application/x-httpd-php
     # Force allow all CORS headers
     Header always set Access-Control-Allow-Origin "*"
@@ -41,10 +42,9 @@ RewriteBase /api/
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
-# PDF MimeType handling
+# PDF MimeType handling - don't force Content-Type
 <FilesMatch "\.pdf$">
     ForceType application/pdf
-    Header always set Content-Type application/pdf
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 
