@@ -57,7 +57,14 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
     
-    logInvoiceError("Processing invoice download for booking ID: $bookingId", $_GET);
+    // Get output format - default to PDF
+    $format = isset($_GET['format']) ? strtolower($_GET['format']) : 'pdf';
+    $isPdfOutput = ($format === 'pdf');
+    
+    logInvoiceError("Processing invoice download for booking ID: $bookingId", [
+        'format' => $format,
+        'isPdf' => $isPdfOutput ? 'true' : 'false'
+    ]);
 
     // Get GST parameters from GET
     $gstEnabled = isset($_GET['gstEnabled']) ? filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
@@ -274,16 +281,40 @@ try {
         throw new Exception("No invoice HTML content generated");
     }
     
-    // CRITICAL: Set Content-Type for HTML output before any HTML output
-    header('Content-Type: text/html');
-    header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
+    // CRITICAL: Set Content-Type and other headers for PDF output
+    if ($isPdfOutput) {
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="invoice_' . $invoiceNumber . '.pdf"');
+    } else {
+        // For HTML output
+        header('Content-Type: text/html');
+        header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
+    }
     
-    // Return invoice HTML with improved styling and JavaScript for better printing
+    // Load CSS file for invoice styling
+    $cssFilePath = __DIR__ . '/../../css/invoice-print.css';
+    $invoiceCSS = '';
+    if (file_exists($cssFilePath)) {
+        $invoiceCSS = file_get_contents($cssFilePath);
+    } else {
+        // Create a default CSS if the file doesn't exist
+        $invoiceCSS = '
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        @media print {
+            body { margin: 0; padding: 0; }
+            @page { size: A4; margin: 10mm; }
+        }
+        .invoice-container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        ';
+    }
+    
+    // Return enhanced invoice HTML with improved printing capabilities
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Invoice #' . $invoiceNumber . '</title>
+    <style>' . $invoiceCSS . '</style>
     <script>
         window.onload = function() {
             // Force PDF print dialog immediately after a slight delay
@@ -296,17 +327,6 @@ try {
             }, 500);
         };
     </script>
-    <style>
-        @media print {
-            body { margin: 0; padding: 0; }
-            @page { size: A4; margin: 10mm; }
-            .no-print { display: none !important; }
-        }
-        body { font-family: Arial, sans-serif; }
-        .print-container { max-width: 800px; margin: 0 auto; }
-        .print-header { text-align: center; margin: 20px 0; }
-        .invoice-container { padding: 20px; }
-    </style>
 </head>
 <body>
     <div class="print-container">

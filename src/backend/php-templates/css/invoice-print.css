@@ -25,6 +25,10 @@ body {
     padding: 10mm;
     max-width: 100%;
   }
+  
+  .no-print {
+    display: none !important;
+  }
 }
 
 .invoice-container {
@@ -112,4 +116,19 @@ h1 {
 h3 {
   color: #555;
   margin-bottom: 10px;
+}
+
+/* Print-specific styles */
+.print-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.print-header {
+  text-align: center;
+  margin: 20px 0;
+}
+
+button {
+  cursor: pointer;
 }

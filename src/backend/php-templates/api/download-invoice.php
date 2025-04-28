@@ -72,6 +72,7 @@ try {
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
+    $format = isset($_GET['format']) ? $_GET['format'] : 'html';
 
     // Connect to database with improved error handling
     try {
@@ -164,8 +165,9 @@ try {
         }
     }
     
-    // Forward request to admin endpoint with all query parameters
+    // Forward request to admin endpoint with all query parameters plus a pdf format flag
     $adminUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/download-invoice.php';
+    $_GET['format'] = 'pdf'; // Force PDF output format
     $queryParams = http_build_query($_GET);
     
     $ch = curl_init($adminUrl . '?' . $queryParams);
@@ -200,25 +202,18 @@ try {
     }
     
     // Check for HTML or error response
-    if (stripos($body, '<html') !== false || stripos($body, '<!DOCTYPE html') !== false) {
-        // Valid HTML response - output as is
-        header("Content-Type: text/html");
-        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
+    if (stripos($contentType, 'application/json') !== false || stripos($body, '{"status":"error"') !== false) {
+        // JSON error response - pass through
+        header("Content-Type: application/json");
         echo $body;
-        logInvoiceError("Public invoice download completed successfully", ['booking_id' => $bookingId]);
         exit;
     } else if (stripos($body, 'Fatal error') !== false || stripos($body, 'Warning') !== false || stripos($body, 'Notice') !== false) {
         // PHP error output - return as error
         logInvoiceError("PHP error in admin download-invoice.php response", ['body' => substr($body, 0, 500)]);
         throw new Exception("Server error generating invoice: " . strip_tags($body));
-    } else if (stripos($body, '{"status":"error"') !== false) {
-        // JSON error response - pass through
-        header("Content-Type: application/json");
-        echo $body;
-        exit;
     }
     
-    // Set appropriate content type (default to HTML if not found)
+    // Set appropriate content type (default to PDF if not found)
     if ($contentType) {
         header("Content-Type: $contentType");
     } else {
@@ -229,7 +224,8 @@ try {
     if (preg_match('/Content-Disposition: ([^\r\n]+)/i', $headers, $matches)) {
         header("Content-Disposition: {$matches[1]}");
     } else {
-        header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.html\"");
+        $invoiceNumber = "invoice_{$bookingId}";
+        header("Content-Disposition: attachment; filename=\"$invoiceNumber.pdf\"");
     }
     
     // Output the response body

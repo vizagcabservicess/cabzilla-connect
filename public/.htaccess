@@ -67,7 +67,7 @@ RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L
 RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
 
-# Add public download-invoice endpoint
+# Add public download-invoice endpoint with special handling for PDFs
 RewriteRule ^api/download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
 RewriteRule ^api/download-invoice$ /api/download-invoice.php [L,NC,QSA]
 
