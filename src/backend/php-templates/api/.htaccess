@@ -1,18 +1,10 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
 
-# CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
+# CRITICAL: Force PHP processing for all .php files
 <FilesMatch "\.php$">
-    # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
-    Header always set Content-Type "application/json" env=!no_content_type
-    # No caching for PHP files
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
 </FilesMatch>
 
 # Add explicit rule for fix-schema.php with highest priority
@@ -24,11 +16,14 @@ RewriteBase /api/
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
-<Files "fix-drivers-schema.php">
+# CRITICAL: Download invoice needs special handling - NO content type header
+<Files "download-invoice.php">
+    # Don't set Content-Type here, let the script handle it
+    SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "POST, OPTIONS, GET"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
@@ -51,28 +46,17 @@ RewriteBase /api/
 
 # SPECIAL RULE - Generate invoice and download invoice need special handling
 <Files "generate-invoice.php">
-    SetEnv no_content_type 1
     SetHandler application/x-httpd-php
+    Header always set Content-Type "application/json"
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # Ensure proper JSON content type for generate-invoice
-    Header always set Content-Type "application/json" env=!no_content_type
-</Files>
-
-# CRITICAL: Download invoice needs the PHP handler but NO content type header
-<Files "download-invoice.php">
-    # Critical - Don't set Content-Type here, let the script handle it
-    SetEnv no_content_type 1
-    SetHandler application/x-httpd-php
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
 </Files>
 
 <Files "download-invoice">
     # Critical - Don't set Content-Type here, let the script handle it
     SetEnv no_content_type 1
+    Header unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"

@@ -512,7 +512,7 @@ try {
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
                 $stmt->bind_param(
-                    "ssdddiiiisssi",
+                    "ssdddiiisssi",
                     $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
@@ -561,9 +561,8 @@ try {
                 $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
                 $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
                 
-                // FIX: Corrected the type definition string to match the number of parameters
                 $stmt->bind_param(
-                    "issdddiiisss",
+                    "issdddiissss",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
@@ -573,7 +572,7 @@ try {
                     $gstEnabledInt,
                     $isIgstInt,
                     $includeTaxInt,
-                    $gstNumberVal, 
+                    $gstNumberVal,
                     $companyNameVal,
                     $companyAddressVal,
                     $invoiceHtml
