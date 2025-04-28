@@ -19,6 +19,9 @@ if (!isset($_GET['download'])) {
     echo "<h1>PDF Generation Test</h1>";
     echo "<p>Server time: " . date('Y-m-d H:i:s') . "</p>";
     echo "<p>PHP Version: " . phpversion() . "</p>";
+    echo "<p>Server IP: " . $_SERVER['SERVER_ADDR'] . "</p>";
+    echo "<p>Document Root: " . $_SERVER['DOCUMENT_ROOT'] . "</p>";
+    echo "<p>Script Path: " . __FILE__ . "</p>";
 }
 
 // Create logs directory if it doesn't exist
@@ -51,14 +54,18 @@ if (!isset($_GET['download'])) {
     echo "<p>Parent directory: " . htmlspecialchars(dirname(dirname(__FILE__))) . "</p>";
 }
 
-// Check for autoloader in multiple possible locations with absolute paths
+// Check for autoloader with absolute paths - include the path the user confirmed exists
 $autoloaderPaths = [
+    // Add the confirmed path first
+    $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
+    
+    // Try common variations of the path
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
+    dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
     __DIR__ . '/../vendor/autoload.php',
     dirname(__DIR__) . '/vendor/autoload.php',
     dirname(dirname(__DIR__)) . '/vendor/autoload.php',
-    dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php',
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
-    $_SERVER['DOCUMENT_ROOT'] . '/src/backend/vendor/autoload.php'
+    dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php'
 ];
 
 $autoloaderPath = null;
@@ -98,12 +105,16 @@ if (!isset($_GET['download'])) {
         // Look for vendor directory
         echo "<h2>Searching for vendor directory and DomPDF...</h2>";
         $possibleVendorDirs = [
+            // Include the confirmed path first
+            $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor',
+            
+            // Try common variations
+            $_SERVER['DOCUMENT_ROOT'] . '/vendor',
+            dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor',
             __DIR__ . '/../vendor',
             dirname(__DIR__) . '/vendor',
             dirname(dirname(__DIR__)) . '/vendor',
-            dirname(dirname(dirname(__DIR__))) . '/vendor',
-            $_SERVER['DOCUMENT_ROOT'] . '/vendor',
-            $_SERVER['DOCUMENT_ROOT'] . '/src/backend/vendor'
+            dirname(dirname(dirname(__DIR__))) . '/vendor'
         ];
         
         echo "<ul>";
@@ -145,6 +156,7 @@ if (!isset($_GET['download'])) {
         // Show composer commands to fix the issue
         echo "<p>Please run these commands in your project root:</p>";
         echo "<pre style='background-color: #f8f8f8; padding: 10px; border: 1px solid #ddd;'>
+cd " . htmlspecialchars($_SERVER['DOCUMENT_ROOT']) . "
 composer require dompdf/dompdf:^2.0
 composer install
 </pre>";

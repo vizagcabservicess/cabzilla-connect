@@ -10,14 +10,19 @@ if (!is_dir($logsDir)) {
     @mkdir($logsDir, 0755, true);
 }
 
-// CRITICAL: Improved autoloader detection with absolute paths
+// CRITICAL: Improved autoloader detection with absolute paths including the known working path
 $autoloaderPaths = [
-    __DIR__ . '/../../vendor/autoload.php',                   // Standard vendor location
-    __DIR__ . '/../../../vendor/autoload.php',                // One level up
-    dirname(dirname(__DIR__)) . '/vendor/autoload.php',       // Alternative path
-    dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php', // Project root
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',       // Document root
-    realpath(__DIR__ . '/../../../../vendor/autoload.php')    // Try with realpath
+    // Add the confirmed path first
+    $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
+    
+    // Try other common paths
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
+    dirname($_SERVER['DOCUMENT_ROOT']) . '/public_html/vendor/autoload.php',
+    dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+    dirname(__DIR__) . '/vendor/autoload.php',
+    dirname(dirname(__DIR__)) . '/vendor/autoload.php',
+    realpath(__DIR__ . '/../../../../vendor/autoload.php')
 ];
 
 $vendorExists = false;
@@ -353,6 +358,7 @@ try {
                 <p>Thank you for choosing Vizag Cab Services!</p>
                 <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
                 <p>Generated on: '.date('d M Y H:i:s').'</p>
+                <p>Server Path: '.$_SERVER['DOCUMENT_ROOT'].'/public_html/vendor/</p>
             </div>
         </div>
     </body>
@@ -468,6 +474,12 @@ try {
                 <p><strong>PDF Generation Unavailable:</strong> The PDF generation library is not installed or configured correctly.</p>
                 <p>Please run <code>composer require dompdf/dompdf:^2.0</code> and then <code>composer install</code> in your project root.</p>
                 <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
+                <p><strong>Server Path Details:</strong></p>
+                <ul>
+                    <li>Document Root: ' . htmlspecialchars($_SERVER['DOCUMENT_ROOT']) . '</li>
+                    <li>Script Path: ' . htmlspecialchars(__FILE__) . '</li>
+                    <li>Expected Path: ' . htmlspecialchars($_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/') . '</li>
+                </ul>
             </div>
             ' . $content . '
         </body>
@@ -490,20 +502,19 @@ try {
         sendJsonResponse([
             'status' => 'error',
             'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-            'error_details' => $debugMode ? [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'line' => $e->getLine(),
-                'file' => $e->getFile()
-            ] : null
+            'debug' => [
+                'document_root' => $_SERVER['DOCUMENT_ROOT'],
+                'script_path' => __FILE__,
+                'autoloader_paths_checked' => $autoloaderSearchResults
+            ]
         ], 500);
     } else {
-        // Return user-friendly error page
+        // Return user-friendly HTML error page
         header('Content-Type: text/html; charset=utf-8');
         echo '<!DOCTYPE html>
         <html>
         <head>
-            <title>Invoice Generation Error</title>
+            <title>Admin Invoice Generation Error</title>
             <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
                 .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
@@ -516,30 +527,33 @@ try {
         </head>
         <body>
             <div class="error-container">
-                <h1>Invoice Generation Error</h1>
-                <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
+                <h1>Admin Invoice Generation Error</h1>
+                <p>We encountered a problem while trying to generate the invoice. We apologize for the inconvenience.</p>
                 <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
                 
                 <div class="error-details">
                     <h3>Troubleshooting Steps:</h3>
                     <ol>
-                        <li>Make sure <code>composer install</code> has been run to install all dependencies</li>
-                        <li>Verify that DomPDF is installed by running <code>composer require dompdf/dompdf:^2.0</code></li>
-                        <li>Check that the vendor directory exists and has proper permissions</li>
-                        <li>Create a logs directory with write permissions</li>
-                        <li>Try viewing our test page to diagnose any issues</li>
+                        <li>Try viewing the HTML version instead: <a href="?format=html&id=' . htmlspecialchars($bookingId) . '">View HTML Version</a></li>
+                        <li>Make sure composer packages are installed correctly in <code>' . htmlspecialchars($_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/') . '</code></li>
+                        <li>Check server logs for PHP errors</li>
                     </ol>
                 </div>
                 
                 ' . ($debugMode ? '<div class="error-details">
                     <h3>Technical Details:</h3>
+                    <p>Document Root: ' . htmlspecialchars($_SERVER['DOCUMENT_ROOT']) . '</p>
+                    <p>Script Path: ' . htmlspecialchars(__FILE__) . '</p>
+                    <p>Autoloader Search Results:</p>
+                    <pre>' . htmlspecialchars(json_encode($autoloaderSearchResults, JSON_PRETTY_PRINT)) . '</pre>
+                    <p>Error Trace:</p>
                     <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
                 </div>' : '') . '
                 
                 <div class="actions">
                     <a href="javascript:history.back()">Go Back</a>
                     <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
-                    <a href="javascript:location.reload()" class="secondary">Try Again</a>
+                    <a href="?format=html&id=' . htmlspecialchars($bookingId) . '" class="secondary">View HTML Version</a>
                 </div>
             </div>
         </body>

@@ -106,26 +106,45 @@ try {
         'directDownload' => $directDownload
     ]);
 
-    // CRITICAL: Improved autoloader detection with absolute paths
+    // CRITICAL: Improved autoloader detection with absolute paths including the public_html path
     $autoloaderPaths = [
-        __DIR__ . '/../vendor/autoload.php',                      // Standard vendor location
-        __DIR__ . '/../../vendor/autoload.php',                   // One level up
-        dirname(__DIR__) . '/vendor/autoload.php',                // Alternative path
-        dirname(dirname(__DIR__)) . '/vendor/autoload.php',      // Project root
-        $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',      // Document root
-        realpath(__DIR__ . '/../../../vendor/autoload.php')       // Try with realpath
+        // Add the confirmed path first
+        $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
+        
+        // Try other common paths
+        $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
+        dirname($_SERVER['DOCUMENT_ROOT']) . '/public_html/vendor/autoload.php',
+        dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
+        __DIR__ . '/../vendor/autoload.php',
+        dirname(__DIR__) . '/vendor/autoload.php', 
+        dirname(dirname(__DIR__)) . '/vendor/autoload.php',
+        realpath(__DIR__ . '/../../../vendor/autoload.php')
     ];
 
     $vendorExists = false;
     $autoloaderPath = null;
+    $autoloaderSearchResults = [];
 
     foreach ($autoloaderPaths as $path) {
-        if (file_exists($path) && is_readable($path)) {
+        $exists = file_exists($path);
+        $isReadable = $exists && is_readable($path);
+        
+        $autoloaderSearchResults[$path] = [
+            'exists' => $exists,
+            'readable' => $isReadable
+        ];
+        
+        if ($exists && $isReadable) {
             $autoloaderPath = $path;
             $vendorExists = true;
             logInvoiceError("Found composer autoloader", ['path' => $path]);
             break;
         }
+    }
+
+    // Log search results if no autoloader found
+    if (!$vendorExists) {
+        logInvoiceError("No composer autoloader found", ['search_results' => $autoloaderSearchResults]);
     }
 
     // Connect to database with improved error handling
@@ -448,7 +467,9 @@ try {
         }
     } else {
         // DomPDF not available, return HTML content with warning
-        logInvoiceError("DomPDF not available, falling back to HTML");
+        logInvoiceError("DomPDF not available, falling back to HTML", [
+            'autoloader_search_results' => $autoloaderSearchResults
+        ]);
         header('Content-Type: text/html; charset=utf-8');
         echo '<!DOCTYPE html>
         <html>
@@ -500,7 +521,7 @@ try {
             <div class="error-details">
                 <h3>Troubleshooting Steps:</h3>
                 <ol>
-                    <li>Try viewing the HTML version instead: <a href="?format=html&id=' . $bookingId . '">View HTML Version</a></li>
+                    <li>Try viewing the HTML version instead: <a href="?format=html&id=' . htmlspecialchars($bookingId) . '">View HTML Version</a></li>
                     <li>Make sure composer packages are installed correctly</li>
                     <li>Check our diagnostic page to verify PDF functionality</li>
                 </ol>
@@ -514,7 +535,7 @@ try {
             <div class="actions">
                 <a href="javascript:history.back()">Go Back</a>
                 <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
-                <a href="?format=html&id=' . $bookingId . '" class="secondary">View HTML Version</a>
+                <a href="?format=html&id=' . htmlspecialchars($bookingId) . '" class="secondary">View HTML Version</a>
             </div>
         </div>
     </body>

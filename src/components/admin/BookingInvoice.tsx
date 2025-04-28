@@ -50,8 +50,9 @@ export function BookingInvoice({
   });
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<string>("settings");
+  const [activeTab, setActiveTab] = useState<string>("html");
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [pdfGenerationAvailable, setPdfGenerationAvailable] = useState(false);
 
   useEffect(() => {
     if (booking && booking.id) {
@@ -115,8 +116,11 @@ export function BookingInvoice({
           description: "Invoice was generated successfully"
         });
         
-        // Load HTML content in the background for HTML tab
+        // Load HTML content immediately
         fetchHtmlInvoice();
+        
+        // Test if PDF generation is available
+        testPdfGeneration();
       } else {
         setInvoiceData(null);
         throw new Error('No invoice data returned from the server');
@@ -129,9 +133,30 @@ export function BookingInvoice({
         title: "Invoice Generation Failed",
         description: error instanceof Error ? error.message : "Failed to generate invoice"
       });
+      
+      // Still try to fetch HTML, as it might work even if the main API fails
+      fetchHtmlInvoice();
     } finally {
       setLoading(false);
       setRegenerating(false);
+    }
+  };
+
+  // Test if PDF generation is working
+  const testPdfGeneration = async () => {
+    try {
+      const testUrl = getApiUrl(`/api/test-pdf.php?t=${new Date().getTime()}`);
+      const response = await fetch(testUrl, { method: 'GET' });
+      
+      if (response.ok) {
+        // If we can fetch the test page, we'll assume PDF might work
+        setPdfGenerationAvailable(true);
+      } else {
+        setPdfGenerationAvailable(false);
+      }
+    } catch (error) {
+      console.error("PDF test error:", error);
+      setPdfGenerationAvailable(false);
     }
   };
 
@@ -147,9 +172,11 @@ export function BookingInvoice({
       
       const html = await response.text();
       setHtmlContent(html);
+      setActiveTab("html"); // Auto-switch to HTML tab as it's more reliable
     } catch (error) {
       console.error("HTML fetch error:", error);
       // Don't show toast for this - it's a background operation
+      setError("Could not load HTML invoice. Please try regenerating the invoice.");
     }
   };
 
@@ -204,7 +231,7 @@ export function BookingInvoice({
       toast({
         variant: "destructive",
         title: "Download Failed",
-        description: "Failed to download invoice. Please try an alternative download method."
+        description: "Failed to download invoice. Please try the HTML version instead."
       });
     }
   };
@@ -251,7 +278,7 @@ export function BookingInvoice({
       toast({
         variant: "destructive",
         title: "Force Download Failed",
-        description: "Failed to force download. Try the normal download option."
+        description: "Failed to force download. Try the HTML version instead."
       });
     }
   };
@@ -272,7 +299,7 @@ export function BookingInvoice({
       toast({
         variant: "destructive",
         title: "Admin Download Failed",
-        description: "Failed to use admin download. Try another method."
+        description: "Failed to use admin download. Try the HTML version instead."
       });
     }
   };
@@ -513,19 +540,19 @@ export function BookingInvoice({
       );
     }
 
-    if (invoiceData?.invoiceHtml) {
+    if (invoiceData?.invoiceHtml || htmlContent) {
       return (
         <div>
           <div className="mb-4 flex justify-between">
-            <h3 className="font-medium">Invoice #{invoiceData.invoiceNumber}</h3>
-            <span>Generated: {invoiceData.invoiceDate}</span>
+            <h3 className="font-medium">Invoice #{invoiceData?.invoiceNumber || 'Generated'}</h3>
+            <span>Generated: {invoiceData?.invoiceDate || new Date().toLocaleDateString()}</span>
           </div>
           
-          <Tabs defaultValue="settings" value={activeTab} onValueChange={setActiveTab}>
+          <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full mb-4">
+              <TabsTrigger value="html" className="flex-1">HTML View</TabsTrigger>
               <TabsTrigger value="settings" className="flex-1">Settings</TabsTrigger>
               <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
-              <TabsTrigger value="html" className="flex-1">HTML</TabsTrigger>
             </TabsList>
             
             <TabsContent value="settings">
@@ -540,6 +567,16 @@ export function BookingInvoice({
               {renderHtmlView()}
             </TabsContent>
           </Tabs>
+
+          {!pdfGenerationAvailable && (
+            <Alert className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                PDF generation may not be working correctly on the server. 
+                HTML view is recommended for reliable invoice viewing.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
       );
     }
@@ -564,7 +601,7 @@ export function BookingInvoice({
           </Button>
           
           <div className="flex space-x-2">
-            {invoiceData && (
+            {(invoiceData || htmlContent) && (
               <>
                 <Button 
                   variant="outline" 
@@ -578,7 +615,7 @@ export function BookingInvoice({
                 <Button
                   onClick={handleViewHtml}
                   disabled={loading || isSubmitting || regenerating}
-                  variant="outline"
+                  variant="secondary"
                 >
                   <FileIcon className="h-4 w-4 mr-2" />
                   HTML
@@ -587,13 +624,14 @@ export function BookingInvoice({
                 <Button
                   onClick={handleDownloadPdf}
                   disabled={loading || isSubmitting || regenerating}
+                  variant={pdfGenerationAvailable ? "default" : "outline"}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Open PDF
                 </Button>
                 
                 <Button
-                  variant="secondary"
+                  variant={pdfGenerationAvailable ? "secondary" : "outline"}
                   onClick={handleForceDownload}
                   disabled={loading || isSubmitting || regenerating}
                 >
