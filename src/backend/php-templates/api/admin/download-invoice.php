@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -235,53 +234,28 @@ try {
     header('Content-Type: text/html');
     header('Content-Disposition: inline; filename="invoice_' . $invoiceNumber . '.html"');
     
-    // Return invoice HTML with improved styling and JavaScript for better printing
-    echo '<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Invoice #' . $invoiceNumber . '</title>
-    <script>
-        window.onload = function() {
-            // Force PDF print dialog immediately after a slight delay
-            setTimeout(function() {
-                window.print();
-                // After print is triggered, show success message
-                setTimeout(function() {
-                    document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been downloaded.</h1><p>You may close this window.</p></div>";
-                }, 1000);
-            }, 500);
-        };
-    </script>
-    <style>
-        @media print {
-            body { margin: 0; padding: 0; }
-            @page { size: A4; margin: 10mm; }
-            .no-print { display: none !important; }
-        }
-        body { font-family: Arial, sans-serif; }
-        .print-container { max-width: 800px; margin: 0 auto; }
-        .print-header { text-align: center; margin: 20px 0; }
-        .invoice-container { padding: 20px; }
-    </style>
-</head>
-<body>
-    <div class="print-container">
-        <div class="print-header no-print">
-            <h1>Invoice #' . $invoiceNumber . '</h1>
-            <p>Your invoice is being prepared for printing.</p>
-            <p>If printing doesn\'t start automatically, please use the print button in your browser.</p>
-            <button onclick="window.print()" style="padding: 10px 20px; background: #4a86e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 20px 0;">Print Invoice</button>
-        </div>
-        <div class="invoice-container">
-        ' . $invoiceHtml . '
-        </div>
-    </div>
-</body>
-</html>';
+    // Inject print script just before </body> if you want auto-print
+    $printScript = '<script>\n'
+        . 'window.onload = function() {\n'
+        . '  setTimeout(function() {\n'
+        . '    window.print();\n'
+        . '    setTimeout(function() {\n'
+        . '      document.body.innerHTML = "<div style=\\'text-align:center;padding:40px;\\'><h1>Your invoice has been downloaded.</h1><p>You may close this window.</p></div>";\n'
+        . '    }, 1000);\n'
+        . '  }, 500);\n'
+        . '};\n'
+        . '</script>';
     
-    logInvoiceError("Invoice sent successfully for printing", ['invoice_number' => $invoiceNumber]);
-    exit; // Important to prevent any additional output
+    // Insert print script before </body>
+    if (strpos($invoiceHtml, '</body>') !== false) {
+        $invoiceHtml = str_replace('</body>', $printScript . '</body>', $invoiceHtml);
+    } else {
+        $invoiceHtml .= $printScript;
+    }
+    
+    // Output only the invoice HTML (no extra wrapper)
+    echo $invoiceHtml;
+    exit;
 
 } catch (Exception $e) {
     logInvoiceError("Critical error in download-invoice.php", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
