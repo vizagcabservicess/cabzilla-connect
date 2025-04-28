@@ -34,6 +34,7 @@ function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
         ($lastError ? $lastError->getMessage() : "Unknown error"));
 }
 
+
 // Function to execute a query with error handling
 function executeQuery($sql, $params = [], $types = "") {
     $conn = getDbConnectionWithRetry();

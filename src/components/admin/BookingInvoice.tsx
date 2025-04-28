@@ -1,9 +1,8 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { Loader2, FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { FileText, Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
@@ -97,12 +96,15 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 
-                 'with GST:', gstEnabled, 
-                 'IGST:', isIGST, 
-                 'Include Tax:', includeTax, 
-                 'Custom Invoice Number:', customInvoiceNumber);
-                 
+      console.log('Generating invoice with params:', {
+        bookingId: booking.id,
+        gstEnabled,
+        isIGST,
+        includeTax,
+        customInvoiceNumber,
+        gstDetails: gstEnabled ? gstDetails : undefined
+      });
+      
       const result = await onGenerateInvoice(
         gstEnabled, 
         gstEnabled ? gstDetails : undefined, 
@@ -111,8 +113,6 @@ export function BookingInvoice({
         customInvoiceNumber.trim() || undefined
       );
       
-      console.log('Invoice generation result:', result);
-      
       if (result && result.data) {
         setInvoiceData(result.data);
         toast({
@@ -120,7 +120,6 @@ export function BookingInvoice({
           description: "Invoice was generated successfully"
         });
       } else {
-        setInvoiceData(null);
         throw new Error('No invoice data returned from the server');
       }
     } catch (error) {
@@ -139,35 +138,28 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     try {
-      // Use a proper URL with query parameters for invoice download
       const baseUrl = getApiUrl(`/api/download-invoice`);
-      const bookingIdParam = `id=${booking.id}`;
-      const gstParam = gstEnabled ? '&gstEnabled=1' : '&gstEnabled=0';
-      const igstParam = isIGST ? '&isIGST=1' : '&isIGST=0';
-      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-      const invoiceNumberParam = customInvoiceNumber.trim() ? 
-        `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+      const params = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0'
+      });
       
-      let gstDetailsParam = '';
-      if (gstEnabled) {
-        gstDetailsParam = `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}`
-          + `&companyName=${encodeURIComponent(gstDetails.companyName)}`
-          + `&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}`;
+      if (customInvoiceNumber.trim()) {
+        params.append('invoiceNumber', customInvoiceNumber.trim());
       }
       
-      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}`;
+      if (gstEnabled) {
+        params.append('gstNumber', gstDetails.gstNumber);
+        params.append('companyName', gstDetails.companyName);
+        params.append('companyAddress', gstDetails.companyAddress);
+      }
+      
+      const downloadUrl = `${baseUrl}?${params.toString()}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      // Open in a new window/tab for PDF download
-      const newWindow = window.open(downloadUrl, '_blank');
-      
-      // If window.open failed (blocked by popup blocker)
-      if (!newWindow) {
-        // Fallback method - redirect in current window with confirmation
-        if (window.confirm('Your browser blocked the pop-up. Would you like to download the invoice in the current window?')) {
-          window.location.href = downloadUrl;
-        }
-      }
+      window.open(downloadUrl, '_blank');
       
       toast({
         title: "Invoice Download Started",
@@ -185,12 +177,12 @@ export function BookingInvoice({
 
   const handleGstToggle = (checked: boolean) => {
     setGstEnabled(checked);
-    if (checked && !includeTax) {
-      // When enabling GST, ensure we default to include tax
-      setIncludeTax(true);
-      toast({
-        title: "Tax Inclusion Enabled",
-        description: "Enabling GST defaults to include tax in the price"
+    if (!checked) {
+      setIsIGST(false);
+      setGstDetails({
+        gstNumber: '',
+        companyName: '',
+        companyAddress: ''
       });
     }
   };
@@ -206,16 +198,9 @@ export function BookingInvoice({
   const handleRegenerateInvoice = () => {
     if (loading || isSubmitting) return;
     
-    // Set regenerating flag to show appropriate feedback
     setRegenerating(true);
-    
-    // Reset any error state
-    setError(null);
-    
-    // Generate invoice with current settings
-    setTimeout(() => {
-      handleGenerateInvoice();
-    }, 100);
+    setInvoiceData(null);
+    handleGenerateInvoice();
   };
 
   const renderInvoiceContent = () => {
@@ -359,7 +344,6 @@ export function BookingInvoice({
             className="invoice-preview border rounded-md overflow-hidden" 
             style={{ height: '400px', overflow: 'auto' }}
           >
-            {/* Use improved iframe with sanitized HTML content */}
             <iframe 
               srcDoc={invoiceData.invoiceHtml}
               title="Invoice Preview" 
