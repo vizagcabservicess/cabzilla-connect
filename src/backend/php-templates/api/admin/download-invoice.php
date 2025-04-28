@@ -176,31 +176,46 @@ try {
         $igstAmount = 0;
     }
 
-    // Get CSS content - FIXED PATH
-    $cssFilePath = __DIR__ . '/../../css/invoice-print.css';
-    if (!file_exists($cssFilePath)) {
-        // If CSS file doesn't exist at expected path, try alternate paths
-        $cssFilePath = __DIR__ . '/../../../css/invoice-print.css';
-        if (!file_exists($cssFilePath)) {
-            // If still not found, use inline minimal CSS
-            $cssContent = "
-            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-            .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
-            .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-            .invoice-header div { display: table-cell; }
-            .company-info { text-align: right; }
-            .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-            .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
-            .total-row { font-weight: bold; background-color: #f9f9f9; }
-            h1, h2, h3 { margin-top: 0; }
-            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
-            ";
-        } else {
-            $cssContent = file_get_contents($cssFilePath);
+    // Get CSS content - IMPROVED PATH RESOLUTION FOR PRODUCTION
+    // Try multiple possible paths for CSS in order of likelihood
+    $cssContent = null;
+    $possiblePaths = [
+        // Public CSS directory (most likely in production)
+        $_SERVER['DOCUMENT_ROOT'] . '/css/invoice-print.css',
+        // Project root CSS directory
+        $_SERVER['DOCUMENT_ROOT'] . '/api/css/invoice-print.css',
+        // Relative to current script
+        __DIR__ . '/../../css/invoice-print.css',
+        // One level up
+        __DIR__ . '/../../../css/invoice-print.css',
+        // Two levels up
+        __DIR__ . '/../../../../css/invoice-print.css',
+    ];
+    
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            $cssContent = file_get_contents($path);
+            logInvoiceError("Admin: CSS file found at path: " . $path);
+            break;
         }
-    } else {
-        $cssContent = file_get_contents($cssFilePath);
+    }
+    
+    // If CSS file not found, use inline minimal CSS
+    if ($cssContent === null) {
+        logInvoiceError("Admin: CSS file not found at any of the expected paths, using inline CSS");
+        $cssContent = "
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+        .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
+        .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+        .invoice-header div { display: table-cell; }
+        .company-info { text-align: right; }
+        .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
+        .total-row { font-weight: bold; background-color: #f9f9f9; }
+        h1, h2, h3 { margin-top: 0; }
+        .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
+        ";
     }
     
     // Create HTML content for the invoice

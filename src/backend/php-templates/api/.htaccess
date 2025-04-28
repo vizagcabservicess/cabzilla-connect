@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -12,14 +13,6 @@ RewriteBase /api/
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
-</FilesMatch>
-
-# SPECIAL PDF FILES - CRITICAL for proper PDF handling
-<FilesMatch "\.(pdf)$">
-    ForceType application/pdf
-    Header always set Content-Type application/pdf
-    Header always set Content-Disposition attachment
-    Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 
 # CRITICAL: Special handling for download-invoice.php
@@ -37,6 +30,13 @@ RewriteBase /api/
     Header always set Expires "0"
 </Files>
 
+# SPECIAL PDF FILES - CRITICAL for proper PDF handling
+<FilesMatch "\.(pdf)$">
+    ForceType application/pdf
+    Header always set Content-Type application/pdf
+    Header always set X-Content-Type-Options "nosniff"
+</FilesMatch>
+
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
@@ -52,6 +52,17 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
+# Add public download-invoice endpoint with special handling for PDFs
+RewriteRule ^download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
+RewriteRule ^download-invoice$ /api/download-invoice.php [L,NC,QSA]
+
+# Direct access to all PHP files - CRITICAL NEW RULE
+<Files ~ "\.php$">
+    Order Allow,Deny
+    Allow from all
+    SetHandler application/x-httpd-php
+</Files>
+
 # EXPLICITLY SET PDF MIME TYPE for PDFs - Critical fix
 <FilesMatch "\.pdf$">
     ForceType application/pdf
@@ -59,83 +70,16 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 
-# CRITICAL: Fix schema endpoints - must come first
-RewriteRule ^admin/fix-schema$ admin/fix-schema.php [L,QSA]
-RewriteRule ^admin/fix-schema\.php$ admin/fix-schema.php [L,QSA]
-RewriteRule ^fix-schema$ admin/fix-schema.php [L,QSA]
-RewriteRule ^fix-schema\.php$ admin/fix-schema.php [L,QSA]
-RewriteRule ^admin/fix-drivers-schema$ admin/fix-drivers-schema.php [L,QSA]
-RewriteRule ^admin/fix-drivers-schema\.php$ admin/fix-drivers-schema.php [L,QSA]
-RewriteRule ^fix-drivers-schema$ admin/fix-drivers-schema.php [L,QSA]
-RewriteRule ^fix-drivers-schema\.php$ admin/fix-drivers-schema.php [L,QSA]
-RewriteRule ^admin/fix-drivers-table$ admin/fix-drivers-table.php [L,QSA]
-RewriteRule ^admin/fix-drivers-table\.php$ admin/fix-drivers-table.php [L,QSA]
+# Invoice and receipt endpoints with high priority
+RewriteRule ^invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
+RewriteRule ^receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
 
-# Direct access to admin endpoints - highest priority
-RewriteRule ^admin/users$ admin/users.php [L,QSA]
-RewriteRule ^admin/users\.php$ admin/users.php [L,QSA]
-RewriteRule ^admin/direct-user-data$ admin/direct-user-data.php [L,QSA]
-RewriteRule ^admin/direct-user-data\.php$ admin/direct-user-data.php [L,QSA]
+# Don't apply rewriting to actual files or directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 
-# Critical invoice endpoints - highest priority
-RewriteRule ^admin/generate-invoice$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/generate-invoice\.php$ admin/generate-invoice.php [L,QSA]
-RewriteRule ^admin/download-invoice$ admin/download-invoice.php [L,QSA]
-RewriteRule ^admin/download-invoice\.php$ admin/download-invoice.php [L,QSA]
-# Public invoice endpoints
-RewriteRule ^download-invoice$ download-invoice.php [L,QSA]
-RewriteRule ^download-invoice\.php$ download-invoice.php [L,QSA]
-
-# Diagnostic endpoints - highest priority
-RewriteRule ^test-connection$ test-connection.php [L,QSA]
-RewriteRule ^test-booking-api$ admin/test-booking-api.php [L,QSA]
-RewriteRule ^direct-connection$ test-connection.php [L,QSA]
-
-# ADD: Test email endpoints - high priority with multiple URLs
-RewriteRule ^test-email-sending$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email-sending\.php$ test-email-sending.php [L,QSA]
-RewriteRule ^test-email$ test-email-sending.php [L,QSA]
-
-# HIGHEST PRIORITY: Booking endpoints
-RewriteRule ^book$ book.php [L,QSA]
-RewriteRule ^book\.php$ book.php [L,QSA]
-RewriteRule ^book/$ book.php [L,QSA]
-RewriteRule ^create-booking$ book.php [L,QSA]
-RewriteRule ^create-booking\.php$ book.php [L,QSA]
-
-# HIGHEST PRIORITY: Email confirmation endpoints
-RewriteRule ^send-booking-confirmation$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^send-booking-confirmation\.php$ send-booking-confirmation.php [L,QSA]
-RewriteRule ^email-confirmation$ send-booking-confirmation.php [L,QSA]
-
-# CRITICAL: Force direct PHP for critical files - ensure JSON content type
-<Files "book.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "test-connection.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "send-booking-confirmation.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-<Files "test-email-sending.php">
-    SetHandler application/x-httpd-php
-    Header always set Content-Type "application/json"
-</Files>
-
-# SPECIAL HANDLING FOR INVOICE AND RECEIPT ENDPOINTS
-RewriteRule ^admin/invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA] 
-RewriteRule ^invoice/([0-9]+)/?$ admin/generate-invoice.php?id=$1 [L,NC,QSA]
-RewriteRule ^admin/receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-RewriteRule ^receipt/([0-9]+)/?$ admin/receipt.php?id=$1 [L,NC,QSA]
-
-# CRITICAL BOOKING API ENDPOINTS
-RewriteRule ^admin/assign-driver/?$ admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^admin/cancel-booking/?$ admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^admin/update-booking/?$ admin/update-booking.php [L,NC,QSA]
+# Send all other requests to index.html for React to handle
+RewriteRule ^(.*)$ /index.html [L]
 
 # Force MIME types
 AddType application/pdf .pdf
