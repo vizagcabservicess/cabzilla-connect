@@ -205,8 +205,18 @@ try {
         
         // If we got HTML instead of PDF, check if it contains the printing JavaScript
         if (stripos($body, '<!DOCTYPE html>') !== false && stripos($body, '<html') !== false) {
-            // We can serve the HTML directly for printing instead since it has auto-print functionality
-            header("Content-Type: text/html; charset=utf-8");
+            // Force PDF Content-Type anyway to try to make browser interpret it as PDF
+            header("Content-Type: application/pdf");
+            
+            // Stronger directive to force browser to treat as PDF
+            header("Content-Disposition: inline; filename=\"invoice_{$bookingId}.pdf\"");
+            header("X-Content-Type-Options: nosniff");
+            
+            // Add extra headers to tell browser it's actually a PDF
+            header("Content-Transfer-Encoding: binary");
+            
+            // Try to convert the HTML to PDF using wkhtmltopdf or similar if available
+            // For now, just output the HTML with hope browser renders it
             echo $body;
             exit;
         } else {

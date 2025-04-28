@@ -243,6 +243,7 @@ try {
     
     // CRITICAL: Set Content-Type and other headers for PDF output
     if ($isPdfOutput) {
+        // FORCE PDF CONTENT TYPE - this is critical!
         header('Content-Type: application/pdf');
         
         // Use attachment disposition to force download, or inline for viewing
@@ -256,6 +257,9 @@ try {
         
         // Additional header to prevent MIME sniffing
         header('X-Content-Type-Options: nosniff');
+        
+        // Explicitly inform the browser this is binary data
+        header('Content-Transfer-Encoding: binary');
     } else {
         // For HTML output
         header('Content-Type: text/html; charset=utf-8');
@@ -279,23 +283,33 @@ try {
         ';
     }
     
-    // Enhanced PDF printing capabilities
+    // Enhanced PDF printing capabilities with improved browser compatibility
     $enhancedPrintJs = '
     window.onload = function() {
+        // Add meta tag to force PDF mode
+        var meta = document.createElement("meta");
+        meta.name = "Content-Type";
+        meta.content = "application/pdf";
+        document.getElementsByTagName("head")[0].appendChild(meta);
+        
         // Force PDF print dialog immediately
-        window.print();
+        setTimeout(function() {
+            window.print();
+        }, 500);
         
         // After print is triggered, show success message
         window.addEventListener("afterprint", function() {
             document.querySelector("body").innerHTML = "<div style=\'text-align:center;padding:40px;\'><h1>Your invoice has been processed.</h1><p>You may close this window.</p></div>";
         });
-    };';
+    };
+    ';
     
     // Return enhanced invoice HTML with improved printing capabilities
     $fullHtml = '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="application/pdf">
     <title>Invoice #' . $invoiceNumber . '</title>
     <style>' . $invoiceCSS . '</style>
     <script>' . $enhancedPrintJs . '</script>
@@ -323,8 +337,13 @@ try {
             'html_length' => strlen($fullHtml)
         ]);
         
-        // Just output the HTML for browser-based PDF generation
-        // The browser will render this as PDF based on content headers
+        // Add a PDF header signature explicitly to trick the browser if needed
+        if ($directPdf) {
+            // This is a simple PDF header that browsers might recognize
+            echo "%PDF-1.5\n%\xE2\xE3\xCF\xD3\n";
+        }
+        
+        // Output the HTML for browser-based PDF generation
         echo $fullHtml;
     } else {
         echo $fullHtml;

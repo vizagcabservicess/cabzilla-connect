@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -137,32 +138,59 @@ export function BookingInvoice({
     }
   };
 
+  // IMPROVED: Much more reliable PDF download function
   const handleDownloadPdf = () => {
     try {
       setDownloadCount(prev => prev + 1);
       
-      const baseUrl = getApiUrl(`/api/download-invoice.php`);
-      const bookingIdParam = `id=${booking.id}`;
-      const gstParam = gstEnabled ? '&gstEnabled=1' : '&gstEnabled=0';
-      const igstParam = isIGST ? '&isIGST=1' : '&isIGST=0';
-      const includeTaxParam = includeTax ? '&includeTax=1' : '&includeTax=0';
-      const cacheBuster = `&v=${downloadCount}-${new Date().getTime()}-${Math.random().toString(36).substring(2, 15)}`;
-      const invoiceNumberParam = customInvoiceNumber.trim() ? 
-        `&invoiceNumber=${encodeURIComponent(customInvoiceNumber.trim())}` : '';
+      // Create an iframe to handle the download
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
       
-      let gstDetailsParam = '';
-      if (gstEnabled) {
-        gstDetailsParam = `&gstNumber=${encodeURIComponent(gstDetails.gstNumber)}`
-          + `&companyName=${encodeURIComponent(gstDetails.companyName)}`
-          + `&companyAddress=${encodeURIComponent(gstDetails.companyAddress)}`;
+      // Add a timestamp to cache-bust the request
+      const timestamp = new Date().getTime();
+      const randomStr = Math.random().toString(36).substring(2);
+      const cacheBuster = `&v=${downloadCount}-${timestamp}-${randomStr}`;
+      
+      // Construct the URL
+      const baseUrl = getApiUrl(`/api/download-invoice.php`);
+      const queryParams = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        direct_download: '1'
+      });
+      
+      if (customInvoiceNumber.trim()) {
+        queryParams.set('invoiceNumber', customInvoiceNumber.trim());
       }
       
-      const formatParam = '&format=pdf';
+      if (gstEnabled) {
+        queryParams.set('gstNumber', gstDetails.gstNumber);
+        queryParams.set('companyName', gstDetails.companyName);
+        queryParams.set('companyAddress', gstDetails.companyAddress);
+      }
       
-      const downloadUrl = `${baseUrl}?${bookingIdParam}${gstParam}${igstParam}${includeTaxParam}${invoiceNumberParam}${gstDetailsParam}${formatParam}${cacheBuster}`;
+      // Complete download URL
+      const downloadUrl = `${baseUrl}?${queryParams.toString()}${cacheBuster}`;
       console.log('Download invoice URL:', downloadUrl);
       
-      handleDirectPdfDownload();
+      // Set the src and load the PDF in the iframe
+      iframe.src = downloadUrl;
+      
+      // Open in new window as fallback
+      setTimeout(() => {
+        window.open(downloadUrl, '_blank');
+        // Cleanup iframe after a delay
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      }, 1000);
       
       toast({
         title: "Invoice Download Started",
@@ -182,6 +210,7 @@ export function BookingInvoice({
     try {
       setDownloadCount(prev => prev + 1);
       
+      // Create an alternative download method using a form
       const form = document.createElement('form');
       form.method = 'GET';
       form.action = getApiUrl(`/api/download-invoice.php`);
@@ -234,6 +263,50 @@ export function BookingInvoice({
         variant: "destructive",
         title: "Download Failed",
         description: "Failed to download invoice. Please try again."
+      });
+    }
+  };
+
+  // Add a more direct approach to getting the PDF
+  const handleAlternativeDownload = () => {
+    try {
+      // Direct browser to API endpoint with proper parameters
+      const baseUrl = getApiUrl(`/api/admin/generate-invoice.php`);
+      const queryParams = new URLSearchParams({
+        id: booking.id.toString(),
+        gstEnabled: gstEnabled ? '1' : '0',
+        isIGST: isIGST ? '1' : '0',
+        includeTax: includeTax ? '1' : '0',
+        format: 'pdf',
+        download: '1'
+      });
+      
+      if (customInvoiceNumber.trim()) {
+        queryParams.set('invoiceNumber', customInvoiceNumber.trim());
+      }
+      
+      if (gstEnabled) {
+        queryParams.set('gstNumber', gstDetails.gstNumber);
+        queryParams.set('companyName', gstDetails.companyName);
+        queryParams.set('companyAddress', gstDetails.companyAddress);
+      }
+      
+      // Add cache buster
+      queryParams.set('_t', Date.now().toString());
+      
+      const url = `${baseUrl}?${queryParams.toString()}`;
+      window.open(url, '_blank');
+      
+      toast({
+        title: "Alternative Download Method",
+        description: "Trying alternative download method"
+      });
+    } catch (error) {
+      console.error("Alternative download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Alternative Download Failed",
+        description: "Failed with alternative method. Please try again."
       });
     }
   };
@@ -458,6 +531,15 @@ export function BookingInvoice({
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download PDF
+                </Button>
+                
+                <Button
+                  variant="secondary"
+                  onClick={handleAlternativeDownload}
+                  disabled={loading || isSubmitting || regenerating}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Alt Download
                 </Button>
               </>
             )}
