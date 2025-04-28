@@ -138,6 +138,7 @@ export function BookingInvoice({
     }
   };
 
+  // IMPROVED DOWNLOAD METHOD: Uses multiple approaches for more reliable PDF download
   const handleDownloadPdf = () => {
     try {
       setDownloadCount(prev => prev + 1);
@@ -164,22 +165,54 @@ export function BookingInvoice({
         params.append('companyAddress', gstDetails.companyAddress);
       }
       
-      // Method 1: Using iframe for seamless download
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
-      document.body.appendChild(iframe);
-      
-      toast({
-        title: "PDF Download Started",
-        description: "Your invoice is being downloaded"
-      });
-      
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
+      // Method 1: Using fetch API first (most reliable for PDF loading)
+      fetch(getApiUrl(`/api/download-invoice.php?${params.toString()}`))
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`);
+          }
+          return response.blob();
+        })
+        .then(blob => {
+          // Create object URL and trigger download
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `invoice_${booking.id}_${customInvoiceNumber || 'download'}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          
+          // Clean up
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 100);
+          
+          toast({
+            title: "PDF Downloaded",
+            description: "Your invoice has been downloaded successfully"
+          });
+        })
+        .catch(error => {
+          console.error("PDF fetch error:", error);
+          
+          // Fallback to iframe method
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = getApiUrl(`/api/download-invoice.php?${params.toString()}`);
+          document.body.appendChild(iframe);
+          
+          toast({
+            title: "Using Fallback Download Method",
+            description: "We're trying an alternative download approach"
+          });
+          
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 5000);
+        });
     } catch (error) {
       console.error("Invoice download error:", error);
       toast({
@@ -263,6 +296,7 @@ export function BookingInvoice({
     }, 100);
   };
 
+  // IMPROVED CLIENT-SIDE PDF GENERATION
   const handleDataUriDownload = () => {
     try {
       // Format date for display in the PDF

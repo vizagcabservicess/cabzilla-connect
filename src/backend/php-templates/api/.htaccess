@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -18,7 +19,6 @@ RewriteBase /api/
 <FilesMatch "\.(pdf)$">
     ForceType application/pdf
     Header always set Content-Type application/pdf
-    Header always set Content-Disposition attachment
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 

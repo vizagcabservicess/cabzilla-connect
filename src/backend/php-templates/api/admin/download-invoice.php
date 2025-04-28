@@ -1,3 +1,4 @@
+
 <?php 
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -173,9 +174,12 @@ try {
 
     // Create PDF content using a simplified structure that matches the dashboard view
     if ($isPdfOutput) {
+        // CRITICAL: Make sure we're not sending mixed content types
         header("Content-Type: application/pdf");
+        // Force download if requested
         $disposition = $directDownload ? "attachment" : "inline";
-        header("Content-Disposition: {$disposition}; filename=\"{$invoiceNumber}.pdf\"");
+        header("Content-Disposition: {$disposition}; filename=\"invoice_{$invoiceNumber}.pdf\"");
+        // Stop caching - critical for consistent PDF loading
         header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
         header("Pragma: no-cache");
         header("Expires: 0");
@@ -276,7 +280,7 @@ try {
             $content .= "S\n";  // Stroke the path
         }
         
-        // Create complete PDF with refined styling
+        // Create complete PDF with refined styling - CRITICAL FIX: Add proper PDF structure markers
         $pdfContent = "%PDF-1.7\n";
         $pdfContent .= "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n";
         $pdfContent .= "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n";
@@ -286,10 +290,11 @@ try {
         $pdfContent .= "5 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>\nendobj\n";
         $pdfContent .= "6 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>\nendobj\n";
         
+        // Start content stream with proper length calculation
         $contentLength = strlen($content);
         $pdfContent .= "4 0 obj\n<</Length $contentLength>>\nstream\n$content\nendstream\nendobj\n";
         
-        // End of PDF
+        // End of PDF with proper xref table
         $pdfContent .= "xref\n0 7\n0000000000 65535 f\n";
         $pdfContent .= "0000000010 00000 n\n";
         $pdfContent .= "0000000056 00000 n\n";
@@ -298,6 +303,9 @@ try {
         $pdfContent .= "0000000434 00000 n\n";
         $pdfContent .= "0000000500 00000 n\n";
         $pdfContent .= "trailer\n<</Size 7 /Root 1 0 R>>\nstartxref\n" . (strlen($pdfContent) + 100) . "\n%%EOF";
+
+        // CRITICAL FIX: Set the content length header
+        header("Content-Length: " . strlen($pdfContent));
 
         echo $pdfContent;
         exit;

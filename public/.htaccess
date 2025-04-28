@@ -61,8 +61,6 @@ RewriteEngine On
     ForceType application/pdf
     Header always set Content-Type "application/pdf"
     Header always set X-Content-Type-Options "nosniff"
-    # Force browser to download PDF rather than display inline
-    Header set Content-Disposition "attachment"
 </FilesMatch>
 
 # API Test Endpoint - highest priority
@@ -94,4 +92,3 @@ RewriteCond %{REQUEST_FILENAME} !-d
 
 # Send all other requests to index.html for React to handle
 RewriteRule ^(.*)$ /index.html [L]
-
