@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -33,7 +34,7 @@ export default function BookingEditPage() {
     address: '' 
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
-  const [extraCharges, setExtraCharges] = useState<{ amount: string; description: string }[]>([]);
+  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>([]);
   const [newExtraAmount, setNewExtraAmount] = useState('');
   const [newExtraDesc, setNewExtraDesc] = useState('');
   const isAdmin = authAPI.isAdmin();
@@ -98,19 +99,36 @@ export default function BookingEditPage() {
           }
         }
 
-        // Initialize extraCharges from booking
+        // Improved handling of extraCharges with standardized format
         if (response.extraCharges && Array.isArray(response.extraCharges)) {
-          setExtraCharges(response.extraCharges.map((c: any) => ({
-            amount: String(c.amount),
-            description: c.label || c.description || ''
+          // Normalize the structure to ensure amount is a number and description is a string
+          setExtraCharges(response.extraCharges.map(c => ({
+            amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
+            description: c.description || c.label || ''
           })));
         } else if (response.extra_charges && Array.isArray(response.extra_charges)) {
-          setExtraCharges(response.extra_charges.map((c: any) => ({
-            amount: String(c.amount),
-            description: c.label || c.description || ''
+          setExtraCharges(response.extra_charges.map(c => ({
+            amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
+            description: c.description || c.label || ''
           })));
         } else {
-          setExtraCharges([]);
+          // Check if it's a JSON string that needs parsing
+          if (typeof response.extraCharges === 'string') {
+            try {
+              const parsedCharges = JSON.parse(response.extraCharges);
+              if (Array.isArray(parsedCharges)) {
+                setExtraCharges(parsedCharges.map(c => ({
+                  amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
+                  description: c.description || c.label || ''
+                })));
+              }
+            } catch (e) {
+              console.error("Failed to parse extraCharges string:", e);
+              setExtraCharges([]);
+            }
+          } else {
+            setExtraCharges([]);
+          }
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
@@ -181,7 +199,11 @@ export default function BookingEditPage() {
 
   const handleAddExtraCharge = () => {
     if (!newExtraAmount || isNaN(Number(newExtraAmount)) || Number(newExtraAmount) <= 0) return;
-    setExtraCharges([...extraCharges, { amount: newExtraAmount, description: newExtraDesc }]);
+    // Ensure amount is saved as a number, not a string
+    setExtraCharges([...extraCharges, { 
+      amount: parseFloat(newExtraAmount), 
+      description: newExtraDesc 
+    }]);
     setNewExtraAmount('');
     setNewExtraDesc('');
   };
@@ -194,6 +216,12 @@ export default function BookingEditPage() {
     if (!booking || !bookingId) return;
     setIsSubmitting(true);
     try {
+      // Ensure extra charges have consistent field names (amount and description)
+      const standardizedExtraCharges = extraCharges.map(c => ({
+        amount: Number(c.amount), // Ensure it's a number
+        description: c.description // Use description as the standard field
+      }));
+
       const updatedData = {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
@@ -201,12 +229,18 @@ export default function BookingEditPage() {
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
-        extraCharges: extraCharges.map(c => ({ amount: Number(c.amount), label: c.description }))
+        extraCharges: standardizedExtraCharges
       };
       const bookingIdNumber = parseInt(bookingId, 10);
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
       if (result) {
-        setBooking({ ...booking, ...result });
+        // Important: Update the local state with the new data to ensure persistence
+        setBooking({ 
+          ...booking, 
+          ...result,
+          // Explicitly update extraCharges to ensure it's in the right format
+          extraCharges: standardizedExtraCharges 
+        });
         toast({ title: "Booking Updated", description: "Your booking has been updated successfully!" });
       }
     } catch (error) {

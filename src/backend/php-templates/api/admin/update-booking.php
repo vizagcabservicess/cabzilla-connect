@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -194,13 +195,28 @@ try {
     // Log the incoming request body for debugging
     error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
 
-    // PATCH: Always update extra_charges in the database
+    // Process extra charges with standardized format
     $receivedExtraCharges = null;
     if (array_key_exists('extraCharges', $data)) {
         $receivedExtraCharges = $data['extraCharges'];
+        
+        // Standardize field names to amount and description
+        $standardizedCharges = [];
+        foreach ($receivedExtraCharges as $charge) {
+            $standardizedCharge = [
+                'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                'description' => isset($charge['description']) ? $charge['description'] : 
+                                (isset($charge['label']) ? $charge['label'] : '')
+            ];
+            $standardizedCharges[] = $standardizedCharge;
+        }
+        
+        $receivedExtraCharges = $standardizedCharges;
+        
     } elseif (array_key_exists('extra_charges', $data)) {
         $receivedExtraCharges = $data['extra_charges'];
     }
+    
     // Fallback: if not present in request, use value from DB or set to []
     if ($receivedExtraCharges === null) {
         $checkExtra = $conn->prepare("SELECT extra_charges FROM bookings WHERE id = ?");
@@ -215,6 +231,7 @@ try {
             $receivedExtraCharges = [];
         }
     }
+    
     error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
     $updateFields[] = "extra_charges = ?";
     $types .= "s";
@@ -286,13 +303,15 @@ try {
     $result = $getStmt->get_result();
     $updatedBooking = $result->fetch_assoc();
     error_log("[update-booking] After update, extra_charges in DB: " . $updatedBooking['extra_charges']);
+    
     // Always decode extra_charges for the response
     $decodedExtraCharges = [];
     if (!empty($updatedBooking['extra_charges'])) {
         $decodedExtraCharges = json_decode($updatedBooking['extra_charges'], true);
         if (!is_array($decodedExtraCharges)) $decodedExtraCharges = [];
     }
-    // Format response
+    
+    // Format response with standardized extra charges format
     $formattedBooking = [
         'id' => (int)$updatedBooking['id'],
         'bookingNumber' => $updatedBooking['booking_number'],

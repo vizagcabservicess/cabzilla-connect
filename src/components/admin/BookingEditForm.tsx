@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,8 +36,19 @@ export function BookingEditForm({
     billingAddress: booking.billingAddress || '',
   });
 
+  // Standardize extra charges data format
+  const initializeExtraCharges = () => {
+    if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
+      return booking.extraCharges.map(charge => ({
+        amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)),
+        description: charge.description || charge.label || ''
+      }));
+    }
+    return [];
+  };
+
   const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>(
-    booking.extraCharges || []
+    initializeExtraCharges()
   );
 
   const [newCharge, setNewCharge] = useState<{ amount: number; description: string }>({
@@ -93,7 +103,10 @@ export function BookingEditForm({
       return;
     }
     
-    setExtraCharges(prev => [...prev, { ...newCharge }]);
+    setExtraCharges(prev => [...prev, { 
+      amount: newCharge.amount,
+      description: newCharge.description
+    }]);
     setNewCharge({ amount: 0, description: '' });
   };
 
@@ -141,6 +154,12 @@ export function BookingEditForm({
       return;
     }
     
+    // Ensure extra charges are properly formatted
+    const standardizedExtraCharges = extraCharges.map(charge => ({
+      amount: charge.amount,
+      description: charge.description
+    }));
+    
     const updatedData = {
       passengerName: formData.passengerName,
       passengerPhone: formData.passengerPhone,
@@ -149,7 +168,7 @@ export function BookingEditForm({
       dropLocation: formData.dropLocation,
       pickupDate: formData.pickupDate.toISOString(),
       billingAddress: formData.billingAddress,
-      extraCharges: extraCharges.length > 0 ? extraCharges : undefined,
+      extraCharges: standardizedExtraCharges,
       totalAmount: calculateTotal(),
     };
     
