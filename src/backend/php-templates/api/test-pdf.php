@@ -74,15 +74,15 @@ if (!isset($_GET['download'])) {
 
 // CRITICAL: Improved autoloader detection with absolute paths
 $autoloaderPaths = [
-    // Primary location - public_html/vendor
-    __DIR__ . '/../../../../public_html/vendor/autoload.php',
+    // Primary location - using document root
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
     
     // Backup locations
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
     dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
+    __DIR__ . '/../../../../vendor/autoload.php',
+    __DIR__ . '/../../../vendor/autoload.php',
     __DIR__ . '/../../vendor/autoload.php',
-    __DIR__ . '/../vendor/autoload.php',
-    dirname(dirname(__DIR__)) . '/vendor/autoload.php'
+    __DIR__ . '/../vendor/autoload.php'
 ];
 
 $vendorExists = false;
