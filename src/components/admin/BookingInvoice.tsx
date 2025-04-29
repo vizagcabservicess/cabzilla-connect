@@ -10,9 +10,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -202,17 +199,12 @@ export function BookingInvoice({
     return subtotal;
   };
 
+  // New simplified UI based on the screenshot
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-xl font-semibold">
-          {loading || regenerating 
-            ? "Generating Invoice..." 
-            : "Booking Invoice"}
-        </h3>
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
+        <h3 className="text-xl font-semibold">Booking Invoice</h3>
+        <Button variant="outline" onClick={onClose}>Close</Button>
       </div>
 
       {error && (
@@ -244,20 +236,6 @@ export function BookingInvoice({
                   <p><span className="text-gray-500">Phone:</span> {booking.passengerPhone || 'N/A'}</p>
                 </div>
               </div>
-              
-              {booking.extraCharges && booking.extraCharges.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-2">Extra Charges</h4>
-                  <ul className="text-sm space-y-1">
-                    {booking.extraCharges.map((charge: any, index: number) => (
-                      <li key={index} className="flex justify-between">
-                        <span>{charge.description || charge.label || `Charge ${index+1}`}</span>
-                        <span>{formatCurrency(Number(charge.amount) || 0)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -273,57 +251,6 @@ export function BookingInvoice({
                 />
                 <Label htmlFor="gst-mode">Enable GST Invoice</Label>
               </div>
-
-              {gstEnabled && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="gst-number">GST Number</Label>
-                    <Input
-                      id="gst-number"
-                      value={gstDetails.gstNumber}
-                      onChange={(e) => setGstDetails({...gstDetails, gstNumber: e.target.value})}
-                      placeholder="e.g. 29AABCU9603R1ZJ"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
-                    <Input
-                      id="company-name"
-                      value={gstDetails.companyName}
-                      onChange={(e) => setGstDetails({...gstDetails, companyName: e.target.value})}
-                      placeholder="Company Name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="company-address">Company Address</Label>
-                    <Input
-                      id="company-address"
-                      value={gstDetails.companyAddress}
-                      onChange={(e) => setGstDetails({...gstDetails, companyAddress: e.target.value})}
-                      placeholder="Company Address"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>GST Type</Label>
-                    <RadioGroup 
-                      value={isIGST ? "igst" : "cgst"} 
-                      onValueChange={(val) => setIsIGST(val === "igst")}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="cgst" id="cgst" />
-                        <Label htmlFor="cgst">CGST + SGST (Within State)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="igst" id="igst" />
-                        <Label htmlFor="igst">IGST (Interstate)</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                </div>
-              )}
 
               <div className="flex items-center space-x-2">
                 <Switch 
@@ -351,17 +278,18 @@ export function BookingInvoice({
                   handleGenerateInvoice();
                 }}
                 disabled={loading || regenerating || isSubmitting}
-                className="w-full"
+                className="w-full bg-blue-500 hover:bg-blue-600"
+                variant="default"
               >
                 {(loading || regenerating || isSubmitting) ? (
                   <>
-                    <Spinner className="mr-2 h-4 w-4" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Generating...
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    {invoiceData ? "Regenerate Invoice" : "Generate Invoice"}
+                    Regenerate Invoice
                   </>
                 )}
               </Button>
@@ -372,68 +300,80 @@ export function BookingInvoice({
 
       {invoiceData && (
         <div className="pt-4 border-t">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-2 mb-4">
-              <TabsTrigger value="html" className="flex items-center">
+          <div className="flex flex-col space-y-4">
+            <div className="flex border rounded-md overflow-hidden">
+              <button 
+                className={`flex-1 p-3 flex items-center justify-center ${activeTab === "html" ? "bg-gray-100" : "bg-white"}`}
+                onClick={() => setActiveTab("html")}
+              >
                 <FileText className="mr-2 h-4 w-4" />
                 HTML Preview
-              </TabsTrigger>
-              <TabsTrigger value="pdf" className="flex items-center" disabled={!pdfGenerationAvailable}>
+              </button>
+              <button 
+                className={`flex-1 p-3 flex items-center justify-center ${activeTab === "pdf" ? "bg-gray-100" : "bg-white"}`}
+                onClick={() => setActiveTab("pdf")}
+                disabled={!pdfGenerationAvailable}
+              >
                 <FileIcon className="mr-2 h-4 w-4" />
                 PDF Download
-              </TabsTrigger>
-            </TabsList>
+              </button>
+            </div>
             
-            <TabsContent value="html" className="space-y-4">
-              <div className="h-[500px] border rounded overflow-auto bg-white">
-                {htmlContent ? (
-                  <iframe
-                    srcDoc={htmlContent}
-                    className="w-full h-full"
-                    title="Invoice Preview"
-                  />
-                ) : (
-                  <div className="flex justify-center items-center h-full">
-                    <p className="text-gray-500">HTML preview is not available</p>
-                  </div>
-                )}
+            {activeTab === "html" && (
+              <div className="space-y-4">
+                <div className="h-[500px] border rounded overflow-auto bg-white">
+                  {htmlContent ? (
+                    <iframe
+                      srcDoc={htmlContent}
+                      className="w-full h-full"
+                      title="Invoice Preview"
+                    />
+                  ) : (
+                    <div className="flex justify-center items-center h-full">
+                      <p className="text-gray-500">HTML preview is not available</p>
+                    </div>
+                  )}
+                </div>
+                
+                <Button onClick={handlePrintHtml} className="w-full">
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print HTML Invoice
+                </Button>
               </div>
-              
-              <Button onClick={handlePrintHtml} className="w-full">
-                <Printer className="mr-2 h-4 w-4" />
-                Print HTML Invoice
-              </Button>
-            </TabsContent>
+            )}
             
-            <TabsContent value="pdf" className="space-y-4">
-              <div className="h-[500px] border rounded overflow-hidden bg-gray-100 relative">
-                {pdfUrl ? (
-                  <iframe
-                    src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                    className="w-full h-full"
-                    title="PDF Preview"
-                  />
-                ) : (
-                  <div className="flex flex-col justify-center items-center h-full">
-                    <AlertCircle className="h-8 w-8 text-amber-500 mb-2" />
-                    <p className="text-gray-600">PDF generation is not available</p>
-                    <p className="text-sm text-gray-500 mt-2">Please use the HTML version instead</p>
-                  </div>
-                )}
+            {activeTab === "pdf" && (
+              <div className="space-y-4">
+                <div className="h-[500px] border rounded overflow-hidden bg-gray-100 relative">
+                  {pdfUrl ? (
+                    <iframe
+                      src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                      className="w-full h-full"
+                      title="PDF Preview"
+                    />
+                  ) : (
+                    <div className="flex flex-col justify-center items-center h-full">
+                      <AlertCircle className="h-8 w-8 text-amber-500 mb-2" />
+                      <p className="text-gray-600">PDF generation is not available</p>
+                      <p className="text-sm text-gray-500 mt-2">Please use the HTML version instead</p>
+                    </div>
+                  )}
+                </div>
+                
+                <Button 
+                  onClick={handleDownload} 
+                  disabled={!pdfUrl}
+                  className="w-full"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download PDF Invoice
+                </Button>
               </div>
-              
-              <Button 
-                onClick={handleDownload} 
-                disabled={!pdfUrl}
-                className="w-full"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF Invoice
-              </Button>
-            </TabsContent>
-          </Tabs>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
+
