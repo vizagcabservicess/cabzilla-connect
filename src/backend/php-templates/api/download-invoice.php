@@ -286,17 +286,91 @@ try {
 
     // Instead of searching for CSS, use inline CSS for reliability
     $cssContent = "
-    body { font-family: DejaVu Sans, Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-    .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
-    .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-    .invoice-header div { display: table-cell; }
-    .company-info { text-align: right; }
-    .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-    .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
-    .total-row { font-weight: bold; background-color: #f9f9f9; }
-    h1, h2, h3 { margin-top: 0; }
-    .footer { margin-top: 40px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
+    body { 
+        font-family: DejaVu Sans, Arial, sans-serif; 
+        line-height: 1.4; 
+        margin: 0; 
+        padding: 10px; 
+        color: #333;
+        font-size: 9pt;
+    }
+    .invoice-container { 
+        width: 100%; 
+        max-width: 800px; 
+        margin: 0 auto; 
+        padding: 15px; 
+    }
+    .invoice-header { 
+        width: 100%; 
+        display: table; 
+        margin-bottom: 15px; 
+        border-bottom: 1px solid #eee; 
+        padding-bottom: 10px; 
+    }
+    .invoice-header div { 
+        display: table-cell; 
+    }
+    .company-info { 
+        text-align: right; 
+    }
+    h1 { 
+        font-size: 18pt; 
+        margin: 0 0 5px 0; 
+    }
+    h2 { 
+        font-size: 14pt; 
+        margin: 0 0 5px 0; 
+    }
+    h3 { 
+        font-size: 11pt; 
+        margin: 10px 0 5px 0; 
+    }
+    .section-title {
+        margin-bottom: 5px;
+        padding-bottom: 3px;
+        border-bottom: 1px solid #eee;
+    }
+    .customer-section { 
+        margin-bottom: 10px; 
+    }
+    .customer-section > div {
+        padding-right: 15px;
+    }
+    p { 
+        margin: 3px 0; 
+    }
+    .fare-table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 10px 0; 
+    }
+    .fare-table th, .fare-table td { 
+        padding: 5px; 
+        text-align: left; 
+        border-bottom: 1px solid #eee; 
+    }
+    .fare-table th:last-child, .fare-table td:last-child { 
+        text-align: right; 
+    }
+    .total-row { 
+        font-weight: bold; 
+        background-color: #f9f9f9; 
+    }
+    .footer { 
+        margin-top: 20px; 
+        text-align: center; 
+        font-size: 8pt; 
+        color: #666; 
+        border-top: 1px solid #eee; 
+        padding-top: 10px; 
+    }
+    .gst-details {
+        margin: 10px 0;
+        padding: 8px;
+        border: 1px solid #eee;
+        background: #f9f9f9;
+        font-size: 9pt;
+    }
     ";
 
     // Create HTML content for the invoice
@@ -443,6 +517,9 @@ try {
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isPhpEnabled', false);
             $options->set('defaultFont', 'DejaVu Sans');
+            $options->set('defaultMediaType', 'print');
+            $options->set('defaultPaperSize', 'A4');
+            $options->set('dpi', 96);
             
             // Create DomPDF instance
             $dompdf = new \Dompdf\Dompdf($options);
@@ -472,8 +549,17 @@ try {
             if (!headers_sent()) {
                 header('Content-Type: application/pdf');
                 header('Content-Length: ' . $pdfSize);
-                header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
-                header('Cache-Control: private, must-revalidate, post-check=0, pre-check=0');
+                
+                // Set content disposition based on direct_download parameter
+                $filename = 'Invoice_' . $invoiceNumber . '.pdf';
+                if (isset($_GET['direct_download']) && $_GET['direct_download'] === '1') {
+                    header('Content-Disposition: attachment; filename="' . $filename . '"');
+                } else {
+                    header('Content-Disposition: inline; filename="' . $filename . '"');
+                }
+                
+                // Cache control headers
+                header('Cache-Control: public, must-revalidate, max-age=0');
                 header('Pragma: public');
                 header('Expires: Sat, 26 Jul 1997 05:00:00 GMT');
                 header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
