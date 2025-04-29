@@ -1,10 +1,29 @@
 <?php
 // Simple test script to verify PDF generation works
 
-// Set headers for better error reporting
+// Set error handling
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+
+// Register error handler
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    error_log("PDF Error: [$errno] $errstr in $errfile on line $errline");
+    if (isset($_GET['debug'])) {
+        echo "Error: [$errno] $errstr in $errfile on line $errline\n";
+    }
+});
+
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        error_log("Fatal Error: " . print_r($error, true));
+        if (isset($_GET['debug'])) {
+            echo "Fatal Error: " . print_r($error, true);
+        }
+    }
+});
 
 // Clear any output buffer
 while (ob_get_level()) ob_end_clean();
@@ -408,3 +427,6 @@ if (!isset($_GET['download'])) {
     echo "<a href='/' style='display:inline-block; margin:0 10px; padding:8px 15px; background:#607D8B; color:white; text-decoration:none; border-radius:5px;'>Return to Home</a>";
     echo "</div>";
 }
+
+// Restore error handler
+restore_error_handler();

@@ -145,8 +145,12 @@ RewriteRule ^(.*)$ /index.html [L]
 
 # Set PHP settings
 <IfModule mod_php7.c>
-    php_flag display_errors Off
-    php_value error_reporting 32767
+    php_flag display_errors on
+    php_value error_reporting E_ALL
+    php_value memory_limit 256M
+    php_value max_execution_time 30
+    php_value output_buffering 4096
+    php_value include_path ".:/public_html/vendor"
 </IfModule>
 
 # Prevent direct access to sensitive files
@@ -157,3 +161,16 @@ RewriteRule ^(.*)$ /index.html [L]
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php
 AddType application/pdf .pdf
+
+# Disable output buffering for PDF files
+<FilesMatch "\.(pdf)$">
+    php_flag output_buffering Off
+</FilesMatch>
+
+# Handle PHP errors
+ErrorDocument 500 "PDF Generation Error. Please check the error logs."
+
+# Enable CORS
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
