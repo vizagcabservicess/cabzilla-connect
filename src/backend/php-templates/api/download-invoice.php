@@ -1,4 +1,13 @@
 <?php
+// CRITICAL: No output before this point
+// Turn off output buffering and disable implicit flush
+@ini_set('output_buffering', 'off');
+@ini_set('implicit_flush', true);
+@ini_set('zlib.output_compression', false);
+
+// Prevent any unwanted output
+ob_start();
+
 // Include configuration file - use absolute path with __DIR__ for reliability
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
@@ -13,9 +22,6 @@ $logsDir = __DIR__ . '/../logs';
 if (!is_dir($logsDir)) {
     @mkdir($logsDir, 0755, true);
 }
-
-// CRITICAL: Clear all buffers first - this is essential for PDF/HTML output
-while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -422,62 +428,74 @@ try {
         try {
             debugLog("Starting PDF generation");
             
+            // Clear ALL output buffers and turn off output buffering
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             // Load DomPDF
             debugLog("Loading DomPDF");
-            require_once $autoloaderPath;
             
             // Configure DomPDF options
             debugLog("Configuring DomPDF options");
-            $options = new \Dompdf\Options();  // Use full namespace
+            $options = new \Dompdf\Options();
             $options->set('isRemoteEnabled', true);
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isPhpEnabled', false);
             $options->set('defaultFont', 'DejaVu Sans');
-            debugLog("DomPDF options set");
-
+            
             // Create DomPDF instance
-            $dompdf = new \Dompdf\Dompdf($options);  // Use full namespace
+            $dompdf = new \Dompdf\Dompdf($options);
             $dompdf->setPaper('A4', 'portrait');
-            debugLog("DomPDF instance created");
             
             // Load HTML content
-            debugLog("Loading HTML content", ['length' => strlen($content)]);
             $dompdf->loadHtml($content);
             
             // Render PDF
             debugLog("Starting PDF render");
             $dompdf->render();
-            debugLog("PDF render complete");
             
             // Get PDF content
             $output = $dompdf->output();
             $pdfSize = strlen($output);
-            debugLog("PDF generated", ['size' => $pdfSize]);
             
             if ($pdfSize === 0) {
                 throw new Exception("Generated PDF is empty");
             }
             
-            // Send headers
-            debugLog("Sending headers");
-            header('Content-Type: application/pdf');
-            header('Content-Length: ' . $pdfSize);
-            header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
-            header('Cache-Control: no-cache, no-store, must-revalidate');
-            header('Pragma: no-cache');
-            header('Expires: 0');
+            // Clear any previous output and disable further output buffering
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            // Send headers - NOTHING should be output before this point
+            if (!headers_sent()) {
+                header('Content-Type: application/pdf');
+                header('Content-Length: ' . $pdfSize);
+                header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
+                header('Cache-Control: private, must-revalidate, post-check=0, pre-check=0');
+                header('Pragma: public');
+                header('Expires: Sat, 26 Jul 1997 05:00:00 GMT');
+                header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+            } else {
+                debugLog("Headers were already sent!");
+            }
+            
+            // Disable any compression
+            if (function_exists('apache_setenv')) {
+                @apache_setenv('no-gzip', 1);
+            }
+            @ini_set('zlib.output_compression', false);
             
             // Output PDF
-            debugLog("Outputting PDF");
             echo $output;
-            debugLog("PDF generation complete");
+            exit();
             
         } catch (Exception $e) {
             debugLog("Error in PDF generation", [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'line' => $e->getLine()
             ]);
             throw $e;
         }
