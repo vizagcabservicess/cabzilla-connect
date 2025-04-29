@@ -171,7 +171,7 @@ try {
         throw new Exception("Database error: " . $conn->error);
     }
 
-    // Parse extra charges from the database
+    // IMPROVED: Parse and standardize extra charges from the database
     $extraCharges = [];
     if (!empty($booking['extra_charges'])) {
         try {
@@ -191,9 +191,9 @@ try {
     
     // Calculate base amount and extra charges
     $totalAmount = (float)$booking['total_amount'];
-    $extraChargesTotal = 0;
     
-    // Calculate total of extra charges
+    // IMPROVED: Calculate total of extra charges
+    $extraChargesTotal = 0;
     if (!empty($extraCharges)) {
         foreach ($extraCharges as $charge) {
             $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
@@ -201,9 +201,7 @@ try {
         }
     }
     
-    // Add extra charges to total if they aren't already included
-    $baseAmountWithoutExtra = $totalAmount;
-    $totalAmountWithExtra = $totalAmount;
+    logInvoiceError("Extra charges total calculated", ['total' => $extraChargesTotal]);
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
@@ -253,8 +251,16 @@ try {
         $igstAmount = 0;
     }
     
-    // Grand total with extra charges
+    // IMPROVED: Calculate grand total with extra charges
     $grandTotal = $totalAmount + $extraChargesTotal;
+
+    logInvoiceError("Final calculation results", [
+        'baseAmountBeforeTax' => $baseAmountBeforeTax,
+        'taxAmount' => $taxAmount,
+        'extraChargesTotal' => $extraChargesTotal,
+        'totalAmount' => $totalAmount,
+        'grandTotal' => $grandTotal
+    ]);
 
     // Use inline CSS for reliability instead of searching for CSS files
     $cssContent = "
@@ -397,24 +403,23 @@ try {
                         <tr class='total-row'>
                             <td>Subtotal</td>
                             <td>₹ " . number_format($totalAmount, 2) . "</td>
-                        </tr>";
+                        </tr>
+                    </tbody>
+                </table>";
     
-    // Add extra charges if there are any
+    // IMPROVED: Add extra charges if there are any
     if (!empty($extraCharges)) {
         $htmlContent .= "
-            </tbody>
-        </table>
-        
-        <div class='extra-charges'>
-            <h3>Extra Charges</h3>
-            <table class='extra-charges-table'>
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>";
+                <div class='extra-charges'>
+                    <h3>Extra Charges</h3>
+                    <table class='extra-charges-table'>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>";
         
         foreach ($extraCharges as $charge) {
             $chargeDesc = isset($charge['description']) ? $charge['description'] : 
@@ -422,28 +427,23 @@ try {
             $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             
             $htmlContent .= "
-                    <tr>
-                        <td>{$chargeDesc}</td>
-                        <td>₹ " . number_format($chargeAmount, 2) . "</td>
-                    </tr>";
+                            <tr>
+                                <td>{$chargeDesc}</td>
+                                <td>₹ " . number_format($chargeAmount, 2) . "</td>
+                            </tr>";
         }
         
         $htmlContent .= "
-                </tbody>
-            </table>
-        </div>
-        
-        <div class='grand-total'>
-            Grand Total: ₹ " . number_format($grandTotal, 2) . "
-        </div>";
-    } else {
-        // If no extra charges, just close the table
-        $htmlContent .= "
-                    </tbody>
-                </table>";
+                        </tbody>
+                    </table>
+                </div>";
     }
     
+    // IMPROVED: Always show the grand total (which includes extra charges if any)
     $htmlContent .= "
+                <div class='grand-total'>
+                    Grand Total: ₹ " . number_format($grandTotal, 2) . "
+                </div>
             </div>
             
             <div class='invoice-footer' style='margin-top: 50px; text-align: center; font-size: 12px;'>
