@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ export function BookingEditForm({
     if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
       return booking.extraCharges.map(charge => ({
         amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)),
-        description: charge.description || charge.label || ''
+        description: charge.description || (charge as any).label || ''
       }));
     }
     return [];
