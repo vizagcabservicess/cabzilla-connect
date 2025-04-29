@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file - use absolute path with __DIR__ for reliability
 require_once __DIR__ . '/../config.php';
@@ -106,19 +105,17 @@ try {
         'directDownload' => $directDownload
     ]);
 
-    // CRITICAL: Improved autoloader detection with absolute paths including the public_html path
+    // CRITICAL: Improved autoloader detection with absolute paths
     $autoloaderPaths = [
-        // Add the confirmed path first
+        // Primary location - public_html/vendor
         $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
         
-        // Try other common paths
+        // Backup locations
         $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
-        dirname($_SERVER['DOCUMENT_ROOT']) . '/public_html/vendor/autoload.php',
         dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
+        __DIR__ . '/../../vendor/autoload.php',
         __DIR__ . '/../vendor/autoload.php',
-        dirname(__DIR__) . '/vendor/autoload.php', 
-        dirname(dirname(__DIR__)) . '/vendor/autoload.php',
-        realpath(__DIR__ . '/../../../vendor/autoload.php')
+        dirname(dirname(__DIR__)) . '/vendor/autoload.php'
     ];
 
     $vendorExists = false;
@@ -126,25 +123,27 @@ try {
     $autoloaderSearchResults = [];
 
     foreach ($autoloaderPaths as $path) {
-        $exists = file_exists($path);
-        $isReadable = $exists && is_readable($path);
-        
         $autoloaderSearchResults[$path] = [
-            'exists' => $exists,
-            'readable' => $isReadable
+            'exists' => file_exists($path),
+            'readable' => is_readable($path)
         ];
         
-        if ($exists && $isReadable) {
+        if (file_exists($path) && is_readable($path)) {
             $autoloaderPath = $path;
             $vendorExists = true;
-            logInvoiceError("Found composer autoloader", ['path' => $path]);
             break;
         }
     }
 
-    // Log search results if no autoloader found
-    if (!$vendorExists) {
-        logInvoiceError("No composer autoloader found", ['search_results' => $autoloaderSearchResults]);
+    // Log autoloader search results
+    logInvoiceError("Autoloader search results", $autoloaderSearchResults);
+
+    // Try to include the autoloader
+    if ($vendorExists) {
+        require_once $autoloaderPath;
+        logInvoiceError("Found composer autoloader at: " . $autoloaderPath);
+    } else {
+        logInvoiceError("CRITICAL ERROR: No composer autoloader found!");
     }
 
     // Connect to database with improved error handling
