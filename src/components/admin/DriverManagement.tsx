@@ -63,113 +63,31 @@ export function DriverManagement() {
   const fetchDrivers = async () => {
     setIsLoading(true);
     setError(null);
-    
     try {
       const apiBaseUrl = getApiBaseUrl();
-      console.log(`Fetching drivers from ${apiBaseUrl}/api/admin/drivers.php`);
-      
       const response = await fetch(`${apiBaseUrl}/api/admin/drivers.php`, {
         headers: {
           'X-Force-Refresh': 'true',
           'X-Debug': 'true'
         }
       });
-      
       const data = await response.json();
-      console.log('Drivers API response:', data);
-      
       if (!response.ok) {
         throw new Error(`API returned status ${response.status}: ${data?.message || 'Unknown error'}`);
       }
-      
-      if (data?.status === 'success' && Array.isArray(data?.drivers) && data.drivers.length > 0) {
+      if (data?.status === 'success' && Array.isArray(data?.drivers)) {
         setDrivers(data.drivers);
+      } else if (data?.status === 'success' && Array.isArray(data?.data)) {
+        setDrivers(data.data);
       } else {
-        console.warn('API returned empty or invalid drivers list, using mock data');
-        setDrivers(getMockDrivers());
+        setDrivers([]);
       }
     } catch (error) {
-      console.error('Error fetching drivers:', error);
-      setError('Failed to load drivers. Using sample data instead.');
-      setDrivers(getMockDrivers());
+      setError('Failed to load drivers.');
+      setDrivers([]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getMockDrivers = (): Driver[] => {
-    return [
-      { 
-        id: 1, 
-        name: 'Rajesh Kumar', 
-        phone: '9876543210', 
-        email: 'rajesh@example.com',
-        license_no: 'DL-1234567890',
-        status: 'available', 
-        total_rides: 352, 
-        earnings: 120000, 
-        rating: 4.8,
-        location: 'Hyderabad Central',
-        vehicle: 'Sedan - AP 31 XX 1234',
-        vehicle_id: 'AP 31 XX 1234'
-      },
-      { 
-        id: 2, 
-        name: 'Pavan Reddy', 
-        phone: '8765432109', 
-        email: 'pavan@example.com',
-        license_no: 'DL-0987654321',
-        status: 'busy', 
-        total_rides: 215, 
-        earnings: 85500, 
-        rating: 4.6,
-        location: 'Gachibowli',
-        vehicle: 'SUV - AP 32 XX 5678',
-        vehicle_id: 'AP 32 XX 5678'
-      },
-      { 
-        id: 3, 
-        name: 'Suresh Verma', 
-        phone: '7654321098', 
-        email: 'suresh@example.com',
-        license_no: 'DL-5678901234',
-        status: 'offline', 
-        total_rides: 180, 
-        earnings: 72000, 
-        rating: 4.5,
-        location: 'Offline',
-        vehicle: 'Sedan - AP 33 XX 9012',
-        vehicle_id: 'AP 33 XX 9012'
-      },
-      { 
-        id: 4, 
-        name: 'Venkatesh S', 
-        phone: '9876543211', 
-        email: 'venkat@example.com',
-        license_no: 'DL-4321098765',
-        status: 'available', 
-        total_rides: 298, 
-        earnings: 110000, 
-        rating: 4.7,
-        location: 'Kukatpally',
-        vehicle: 'Hatchback - AP 34 XX 3456',
-        vehicle_id: 'AP 34 XX 3456'
-      },
-      { 
-        id: 5, 
-        name: 'Ramesh Babu', 
-        phone: '8765432108', 
-        email: 'ramesh@example.com',
-        license_no: 'DL-2345678901',
-        status: 'busy', 
-        total_rides: 175, 
-        earnings: 65000, 
-        rating: 4.4,
-        location: 'Ameerpet',
-        vehicle: 'Tempo - AP 35 XX 7890',
-        vehicle_id: 'AP 35 XX 7890'
-      }
-    ];
   };
 
   const filteredDrivers = drivers.filter(driver => 

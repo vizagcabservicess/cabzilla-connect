@@ -32,6 +32,9 @@ if ($debugMode) {
 // Get database connection
 try {
     $conn = getDbConnectionWithRetry();
+    if (!$conn) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+    }
 } catch (Exception $e) {
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
 }
@@ -169,142 +172,172 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $statusFilter = isset($_GET['status']) ? $_GET['status'] : null;
             $searchTerm = isset($_GET['search']) ? $_GET['search'] : null;
             
-            if ($statusFilter && $searchTerm) {
-                $sql = "SELECT * FROM drivers WHERE status = ? AND (name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?)";
-                $stmt = $conn->prepare($sql);
-                $searchParam = "%$searchTerm%";
-                $stmt->bind_param("sssss", $statusFilter, $searchParam, $searchParam, $searchParam, $searchParam);
-            } 
-            elseif ($statusFilter) {
-                $sql = "SELECT * FROM drivers WHERE status = ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("s", $statusFilter);
-            }
-            elseif ($searchTerm) {
-                $sql = "SELECT * FROM drivers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?";
-                $stmt = $conn->prepare($sql);
-                $searchParam = "%$searchTerm%";
-                $stmt->bind_param("ssss", $searchParam, $searchParam, $searchParam, $searchParam);
-            }
-            else {
-                $sql = "SELECT * FROM drivers";
-                $stmt = $conn->prepare($sql);
+            // Start transaction
+            $conn->begin_transaction();
+            
+            try {
+                if ($statusFilter && $searchTerm) {
+                    $sql = "SELECT * FROM drivers WHERE status = ? AND (name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?)";
+                    $stmt = $conn->prepare($sql);
+                    $searchParam = "%$searchTerm%";
+                    $stmt->bind_param("sssss", $statusFilter, $searchParam, $searchParam, $searchParam, $searchParam);
+                } 
+                elseif ($statusFilter) {
+                    $sql = "SELECT * FROM drivers WHERE status = ?";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("s", $statusFilter);
+                }
+                elseif ($searchTerm) {
+                    $sql = "SELECT * FROM drivers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?";
+                    $stmt = $conn->prepare($sql);
+                    $searchParam = "%$searchTerm%";
+                    $stmt->bind_param("ssss", $searchParam, $searchParam, $searchParam, $searchParam);
+                }
+                else {
+                    $sql = "SELECT * FROM drivers";
+                    $stmt = $conn->prepare($sql);
+                }
+                
+                if (!$stmt) {
+                    throw new Exception("Failed to prepare statement: " . $conn->error);
+                }
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Failed to execute statement: " . $stmt->error);
+                }
+                
+                $result = $stmt->get_result();
+                $drivers = [];
+                
+                while ($row = $result->fetch_assoc()) {
+                    $drivers[] = $row;
+                }
+                
+                // Commit transaction
+                $conn->commit();
+                
+                sendJsonResponse([
+                    'status' => 'success',
+                    'data' => $drivers
+                ]);
+                
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $conn->rollback();
+                throw $e;
             }
             
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            $drivers = [];
-            while ($row = $result->fetch_assoc()) {
-                $drivers[] = $row;
-            }
-            
-            sendJsonResponse(['status' => 'success', 'drivers' => $drivers]);
         } catch (Exception $e) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve drivers: ' . $e->getMessage()], 500);
+            sendJsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to fetch drivers: ' . $e->getMessage()
+            ], 500);
         }
         break;
         
     case 'POST':
         // Create new driver
         try {
-            $jsonData = file_get_contents('php://input');
-            $data = json_decode($jsonData, true);
+            $data = json_decode(file_get_contents('php://input'), true);
             
-            if (!$data) {
-                sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
-            }
-            
-            // Validate input data
+            // Validate driver data
             $errors = validateDriverData($data);
             if (!empty($errors)) {
-                sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
-            }
-            
-            // Check for duplicate phone and license
-            $stmt = $conn->prepare("SELECT id FROM drivers WHERE phone = ? OR license_no = ?");
-            $stmt->bind_param("ss", $data['phone'], $data['license_no']);
-            $stmt->execute();
-            
-            if ($stmt->get_result()->num_rows > 0) {
                 sendJsonResponse([
                     'status' => 'error',
-                    'message' => 'Driver with this phone number or license number already exists'
-                ], 409);
+                    'message' => 'Validation failed',
+                    'errors' => $errors
+                ], 400);
             }
             
-            // Insert new driver
-            $stmt = $conn->prepare("
-                INSERT INTO drivers (
-                    name, phone, email, license_no, status, location, vehicle, total_rides, earnings, rating
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
+            // Start transaction
+            $conn->begin_transaction();
             
-            $status = $data['status'] ?? 'available';
-            $stmt->bind_param(
-                "ssssssssdd",
-                $data['name'],
-                $data['phone'],
-                $data['email'],
-                $data['license_no'],
-                $status,
-                $data['location'],
-                $data['vehicle'],
-                $data['total_rides'],
-                $data['earnings'],
-                $data['rating']
-            );
-            
-            if ($stmt->execute()) {
-                $driverId = $stmt->insert_id;
-                
-                // Handle document uploads if provided
-                if (!empty($data['documents'])) {
-                    $docStmt = $conn->prepare("
-                        INSERT INTO driver_documents (
-                            driver_id, document_type, document_number, 
-                            expiry_date, document_url, status
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                    ");
-                    
-                    foreach ($data['documents'] as $doc) {
-                        $docStatus = 'pending';
-                        $docStmt->bind_param(
-                            "isssss",
-                            $driverId,
-                            $doc['type'],
-                            $doc['number'],
-                            $doc['expiry'],
-                            $doc['url'],
-                            $docStatus
-                        );
-                        $docStmt->execute();
-                    }
+            try {
+                // Check if driver with same phone/email exists
+                $checkStmt = $conn->prepare("SELECT id FROM drivers WHERE phone = ? OR email = ?");
+                if (!$checkStmt) {
+                    throw new Exception("Failed to prepare check statement: " . $conn->error);
                 }
                 
-                // Get the newly created driver
-                $stmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
-                $stmt->bind_param("i", $driverId);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $newDriver = $result->fetch_assoc();
+                $checkStmt->bind_param("ss", $data['phone'], $data['email']);
+                if (!$checkStmt->execute()) {
+                    throw new Exception("Failed to check existing driver: " . $checkStmt->error);
+                }
+                
+                $checkResult = $checkStmt->get_result();
+                if ($checkResult->num_rows > 0) {
+                    throw new Exception("Driver with same phone or email already exists");
+                }
+                
+                // Insert new driver
+                $sql = "INSERT INTO drivers (name, phone, email, license_no, status, vehicle) VALUES (?, ?, ?, ?, ?, ?)";
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Failed to prepare insert statement: " . $conn->error);
+                }
+                
+                $status = $data['status'] ?? 'available';
+                $stmt->bind_param("ssssss", 
+                    $data['name'],
+                    $data['phone'],
+                    $data['email'],
+                    $data['license_no'],
+                    $status,
+                    $data['vehicle']
+                );
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Failed to create driver: " . $stmt->error);
+                }
+                
+                $newDriverId = $stmt->insert_id;
+                
+                // Fetch the created driver
+                $getStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+                if (!$getStmt) {
+                    throw new Exception("Failed to prepare select statement: " . $conn->error);
+                }
+                
+                $getStmt->bind_param("i", $newDriverId);
+                if (!$getStmt->execute()) {
+                    throw new Exception("Failed to fetch created driver: " . $getStmt->error);
+                }
+                
+                $result = $getStmt->get_result();
+                $driver = $result->fetch_assoc();
+                
+                // Commit transaction
+                $conn->commit();
                 
                 sendJsonResponse([
                     'status' => 'success',
                     'message' => 'Driver created successfully',
-                    'driver' => $newDriver
+                    'data' => $driver
                 ], 201);
-            } else {
-                throw new Exception("Failed to create driver: " . $stmt->error);
+                
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $conn->rollback();
+                throw $e;
             }
+            
         } catch (Exception $e) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create driver: ' . $e->getMessage()], 500);
+            sendJsonResponse([
+                'status' => 'error',
+                'message' => 'Failed to create driver: ' . $e->getMessage()
+            ], 500);
         }
         break;
         
     default:
-        sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'Method not allowed'
+        ], 405);
 }
 
-// Close connection
-$conn->close();
+// Close database connection
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+}

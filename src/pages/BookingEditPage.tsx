@@ -11,7 +11,7 @@ import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking, Location, BookingStatus } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
 
 export default function BookingEditPage() {
@@ -33,6 +33,9 @@ export default function BookingEditPage() {
     address: '' 
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
+  const [extraCharges, setExtraCharges] = useState<{ amount: string; description: string }[]>([]);
+  const [newExtraAmount, setNewExtraAmount] = useState('');
+  const [newExtraDesc, setNewExtraDesc] = useState('');
   const isAdmin = authAPI.isAdmin();
 
   useEffect(() => {
@@ -93,6 +96,21 @@ export default function BookingEditPage() {
           if (!isNaN(dateObj.getTime())) {
             setPickupDate(dateObj);
           }
+        }
+
+        // Initialize extraCharges from booking
+        if (response.extraCharges && Array.isArray(response.extraCharges)) {
+          setExtraCharges(response.extraCharges.map((c: any) => ({
+            amount: String(c.amount),
+            description: c.label || c.description || ''
+          })));
+        } else if (response.extra_charges && Array.isArray(response.extra_charges)) {
+          setExtraCharges(response.extra_charges.map((c: any) => ({
+            amount: String(c.amount),
+            description: c.label || c.description || ''
+          })));
+        } else {
+          setExtraCharges([]);
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
@@ -161,9 +179,19 @@ export default function BookingEditPage() {
     }
   };
 
+  const handleAddExtraCharge = () => {
+    if (!newExtraAmount || isNaN(Number(newExtraAmount)) || Number(newExtraAmount) <= 0) return;
+    setExtraCharges([...extraCharges, { amount: newExtraAmount, description: newExtraDesc }]);
+    setNewExtraAmount('');
+    setNewExtraDesc('');
+  };
+
+  const handleRemoveExtraCharge = (idx: number) => {
+    setExtraCharges(extraCharges.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (contactDetails: any) => {
     if (!booking || !bookingId) return;
-    
     setIsSubmitting(true);
     try {
       const updatedData = {
@@ -172,30 +200,18 @@ export default function BookingEditPage() {
         passengerEmail: contactDetails.email,
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
-        pickupDate: pickupDate ? pickupDate.toISOString() : undefined
+        pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
+        extraCharges: extraCharges.map(c => ({ amount: Number(c.amount), label: c.description }))
       };
-      
       const bookingIdNumber = parseInt(bookingId, 10);
-      
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
-      
       if (result) {
-        setBooking({
-          ...booking,
-          ...result
-        });
-        toast({
-          title: "Booking Updated",
-          description: "Your booking has been updated successfully!",
-        });
+        setBooking({ ...booking, ...result });
+        toast({ title: "Booking Updated", description: "Your booking has been updated successfully!" });
       }
     } catch (error) {
       console.error("Error updating booking:", error);
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : 'Failed to update booking',
-        variant: "destructive",
-      });
+      toast({ title: "Update Failed", description: error instanceof Error ? error.message : 'Failed to update booking', variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -348,6 +364,48 @@ export default function BookingEditPage() {
                   onDateChange={setPickupDate}
                   minDate={new Date()}
                 />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Extra Charges</CardTitle>
+              <CardDescription>Add or edit extra charges for this booking</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {extraCharges.length === 0 && <div className="text-gray-500 mb-2">No extra charges added</div>}
+              {extraCharges.length > 0 && (
+                <ul className="mb-4">
+                  {extraCharges.map((charge, idx) => (
+                    <li key={idx} className="flex items-center mb-2">
+                      <span className="mr-2">₹{charge.amount}</span>
+                      <span className="mr-2">{charge.description}</span>
+                      <button type="button" className="ml-2 text-red-500 hover:text-red-700" onClick={() => handleRemoveExtraCharge(idx)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Amount (₹)"
+                  className="border rounded px-2 py-1 w-28"
+                  value={newExtraAmount}
+                  onChange={e => setNewExtraAmount(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Description"
+                  className="border rounded px-2 py-1 flex-1"
+                  value={newExtraDesc}
+                  onChange={e => setNewExtraDesc(e.target.value)}
+                />
+                <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded flex items-center" onClick={handleAddExtraCharge}>
+                  <Plus size={16} className="mr-1" /> Add
+                </button>
               </div>
             </CardContent>
           </Card>

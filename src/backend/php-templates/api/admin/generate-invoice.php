@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -173,6 +172,8 @@ try {
     
     // Get booking details from database (or use mock data in demo mode)
     $booking = null;
+    $extraChargesArr = [];
+    $totalExtraCharges = 0;
     
     if (!$demoMode && isset($conn)) {
         try {
@@ -187,6 +188,31 @@ try {
             
             $booking = $result->fetch_assoc();
             logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'amount' => $booking['total_amount']]);
+
+            // Parse extra_charges robustly from booking
+            $extraChargesArr = [];
+            $totalExtraCharges = 0;
+            if (!empty($booking['extra_charges'])) {
+                $extraChargesArr = json_decode($booking['extra_charges'], true);
+            } elseif (!empty($booking['extraCharges'])) {
+                $extraChargesArr = is_array($booking['extraCharges']) ? $booking['extraCharges'] : json_decode($booking['extraCharges'], true);
+            }
+            if (is_array($extraChargesArr)) {
+                foreach ($extraChargesArr as $charge) {
+                    if (isset($charge['amount'])) {
+                        $totalExtraCharges += floatval($charge['amount']);
+                    }
+                }
+            } else {
+                $extraChargesArr = [];
+            }
+            logInvoiceError('Loaded extra charges for invoice', ['booking_id' => $booking['id'], 'extraChargesArr' => $extraChargesArr]);
+
+            logInvoiceError('Raw extra_charges in booking', [
+                'booking_id' => $booking['id'],
+                'extra_charges' => isset($booking['extra_charges']) ? $booking['extra_charges'] : null,
+                'extraCharges' => isset($booking['extraCharges']) ? $booking['extraCharges'] : null
+            ]);
         } catch (Exception $e) {
             // If there's a database error, enable demo mode for testing
             $demoMode = true;
@@ -216,8 +242,17 @@ try {
             'driver_name' => 'Rajesh Kumar',
             'driver_phone' => '9876543210',
             'vehicle_number' => 'AP 31 AB 1234',
-            'status' => 'confirmed'
+            'status' => 'confirmed',
+            'extra_charges' => json_encode([
+                ['label' => 'Toll Fee', 'amount' => 100],
+                ['label' => 'Parking', 'amount' => 50]
+            ])
         ];
+        $extraChargesArr = [
+            ['label' => 'Toll Fee', 'amount' => 100],
+            ['label' => 'Parking', 'amount' => 50]
+        ];
+        $totalExtraCharges = 150;
     }
 
     // Current date for invoice generation
@@ -225,38 +260,39 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
+    // Add extra charges to base fare before tax
     $totalAmount = (float)$booking['total_amount'];
-    
+    $baseFare = $totalAmount;
+    if ($totalExtraCharges > 0) {
+        $baseFare += $totalExtraCharges;
+    }
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
-    
     // Convert string to number if needed
-    if (!is_numeric($totalAmount)) {
-        $totalAmount = floatval($totalAmount);
+    if (!is_numeric($baseFare)) {
+        $baseFare = floatval($baseFare);
     }
-    
     // Ensure we have a valid amount
-    if ($totalAmount <= 0) {
-        $totalAmount = 0;
+    if ($baseFare <= 0) {
+        $baseFare = 0;
     }
-    
     if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
-        // We need to calculate: baseAmount = totalAmount / (1 + gstRate)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        // We need to calculate: baseAmount = baseFare / (1 + gstRate)
+        $baseAmountBeforeTax = $baseFare / (1 + $gstRate);
         $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = $baseFare - $baseAmountBeforeTax;
         $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
     } else if (!$includeTax && $gstEnabled) {
         // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
+        $baseAmountBeforeTax = $baseFare;
+        $taxAmount = $baseFare * $gstRate;
         $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
-        $totalAmount = round($totalAmount, 2); // Round to ensure consistency
+        $baseFare = $baseAmountBeforeTax + $taxAmount;
+        $baseFare = round($baseFare, 2); // Round to ensure consistency
     } else {
         // No tax case
-        $baseAmountBeforeTax = $totalAmount;
+        $baseAmountBeforeTax = $baseFare;
         $taxAmount = 0;
     }
     
@@ -373,27 +409,17 @@ try {
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format((float)$booking['total_amount'], 2) . '</td>
                 </tr>';
-                
-    if ($gstEnabled) {
-        if ($isIGST) {
-            $invoiceHtml .= '
-                <tr>
-                    <td>IGST (12%)</td>
-                    <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>
-                </tr>';
-        } else {
-            $invoiceHtml .= '
-                <tr>
-                    <td>CGST (6%)</td>
-                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
-                </tr>
-                <tr>
-                    <td>SGST (6%)</td>
-                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
-                </tr>';
+    // Add extra charges as line items
+    if (!empty($extraChargesArr)) {
+        foreach ($extraChargesArr as $charge) {
+            if ((isset($charge['label']) && $charge['label'] !== '') && isset($charge['amount'])) {
+                $invoiceHtml .= '\n                <tr>\n                    <td>' . htmlspecialchars($charge['label']) . '</td>\n                    <td style="text-align: right;">₹ ' . number_format((float)$charge['amount'], 2) . '</td>\n                </tr>';
+            }
         }
+    } else {
+        $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
     }
     
     $invoiceHtml .= '
@@ -434,6 +460,8 @@ try {
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
             'includeTax' => $includeTax,
+            'extraCharges' => $extraChargesArr,
+            'totalExtraCharges' => $totalExtraCharges,
             'invoiceHtml' => $invoiceHtml
         ]
     ];

@@ -135,7 +135,7 @@ export const bookingAPI = {
         body: JSON.stringify(bookingData),
       });
       
-      console.log('Response status:', response.status, response.statusText);
+      console.log('Response status:', response.status);
       
       // Get the response text first to debug potential issues
       const responseText = await response.text();
@@ -248,7 +248,8 @@ export const bookingAPI = {
   },
   
   updateBooking: async (id: string | number, data: any) => {
-    const response = await apiClient.put(`/update-booking/${id}`, data);
+    // PATCH: Use POST to /api/admin/update-booking.php with bookingId in body
+    const response = await apiClient.post('/api/admin/update-booking.php', { ...data, bookingId: id });
     return response.data;
   },
   

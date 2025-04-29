@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -107,6 +106,16 @@ try {
                 error_log("Added billing_address column to bookings table");
             }
         }
+        // PATCH: Add extra_charges column if missing
+        $checkExtraCharges = $conn->query("SHOW COLUMNS FROM bookings LIKE 'extra_charges'");
+        if ($checkExtraCharges->num_rows === 0) {
+            $conn->query("ALTER TABLE bookings ADD COLUMN extra_charges TEXT NULL AFTER admin_notes");
+            if ($conn->error) {
+                logError("Failed to add extra_charges column", ['error' => $conn->error]);
+            } else {
+                error_log("Added extra_charges column to bookings table");
+            }
+        }
     } catch (Exception $e) {
         logError("Error checking/updating table schema", ['error' => $e->getMessage()]);
         // Continue execution - non-fatal error
@@ -182,6 +191,35 @@ try {
         'adminNotes' => 'admin_notes'
     ];
     
+    // Log the incoming request body for debugging
+    error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
+
+    // PATCH: Always update extra_charges in the database
+    $receivedExtraCharges = null;
+    if (array_key_exists('extraCharges', $data)) {
+        $receivedExtraCharges = $data['extraCharges'];
+    } elseif (array_key_exists('extra_charges', $data)) {
+        $receivedExtraCharges = $data['extra_charges'];
+    }
+    // Fallback: if not present in request, use value from DB or set to []
+    if ($receivedExtraCharges === null) {
+        $checkExtra = $conn->prepare("SELECT extra_charges FROM bookings WHERE id = ?");
+        $checkExtra->bind_param("i", $bookingId);
+        $checkExtra->execute();
+        $resultExtra = $checkExtra->get_result();
+        $rowExtra = $resultExtra->fetch_assoc();
+        if (!empty($rowExtra['extra_charges'])) {
+            $receivedExtraCharges = json_decode($rowExtra['extra_charges'], true);
+            if (!is_array($receivedExtraCharges)) $receivedExtraCharges = [];
+        } else {
+            $receivedExtraCharges = [];
+        }
+    }
+    error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
+    $updateFields[] = "extra_charges = ?";
+    $types .= "s";
+    $params[] = json_encode($receivedExtraCharges);
+    
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
         if (array_key_exists($requestField, $data)) {
@@ -217,11 +255,10 @@ try {
     // Prepare and execute the update query
     $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
     $updateStmt = $conn->prepare($sql);
-    
     if (!$updateStmt) {
+        error_log("[update-booking] Failed to prepare update statement: $sql | Error: " . $conn->error);
         throw new Exception("Failed to prepare update statement: " . $conn->error);
     }
-    
     // Use a helper function to properly reference values for bind_param
     function refValues($arr) {
         $refs = array();
@@ -230,28 +267,31 @@ try {
         }
         return $refs;
     }
-    
     // Dynamically bind parameters with proper referencing
     $bindParams = array($types);
     foreach ($params as $key => $value) {
         $bindParams[] = $params[$key];
     }
-    
+    error_log("[update-booking] Executing SQL: $sql | Types: $types | Params: " . json_encode($params));
     call_user_func_array(array($updateStmt, 'bind_param'), refValues($bindParams));
-    
     $success = $updateStmt->execute();
-    
     if (!$success) {
+        error_log("[update-booking] SQL execution failed: " . $updateStmt->error);
         throw new Exception("Failed to update booking: " . $updateStmt->error);
     }
-    
     // Fetch the updated booking
     $getStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $getStmt->bind_param("i", $bookingId);
     $getStmt->execute();
     $result = $getStmt->get_result();
     $updatedBooking = $result->fetch_assoc();
-    
+    error_log("[update-booking] After update, extra_charges in DB: " . $updatedBooking['extra_charges']);
+    // Always decode extra_charges for the response
+    $decodedExtraCharges = [];
+    if (!empty($updatedBooking['extra_charges'])) {
+        $decodedExtraCharges = json_decode($updatedBooking['extra_charges'], true);
+        if (!is_array($decodedExtraCharges)) $decodedExtraCharges = [];
+    }
     // Format response
     $formattedBooking = [
         'id' => (int)$updatedBooking['id'],
@@ -271,6 +311,7 @@ try {
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => isset($updatedBooking['admin_notes']) ? $updatedBooking['admin_notes'] : null,
+        'extraCharges' => $decodedExtraCharges,
         'updatedAt' => $updatedBooking['updated_at']
     ];
     

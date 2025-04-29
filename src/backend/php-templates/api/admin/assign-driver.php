@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -39,9 +38,9 @@ function logAssignDriverError($message, $data = []) {
     $logFile = __DIR__ . '/../../logs/assign_driver_errors.log';
     $dir = dirname($logFile);
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        @mkdir($dir, 0755, true);
     }
-    file_put_contents(
+    @file_put_contents(
         $logFile,
         date('Y-m-d H:i:s') . " - $message - " . json_encode($data) . "\n",
         FILE_APPEND
@@ -52,189 +51,166 @@ try {
     // Only allow POST or PUT requests
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
-        exit;
     }
 
     // Get JSON input data
     $jsonData = file_get_contents('php://input');
     $data = json_decode($jsonData, true);
     
-    error_log("Assign driver request data: " . print_r($data, true));
+    if ($debugMode) {
+        error_log("Assign driver request data: " . print_r($data, true));
+    }
 
     // Validate required fields
-    if (!isset($data['bookingId']) || !isset($data['driverName']) || !isset($data['driverPhone']) || !isset($data['vehicleNumber'])) {
+    if (!isset($data['bookingId']) || !isset($data['driverId'])) {
         logAssignDriverError('Missing required data', $data);
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required data (bookingId, driverName, driverPhone, vehicleNumber)'], 400);
-        exit;
+        sendJsonResponse(['status' => 'error', 'message' => 'Missing required data (bookingId, driverId)'], 400);
     }
 
-    // Connect to database with improved error handling
+    // Connect to database
+    $conn = getDbConnectionWithRetry();
+    
+    if (!$conn) {
+        logAssignDriverError('Database connection failed');
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+    }
+
+    // Start transaction
+    $conn->begin_transaction();
+
     try {
-        $conn = getDbConnectionWithRetry();
-        logAssignDriverError('Database connection successful', ['status' => 'connected']);
-    } catch (Exception $e) {
-        logAssignDriverError('Database connection error', ['error' => $e->getMessage()]);
+        // Get driver details first
+        $driverStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+        if (!$driverStmt) {
+            throw new Exception("Failed to prepare driver statement: " . $conn->error);
+        }
         
-        // Since we're having connection issues, return a successful mock response for testing purposes
+        $driverStmt->bind_param("i", $data['driverId']);
+        if (!$driverStmt->execute()) {
+            throw new Exception("Failed to fetch driver: " . $driverStmt->error);
+        }
+        
+        $driverResult = $driverStmt->get_result();
+        if ($driverResult->num_rows === 0) {
+            throw new Exception("Driver not found");
+        }
+        
+        $driver = $driverResult->fetch_assoc();
+        
+        // Check if driver is available
+        if ($driver['status'] !== 'available') {
+            throw new Exception("Driver is not available");
+        }
+        
+        // Get booking details
+        $bookingStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+        if (!$bookingStmt) {
+            throw new Exception("Failed to prepare booking statement: " . $conn->error);
+        }
+        
+        $bookingStmt->bind_param("i", $data['bookingId']);
+        if (!$bookingStmt->execute()) {
+            throw new Exception("Failed to fetch booking: " . $bookingStmt->error);
+        }
+        
+        $bookingResult = $bookingStmt->get_result();
+        if ($bookingResult->num_rows === 0) {
+            throw new Exception("Booking not found");
+        }
+        
+        $booking = $bookingResult->fetch_assoc();
+        
+        // Check if booking can be assigned
+        if (!in_array($booking['status'], ['pending', 'confirmed'])) {
+            throw new Exception("Booking cannot be assigned (current status: {$booking['status']})");
+        }
+        
+        // Update booking with driver information
+        $updateBookingStmt = $conn->prepare("
+            UPDATE bookings 
+            SET driver_id = ?,
+                driver_name = ?,
+                driver_phone = ?,
+                vehicle_number = ?,
+                status = 'assigned',
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        
+        if (!$updateBookingStmt) {
+            throw new Exception("Failed to prepare booking update statement: " . $conn->error);
+        }
+        
+        $updateBookingStmt->bind_param(
+            "isssi",
+            $driver['id'],
+            $driver['name'],
+            $driver['phone'],
+            $driver['vehicle'],
+            $data['bookingId']
+        );
+        
+        if (!$updateBookingStmt->execute()) {
+            throw new Exception("Failed to update booking: " . $updateBookingStmt->error);
+        }
+        
+        // Update driver status to busy
+        $updateDriverStmt = $conn->prepare("
+            UPDATE drivers 
+            SET status = 'busy',
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        
+        if (!$updateDriverStmt) {
+            throw new Exception("Failed to prepare driver update statement: " . $conn->error);
+        }
+        
+        $updateDriverStmt->bind_param("i", $driver['id']);
+        if (!$updateDriverStmt->execute()) {
+            throw new Exception("Failed to update driver status: " . $updateDriverStmt->error);
+        }
+        
+        // Commit transaction
+        $conn->commit();
+        
+        // Send success response
         sendJsonResponse([
             'status' => 'success',
-            'message' => 'Driver assigned successfully (MOCK - database connection issue)',
+            'message' => 'Driver assigned successfully',
             'data' => [
-                'id' => (int)$data['bookingId'],
-                'bookingNumber' => 'CB' . rand(10000000000, 99999999999),
+                'bookingId' => (int)$data['bookingId'],
+                'bookingNumber' => $booking['booking_number'],
+                'driverId' => (int)$driver['id'],
+                'driverName' => $driver['name'],
+                'driverPhone' => $driver['phone'],
+                'vehicleNumber' => $driver['vehicle'],
                 'status' => 'assigned',
-                'driverName' => $data['driverName'],
-                'driverPhone' => $data['driverPhone'],
-                'vehicleNumber' => $data['vehicleNumber'],
                 'updatedAt' => date('Y-m-d H:i:s')
-            ],
-            'testing_mode' => true
+            ]
         ]);
-        exit;
-    }
-
-    // Extract booking ID and driver info
-    $bookingId = $data['bookingId'];
-    $driverName = $data['driverName'];
-    $driverPhone = $data['driverPhone'];
-    $vehicleNumber = $data['vehicleNumber'];
-    
-    // Verify booking exists
-    $checkStmt = $conn->prepare("SELECT id, status, booking_number FROM bookings WHERE id = ?");
-    
-    if (!$checkStmt) {
-        logAssignDriverError('Failed to prepare booking check statement', ['error' => $conn->error]);
-        throw new Exception("Failed to prepare statement: " . $conn->error);
-    }
-    
-    $checkStmt->bind_param("i", $bookingId);
-    $checkResult = $checkStmt->execute();
-    
-    if (!$checkResult) {
-        logAssignDriverError('Failed to execute booking check statement', ['error' => $checkStmt->error]);
-        throw new Exception("Failed to execute statement: " . $checkStmt->error);
-    }
-    
-    $result = $checkStmt->get_result();
-    
-    // If booking not found, try to create it for testing purposes
-    if ($result->num_rows === 0) {
-        logAssignDriverError('Booking not found', ['booking_id' => $bookingId]);
         
-        // For testing only - try to create a booking if not exists
-        $testOnly = false;
+    } catch (Exception $e) {
+        // Rollback transaction on error
+        $conn->rollback();
         
-        if ($testOnly) {
-            // Generate a random booking number
-            $newBookingNumber = 'CB' . rand(10000000000, 99999999999);
-            
-            // Create a new booking (for testing only)
-            $createStmt = $conn->prepare("
-                INSERT INTO bookings (id, booking_number, pickup_location, drop_location, pickup_date, cab_type, 
-                                     trip_type, trip_mode, total_amount, status, passenger_name, passenger_phone)
-                VALUES (?, ?, 'Test Origin', 'Test Destination', NOW(), 'Sedan', 
-                       'one_way', 'local', 1500.00, 'pending', 'Test User', '9999999999')
-            ");
-            
-            if (!$createStmt) {
-                logAssignDriverError('Failed to create test booking statement', ['error' => $conn->error]);
-            } else {
-                $createStmt->bind_param("is", $bookingId, $newBookingNumber);
-                $createResult = $createStmt->execute();
-                
-                if ($createResult) {
-                    logAssignDriverError('Created test booking', [
-                        'booking_id' => $bookingId,
-                        'booking_number' => $newBookingNumber
-                    ]);
-                    
-                    // Fetch the created booking
-                    $checkStmt->execute();
-                    $result = $checkStmt->get_result();
-                } else {
-                    logAssignDriverError('Failed to create test booking', ['error' => $createStmt->error]);
-                }
-            }
-        }
+        logAssignDriverError('Failed to assign driver', [
+            'error' => $e->getMessage(),
+            'booking_id' => $data['bookingId'],
+            'driver_id' => $data['driverId']
+        ]);
         
-        // If still not found, return error
-        if ($result->num_rows === 0) {
-            // For testing purposes, return mock data if booking is not found
-            sendJsonResponse([
-                'status' => 'success',
-                'message' => 'Driver assigned successfully (MOCK - booking not found)',
-                'data' => [
-                    'id' => (int)$bookingId,
-                    'bookingNumber' => 'CB' . rand(10000000000, 99999999999),
-                    'status' => 'assigned',
-                    'driverName' => $driverName,
-                    'driverPhone' => $driverPhone,
-                    'vehicleNumber' => $vehicleNumber,
-                    'updatedAt' => date('Y-m-d H:i:s')
-                ],
-                'testing_mode' => true
-            ]);
-            exit;
-        }
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
     }
     
-    $booking = $result->fetch_assoc();
-    
-    // Update booking with driver information
-    $updateStmt = $conn->prepare("
-        UPDATE bookings 
-        SET driver_name = ?, driver_phone = ?, vehicle_number = ?, status = ?, updated_at = NOW()
-        WHERE id = ?
-    ");
-    
-    if (!$updateStmt) {
-        logAssignDriverError('Failed to prepare update statement', ['error' => $conn->error]);
-        throw new Exception("Failed to prepare update statement: " . $conn->error);
-    }
-    
-    // If booking was in pending or confirmed state, update to assigned
-    $newStatus = 'assigned';
-    if ($booking['status'] === 'cancelled') {
-        // Don't change status if booking was already cancelled
-        $newStatus = 'cancelled';
-    }
-    
-    $updateStmt->bind_param("ssssi", $driverName, $driverPhone, $vehicleNumber, $newStatus, $bookingId);
-    $updateResult = $updateStmt->execute();
-    
-    if (!$updateResult) {
-        logAssignDriverError('Failed to update booking', ['error' => $updateStmt->error]);
-        throw new Exception("Failed to update booking: " . $updateStmt->error);
-    }
-    
-    logAssignDriverError('Successfully updated booking with driver details', [
-        'booking_id' => $bookingId,
-        'driver_name' => $driverName
-    ]);
-    
-    // Success! Return the updated booking
-    sendJsonResponse([
-        'status' => 'success', 
-        'message' => 'Driver assigned successfully',
-        'data' => [
-            'id' => (int)$booking['id'],
-            'bookingNumber' => $booking['booking_number'],
-            'status' => $newStatus,
-            'driverName' => $driverName,
-            'driverPhone' => $driverPhone,
-            'vehicleNumber' => $vehicleNumber,
-            'updatedAt' => date('Y-m-d H:i:s')
-        ]
-    ]);
-
 } catch (Exception $e) {
-    logAssignDriverError("Unhandled error", ['error' => $e->getMessage()]);
-    
-    // Return mock data for unhandled exceptions
+    logAssignDriverError('Critical error', ['error' => $e->getMessage()]);
     sendJsonResponse([
         'status' => 'error',
-        'message' => 'Failed to assign driver: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getMessage() : null
+        'message' => 'Internal server error: ' . $e->getMessage()
     ], 500);
 }
 

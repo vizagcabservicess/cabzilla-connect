@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ import { getApiUrl } from '@/config/api';
 
 interface DriverAssignmentProps {
   booking: Booking;
-  onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string; bookingId: string }) => Promise<void>;
   onClose?: () => void;
   onCancel?: () => void;
   isSubmitting: boolean;
@@ -64,14 +63,14 @@ export function DriverAssignment({
         
         console.log('Driver API response:', response.data);
         
-        if (response.data && response.data.status === 'success' && response.data.drivers) {
-          const drivers: Driver[] = response.data.drivers.map((driver: any) => ({
+        if (response.data && response.data.status === 'success' && Array.isArray(response.data.data)) {
+          const drivers: Driver[] = response.data.data.map((driver: any) => ({
             id: driver.id,
             name: driver.name,
             phone: driver.phone,
-            email: driver.email || 'unknown@example.com', // Ensure email is present for type safety
-            vehicleNumber: driver.vehicle_number || driver.vehicle || 'Unknown', // Map vehicle field to vehicleNumber for UI
-            vehicle: driver.vehicle_number || driver.vehicle || 'Unknown'
+            email: driver.email || 'unknown@example.com',
+            vehicleNumber: driver.vehicleNumber || driver.vehicle || driver.vehicle_number || 'Unknown',
+            vehicle: driver.vehicleNumber || driver.vehicle || driver.vehicle_number || 'Unknown'
           }));
           setAvailableDrivers(drivers);
         } else {
@@ -79,32 +78,11 @@ export function DriverAssignment({
         }
       } catch (error) {
         console.error('Error fetching drivers:', error);
-        
-        // Fallback to mock data if API fails
-        const mockDrivers: Driver[] = [
-          { id: 1, name: "Rajesh Kumar", phone: "9876543210", email: "rajesh@example.com", vehicleNumber: "AP 31 AB 1234", vehicle: "AP 31 AB 1234" },
-          { id: 2, name: "Suresh Singh", phone: "9876543211", email: "suresh@example.com", vehicleNumber: "AP 31 CD 5678", vehicle: "AP 31 CD 5678" },
-          { id: 3, name: "Mahesh Reddy", phone: "9876543212", email: "mahesh@example.com", vehicleNumber: "AP 31 EF 9012", vehicle: "AP 31 EF 9012" },
-          { id: 4, name: "Venkatesh S", phone: "9876543213", email: "venkatesh@example.com", vehicleNumber: "AP 34 XX 3456", vehicle: "AP 34 XX 3456" },
-          { id: 5, name: "Ramesh Babu", phone: "8765432108", email: "ramesh@example.com", vehicleNumber: "AP 35 XX 7890", vehicle: "AP 35 XX 7890" }
-        ];
-        
-        if (searchQuery) {
-          const lowerQuery = searchQuery.toLowerCase();
-          const filteredDrivers = mockDrivers.filter(driver => 
-            driver.name.toLowerCase().includes(lowerQuery) || 
-            driver.phone.includes(searchQuery) ||
-            (driver.vehicleNumber && driver.vehicleNumber.toLowerCase().includes(lowerQuery))
-          );
-          setAvailableDrivers(filteredDrivers);
-        } else {
-          setAvailableDrivers(mockDrivers);
-        }
-        
+        setAvailableDrivers([]);
         toast({
-          variant: "default",
-          title: "Using local driver data",
-          description: "Could not connect to server. Using cached driver data."
+          variant: "destructive",
+          title: "Failed to load drivers",
+          description: "Could not connect to server."
         });
       } finally {
         setLoadingDrivers(false);
@@ -163,13 +141,14 @@ export function DriverAssignment({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validate()) {
       return;
     }
-    
     try {
-      await onAssign(driverData);
+      await onAssign({
+        ...driverData,
+        bookingId: booking.id
+      });
     } catch (error) {
       console.error('Error assigning driver:', error);
       toast({

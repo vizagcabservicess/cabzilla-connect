@@ -1,5 +1,8 @@
-
 <?php
+// Suppress warnings and errors in output
+error_reporting(E_ERROR | E_PARSE);
+ini_set('display_errors', 0);
+
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
@@ -11,7 +14,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Clear any potential output buffer to avoid content contamination
-if (ob_get_level()) ob_end_clean();
+while (ob_get_level()) ob_end_clean();
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -154,12 +157,12 @@ try {
                     'id' => (int)$row['id'],
                     'name' => $row['name'],
                     'phone' => $row['phone'],
-                    'licenseNumber' => $row['license_number'],
-                    'vehicleType' => $row['vehicle_type'],
-                    'vehicleNumber' => $row['vehicle_number'],
+                    'licenseNumber' => isset($row['license_no']) ? $row['license_no'] : (isset($row['license_number']) ? $row['license_number'] : null),
+                    'vehicleType' => isset($row['vehicle_type']) ? $row['vehicle_type'] : null,
+                    'vehicleNumber' => isset($row['vehicle_number']) ? $row['vehicle_number'] : null,
                     'status' => $row['status'],
-                    'address' => $row['address'] ?? '',
-                    'dateJoined' => $row['date_joined'] ?? ''
+                    'address' => isset($row['address']) ? $row['address'] : '',
+                    'dateJoined' => isset($row['date_joined']) ? $row['date_joined'] : ''
                 ];
             }
             
