@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { Loader2, FileText, Download, RefreshCw, AlertCircle, FileIcon } from 'lucide-react';
+import { Loader2, FileText, Download, RefreshCw, AlertCircle, FileIcon, Printer } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from "@/components/ui/switch";
