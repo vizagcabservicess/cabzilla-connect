@@ -4,6 +4,10 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 require_once __DIR__ . '/utils/response.php';
 
+// Import DomPDF classes at the top level
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 // CRITICAL: Create logs directory if it doesn't exist
 $logsDir = __DIR__ . '/../logs';
 if (!is_dir($logsDir)) {
@@ -418,31 +422,21 @@ try {
         try {
             debugLog("Starting PDF generation");
             
-            // Clear output buffers
-            while (ob_get_level()) {
-                debugLog("Clearing output buffer level: " . ob_get_level());
-                ob_end_clean();
-            }
-            
             // Load DomPDF
             debugLog("Loading DomPDF");
             require_once $autoloaderPath;
             
             // Configure DomPDF options
             debugLog("Configuring DomPDF options");
-            $options = new Options();
+            $options = new \Dompdf\Options();  // Use full namespace
             $options->set('isRemoteEnabled', true);
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isPhpEnabled', false);
             $options->set('defaultFont', 'DejaVu Sans');
-            debugLog("DomPDF options set", [
-                'isRemoteEnabled' => true,
-                'isHtml5ParserEnabled' => true,
-                'defaultFont' => 'DejaVu Sans'
-            ]);
+            debugLog("DomPDF options set");
 
             // Create DomPDF instance
-            $dompdf = new Dompdf($options);
+            $dompdf = new \Dompdf\Dompdf($options);  // Use full namespace
             $dompdf->setPaper('A4', 'portrait');
             debugLog("DomPDF instance created");
             
