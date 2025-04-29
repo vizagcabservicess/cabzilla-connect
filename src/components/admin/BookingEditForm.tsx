@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,10 +155,10 @@ export function BookingEditForm({
       return;
     }
     
-    // IMPROVED: Ensure extra charges are properly formatted with consistent field names
+    // Ensure extra charges are properly formatted
     const standardizedExtraCharges = extraCharges.map(charge => ({
-      amount: Number(charge.amount), // Ensure it's a number
-      description: charge.description // Use description as the standard field name
+      amount: charge.amount,
+      description: charge.description
     }));
     
     const updatedData = {
