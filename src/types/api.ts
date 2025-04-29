@@ -1,4 +1,3 @@
-
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -27,6 +26,12 @@ export interface Driver {
   total_rides?: number;
   earnings?: number;
   rating?: number;
+}
+
+export interface ExtraCharge {
+  amount: number;
+  description: string;
+  label?: string; // For backwards compatibility
 }
 
 export interface Booking {
@@ -60,10 +65,8 @@ export interface Booking {
   paymentStatus?: string;
   adminNotes?: string;
   billingAddress?: string;
-  extraCharges?: {
-    amount: number;
-    description: string;
-  }[];
+  extraCharges?: ExtraCharge[];
+  extra_charges?: ExtraCharge[]; // For backwards compatibility
   gstEnabled?: boolean;
   gstDetails?: {
     gstNumber: string;
@@ -224,7 +227,8 @@ export interface BookingRequest {
   passengerEmail?: string;
   hourlyPackage?: string | null;
   tourId?: string;
-  userId?: number; // Added this property to fix the TypeScript error
+  userId?: number;
+  extraCharges?: ExtraCharge[]; // Add support for extra charges
 }
 
 export interface TourFare {
@@ -308,4 +312,5 @@ export interface BookingUpdateRequest {
   dropLocation?: string;
   pickupDate?: string;
   status?: BookingStatus;
+  extraCharges?: ExtraCharge[]; // Add support for extra charges
 }
