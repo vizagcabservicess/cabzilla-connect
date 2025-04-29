@@ -61,6 +61,24 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
     ]);
 }, E_ALL);
 
+// Enhanced debug logging function
+function debugLog($message, $data = null) {
+    global $debugMode;
+    $log = date('Y-m-d H:i:s') . " - " . $message;
+    if ($data !== null) {
+        $log .= " - Data: " . (is_array($data) ? json_encode($data) : $data);
+    }
+    
+    // Always log to file
+    error_log($log);
+    logInvoiceError($log);
+    
+    // Output to browser if in debug mode
+    if ($debugMode) {
+        echo $log . "\n";
+    }
+}
+
 try {
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -398,81 +416,76 @@ try {
     // For PDF output, check if we can use DomPDF
     if ($vendorExists && class_exists('Dompdf\Dompdf')) {
         try {
-            // Try to include the autoloader
-            if (!class_exists('Dompdf\Dompdf')) {
-                require_once $autoloaderPath;
+            debugLog("Starting PDF generation");
+            
+            // Clear output buffers
+            while (ob_get_level()) {
+                debugLog("Clearing output buffer level: " . ob_get_level());
+                ob_end_clean();
             }
             
-            // Import DomPDF classes
-            use Dompdf\Dompdf;
-            use Dompdf\Options;
-            
-            logInvoiceError("DomPDF class found, generating PDF");
+            // Load DomPDF
+            debugLog("Loading DomPDF");
+            require_once $autoloaderPath;
             
             // Configure DomPDF options
+            debugLog("Configuring DomPDF options");
             $options = new Options();
             $options->set('isRemoteEnabled', true);
             $options->set('isHtml5ParserEnabled', true);
-            $options->set('isPhpEnabled', false); // Security: disable PHP in HTML
+            $options->set('isPhpEnabled', false);
             $options->set('defaultFont', 'DejaVu Sans');
+            debugLog("DomPDF options set", [
+                'isRemoteEnabled' => true,
+                'isHtml5ParserEnabled' => true,
+                'defaultFont' => 'DejaVu Sans'
+            ]);
 
             // Create DomPDF instance
             $dompdf = new Dompdf($options);
             $dompdf->setPaper('A4', 'portrait');
+            debugLog("DomPDF instance created");
             
             // Load HTML content
+            debugLog("Loading HTML content", ['length' => strlen($content)]);
             $dompdf->loadHtml($content);
             
-            // Render the PDF
+            // Render PDF
+            debugLog("Starting PDF render");
             $dompdf->render();
+            debugLog("PDF render complete");
             
-            // CRITICAL: Clear any previous headers and output buffers
-            while (ob_get_level()) ob_end_clean();
+            // Get PDF content
+            $output = $dompdf->output();
+            $pdfSize = strlen($output);
+            debugLog("PDF generated", ['size' => $pdfSize]);
             
-            // Check if headers already sent
-            if (headers_sent($file, $line)) {
-                logInvoiceError("WARNING: Headers already sent before PDF output", [
-                    'file' => $file,
-                    'line' => $line
-                ]);
+            if ($pdfSize === 0) {
+                throw new Exception("Generated PDF is empty");
             }
-
-            // Set appropriate headers
+            
+            // Send headers
+            debugLog("Sending headers");
             header('Content-Type: application/pdf');
-            header('Content-Disposition: ' . ($directDownload ? 'attachment' : 'inline') . '; filename="Invoice_'.$invoiceNumber.'.pdf"');
-            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Content-Length: ' . $pdfSize);
+            header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
             header('Pragma: no-cache');
             header('Expires: 0');
-
-            // Output the generated PDF
-            echo $dompdf->output();
             
-            logInvoiceError("PDF generated and output successfully");
+            // Output PDF
+            debugLog("Outputting PDF");
+            echo $output;
+            debugLog("PDF generation complete");
             
         } catch (Exception $e) {
-            logInvoiceError("PDF generation error", [
-                'error' => $e->getMessage(), 
+            debugLog("Error in PDF generation", [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
-            // If PDF generation fails, fall back to HTML output with warning
-            header('Content-Type: text/html; charset=utf-8');
-            echo '<!DOCTYPE html>
-            <html>
-            <head>
-                <title>Invoice (HTML Fallback)</title>
-                <style>
-                    .error-banner { background-color: #ffdddd; border: 1px solid #ff0000; padding: 10px; margin-bottom: 20px; }
-                </style>
-            </head>
-            <body>
-                <div class="error-banner">
-                    <p><strong>PDF Generation Failed:</strong> Falling back to HTML view. Error: ' . htmlspecialchars($e->getMessage()) . '</p>
-                    <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
-                </div>
-                ' . $content . '
-            </body>
-            </html>';
+            throw $e;
         }
     } else {
         // DomPDF not available, return HTML content with warning
