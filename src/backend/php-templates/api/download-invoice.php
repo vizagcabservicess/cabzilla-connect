@@ -108,7 +108,7 @@ try {
     // CRITICAL: Improved autoloader detection with absolute paths
     $autoloaderPaths = [
         // Primary location - public_html/vendor
-        $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
+        __DIR__ . '/../../../../public_html/vendor/autoload.php',
         
         // Backup locations
         $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
@@ -123,14 +123,17 @@ try {
     $autoloaderSearchResults = [];
 
     foreach ($autoloaderPaths as $path) {
+        $realPath = realpath($path);
         $autoloaderSearchResults[$path] = [
             'exists' => file_exists($path),
-            'readable' => is_readable($path)
+            'readable' => is_readable($path),
+            'realpath' => $realPath
         ];
         
         if (file_exists($path) && is_readable($path)) {
             $autoloaderPath = $path;
             $vendorExists = true;
+            logInvoiceError("Found autoloader at: " . $path . " (realpath: " . $realPath . ")");
             break;
         }
     }
@@ -141,7 +144,14 @@ try {
     // Try to include the autoloader
     if ($vendorExists) {
         require_once $autoloaderPath;
-        logInvoiceError("Found composer autoloader at: " . $autoloaderPath);
+        logInvoiceError("Successfully included autoloader from: " . $autoloaderPath);
+        
+        // Verify DomPDF class exists
+        if (class_exists('Dompdf\Dompdf')) {
+            logInvoiceError("DomPDF class found successfully");
+        } else {
+            logInvoiceError("DomPDF class not found after including autoloader");
+        }
     } else {
         logInvoiceError("CRITICAL ERROR: No composer autoloader found!");
     }

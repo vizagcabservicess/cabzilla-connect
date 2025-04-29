@@ -1,4 +1,3 @@
-
 <?php
 // Simple test script to verify PDF generation works
 
@@ -54,44 +53,47 @@ if (!isset($_GET['download'])) {
     echo "<p>Parent directory: " . htmlspecialchars(dirname(dirname(__FILE__))) . "</p>";
 }
 
-// Check for autoloader with absolute paths - include the path the user confirmed exists
+// CRITICAL: Improved autoloader detection with absolute paths
 $autoloaderPaths = [
-    // Add the confirmed path first
-    $_SERVER['DOCUMENT_ROOT'] . '/public_html/vendor/autoload.php',
+    // Primary location - public_html/vendor
+    __DIR__ . '/../../../../public_html/vendor/autoload.php',
     
-    // Try common variations of the path
+    // Backup locations
     $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php',
     dirname($_SERVER['DOCUMENT_ROOT']) . '/vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
     __DIR__ . '/../vendor/autoload.php',
-    dirname(__DIR__) . '/vendor/autoload.php',
-    dirname(dirname(__DIR__)) . '/vendor/autoload.php',
-    dirname(dirname(dirname(__DIR__))) . '/vendor/autoload.php'
+    dirname(dirname(__DIR__)) . '/vendor/autoload.php'
 ];
 
-$autoloaderPath = null;
 $vendorExists = false;
-$autloaderCheckResults = [];
+$autoloaderPath = null;
+$autoloaderSearchResults = [];
 
 foreach ($autoloaderPaths as $path) {
-    $exists = file_exists($path);
-    $autloaderCheckResults[] = [
-        'path' => $path,
-        'exists' => $exists,
-        'readable' => $exists ? is_readable($path) : false
+    $realPath = realpath($path);
+    $autoloaderSearchResults[$path] = [
+        'exists' => file_exists($path),
+        'readable' => is_readable($path),
+        'realpath' => $realPath
     ];
     
-    if ($exists) {
+    if (file_exists($path) && is_readable($path)) {
         $autoloaderPath = $path;
         $vendorExists = true;
+        error_log("Found autoloader at: " . $path . " (realpath: " . $realPath . ")");
         break;
     }
 }
 
+// Log search results
+error_log("Autoloader search results: " . json_encode($autoloaderSearchResults));
+
 if (!isset($_GET['download'])) {
     echo "<h2>Autoloader Check</h2>";
     echo "<ul>";
-    foreach ($autloaderCheckResults as $result) {
-        echo "<li>" . htmlspecialchars($result['path']) . " - " . 
+    foreach ($autoloaderSearchResults as $path => $result) {
+        echo "<li>" . htmlspecialchars($path) . " - " . 
              ($result['exists'] ? 
                 "<span style='color:green'>Exists" . ($result['readable'] ? ", Readable" : ", NOT READABLE") . "</span>" : 
                 "<span style='color:red'>Not found</span>") . "</li>";
