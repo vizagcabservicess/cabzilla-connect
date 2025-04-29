@@ -124,7 +124,6 @@ try {
                 driver_phone VARCHAR(20),
                 vehicle_number VARCHAR(20),
                 admin_notes TEXT,
-                extra_charges TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY (booking_number)
@@ -133,14 +132,6 @@ try {
         $conn->query($createTableSql);
         sendJsonResponse(['status' => 'error', 'message' => 'Booking not found, created bookings table'], 404);
         exit;
-    }
-
-    // Check if extra_charges column exists, add it if not
-    $checkExtraCharges = $conn->query("SHOW COLUMNS FROM bookings LIKE 'extra_charges'");
-    if ($checkExtraCharges->num_rows === 0) {
-        $addExtraChargesColumn = "ALTER TABLE bookings ADD COLUMN extra_charges TEXT AFTER admin_notes";
-        $conn->query($addExtraChargesColumn);
-        error_log("Added extra_charges column to bookings table");
     }
 
     // First check if the booking exists
@@ -183,32 +174,6 @@ try {
     $oldStatus = $booking['status'];
     $newStatus = isset($data['status']) ? $data['status'] : $oldStatus;
     $statusUpdated = ($oldStatus != $newStatus);
-
-    // Process extra charges with standardized format
-    if (isset($data['extraCharges']) || isset($data['extra_charges'])) {
-        $extraCharges = isset($data['extraCharges']) ? $data['extraCharges'] : $data['extra_charges'];
-        
-        // Standardize the format to ensure consistency
-        $standardizedCharges = [];
-        if (is_array($extraCharges)) {
-            foreach ($extraCharges as $charge) {
-                // Ensure both 'description' and 'label' fields exist
-                $description = isset($charge['description']) ? $charge['description'] : 
-                              (isset($charge['label']) ? $charge['label'] : '');
-                              
-                $standardizedCharge = [
-                    'amount' => (float)$charge['amount'],
-                    'description' => $description,
-                    'label' => $description // For backwards compatibility
-                ];
-                $standardizedCharges[] = $standardizedCharge;
-            }
-        }
-        
-        $updateFields[] = "extra_charges = ?";
-        $updateValues[] = json_encode($standardizedCharges);
-        $updateTypes .= "s";
-    }
     
     // Map API field names to database field names
     foreach ($allowedFields as $dbField => $apiField) {
@@ -274,15 +239,6 @@ try {
     $result = $stmt->get_result();
     $updatedBooking = $result->fetch_assoc();
     
-    // Process extra charges for response
-    $extraChargesData = [];
-    if (!empty($updatedBooking['extra_charges'])) {
-        $extraChargesData = json_decode($updatedBooking['extra_charges'], true);
-        if (!is_array($extraChargesData)) {
-            $extraChargesData = []; // Ensure it's always an array
-        }
-    }
-    
     // Format the response
     $booking = [
         'id' => (int)$updatedBooking['id'],
@@ -305,7 +261,6 @@ try {
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => $updatedBooking['admin_notes'],
-        'extraCharges' => $extraChargesData,
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']
     ];

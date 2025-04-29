@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -99,20 +98,20 @@ export default function BookingEditPage() {
           }
         }
 
-        // Initialize extraCharges from booking with consistent format
-        const processedCharges = [];
+        // Initialize extraCharges from booking
         if (response.extraCharges && Array.isArray(response.extraCharges)) {
-          processedCharges.push(...response.extraCharges.map((c: any) => ({
+          setExtraCharges(response.extraCharges.map((c: any) => ({
             amount: String(c.amount),
             description: c.label || c.description || ''
           })));
         } else if (response.extra_charges && Array.isArray(response.extra_charges)) {
-          processedCharges.push(...response.extra_charges.map((c: any) => ({
+          setExtraCharges(response.extra_charges.map((c: any) => ({
             amount: String(c.amount),
             description: c.label || c.description || ''
           })));
+        } else {
+          setExtraCharges([]);
         }
-        setExtraCharges(processedCharges);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
         setError(errorMessage);
@@ -195,13 +194,6 @@ export default function BookingEditPage() {
     if (!booking || !bookingId) return;
     setIsSubmitting(true);
     try {
-      // Standardize extra charges format for consistency
-      const standardizedExtraCharges = extraCharges.map(c => ({
-        amount: Number(c.amount),
-        description: c.description, // primary field name
-        label: c.description // add label for backward compatibility
-      }));
-
       const updatedData = {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
@@ -209,37 +201,17 @@ export default function BookingEditPage() {
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
-        extraCharges: standardizedExtraCharges
+        extraCharges: extraCharges.map(c => ({ amount: Number(c.amount), label: c.description }))
       };
-
-      console.log("Submitting updated data:", updatedData);
-      
       const bookingIdNumber = parseInt(bookingId, 10);
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
-      
       if (result) {
-        // Update local state with the returned data to ensure consistency
-        const updatedBooking = {
-          ...booking,
-          ...result,
-          // Ensure the extraCharges are properly updated in the local state
-          extraCharges: result.extraCharges || standardizedExtraCharges
-        };
-        
-        setBooking(updatedBooking);
-        
-        toast({ 
-          title: "Booking Updated", 
-          description: "Your booking has been updated successfully!" 
-        });
+        setBooking({ ...booking, ...result });
+        toast({ title: "Booking Updated", description: "Your booking has been updated successfully!" });
       }
     } catch (error) {
       console.error("Error updating booking:", error);
-      toast({ 
-        title: "Update Failed", 
-        description: error instanceof Error ? error.message : 'Failed to update booking', 
-        variant: "destructive" 
-      });
+      toast({ title: "Update Failed", description: error instanceof Error ? error.message : 'Failed to update booking', variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -395,7 +367,7 @@ export default function BookingEditPage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="mb-6 mt-6">
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle>Extra Charges</CardTitle>
               <CardDescription>Add or edit extra charges for this booking</CardDescription>
@@ -403,52 +375,37 @@ export default function BookingEditPage() {
             <CardContent>
               {extraCharges.length === 0 && <div className="text-gray-500 mb-2">No extra charges added</div>}
               {extraCharges.length > 0 && (
-                <ul className="mb-4 space-y-2">
+                <ul className="mb-4">
                   {extraCharges.map((charge, idx) => (
-                    <li key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
-                      <div>
-                        <span className="font-medium mr-2">₹{charge.amount}</span>
-                        <span className="text-gray-600">{charge.description}</span>
-                      </div>
-                      <button type="button" className="text-red-500 hover:text-red-700" onClick={() => handleRemoveExtraCharge(idx)}>
+                    <li key={idx} className="flex items-center mb-2">
+                      <span className="mr-2">₹{charge.amount}</span>
+                      <span className="mr-2">{charge.description}</span>
+                      <button type="button" className="ml-2 text-red-500 hover:text-red-700" onClick={() => handleRemoveExtraCharge(idx)}>
                         <Trash2 size={16} />
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              <div className="grid grid-cols-3 gap-2 items-end mt-4">
-                <div className="col-span-1">
-                  <label className="text-sm font-medium mb-1 block">Amount (₹)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Amount"
-                    className="border rounded px-2 py-1.5 w-full"
-                    value={newExtraAmount}
-                    onChange={e => setNewExtraAmount(e.target.value)}
-                  />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-sm font-medium mb-1 block">Description</label>
-                  <input
-                    type="text"
-                    placeholder="Description"
-                    className="border rounded px-2 py-1.5 w-full"
-                    value={newExtraDesc}
-                    onChange={e => setNewExtraDesc(e.target.value)}
-                  />
-                </div>
-                <div className="col-span-1">
-                  <Button
-                    type="button"
-                    onClick={handleAddExtraCharge}
-                    disabled={!newExtraDesc || Number(newExtraAmount) <= 0 || isSubmitting}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" /> Add
-                  </Button>
-                </div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Amount (₹)"
+                  className="border rounded px-2 py-1 w-28"
+                  value={newExtraAmount}
+                  onChange={e => setNewExtraAmount(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Description"
+                  className="border rounded px-2 py-1 flex-1"
+                  value={newExtraDesc}
+                  onChange={e => setNewExtraDesc(e.target.value)}
+                />
+                <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded flex items-center" onClick={handleAddExtraCharge}>
+                  <Plus size={16} className="mr-1" /> Add
+                </button>
               </div>
             </CardContent>
           </Card>

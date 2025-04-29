@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, Plus, X } from "lucide-react";
-import { Booking, BookingStatus, ExtraCharge } from '@/types/api';
+import { Booking, BookingStatus } from '@/types/api';
 import { isBookingEditable } from '@/utils/bookingUtils';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
@@ -37,26 +37,9 @@ export function BookingEditForm({
     billingAddress: booking.billingAddress || '',
   });
 
-  // Initialize extraCharges with standardized format from booking
-  const initializeExtraCharges = () => {
-    const charges: ExtraCharge[] = [];
-    
-    if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
-      return booking.extraCharges.map(charge => ({
-        amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)) || 0,
-        description: charge.description || charge.label || ''
-      }));
-    } else if (booking.extra_charges && Array.isArray(booking.extra_charges)) {
-      return booking.extra_charges.map(charge => ({
-        amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)) || 0,
-        description: charge.description || charge.label || ''
-      }));
-    }
-    
-    return charges;
-  };
-
-  const [extraCharges, setExtraCharges] = useState<ExtraCharge[]>(initializeExtraCharges());
+  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>(
+    booking.extraCharges || []
+  );
 
   const [newCharge, setNewCharge] = useState<{ amount: number; description: string }>({
     amount: 0,
@@ -158,13 +141,6 @@ export function BookingEditForm({
       return;
     }
     
-    // Standardize extra charges format for API
-    const standardizedExtraCharges = extraCharges.map(charge => ({
-      amount: charge.amount,
-      description: charge.description,
-      label: charge.description // Add label for backward compatibility
-    }));
-    
     const updatedData = {
       passengerName: formData.passengerName,
       passengerPhone: formData.passengerPhone,
@@ -173,7 +149,7 @@ export function BookingEditForm({
       dropLocation: formData.dropLocation,
       pickupDate: formData.pickupDate.toISOString(),
       billingAddress: formData.billingAddress,
-      extraCharges: standardizedExtraCharges,
+      extraCharges: extraCharges.length > 0 ? extraCharges : undefined,
       totalAmount: calculateTotal(),
     };
     

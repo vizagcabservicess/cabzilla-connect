@@ -3,13 +3,16 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Booking } from '@/types/api';
-import { Loader2, FileText, Download, RefreshCw, AlertCircle, FileIcon, Printer } from 'lucide-react';
+import { Loader2, FileText, Download, RefreshCw, AlertCircle, FileIcon } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface BookingInvoiceProps {
   booking: Booking;
@@ -106,274 +109,548 @@ export function BookingInvoice({
       
       console.log('Invoice generation result:', result);
       
-      if (result.html) {
-        setHtmlContent(result.html);
-        setActiveTab("html");
-      }
-      
-      if (result.pdf) {
-        setPdfGenerationAvailable(true);
+      if (result && result.data) {
+        setInvoiceData(result.data);
+        toast({
+          title: "Invoice Generated",
+          description: "Invoice was generated successfully"
+        });
+        
+        // Load HTML content immediately
+        fetchHtmlInvoice();
+        
+        // Test if PDF generation is available
+        testPdfGeneration();
       } else {
-        setPdfGenerationAvailable(false);
+        setInvoiceData(null);
+        throw new Error('No invoice data returned from the server');
       }
-      
-      setInvoiceData(result);
-      
-      toast({
-        title: "Invoice Generated",
-        description: "The invoice has been generated successfully",
-      });
-      
     } catch (error) {
-      console.error('Error generating invoice:', error);
-      
-      setError(
-        error instanceof Error ? 
-        error.message : 
-        "Failed to generate invoice. Please try again later."
-      );
-      
+      console.error("Invoice generation error:", error);
+      setError(error instanceof Error ? error.message : "Failed to generate invoice");
       toast({
         variant: "destructive",
         title: "Invoice Generation Failed",
-        description: 
-          error instanceof Error ? 
-          error.message : 
-          "Failed to generate invoice. Please try again."
+        description: error instanceof Error ? error.message : "Failed to generate invoice"
       });
       
+      // Still try to fetch HTML, as it might work even if the main API fails
+      fetchHtmlInvoice();
     } finally {
       setLoading(false);
       setRegenerating(false);
     }
   };
 
-  const handleDownload = () => {
-    if (pdfUrl) {
-      console.log('Downloading PDF from URL:', pdfUrl);
+  // Test if PDF generation is working
+  const testPdfGeneration = async () => {
+    try {
+      const testUrl = getApiUrl(`/api/test-pdf.php?t=${new Date().getTime()}`);
+      const response = await fetch(testUrl, { method: 'GET' });
       
-      const link = document.createElement('a');
-      link.href = pdfUrl;
-      link.setAttribute('download', `Invoice_${booking.bookingNumber}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (response.ok) {
+        // If we can fetch the test page, we'll assume PDF might work
+        setPdfGenerationAvailable(true);
+      } else {
+        setPdfGenerationAvailable(false);
+      }
+    } catch (error) {
+      console.error("PDF test error:", error);
+      setPdfGenerationAvailable(false);
+    }
+  };
+
+  // Fetch HTML version of invoice
+  const fetchHtmlInvoice = async () => {
+    try {
+      const htmlUrl = createPdfUrl(false, false, true);
+      const response = await fetch(htmlUrl);
       
-      setDownloadCount(prevCount => prevCount + 1);
-    } else {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch HTML: ${response.status} ${response.statusText}`);
+      }
+      
+      const html = await response.text();
+      setHtmlContent(html);
+      setActiveTab("html"); // Auto-switch to HTML tab as it's more reliable
+    } catch (error) {
+      console.error("HTML fetch error:", error);
+      // Don't show toast for this - it's a background operation
+      setError("Could not load HTML invoice. Please try regenerating the invoice.");
+    }
+  };
+
+  // Create a dynamic and unique URL for PDF download
+  const createPdfUrl = (directDownload = false, useAdminEndpoint = false, htmlFormat = false) => {
+    const timestamp = new Date().getTime();
+    const randomPart = Math.random().toString(36).substring(2, 8);
+    
+    const endpoint = useAdminEndpoint 
+      ? `/api/admin/download-invoice.php` 
+      : `/api/download-invoice.php`;
+      
+    const params = new URLSearchParams({
+      id: booking.id.toString(),
+      gstEnabled: gstEnabled ? '1' : '0',
+      isIGST: isIGST ? '1' : '0',
+      includeTax: includeTax ? '1' : '0',
+      format: htmlFormat ? 'html' : 'pdf',
+      direct_download: directDownload ? '1' : '0',
+      v: downloadCount.toString(),
+      t: timestamp.toString(),
+      r: randomPart
+    });
+    
+    if (customInvoiceNumber.trim()) {
+      params.append('invoiceNumber', customInvoiceNumber.trim());
+    }
+    
+    if (gstEnabled) {
+      params.append('gstNumber', gstDetails.gstNumber);
+      params.append('companyName', gstDetails.companyName);
+      params.append('companyAddress', gstDetails.companyAddress || '');
+    }
+    
+    return getApiUrl(`${endpoint}?${params.toString()}`);
+  };
+
+  const handleDownloadPdf = () => {
+    try {
+      setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(false);
+      
+      // Open in new tab with browser's PDF viewer
+      window.open(pdfUrl, '_blank');
+      
+      toast({
+        title: "PDF Opened in New Tab",
+        description: "Your invoice should open in a new browser tab"
+      });
+    } catch (error) {
+      console.error("Invoice download error:", error);
       toast({
         variant: "destructive",
         title: "Download Failed",
-        description: "PDF file is not available for download"
+        description: "Failed to download invoice. Please try the HTML version instead."
       });
     }
   };
 
-  const handlePrintHtml = () => {
-    if (htmlContent) {
-      const printWin = window.open('', '_blank');
-      if (printWin) {
-        printWin.document.write(htmlContent);
-        printWin.document.close();
-        printWin.focus();
-        printWin.print();
-        // Don't close the window automatically as some browsers need it open for printing
-      }
+  const handleViewHtml = () => {
+    try {
+      const htmlUrl = createPdfUrl(false, false, true);
+      window.open(htmlUrl, '_blank');
+      
+      toast({
+        title: "HTML Invoice",
+        description: "HTML version of the invoice opened in a new tab"
+      });
+    } catch (error) {
+      console.error("HTML view error:", error);
+      toast({
+        variant: "destructive",
+        title: "HTML View Failed",
+        description: "Failed to open HTML invoice"
+      });
     }
   };
 
-  const formatCurrency = (amount: number): string => {
-    return '₹' + amount.toLocaleString('en-IN');
-  };
-
-  const calculateSubtotal = (): number => {
-    let subtotal = booking.totalAmount || 0;
-    
-    // Add extra charges if they exist
-    if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
-      subtotal += booking.extraCharges.reduce((sum, charge) => {
-        return sum + (typeof charge.amount === 'number' ? charge.amount : 0);
-      }, 0);
+  const handleForceDownload = () => {
+    try {
+      setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(true);
+      
+      // Use download attribute to force download
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = `Invoice_${booking.id}_${new Date().getTime()}.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download Started",
+        description: "Your invoice download should begin shortly"
+      });
+    } catch (error) {
+      console.error("Force download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Force Download Failed",
+        description: "Failed to force download. Try the HTML version instead."
+      });
     }
-    
-    return subtotal;
   };
 
-  // New simplified UI based on the screenshot
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-xl font-semibold">Booking Invoice</h3>
-        <Button variant="outline" onClick={onClose}>Close</Button>
+  const handleAdminDownload = () => {
+    try {
+      setDownloadCount(prev => prev + 1);
+      const pdfUrl = createPdfUrl(true, true); // true for direct download, true for admin endpoint
+      
+      window.open(pdfUrl, '_blank');
+      
+      toast({
+        title: "Admin PDF Download",
+        description: "Using admin endpoint to download PDF"
+      });
+    } catch (error) {
+      console.error("Admin download error:", error);
+      toast({
+        variant: "destructive",
+        title: "Admin Download Failed",
+        description: "Failed to use admin download. Try the HTML version instead."
+      });
+    }
+  };
+
+  const handleTestPdfDownload = () => {
+    try {
+      const testUrl = getApiUrl(`/api/test-pdf.php?download=1&t=${new Date().getTime()}`);
+      window.open(testUrl, '_blank');
+      
+      toast({
+        title: "Testing PDF Generation",
+        description: "Opening test PDF to verify if PDF generation works"
+      });
+    } catch (error) {
+      console.error("Test PDF error:", error);
+      toast({
+        variant: "destructive",
+        title: "Test PDF Failed",
+        description: "Failed to open test PDF"
+      });
+    }
+  };
+
+  const handleGstToggle = (checked: boolean) => {
+    setGstEnabled(checked);
+    if (checked && !includeTax) {
+      setIncludeTax(true);
+      toast({
+        title: "Tax Inclusion Enabled",
+        description: "Enabling GST defaults to include tax in the price"
+      });
+    }
+  };
+
+  const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setGstDetails(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleRegenerateInvoice = () => {
+    if (loading || isSubmitting) return;
+    
+    setRegenerating(true);
+    setInvoiceData(null);
+    setHtmlContent(null);
+    
+    setTimeout(() => {
+      handleGenerateInvoice();
+    }, 100);
+  };
+
+  const renderInvoiceSettings = () => {
+    return (
+      <div className="p-4 border rounded-md space-y-4">
+        <div>
+          <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
+          <Input 
+            id="custom-invoice"
+            value={customInvoiceNumber}
+            onChange={(e) => setCustomInvoiceNumber(e.target.value)}
+            placeholder="Optional - Leave blank for auto-generated number"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            If provided, this will replace the auto-generated invoice number
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="gst-toggle"
+            checked={gstEnabled}
+            onCheckedChange={handleGstToggle}
+          />
+          <Label htmlFor="gst-toggle">Include GST (12%)</Label>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="tax-toggle"
+            checked={includeTax}
+            onCheckedChange={setIncludeTax}
+          />
+          <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
+        </div>
+        
+        {gstEnabled && (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
+              <Input 
+                id="gstNumber"
+                name="gstNumber"
+                value={gstDetails.gstNumber}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter GST number"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="companyName">Company Name<span className="text-red-500">*</span></Label>
+              <Input 
+                id="companyName"
+                name="companyName"
+                value={gstDetails.companyName}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter company name"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="companyAddress">Company Address</Label>
+              <Input 
+                id="companyAddress"
+                name="companyAddress"
+                value={gstDetails.companyAddress}
+                onChange={handleGstDetailsChange}
+                placeholder="Enter company address"
+              />
+            </div>
+            
+            <div className="mt-4">
+              <Label>GST Type</Label>
+              <RadioGroup 
+                value={isIGST ? "igst" : "cgst-sgst"} 
+                onValueChange={(value) => setIsIGST(value === "igst")}
+                className="mt-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
+                  <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="igst" id="igst" />
+                  <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+        )}
+        
+        <div>
+          <Button 
+            variant="outline" 
+            onClick={handleRegenerateInvoice}
+            disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
+            className="w-full"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+            Regenerate Invoice with Current Settings
+          </Button>
+        </div>
       </div>
+    );
+  };
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4 mr-2" />
+  const renderInvoicePreview = () => {
+    if (!invoiceData?.invoiceHtml) {
+      return (
+        <div className="text-center py-8 border rounded-md">
+          <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <p className="mb-4">No invoice preview available.</p>
+          <Button onClick={handleGenerateInvoice} disabled={loading || isSubmitting}>Generate Invoice</Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className="invoice-preview border rounded-md overflow-hidden" 
+        style={{ height: '400px', overflow: 'auto' }}
+      >
+        <iframe 
+          srcDoc={invoiceData.invoiceHtml}
+          title="Invoice Preview" 
+          className="w-full h-full"
+          style={{ border: 'none' }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    );
+  };
+
+  const renderHtmlView = () => {
+    if (!htmlContent) {
+      return (
+        <div className="text-center py-8 border rounded-md">
+          <FileIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <p className="mb-4">HTML invoice has not been loaded yet.</p>
+          <Button onClick={fetchHtmlInvoice} disabled={loading || isSubmitting}>Load HTML Invoice</Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className="html-preview border rounded-md overflow-hidden" 
+        style={{ height: '400px', overflow: 'auto' }}
+      >
+        <iframe 
+          srcDoc={htmlContent}
+          title="HTML Invoice" 
+          className="w-full h-full"
+          style={{ border: 'none' }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    );
+  };
+
+  const renderInvoiceContent = () => {
+    if (loading || isSubmitting) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Spinner size="lg" className="mb-4" />
+          <p>Generating invoice...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
+      );
+    }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">Booking Information</h4>
-                <div className="text-sm space-y-1">
-                  <p><span className="text-gray-500">Booking #:</span> {booking.bookingNumber}</p>
-                  <p><span className="text-gray-500">Date:</span> {new Date(booking.createdAt).toLocaleDateString()}</p>
-                  <p><span className="text-gray-500">Status:</span> {booking.status}</p>
-                  <p><span className="text-gray-500">Amount:</span> {formatCurrency(calculateSubtotal())}</p>
-                </div>
-              </div>
+    if (regenerating) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Spinner size="lg" className="mb-4" />
+          <p>Regenerating invoice with new settings...</p>
+        </div>
+      );
+    }
 
-              <div>
-                <h4 className="font-medium mb-2">Customer Information</h4>
-                <div className="text-sm space-y-1">
-                  <p><span className="text-gray-500">Name:</span> {booking.passengerName || 'N/A'}</p>
-                  <p><span className="text-gray-500">Email:</span> {booking.passengerEmail || 'N/A'}</p>
-                  <p><span className="text-gray-500">Phone:</span> {booking.passengerPhone || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    if (invoiceData?.invoiceHtml || htmlContent) {
+      return (
+        <div>
+          <div className="mb-4 flex justify-between">
+            <h3 className="font-medium">Invoice #{invoiceData?.invoiceNumber || 'Generated'}</h3>
+            <span>Generated: {invoiceData?.invoiceDate || new Date().toLocaleDateString()}</span>
+          </div>
+          
+          <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full mb-4">
+              <TabsTrigger value="html" className="flex-1">HTML View</TabsTrigger>
+              <TabsTrigger value="settings" className="flex-1">Settings</TabsTrigger>
+              <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="settings">
+              {renderInvoiceSettings()}
+            </TabsContent>
+            
+            <TabsContent value="preview">
+              {renderInvoicePreview()}
+            </TabsContent>
+            
+            <TabsContent value="html">
+              {renderHtmlView()}
+            </TabsContent>
+          </Tabs>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="gst-mode"
-                  checked={gstEnabled}
-                  onCheckedChange={setGstEnabled}
-                />
-                <Label htmlFor="gst-mode">Enable GST Invoice</Label>
-              </div>
+          {!pdfGenerationAvailable && (
+            <Alert className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                PDF generation may not be working correctly on the server. 
+                HTML view is recommended for reliable invoice viewing.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      );
+    }
 
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="include-tax"
-                  checked={includeTax}
-                  onCheckedChange={setIncludeTax}
-                />
-                <Label htmlFor="include-tax">Include Tax in Total</Label>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="invoice-number">Custom Invoice Number (Optional)</Label>
-                <Input
-                  id="invoice-number"
-                  value={customInvoiceNumber}
-                  onChange={(e) => setCustomInvoiceNumber(e.target.value)}
-                  placeholder="Leave blank for auto-generated"
-                />
-              </div>
-
-              <Button 
-                type="button" 
-                onClick={() => {
-                  setRegenerating(true);
-                  handleGenerateInvoice();
-                }}
-                disabled={loading || regenerating || isSubmitting}
-                className="w-full bg-blue-500 hover:bg-blue-600"
-                variant="default"
-              >
-                {(loading || regenerating || isSubmitting) ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Regenerate Invoice
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+    return (
+      <div className="text-center py-8">
+        <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+        <p className="mb-4">No invoice has been generated for this booking yet.</p>
+        <Button onClick={handleGenerateInvoice}>Generate Invoice</Button>
       </div>
+    );
+  };
 
-      {invoiceData && (
-        <div className="pt-4 border-t">
-          <div className="flex flex-col space-y-4">
-            <div className="flex border rounded-md overflow-hidden">
-              <button 
-                className={`flex-1 p-3 flex items-center justify-center ${activeTab === "html" ? "bg-gray-100" : "bg-white"}`}
-                onClick={() => setActiveTab("html")}
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                HTML Preview
-              </button>
-              <button 
-                className={`flex-1 p-3 flex items-center justify-center ${activeTab === "pdf" ? "bg-gray-100" : "bg-white"}`}
-                onClick={() => setActiveTab("pdf")}
-                disabled={!pdfGenerationAvailable}
-              >
-                <FileIcon className="mr-2 h-4 w-4" />
-                PDF Download
-              </button>
-            </div>
-            
-            {activeTab === "html" && (
-              <div className="space-y-4">
-                <div className="h-[500px] border rounded overflow-auto bg-white">
-                  {htmlContent ? (
-                    <iframe
-                      srcDoc={htmlContent}
-                      className="w-full h-full"
-                      title="Invoice Preview"
-                    />
-                  ) : (
-                    <div className="flex justify-center items-center h-full">
-                      <p className="text-gray-500">HTML preview is not available</p>
-                    </div>
-                  )}
-                </div>
-                
-                <Button onClick={handlePrintHtml} className="w-full">
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print HTML Invoice
-                </Button>
-              </div>
-            )}
-            
-            {activeTab === "pdf" && (
-              <div className="space-y-4">
-                <div className="h-[500px] border rounded overflow-hidden bg-gray-100 relative">
-                  {pdfUrl ? (
-                    <iframe
-                      src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                      className="w-full h-full"
-                      title="PDF Preview"
-                    />
-                  ) : (
-                    <div className="flex flex-col justify-center items-center h-full">
-                      <AlertCircle className="h-8 w-8 text-amber-500 mb-2" />
-                      <p className="text-gray-600">PDF generation is not available</p>
-                      <p className="text-sm text-gray-500 mt-2">Please use the HTML version instead</p>
-                    </div>
-                  )}
-                </div>
-                
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        {renderInvoiceContent()}
+        
+        <div className="flex justify-between mt-4">
+          <Button variant="outline" onClick={onClose}>
+            Back
+          </Button>
+          
+          <div className="flex space-x-2">
+            {(invoiceData || htmlContent) && (
+              <>
                 <Button 
-                  onClick={handleDownload} 
-                  disabled={!pdfUrl}
-                  className="w-full"
+                  variant="outline" 
+                  onClick={handleRegenerateInvoice}
+                  disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download PDF Invoice
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+                  Refresh
                 </Button>
-              </div>
+                
+                <Button
+                  onClick={handleViewHtml}
+                  disabled={loading || isSubmitting || regenerating}
+                  variant="secondary"
+                >
+                  <FileIcon className="h-4 w-4 mr-2" />
+                  HTML
+                </Button>
+                
+                <Button
+                  onClick={handleDownloadPdf}
+                  disabled={loading || isSubmitting || regenerating}
+                  variant={pdfGenerationAvailable ? "default" : "outline"}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Open PDF
+                </Button>
+                
+                <Button
+                  variant={pdfGenerationAvailable ? "secondary" : "outline"}
+                  onClick={handleForceDownload}
+                  disabled={loading || isSubmitting || regenerating}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download PDF
+                </Button>
+              </>
             )}
+            
+            <Button
+              variant="outline"
+              onClick={handleTestPdfDownload}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Test PDF
+            </Button>
           </div>
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }
-

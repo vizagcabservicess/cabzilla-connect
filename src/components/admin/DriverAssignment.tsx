@@ -147,7 +147,7 @@ export function DriverAssignment({
     try {
       await onAssign({
         ...driverData,
-        bookingId: booking.id.toString() // Convert number to string to match expected type
+        bookingId: booking.id
       });
     } catch (error) {
       console.error('Error assigning driver:', error);

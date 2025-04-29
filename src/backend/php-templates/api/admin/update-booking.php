@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -195,58 +194,33 @@ try {
     // Log the incoming request body for debugging
     error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
 
-    // Standardize and process extra charges
-    $extraCharges = null;
-
-    // First check for extraCharges in the request (primary field name)
-    if (isset($data['extraCharges']) && is_array($data['extraCharges'])) {
-        $extraCharges = $data['extraCharges'];
-        // Standardize format to ensure amount and description fields
-        foreach ($extraCharges as &$charge) {
-            // Ensure numeric amount
-            $charge['amount'] = (float)$charge['amount'];
-            // Ensure description exists (using label as fallback)
-            if (!isset($charge['description']) && isset($charge['label'])) {
-                $charge['description'] = $charge['label'];
-            } else if (!isset($charge['description'])) {
-                $charge['description'] = '';
-            }
-            // Ensure label exists (using description as fallback)
-            if (!isset($charge['label']) && isset($charge['description'])) {
-                $charge['label'] = $charge['description'];
-            } else if (!isset($charge['label'])) {
-                $charge['label'] = '';
-            }
+    // PATCH: Always update extra_charges in the database
+    $receivedExtraCharges = null;
+    if (array_key_exists('extraCharges', $data)) {
+        $receivedExtraCharges = $data['extraCharges'];
+    } elseif (array_key_exists('extra_charges', $data)) {
+        $receivedExtraCharges = $data['extra_charges'];
+    }
+    // Fallback: if not present in request, use value from DB or set to []
+    if ($receivedExtraCharges === null) {
+        $checkExtra = $conn->prepare("SELECT extra_charges FROM bookings WHERE id = ?");
+        $checkExtra->bind_param("i", $bookingId);
+        $checkExtra->execute();
+        $resultExtra = $checkExtra->get_result();
+        $rowExtra = $resultExtra->fetch_assoc();
+        if (!empty($rowExtra['extra_charges'])) {
+            $receivedExtraCharges = json_decode($rowExtra['extra_charges'], true);
+            if (!is_array($receivedExtraCharges)) $receivedExtraCharges = [];
+        } else {
+            $receivedExtraCharges = [];
         }
     }
-    // Fallback to extra_charges for backward compatibility
-    else if (isset($data['extra_charges']) && is_array($data['extra_charges'])) {
-        $extraCharges = $data['extra_charges'];
-        // Apply same standardization
-        foreach ($extraCharges as &$charge) {
-            $charge['amount'] = (float)$charge['amount'];
-            if (!isset($charge['description']) && isset($charge['label'])) {
-                $charge['description'] = $charge['label'];
-            } else if (!isset($charge['description'])) {
-                $charge['description'] = '';
-            }
-            if (!isset($charge['label']) && isset($charge['description'])) {
-                $charge['label'] = $charge['description'];
-            } else if (!isset($charge['label'])) {
-                $charge['label'] = '';
-            }
-        }
-    }
-
-    // Always update extra_charges with the standardized format or existing value
-    if ($extraCharges !== null) {
-        error_log("[update-booking] Will save extraCharges: " . json_encode($extraCharges));
-        $updateFields[] = "extra_charges = ?";
-        $types .= "s";
-        $params[] = json_encode($extraCharges);
-    }
+    error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
+    $updateFields[] = "extra_charges = ?";
+    $types .= "s";
+    $params[] = json_encode($receivedExtraCharges);
     
-    // Build update query dynamically for other fields
+    // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
         if (array_key_exists($requestField, $data)) {
             $updateFields[] = "$dbField = ?";
@@ -293,38 +267,31 @@ try {
         }
         return $refs;
     }
-    
     // Dynamically bind parameters with proper referencing
     $bindParams = array($types);
     foreach ($params as $key => $value) {
         $bindParams[] = $params[$key];
     }
-    
     error_log("[update-booking] Executing SQL: $sql | Types: $types | Params: " . json_encode($params));
     call_user_func_array(array($updateStmt, 'bind_param'), refValues($bindParams));
-    
     $success = $updateStmt->execute();
     if (!$success) {
         error_log("[update-booking] SQL execution failed: " . $updateStmt->error);
         throw new Exception("Failed to update booking: " . $updateStmt->error);
     }
-    
     // Fetch the updated booking
     $getStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $getStmt->bind_param("i", $bookingId);
     $getStmt->execute();
     $result = $getStmt->get_result();
     $updatedBooking = $result->fetch_assoc();
-    
     error_log("[update-booking] After update, extra_charges in DB: " . $updatedBooking['extra_charges']);
-    
     // Always decode extra_charges for the response
     $decodedExtraCharges = [];
     if (!empty($updatedBooking['extra_charges'])) {
         $decodedExtraCharges = json_decode($updatedBooking['extra_charges'], true);
         if (!is_array($decodedExtraCharges)) $decodedExtraCharges = [];
     }
-    
     // Format response
     $formattedBooking = [
         'id' => (int)$updatedBooking['id'],

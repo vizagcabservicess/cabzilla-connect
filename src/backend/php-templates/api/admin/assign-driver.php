@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';

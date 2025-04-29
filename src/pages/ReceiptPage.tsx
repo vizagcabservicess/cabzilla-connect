@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
@@ -120,17 +119,6 @@ const ReceiptPage = () => {
   const handlePrint = () => {
     window.print();
   };
-  
-  // Calculate total extra charges
-  const getTotalExtraCharges = () => {
-    if (!booking || !booking.extraCharges || !Array.isArray(booking.extraCharges)) {
-      return 0;
-    }
-    return booking.extraCharges.reduce((sum: number, charge: any) => {
-      const amount = parseFloat(charge.amount);
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
-  };
 
   if (loading) {
     return (
@@ -174,7 +162,6 @@ const ReceiptPage = () => {
     : parseFloat(booking.totalAmount) || 0;
     
   const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
-  const totalExtraCharges = getTotalExtraCharges();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -295,27 +282,10 @@ const ReceiptPage = () => {
                     <span>Taxes & Fees</span>
                     <span>{formatCurrency(taxes)}</span>
                   </div>
-                  
-                  {/* Display extra charges if they exist */}
-                  {booking.extraCharges && booking.extraCharges.length > 0 && (
-                    <>
-                      <Separator className="my-2" />
-                      <div className="mb-2">
-                        <div className="font-medium mb-1">Extra Charges:</div>
-                        {booking.extraCharges.map((charge: any, idx: number) => (
-                          <div key={idx} className="flex justify-between text-sm pl-2">
-                            <span>{charge.description || charge.label || `Charge ${idx+1}`}</span>
-                            <span>{formatCurrency(parseFloat(charge.amount) || 0)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  
                   <Separator className="my-2" />
                   <div className="flex justify-between font-bold">
                     <span>Total Amount</span>
-                    <span>{formatCurrency(totalAmount + totalExtraCharges)}</span>
+                    <span>{formatCurrency(totalAmount)}</span>
                   </div>
                   <div className="mt-3 text-sm text-green-600 font-medium">
                     <DollarSign className="w-4 h-4 inline mr-1" />
