@@ -1,3 +1,4 @@
+
 <?php
 // CRITICAL: No output before this point
 // Turn off output buffering and disable implicit flush
@@ -212,6 +213,11 @@ try {
         }
         
         $booking = $result->fetch_assoc();
+        logInvoiceError("Booking data fetched", [
+            'id' => $booking['id'],
+            'extra_charges' => $booking['extra_charges'],
+            'total_amount' => $booking['total_amount']
+        ]);
         $stmt->close();
     } else {
         logInvoiceError("Error preparing statement", ['error' => $conn->error]);
@@ -220,31 +226,44 @@ try {
 
     // Parse and standardize extra charges
     $extraCharges = [];
+    $extraChargesTotal = 0;
+    
     if (!empty($booking['extra_charges'])) {
         try {
+            // Debug the raw value
+            logInvoiceError("Raw extra_charges from DB", ['raw' => $booking['extra_charges']]);
+            
             $parsedCharges = json_decode($booking['extra_charges'], true);
             if (is_array($parsedCharges)) {
                 // Standardize to ensure amount and description fields
                 foreach ($parsedCharges as $charge) {
+                    $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
                     $extraCharges[] = [
-                        'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                        'amount' => $chargeAmount,
                         'description' => isset($charge['description']) ? $charge['description'] : 
                                       (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
                     ];
+                    $extraChargesTotal += $chargeAmount;
                 }
-                logInvoiceError("Extra charges found", ['charges' => $extraCharges]);
+                logInvoiceError("Extra charges found", [
+                    'charges' => $extraCharges, 
+                    'total' => $extraChargesTotal
+                ]);
+            } else {
+                logInvoiceError("Invalid extra_charges format in DB", [
+                    'value' => $booking['extra_charges'],
+                    'decoded_as' => gettype($parsedCharges)
+                ]);
             }
         } catch (Exception $e) {
-            logInvoiceError("Failed to parse extra_charges", ['error' => $e->getMessage()]);
+            logInvoiceError("Failed to parse extra_charges", [
+                'error' => $e->getMessage(), 
+                'value' => $booking['extra_charges']
+            ]);
         }
+    } else {
+        logInvoiceError("No extra_charges found in booking");
     }
-
-    // Calculate extra charges total
-    $extraChargesTotal = 0;
-    foreach ($extraCharges as $charge) {
-        $extraChargesTotal += (float)$charge['amount'];
-    }
-    logInvoiceError("Extra charges total calculated", ['total' => $extraChargesTotal]);
 
     // Generate invoice number
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
@@ -264,24 +283,53 @@ try {
     if ($totalAmount <= 0) {
         $totalAmount = 0;
     }
+
+    // IMPORTANT: Check if total_amount in DB already includes extra charges or not
+    $baseAmountWithoutExtra = $totalAmount;
     
-    // Calculate base amount before tax based on GST settings
+    // If we have extra charges, determine if they need to be added to the total
+    if ($extraChargesTotal > 0) {
+        // Log to debug
+        logInvoiceError("Total amount check", [
+            'db_total' => $totalAmount,
+            'extraChargesTotal' => $extraChargesTotal
+        ]);
+
+        // Check if the total amount includes extra charges already
+        if ($totalAmount > $extraChargesTotal) {
+            $baseAmountWithoutExtra = $totalAmount - $extraChargesTotal;
+            logInvoiceError("Calculated base amount by subtracting extras", [
+                'baseAmountWithoutExtra' => $baseAmountWithoutExtra
+            ]);
+        } else {
+            // If total amount is less than extras, consider base to be the total in DB
+            // and we'll add extras on top of it
+            $baseAmountWithoutExtra = $totalAmount;
+            logInvoiceError("Using DB total as base (not including extras yet)", [
+                'baseAmountWithoutExtra' => $baseAmountWithoutExtra
+            ]);
+        }
+    }
+    
+    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+    $gstRate = $gstEnabled ? 0.12 : 0; 
+    
     if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = $baseAmountWithoutExtra / (1 + $gstRate);
         $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = $baseAmountWithoutExtra - $baseAmountBeforeTax;
         $taxAmount = round($taxAmount, 2);
     } else if (!$includeTax && $gstEnabled) {
         // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
+        $baseAmountBeforeTax = $baseAmountWithoutExtra;
+        $taxAmount = $baseAmountWithoutExtra * $gstRate;
         $taxAmount = round($taxAmount, 2);
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        $totalAmount = $baseAmountWithoutExtra + $taxAmount;
         $totalAmount = round($totalAmount, 2);
     } else {
         // No tax case
-        $baseAmountBeforeTax = $totalAmount;
+        $baseAmountBeforeTax = $baseAmountWithoutExtra;
         $taxAmount = 0;
     }
     
@@ -306,12 +354,15 @@ try {
         $igstAmount = 0;
     }
     
-    // Grand total with extra charges added
-    $grandTotal = $totalAmount + $extraChargesTotal;
+    // Calculate subtotal (base + tax) and grand total (subtotal + extra charges)
+    $subtotal = $baseAmountBeforeTax + $taxAmount;
+    $grandTotal = $subtotal + $extraChargesTotal;
+    $grandTotal = round($grandTotal, 2);
+    
     logInvoiceError("Final calculation", [
-        'baseAmount' => $baseAmountBeforeTax,
+        'baseAmountBeforeTax' => $baseAmountBeforeTax,
         'taxAmount' => $taxAmount,
-        'totalBeforeExtras' => $totalAmount,
+        'subtotal' => $subtotal,
         'extraChargesTotal' => $extraChargesTotal,
         'grandTotal' => $grandTotal
     ]);
@@ -541,25 +592,27 @@ try {
     $htmlContent .= "
                         <tr class='total-row'>
                             <td>Subtotal</td>
-                            <td>₹ " . number_format($totalAmount, 2) . "</td>
+                            <td>₹ " . number_format($subtotal, 2) . "</td>
                         </tr>";
     
-    // Add extra charges if there are any
+    // Close the main fare table
+    $htmlContent .= "
+                    </tbody>
+                </table>";
+    
+    // Add extra charges section if there are any
     if (!empty($extraCharges)) {
         $htmlContent .= "
-            </tbody>
-        </table>
-        
-        <div class='extra-charges'>
-            <h3>Extra Charges</h3>
-            <table class='extra-charges-table'>
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>";
+            <div class='extra-charges'>
+                <h3>Extra Charges</h3>
+                <table class='extra-charges-table'>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>";
         
         foreach ($extraCharges as $charge) {
             $chargeDesc = isset($charge['description']) ? $charge['description'] : 
@@ -567,26 +620,23 @@ try {
             $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             
             $htmlContent .= "
-                    <tr>
-                        <td>{$chargeDesc}</td>
-                        <td>₹ " . number_format($chargeAmount, 2) . "</td>
-                    </tr>";
+                        <tr>
+                            <td>{$chargeDesc}</td>
+                            <td>₹ " . number_format($chargeAmount, 2) . "</td>
+                        </tr>";
         }
         
         $htmlContent .= "
-                </tbody>
-            </table>
-        </div>
-        
-        <div class='grand-total'>
-            Grand Total: ₹ " . number_format($grandTotal, 2) . "
-        </div>";
-    } else {
-        // If no extra charges, just close the table
-        $htmlContent .= "
                     </tbody>
-                </table>";
+                </table>
+            </div>";
     }
+    
+    // Always add grand total section
+    $htmlContent .= "
+            <div class='grand-total'>
+                Grand Total: ₹ " . number_format($grandTotal, 2) . "
+            </div>";
     
     $htmlContent .= "
             </div>
@@ -737,49 +787,34 @@ try {
     <head>
         <title>Invoice Generation Error</title>
         <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-            .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
-            h1 { color: #cc0000; }
-            .error-details { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; overflow: auto; }
-            .actions { margin-top: 20px; }
-            .actions a { display: inline-block; margin-right: 10px; padding: 8px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
-            .actions a.secondary { background-color: #607d8b; }
+            body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; color: #333; }
+            .error-container { max-width: 800px; margin: 0 auto; border: 1px solid #f5c6cb; padding: 20px; background-color: #f8d7da; border-radius: 5px; }
+            h1 { color: #721c24; }
+            .details { margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px; }
+            pre { background: #f8f8f8; padding: 10px; overflow: auto; }
         </style>
     </head>
     <body>
         <div class="error-container">
             <h1>Invoice Generation Error</h1>
-            <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
-            <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
+            <p>We encountered an error while generating your invoice. Please try again later or contact support.</p>
             
-            <div class="error-details">
-                <h3>Troubleshooting Steps:</h3>
-                <ol>
-                    <li>Try viewing the HTML version instead: <a href="?format=html&id=' . htmlspecialchars($bookingId) . '">View HTML Version</a></li>
-                    <li>Make sure composer packages are installed correctly</li>
-                    <li>Check our diagnostic page to verify PDF functionality</li>
-                </ol>
-            </div>
-            
-            ' . ($debugMode ? '<div class="error-details">
-                <h3>Technical Details:</h3>
+            <p>Error: ' . htmlspecialchars($e->getMessage()) . '</p>';
+    
+    if ($debugMode) {
+        echo '<div class="details">
+                <h3>Technical Details (Debug Mode)</h3>
                 <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
-            </div>' : '') . '
-            
-            <div class="actions">
-                <a href="javascript:history.back()">Go Back</a>
-                <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
-                <a href="?format=html&id=' . htmlspecialchars($bookingId) . '" class="secondary">View HTML Version</a>
-            </div>
-        </div>
+              </div>';
+    }
+    
+    echo '</div>
     </body>
     </html>';
+    exit;
 }
 
-// Restore normal error handler
-restore_error_handler();
-
-// Close database connection
+// Close any remaining database connections
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
 }

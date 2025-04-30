@@ -182,6 +182,9 @@ try {
     ];
     
     // Handle extra charges separately to ensure proper JSON encoding
+    $extraCharges = null;
+    $extraChargesTotal = 0;
+
     if (isset($data['extraCharges'])) {
         // Log the raw data for debugging
         logError("Processing extra charges from request", $data['extraCharges']);
@@ -189,12 +192,14 @@ try {
         // Standardize field names to amount and description
         $standardizedCharges = [];
         foreach ($data['extraCharges'] as $charge) {
+            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             $standardizedCharge = [
-                'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                'amount' => $chargeAmount,
                 'description' => isset($charge['description']) ? $charge['description'] : 
                                 (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
             ];
             $standardizedCharges[] = $standardizedCharge;
+            $extraChargesTotal += $chargeAmount;
         }
         
         $extraCharges = json_encode($standardizedCharges);
@@ -203,29 +208,60 @@ try {
         $updateTypes .= "s"; // JSON string
         
         // Log the extra charges that are being saved
-        logError("Saving extra charges", ['charges' => $standardizedCharges, 'json' => $extraCharges]);
+        logError("Saving extra charges", [
+            'charges' => $standardizedCharges, 
+            'json' => $extraCharges,
+            'total' => $extraChargesTotal
+        ]);
+    }
+    
+    // Calculate new total amount if extra charges are provided
+    if ($extraChargesTotal > 0) {
+        // Get the base amount (current total amount without extras)
+        $baseAmount = (float)$booking['total_amount'];
         
-        // If totalAmount isn't explicitly provided but we have extraCharges,
-        // calculate and update the total amount
-        if (!isset($data['totalAmount']) && !empty($standardizedCharges)) {
-            $baseAmount = (float)$booking['total_amount'];
-            $extraTotal = 0;
-            
-            foreach ($standardizedCharges as $charge) {
-                $extraTotal += (float)$charge['amount'];
+        // Check if the current amount already includes extra charges
+        // by looking at the existing extra_charges in DB
+        if (!empty($booking['extra_charges'])) {
+            try {
+                $currentExtraCharges = json_decode($booking['extra_charges'], true);
+                $currentExtraTotal = 0;
+                if (is_array($currentExtraCharges)) {
+                    foreach ($currentExtraCharges as $charge) {
+                        $currentExtraTotal += (float)($charge['amount'] ?? 0);
+                    }
+                }
+                // Subtract current extra charges from the base amount
+                // to get the true base amount without extras
+                $baseAmount = $baseAmount - $currentExtraTotal;
+                
+                logError("Adjusted base amount by subtracting current extras", [
+                    'originalTotal' => $booking['total_amount'],
+                    'currentExtraTotal' => $currentExtraTotal,
+                    'adjustedBaseAmount' => $baseAmount
+                ]);
+            } catch (Exception $e) {
+                logError("Failed to parse existing extra_charges", [
+                    'error' => $e->getMessage(),
+                    'extra_charges' => $booking['extra_charges']
+                ]);
             }
+        }
+        
+        // Calculate new total amount: base + new extras
+        $newTotal = $baseAmount + $extraChargesTotal;
+        
+        // Only update the total amount if it's not provided explicitly
+        if (!isset($data['totalAmount'])) {
+            $updateFields[] = "total_amount = ?";
+            $updateValues[] = $newTotal;
+            $updateTypes .= "d"; // double
             
-            $newTotal = $baseAmount + $extraTotal;
-            $data['totalAmount'] = $newTotal;
-            
-            logError("Recalculated total amount", [
+            logError("Automatically updating total amount", [
                 'baseAmount' => $baseAmount,
-                'extraTotal' => $extraTotal,
+                'extraChargesTotal' => $extraChargesTotal,
                 'newTotal' => $newTotal
             ]);
-        } else if (isset($data['totalAmount'])) {
-            // If totalAmount is provided along with extraCharges, ensure it's used as is
-            logError("Using provided totalAmount", ['amount' => $data['totalAmount']]);
         }
     }
     

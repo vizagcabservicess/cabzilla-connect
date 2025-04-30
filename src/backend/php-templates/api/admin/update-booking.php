@@ -197,18 +197,16 @@ try {
     error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
 
     // Process extra charges with standardized format
-    $receivedExtraCharges = null;
+    $extraCharges = null;
     $extraChargesTotal = 0;
     
     if (array_key_exists('extraCharges', $data)) {
-        $receivedExtraCharges = $data['extraCharges'];
-        
         // Log the incoming data for debugging
-        error_log("[update-booking] Received extraCharges: " . json_encode($receivedExtraCharges));
+        error_log("[update-booking] Received extraCharges: " . json_encode($data['extraCharges']));
         
         // Standardize field names to amount and description
         $standardizedCharges = [];
-        foreach ($receivedExtraCharges as $charge) {
+        foreach ($data['extraCharges'] as $charge) {
             $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             $standardizedCharge = [
                 'amount' => $chargeAmount,
@@ -219,7 +217,14 @@ try {
             $extraChargesTotal += $chargeAmount;
         }
         
-        $receivedExtraCharges = $standardizedCharges;
+        $extraCharges = json_encode($standardizedCharges);
+        
+        // Log the formatted charges
+        logError("Standardized extra charges", [
+            'charges' => $standardizedCharges,
+            'total' => $extraChargesTotal,
+            'json' => $extraCharges
+        ]);
         
     } elseif (array_key_exists('extra_charges', $data)) {
         $receivedExtraCharges = $data['extra_charges'];
@@ -237,36 +242,81 @@ try {
                 $standardizedCharges[] = $standardizedCharge;
                 $extraChargesTotal += $chargeAmount;
             }
-            $receivedExtraCharges = $standardizedCharges;
+            $extraCharges = json_encode($standardizedCharges);
         }
     }
     
     // Fallback: if not present in request, use value from DB or set to []
-    if ($receivedExtraCharges === null) {
+    if ($extraCharges === null) {
         $checkExtra = $conn->prepare("SELECT extra_charges FROM bookings WHERE id = ?");
         $checkExtra->bind_param("i", $bookingId);
         $checkExtra->execute();
         $resultExtra = $checkExtra->get_result();
         $rowExtra = $resultExtra->fetch_assoc();
         if (!empty($rowExtra['extra_charges'])) {
-            $receivedExtraCharges = json_decode($rowExtra['extra_charges'], true);
-            if (!is_array($receivedExtraCharges)) $receivedExtraCharges = [];
-            
-            // Calculate total of extra charges from DB
-            foreach ($receivedExtraCharges as $charge) {
-                $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
-                $extraChargesTotal += $chargeAmount;
+            $parsedExtraCharges = json_decode($rowExtra['extra_charges'], true);
+            if (is_array($parsedExtraCharges)) {
+                // Calculate total of extra charges from DB
+                foreach ($parsedExtraCharges as $charge) {
+                    $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+                    $extraChargesTotal += $chargeAmount;
+                }
+                $extraCharges = $rowExtra['extra_charges']; // Keep existing JSON string
+            } else {
+                $extraCharges = '[]';
             }
         } else {
-            $receivedExtraCharges = [];
+            $extraCharges = '[]';
         }
     }
     
-    // If totalAmount isn't provided but we have extraCharges, update the total amount
-    if (!isset($data['totalAmount']) && $extraChargesTotal > 0) {
+    // Always save extra charges (even if empty array)
+    $updateFields[] = "extra_charges = ?";
+    $types .= "s";
+    $params[] = $extraCharges;
+    
+    // Calculate new total amount if extra charges are provided but totalAmount isn't
+    if ($extraChargesTotal > 0 && !isset($data['totalAmount'])) {
+        // Get the base amount (current total amount without extras)
         $baseAmount = (float)$booking['total_amount'];
+        
+        // Check if the current amount already includes extra charges
+        // by looking at the existing extra_charges in DB
+        if (!empty($booking['extra_charges'])) {
+            try {
+                $currentExtraCharges = json_decode($booking['extra_charges'], true);
+                $currentExtraTotal = 0;
+                if (is_array($currentExtraCharges)) {
+                    foreach ($currentExtraCharges as $charge) {
+                        $currentExtraTotal += (float)($charge['amount'] ?? 0);
+                    }
+                }
+                // Subtract current extra charges from the base amount
+                // to get the true base amount without extras
+                if ($currentExtraTotal > 0 && $baseAmount > $currentExtraTotal) {
+                    $baseAmount = $baseAmount - $currentExtraTotal;
+                }
+                
+                logError("Adjusted base amount by subtracting current extras", [
+                    'originalTotal' => $booking['total_amount'],
+                    'currentExtraTotal' => $currentExtraTotal,
+                    'adjustedBaseAmount' => $baseAmount
+                ]);
+            } catch (Exception $e) {
+                logError("Failed to parse existing extra_charges", [
+                    'error' => $e->getMessage(),
+                    'extra_charges' => $booking['extra_charges']
+                ]);
+            }
+        }
+        
+        // Calculate new total amount: base + new extras
         $newTotal = $baseAmount + $extraChargesTotal;
-        $data['totalAmount'] = $newTotal;
+        
+        // Update the total amount field
+        $updateFields[] = "total_amount = ?";
+        $types .= "d"; // double
+        $params[] = $newTotal;
         
         logError("Recalculated total amount", [
             'baseAmount' => $baseAmount,
@@ -274,11 +324,6 @@ try {
             'newTotal' => $newTotal
         ]);
     }
-    
-    error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
-    $updateFields[] = "extra_charges = ?";
-    $types .= "s";
-    $params[] = json_encode($receivedExtraCharges);
     
     // Build update query dynamically
     foreach ($fieldMappings as $requestField => $dbField) {
