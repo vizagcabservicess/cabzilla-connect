@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -341,6 +342,17 @@ try {
     if (!empty($updatedBooking['extra_charges'])) {
         $decodedExtraCharges = json_decode($updatedBooking['extra_charges'], true);
         if (!is_array($decodedExtraCharges)) $decodedExtraCharges = [];
+        
+        // Standardize the format to ensure amount and description fields
+        $standardizedExtraCharges = [];
+        foreach ($decodedExtraCharges as $charge) {
+            $standardizedExtraCharges[] = [
+                'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                'description' => isset($charge['description']) ? $charge['description'] : 
+                              (isset($charge['label']) ? $charge['label'] : '')
+            ];
+        }
+        $decodedExtraCharges = $standardizedExtraCharges;
     }
     
     // Format response with standardized extra charges format

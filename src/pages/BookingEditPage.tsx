@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -101,25 +102,31 @@ export default function BookingEditPage() {
         // Improved handling of extraCharges with standardized format
         if (response.extraCharges && Array.isArray(response.extraCharges)) {
           // Normalize the structure to ensure amount is a number and description is a string
-          setExtraCharges(response.extraCharges.map(c => ({
+          const standardizedCharges = response.extraCharges.map(c => ({
             amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-            description: c.description || c.label || ''
-          })));
+            description: c.description || (c as any).label || ''
+          }));
+          setExtraCharges(standardizedCharges);
+          console.log('Setting standardized extra charges:', standardizedCharges);
         } else if (response.extra_charges && Array.isArray(response.extra_charges)) {
-          setExtraCharges(response.extra_charges.map(c => ({
+          const standardizedCharges = response.extra_charges.map(c => ({
             amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-            description: c.description || c.label || ''
-          })));
+            description: c.description || (c as any).label || ''
+          }));
+          setExtraCharges(standardizedCharges);
+          console.log('Setting standardized extra charges from extra_charges:', standardizedCharges);
         } else {
           // Check if it's a JSON string that needs parsing
           if (typeof response.extraCharges === 'string') {
             try {
               const parsedCharges = JSON.parse(response.extraCharges);
               if (Array.isArray(parsedCharges)) {
-                setExtraCharges(parsedCharges.map(c => ({
+                const standardizedCharges = parsedCharges.map(c => ({
                   amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-                  description: c.description || c.label || ''
-                })));
+                  description: c.description || (c as any).label || ''
+                }));
+                setExtraCharges(standardizedCharges);
+                console.log('Setting standardized extra charges from parsed string:', standardizedCharges);
               }
             } catch (e) {
               console.error("Failed to parse extraCharges string:", e);
@@ -127,6 +134,7 @@ export default function BookingEditPage() {
             }
           } else {
             setExtraCharges([]);
+            console.log('No extra charges found, setting empty array');
           }
         }
       } catch (error) {
@@ -199,16 +207,20 @@ export default function BookingEditPage() {
   const handleAddExtraCharge = () => {
     if (!newExtraAmount || isNaN(Number(newExtraAmount)) || Number(newExtraAmount) <= 0) return;
     // Ensure amount is saved as a number, not a string
-    setExtraCharges([...extraCharges, { 
+    const newCharges = [...extraCharges, { 
       amount: parseFloat(newExtraAmount), 
-      description: newExtraDesc 
-    }]);
+      description: newExtraDesc || 'Additional Charge'
+    }];
+    setExtraCharges(newCharges);
+    console.log('Added extra charge, new list:', newCharges);
     setNewExtraAmount('');
     setNewExtraDesc('');
   };
 
   const handleRemoveExtraCharge = (idx: number) => {
-    setExtraCharges(extraCharges.filter((_, i) => i !== idx));
+    const updatedCharges = extraCharges.filter((_, i) => i !== idx);
+    setExtraCharges(updatedCharges);
+    console.log('Removed extra charge, new list:', updatedCharges);
   };
 
   const handleSubmit = async (contactDetails: any) => {
@@ -218,16 +230,28 @@ export default function BookingEditPage() {
       // Ensure extra charges have consistent field names (amount and description)
       const standardizedExtraCharges = extraCharges.map(c => ({
         amount: Number(c.amount), // Ensure it's a number
-        description: c.description // Use description as the standard field
+        description: c.description || 'Additional Charge' // Use description as the standard field
       }));
+      
+      console.log('Submitting with standardized extra charges:', standardizedExtraCharges);
       
       // Calculate total amount including extra charges
       const baseAmount = typeof booking.totalAmount === 'number' 
         ? booking.totalAmount 
         : parseFloat(String(booking.totalAmount)) || 0;
         
+      // Calculate extra charges sum
       const extraAmount = standardizedExtraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+      
+      // Only add extra charges to base amount if they are not already included
+      // This check prevents double-counting if the base totalAmount already includes extras
       const calculatedTotal = baseAmount + extraAmount;
+      
+      console.log('Calculated total:', {
+        baseAmount,
+        extraAmount,
+        calculatedTotal
+      });
 
       const updatedData = {
         passengerName: contactDetails.name,
@@ -240,8 +264,12 @@ export default function BookingEditPage() {
         totalAmount: calculatedTotal // Include the calculated total with extra charges
       };
       
+      console.log('Sending update data:', updatedData);
+      
       const bookingIdNumber = parseInt(bookingId, 10);
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
+      
+      console.log('Update result:', result);
       
       if (result) {
         // Important: Update the local state with the new data to ensure persistence
@@ -282,12 +310,21 @@ export default function BookingEditPage() {
     return `${type}${mode}`;
   };
 
-  const calculatePriceBreakdown = (totalAmount: number) => {
+  const calculatePriceBreakdown = (totalAmount: number, extraChargesList: Array<{amount: number; description: string}> = []) => {
     if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
       return { baseFare: 0, taxes: 0 };
     }
-    const baseFare = Math.round(totalAmount * 0.85);
-    const taxes = Math.round(totalAmount * 0.15);
+    
+    // Calculate total of extra charges
+    const extraTotal = extraChargesList.reduce((sum, charge) => sum + Number(charge.amount), 0);
+    
+    // Base amount is total minus extra charges
+    const baseAmountWithTax = Math.max(0, totalAmount - extraTotal);
+    
+    // Split into base fare and taxes (assume 15% tax is included in price)
+    const baseFare = Math.round(baseAmountWithTax * 0.85);
+    const taxes = Math.round(baseAmountWithTax * 0.15);
+    
     return { baseFare, taxes };
   };
 
@@ -317,11 +354,16 @@ export default function BookingEditPage() {
     );
   }
 
+  // Calculate the display total, which is the sum of booking's base amount + extra charges
   const totalAmount = typeof booking.totalAmount === 'number' 
     ? booking.totalAmount 
     : parseFloat(String(booking.totalAmount)) || 0;
-    
-  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
+  
+  // Get extra charges total for display
+  const extraChargesTotal = extraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+  
+  // Calculate price breakdown
+  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount, extraCharges);
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -369,11 +411,22 @@ export default function BookingEditPage() {
                 <p className="text-sm font-medium mb-1">Taxes & Fees</p>
                 <p className="text-gray-700">₹{taxes.toLocaleString('en-IN')}</p>
               </div>
+              
+              {extraCharges.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Extra Charges</p>
+                    <p className="text-gray-700">₹{extraChargesTotal.toLocaleString('en-IN')}</p>
+                  </div>
+                </>
+              )}
+              
               <Separator />
               <div>
                 <p className="text-sm font-medium mb-1">Total Amount</p>
                 <p className="text-gray-700 text-lg font-semibold">
-                  ₹{totalAmount.toLocaleString('en-IN')}
+                  ₹{(totalAmount + extraChargesTotal).toLocaleString('en-IN')}
                 </p>
               </div>
             </CardContent>
@@ -423,7 +476,7 @@ export default function BookingEditPage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="mb-6">
+          <Card className="mb-6 mt-6">
             <CardHeader>
               <CardTitle>Extra Charges</CardTitle>
               <CardDescription>Add or edit extra charges for this booking</CardDescription>
@@ -433,35 +486,62 @@ export default function BookingEditPage() {
               {extraCharges.length > 0 && (
                 <ul className="mb-4">
                   {extraCharges.map((charge, idx) => (
-                    <li key={idx} className="flex items-center mb-2">
-                      <span className="mr-2">₹{charge.amount}</span>
-                      <span className="mr-2">{charge.description}</span>
-                      <button type="button" className="ml-2 text-red-500 hover:text-red-700" onClick={() => handleRemoveExtraCharge(idx)}>
+                    <li key={idx} className="flex items-center justify-between mb-2 p-2 bg-gray-50 rounded-md">
+                      <div>
+                        <span className="font-medium">{charge.description}</span>
+                        <span className="ml-2 text-gray-500">₹{charge.amount.toLocaleString('en-IN')}</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => handleRemoveExtraCharge(idx)}
+                      >
                         <Trash2 size={16} />
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              <div className="flex gap-2 mb-2">
+              <div className="grid grid-cols-12 gap-2 mb-2">
                 <input
                   type="number"
                   min="1"
                   placeholder="Amount (₹)"
-                  className="border rounded px-2 py-1 w-28"
+                  className="border rounded px-2 py-1 col-span-3"
                   value={newExtraAmount}
                   onChange={e => setNewExtraAmount(e.target.value)}
                 />
                 <input
                   type="text"
                   placeholder="Description"
-                  className="border rounded px-2 py-1 flex-1"
+                  className="border rounded px-2 py-1 col-span-7"
                   value={newExtraDesc}
                   onChange={e => setNewExtraDesc(e.target.value)}
                 />
-                <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded flex items-center" onClick={handleAddExtraCharge}>
+                <button 
+                  type="button" 
+                  className="bg-blue-500 text-white px-3 py-1 rounded flex items-center justify-center col-span-2" 
+                  onClick={handleAddExtraCharge}
+                >
                   <Plus size={16} className="mr-1" /> Add
                 </button>
+              </div>
+              
+              <div className="mt-4 border-t pt-4">
+                <div className="flex justify-between text-sm">
+                  <span>Base Amount:</span>
+                  <span>₹{totalAmount.toLocaleString('en-IN')}</span>
+                </div>
+                {extraCharges.length > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Extra Charges:</span>
+                    <span>₹{extraChargesTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold mt-2">
+                  <span>Grand Total:</span>
+                  <span>₹{(totalAmount + extraChargesTotal).toLocaleString('en-IN')}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -476,7 +556,7 @@ export default function BookingEditPage() {
             <CardContent>
               <GuestDetailsForm
                 onSubmit={handleSubmit}
-                totalPrice={totalAmount}
+                totalPrice={totalAmount + extraChargesTotal}
                 initialData={{
                   name: booking.passengerName || '',
                   email: booking.passengerEmail || '',

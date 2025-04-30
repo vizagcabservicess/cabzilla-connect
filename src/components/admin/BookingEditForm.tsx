@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ export function BookingEditForm({
   const initializeExtraCharges = () => {
     if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
       return booking.extraCharges.map(charge => ({
-        amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)),
+        amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)) || 0,
         description: charge.description || (charge as any).label || ''
       }));
     }
@@ -104,7 +105,7 @@ export function BookingEditForm({
     }
     
     setExtraCharges(prev => [...prev, { 
-      amount: newCharge.amount,
+      amount: Number(newCharge.amount),
       description: newCharge.description
     }]);
     setNewCharge({ amount: 0, description: '' });
@@ -151,7 +152,7 @@ export function BookingEditForm({
     }
     
     // Calculate total extra charges
-    const additionalCharges = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
+    const additionalCharges = extraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
     
     // Return total with additional charges
     return baseAmount + additionalCharges;
@@ -167,7 +168,7 @@ export function BookingEditForm({
     // Ensure extra charges are properly formatted with consistent field names
     const standardizedExtraCharges = extraCharges.map(charge => ({
       amount: Number(charge.amount),
-      description: charge.description
+      description: charge.description || 'Additional Charge'
     }));
     
     const updatedData = {
@@ -397,7 +398,7 @@ export function BookingEditForm({
             <p className="text-sm text-gray-500">Base Amount: ₹{booking.totalAmount}</p>
             {extraCharges.length > 0 && (
               <p className="text-sm text-gray-500">
-                Additional Charges: ₹{extraCharges.reduce((sum, charge) => sum + charge.amount, 0)}
+                Additional Charges: ₹{extraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0)}
               </p>
             )}
             <p className="text-lg font-bold">

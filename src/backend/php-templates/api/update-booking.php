@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -220,6 +221,9 @@ try {
                 'extraTotal' => $extraTotal,
                 'newTotal' => $newTotal
             ]);
+        } else if (isset($data['totalAmount'])) {
+            // If totalAmount is provided along with extraCharges, ensure it's used as is
+            logError("Using provided totalAmount", ['amount' => $data['totalAmount']]);
         }
     }
     
@@ -297,7 +301,14 @@ try {
     if (!empty($updatedBooking['extra_charges'])) {
         $parsedCharges = json_decode($updatedBooking['extra_charges'], true);
         if (is_array($parsedCharges)) {
-            $formattedExtraCharges = $parsedCharges;
+            foreach ($parsedCharges as $charge) {
+                // Always use amount and description as the standard fields
+                $formattedExtraCharges[] = [
+                    'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                    'description' => isset($charge['description']) ? $charge['description'] : 
+                                   (isset($charge['label']) ? $charge['label'] : '')
+                ];
+            }
         }
     }
     

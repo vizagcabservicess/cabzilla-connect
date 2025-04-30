@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file - use absolute path with __DIR__
 require_once __DIR__ . '/../../config.php';
@@ -210,32 +211,39 @@ try {
     logInvoiceError("Extra charges total", ['total' => $extraChargesTotal]);
     
     // Base amount without extra charges
-    $baseAmountWithoutExtra = $totalAmount;
+    $baseAmountWithoutExtra = $totalAmount - $extraChargesTotal;
+    if ($baseAmountWithoutExtra < 0) {
+        $baseAmountWithoutExtra = $totalAmount;
+        logInvoiceError("Warning: Base amount calculation resulted in negative value, using total amount instead", [
+            'totalAmount' => $totalAmount,
+            'extraChargesTotal' => $extraChargesTotal
+        ]);
+    }
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
     
     // Ensure we have a valid amount
-    if ($totalAmount <= 0) {
-        $totalAmount = 0;
+    if ($baseAmountWithoutExtra <= 0) {
+        $baseAmountWithoutExtra = 0;
     }
     
     if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = $baseAmountWithoutExtra / (1 + $gstRate);
         $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
+        $taxAmount = $baseAmountWithoutExtra - $baseAmountBeforeTax;
         $taxAmount = round($taxAmount, 2);
     } else if (!$includeTax && $gstEnabled) {
         // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
+        $baseAmountBeforeTax = $baseAmountWithoutExtra;
+        $taxAmount = $baseAmountWithoutExtra * $gstRate;
         $taxAmount = round($taxAmount, 2);
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
+        $totalAmount = $baseAmountBeforeTax + $taxAmount + $extraChargesTotal;
         $totalAmount = round($totalAmount, 2);
     } else {
         // No tax case
-        $baseAmountBeforeTax = $totalAmount;
+        $baseAmountBeforeTax = $baseAmountWithoutExtra;
         $taxAmount = 0;
     }
     
@@ -261,13 +269,14 @@ try {
     }
     
     // Grand total with extra charges
-    $grandTotal = $totalAmount + $extraChargesTotal;
+    $grandTotal = $baseAmountWithoutExtra + $taxAmount + $extraChargesTotal;
+    $grandTotal = round($grandTotal, 2);
     
     // Log final calculations
     logInvoiceError("Final calculation", [
         'baseAmount' => $baseAmountBeforeTax,
         'taxAmount' => $taxAmount,
-        'totalBeforeExtras' => $totalAmount,
+        'totalBeforeExtras' => $baseAmountWithoutExtra + $taxAmount,
         'extraChargesTotal' => $extraChargesTotal,
         'grandTotal' => $grandTotal
     ]);
@@ -409,10 +418,12 @@ try {
         }
     }
     
+    $subtotal = $baseAmountBeforeTax + $taxAmount;
+    
     $htmlContent .= "
                         <tr class='total-row'>
                             <td>Subtotal</td>
-                            <td>₹ " . number_format($totalAmount, 2) . "</td>
+                            <td>₹ " . number_format($subtotal, 2) . "</td>
                         </tr>";
     
     // Add extra charges if there are any
@@ -453,10 +464,13 @@ try {
             Grand Total: ₹ " . number_format($grandTotal, 2) . "
         </div>";
     } else {
-        // If no extra charges, just close the table
+        // If no extra charges, just close the table and show the total
         $htmlContent .= "
                     </tbody>
-                </table>";
+                </table>
+                <div class='grand-total'>
+                    Total Amount: ₹ " . number_format($grandTotal, 2) . "
+                </div>";
     }
     
     $htmlContent .= "
