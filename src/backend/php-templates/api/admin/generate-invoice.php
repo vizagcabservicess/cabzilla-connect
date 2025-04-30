@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -187,32 +188,40 @@ try {
             }
             
             $booking = $result->fetch_assoc();
-            logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'amount' => $booking['total_amount']]);
+            logInvoiceError("Booking found", [
+                'booking_id' => $booking['id'], 
+                'amount' => $booking['total_amount'],
+                'extra_charges' => isset($booking['extra_charges']) ? $booking['extra_charges'] : null
+            ]);
 
             // Parse extra_charges robustly from booking
             $extraChargesArr = [];
             $totalExtraCharges = 0;
             if (!empty($booking['extra_charges'])) {
-                $extraChargesArr = json_decode($booking['extra_charges'], true);
-            } elseif (!empty($booking['extraCharges'])) {
-                $extraChargesArr = is_array($booking['extraCharges']) ? $booking['extraCharges'] : json_decode($booking['extraCharges'], true);
-            }
-            if (is_array($extraChargesArr)) {
-                foreach ($extraChargesArr as $charge) {
-                    if (isset($charge['amount'])) {
-                        $totalExtraCharges += floatval($charge['amount']);
+                try {
+                    $extraChargesArr = json_decode($booking['extra_charges'], true);
+                    if (is_array($extraChargesArr)) {
+                        foreach ($extraChargesArr as $charge) {
+                            if (isset($charge['amount'])) {
+                                $totalExtraCharges += floatval($charge['amount']);
+                            }
+                        }
+                    } else {
+                        $extraChargesArr = [];
                     }
+                    logInvoiceError('Loaded extra charges for invoice', [
+                        'booking_id' => $booking['id'], 
+                        'extraChargesArr' => $extraChargesArr,
+                        'totalExtraCharges' => $totalExtraCharges
+                    ]);
+                } catch (Exception $e) {
+                    logInvoiceError("Failed to parse extra charges", [
+                        'error' => $e->getMessage(),
+                        'extra_charges' => $booking['extra_charges']
+                    ]);
+                    $extraChargesArr = [];
                 }
-            } else {
-                $extraChargesArr = [];
             }
-            logInvoiceError('Loaded extra charges for invoice', ['booking_id' => $booking['id'], 'extraChargesArr' => $extraChargesArr]);
-
-            logInvoiceError('Raw extra_charges in booking', [
-                'booking_id' => $booking['id'],
-                'extra_charges' => isset($booking['extra_charges']) ? $booking['extra_charges'] : null,
-                'extraCharges' => isset($booking['extraCharges']) ? $booking['extraCharges'] : null
-            ]);
         } catch (Exception $e) {
             // If there's a database error, enable demo mode for testing
             $demoMode = true;
@@ -238,19 +247,19 @@ try {
             'drop_location' => 'Araku Valley',
             'pickup_date' => date('Y-m-d H:i:s'),
             'cab_type' => 'Innova Crysta',
-            'total_amount' => 3500,
+            'total_amount' => 3000,
             'driver_name' => 'Rajesh Kumar',
             'driver_phone' => '9876543210',
             'vehicle_number' => 'AP 31 AB 1234',
             'status' => 'confirmed',
             'extra_charges' => json_encode([
-                ['label' => 'Toll Fee', 'amount' => 100],
-                ['label' => 'Parking', 'amount' => 50]
+                ['description' => 'Toll Fee', 'amount' => 100],
+                ['description' => 'Parking', 'amount' => 50]
             ])
         ];
         $extraChargesArr = [
-            ['label' => 'Toll Fee', 'amount' => 100],
-            ['label' => 'Parking', 'amount' => 50]
+            ['description' => 'Toll Fee', 'amount' => 100],
+            ['description' => 'Parking', 'amount' => 50]
         ];
         $totalExtraCharges = 150;
     }
@@ -260,53 +269,43 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
-    // Add extra charges to base fare before tax
-    $totalAmount = (float)$booking['total_amount'];
-    $baseFare = $totalAmount;
-    if ($totalExtraCharges > 0) {
-        $baseFare += $totalExtraCharges;
-    }
+    $baseAmount = (float)$booking['total_amount'];
+    
+    logInvoiceError("Calculation inputs", [
+        'baseAmount' => $baseAmount,
+        'extraChargesTotal' => $totalExtraCharges,
+        'gstEnabled' => $gstEnabled ? 'true' : 'false',
+        'includeTax' => $includeTax ? 'true' : 'false',
+        'isIGST' => $isIGST ? 'true' : 'false'
+    ]);
+    
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
-    // Convert string to number if needed
-    if (!is_numeric($baseFare)) {
-        $baseFare = floatval($baseFare);
-    }
-    // Ensure we have a valid amount
-    if ($baseFare <= 0) {
-        $baseFare = 0;
-    }
+    $gstRate = $gstEnabled ? 0.12 : 0;
+    
+    // Calculate base amount before tax
     if ($includeTax && $gstEnabled) {
-        // If tax is included in total amount (default)
-        // We need to calculate: baseAmount = baseFare / (1 + gstRate)
-        $baseAmountBeforeTax = $baseFare / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
-        $taxAmount = $baseFare - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
+        $baseAmountBeforeTax = $baseAmount / (1 + $gstRate);
+        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
+        $taxAmount = $baseAmount - $baseAmountBeforeTax;
+        $taxAmount = round($taxAmount, 2);
     } else if (!$includeTax && $gstEnabled) {
-        // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $baseFare;
-        $taxAmount = $baseFare * $gstRate;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-        $baseFare = $baseAmountBeforeTax + $taxAmount;
-        $baseFare = round($baseFare, 2); // Round to ensure consistency
+        $baseAmountBeforeTax = $baseAmount;
+        $taxAmount = $baseAmount * $gstRate;
+        $taxAmount = round($taxAmount, 2);
+        $baseAmount = $baseAmountBeforeTax + $taxAmount; // Updated base amount
     } else {
-        // No tax case
-        $baseAmountBeforeTax = $baseFare;
+        $baseAmountBeforeTax = $baseAmount;
         $taxAmount = 0;
     }
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
         if ($isIGST) {
-            // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
-            $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
+            $igstAmount = round($igstAmount, 2);
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
-            // Intrastate - Split into CGST (6%) and SGST (6%)
-            // Use exact division to ensure totals match
             $halfTax = $taxAmount / 2;
             $cgstAmount = round($halfTax, 2);
             $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
@@ -318,9 +317,18 @@ try {
         $igstAmount = 0;
     }
     
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
-    $finalTotal = round($finalTotal, 2);
+    // Add extra charges to calculate final total
+    $subtotal = $baseAmountBeforeTax + $taxAmount;
+    $grandTotal = $subtotal + $totalExtraCharges;
+    $grandTotal = round($grandTotal, 2);
+    
+    logInvoiceError("Final calculation results", [
+        'baseAmountBeforeTax' => $baseAmountBeforeTax,
+        'taxAmount' => $taxAmount,
+        'subtotal' => $subtotal,
+        'extraChargesTotal' => $totalExtraCharges,
+        'grandTotal' => $grandTotal
+    ]);
     
     // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
@@ -340,11 +348,14 @@ try {
         .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
         .fare-table th { background-color: #f9f9f9; }
+        .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
         .total-row { font-weight: bold; }
         .gst-details { border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9; margin-bottom: 20px; }
         .gst-title { font-weight: bold; margin-bottom: 10px; }
         .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
         .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
+        .extra-charges { margin-top: 20px; margin-bottom: 20px; }
+        .grand-total { font-size: 1.2em; font-weight: bold; margin-top: 20px; text-align: right; }
         @media print {
             body { margin: 0; padding: 0; }
             .invoice-container { box-shadow: none; border: none; padding: 20px; }
@@ -357,7 +368,7 @@ try {
         <div class="invoice-header">
             <div>
                 <h1 style="margin: 0; color: #333;">INVOICE</h1>
-                <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
+                <p style="margin-top: 5px; color: #777;">BE Rides</p>
             </div>
             <div class="company-info">
                 <h2 style="margin: 0;">#' . $invoiceNumber . '</h2>
@@ -405,41 +416,86 @@ try {
             <table class="fare-table">
                 <tr>
                     <th>Description</th>
-                    <th style="text-align: right;">Amount</th>
+                    <th>Amount</th>
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format((float)$booking['total_amount'], 2) . '</td>
+                    <td>₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
-    // Add extra charges as line items
-    if (!empty($extraChargesArr)) {
-        foreach ($extraChargesArr as $charge) {
-            if ((isset($charge['label']) && $charge['label'] !== '') && isset($charge['amount'])) {
-                $invoiceHtml .= '\n                <tr>\n                    <td>' . htmlspecialchars($charge['label']) . '</td>\n                    <td style="text-align: right;">₹ ' . number_format((float)$charge['amount'], 2) . '</td>\n                </tr>';
-            }
+    
+    // Add tax details if GST is enabled
+    if ($gstEnabled) {
+        if ($isIGST) {
+            $invoiceHtml .= '
+                <tr>
+                    <td>IGST (12%)</td>
+                    <td>₹ ' . number_format($igstAmount, 2) . '</td>
+                </tr>';
+        } else {
+            $invoiceHtml .= '
+                <tr>
+                    <td>CGST (6%)</td>
+                    <td>₹ ' . number_format($cgstAmount, 2) . '</td>
+                </tr>
+                <tr>
+                    <td>SGST (6%)</td>
+                    <td>₹ ' . number_format($sgstAmount, 2) . '</td>
+                </tr>';
         }
-    } else {
-        $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
     }
     
     $invoiceHtml .= '
                 <tr class="total-row">
-                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                    <td>Subtotal</td>
+                    <td>₹ ' . number_format($subtotal, 2) . '</td>
                 </tr>
             </table>';
             
+    // Add extra charges as a separate section
+    if (!empty($extraChargesArr)) {
+        $invoiceHtml .= '
+            <div class="extra-charges">
+                <h3 class="section-title">Extra Charges</h3>
+                <table class="fare-table">
+                    <tr>
+                        <th>Description</th>
+                        <th>Amount</th>
+                    </tr>';
+                    
+        foreach ($extraChargesArr as $charge) {
+            $description = isset($charge['description']) ? htmlspecialchars($charge['description']) : 
+                         (isset($charge['label']) ? htmlspecialchars($charge['label']) : 'Additional Charge');
+            $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+            
+            $invoiceHtml .= '
+                    <tr>
+                        <td>' . $description . '</td>
+                        <td>₹ ' . number_format($amount, 2) . '</td>
+                    </tr>';
+        }
+        
+        $invoiceHtml .= '
+                </table>
+            </div>';
+    }
+            
+    // Add grand total including extra charges
+    $invoiceHtml .= '
+            <div class="grand-total">
+                Grand Total: ₹ ' . number_format($grandTotal, 2) . '
+            </div>';
+            
     if (!$includeTax && $gstEnabled) {
         $invoiceHtml .= '
-            <p class="tax-note">Note: This invoice shows base amounts excluding tax. Taxes will be charged separately.</p>';
+            <p class="tax-note">Note: This invoice shows base amounts excluding tax. Taxes are included in the grand total.</p>';
     }
             
     $invoiceHtml .= '
         </div>
         
         <div class="footer">
-            <p>Thank you for choosing Vizag Cab Services.</p>
-            <p>For any questions regarding this invoice, please contact support@vizagcabs.com</p>
+            <p>Thank you for choosing BE Rides.</p>
+            <p>For any questions regarding this invoice, please contact info@berides.in</p>
         </div>
     </div>
 </body>
@@ -454,7 +510,7 @@ try {
             'invoiceDate' => date('d M Y'),
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
-            'totalAmount' => $finalTotal,
+            'totalAmount' => $grandTotal,
             'baseAmount' => $baseAmountBeforeTax,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
@@ -478,167 +534,19 @@ try {
         }
     }
     
-    // Store invoice in database if not in demo mode
-    if (!$demoMode && isset($conn)) {
-        try {
-            // Check if invoice table exists, create if not
-            $conn->query("
-                CREATE TABLE IF NOT EXISTS invoices (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    booking_id INT NOT NULL,
-                    invoice_number VARCHAR(50) NOT NULL,
-                    invoice_date DATE NOT NULL,
-                    base_amount DECIMAL(10,2) NOT NULL,
-                    tax_amount DECIMAL(10,2) NOT NULL,
-                    total_amount DECIMAL(10,2) NOT NULL,
-                    gst_enabled TINYINT(1) DEFAULT 0,
-                    is_igst TINYINT(1) DEFAULT 0,
-                    include_tax TINYINT(1) DEFAULT 1,
-                    gst_number VARCHAR(20),
-                    company_name VARCHAR(100),
-                    company_address TEXT,
-                    invoice_html MEDIUMTEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY (invoice_number),
-                    KEY (booking_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            ");
-            
-            // Check if invoice already exists for this booking
-            $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
-            $checkStmt->bind_param("i", $booking['id']);
-            $checkStmt->execute();
-            $checkResult = $checkStmt->get_result();
-            
-            if ($checkResult->num_rows > 0) {
-                // Update existing invoice
-                $invoiceRow = $checkResult->fetch_assoc();
-                $stmt = $conn->prepare("
-                    UPDATE invoices SET 
-                        invoice_number = ?,
-                        invoice_date = ?, 
-                        base_amount = ?, 
-                        tax_amount = ?, 
-                        total_amount = ?,
-                        gst_enabled = ?,
-                        is_igst = ?,
-                        include_tax = ?,
-                        gst_number = ?,
-                        company_name = ?,
-                        company_address = ?,
-                        invoice_html = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ");
-                
-                $gstEnabledInt = $gstEnabled ? 1 : 0;
-                $isIgstInt = $isIGST ? 1 : 0;
-                $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
-                
-                $stmt->bind_param(
-                    "ssdddiiiisssi",
-                    $invoiceNumber,
-                    $currentDate,
-                    $baseAmountBeforeTax,
-                    $taxAmount,
-                    $finalTotal,
-                    $gstEnabledInt,
-                    $isIgstInt,
-                    $includeTaxInt,
-                    $gstNumberVal,
-                    $companyNameVal,
-                    $companyAddressVal,
-                    $invoiceHtml,
-                    $invoiceRow['id']
-                );
-                
-                $success = $stmt->execute();
-                
-                if (!$success || $stmt->error) {
-                    logInvoiceError("Error updating invoice", [
-                        'error' => $stmt->error,
-                        'id' => $invoiceRow['id'],
-                        'success' => $success ? 'true' : 'false'
-                    ]);
-                } else {
-                    $responseData['message'] = 'Invoice updated successfully';
-                    logInvoiceError("Invoice updated successfully", [
-                        'invoice_id' => $invoiceRow['id'],
-                        'invoice_number' => $invoiceNumber,
-                        'rows_affected' => $stmt->affected_rows
-                    ]);
-                }
-            } else {
-                // Insert new invoice
-                $stmt = $conn->prepare("
-                    INSERT INTO invoices (
-                        booking_id, invoice_number, invoice_date, base_amount, 
-                        tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
-                        gst_number, company_name, company_address, invoice_html
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                
-                $gstEnabledInt = $gstEnabled ? 1 : 0;
-                $isIgstInt = $isIGST ? 1 : 0;
-                $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
-                
-                // Fix: Corrected the bind_param type string to match all 13 parameters
-                $stmt->bind_param(
-                    "issdddiiiisss",
-                    $booking['id'],
-                    $invoiceNumber,
-                    $currentDate,
-                    $baseAmountBeforeTax,
-                    $taxAmount,
-                    $finalTotal,
-                    $gstEnabledInt,
-                    $isIgstInt,
-                    $includeTaxInt,
-                    $gstNumberVal, 
-                    $companyNameVal,
-                    $companyAddressVal,
-                    $invoiceHtml
-                );
-                
-                $success = $stmt->execute();
-                
-                if (!$success || $stmt->error) {
-                    logInvoiceError("Error inserting invoice", [
-                        'error' => $stmt->error, 
-                        'success' => $success ? 'true' : 'false'
-                    ]);
-                } else {
-                    $responseData['message'] = 'Invoice generated and saved successfully';
-                    $newId = $stmt->insert_id;
-                    logInvoiceError("New invoice created", [
-                        'booking_id' => $booking['id'], 
-                        'invoice_id' => $newId,
-                        'invoice_number' => $invoiceNumber
-                    ]);
-                }
-            }
-        } catch (Exception $e) {
-            logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            // Continue and return the invoice even if saving to DB fails
-        }
-    }
-    
-    // Send invoice data response
+    // Send success response
     sendJsonResponse($responseData);
-
+    
 } catch (Exception $e) {
-    logInvoiceError("Error generating invoice", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logInvoiceError("Exception", [
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
+    
     sendJsonResponse([
         'status' => 'error',
         'message' => 'Failed to generate invoice: ' . $e->getMessage(),
-        'error_details' => $debugMode ? $e->getMessage() : null
+        'error_details' => $debugMode ? $e->getTraceAsString() : null
     ], 500);
 }
 
