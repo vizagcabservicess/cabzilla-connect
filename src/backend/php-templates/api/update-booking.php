@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -202,6 +201,26 @@ try {
         
         // Log the extra charges that are being saved
         logError("Saving extra charges", ['charges' => $standardizedCharges, 'json' => $extraCharges]);
+        
+        // If totalAmount isn't explicitly provided but we have extraCharges,
+        // calculate and update the total amount
+        if (!isset($data['totalAmount']) && !empty($standardizedCharges)) {
+            $baseAmount = (float)$booking['total_amount'];
+            $extraTotal = 0;
+            
+            foreach ($standardizedCharges as $charge) {
+                $extraTotal += (float)$charge['amount'];
+            }
+            
+            $newTotal = $baseAmount + $extraTotal;
+            $data['totalAmount'] = $newTotal;
+            
+            logError("Recalculated total amount", [
+                'baseAmount' => $baseAmount,
+                'extraTotal' => $extraTotal,
+                'newTotal' => $newTotal
+            ]);
+        }
     }
     
     // Track if status is being updated
@@ -304,7 +323,7 @@ try {
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => $updatedBooking['admin_notes'],
-        'extraCharges' => $formattedExtraCharges,
+        'extraCharges' => $formattedExtraCharges, // Use consistently formatted extra charges
         'billingAddress' => isset($updatedBooking['billing_address']) ? $updatedBooking['billing_address'] : null,
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -221,6 +220,14 @@ export default function BookingEditPage() {
         amount: Number(c.amount), // Ensure it's a number
         description: c.description // Use description as the standard field
       }));
+      
+      // Calculate total amount including extra charges
+      const baseAmount = typeof booking.totalAmount === 'number' 
+        ? booking.totalAmount 
+        : parseFloat(String(booking.totalAmount)) || 0;
+        
+      const extraAmount = standardizedExtraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
+      const calculatedTotal = baseAmount + extraAmount;
 
       const updatedData = {
         passengerName: contactDetails.name,
@@ -229,23 +236,38 @@ export default function BookingEditPage() {
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
-        extraCharges: standardizedExtraCharges
+        extraCharges: standardizedExtraCharges,
+        totalAmount: calculatedTotal // Include the calculated total with extra charges
       };
+      
       const bookingIdNumber = parseInt(bookingId, 10);
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
+      
       if (result) {
         // Important: Update the local state with the new data to ensure persistence
         setBooking({ 
           ...booking, 
           ...result,
           // Explicitly update extraCharges to ensure it's in the right format
-          extraCharges: standardizedExtraCharges 
+          extraCharges: standardizedExtraCharges,
+          totalAmount: calculatedTotal
         });
-        toast({ title: "Booking Updated", description: "Your booking has been updated successfully!" });
+        
+        // Also update the extraCharges state to ensure UI consistency
+        setExtraCharges(standardizedExtraCharges);
+        
+        toast({ 
+          title: "Booking Updated", 
+          description: "Your booking has been updated successfully!" 
+        });
       }
     } catch (error) {
       console.error("Error updating booking:", error);
-      toast({ title: "Update Failed", description: error instanceof Error ? error.message : 'Failed to update booking', variant: "destructive" });
+      toast({ 
+        title: "Update Failed", 
+        description: error instanceof Error ? error.message : 'Failed to update booking', 
+        variant: "destructive" 
+      });
     } finally {
       setIsSubmitting(false);
     }

@@ -218,28 +218,54 @@ try {
         throw new Exception("Database error: " . $conn->error);
     }
 
+    // Parse and standardize extra charges
+    $extraCharges = [];
+    if (!empty($booking['extra_charges'])) {
+        try {
+            $parsedCharges = json_decode($booking['extra_charges'], true);
+            if (is_array($parsedCharges)) {
+                // Standardize to ensure amount and description fields
+                foreach ($parsedCharges as $charge) {
+                    $extraCharges[] = [
+                        'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                        'description' => isset($charge['description']) ? $charge['description'] : 
+                                      (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
+                    ];
+                }
+                logInvoiceError("Extra charges found", ['charges' => $extraCharges]);
+            }
+        } catch (Exception $e) {
+            logInvoiceError("Failed to parse extra_charges", ['error' => $e->getMessage()]);
+        }
+    }
+
+    // Calculate extra charges total
+    $extraChargesTotal = 0;
+    foreach ($extraCharges as $charge) {
+        $extraChargesTotal += (float)$charge['amount'];
+    }
+    logInvoiceError("Extra charges total calculated", ['total' => $extraChargesTotal]);
+
     // Generate invoice number
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
 
     // Current date for invoice generation
     $currentDate = date('Y-m-d');
 
-    // Calculate tax components based on includeTax setting
+    // Base total amount from booking
     $totalAmount = (float)$booking['total_amount'];
-    
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
     
     // Convert string to number if needed
     if (!is_numeric($totalAmount)) {
-        $totalAmount = floatval($totalAmount);
+        $totalAmount = floatval($totalAmount) || 0;
     }
     
-    // Ensure we have a valid amount
+    // Ensure we have a valid base amount
     if ($totalAmount <= 0) {
         $totalAmount = 0;
     }
     
+    // Calculate base amount before tax based on GST settings
     if ($includeTax && $gstEnabled) {
         // If tax is included in total amount (default)
         $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
@@ -280,9 +306,15 @@ try {
         $igstAmount = 0;
     }
     
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
-    $finalTotal = round($finalTotal, 2);
+    // Grand total with extra charges added
+    $grandTotal = $totalAmount + $extraChargesTotal;
+    logInvoiceError("Final calculation", [
+        'baseAmount' => $baseAmountBeforeTax,
+        'taxAmount' => $taxAmount,
+        'totalBeforeExtras' => $totalAmount,
+        'extraChargesTotal' => $extraChargesTotal,
+        'grandTotal' => $grandTotal
+    ]);
 
     // Instead of searching for CSS, use inline CSS for reliability
     $cssContent = "
@@ -371,129 +403,211 @@ try {
         background: #f9f9f9;
         font-size: 9pt;
     }
+    .extra-charges {
+        margin-top: 20px;
+    }
+    .extra-charges-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .extra-charges-table th, .extra-charges-table td {
+        padding: 5px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    .extra-charges-table th:last-child, .extra-charges-table td:last-child {
+        text-align: right;
+    }
+    .grand-total {
+        margin-top: 20px;
+        font-weight: bold;
+    }
     ";
 
     // Create HTML content for the invoice
-    $content = '
+    $htmlContent = "
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset="utf-8">
-        <title>Invoice #'.$invoiceNumber.'</title>
+        <meta charset='utf-8'>
+        <title>Invoice #{$invoiceNumber}</title>
         <style>
-            '.$cssContent.'
+            {$cssContent}
         </style>
     </head>
     <body>
-        <div class="invoice-container">
-            <div class="invoice-header">
+        <div class='invoice-container'>
+            <div class='invoice-header'>
                 <div>
                     <h1>INVOICE</h1>
-                    <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
+                    <p>Invoice #: {$invoiceNumber}</p>
+                    <p>Date: {$currentDate}</p>
+                    <p>Booking #: {$booking['booking_number']}</p>
                 </div>
-                <div class="company-info">
-                    <h2>#'.$invoiceNumber.'</h2>
-                    <p>Date: '.date('d M Y', strtotime($currentDate)).'</p>
-                    <p>Booking #: '.($booking['booking_number'] ?? 'N/A').'</p>
+                <div class='company-info'>
+                    <h2>BE Rides</h2>
+                    <p>Vizag, Andhra Pradesh, India</p>
+                    <p>Phone: +91-7093864511</p>
+                    <p>Email: info@berides.in</p>
                 </div>
             </div>
             
-            <div class="invoice-body">
-                <div class="customer-section" style="display: table; width: 100%; margin-bottom: 20px;">
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Customer Details</h3>
-                        <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
-                        <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
-                        <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
-                    </div>
-                    
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
-                        (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
-                        <p><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                        <p><strong>Vehicle:</strong> '.($booking['cab_type'] ?? 'N/A').'</p>
-                    </div>
-                </div>
+            <div class='customer-info'>
+                <h3>Bill To</h3>
+                <p><strong>{$booking['passenger_name']}</strong></p>
+                <p>Phone: {$booking['passenger_phone']}</p>
+                <p>Email: {$booking['passenger_email']}</p>";
                 
-                <div class="trip-details">
-                    <h3 class="section-title">Trip Details</h3>
-                    <p><strong>Pickup:</strong> '.($booking['pickup_location'] ?? 'N/A').'</p>
-                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p><strong>Drop:</strong> '.$booking['drop_location'].'</p>' : '').'
-                    <p><strong>Pickup Time:</strong> '.(isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                </div>';
-
+    // Add GST info if enabled
     if ($gstEnabled && !empty($gstNumber)) {
-        $content .= '
-                <div class="gst-details" style="margin: 20px 0; padding: 10px; border: 1px solid #eee; background: #f9f9f9;">
-                    <h3 class="section-title">GST Details</h3>
-                    <p><strong>GST Number:</strong> '.htmlspecialchars($gstNumber).'</p>
-                    <p><strong>Company Name:</strong> '.htmlspecialchars($companyName).'</p>
-                    '.(!empty($companyAddress) ? '<p><strong>Company Address:</strong> '.htmlspecialchars($companyAddress).'</p>' : '').'
-                </div>';
-    }
-
-    $content .= '
-                <h3 class="section-title">Fare Breakdown</h3>
-                <table class="fare-table">
-                    <tr>
-                        <th>Description</th>
-                        <th style="text-align: right;">Amount</th>
-                    </tr>
-                    <tr>
-                        <td>Base Fare'.($includeTax && $gstEnabled ? ' (excluding tax)' : '').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
-                    </tr>';
-
-    if ($gstEnabled) {
-        if ($isIGST) {
-            $content .= '
-                    <tr>
-                        <td>IGST (12%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($igstAmount, 2).'</td>
-                    </tr>';
-        } else {
-            $content .= '
-                    <tr>
-                        <td>CGST (6%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($cgstAmount, 2).'</td>
-                    </tr>
-                    <tr>
-                        <td>SGST (6%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($sgstAmount, 2).'</td>
-                    </tr>';
+        $htmlContent .= "<p>GST Number: {$gstNumber}</p>";
+        if (!empty($companyName)) {
+            $htmlContent .= "<p>Company: {$companyName}</p>";
+        }
+        if (!empty($companyAddress)) {
+            $htmlContent .= "<p>Address: {$companyAddress}</p>";
         }
     }
-
-    $content .= '
-                    <tr class="total-row">
-                        <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
-                    </tr>
-                </table>';
-
-    if ($gstEnabled) {
-        $content .= '
-                <p class="tax-note" style="font-size: 0.9em; color: #666;">This invoice includes GST as per applicable rates. '.
-                ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%').' has been applied.</p>';
-    }
-
-    $content .= '
+    
+    $htmlContent .= "
             </div>
             
-            <div class="footer">
-                <p>Thank you for choosing Vizag Cab Services!</p>
-                <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
-                <p>Generated on: '.date('d M Y H:i:s').'</p>
+            <div class='booking-details'>
+                <h3>Booking Details</h3>
+                <table>
+                    <tr>
+                        <th>Pickup:</th>
+                        <td>{$booking['pickup_location']}</td>
+                    </tr>";
+    
+    if (!empty($booking['drop_location'])) {
+        $htmlContent .= "
+                    <tr>
+                        <th>Drop:</th>
+                        <td>{$booking['drop_location']}</td>
+                    </tr>";
+    }
+    
+    $formattedPickupDate = date('d M Y h:i A', strtotime($booking['pickup_date']));
+    
+    $htmlContent .= "
+                    <tr>
+                        <th>Date:</th>
+                        <td>{$formattedPickupDate}</td>
+                    </tr>
+                    <tr>
+                        <th>Vehicle:</th>
+                        <td>{$booking['cab_type']}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class='fare-details'>
+                <h3>Fare Details</h3>
+                <table class='fare-table'>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Base Fare</td>
+                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                        </tr>";
+    
+    // Add GST rows if applicable
+    if ($gstEnabled) {
+        if ($isIGST) {
+            $htmlContent .= "
+                        <tr>
+                            <td>IGST (12%)</td>
+                            <td>₹ " . number_format($igstAmount, 2) . "</td>
+                        </tr>";
+        } else {
+            $htmlContent .= "
+                        <tr>
+                            <td>CGST (6%)</td>
+                            <td>₹ " . number_format($cgstAmount, 2) . "</td>
+                        </tr>
+                        <tr>
+                            <td>SGST (6%)</td>
+                            <td>₹ " . number_format($sgstAmount, 2) . "</td>
+                        </tr>";
+        }
+    }
+    
+    $htmlContent .= "
+                        <tr class='total-row'>
+                            <td>Subtotal</td>
+                            <td>₹ " . number_format($totalAmount, 2) . "</td>
+                        </tr>";
+    
+    // Add extra charges if there are any
+    if (!empty($extraCharges)) {
+        $htmlContent .= "
+            </tbody>
+        </table>
+        
+        <div class='extra-charges'>
+            <h3>Extra Charges</h3>
+            <table class='extra-charges-table'>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>";
+        
+        foreach ($extraCharges as $charge) {
+            $chargeDesc = isset($charge['description']) ? $charge['description'] : 
+                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+            
+            $htmlContent .= "
+                    <tr>
+                        <td>{$chargeDesc}</td>
+                        <td>₹ " . number_format($chargeAmount, 2) . "</td>
+                    </tr>";
+        }
+        
+        $htmlContent .= "
+                </tbody>
+            </table>
+        </div>
+        
+        <div class='grand-total'>
+            Grand Total: ₹ " . number_format($grandTotal, 2) . "
+        </div>";
+    } else {
+        // If no extra charges, just close the table
+        $htmlContent .= "
+                    </tbody>
+                </table>";
+    }
+    
+    $htmlContent .= "
+            </div>
+            
+            <div class='invoice-footer' style='margin-top: 50px; text-align: center; font-size: 12px;'>
+                <p>Thank you for using BE Rides. For any queries, please contact us at info@berides.in</p>";
+    
+    if ($gstEnabled) {
+        $htmlContent .= "<p>This is a computer-generated invoice and does not require a signature</p>";
+    }
+    
+    $htmlContent .= "
             </div>
         </div>
     </body>
-    </html>';
+    </html>";
 
     // For HTML output
     if ($format === 'html' || isset($_GET['show_html'])) {
         header('Content-Type: text/html; charset=utf-8');
-        echo $content;
+        echo $htmlContent;
         exit;
     }
 
@@ -526,7 +640,7 @@ try {
             $dompdf->setPaper('A4', 'portrait');
             
             // Load HTML content
-            $dompdf->loadHtml($content);
+            $dompdf->loadHtml($htmlContent);
             
             // Render PDF
             debugLog("Starting PDF render");
@@ -605,7 +719,7 @@ try {
                 <p>Please run <code>composer require dompdf/dompdf:^2.0</code> and then <code>composer install</code> in your project root.</p>
                 <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
             </div>
-            ' . $content . '
+            ' . $htmlContent . '
         </body>
         </html>';
     }

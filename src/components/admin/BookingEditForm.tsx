@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +36,7 @@ export function BookingEditForm({
     billingAddress: booking.billingAddress || '',
   });
 
-  // Standardize extra charges data format
+  // Standardize extra charges data format - always use amount and description
   const initializeExtraCharges = () => {
     if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
       return booking.extraCharges.map(charge => ({
@@ -143,9 +142,19 @@ export function BookingEditForm({
   };
 
   const calculateTotal = () => {
-    let total = parseFloat(booking.totalAmount.toString()) || 0;
+    // Parse the base amount properly
+    let baseAmount = 0;
+    if (typeof booking.totalAmount === 'number') {
+      baseAmount = booking.totalAmount;
+    } else if (typeof booking.totalAmount === 'string') {
+      baseAmount = parseFloat(booking.totalAmount) || 0;
+    }
+    
+    // Calculate total extra charges
     const additionalCharges = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
-    return total + additionalCharges;
+    
+    // Return total with additional charges
+    return baseAmount + additionalCharges;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,9 +164,9 @@ export function BookingEditForm({
       return;
     }
     
-    // Ensure extra charges are properly formatted
+    // Ensure extra charges are properly formatted with consistent field names
     const standardizedExtraCharges = extraCharges.map(charge => ({
-      amount: charge.amount,
+      amount: Number(charge.amount),
       description: charge.description
     }));
     

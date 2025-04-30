@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file - use absolute path with __DIR__
 require_once __DIR__ . '/../../config.php';
@@ -171,13 +170,20 @@ try {
         throw new Exception("Database error: " . $conn->error);
     }
 
-    // Parse extra charges from the database
+    // Parse and standardize extra charges from the database
     $extraCharges = [];
     if (!empty($booking['extra_charges'])) {
         try {
             $parsedCharges = json_decode($booking['extra_charges'], true);
             if (is_array($parsedCharges)) {
-                $extraCharges = $parsedCharges;
+                // Standardize to ensure amount and description fields
+                foreach ($parsedCharges as $charge) {
+                    $extraCharges[] = [
+                        'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                        'description' => isset($charge['description']) ? $charge['description'] : 
+                                      (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
+                    ];
+                }
                 logInvoiceError("Extra charges found", ['charges' => $extraCharges]);
             }
         } catch (Exception $e) {
@@ -196,14 +202,15 @@ try {
     // Calculate total of extra charges
     if (!empty($extraCharges)) {
         foreach ($extraCharges as $charge) {
-            $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
-            $extraChargesTotal += $amount;
+            $extraChargesTotal += (float)$charge['amount'];
         }
     }
     
-    // Add extra charges to total if they aren't already included
+    // Log extra charges total
+    logInvoiceError("Extra charges total", ['total' => $extraChargesTotal]);
+    
+    // Base amount without extra charges
     $baseAmountWithoutExtra = $totalAmount;
-    $totalAmountWithExtra = $totalAmount;
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
@@ -255,6 +262,15 @@ try {
     
     // Grand total with extra charges
     $grandTotal = $totalAmount + $extraChargesTotal;
+    
+    // Log final calculations
+    logInvoiceError("Final calculation", [
+        'baseAmount' => $baseAmountBeforeTax,
+        'taxAmount' => $taxAmount,
+        'totalBeforeExtras' => $totalAmount,
+        'extraChargesTotal' => $extraChargesTotal,
+        'grandTotal' => $grandTotal
+    ]);
 
     // Use inline CSS for reliability instead of searching for CSS files
     $cssContent = "

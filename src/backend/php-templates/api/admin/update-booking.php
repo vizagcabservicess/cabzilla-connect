@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -197,24 +196,44 @@ try {
 
     // Process extra charges with standardized format
     $receivedExtraCharges = null;
+    $extraChargesTotal = 0;
+    
     if (array_key_exists('extraCharges', $data)) {
         $receivedExtraCharges = $data['extraCharges'];
         
         // Standardize field names to amount and description
         $standardizedCharges = [];
         foreach ($receivedExtraCharges as $charge) {
+            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             $standardizedCharge = [
-                'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
+                'amount' => $chargeAmount,
                 'description' => isset($charge['description']) ? $charge['description'] : 
                                 (isset($charge['label']) ? $charge['label'] : '')
             ];
             $standardizedCharges[] = $standardizedCharge;
+            $extraChargesTotal += $chargeAmount;
         }
         
         $receivedExtraCharges = $standardizedCharges;
         
     } elseif (array_key_exists('extra_charges', $data)) {
         $receivedExtraCharges = $data['extra_charges'];
+        
+        // Standardize if it's under extra_charges key
+        if (is_array($receivedExtraCharges)) {
+            $standardizedCharges = [];
+            foreach ($receivedExtraCharges as $charge) {
+                $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+                $standardizedCharge = [
+                    'amount' => $chargeAmount,
+                    'description' => isset($charge['description']) ? $charge['description'] : 
+                                   (isset($charge['label']) ? $charge['label'] : '')
+                ];
+                $standardizedCharges[] = $standardizedCharge;
+                $extraChargesTotal += $chargeAmount;
+            }
+            $receivedExtraCharges = $standardizedCharges;
+        }
     }
     
     // Fallback: if not present in request, use value from DB or set to []
@@ -230,6 +249,19 @@ try {
         } else {
             $receivedExtraCharges = [];
         }
+    }
+    
+    // If totalAmount isn't provided but we have extraCharges, update the total amount
+    if (!isset($data['totalAmount']) && $extraChargesTotal > 0) {
+        $baseAmount = (float)$booking['total_amount'];
+        $newTotal = $baseAmount + $extraChargesTotal;
+        $data['totalAmount'] = $newTotal;
+        
+        logError("Recalculated total amount", [
+            'baseAmount' => $baseAmount,
+            'extraChargesTotal' => $extraChargesTotal,
+            'newTotal' => $newTotal
+        ]);
     }
     
     error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
