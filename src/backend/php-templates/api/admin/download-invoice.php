@@ -164,7 +164,7 @@ try {
         }
         
         $booking = $result->fetch_assoc();
-        logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'extra_charges' => $booking['extra_charges'], 'total_amount' => $booking['total_amount']]);
+        logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'extra_charges' => $booking['extra_charges']]);
         $stmt->close();
     } else {
         logInvoiceError("Error preparing statement", ['error' => $conn->error]);
@@ -180,10 +180,7 @@ try {
             // Debug the raw value
             logInvoiceError("Raw extra_charges from DB", ['raw' => $booking['extra_charges']]);
             
-            // Try to decode the extra_charges as JSON
             $parsedCharges = json_decode($booking['extra_charges'], true);
-            
-            // If we got an array, process it
             if (is_array($parsedCharges)) {
                 // Standardize to ensure amount and description fields
                 foreach ($parsedCharges as $charge) {
@@ -219,14 +216,35 @@ try {
     $currentDate = date('Y-m-d');
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
     
-    // CRITICAL: Correctly calculate base amount and total with extra charges
+    // Calculate base amount and total with extra charges
     $totalAmount = (float)$booking['total_amount'];
+    
+    // IMPORTANT: Check if total_amount in DB already includes extra charges or not
     $baseAmountWithoutExtra = $totalAmount;
     
-    logInvoiceError("Initial total calculation", [
-        'db_total_amount' => $totalAmount,
-        'extraChargesTotal' => $extraChargesTotal
-    ]);
+    // If we have extra charges, determine if they need to be added to the total
+    if ($extraChargesTotal > 0) {
+        // Log to debug
+        logInvoiceError("Total amount check", [
+            'db_total' => $totalAmount,
+            'extraChargesTotal' => $extraChargesTotal
+        ]);
+
+        // Check if the total amount includes extra charges already
+        if ($totalAmount > $extraChargesTotal) {
+            $baseAmountWithoutExtra = $totalAmount - $extraChargesTotal;
+            logInvoiceError("Calculated base amount by subtracting extras", [
+                'baseAmountWithoutExtra' => $baseAmountWithoutExtra
+            ]);
+        } else {
+            // If total amount is less than extras, consider base to be the total in DB
+            // and we'll add extras on top of it
+            $baseAmountWithoutExtra = $totalAmount;
+            logInvoiceError("Using DB total as base (not including extras yet)", [
+                'baseAmountWithoutExtra' => $baseAmountWithoutExtra
+            ]);
+        }
+    }
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
@@ -276,9 +294,9 @@ try {
         $igstAmount = 0;
     }
     
-    // Calculate grand total by adding base amount, tax AND extra charges
-    $subtotal = $baseAmountBeforeTax;
-    $grandTotal = $subtotal + $taxAmount + $extraChargesTotal;
+    // Calculate grand total by adding base amount, tax and extra charges
+    $subtotal = $baseAmountWithoutExtra + $taxAmount;
+    $grandTotal = $subtotal + $extraChargesTotal;
     $grandTotal = round($grandTotal, 2);
     
     // Log final calculations
@@ -430,12 +448,12 @@ try {
     $htmlContent .= "
                         <tr class='total-row'>
                             <td>Subtotal</td>
-                            <td>₹ " . number_format($subtotal + $taxAmount, 2) . "</td>
+                            <td>₹ " . number_format($subtotal, 2) . "</td>
                         </tr>
                     </tbody>
                 </table>";
     
-    // Add extra charges section - CRITICAL: Always show this section if there are extra charges
+    // Add extra charges section
     if (!empty($extraCharges)) {
         $htmlContent .= "
             <div class='extra-charges'>
@@ -450,8 +468,8 @@ try {
                     <tbody>";
         
         foreach ($extraCharges as $charge) {
-            $chargeDesc = isset($charge['description']) ? htmlspecialchars($charge['description']) : 
-                        (isset($charge['label']) ? htmlspecialchars($charge['label']) : 'Additional Charge');
+            $chargeDesc = isset($charge['description']) ? $charge['description'] : 
+                        (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
             $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             
             $htmlContent .= "
@@ -467,7 +485,7 @@ try {
             </div>";
     }
     
-    // Add grand total - CRITICAL: Include the extra charges in the grand total
+    // Add grand total
     $htmlContent .= "
             <div class='grand-total'>
                 Grand Total: ₹ " . number_format($grandTotal, 2) . "
