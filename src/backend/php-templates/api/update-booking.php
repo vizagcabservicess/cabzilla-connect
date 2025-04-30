@@ -182,15 +182,17 @@ try {
     ];
     
     // Handle extra charges separately to ensure proper JSON encoding
-    $extraCharges = null;
     if (isset($data['extraCharges'])) {
+        // Log the raw data for debugging
+        logError("Processing extra charges from request", $data['extraCharges']);
+        
         // Standardize field names to amount and description
         $standardizedCharges = [];
         foreach ($data['extraCharges'] as $charge) {
             $standardizedCharge = [
                 'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
                 'description' => isset($charge['description']) ? $charge['description'] : 
-                                (isset($charge['label']) ? $charge['label'] : '')
+                                (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
             ];
             $standardizedCharges[] = $standardizedCharge;
         }
@@ -299,18 +301,25 @@ try {
     // Parse and format extra charges
     $formattedExtraCharges = [];
     if (!empty($updatedBooking['extra_charges'])) {
-        $parsedCharges = json_decode($updatedBooking['extra_charges'], true);
+        $rawExtraCharges = $updatedBooking['extra_charges'];
+        logError("Raw extra_charges from DB", ['extra_charges' => $rawExtraCharges]);
+        
+        $parsedCharges = json_decode($rawExtraCharges, true);
         if (is_array($parsedCharges)) {
             foreach ($parsedCharges as $charge) {
                 // Always use amount and description as the standard fields
                 $formattedExtraCharges[] = [
                     'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
                     'description' => isset($charge['description']) ? $charge['description'] : 
-                                   (isset($charge['label']) ? $charge['label'] : '')
+                                   (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
                 ];
             }
+        } else {
+            logError("Failed to parse extra_charges as JSON", ['extra_charges' => $rawExtraCharges]);
         }
     }
+    
+    logError("Formatted extra charges for response", $formattedExtraCharges);
     
     // Format the response
     $booking = [

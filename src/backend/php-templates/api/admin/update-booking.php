@@ -148,7 +148,8 @@ try {
                 'driver_name' => $data['driverName'] ?? null,
                 'driver_phone' => $data['driverPhone'] ?? null,
                 'vehicle_number' => $data['vehicleNumber'] ?? null,
-                'updated_at' => date('Y-m-d H:i:s')
+                'updated_at' => date('Y-m-d H:i:s'),
+                'extra_charges' => isset($data['extraCharges']) ? json_encode($data['extraCharges']) : null
             ];
             
             sendJsonResponse([
@@ -202,6 +203,9 @@ try {
     if (array_key_exists('extraCharges', $data)) {
         $receivedExtraCharges = $data['extraCharges'];
         
+        // Log the incoming data for debugging
+        error_log("[update-booking] Received extraCharges: " . json_encode($receivedExtraCharges));
+        
         // Standardize field names to amount and description
         $standardizedCharges = [];
         foreach ($receivedExtraCharges as $charge) {
@@ -209,7 +213,7 @@ try {
             $standardizedCharge = [
                 'amount' => $chargeAmount,
                 'description' => isset($charge['description']) ? $charge['description'] : 
-                                (isset($charge['label']) ? $charge['label'] : '')
+                                (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
             ];
             $standardizedCharges[] = $standardizedCharge;
             $extraChargesTotal += $chargeAmount;
@@ -228,7 +232,7 @@ try {
                 $standardizedCharge = [
                     'amount' => $chargeAmount,
                     'description' => isset($charge['description']) ? $charge['description'] : 
-                                   (isset($charge['label']) ? $charge['label'] : '')
+                                   (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
                 ];
                 $standardizedCharges[] = $standardizedCharge;
                 $extraChargesTotal += $chargeAmount;
@@ -247,6 +251,12 @@ try {
         if (!empty($rowExtra['extra_charges'])) {
             $receivedExtraCharges = json_decode($rowExtra['extra_charges'], true);
             if (!is_array($receivedExtraCharges)) $receivedExtraCharges = [];
+            
+            // Calculate total of extra charges from DB
+            foreach ($receivedExtraCharges as $charge) {
+                $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+                $extraChargesTotal += $chargeAmount;
+            }
         } else {
             $receivedExtraCharges = [];
         }
@@ -349,7 +359,7 @@ try {
             $standardizedExtraCharges[] = [
                 'amount' => isset($charge['amount']) ? (float)$charge['amount'] : 0,
                 'description' => isset($charge['description']) ? $charge['description'] : 
-                              (isset($charge['label']) ? $charge['label'] : '')
+                              (isset($charge['label']) ? $charge['label'] : 'Additional Charge')
             ];
         }
         $decodedExtraCharges = $standardizedExtraCharges;

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,11 @@ interface BookingEditFormProps {
   onSubmit?: (updatedData: Partial<Booking>) => Promise<void>; // Add for backward compatibility
   onCancel: () => void;
   isSubmitting: boolean;
+}
+
+interface ExtraCharge {
+  amount: number;
+  description: string;
 }
 
 export function BookingEditForm({ 
@@ -39,20 +44,32 @@ export function BookingEditForm({
 
   // Standardize extra charges data format - always use amount and description
   const initializeExtraCharges = () => {
+    let result: ExtraCharge[] = [];
+    
+    // Check console logs for debugging
+    console.log('Initializing extra charges from booking:', booking.extraCharges);
+    
     if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
-      return booking.extraCharges.map(charge => ({
+      result = booking.extraCharges.map(charge => ({
         amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)) || 0,
         description: charge.description || (charge as any).label || ''
       }));
     }
-    return [];
+    
+    console.log('Initialized extra charges:', result);
+    return result;
   };
 
-  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>(
+  const [extraCharges, setExtraCharges] = useState<ExtraCharge[]>(
     initializeExtraCharges()
   );
 
-  const [newCharge, setNewCharge] = useState<{ amount: number; description: string }>({
+  // Add effect to update extraCharges when booking changes
+  useEffect(() => {
+    setExtraCharges(initializeExtraCharges());
+  }, [booking.extraCharges]);
+
+  const [newCharge, setNewCharge] = useState<ExtraCharge>({
     amount: 0,
     description: ''
   });
@@ -104,15 +121,24 @@ export function BookingEditForm({
       return;
     }
     
-    setExtraCharges(prev => [...prev, { 
+    // Create a new array with the standardized format
+    const updatedCharges = [...extraCharges, { 
       amount: Number(newCharge.amount),
       description: newCharge.description
-    }]);
+    }];
+    
+    // Log for debugging
+    console.log('Adding extra charge:', newCharge);
+    console.log('Updated charges:', updatedCharges);
+    
+    setExtraCharges(updatedCharges);
     setNewCharge({ amount: 0, description: '' });
   };
 
   const removeExtraCharge = (index: number) => {
-    setExtraCharges(prev => prev.filter((_, i) => i !== index));
+    const updatedCharges = extraCharges.filter((_, i) => i !== index);
+    console.log('Removing charge at index', index, 'new charges:', updatedCharges);
+    setExtraCharges(updatedCharges);
   };
 
   const validateForm = () => {
@@ -154,6 +180,13 @@ export function BookingEditForm({
     // Calculate total extra charges
     const additionalCharges = extraCharges.reduce((sum, charge) => sum + Number(charge.amount), 0);
     
+    // Log for debugging
+    console.log('Calculating total:', {
+      baseAmount,
+      additionalCharges,
+      total: baseAmount + additionalCharges
+    });
+    
     // Return total with additional charges
     return baseAmount + additionalCharges;
   };
@@ -165,11 +198,16 @@ export function BookingEditForm({
       return;
     }
     
+    // Log the current extra charges before submission
+    console.log('Extra charges before submission:', extraCharges);
+    
     // Ensure extra charges are properly formatted with consistent field names
     const standardizedExtraCharges = extraCharges.map(charge => ({
       amount: Number(charge.amount),
       description: charge.description || 'Additional Charge'
     }));
+    
+    console.log('Standardized extra charges for submission:', standardizedExtraCharges);
     
     const updatedData = {
       passengerName: formData.passengerName,
@@ -182,6 +220,8 @@ export function BookingEditForm({
       extraCharges: standardizedExtraCharges,
       totalAmount: calculateTotal(),
     };
+    
+    console.log('Submitting booking update data:', updatedData);
     
     // Use onSubmit if provided (for backward compatibility), otherwise use onSave
     const submitHandler = onSubmit || onSave;

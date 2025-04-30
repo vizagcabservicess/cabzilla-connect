@@ -164,7 +164,7 @@ try {
         }
         
         $booking = $result->fetch_assoc();
-        logInvoiceError("Booking found", ['booking_id' => $booking['id']]);
+        logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'extra_charges' => $booking['extra_charges']]);
         $stmt->close();
     } else {
         logInvoiceError("Error preparing statement", ['error' => $conn->error]);
@@ -186,10 +186,14 @@ try {
                     ];
                 }
                 logInvoiceError("Extra charges found", ['charges' => $extraCharges]);
+            } else {
+                logInvoiceError("Invalid extra_charges format in DB", ['value' => $booking['extra_charges']]);
             }
         } catch (Exception $e) {
-            logInvoiceError("Failed to parse extra_charges", ['error' => $e->getMessage()]);
+            logInvoiceError("Failed to parse extra_charges", ['error' => $e->getMessage(), 'value' => $booking['extra_charges']]);
         }
+    } else {
+        logInvoiceError("No extra_charges found in booking");
     }
 
     // Current date for invoice generation
@@ -208,11 +212,12 @@ try {
     }
     
     // Log extra charges total
-    logInvoiceError("Extra charges total", ['total' => $extraChargesTotal]);
+    logInvoiceError("Extra charges total", ['total' => $extraChargesTotal, 'found_charges' => count($extraCharges)]);
     
-    // Base amount without extra charges
+    // Base amount without extra charges - ensure it's correct if total already includes extras
     $baseAmountWithoutExtra = $totalAmount - $extraChargesTotal;
     if ($baseAmountWithoutExtra < 0) {
+        // If negative, assume the base doesn't include extras yet
         $baseAmountWithoutExtra = $totalAmount;
         logInvoiceError("Warning: Base amount calculation resulted in negative value, using total amount instead", [
             'totalAmount' => $totalAmount,
@@ -394,7 +399,7 @@ try {
                     <tbody>
                         <tr>
                             <td>Base Fare</td>
-                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                            <td>₹ " . number_format($baseAmountWithoutExtra, 2) . "</td>
                         </tr>";
     
     // Add GST rows if applicable
@@ -418,7 +423,7 @@ try {
         }
     }
     
-    $subtotal = $baseAmountBeforeTax + $taxAmount;
+    $subtotal = $baseAmountWithoutExtra + $taxAmount;
     
     $htmlContent .= "
                         <tr class='total-row'>
@@ -426,14 +431,18 @@ try {
                             <td>₹ " . number_format($subtotal, 2) . "</td>
                         </tr>";
     
-    // Add extra charges if there are any
+    // ALWAYS check if there are any extraCharges, even if empty
+    $htmlContent .= "
+            </tbody>
+        </table>";
+       
+    // Add extra charges section even if there are no extra charges
+    $htmlContent .= "
+        <div class='extra-charges'>
+            <h3>Extra Charges</h3>";
+    
     if (!empty($extraCharges)) {
         $htmlContent .= "
-            </tbody>
-        </table>
-        
-        <div class='extra-charges'>
-            <h3>Extra Charges</h3>
             <table class='extra-charges-table'>
                 <thead>
                     <tr>
@@ -445,7 +454,7 @@ try {
         
         foreach ($extraCharges as $charge) {
             $chargeDesc = isset($charge['description']) ? $charge['description'] : 
-                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+                        (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
             $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             
             $htmlContent .= "
@@ -457,21 +466,18 @@ try {
         
         $htmlContent .= "
                 </tbody>
-            </table>
+            </table>";
+    } else {
+        $htmlContent .= "
+            <p class='text-sm text-gray-500 italic'>No extra charges added</p>";
+    }
+    
+    $htmlContent .= "
         </div>
         
         <div class='grand-total'>
             Grand Total: ₹ " . number_format($grandTotal, 2) . "
         </div>";
-    } else {
-        // If no extra charges, just close the table and show the total
-        $htmlContent .= "
-                    </tbody>
-                </table>
-                <div class='grand-total'>
-                    Total Amount: ₹ " . number_format($grandTotal, 2) . "
-                </div>";
-    }
     
     $htmlContent .= "
             </div>
