@@ -37,6 +37,7 @@ file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "
 file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
 
 // Include utilities
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/utils/database.php';
 require_once __DIR__ . '/utils/response.php';
 
@@ -58,16 +59,20 @@ try {
     
     if ($directHandling) {
         // Get database connection
-        $conn = getDbConnection();
+        $conn = getDbConnectionWithRetry(3, 1000);
         
         if (!$conn) {
-            throw new Exception('Database connection failed, check credentials');
+            throw new Exception('Database connection failed after multiple attempts, check credentials');
         }
+        
+        file_put_contents($logFile, "[$timestamp] Database connection established successfully\n", FILE_APPEND);
         
         // Ensure airport fares table exists and has default data
         if (!ensureAirportFaresTable($conn)) {
             throw new Exception('Failed to ensure airport_transfer_fares table');
         }
+        
+        file_put_contents($logFile, "[$timestamp] Airport fares table verified\n", FILE_APPEND);
         
         // Execute the appropriate query based on whether we have a vehicle ID
         if ($vehicleId) {
@@ -114,7 +119,11 @@ try {
                 ];
             }
             
+            file_put_contents($logFile, "[$timestamp] Query results: " . count($fares) . " fares found\n", FILE_APPEND);
+            
             if (count($fares) === 0) {
+                file_put_contents($logFile, "[$timestamp] No fares found, creating default\n", FILE_APPEND);
+                
                 // Default values based on vehicle type
                 $basePrice = 1200;
                 $pricePerKm = 12;
@@ -180,8 +189,20 @@ try {
                 ];
             }
             
+            // Format the response object properly
+            $responseData = [
+                'status' => 'success',
+                'message' => 'Airport fares retrieved successfully',
+                'data' => [
+                    'fares' => $fares
+                ]
+            ];
+            
+            // Log the outgoing response
+            file_put_contents($logFile, "[$timestamp] Sending response: " . json_encode($responseData) . "\n", FILE_APPEND);
+            
             // Send the response
-            sendSuccessResponse(['fares' => $fares], 'Airport fares retrieved successfully');
+            sendJsonResponse($responseData);
         } else {
             // Query for all vehicles
             $query = "SELECT * FROM airport_transfer_fares";
@@ -210,9 +231,21 @@ try {
                     'extraKmCharge' => (float)$row['extra_km_charge'],
                 ];
             }
+
+            // Format the response object properly
+            $responseData = [
+                'status' => 'success',
+                'message' => 'Airport fares retrieved successfully',
+                'data' => [
+                    'fares' => $fares
+                ]
+            ];
+            
+            // Log the outgoing response
+            file_put_contents($logFile, "[$timestamp] Sending response with " . count($fares) . " fares\n", FILE_APPEND);
             
             // Send the response
-            sendSuccessResponse(['fares' => $fares], 'Airport fares retrieved successfully');
+            sendJsonResponse($responseData);
         }
     } else {
         // Forward the request to the admin endpoint

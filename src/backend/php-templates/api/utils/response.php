@@ -1,65 +1,61 @@
 
 <?php
 /**
- * Standardized API response functions
+ * API Response Helper Functions
  */
 
-// Function to send a successful response
-function sendSuccessResponse($data = [], $message = 'Success', $code = 200) {
-    // Clear any existing output buffers to prevent contamination
+// Function to send success response
+function sendSuccessResponse($data = [], $message = 'Operation completed successfully', $statusCode = 200) {
+    // Clear any existing output buffers
     while (ob_get_level()) {
         ob_end_clean();
     }
     
+    // Set CORS and response headers
     header('Content-Type: application/json');
-    http_response_code($code);
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     
-    echo json_encode([
+    http_response_code($statusCode);
+    
+    $response = [
         'status' => 'success',
         'message' => $message,
-        'data' => $data,
-        'timestamp' => date('c')
-    ]);
+        'data' => $data
+    ];
     
+    echo json_encode($response, JSON_PRETTY_PRINT);
     exit;
 }
 
-// Function to send an error response
-function sendErrorResponse($message = 'An error occurred', $code = 400, $errors = []) {
-    // Clear any existing output buffers to prevent contamination
+// Function to send error response
+function sendErrorResponse($message = 'An error occurred', $statusCode = 400) {
+    // Clear any existing output buffers
     while (ob_get_level()) {
         ob_end_clean();
     }
     
+    // Set CORS and response headers
     header('Content-Type: application/json');
-    http_response_code($code);
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     
-    echo json_encode([
+    http_response_code($statusCode);
+    
+    $response = [
         'status' => 'error',
         'message' => $message,
-        'errors' => $errors,
-        'timestamp' => date('c')
-    ]);
+        'data' => []
+    ];
     
+    echo json_encode($response, JSON_PRETTY_PRINT);
     exit;
-}
-
-// Function to send a validation error response
-function sendValidationErrorResponse($errors = [], $message = 'Validation failed') {
-    sendErrorResponse($message, 422, $errors);
-}
-
-// Function to send a not found response
-function sendNotFoundResponse($message = 'Resource not found') {
-    sendErrorResponse($message, 404);
-}
-
-// Function to send an unauthorized response
-function sendUnauthorizedResponse($message = 'Unauthorized') {
-    sendErrorResponse($message, 401);
-}
-
-// Function to send a forbidden response
-function sendForbiddenResponse($message = 'Forbidden') {
-    sendErrorResponse($message, 403);
 }

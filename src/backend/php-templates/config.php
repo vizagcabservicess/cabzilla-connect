@@ -17,9 +17,9 @@ define('DB_USER', 'u644605165_usr_be');
 define('DB_PASS', 'Vizag@1213');
 
 // Database Connection Settings - Increased timeouts for stability
-ini_set('mysql.connect_timeout', '30');
-ini_set('default_socket_timeout', '30');
-ini_set('max_execution_time', '60');
+ini_set('mysql.connect_timeout', '60');
+ini_set('default_socket_timeout', '60');
+ini_set('max_execution_time', '120');
 
 // Error Reporting Configuration
 if (APP_DEBUG) {
@@ -61,18 +61,32 @@ function getDbConnection() {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         
         if ($conn->connect_error) {
+            // Log the original error
+            $timestamp = date('Y-m-d H:i:s');
+            $logMessage = "[$timestamp] Primary database connection failed: " . $conn->connect_error . "\n";
+            file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
+            
             // Try alternative credentials if primary fails
             $altUser = 'u644605165_usr_be';
             $altPass = 'Vizag@1213';
             
             if (DB_USER !== $altUser) {
+                $logMessage = "[$timestamp] Trying alternative credentials\n";
+                file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
+                
                 $altConn = new mysqli(DB_HOST, $altUser, $altPass, DB_NAME);
                 if (!$altConn->connect_error) {
+                    $logMessage = "[$timestamp] Connected successfully with alternative credentials\n";
+                    file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
+                    
                     $altConn->set_charset("utf8mb4");
                     $altConn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
-                    $altConn->query("SET session wait_timeout=180");
-                    $altConn->query("SET session interactive_timeout=180");
+                    $altConn->query("SET session wait_timeout=300");
+                    $altConn->query("SET session interactive_timeout=300");
                     return $altConn;
+                } else {
+                    $logMessage = "[$timestamp] Alternative credentials also failed: " . $altConn->connect_error . "\n";
+                    file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
                 }
             }
             
@@ -84,8 +98,8 @@ function getDbConnection() {
         $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
         
         // Set session timeouts - increased for stability
-        $conn->query("SET session wait_timeout=180");
-        $conn->query("SET session interactive_timeout=180");
+        $conn->query("SET session wait_timeout=300");
+        $conn->query("SET session interactive_timeout=300");
         
         return $conn;
     } catch (Exception $e) {
@@ -159,7 +173,7 @@ if (!function_exists('generateJwtToken')) {
 
 // Database connection with retry mechanism
 if (!function_exists('getDbConnectionWithRetry')) {
-    function getDbConnectionWithRetry($maxRetries = 3, $retryDelayMs = 500) {
+    function getDbConnectionWithRetry($maxRetries = 5, $retryDelayMs = 1000) {
         $attempts = 0;
         $lastError = null;
         

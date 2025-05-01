@@ -36,6 +36,7 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Include database utilities
 require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../utils/response.php';
 
 try {
@@ -44,16 +45,20 @@ try {
     file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
     
     // Get database connection
-    $conn = getDbConnection();
+    $conn = getDbConnectionWithRetry(5, 1000);
     
     if (!$conn) {
         throw new Exception('Database connection failed - check credentials');
     }
     
+    file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
+    
     // Ensure airport fares table exists
     if (!ensureAirportFaresTable($conn)) {
         throw new Exception('Failed to create or verify airport_transfer_fares table');
     }
+    
+    file_put_contents($logFile, "[$timestamp] Airport fares table verified\n", FILE_APPEND);
     
     // Get vehicle ID if provided
     $vehicleId = null;
@@ -76,12 +81,14 @@ try {
         $stmt = $conn->prepare($query);
         
         if (!$stmt) {
+            file_put_contents($logFile, "[$timestamp] Prepare failed: " . $conn->error . "\n", FILE_APPEND);
             throw new Exception("Prepare failed: " . $conn->error);
         }
         
         $stmt->bind_param("s", $vehicleId);
         
         if (!$stmt->execute()) {
+            file_put_contents($logFile, "[$timestamp] Execute failed: " . $stmt->error . "\n", FILE_APPEND);
             throw new Exception("Execute failed: " . $stmt->error);
         }
         
@@ -106,37 +113,36 @@ try {
             ];
         }
         
+        file_put_contents($logFile, "[$timestamp] Query results: " . count($fares) . " fares found\n", FILE_APPEND);
+        
         if (count($fares) === 0) {
-            // If no fare found for this vehicle, create a default structure
             file_put_contents($logFile, "[$timestamp] No fare found for vehicle $vehicleId, creating default\n", FILE_APPEND);
             
-            // Try to insert a default fare
-            $defaultPrices = [
-                'sedan' => ['base_price' => 1200, 'price_per_km' => 12, 'tier1_price' => 1200, 'tier2_price' => 1800, 'tier3_price' => 2400, 'extra_km_charge' => 14],
-                'suv' => ['base_price' => 1500, 'price_per_km' => 15, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
-                'ertiga' => ['base_price' => 1500, 'price_per_km' => 14, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
-                'innova' => ['base_price' => 2000, 'price_per_km' => 18, 'tier1_price' => 2000, 'tier2_price' => 2800, 'tier3_price' => 3600, 'extra_km_charge' => 18],
-                'innova_crysta' => ['base_price' => 2200, 'price_per_km' => 20, 'tier1_price' => 2200, 'tier2_price' => 3000, 'tier3_price' => 3800, 'extra_km_charge' => 20]
-            ];
+            // Default values based on vehicle type
+            $basePrice = 800;
+            $pricePerKm = 12;
+            $tier1Price = 800;
+            $tier2Price = 1600;
+            $tier3Price = 2400;
+            $extraKmCharge = 14;
             
-            $defaultBasePrice = 1200;
-            $defaultPricePerKm = 12;
-            $defaultTier1Price = 1200;
-            $defaultTier2Price = 1800;
-            $defaultTier3Price = 2400;
-            $defaultExtraKmCharge = 14;
-            
-            // Check if we have default values for this vehicle type
-            foreach ($defaultPrices as $type => $prices) {
-                if (stripos($vehicleId, $type) !== false) {
-                    $defaultBasePrice = $prices['base_price'];
-                    $defaultPricePerKm = $prices['price_per_km'];
-                    $defaultTier1Price = $prices['tier1_price'];
-                    $defaultTier2Price = $prices['tier2_price'];
-                    $defaultTier3Price = $prices['tier3_price'];
-                    $defaultExtraKmCharge = $prices['extra_km_charge'];
-                    break;
-                }
+            // Set different defaults based on vehicle type keywords
+            if (stripos($vehicleId, 'suv') !== false || 
+                stripos($vehicleId, 'ertiga') !== false) {
+                $basePrice = 1000;
+                $pricePerKm = 15;
+                $tier1Price = 1000;
+                $tier2Price = 2000;
+                $tier3Price = 3000;
+                $extraKmCharge = 16;
+            } else if (stripos($vehicleId, 'innova') !== false || 
+                       stripos($vehicleId, 'crysta') !== false) {
+                $basePrice = 1200;
+                $pricePerKm = 18;
+                $tier1Price = 1200;
+                $tier2Price = 2400;
+                $tier3Price = 3600;
+                $extraKmCharge = 18;
             }
             
             // Insert default fare for this vehicle
@@ -149,12 +155,12 @@ try {
                 $insertStmt->bind_param(
                     "sdddddd", 
                     $vehicleId,
-                    $defaultBasePrice,
-                    $defaultPricePerKm,
-                    $defaultTier1Price,
-                    $defaultTier2Price,
-                    $defaultTier3Price,
-                    $defaultExtraKmCharge
+                    $basePrice,
+                    $pricePerKm,
+                    $tier1Price,
+                    $tier2Price,
+                    $tier3Price,
+                    $extraKmCharge
                 );
                 
                 if ($insertStmt->execute()) {
@@ -168,21 +174,32 @@ try {
             $fares[] = [
                 'vehicleId' => $vehicleId,
                 'vehicle_id' => $vehicleId,
-                'basePrice' => $defaultBasePrice,
-                'pricePerKm' => $defaultPricePerKm,
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm,
                 'pickupPrice' => 0,
                 'dropPrice' => 0,
-                'tier1Price' => $defaultTier1Price,
-                'tier2Price' => $defaultTier2Price,
-                'tier3Price' => $defaultTier3Price,
-                'tier4Price' => $defaultTier3Price, // Use tier3 as default for tier4 too
-                'extraKmCharge' => $defaultExtraKmCharge,
+                'tier1Price' => $tier1Price,
+                'tier2Price' => $tier2Price,
+                'tier3Price' => $tier3Price,
+                'tier4Price' => $tier3Price, // Use tier3 as default for tier4 too
+                'extraKmCharge' => $extraKmCharge,
             ];
         }
         
-        // Send the response
-        sendSuccessResponse(['fares' => $fares], 'Airport fares retrieved successfully');
+        // Format the response correctly
+        $responseData = [
+            'status' => 'success',
+            'message' => 'Airport fares retrieved successfully',
+            'data' => [
+                'fares' => $fares
+            ]
+        ];
         
+        // Log the outgoing response
+        file_put_contents($logFile, "[$timestamp] Sending response with data\n", FILE_APPEND);
+        
+        // Send the response
+        sendJsonResponse($responseData, 200);
     } else {
         file_put_contents($logFile, "[$timestamp] Querying for all vehicles\n", FILE_APPEND);
         
@@ -214,6 +231,8 @@ try {
             ];
         }
         
+        file_put_contents($logFile, "[$timestamp] Query results: " . count($fares) . " fares found\n", FILE_APPEND);
+        
         // If we have no fares, but have vehicles, create default fares for all vehicles
         if (count($fares) === 0) {
             file_put_contents($logFile, "[$timestamp] No fares found, checking for vehicles\n", FILE_APPEND);
@@ -230,32 +249,30 @@ try {
                         $vehicleId = $vehicle['vehicle_id'];
                         
                         // Get default prices based on vehicle type
-                        $defaultPrices = [
-                            'sedan' => ['base_price' => 1200, 'price_per_km' => 12, 'tier1_price' => 1200, 'tier2_price' => 1800, 'tier3_price' => 2400, 'extra_km_charge' => 14],
-                            'suv' => ['base_price' => 1500, 'price_per_km' => 15, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
-                            'ertiga' => ['base_price' => 1500, 'price_per_km' => 14, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
-                            'innova' => ['base_price' => 2000, 'price_per_km' => 18, 'tier1_price' => 2000, 'tier2_price' => 2800, 'tier3_price' => 3600, 'extra_km_charge' => 18],
-                            'innova_crysta' => ['base_price' => 2200, 'price_per_km' => 20, 'tier1_price' => 2200, 'tier2_price' => 3000, 'tier3_price' => 3800, 'extra_km_charge' => 20]
-                        ];
-                        
-                        $basePrice = 1200;
+                        $basePrice = 800;
                         $pricePerKm = 12;
-                        $tier1Price = 1200;
-                        $tier2Price = 1800;
+                        $tier1Price = 800;
+                        $tier2Price = 1600;
                         $tier3Price = 2400;
                         $extraKmCharge = 14;
                         
-                        // Check if we have default values for this vehicle type
-                        foreach ($defaultPrices as $type => $prices) {
-                            if (stripos($vehicleId, $type) !== false) {
-                                $basePrice = $prices['base_price'];
-                                $pricePerKm = $prices['price_per_km'];
-                                $tier1Price = $prices['tier1_price'];
-                                $tier2Price = $prices['tier2_price'];
-                                $tier3Price = $prices['tier3_price'];
-                                $extraKmCharge = $prices['extra_km_charge'];
-                                break;
-                            }
+                        // Set different defaults based on vehicle type keywords
+                        if (stripos($vehicleId, 'suv') !== false || 
+                            stripos($vehicleId, 'ertiga') !== false) {
+                            $basePrice = 1000;
+                            $pricePerKm = 15;
+                            $tier1Price = 1000;
+                            $tier2Price = 2000;
+                            $tier3Price = 3000;
+                            $extraKmCharge = 16;
+                        } else if (stripos($vehicleId, 'innova') !== false || 
+                                   stripos($vehicleId, 'crysta') !== false) {
+                            $basePrice = 1200;
+                            $pricePerKm = 18;
+                            $tier1Price = 1200;
+                            $tier2Price = 2400;
+                            $tier3Price = 3600;
+                            $extraKmCharge = 18;
                         }
                         
                         // Add default fare to array for response
@@ -292,14 +309,27 @@ try {
                             );
                             
                             $insertStmt->execute();
+                            file_put_contents($logFile, "[$timestamp] Inserted default fare for $vehicleId\n", FILE_APPEND);
                         }
                     }
                 }
             }
         }
         
+        // Format the response correctly
+        $responseData = [
+            'status' => 'success',
+            'message' => 'Airport fares retrieved successfully',
+            'data' => [
+                'fares' => $fares
+            ]
+        ];
+        
+        // Log the outgoing response
+        file_put_contents($logFile, "[$timestamp] Sending response with " . count($fares) . " fares\n", FILE_APPEND);
+        
         // Send the response
-        sendSuccessResponse(['fares' => $fares], 'Airport fares retrieved successfully');
+        sendJsonResponse($responseData, 200);
     }
     
 } catch (Exception $e) {
