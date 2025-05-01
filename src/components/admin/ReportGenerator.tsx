@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { GstReportData } from '@/types/api';
 
 interface ReportGeneratorProps {
   reportType?: string;
@@ -102,7 +102,7 @@ const fetchReportData = async (
 export function ReportGenerator({ reportType: initialReportType, dateRange: initialDateRange }: ReportGeneratorProps = {}) {
   const [activeTab, setActiveTab] = useState<string>(initialReportType || 'bookings');
   const [loading, setLoading] = useState<boolean>(false);
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<any>({});
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     initialDateRange || {
       from: new Date(new Date().setDate(new Date().getDate() - 30)),
@@ -147,7 +147,8 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   };
 
   const handleExportCSV = () => {
-    if (!reportData || reportData.length === 0) {
+    if (!reportData || (Array.isArray(reportData) && reportData.length === 0) || 
+        (activeTab === 'gst' && !reportData.gstInvoices?.length)) {
       toast({
         title: "Nothing to export",
         description: "Generate a report first before exporting",
@@ -222,9 +223,12 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       );
     }
 
-    if (!reportData || 
-        (Array.isArray(reportData) && reportData.length === 0) || 
-        (activeTab === 'gst' && (!reportData.gstInvoices || reportData.gstInvoices.length === 0))) {
+    // Handle empty data states for different report types
+    const isEmptyData = 
+      (activeTab === 'gst' && (!reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0)) ||
+      (activeTab !== 'gst' && (!reportData || (Array.isArray(reportData) && reportData.length === 0)));
+
+    if (isEmptyData) {
       return (
         <div className="text-center p-12">
           <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

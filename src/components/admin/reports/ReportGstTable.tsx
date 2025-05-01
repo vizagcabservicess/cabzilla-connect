@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from 'date-fns';
+import { GstReportData, GstInvoice } from '@/types/api';
 
 interface ReportGstTableProps {
-  data: any;
+  data: GstReportData | any;
 }
 
 export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
@@ -72,7 +73,7 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {gstInvoices.map((invoice: any) => (
+            {gstInvoices.map((invoice: GstInvoice) => (
               <TableRow key={invoice.id}>
                 <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
                 <TableCell>{invoice.customerName}</TableCell>
