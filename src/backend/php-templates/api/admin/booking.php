@@ -24,7 +24,7 @@ function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     
     // Clear any output buffering to prevent HTML contamination
-    if (ob_get_level()) {
+    while (ob_get_level()) {
         ob_end_clean();
     }
     
@@ -43,9 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 try {
     // Direct connection as fallback since we need maximum reliability
     $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+    $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+    $dbPass = defined('DB_PASS') ? DB_PASS : 'Vizag@1213';
     
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     if ($conn->connect_error) {
@@ -172,6 +172,12 @@ try {
             
             $booking = $result->fetch_assoc();
             
+            // Parse extra charges if available
+            $extraCharges = [];
+            if (!empty($booking['extra_charges'])) {
+                $extraCharges = json_decode($booking['extra_charges'], true) ?? [];
+            }
+            
             // Format response data
             $formattedBooking = [
                 'id' => (int)$booking['id'],
@@ -190,6 +196,12 @@ try {
                 'passengerName' => $booking['passenger_name'],
                 'passengerPhone' => $booking['passenger_phone'],
                 'passengerEmail' => $booking['passenger_email'],
+                'driverName' => $booking['driver_name'] ?? null,
+                'driverPhone' => $booking['driver_phone'] ?? null,
+                'vehicleNumber' => $booking['vehicle_number'] ?? null,
+                'adminNotes' => $booking['admin_notes'] ?? null,
+                'extraCharges' => $extraCharges,
+                'billingAddress' => $booking['billing_address'] ?? null,
                 'createdAt' => $booking['created_at'],
                 'updatedAt' => $booking['updated_at']
             ];
@@ -225,6 +237,12 @@ try {
                     passenger_email VARCHAR(100) NOT NULL,
                     hourly_package VARCHAR(50),
                     tour_id VARCHAR(50),
+                    driver_name VARCHAR(100),
+                    driver_phone VARCHAR(20),
+                    vehicle_number VARCHAR(20),
+                    admin_notes TEXT,
+                    extra_charges TEXT,
+                    billing_address TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -276,6 +294,12 @@ try {
                 
                 $bookings = [];
                 while ($row = $result->fetch_assoc()) {
+                    // Parse extra charges if available
+                    $extraCharges = [];
+                    if (!empty($row['extra_charges'])) {
+                        $extraCharges = json_decode($row['extra_charges'], true) ?? [];
+                    }
+                    
                     $booking = [
                         'id' => (int)$row['id'],
                         'userId' => $row['user_id'] ? (int)$row['user_id'] : null,
@@ -293,6 +317,12 @@ try {
                         'passengerName' => $row['passenger_name'],
                         'passengerPhone' => $row['passenger_phone'],
                         'passengerEmail' => $row['passenger_email'],
+                        'driverName' => $row['driver_name'] ?? null,
+                        'driverPhone' => $row['driver_phone'] ?? null,
+                        'vehicleNumber' => $row['vehicle_number'] ?? null,
+                        'adminNotes' => $row['admin_notes'] ?? null,
+                        'extraCharges' => $extraCharges,
+                        'billingAddress' => $row['billing_address'] ?? null,
                         'createdAt' => $row['created_at'],
                         'updatedAt' => $row['updated_at']
                     ];

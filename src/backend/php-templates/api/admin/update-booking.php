@@ -7,11 +7,13 @@ require_once __DIR__ . '/../../config.php';
 ob_start();
 
 // CRITICAL: Set all response headers first before any output
-header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Content-Type: application/json');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
@@ -71,9 +73,9 @@ try {
     try {
         // Direct database connection for maximum reliability
         $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
+        $dbName = defined('DB_NAME') ? DB_NAME : 'u644605165_db_be';
+        $dbUser = defined('DB_USER') ? DB_USER : 'u644605165_usr_be';
+        $dbPass = defined('DB_PASS') ? DB_PASS : 'Vizag@1213';
         
         $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
         
@@ -276,6 +278,7 @@ try {
         error_log("[update-booking] Failed to prepare update statement: $sql | Error: " . $conn->error);
         throw new Exception("Failed to prepare update statement: " . $conn->error);
     }
+    
     // Use a helper function to properly reference values for bind_param
     function refValues($arr) {
         $refs = array();
@@ -284,24 +287,29 @@ try {
         }
         return $refs;
     }
+    
     // Dynamically bind parameters with proper referencing
     $bindParams = array($types);
     foreach ($params as $key => $value) {
         $bindParams[] = $params[$key];
     }
+    
     error_log("[update-booking] Executing SQL: $sql | Types: $types | Params: " . json_encode($params));
     call_user_func_array(array($updateStmt, 'bind_param'), refValues($bindParams));
     $success = $updateStmt->execute();
+    
     if (!$success) {
         error_log("[update-booking] SQL execution failed: " . $updateStmt->error);
         throw new Exception("Failed to update booking: " . $updateStmt->error);
     }
+    
     // Fetch the updated booking
     $getStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $getStmt->bind_param("i", $bookingId);
     $getStmt->execute();
     $result = $getStmt->get_result();
     $updatedBooking = $result->fetch_assoc();
+    
     error_log("[update-booking] After update, extra_charges in DB: " . $updatedBooking['extra_charges']);
     
     // Always decode extra_charges for the response

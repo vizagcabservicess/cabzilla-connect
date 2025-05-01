@@ -82,6 +82,7 @@ export function AdminBookingsList() {
             'Authorization': token ? `Bearer ${token}` : '',
             'Accept': 'application/json',
             'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
             'X-Force-Refresh': 'true',
             'X-Admin-Mode': 'true',
             'X-Debug': 'true'
@@ -131,7 +132,7 @@ export function AdminBookingsList() {
         try {
           setApiAttempt(2);
           const token = localStorage.getItem('authToken');
-          const requestUrl = `/api/admin/bookings?_t=${timestamp}`;
+          const requestUrl = `/api/admin/booking?_t=${timestamp}`;
           console.log(`Attempting alternative fetch from: ${requestUrl}`);
           
           const altDirectResponse = await fetch(requestUrl, {
@@ -140,6 +141,7 @@ export function AdminBookingsList() {
               ...getForcedRequestConfig().headers,
               'Authorization': token ? `Bearer ${token}` : '',
               'Accept': 'application/json',
+              'Content-Type': 'application/json',
               'X-Admin-Mode': 'true',
               'X-Debug': 'true'
             }
@@ -219,7 +221,8 @@ export function AdminBookingsList() {
                     'Authorization': token ? `Bearer ${token}` : '',
                     'Cache-Control': 'no-cache',
                     'X-Force-Refresh': 'true',
-                    'X-Admin-Mode': 'true' 
+                    'X-Admin-Mode': 'true',
+                    'Content-Type': 'application/json'
                   }
                 });
                 
@@ -338,7 +341,7 @@ export function AdminBookingsList() {
       setIsRefreshing(false);
     }
   };
-
+  
   const handleViewDetails = (booking: Booking) => {
     setSelectedBooking(booking);
   };
@@ -352,7 +355,40 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      console.log('Updating booking:', selectedBooking.id, updatedData);
+      
+      // Make a direct fetch to bypass API helper for better debugging
+      const directResponse = await fetch('/api/admin/update-booking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        body: JSON.stringify({
+          bookingId: selectedBooking.id,
+          ...updatedData
+        })
+      });
+      
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        console.error('Booking update error response:', errorText);
+        throw new Error(`Failed to update booking: ${directResponse.status} ${directResponse.statusText}`);
+      }
+      
+      const contentType = directResponse.headers.get('content-type');
+      console.log('Response content-type:', contentType);
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await directResponse.text();
+        console.error('API returned non-JSON response:', textResponse);
+        throw new Error('API returned non-JSON response');
+      }
+      
+      const response = await directResponse.json();
       console.log('Booking update response:', response);
       
       // Update the bookings list with the updated data from the response
@@ -368,7 +404,7 @@ export function AdminBookingsList() {
       handleCloseDetails();
     } catch (error) {
       console.error('Error updating booking:', error);
-      toast.error("Failed to update booking");
+      toast.error("Failed to update booking: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -384,7 +420,36 @@ export function AdminBookingsList() {
         status: 'assigned' as BookingStatus
       };
       
-      const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+      // Direct fetch for better debugging
+      const directResponse = await fetch('/api/admin/update-booking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        body: JSON.stringify({
+          bookingId: selectedBooking.id,
+          ...updatedData
+        })
+      });
+      
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        console.error('Driver assignment error response:', errorText);
+        throw new Error(`Failed to assign driver: ${directResponse.status} ${directResponse.statusText}`);
+      }
+      
+      const contentType = directResponse.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await directResponse.text();
+        console.error('API returned non-JSON response:', textResponse);
+        throw new Error('API returned non-JSON response');
+      }
+      
+      const response = await directResponse.json();
       console.log('Driver assignment response:', response);
       
       // Update the bookings list with the updated data from the response
@@ -400,7 +465,7 @@ export function AdminBookingsList() {
       handleCloseDetails();
     } catch (error) {
       console.error('Error assigning driver:', error);
-      toast.error("Failed to assign driver");
+      toast.error("Failed to assign driver: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -411,7 +476,27 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      await bookingAPI.updateBooking(selectedBooking.id, { status: 'cancelled' as BookingStatus });
+      // Direct fetch for better debugging
+      const directResponse = await fetch('/api/admin/update-booking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        body: JSON.stringify({
+          bookingId: selectedBooking.id,
+          status: 'cancelled'
+        })
+      });
+      
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        console.error('Cancel booking error response:', errorText);
+        throw new Error(`Failed to cancel booking: ${directResponse.status} ${directResponse.statusText}`);
+      }
       
       // Update the bookings list
       const updatedBookings = bookings.map(booking => 
@@ -424,7 +509,7 @@ export function AdminBookingsList() {
       handleCloseDetails();
     } catch (error) {
       console.error('Error cancelling booking:', error);
-      toast.error("Failed to cancel booking");
+      toast.error("Failed to cancel booking: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -435,7 +520,27 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
-      await bookingAPI.updateBooking(selectedBooking.id, { status: newStatus });
+      // Direct fetch for better debugging
+      const directResponse = await fetch('/api/admin/update-booking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        body: JSON.stringify({
+          bookingId: selectedBooking.id,
+          status: newStatus
+        })
+      });
+      
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        console.error('Status update error response:', errorText);
+        throw new Error(`Failed to update status: ${directResponse.status} ${directResponse.statusText}`);
+      }
       
       // Update the bookings list
       const updatedBookings = bookings.map(booking => 
@@ -447,7 +552,7 @@ export function AdminBookingsList() {
       toast.success(`Booking status updated to ${newStatus}`);
     } catch (error) {
       console.error('Error updating booking status:', error);
-      toast.error("Failed to update booking status");
+      toast.error("Failed to update booking status: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -774,97 +879,4 @@ export function AdminBookingsList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div>{new Date(booking.pickupDate).toLocaleDateString()}</div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(booking.pickupDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </div>
-                    </TableCell>
-                    <TableCell>₹{booking.totalAmount?.toLocaleString('en-IN') || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColorClass(booking.status)}>
-                        {booking.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {booking.driverName ? (
-                        <div>
-                          <div className="font-medium">{booking.driverName}</div>
-                          {booking.driverPhone && (
-                            <div className="text-xs text-gray-500">{booking.driverPhone}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <Badge variant="outline" className="text-gray-500">
-                          Unassigned
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Open menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {booking.status === 'pending' && (
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedBooking(booking);
-                              handleStatusChange('confirmed');
-                            }}>
-                              Confirm Booking
-                            </DropdownMenuItem>
-                          )}
-                          {['pending', 'confirmed'].includes(booking.status) && (
-                            <>
-                              <DropdownMenuItem onClick={() => {
-                                handleViewDetails(booking);
-                                setTimeout(() => document.getElementById('driver-tab')?.click(), 100);
-                              }}>
-                                Assign Driver
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setSelectedBooking(booking);
-                                handleCancelBooking();
-                              }}>
-                                Cancel Booking
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          {booking.status === 'assigned' && (
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedBooking(booking);
-                              handleStatusChange('completed');
-                            }}>
-                              Mark as Completed
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-10 border rounded-md">
-          <p className="text-gray-500 mb-4">No bookings found that match your filters.</p>
-          <Button variant="outline" onClick={() => {
-            setSearchTerm('');
-            setStatusFilter('all');
-          }}>
-            Clear Filters
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
+                      <div>{
