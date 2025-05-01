@@ -7,7 +7,7 @@ import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, FileText, BarChart3, PieChart } from 'lucide-react';
+import { Download, FileText, BarChart3, PieChart, CalendarCheck } from 'lucide-react';
 import { DateRange } from "react-day-picker";
 import { addDays } from "date-fns";
 
@@ -15,18 +15,20 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<string>("reports");
   const [reportTab, setReportTab] = useState<string>("bookings");
   const [reportType, setReportType] = useState<string>("summary");
+  const [reportPeriod, setReportPeriod] = useState<string>("monthly");
   const [date, setDate] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [withGst, setWithGst] = useState<boolean>(false);
 
   const handleGenerateReport = async () => {
     setIsLoading(true);
     try {
       // This would be an API call to generate the report
       await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log("Generating report with:", { reportType, reportTab, dateRange: date });
+      console.log("Generating report with:", { reportType, reportTab, reportPeriod, dateRange: date, withGst });
       setIsLoading(false);
     } catch (error) {
       console.error("Error generating report:", error);
@@ -64,9 +66,28 @@ export default function ReportsPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Date Range</label>
-                <DatePickerWithRange date={date} setDate={setDate} />
+                <label className="text-sm font-medium">Report Period</label>
+                <Select value={reportPeriod} onValueChange={setReportPeriod}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select report period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              
+              {reportPeriod === 'custom' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Date Range</label>
+                  <DatePickerWithRange date={date} setDate={setDate} />
+                </div>
+              )}
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Report Type</label>
@@ -78,6 +99,7 @@ export default function ReportsPage() {
                     <SelectItem value="summary">Summary Report</SelectItem>
                     <SelectItem value="detailed">Detailed Report</SelectItem>
                     <SelectItem value="financial">Financial Report</SelectItem>
+                    <SelectItem value="gst">GST Report</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -88,6 +110,7 @@ export default function ReportsPage() {
                   className="w-full"
                   disabled={isLoading}
                 >
+                  <CalendarCheck className="mr-2 h-4 w-4" />
                   Generate Report
                 </Button>
               </div>
@@ -101,6 +124,7 @@ export default function ReportsPage() {
             <TabsTrigger value="drivers">Drivers</TabsTrigger>
             <TabsTrigger value="revenue">Revenue</TabsTrigger>
             <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
+            <TabsTrigger value="gst">GST</TabsTrigger>
           </TabsList>
           
           <TabsContent value="bookings" className="space-y-6">
@@ -117,6 +141,10 @@ export default function ReportsPage() {
           
           <TabsContent value="vehicles" className="space-y-6">
             <ReportGenerator reportType="vehicles" dateRange={date} />
+          </TabsContent>
+          
+          <TabsContent value="gst" className="space-y-6">
+            <ReportGenerator reportType="gst" dateRange={date} />
           </TabsContent>
         </Tabs>
       </main>

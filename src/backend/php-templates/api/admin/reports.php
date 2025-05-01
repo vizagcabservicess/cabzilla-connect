@@ -37,9 +37,48 @@ $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', st
 $endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
 $format = isset($_GET['format']) ? $_GET['format'] : 'json';
 $detailed = isset($_GET['detailed']) ? filter_var($_GET['detailed'], FILTER_VALIDATE_BOOLEAN) : false;
+$period = isset($_GET['period']) ? $_GET['period'] : 'custom'; // New parameter: 'daily', 'weekly', 'monthly', 'yearly'
+$withGst = isset($_GET['gst']) ? filter_var($_GET['gst'], FILTER_VALIDATE_BOOLEAN) : false; // New parameter for GST reports
+
+// Calculate dynamic date range based on period parameter
+if ($period !== 'custom') {
+    $today = date('Y-m-d');
+    switch ($period) {
+        case 'daily':
+            $startDate = $today;
+            $endDate = $today;
+            break;
+        case 'weekly':
+            $startDate = date('Y-m-d', strtotime('monday this week'));
+            $endDate = date('Y-m-d', strtotime('sunday this week'));
+            break;
+        case 'monthly':
+            $startDate = date('Y-m-01');
+            $endDate = date('Y-m-t');
+            break;
+        case 'last_month':
+            $startDate = date('Y-m-01', strtotime('first day of last month'));
+            $endDate = date('Y-m-t', strtotime('last day of last month'));
+            break;
+        case 'quarterly':
+            $month = date('n');
+            $quarter = ceil($month / 3);
+            $startDate = date('Y-' . (($quarter - 1) * 3 + 1) . '-01');
+            $endDate = date('Y-m-t', strtotime($startDate . ' +2 month'));
+            break;
+        case 'yearly':
+            $startDate = date('Y-01-01');
+            $endDate = date('Y-12-31');
+            break;
+        case 'last_year':
+            $startDate = date('Y-01-01', strtotime('-1 year'));
+            $endDate = date('Y-12-31', strtotime('-1 year'));
+            break;
+    }
+}
 
 // For debugging
-error_log("Report request: type=$reportType, start=$startDate, end=$endDate, format=$format, detailed=$detailed");
+error_log("Report request: type=$reportType, period=$period, start=$startDate, end=$endDate, format=$format, detailed=$detailed, gst=$withGst");
 
 try {
     $reportData = [];
@@ -109,15 +148,46 @@ try {
         case 'revenue':
             // Get revenue statistics
             if ($detailed) {
-                $sql = "SELECT id, booking_number, passenger_name, passenger_phone, total_amount, created_at 
-                        FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC";
-                $stmt = $conn->prepare($sql);
+                $sqlBase = "SELECT id, booking_number, passenger_name, passenger_phone, total_amount";
+                
+                // Add GST related columns if requested
+                if ($withGst) {
+                    $sqlBase .= ", gst_enabled, extra_charges, gst_details, total_amount as taxable_value";
+                }
+                
+                $sqlBase .= ", created_at FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC";
+                
+                $stmt = $conn->prepare($sqlBase);
                 $stmt->bind_param("ss", $startDate, $endDate);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
                 $transactions = [];
                 while ($row = $result->fetch_assoc()) {
+                    // Calculate GST if applicable
+                    if ($withGst) {
+                        // Default GST rate
+                        $gstRate = 5; // 5% GST rate for transport services
+                        
+                        // Calculate GST amount
+                        $taxableValue = (float)$row['taxable_value'];
+                        $gstAmount = $taxableValue * ($gstRate / 100);
+                        
+                        // Add GST information
+                        $row['gst_rate'] = $gstRate . '%';
+                        $row['gst_amount'] = $gstAmount;
+                        
+                        // Parse GST details if available
+                        if (!empty($row['gst_details'])) {
+                            $gstDetails = json_decode($row['gst_details'], true);
+                            if ($gstDetails) {
+                                $row['gst_number'] = $gstDetails['gstNumber'] ?? '';
+                                $row['company_name'] = $gstDetails['companyName'] ?? '';
+                                $row['company_address'] = $gstDetails['companyAddress'] ?? '';
+                            }
+                        }
+                    }
+                    
                     $transactions[] = $row;
                 }
                 $reportData = $transactions;
@@ -165,8 +235,88 @@ try {
                 }
                 $summaryData['dailyRevenue'] = $dailyRevenue;
                 
+                // Add GST summary if requested
+                if ($withGst) {
+                    $sqlGST = "SELECT SUM(total_amount) as taxable_amount FROM bookings 
+                            WHERE DATE(created_at) BETWEEN ? AND ? AND (gst_enabled = 1 OR gst_enabled = '1')";
+                    $stmt = $conn->prepare($sqlGST);
+                    $stmt->bind_param("ss", $startDate, $endDate);
+                    $stmt->execute();
+                    $gstResult = $stmt->get_result()->fetch_assoc();
+                    
+                    $taxableAmount = (float)($gstResult['taxable_amount'] ?? 0);
+                    $gstAmount = $taxableAmount * 0.05; // 5% GST
+                    
+                    $summaryData['gstSummary'] = [
+                        'taxableAmount' => $taxableAmount,
+                        'gstRate' => '5%',
+                        'gstAmount' => $gstAmount,
+                        'totalWithGst' => $taxableAmount + $gstAmount
+                    ];
+                }
+                
                 $reportData = [$summaryData];
             }
+            break;
+            
+        case 'gst':
+            // Specific GST report type
+            $sql = "SELECT id, booking_number, passenger_name, total_amount as taxable_value, 
+                    created_at, gst_details, gst_enabled 
+                    FROM bookings 
+                    WHERE DATE(created_at) BETWEEN ? AND ? 
+                    AND (gst_enabled = 1 OR gst_enabled = '1')
+                    ORDER BY created_at DESC";
+            
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ss", $startDate, $endDate);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $gstReportData = [];
+            $totalTaxableValue = 0;
+            $totalGstAmount = 0;
+            
+            while ($row = $result->fetch_assoc()) {
+                $taxableValue = (float)$row['taxable_value'];
+                $gstRate = 5; // 5% for transport services
+                $gstAmount = $taxableValue * ($gstRate / 100);
+                
+                $gstDetails = [];
+                if (!empty($row['gst_details'])) {
+                    $decoded = json_decode($row['gst_details'], true);
+                    if (is_array($decoded)) {
+                        $gstDetails = $decoded;
+                    }
+                }
+                
+                $gstReportData[] = [
+                    'id' => $row['id'],
+                    'invoiceNumber' => $row['booking_number'],
+                    'customerName' => $row['passenger_name'],
+                    'gstNumber' => $gstDetails['gstNumber'] ?? 'N/A',
+                    'companyName' => $gstDetails['companyName'] ?? 'N/A',
+                    'taxableValue' => $taxableValue,
+                    'gstRate' => $gstRate . '%',
+                    'gstAmount' => $gstAmount,
+                    'totalAmount' => $taxableValue + $gstAmount,
+                    'invoiceDate' => $row['created_at']
+                ];
+                
+                $totalTaxableValue += $taxableValue;
+                $totalGstAmount += $gstAmount;
+            }
+            
+            // Add summary totals
+            $reportData = [
+                'gstInvoices' => $gstReportData,
+                'summary' => [
+                    'totalInvoices' => count($gstReportData),
+                    'totalTaxableValue' => $totalTaxableValue,
+                    'totalGstAmount' => $totalGstAmount,
+                    'totalWithGst' => $totalTaxableValue + $totalGstAmount
+                ]
+            ];
             break;
             
         case 'drivers':
@@ -327,6 +477,7 @@ try {
     sendResponse([
         'status' => 'success',
         'reportType' => $reportType,
+        'period' => $period,
         'startDate' => $startDate,
         'endDate' => $endDate,
         'data' => $reportData

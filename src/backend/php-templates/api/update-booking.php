@@ -125,6 +125,9 @@ try {
                 vehicle_number VARCHAR(20),
                 admin_notes TEXT,
                 extra_charges TEXT,
+                gst_enabled TINYINT(1) DEFAULT 0,
+                gst_details TEXT,
+                billing_address TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY (booking_number)
@@ -148,13 +151,22 @@ try {
     
     $booking = $result->fetch_assoc();
     
-    // Check if extra_charges field exists in the table
-    $checkColumnStmt = $conn->query("SHOW COLUMNS FROM bookings LIKE 'extra_charges'");
-    if ($checkColumnStmt->num_rows === 0) {
-        // Add extra_charges column if it doesn't exist
-        $alterTableSql = "ALTER TABLE bookings ADD COLUMN extra_charges TEXT AFTER admin_notes";
-        $conn->query($alterTableSql);
-        logError("Added extra_charges column to bookings table");
+    // Check if required columns exist in the table
+    $requiredColumns = [
+        'extra_charges' => 'TEXT',
+        'gst_enabled' => 'TINYINT(1) DEFAULT 0',
+        'gst_details' => 'TEXT',
+        'billing_address' => 'TEXT'
+    ];
+    
+    foreach ($requiredColumns as $column => $type) {
+        $checkColumnStmt = $conn->query("SHOW COLUMNS FROM bookings LIKE '$column'");
+        if ($checkColumnStmt->num_rows === 0) {
+            // Add column if it doesn't exist
+            $alterTableSql = "ALTER TABLE bookings ADD COLUMN $column $type";
+            $conn->query($alterTableSql);
+            logError("Added $column column to bookings table");
+        }
     }
     
     // Build the update query based on provided fields
@@ -206,6 +218,22 @@ try {
             'standardized' => $standardizedCharges, 
             'json' => $extraCharges
         ]);
+    }
+    
+    // Handle GST information
+    if (isset($data['gstEnabled'])) {
+        $gstEnabled = $data['gstEnabled'] ? 1 : 0;
+        $updateFields[] = "gst_enabled = ?";
+        $updateValues[] = $gstEnabled;
+        $updateTypes .= "i"; // Integer for boolean
+    }
+    
+    // Handle GST details as JSON
+    if (isset($data['gstDetails'])) {
+        $gstDetails = json_encode($data['gstDetails']);
+        $updateFields[] = "gst_details = ?";
+        $updateValues[] = $gstDetails;
+        $updateTypes .= "s"; // JSON string
     }
     
     // Track if status is being updated
@@ -286,6 +314,15 @@ try {
         }
     }
     
+    // Parse and format GST details
+    $formattedGstDetails = null;
+    if (!empty($updatedBooking['gst_details'])) {
+        $parsedGstDetails = json_decode($updatedBooking['gst_details'], true);
+        if (is_array($parsedGstDetails)) {
+            $formattedGstDetails = $parsedGstDetails;
+        }
+    }
+    
     // Format the response
     $booking = [
         'id' => (int)$updatedBooking['id'],
@@ -309,7 +346,9 @@ try {
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => $updatedBooking['admin_notes'],
         'extraCharges' => $formattedExtraCharges,
-        'billingAddress' => isset($updatedBooking['billing_address']) ? $updatedBooking['billing_address'] : null,
+        'gstEnabled' => !empty($updatedBooking['gst_enabled']),
+        'gstDetails' => $formattedGstDetails,
+        'billingAddress' => $updatedBooking['billing_address'] ?? null,
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']
     ];
