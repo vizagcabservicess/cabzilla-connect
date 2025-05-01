@@ -203,7 +203,7 @@ try {
     
     // Add extra charges to total if they aren't already included
     $baseAmountWithoutExtra = $totalAmount;
-    $totalAmountWithExtra = $totalAmount;
+    $totalAmountWithExtra = $totalAmount + $extraChargesTotal;
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 

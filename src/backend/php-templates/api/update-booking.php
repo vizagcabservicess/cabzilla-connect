@@ -181,10 +181,10 @@ try {
         'cab_type' => 'cabType'
     ];
     
-    // Handle extra charges separately to ensure proper JSON encoding
+    // Handle extra charges separately to ensure proper JSON encoding and standardized field naming
     $extraCharges = null;
     if (isset($data['extraCharges'])) {
-        // Standardize field names to amount and description
+        // Standardize field names to use 'description' and 'amount' consistently
         $standardizedCharges = [];
         foreach ($data['extraCharges'] as $charge) {
             $standardizedCharge = [
@@ -201,7 +201,11 @@ try {
         $updateTypes .= "s"; // JSON string
         
         // Log the extra charges that are being saved
-        logError("Saving extra charges", ['charges' => $standardizedCharges, 'json' => $extraCharges]);
+        logError("Saving standardized extra charges", [
+            'original' => $data['extraCharges'],
+            'standardized' => $standardizedCharges, 
+            'json' => $extraCharges
+        ]);
     }
     
     // Track if status is being updated

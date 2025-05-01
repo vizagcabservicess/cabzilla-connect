@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -345,6 +346,10 @@ try {
         .gst-title { font-weight: bold; margin-bottom: 10px; }
         .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
         .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
+        .extra-charges { margin-top: 20px; margin-bottom: 20px; }
+        .extra-charges-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .extra-charges-table th, .extra-charges-table td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        .extra-charges-table th:last-child, .extra-charges-table td:last-child { text-align: right; }
         @media print {
             body { margin: 0; padding: 0; }
             .invoice-container { box-shadow: none; border: none; padding: 20px; }
@@ -413,13 +418,54 @@ try {
                 </tr>';
     // Add extra charges as line items
     if (!empty($extraChargesArr)) {
+        $invoiceHtml .= '
+            </table>
+            
+            <div class="extra-charges">
+                <h3 class="section-title">Extra Charges</h3>
+                <table class="extra-charges-table">
+                    <tr>
+                        <th>Description</th>
+                        <th style="text-align: right;">Amount</th>
+                    </tr>';
+                    
         foreach ($extraChargesArr as $charge) {
-            if ((isset($charge['label']) && $charge['label'] !== '') && isset($charge['amount'])) {
-                $invoiceHtml .= '\n                <tr>\n                    <td>' . htmlspecialchars($charge['label']) . '</td>\n                    <td style="text-align: right;">₹ ' . number_format((float)$charge['amount'], 2) . '</td>\n                </tr>';
-            }
+            $description = isset($charge['description']) ? $charge['description'] : 
+                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+            $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+            
+            $invoiceHtml .= '
+                    <tr>
+                        <td>' . htmlspecialchars($description) . '</td>
+                        <td style="text-align: right;">₹ ' . number_format($amount, 2) . '</td>
+                    </tr>';
         }
-    } else {
-        $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
+        
+        $invoiceHtml .= '
+                </table>
+            </div>
+            
+            <table class="fare-table">';
+    }
+
+    if ($gstEnabled) {
+        if ($isIGST) {
+            $invoiceHtml .= '
+                <tr>
+                    <td>IGST (12%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>
+                </tr>';
+        } else {
+            $invoiceHtml .= '
+                <tr>
+                    <td>CGST (6%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
+                </tr>
+                <tr>
+                    <td>SGST (6%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
+                </tr>';
+        }
     }
     
     $invoiceHtml .= '

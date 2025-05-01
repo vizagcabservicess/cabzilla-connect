@@ -1,3 +1,4 @@
+
 <?php
 // CRITICAL: No output before this point
 // Turn off output buffering and disable implicit flush
@@ -218,6 +219,26 @@ try {
         throw new Exception("Database error: " . $conn->error);
     }
 
+    // Parse extra charges from booking
+    $extraCharges = [];
+    $extraChargesTotal = 0;
+    if (!empty($booking['extra_charges'])) {
+        try {
+            $extraCharges = json_decode($booking['extra_charges'], true);
+            if (is_array($extraCharges)) {
+                foreach ($extraCharges as $charge) {
+                    if (isset($charge['amount'])) {
+                        $extraChargesTotal += floatval($charge['amount']);
+                    }
+                }
+            } else {
+                $extraCharges = [];
+            }
+        } catch (Exception $e) {
+            logInvoiceError("Failed to parse extra charges", ['error' => $e->getMessage()]);
+        }
+    }
+
     // Generate invoice number
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
 
@@ -280,9 +301,9 @@ try {
         $igstAmount = 0;
     }
     
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
-    $finalTotal = round($finalTotal, 2);
+    // Calculate grand total with extra charges
+    $grandTotal = $totalAmount + $extraChargesTotal;
+    $grandTotal = round($grandTotal, 2);
 
     // Instead of searching for CSS, use inline CSS for reliability
     $cssContent = "
@@ -371,6 +392,23 @@ try {
         background: #f9f9f9;
         font-size: 9pt;
     }
+    .extra-charges {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+    .extra-charges-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 5px;
+    }
+    .extra-charges-table th, .extra-charges-table td {
+        padding: 5px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    .extra-charges-table th:last-child, .extra-charges-table td:last-child {
+        text-align: right;
+    }
     ";
 
     // Create HTML content for the invoice
@@ -445,6 +483,38 @@ try {
                         <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
                     </tr>';
 
+    // Add extra charges section if there are any extra charges
+    if (!empty($extraCharges)) {
+        $content .= '
+                </table>
+                
+                <div class="extra-charges">
+                    <h3 class="section-title">Extra Charges</h3>
+                    <table class="extra-charges-table">
+                        <tr>
+                            <th>Description</th>
+                            <th style="text-align: right;">Amount</th>
+                        </tr>';
+
+        foreach ($extraCharges as $charge) {
+            $description = isset($charge['description']) ? $charge['description'] : 
+                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+            $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+
+            $content .= '
+                        <tr>
+                            <td>'.htmlspecialchars($description).'</td>
+                            <td><span class="rupee-symbol">₹</span> '.number_format($amount, 2).'</td>
+                        </tr>';
+        }
+
+        $content .= '
+                    </table>
+                </div>
+                
+                <table class="fare-table">';
+    }
+
     if ($gstEnabled) {
         if ($isIGST) {
             $content .= '
@@ -468,7 +538,7 @@ try {
     $content .= '
                     <tr class="total-row">
                         <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($grandTotal, 2).'</td>
                     </tr>
                 </table>';
 
