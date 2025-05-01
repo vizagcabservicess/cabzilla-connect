@@ -2,11 +2,14 @@
 <?php
 // Redirect to admin endpoint for airport fares
 
+// Clear any existing output buffers to prevent contamination
+if (ob_get_level()) ob_clean();
+
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
-header('Content-Type: application/json');
+header('Content-Type: application/json'); 
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
@@ -77,5 +80,34 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Forward this request to the admin endpoint
+// Capture output from the included file
+ob_start();
 require_once __DIR__ . '/admin/direct-airport-fares.php';
+$output = ob_get_clean();
+
+// Check if the output is valid JSON
+$isValidJson = false;
+$jsonData = json_decode($output);
+if (json_last_error() === JSON_ERROR_NONE) {
+    $isValidJson = true;
+}
+
+// If the output is not valid JSON, clean it and return a structured response
+if (!$isValidJson) {
+    file_put_contents($logFile, "[$timestamp] Invalid JSON detected in output. Cleaning up response.\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] Raw output: " . substr($output, 0, 500) . "\n", FILE_APPEND);
+    
+    // Return a clean JSON response
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Failed to fetch airport fares. The server returned invalid JSON.',
+        'debug_info' => [
+            'error' => 'Invalid JSON in response',
+            'output_preview' => substr($output, 0, 100) . (strlen($output) > 100 ? '...' : ''),
+            'time' => date('c')
+        ]
+    ]);
+} else {
+    // Output was valid JSON, pass it through
+    echo $output;
+}

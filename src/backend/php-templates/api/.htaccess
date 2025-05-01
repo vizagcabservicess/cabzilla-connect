@@ -48,6 +48,22 @@ RewriteBase /api/
     Header always set Expires "0"
 </Files>
 
+# Special handling for airport-fares related endpoints
+<FilesMatch "^(direct-airport-fares\.php|airport-fares\.php|admin/direct-airport-fares\.php)$">
+    # Ensure PHP processing
+    SetHandler application/x-httpd-php
+    # Force Content-Type to be application/json
+    Header always set Content-Type "application/json"
+    # Force CORS headers
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "*"
+    # Ensure no caching 
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+</FilesMatch>
+
 # PDF MimeType handling - don't force Content-Type
 <FilesMatch "\.pdf$">
     ForceType application/pdf
@@ -93,6 +109,12 @@ AddType application/x-httpd-php .php
 # Invoice and receipt endpoints with high priority
 RewriteRule ^invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
 RewriteRule ^receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
+
+# Airport fare endpoints with high priority
+RewriteRule ^airport-fares$ /api/airport-fares.php [L,NC,QSA]
+RewriteRule ^airport-fares/([a-zA-Z0-9_-]+)$ /api/airport-fares.php?vehicleId=$1 [L,NC,QSA]
+RewriteRule ^admin/airport-fares$ /api/admin/direct-airport-fares.php [L,NC,QSA]
+RewriteRule ^admin/airport-fares/([a-zA-Z0-9_-]+)$ /api/admin/direct-airport-fares.php?vehicleId=$1 [L,NC,QSA]
 
 # Diagnostic endpoints with high priority  
 RewriteRule ^test$ /api/test.php [L,NC,QSA]

@@ -1,283 +1,118 @@
 
 <?php
 /**
- * Database utility functions for establishing connections
+ * Database connection utility functions
  */
 
-// Create logs directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0777, true);
-}
-
-// Define a function to log database connection info
-function logDbConnection($message, $data = []) {
-    global $logDir;
-    $logFile = $logDir . '/db_connection_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message";
-    
-    if (!empty($data)) {
-        $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE);
-    }
-    
-    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
-    error_log($logEntry);
-}
-
-// Get database connection with improved error handling
+// Function to get the database connection
 function getDbConnection() {
-    // Disable any output buffering to prevent HTML contamination
-    if (ob_get_level()) ob_end_clean();
-    
-    // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    try {
-        logDbConnection("Attempting database connection", [
-            'host' => $dbHost, 
-            'dbname' => $dbName
-        ]);
-        
-        // Create connection with error reporting
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            logDbConnection("Database connection failed", ['error' => $conn->connect_error]);
-            throw new Exception("Connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset to prevent encoding issues
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query to ensure it's working
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            logDbConnection("Database test query failed", ['error' => $conn->error]);
-            throw new Exception("Database connection test query failed: " . $conn->error);
-        }
-        
-        logDbConnection("Database connection successful", ['server_info' => $conn->server_info]);
-        return $conn;
-    } catch (Exception $e) {
-        // Log error to both custom log and PHP error log
-        logDbConnection("Database connection error", ['error' => $e->getMessage()]);
-        error_log("Database connection error: " . $e->getMessage());
-        
-        return null;
-    }
-}
-
-// Function for sending JSON responses
-function sendDbJsonResponse($data, $statusCode = 200) {
-    // Clear any existing output to prevent contamination
-    if (ob_get_length()) ob_clean();
-    
-    // Set HTTP status code
-    http_response_code($statusCode);
-    
-    // Ensure content type is application/json
-    header('Content-Type: application/json');
-    
-    // Output JSON
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// Enhanced direct database connection function that NEVER fails silently
-function getDirectDatabaseConnection() {
-    // Disable any output buffering
-    if (ob_get_level()) ob_end_clean();
-    
-    // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    // Log the attempt
-    error_log("Attempting direct database connection to {$dbHost}/{$dbName}");
-    
-    try {
-        // Create connection
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            error_log("Direct database connection failed: " . $conn->connect_error);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            error_log("Connection test query failed: " . $conn->error);
-            throw new Exception("Connection test query failed: " . $conn->error);
-        }
-        
-        error_log("Direct database connection successful");
-        return $conn;
-    } catch (Exception $e) {
-        // Log the error
-        error_log("Direct database connection error: " . $e->getMessage());
-        return null;
-    }
-}
-
-// Function to safely escape a value for database queries
-function dbEscape($conn, $value) {
-    if ($conn) {
-        return $conn->real_escape_string($value);
-    }
-    
-    // Fallback if no connection
-    return str_replace(["'", "\""], ["\'", "\\\""], $value);
-}
-
-// Function to check if a table exists
-function tableExists($conn, $tableName) {
-    if (!$conn) {
-        return false;
-    }
-    
-    $result = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($tableName) . "'");
-    return $result && $result->num_rows > 0;
-}
-
-// Direct database testing function for diagnostics
-function testDirectDatabaseConnection() {
-    // Disable any output buffering
-    if (ob_get_level()) ob_end_clean();
-    
-    $result = [
-        'status' => 'error',
-        'message' => 'Database connection test failed',
-        'connection' => false,
-        'timestamp' => time()
-    ];
-    
-    try {
-        // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        logDbConnection("Testing direct database connection", [
-            'host' => $dbHost, 
-            'dbname' => $dbName
-        ]);
-        
-        // Create connection
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            logDbConnection("Direct connection failed", ['error' => $conn->connect_error]);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            logDbConnection("Test query failed", ['error' => $conn->error]);
-            throw new Exception("Test query failed: " . $conn->error);
-        }
-        
-        // Check if bookings table exists
-        $bookingsTableExists = tableExists($conn, 'bookings');
-        
-        // Try simple insert and delete on bookings table
-        $testInsertSuccess = false;
-        
-        if ($bookingsTableExists) {
-            // Generate test booking number
-            $testBookingNumber = 'TEST' . time() . rand(1000, 9999);
-            
-            // Try insert with MINIMUM required fields only
-            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, pickup_date, cab_type, trip_type, trip_mode, total_amount, passenger_name, passenger_phone, passenger_email) 
-                             VALUES ('$testBookingNumber', 'Test connection', NOW(), 'Test', 'test', 'test', 100, 'Test User', '1234567890', 'test@example.com')";
-            $testInsertResult = $conn->query($testInsertSql);
-            
-            $testInsertSuccess = $testInsertResult !== false;
-            logDbConnection("Test insert result", [
-                'success' => $testInsertSuccess, 
-                'error' => $testInsertSuccess ? null : $conn->error,
-                'sql' => $testInsertSql
-            ]);
-            
-            // Delete test record
-            if ($testInsertSuccess) {
-                $conn->query("DELETE FROM bookings WHERE booking_number = '$testBookingNumber'");
+    // Load environment variables if available
+    $envFile = __DIR__ . '/../.env';
+    if (file_exists($envFile)) {
+        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+                list($key, $value) = explode('=', $line, 2);
+                $_ENV[$key] = $value;
+                putenv("$key=$value");
             }
         }
-        
-        // Build success response
-        $result = [
-            'status' => 'success',
-            'message' => 'Database connection and query test successful',
-            'connection' => true,
-            'timestamp' => time(),
-            'server' => $conn->server_info ?? 'unknown',
-            'php_version' => phpversion(),
-            'bookings_table_exists' => $bookingsTableExists,
-            'test_insert_success' => $testInsertSuccess
-        ];
-        
-        logDbConnection("Direct test successful", ['result' => $result]);
-        
-        // Close connection
-        $conn->close();
-        
-    } catch (Exception $e) {
-        // Log error and build error response
-        logDbConnection("Direct database connection test failed", ['error' => $e->getMessage()]);
-        
-        $result = [
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'connection' => false,
-            'timestamp' => time(),
-            'php_version' => phpversion(),
-            'mysql_client_version' => mysqli_get_client_info()
-        ];
     }
     
-    return $result;
+    // First check environment variables
+    $dbHost = getenv('DB_HOST') ?: 'localhost';
+    $dbUser = getenv('DB_USER') ?: 'root';
+    $dbPass = getenv('DB_PASS') ?: '';
+    $dbName = getenv('DB_NAME') ?: 'cabzilla';
+    
+    // Create connection with improved error handling
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    // Check connection
+    if ($conn->connect_error) {
+        error_log("Database connection failed: " . $conn->connect_error);
+        return null;
+    }
+    
+    // Set character set
+    $conn->set_charset("utf8mb4");
+    
+    // Return connection
+    return $conn;
 }
 
-// Function to verify database integrity
-function verifyDatabaseIntegrity($conn) {
-    if (!$conn) {
-        return ['status' => 'error', 'message' => 'No database connection'];
+// Function to check database table exists
+function checkTableExists($conn, $tableName) {
+    $result = $conn->query("SHOW TABLES LIKE '$tableName'");
+    return ($result && $result->num_rows > 0);
+}
+
+// Function to get database version
+function getDatabaseVersion($conn) {
+    $result = $conn->query("SELECT version() as version");
+    if ($result && $row = $result->fetch_assoc()) {
+        return $row['version'];
     }
+    return 'Unknown';
+}
+
+// Function to create the airport_transfer_fares table if it doesn't exist
+function ensureAirportFaresTable($conn) {
+    $tableName = 'airport_transfer_fares';
     
-    $requiredTables = ['bookings'];
-    $missingTables = [];
-    
-    foreach ($requiredTables as $table) {
-        if (!tableExists($conn, $table)) {
-            $missingTables[] = $table;
+    if (!checkTableExists($conn, $tableName)) {
+        $sql = "CREATE TABLE $tableName (
+            id INT(11) NOT NULL AUTO_INCREMENT,
+            vehicle_id VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+            base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+            pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY vehicle_id (vehicle_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        
+        if (!$conn->query($sql)) {
+            return false;
         }
     }
     
-    if (count($missingTables) > 0) {
-        return [
-            'status' => 'warning', 
-            'message' => 'Missing required tables', 
-            'missing_tables' => $missingTables
-        ];
+    return true;
+}
+
+// Function to create the vehicles table if it doesn't exist
+function ensureVehiclesTable($conn) {
+    $tableName = 'vehicles';
+    
+    if (!checkTableExists($conn, $tableName)) {
+        $sql = "CREATE TABLE $tableName (
+            id VARCHAR(50) PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            capacity INT DEFAULT 4,
+            luggage_capacity INT DEFAULT 2,
+            price DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(5,2) DEFAULT 0,
+            image VARCHAR(255),
+            description TEXT,
+            ac TINYINT(1) DEFAULT 1,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY (vehicle_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        
+        if (!$conn->query($sql)) {
+            return false;
+        }
     }
     
-    return ['status' => 'success', 'message' => 'Database integrity verified'];
+    return true;
 }
