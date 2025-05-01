@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -879,4 +880,65 @@ export function AdminBookingsList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div>{
+                      <div>
+                        {new Date(booking.pickupDate).toLocaleDateString('en-US', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(booking.pickupDate).toLocaleTimeString('en-US', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell>₹{booking.totalAmount}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusColorClass(booking.status)}>
+                        {booking.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {booking.driverName ? (
+                        <div>
+                          <div className="font-medium">{booking.driverName}</div>
+                          <div className="text-xs text-gray-500">{booking.driverPhone}</div>
+                          <div className="text-xs text-gray-500">{booking.vehicleNumber}</div>
+                        </div>
+                      ) : (
+                        <div className="text-gray-500 text-sm">Not assigned</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-white">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
+                            View Details
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-10">
+          <p className="text-gray-500">No bookings found.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
