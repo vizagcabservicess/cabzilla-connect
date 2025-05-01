@@ -43,9 +43,29 @@ if (!$conn) {
 file_put_contents($logFile, "[$timestamp] Starting airport fares sync\n", FILE_APPEND);
 
 // Step 1: Ensure the airport_transfer_fares table exists
-if (!ensureAirportFaresTable($conn)) {
-    file_put_contents($logFile, "[$timestamp] Failed to ensure airport_transfer_fares table\n", FILE_APPEND);
-    sendErrorResponse('Failed to create airport_transfer_fares table');
+$createAirportTableSql = "
+CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    vehicle_id VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+    pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY vehicle_id (vehicle_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+";
+
+if (!$conn->query($createAirportTableSql)) {
+    file_put_contents($logFile, "[$timestamp] Failed to create airport_transfer_fares table: " . $conn->error . "\n", FILE_APPEND);
+    sendErrorResponse('Failed to create airport_transfer_fares table: ' . $conn->error);
     exit;
 }
 
@@ -191,70 +211,13 @@ INSERT IGNORE INTO airport_transfer_fares (
 )
 SELECT 
     v.vehicle_id,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 1200
-        WHEN v.vehicle_id LIKE '%suv%' THEN 1500
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 1500
-        WHEN v.vehicle_id LIKE '%innova%' THEN 2000
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 2200
-        ELSE 1200
-    END as base_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 12
-        WHEN v.vehicle_id LIKE '%suv%' THEN 15
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 14
-        WHEN v.vehicle_id LIKE '%innova%' THEN 18
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 20
-        ELSE 12
-    END as price_per_km,
-    0 as pickup_price,
-    0 as drop_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 1200
-        WHEN v.vehicle_id LIKE '%suv%' THEN 1500
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 1500
-        WHEN v.vehicle_id LIKE '%innova%' THEN 2000
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 2200
-        ELSE 1200
-    END as tier1_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 1800
-        WHEN v.vehicle_id LIKE '%suv%' THEN 2200
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 2200
-        WHEN v.vehicle_id LIKE '%innova%' THEN 2800
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 3000
-        ELSE 1800
-    END as tier2_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 2400
-        WHEN v.vehicle_id LIKE '%suv%' THEN 3000
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 3000
-        WHEN v.vehicle_id LIKE '%innova%' THEN 3600
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 3800
-        ELSE 2400
-    END as tier3_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 2400
-        WHEN v.vehicle_id LIKE '%suv%' THEN 3000
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 3000
-        WHEN v.vehicle_id LIKE '%innova%' THEN 3600
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 3800
-        ELSE 2400
-    END as tier4_price,
-    CASE
-        WHEN v.vehicle_id LIKE '%sedan%' THEN 14
-        WHEN v.vehicle_id LIKE '%suv%' THEN 16
-        WHEN v.vehicle_id LIKE '%ertiga%' THEN 16
-        WHEN v.vehicle_id LIKE '%innova%' THEN 18
-        WHEN v.vehicle_id LIKE '%crysta%' THEN 20
-        ELSE 14
-    END as extra_km_charge
+    0, 0, 0, 0, 0, 0, 0, 0, 0
 FROM 
     vehicles v
 LEFT JOIN 
     airport_transfer_fares atf ON v.vehicle_id = atf.vehicle_id
 WHERE 
-    atf.id IS NULL AND v.is_active = 1
+    atf.id IS NULL
 ";
 
 $insertDefaultFaresResult = $conn->query($insertDefaultFaresSql);

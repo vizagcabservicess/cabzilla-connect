@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -199,9 +200,9 @@ export function useFare(
             const airportFee = 40; // Updated airport fee to Rs 40
 
             if (distance <= 10) {
-              basePrice = airportFares.tier1Price || 800;
+              basePrice = airportFares.tier1Price || 1200;
             } else if (distance <= 20) {
-              basePrice = airportFares.tier2Price || 1600;
+              basePrice = airportFares.tier2Price || 1800;
             } else if (distance <= 30) {
               basePrice = airportFares.tier3Price || 2400;
             } else {
@@ -227,8 +228,6 @@ export function useFare(
 
             source = 'database';
             
-            console.log(`Calculated airport fare for ${cabId}: ${fare} (source: ${source})`);
-            
             storeFareData(fareKey, fare, source, breakdown);
             
             debouncedDispatchEvent({
@@ -248,9 +247,9 @@ export function useFare(
             const airportFee = 40; // Updated airport fee here too
 
             if (distance <= 10) {
-              basePrice = 800;
+              basePrice = 1200;
             } else if (distance <= 20) {
-              basePrice = 1600;
+              basePrice = 1800;
             } else if (distance <= 30) {
               basePrice = 2400;
             } else {
@@ -275,7 +274,6 @@ export function useFare(
 
             source = 'default';
             
-            console.log(`Using default airport fare for ${cabId}: ${fare} (source: ${source})`);
             storeFareData(fareKey, fare, source, breakdown);
           }
         } else if (tripType === "outstation") {
