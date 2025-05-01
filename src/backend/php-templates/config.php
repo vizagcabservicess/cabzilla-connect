@@ -61,6 +61,21 @@ function getDbConnection() {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         
         if ($conn->connect_error) {
+            // Try alternative credentials if primary fails
+            $altUser = 'u644605165_usr_be';
+            $altPass = 'Vizag@1213';
+            
+            if (DB_USER !== $altUser) {
+                $altConn = new mysqli(DB_HOST, $altUser, $altPass, DB_NAME);
+                if (!$altConn->connect_error) {
+                    $altConn->set_charset("utf8mb4");
+                    $altConn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
+                    $altConn->query("SET session wait_timeout=180");
+                    $altConn->query("SET session interactive_timeout=180");
+                    return $altConn;
+                }
+            }
+            
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         

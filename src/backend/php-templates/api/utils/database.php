@@ -21,21 +21,49 @@ function getDbConnection() {
     
     // First check environment variables
     $dbHost = getenv('DB_HOST') ?: 'localhost';
-    $dbUser = getenv('DB_USER') ?: 'root';
-    $dbPass = getenv('DB_PASS') ?: '';
-    $dbName = getenv('DB_NAME') ?: 'cabzilla';
+    $dbUser = getenv('DB_USER') ?: 'u644605165_usr_be';
+    $dbPass = getenv('DB_PASS') ?: 'Vizag@1213';
+    $dbName = getenv('DB_NAME') ?: 'u644605165_db_be';
+    
+    // Log connection attempt for debugging
+    $logDir = __DIR__ . '/../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0777, true);
+    }
+    $logFile = $logDir . '/db_connection_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$timestamp] Attempting database connection to $dbName@$dbHost as $dbUser\n", FILE_APPEND);
     
     // Create connection with improved error handling
     $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     
     // Check connection
     if ($conn->connect_error) {
+        file_put_contents($logFile, "[$timestamp] Database connection failed: " . $conn->connect_error . "\n", FILE_APPEND);
         error_log("Database connection failed: " . $conn->connect_error);
+        
+        // Try alternative credentials if primary fails
+        $altUser = 'u644605165_usr_be'; // Primary credential
+        $altPass = 'Vizag@1213';
+        
+        if ($dbUser !== $altUser) {
+            file_put_contents($logFile, "[$timestamp] Trying alternative credentials: $altUser@$dbHost\n", FILE_APPEND);
+            $conn = new mysqli($dbHost, $altUser, $altPass, $dbName);
+            if (!$conn->connect_error) {
+                file_put_contents($logFile, "[$timestamp] Connected successfully with alternative credentials\n", FILE_APPEND);
+                
+                // Set character set
+                $conn->set_charset("utf8mb4");
+                return $conn;
+            }
+        }
+        
         return null;
     }
     
     // Set character set
     $conn->set_charset("utf8mb4");
+    file_put_contents($logFile, "[$timestamp] Database connection successful\n", FILE_APPEND);
     
     // Return connection
     return $conn;
@@ -82,6 +110,33 @@ function ensureAirportFaresTable($conn) {
         if (!$conn->query($sql)) {
             return false;
         }
+        
+        // Add default values for common vehicle types
+        $defaultVehicles = [
+            'sedan' => ['base_price' => 1200, 'price_per_km' => 12, 'tier1_price' => 1200, 'tier2_price' => 1800, 'tier3_price' => 2400, 'extra_km_charge' => 14],
+            'suv' => ['base_price' => 1500, 'price_per_km' => 15, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
+            'ertiga' => ['base_price' => 1500, 'price_per_km' => 14, 'tier1_price' => 1500, 'tier2_price' => 2200, 'tier3_price' => 3000, 'extra_km_charge' => 16],
+            'innova' => ['base_price' => 2000, 'price_per_km' => 18, 'tier1_price' => 2000, 'tier2_price' => 2800, 'tier3_price' => 3600, 'extra_km_charge' => 18],
+            'innova_crysta' => ['base_price' => 2200, 'price_per_km' => 20, 'tier1_price' => 2200, 'tier2_price' => 3000, 'tier3_price' => 3800, 'extra_km_charge' => 20]
+        ];
+        
+        foreach ($defaultVehicles as $vehicleId => $prices) {
+            $insertSql = "INSERT IGNORE INTO $tableName (vehicle_id, base_price, price_per_km, tier1_price, tier2_price, tier3_price, extra_km_charge) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($insertSql);
+            $stmt->bind_param(
+                'sdddddd',
+                $vehicleId,
+                $prices['base_price'],
+                $prices['price_per_km'],
+                $prices['tier1_price'],
+                $prices['tier2_price'],
+                $prices['tier3_price'],
+                $prices['extra_km_charge']
+            );
+            $stmt->execute();
+            $stmt->close();
+        }
     }
     
     return true;
@@ -111,6 +166,31 @@ function ensureVehiclesTable($conn) {
         
         if (!$conn->query($sql)) {
             return false;
+        }
+        
+        // Add default values for common vehicle types
+        $defaultVehicles = [
+            ['id' => 'sedan', 'vehicle_id' => 'sedan', 'name' => 'Sedan', 'capacity' => 4, 'luggage_capacity' => 2],
+            ['id' => 'suv', 'vehicle_id' => 'suv', 'name' => 'SUV', 'capacity' => 6, 'luggage_capacity' => 3],
+            ['id' => 'ertiga', 'vehicle_id' => 'ertiga', 'name' => 'Ertiga', 'capacity' => 6, 'luggage_capacity' => 3],
+            ['id' => 'innova', 'vehicle_id' => 'innova', 'name' => 'Innova', 'capacity' => 7, 'luggage_capacity' => 4],
+            ['id' => 'innova_crysta', 'vehicle_id' => 'innova_crysta', 'name' => 'Innova Crysta', 'capacity' => 7, 'luggage_capacity' => 4]
+        ];
+        
+        foreach ($defaultVehicles as $vehicle) {
+            $insertSql = "INSERT IGNORE INTO $tableName (id, vehicle_id, name, capacity, luggage_capacity, is_active) 
+                          VALUES (?, ?, ?, ?, ?, 1)";
+            $stmt = $conn->prepare($insertSql);
+            $stmt->bind_param(
+                'sssii',
+                $vehicle['id'],
+                $vehicle['vehicle_id'],
+                $vehicle['name'],
+                $vehicle['capacity'],
+                $vehicle['luggage_capacity']
+            );
+            $stmt->execute();
+            $stmt->close();
         }
     }
     
