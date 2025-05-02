@@ -2,7 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, RefreshCw, FileText, CalendarCheck, Fuel, Car, Receipt, BookOpen, Wrench } from 'lucide-react';
+import { 
+  Download, 
+  RefreshCw, 
+  FileText, 
+  CalendarCheck, 
+  Fuel, 
+  Car, 
+  Receipt, 
+  BookOpen, 
+  Wrench,
+  Filter
+} from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from 'date-fns';
@@ -27,21 +38,44 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { GstReportData } from '@/types/api';
+import { 
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface ReportGeneratorProps {
   reportType?: string;
   dateRange?: DateRange;
 }
 
+// Payment method options for filtering
+const PAYMENT_METHODS = [
+  { value: '', label: 'All Payment Methods' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'card', label: 'Card' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'other', label: 'Other' },
+];
+
 // This will be imported from a proper API service
 const fetchReportData = async (
   reportType: string, 
   dateRange: DateRange | undefined,
   periodFilter: string = 'custom',
-  withGst: boolean = false
+  withGst: boolean = false,
+  paymentMethod: string = ''
 ) => {
   try {
     let apiParams: Record<string, string> = {
@@ -59,6 +93,10 @@ const fetchReportData = async (
     
     if (withGst) {
       apiParams.gst = 'true';
+    }
+    
+    if (paymentMethod) {
+      apiParams.payment_method = paymentMethod;
     }
     
     const queryString = Object.entries(apiParams)
@@ -110,6 +148,8 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   );
   const [periodFilter, setPeriodFilter] = useState<string>('custom');
   const [withGst, setWithGst] = useState<boolean>(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('');
+  const [filtersVisible, setFiltersVisible] = useState<boolean>(false);
   const { toast } = useToast();
 
   // Effect for loading report data
@@ -122,7 +162,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const loadReport = async () => {
     try {
       setLoading(true);
-      const data = await fetchReportData(activeTab, dateRange, periodFilter, withGst);
+      const data = await fetchReportData(activeTab, dateRange, periodFilter, withGst, paymentMethod);
       console.log('Processed report data:', data);
       setReportData(data);
     } catch (error) {
@@ -142,6 +182,10 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApplyFilters = () => {
+    loadReport();
   };
 
   const handleRefresh = () => {
@@ -350,6 +394,55 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
           <p className="text-muted-foreground">Generate and analyze business reports</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Filter className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-4">
+                <h4 className="font-medium leading-none">Report Filters</h4>
+                <div className="space-y-2">
+                  <Label htmlFor="payment-method">Payment Method</Label>
+                  <Select 
+                    value={paymentMethod} 
+                    onValueChange={(value) => setPaymentMethod(value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {PAYMENT_METHODS.map(method => (
+                          <SelectItem key={method.value} value={method.value}>
+                            {method.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="gst-filter" 
+                    checked={withGst}
+                    onCheckedChange={(checked) => setWithGst(checked as boolean)}
+                  />
+                  <Label htmlFor="gst-filter">Include GST calculations</Label>
+                </div>
+                <Button 
+                  className="w-full" 
+                  onClick={() => {
+                    handleApplyFilters();
+                  }}
+                >
+                  Apply Filters
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button className="w-full sm:w-auto" onClick={handleRefresh}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
@@ -441,16 +534,20 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
               </div>
             )}
             
-            {(activeTab === 'revenue' || activeTab === 'gst' || activeTab === 'nongst') && (
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="gst-filter" 
-                  checked={withGst}
-                  onCheckedChange={(checked) => setWithGst(checked as boolean)}
-                />
-                <Label htmlFor="gst-filter">Include GST calculations</Label>
-              </div>
-            )}
+            <div className="flex items-center justify-end">
+              <Button 
+                variant="default"
+                onClick={handleApplyFilters}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Generate Report
+              </Button>
+            </div>
           </div>
           
           {renderReportTable()}

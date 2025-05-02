@@ -173,6 +173,32 @@ try {
         
         file_put_contents($setupLogFile, "[$setupTimestamp] Created drivers table\n", FILE_APPEND);
     }
+
+    // Create driver_ratings table if needed
+    $checkRatingsTable = $conn->query("SHOW TABLES LIKE 'driver_ratings'");
+    
+    if (!$checkRatingsTable || $checkRatingsTable->num_rows === 0) {
+        // Create driver_ratings table
+        $createRatingsSQL = "
+            CREATE TABLE IF NOT EXISTS driver_ratings (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                driver_id INT(11) NOT NULL,
+                booking_id INT(11),
+                rating DECIMAL(3,1) NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY driver_id (driver_id),
+                KEY booking_id (booking_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createRatingsSQL)) {
+            throw new Exception("Failed to create driver_ratings table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created driver_ratings table\n", FILE_APPEND);
+    }
     
     // Verify and update the bookings table to ensure it has all required columns
     $checkBookingsTable = $conn->query("SHOW TABLES LIKE 'bookings'");
@@ -217,6 +243,54 @@ try {
             $conn->query($addColumnSQL);
             file_put_contents($setupLogFile, "[$setupTimestamp] Added company_address column to bookings table\n", FILE_APPEND);
         }
+        
+        // Check for and add driver_id column if it doesn't exist
+        $checkDriverId = $conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
+        if (!$checkDriverId || $checkDriverId->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN driver_id INT(11) AFTER status";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added driver_id column to bookings table\n", FILE_APPEND);
+        }
+    } else {
+        // Create bookings table if it doesn't exist (minimal structure)
+        $createBookingsSQL = "
+            CREATE TABLE IF NOT EXISTS bookings (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                user_id INT(11),
+                booking_number VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(50) NOT NULL,
+                cab_type VARCHAR(50) NOT NULL,
+                pickup_location VARCHAR(255) NOT NULL,
+                drop_location VARCHAR(255),
+                pickup_date DATETIME NOT NULL,
+                return_date DATETIME,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                driver_id INT(11),
+                driver_name VARCHAR(100),
+                driver_phone VARCHAR(20),
+                vehicle_number VARCHAR(50),
+                total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                payment_status VARCHAR(50) DEFAULT 'pending',
+                payment_method VARCHAR(50),
+                gst_enabled TINYINT(1) DEFAULT 0,
+                gst_number VARCHAR(20),
+                company_name VARCHAR(100),
+                company_address TEXT,
+                passenger_name VARCHAR(100),
+                passenger_phone VARCHAR(20),
+                passenger_email VARCHAR(100),
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY booking_number (booking_number)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createBookingsSQL)) {
+            throw new Exception("Failed to create bookings table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created bookings table\n", FILE_APPEND);
     }
     
     file_put_contents($setupLogFile, "[$setupTimestamp] Database setup completed successfully\n", FILE_APPEND);

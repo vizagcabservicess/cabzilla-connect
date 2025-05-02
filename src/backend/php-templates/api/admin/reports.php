@@ -320,7 +320,7 @@ try {
             
         case 'gst':
             try {
-                // Check if gst_details column exists
+                // Check if gst_enabled column exists
                 $columnsExist = false;
                 try {
                     $checkColumns = $conn->query("SHOW COLUMNS FROM bookings LIKE 'gst_enabled'");
@@ -346,10 +346,21 @@ try {
                     $sql .= " AND (gst_enabled = 1 OR gst_enabled = '1')";
                 }
                 
+                // Add payment method filter if specified
+                if (!empty($paymentMethod)) {
+                    $sql .= " AND payment_method = ?";
+                }
+                
                 $sql .= " ORDER BY created_at DESC";
                 
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ss", $startDate, $endDate);
+                if (!empty($paymentMethod)) {
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("sss", $startDate, $endDate, $paymentMethod);
+                } else {
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ss", $startDate, $endDate);
+                }
+                
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
@@ -471,22 +482,6 @@ try {
                                 'total_earnings' => 72000,
                                 'rating' => 4.5,
                                 'average_trip_value' => 400
-                            ],
-                            [
-                                'driver_id' => 4,
-                                'driver_name' => 'Vijay Singh',
-                                'total_trips' => 140,
-                                'total_earnings' => 59000,
-                                'rating' => 4.7,
-                                'average_trip_value' => 421
-                            ],
-                            [
-                                'driver_id' => 5,
-                                'driver_name' => 'Anil Kumar',
-                                'total_trips' => 120,
-                                'total_earnings' => 52000,
-                                'rating' => 4.3,
-                                'average_trip_value' => 433
                             ]
                         ]
                     ];
@@ -526,16 +521,6 @@ try {
                         'vehicleType' => $row['vehicleType'],
                         'bookings' => (int)$row['bookings'],
                         'revenue' => (float)$row['revenue']
-                    ];
-                }
-                
-                if (empty($vehicleStats)) {
-                    // Generate sample data if no results
-                    $vehicleStats = [
-                        ['vehicleType' => 'Sedan', 'bookings' => 45, 'revenue' => 175640],
-                        ['vehicleType' => 'Ertiga', 'bookings' => 32, 'revenue' => 92601],
-                        ['vehicleType' => 'Innova Crysta', 'bookings' => 28, 'revenue' => 98000],
-                        ['vehicleType' => 'Tempo Traveller', 'bookings' => 12, 'revenue' => 120000],
                     ];
                 }
                 
@@ -621,62 +606,18 @@ try {
                                 'description' => 'City tour',
                                 'paymentStatus' => 'pending',
                                 'paymentMethod' => null
-                            ],
-                            [
-                                'id' => '3',
-                                'billNumber' => 'NON-GST-003',
-                                'date' => date('Y-m-d', strtotime('-15 days')),
-                                'customerName' => 'Local Customer 3',
-                                'amount' => 1850,
-                                'description' => 'One way trip',
-                                'paymentStatus' => 'partial',
-                                'paymentMethod' => 'paytm'
-                            ],
-                            [
-                                'id' => '4',
-                                'billNumber' => 'NON-GST-004',
-                                'date' => date('Y-m-d', strtotime('-20 days')),
-                                'customerName' => 'Local Customer 4',
-                                'amount' => 3000,
-                                'description' => 'Round trip',
-                                'paymentStatus' => 'paid',
-                                'paymentMethod' => 'gpay'
-                            ],
-                            [
-                                'id' => '5',
-                                'billNumber' => 'NON-GST-005',
-                                'date' => date('Y-m-d', strtotime('-25 days')),
-                                'customerName' => 'Local Customer 5',
-                                'amount' => 1750,
-                                'description' => 'Sightseeing',
-                                'paymentStatus' => 'paid',
-                                'paymentMethod' => 'current_account'
                             ]
                         ]
                     ];
                 }
             } catch (Exception $e) {
-                debugLog("Error in non-GST bills report: " . $e->getMessage());
-                // Create sample data as fallback
-                $reportData = [
-                    'bills' => [
-                        [
-                            'id' => '1',
-                            'billNumber' => 'NON-GST-001',
-                            'date' => date('Y-m-d', strtotime('-5 days')),
-                            'customerName' => 'Local Customer 1',
-                            'amount' => 1200,
-                            'description' => 'Airport transfer',
-                            'paymentStatus' => 'paid',
-                            'paymentMethod' => 'cash'
-                        ]
-                    ]
-                ];
+                debugLog("Error in non-GST report: " . $e->getMessage());
+                $reportData = ['bills' => []];
             }
             break;
             
         case 'maintenance':
-            // Get vehicle maintenance data
+            // Get vehicle maintenance records
             try {
                 // Check if maintenance table exists
                 $tableExists = false;
@@ -684,113 +625,100 @@ try {
                     $tableCheck = $conn->query("SHOW TABLES LIKE 'vehicle_maintenance'");
                     $tableExists = ($tableCheck && $tableCheck->num_rows > 0);
                 } catch (Exception $e) {
-                    debugLog("Error checking table: " . $e->getMessage());
+                    debugLog("Error checking maintenance table: " . $e->getMessage());
                 }
                 
                 if ($tableExists) {
-                    // Use real data if table exists
-                    $sql = "SELECT m.id, m.maintenance_date as date, m.vehicle_id as vehicleId, 
-                            v.name as vehicleName, v.vehicle_id as vehicleNumber, 
-                            m.service_type as serviceType, m.description, m.cost, m.vendor,
-                            m.next_service_date as nextServiceDate
-                            FROM vehicle_maintenance m
-                            LEFT JOIN vehicles v ON m.vehicle_id = v.id
-                            WHERE DATE(m.maintenance_date) BETWEEN ? AND ?
-                            ORDER BY m.maintenance_date DESC";
-                            
+                    // Use actual maintenance data
+                    $sql = "SELECT id, vehicle_id as vehicleId, maintenance_date as date, 
+                            service_type as serviceType, description, cost, vendor, 
+                            next_service_date as nextServiceDate
+                            FROM vehicle_maintenance 
+                            WHERE DATE(maintenance_date) BETWEEN ? AND ? 
+                            ORDER BY maintenance_date DESC";
+                    
                     $stmt = $conn->prepare($sql);
                     $stmt->bind_param("ss", $startDate, $endDate);
                     $stmt->execute();
                     $result = $stmt->get_result();
                     
-                    $maintenanceData = [];
+                    $maintenanceRecords = [];
+                    $totalCost = 0;
+                    $costByVehicle = [];
+                    $costByType = [];
+                    
                     while ($row = $result->fetch_assoc()) {
                         // Ensure numeric values
                         $row['cost'] = (float)$row['cost'];
                         
-                        $maintenanceData[] = $row;
+                        $maintenanceRecords[] = $row;
+                        
+                        // Calculate totals
+                        $totalCost += $row['cost'];
+                        
+                        // By vehicle
+                        if (!isset($costByVehicle[$row['vehicleId']])) {
+                            $costByVehicle[$row['vehicleId']] = 0;
+                        }
+                        $costByVehicle[$row['vehicleId']] += $row['cost'];
+                        
+                        // By service type
+                        if (!isset($costByType[$row['serviceType']])) {
+                            $costByType[$row['serviceType']] = 0;
+                        }
+                        $costByType[$row['serviceType']] += $row['cost'];
                     }
                     
-                    $reportData = ['maintenance' => $maintenanceData];
+                    $reportData = [
+                        'maintenance' => $maintenanceRecords,
+                        'totalCost' => $totalCost,
+                        'costByVehicle' => $costByVehicle,
+                        'costByType' => $costByType
+                    ];
                 } else {
                     // Create sample data for development and testing
                     $reportData = [
                         'maintenance' => [
                             [
-                                'id' => '1',
-                                'date' => date('Y-m-d', strtotime('-10 days')),
-                                'vehicleId' => 'V001',
-                                'vehicleName' => 'Toyota Innova',
-                                'vehicleNumber' => 'AP 31 TC 1234',
-                                'serviceType' => 'Regular Service',
-                                'description' => 'Engine oil change, filter replacement',
-                                'cost' => 3500,
-                                'vendor' => 'Toyota Service Center',
-                                'nextServiceDate' => date('Y-m-d', strtotime('+80 days'))
-                            ],
-                            [
-                                'id' => '2',
+                                'id' => 1,
+                                'vehicleId' => 'TN01AB1234',
                                 'date' => date('Y-m-d', strtotime('-15 days')),
-                                'vehicleId' => 'V002',
-                                'vehicleName' => 'Maruti Swift Dzire',
-                                'vehicleNumber' => 'AP 31 TD 5678',
-                                'serviceType' => 'Brake Repair',
-                                'description' => 'Brake pad replacement, brake fluid change',
-                                'cost' => 2200,
-                                'vendor' => 'Local Garage',
-                                'nextServiceDate' => null
+                                'serviceType' => 'Oil Change',
+                                'description' => 'Regular service',
+                                'cost' => 2500,
+                                'vendor' => 'Service Center',
+                                'nextServiceDate' => date('Y-m-d', strtotime('+75 days'))
                             ],
                             [
-                                'id' => '3',
-                                'date' => date('Y-m-d', strtotime('-25 days')),
-                                'vehicleId' => 'V003',
-                                'vehicleName' => 'Maruti Ertiga',
-                                'vehicleNumber' => 'AP 31 TE 9012',
-                                'serviceType' => 'Major Service',
-                                'description' => 'Full vehicle inspection, major service',
-                                'cost' => 6500,
-                                'vendor' => 'Maruti Service Center',
-                                'nextServiceDate' => date('Y-m-d', strtotime('+70 days'))
-                            ],
-                            [
-                                'id' => '4',
-                                'date' => date('Y-m-d', strtotime('-40 days')),
-                                'vehicleId' => 'V001',
-                                'vehicleName' => 'Toyota Innova',
-                                'vehicleNumber' => 'AP 31 TC 1234',
+                                'id' => 2,
+                                'vehicleId' => 'TN01CD5678',
+                                'date' => date('Y-m-d', strtotime('-10 days')),
                                 'serviceType' => 'Tire Replacement',
-                                'description' => 'Replaced all 4 tires',
-                                'cost' => 24000,
-                                'vendor' => 'Tyre World',
-                                'nextServiceDate' => null
+                                'description' => 'All 4 tires replaced',
+                                'cost' => 16000,
+                                'vendor' => 'Tire Shop',
+                                'nextServiceDate' => date('Y-m-d', strtotime('+180 days'))
                             ]
+                        ],
+                        'totalCost' => 18500,
+                        'costByVehicle' => [
+                            'TN01AB1234' => 2500,
+                            'TN01CD5678' => 16000
+                        ],
+                        'costByType' => [
+                            'Oil Change' => 2500,
+                            'Tire Replacement' => 16000
                         ]
                     ];
                 }
             } catch (Exception $e) {
                 debugLog("Error in maintenance report: " . $e->getMessage());
-                // Create sample data as fallback
-                $reportData = [
-                    'maintenance' => [
-                        [
-                            'id' => '1',
-                            'date' => date('Y-m-d', strtotime('-10 days')),
-                            'vehicleId' => 'V001',
-                            'vehicleName' => 'Toyota Innova',
-                            'vehicleNumber' => 'AP 31 TC 1234',
-                            'serviceType' => 'Regular Service',
-                            'description' => 'Engine oil change, filter replacement',
-                            'cost' => 3500,
-                            'vendor' => 'Toyota Service Center',
-                            'nextServiceDate' => date('Y-m-d', strtotime('+80 days'))
-                        ]
-                    ]
-                ];
+                $reportData = ['maintenance' => [], 'totalCost' => 0, 'costByVehicle' => [], 'costByType' => []];
             }
             break;
             
         case 'ledger':
-            // Get ledger data
+            // Get financial ledger data
             try {
                 // Check if ledger table exists
                 $tableExists = false;
@@ -798,13 +726,13 @@ try {
                     $tableCheck = $conn->query("SHOW TABLES LIKE 'financial_ledger'");
                     $tableExists = ($tableCheck && $tableCheck->num_rows > 0);
                 } catch (Exception $e) {
-                    debugLog("Error checking table: " . $e->getMessage());
+                    debugLog("Error checking ledger table: " . $e->getMessage());
                 }
                 
                 if ($tableExists) {
-                    // Use real data if table exists
-                    $sql = "SELECT id, transaction_date as date, description, type, amount, category, 
-                            payment_method as paymentMethod, reference, balance 
+                    // Use actual ledger data
+                    $sql = "SELECT id, transaction_date as date, description, type, 
+                            amount, category, payment_method as paymentMethod, reference, balance
                             FROM financial_ledger 
                             WHERE DATE(transaction_date) BETWEEN ? AND ?";
                             
@@ -813,7 +741,7 @@ try {
                         $sql .= " AND payment_method = ?";
                     }
                     
-                    $sql .= " ORDER BY transaction_date ASC, id ASC";
+                    $sql .= " ORDER BY transaction_date DESC, id DESC";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -827,173 +755,142 @@ try {
                     $result = $stmt->get_result();
                     
                     $ledgerEntries = [];
+                    $totalIncome = 0;
+                    $totalExpense = 0;
+                    $latestBalance = 0;
+                    $byCategory = [];
+                    
                     while ($row = $result->fetch_assoc()) {
                         // Ensure numeric values
                         $row['amount'] = (float)$row['amount'];
                         $row['balance'] = (float)$row['balance'];
                         
                         $ledgerEntries[] = $row;
-                    }
-                    
-                    $reportData = ['entries' => $ledgerEntries];
-                } else {
-                    // Create sample data for development and testing
-                    $balance = 25000; // Starting balance
-                    $entries = [];
-                    
-                    // Sample transactions
-                    $transactions = [
-                        [
-                            'date' => date('Y-m-d', strtotime('-30 days')),
-                            'description' => 'Starting Balance',
-                            'type' => 'income',
-                            'amount' => 25000,
-                            'category' => 'Capital',
-                            'paymentMethod' => 'bank_transfer',
-                            'reference' => 'INIT-001'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-25 days')),
-                            'description' => 'Fuel Purchase',
-                            'type' => 'expense',
-                            'amount' => 5000,
-                            'category' => 'Fuel',
-                            'paymentMethod' => 'cash',
-                            'reference' => 'FUEL-001'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-20 days')),
-                            'description' => 'Trip Payment - Corporate Client',
-                            'type' => 'income',
-                            'amount' => 12500,
-                            'category' => 'Sales',
-                            'paymentMethod' => 'bank_transfer',
-                            'reference' => 'INV-001'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-15 days')),
-                            'description' => 'Driver Salary',
-                            'type' => 'expense',
-                            'amount' => 8000,
-                            'category' => 'Salaries',
-                            'paymentMethod' => 'bank_transfer',
-                            'reference' => 'SAL-001'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-10 days')),
-                            'description' => 'Vehicle Maintenance',
-                            'type' => 'expense',
-                            'amount' => 3500,
-                            'category' => 'Maintenance',
-                            'paymentMethod' => 'cash',
-                            'reference' => 'MAINT-001'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-5 days')),
-                            'description' => 'Trip Payment - Local Customer',
-                            'type' => 'income',
-                            'amount' => 4500,
-                            'category' => 'Sales',
-                            'paymentMethod' => 'paytm',
-                            'reference' => 'INV-002'
-                        ],
-                        [
-                            'date' => date('Y-m-d', strtotime('-1 days')),
-                            'description' => 'Office Rent',
-                            'type' => 'expense',
-                            'amount' => 6000,
-                            'category' => 'Rent',
-                            'paymentMethod' => 'bank_transfer',
-                            'reference' => 'RENT-001'
-                        ]
-                    ];
-                    
-                    // Calculate running balance
-                    foreach ($transactions as $i => $tx) {
-                        if ($i > 0) {
-                            if ($tx['type'] === 'income') {
-                                $balance += $tx['amount'];
-                            } else {
-                                $balance -= $tx['amount'];
-                            }
+                        
+                        // Calculate totals
+                        if ($row['type'] === 'income') {
+                            $totalIncome += $row['amount'];
+                        } else {
+                            $totalExpense += $row['amount'];
                         }
                         
-                        $entries[] = [
-                            'id' => (string)($i + 1),
-                            'date' => $tx['date'],
-                            'description' => $tx['description'],
-                            'type' => $tx['type'],
-                            'amount' => $tx['amount'],
-                            'category' => $tx['category'],
-                            'paymentMethod' => $tx['paymentMethod'],
-                            'reference' => $tx['reference'],
-                            'balance' => $balance
-                        ];
+                        // Track latest balance
+                        if (count($ledgerEntries) === 1) {
+                            $latestBalance = $row['balance'];
+                        }
+                        
+                        // By category
+                        if (!isset($byCategory[$row['category']])) {
+                            $byCategory[$row['category']] = [
+                                'income' => 0,
+                                'expense' => 0
+                            ];
+                        }
+                        
+                        if ($row['type'] === 'income') {
+                            $byCategory[$row['category']]['income'] += $row['amount'];
+                        } else {
+                            $byCategory[$row['category']]['expense'] += $row['amount'];
+                        }
                     }
                     
-                    $reportData = ['entries' => $entries];
+                    $reportData = [
+                        'entries' => $ledgerEntries,
+                        'totalIncome' => $totalIncome,
+                        'totalExpense' => $totalExpense,
+                        'netChange' => $totalIncome - $totalExpense,
+                        'latestBalance' => $latestBalance,
+                        'byCategory' => $byCategory
+                    ];
+                } else {
+                    // Create sample data for development and testing
+                    $reportData = [
+                        'entries' => [
+                            [
+                                'id' => 1,
+                                'date' => date('Y-m-d', strtotime('-20 days')),
+                                'description' => 'Initial Balance',
+                                'type' => 'income',
+                                'amount' => 50000,
+                                'category' => 'Initial',
+                                'paymentMethod' => 'bank_transfer',
+                                'reference' => 'Opening Balance',
+                                'balance' => 50000
+                            ],
+                            [
+                                'id' => 2,
+                                'date' => date('Y-m-d', strtotime('-15 days')),
+                                'description' => 'Fuel Purchase',
+                                'type' => 'expense',
+                                'amount' => 5000,
+                                'category' => 'Fuel',
+                                'paymentMethod' => 'cash',
+                                'reference' => 'Invoice #FUEL-001',
+                                'balance' => 45000
+                            ],
+                            [
+                                'id' => 3,
+                                'date' => date('Y-m-d', strtotime('-10 days')),
+                                'description' => 'Booking Revenue',
+                                'type' => 'income',
+                                'amount' => 12500,
+                                'category' => 'Bookings',
+                                'paymentMethod' => 'card',
+                                'reference' => 'BOOK-123',
+                                'balance' => 57500
+                            ]
+                        ],
+                        'totalIncome' => 62500,
+                        'totalExpense' => 5000,
+                        'netChange' => 57500,
+                        'latestBalance' => 57500,
+                        'byCategory' => [
+                            'Initial' => ['income' => 50000, 'expense' => 0],
+                            'Fuel' => ['income' => 0, 'expense' => 5000],
+                            'Bookings' => ['income' => 12500, 'expense' => 0]
+                        ]
+                    ];
                 }
             } catch (Exception $e) {
                 debugLog("Error in ledger report: " . $e->getMessage());
-                // Create simple sample data as fallback
                 $reportData = [
-                    'entries' => [
-                        [
-                            'id' => '1',
-                            'date' => date('Y-m-d', strtotime('-30 days')),
-                            'description' => 'Starting Balance',
-                            'type' => 'income',
-                            'amount' => 25000,
-                            'category' => 'Capital',
-                            'paymentMethod' => 'bank_transfer',
-                            'reference' => 'INIT-001',
-                            'balance' => 25000
-                        ],
-                        [
-                            'id' => '2',
-                            'date' => date('Y-m-d', strtotime('-25 days')),
-                            'description' => 'Fuel Purchase',
-                            'type' => 'expense',
-                            'amount' => 5000,
-                            'category' => 'Fuel',
-                            'paymentMethod' => 'cash',
-                            'reference' => 'FUEL-001',
-                            'balance' => 20000
-                        ]
-                    ]
+                    'entries' => [], 
+                    'totalIncome' => 0, 
+                    'totalExpense' => 0, 
+                    'netChange' => 0, 
+                    'latestBalance' => 0, 
+                    'byCategory' => []
                 ];
             }
             break;
             
         case 'fuels':
-            // Get fuel consumption data
+            // Get fuel records
             try {
-                // Check if fuel_records table exists
+                // Check if the fuel_records table exists
                 $tableExists = false;
                 try {
                     $tableCheck = $conn->query("SHOW TABLES LIKE 'fuel_records'");
                     $tableExists = ($tableCheck && $tableCheck->num_rows > 0);
                 } catch (Exception $e) {
-                    debugLog("Error checking table: " . $e->getMessage());
+                    debugLog("Error checking fuel table: " . $e->getMessage());
                 }
                 
                 if ($tableExists) {
-                    // Use real data if table exists
-                    $sql = "SELECT f.id, f.fill_date as date, f.vehicle_id as vehicleId, 
-                            v.name as vehicleName, v.vehicle_id as vehicleNumber, 
-                            f.quantity_liters as liters, f.price_per_liter as pricePerLiter, 
-                            f.total_cost as cost, f.odometer_reading as odometer, 
-                            f.station as fuelStation, f.payment_method as paymentMethod
-                            FROM fuel_records f
-                            LEFT JOIN vehicles v ON f.vehicle_id = v.id
-                            WHERE DATE(f.fill_date) BETWEEN ? AND ?";
+                    // Use actual fuel data
+                    $sql = "SELECT id, vehicle_id as vehicleId, fill_date as date, 
+                            quantity_liters as liters, price_per_liter as pricePerLiter, 
+                            total_cost as cost, odometer_reading as odometer, 
+                            station as fuelStation, payment_method as paymentMethod
+                            FROM fuel_records 
+                            WHERE DATE(fill_date) BETWEEN ? AND ?";
                             
                     // Add payment method filter if specified
                     if (!empty($paymentMethod)) {
-                        $sql .= " AND f.payment_method = ?";
+                        $sql .= " AND payment_method = ?";
                     }
                     
-                    $sql .= " ORDER BY f.fill_date DESC";
+                    $sql .= " ORDER BY fill_date DESC";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -1007,107 +904,142 @@ try {
                     $result = $stmt->get_result();
                     
                     $fuelRecords = [];
+                    $totalLiters = 0;
+                    $totalCost = 0;
+                    $byVehicle = [];
+                    $byStation = [];
+                    $byPaymentMethod = [];
+                    
                     while ($row = $result->fetch_assoc()) {
                         // Ensure numeric values
                         $row['liters'] = (float)$row['liters'];
                         $row['pricePerLiter'] = (float)$row['pricePerLiter'];
                         $row['cost'] = (float)$row['cost'];
-                        $row['odometer'] = (int)$row['odometer'];
+                        if ($row['odometer']) {
+                            $row['odometer'] = (int)$row['odometer'];
+                        }
+                        
+                        // Add vehicle name for display (would come from a vehicles table in real implementation)
+                        $row['vehicleName'] = 'Vehicle ' . $row['vehicleId'];
+                        $row['vehicleNumber'] = $row['vehicleId']; // Duplicate as vehicleNumber for UI compatibility
                         
                         $fuelRecords[] = $row;
+                        
+                        // Calculate totals
+                        $totalLiters += $row['liters'];
+                        $totalCost += $row['cost'];
+                        
+                        // By vehicle
+                        if (!isset($byVehicle[$row['vehicleId']])) {
+                            $byVehicle[$row['vehicleId']] = [
+                                'liters' => 0,
+                                'cost' => 0,
+                                'fillCount' => 0
+                            ];
+                        }
+                        $byVehicle[$row['vehicleId']]['liters'] += $row['liters'];
+                        $byVehicle[$row['vehicleId']]['cost'] += $row['cost'];
+                        $byVehicle[$row['vehicleId']]['fillCount']++;
+                        
+                        // By station
+                        if ($row['fuelStation']) {
+                            if (!isset($byStation[$row['fuelStation']])) {
+                                $byStation[$row['fuelStation']] = [
+                                    'liters' => 0,
+                                    'cost' => 0,
+                                    'fillCount' => 0
+                                ];
+                            }
+                            $byStation[$row['fuelStation']]['liters'] += $row['liters'];
+                            $byStation[$row['fuelStation']]['cost'] += $row['cost'];
+                            $byStation[$row['fuelStation']]['fillCount']++;
+                        }
+                        
+                        // By payment method
+                        if ($row['paymentMethod']) {
+                            if (!isset($byPaymentMethod[$row['paymentMethod']])) {
+                                $byPaymentMethod[$row['paymentMethod']] = 0;
+                            }
+                            $byPaymentMethod[$row['paymentMethod']] += $row['cost'];
+                        }
                     }
                     
-                    $reportData = ['fuels' => $fuelRecords];
+                    $reportData = [
+                        'fuels' => $fuelRecords,
+                        'totalLiters' => $totalLiters,
+                        'totalCost' => $totalCost,
+                        'avgPricePerLiter' => $totalLiters > 0 ? $totalCost / $totalLiters : 0,
+                        'byVehicle' => $byVehicle,
+                        'byStation' => $byStation,
+                        'byPaymentMethod' => $byPaymentMethod
+                    ];
                 } else {
                     // Create sample data for development and testing
                     $reportData = [
                         'fuels' => [
                             [
-                                'id' => '1',
-                                'date' => date('Y-m-d', strtotime('-3 days')),
-                                'vehicleId' => 'V001',
-                                'vehicleName' => 'Toyota Innova',
-                                'vehicleNumber' => 'AP 31 TC 1234',
-                                'liters' => 45.5,
-                                'pricePerLiter' => 96.75,
-                                'cost' => 4402.12,
-                                'odometer' => 56780,
-                                'fuelStation' => 'IOCL Pump, Maddilapalem',
-                                'paymentMethod' => 'credit_card'
-                            ],
-                            [
-                                'id' => '2',
-                                'date' => date('Y-m-d', strtotime('-6 days')),
-                                'vehicleId' => 'V002',
-                                'vehicleName' => 'Maruti Swift Dzire',
-                                'vehicleNumber' => 'AP 31 TD 5678',
-                                'liters' => 32.0,
-                                'pricePerLiter' => 96.75,
-                                'cost' => 3096.00,
-                                'odometer' => 42500,
-                                'fuelStation' => 'HPCL Pump, Gajuwaka',
-                                'paymentMethod' => 'cash'
-                            ],
-                            [
-                                'id' => '3',
-                                'date' => date('Y-m-d', strtotime('-10 days')),
-                                'vehicleId' => 'V003',
-                                'vehicleName' => 'Maruti Ertiga',
-                                'vehicleNumber' => 'AP 31 TE 9012',
-                                'liters' => 40.0,
-                                'pricePerLiter' => 96.45,
-                                'cost' => 3858.00,
-                                'odometer' => 35200,
-                                'fuelStation' => 'BPCL Pump, Siripuram',
-                                'paymentMethod' => 'paytm'
-                            ],
-                            [
-                                'id' => '4',
+                                'id' => 1,
+                                'vehicleId' => 'TN01AB1234',
+                                'vehicleName' => 'Sedan',
+                                'vehicleNumber' => 'TN01AB1234',
                                 'date' => date('Y-m-d', strtotime('-15 days')),
-                                'vehicleId' => 'V001',
-                                'vehicleName' => 'Toyota Innova',
-                                'vehicleNumber' => 'AP 31 TC 1234',
-                                'liters' => 42.5,
-                                'pricePerLiter' => 96.25,
-                                'cost' => 4090.62,
-                                'odometer' => 56300,
-                                'fuelStation' => 'IOCL Pump, Maddilapalem',
+                                'liters' => 40.5,
+                                'pricePerLiter' => 102.5,
+                                'cost' => 4151.25,
+                                'odometer' => 25680,
+                                'fuelStation' => 'IOCL',
                                 'paymentMethod' => 'cash'
+                            ],
+                            [
+                                'id' => 2,
+                                'vehicleId' => 'TN01CD5678',
+                                'vehicleName' => 'Ertiga',
+                                'vehicleNumber' => 'TN01CD5678',
+                                'date' => date('Y-m-d', strtotime('-10 days')),
+                                'liters' => 35.2,
+                                'pricePerLiter' => 102.8,
+                                'cost' => 3618.56,
+                                'odometer' => 42350,
+                                'fuelStation' => 'BPCL',
+                                'paymentMethod' => 'card'
                             ]
+                        ],
+                        'totalLiters' => 75.7,
+                        'totalCost' => 7769.81,
+                        'avgPricePerLiter' => 102.64,
+                        'byVehicle' => [
+                            'TN01AB1234' => ['liters' => 40.5, 'cost' => 4151.25, 'fillCount' => 1],
+                            'TN01CD5678' => ['liters' => 35.2, 'cost' => 3618.56, 'fillCount' => 1]
+                        ],
+                        'byStation' => [
+                            'IOCL' => ['liters' => 40.5, 'cost' => 4151.25, 'fillCount' => 1],
+                            'BPCL' => ['liters' => 35.2, 'cost' => 3618.56, 'fillCount' => 1]
+                        ],
+                        'byPaymentMethod' => [
+                            'cash' => 4151.25,
+                            'card' => 3618.56
                         ]
                     ];
                 }
             } catch (Exception $e) {
                 debugLog("Error in fuel report: " . $e->getMessage());
-                // Create sample data as fallback
                 $reportData = [
-                    'fuels' => [
-                        [
-                            'id' => '1',
-                            'date' => date('Y-m-d', strtotime('-3 days')),
-                            'vehicleId' => 'V001',
-                            'vehicleName' => 'Toyota Innova',
-                            'vehicleNumber' => 'AP 31 TC 1234',
-                            'liters' => 45.5,
-                            'pricePerLiter' => 96.75,
-                            'cost' => 4402.12,
-                            'odometer' => 56780,
-                            'fuelStation' => 'IOCL Pump, Maddilapalem',
-                            'paymentMethod' => 'credit_card'
-                        ]
-                    ]
+                    'fuels' => [], 
+                    'totalLiters' => 0, 
+                    'totalCost' => 0, 
+                    'avgPricePerLiter' => 0, 
+                    'byVehicle' => [], 
+                    'byStation' => [],
+                    'byPaymentMethod' => []
                 ];
             }
             break;
-            
-        default:
-            sendResponse(['status' => 'error', 'message' => 'Unknown report type'], 400);
     }
     
-    // Return the report data
+    // Send the response
     sendResponse([
-        'status' => 'success',
-        'reportType' => $reportType,
+        'status' => 'success', 
+        'reportType' => $reportType, 
         'period' => $period,
         'startDate' => $startDate,
         'endDate' => $endDate,
@@ -1115,9 +1047,9 @@ try {
     ]);
     
 } catch (Exception $e) {
-    debugLog("Critical error in report generation: " . $e->getMessage());
-    sendResponse(['status' => 'error', 'message' => 'Failed to generate report: ' . $e->getMessage()], 500);
+    debugLog("Error in reports API: " . $e->getMessage());
+    sendResponse([
+        'status' => 'error',
+        'message' => $e->getMessage()
+    ], 500);
 }
-
-// Close connection
-$conn->close();
