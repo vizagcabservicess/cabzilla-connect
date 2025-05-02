@@ -15,36 +15,12 @@ RewriteBase /api/
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# CRITICAL FIXED: Special handling for download-invoice.php - explicitly clear Content-Type
+# CRITICAL: Special handling for download-invoice.php - explicitly clear Content-Type
 <Files "download-invoice.php">
     # Remove all output buffering before processing
     php_flag output_buffering off
     # Remove Content-Type header to let PHP script set it
     Header unset Content-Type
-    # FIXED: Add environment variable to identify special handling
-    SetEnvIf Request_URI "download-invoice\.php" no_content_type=1
-    Header unset Content-Type env=no_content_type
-    # Ensure PHP processing
-    SetHandler application/x-httpd-php
-    # Force allow all CORS headers
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # Ensure no caching for PDF files
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# CRITICAL FIXED: Same special handling for admin version
-<Files "admin/download-invoice.php">
-    # Remove all output buffering before processing
-    php_flag output_buffering off
-    # Remove Content-Type header to let PHP script set it
-    Header unset Content-Type
-    # FIXED: Add environment variable to identify special handling
-    SetEnvIf Request_URI "admin/download-invoice\.php" no_content_type=1
-    Header unset Content-Type env=no_content_type
     # Ensure PHP processing
     SetHandler application/x-httpd-php
     # Force allow all CORS headers

@@ -41,30 +41,11 @@ RewriteEngine On
     SetHandler application/x-httpd-php
 </Files>
 
-# CRITICAL: Improved handling for download-invoice.php - let the script handle content type
+# CRITICAL: Special handling for download-invoice.php - let the script handle content type
 <Files "download-invoice.php">
     # Don't set Content-Type here, let the script handle it
-    SetEnvIf Request_URI "download-invoice\.php" no_content_type=1
+    SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
-    # FIXED: Don't add Content-Type header for download-invoice.php
-    Header always unset Content-Type env=no_content_type
-    SetHandler application/x-httpd-php
-    # Force allow all CORS headers
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # No caching for PDF files
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# Special handling for admin download-invoice.php - same handling as public version
-<Files "admin/download-invoice.php">
-    SetEnvIf Request_URI "admin/download-invoice\.php" no_content_type=1
-    Header unset Content-Type env=no_content_type
-    # FIXED: Don't add Content-Type header for admin download-invoice.php
-    Header always unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
     # Force allow all CORS headers
     Header always set Access-Control-Allow-Origin "*"
@@ -78,14 +59,12 @@ RewriteEngine On
 
 # Special handling for test-pdf.php
 <Files "test-pdf.php">
-    SetEnvIf Request_URI "test-pdf\.php" no_content_type=1
+    SetEnv no_content_type 1
     Header unset Content-Type env=no_content_type
-    # FIXED: Don't add Content-Type header for test-pdf.php
-    Header always unset Content-Type env=no_content_type
     SetHandler application/x-httpd-php
 </Files>
 
-# PDF MimeType handling - don't force Content-Type
+# PDF MimeType handling - no Content-Type override
 <FilesMatch "\.pdf$">
     ForceType application/pdf
     Header always set X-Content-Type-Options "nosniff"
