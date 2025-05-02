@@ -75,8 +75,7 @@ const fetchReportData = async (
   dateRange: DateRange | undefined,
   periodFilter: string = 'custom',
   withGst: boolean = false,
-  paymentMethod: string = '',
-  onlyGstEnabled: boolean = false
+  paymentMethod: string = ''
 ) => {
   try {
     let apiParams: Record<string, string> = {
@@ -98,11 +97,6 @@ const fetchReportData = async (
     
     if (paymentMethod) {
       apiParams.payment_method = paymentMethod;
-    }
-    
-    // Add parameter for GST filtering
-    if (onlyGstEnabled || reportType === 'gst') {
-      apiParams.only_gst_enabled = 'true';
     }
     
     const queryString = Object.entries(apiParams)
@@ -155,7 +149,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const [periodFilter, setPeriodFilter] = useState<string>('custom');
   const [withGst, setWithGst] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('');
-  const [onlyGstEnabled, setOnlyGstEnabled] = useState<boolean>(true); // Default to true for GST reports
   const [filtersVisible, setFiltersVisible] = useState<boolean>(false);
   const { toast } = useToast();
 
@@ -164,26 +157,12 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     loadReport();
   }, [activeTab]);
 
-  // Effect to automatically set onlyGstEnabled when switching to GST tab
-  useEffect(() => {
-    if (activeTab === 'gst') {
-      setOnlyGstEnabled(true);
-    }
-  }, [activeTab]);
-
   // Don't auto-reload when date changes, only when tab or period changes
   // This prevents multiple reloads when adjusting dates
   const loadReport = async () => {
     try {
       setLoading(true);
-      const data = await fetchReportData(
-        activeTab, 
-        dateRange, 
-        periodFilter, 
-        withGst, 
-        paymentMethod,
-        onlyGstEnabled
-      );
+      const data = await fetchReportData(activeTab, dateRange, periodFilter, withGst, paymentMethod);
       console.log('Processed report data:', data);
       setReportData(data);
     } catch (error) {
@@ -453,18 +432,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
                   />
                   <Label htmlFor="gst-filter">Include GST calculations</Label>
                 </div>
-
-                {activeTab !== 'gst' && (
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="only-gst-enabled-filter" 
-                      checked={onlyGstEnabled}
-                      onCheckedChange={(checked) => setOnlyGstEnabled(checked as boolean)}
-                    />
-                    <Label htmlFor="only-gst-enabled-filter">Only GST-enabled invoices</Label>
-                  </div>
-                )}
-
                 <Button 
                   className="w-full" 
                   onClick={() => {

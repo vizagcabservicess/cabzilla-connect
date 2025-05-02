@@ -23,7 +23,7 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
   if (!gstInvoices || gstInvoices.length === 0) {
     return (
       <div className="text-center p-6">
-        <p className="text-muted-foreground">No GST invoice data available for the selected period. Only invoices with GST enabled will appear here.</p>
+        <p className="text-muted-foreground">No GST invoice data available for the selected period.</p>
       </div>
     );
   }
@@ -33,7 +33,7 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
       {/* GST Summary Card */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">GST Summary (GST-enabled invoices only)</CardTitle>
+          <CardTitle className="text-lg">GST Summary</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -73,11 +73,11 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {gstInvoices.map((invoice: GstInvoice, index: number) => (
-              <TableRow key={invoice.id || `invoice-${index}`}>
+            {gstInvoices.map((invoice: GstInvoice) => (
+              <TableRow key={invoice.id}>
                 <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                <TableCell>{invoice.customerName || 'N/A'}</TableCell>
-                <TableCell>{invoice.gstNumber || 'N/A'}</TableCell>
+                <TableCell>{invoice.customerName}</TableCell>
+                <TableCell>{invoice.gstNumber}</TableCell>
                 <TableCell>
                   {invoice.invoiceDate ? format(new Date(invoice.invoiceDate), 'dd MMM yyyy') : 'N/A'}
                 </TableCell>
