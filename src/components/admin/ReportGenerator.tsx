@@ -158,8 +158,18 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   };
 
   const handleExportCSV = () => {
-    if (!reportData || (Array.isArray(reportData) && reportData.length === 0) || 
-        (activeTab === 'gst' && !reportData.gstInvoices?.length)) {
+    // Check if there's data to export based on the report type
+    let dataEmpty = false;
+    
+    if (activeTab === 'gst') {
+      // GST report has a specific structure
+      dataEmpty = !reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0;
+    } else {
+      // For other reports, check if data is an empty array
+      dataEmpty = !reportData || (Array.isArray(reportData) && reportData.length === 0);
+    }
+    
+    if (dataEmpty) {
       toast({
         title: "Nothing to export",
         description: "Generate a report first before exporting",
@@ -234,12 +244,16 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       );
     }
 
-    // Handle empty data states for different report types
-    const isEmptyData = 
-      (activeTab === 'gst' && (!reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0)) ||
-      (activeTab !== 'gst' && (!reportData || (Array.isArray(reportData) && reportData.length === 0)));
+    // Handle empty data states
+    const isEmptyData = () => {
+      if (activeTab === 'gst') {
+        return !reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0;
+      }
+      
+      return !reportData || (Array.isArray(reportData) && reportData.length === 0);
+    };
 
-    if (isEmptyData) {
+    if (isEmptyData()) {
       return (
         <div className="text-center p-12">
           <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
