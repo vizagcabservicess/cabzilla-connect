@@ -7,7 +7,7 @@ import { addDays } from "date-fns";
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<string>("reports");
-  const [reportType, setReportType] = useState<string>("bookings");
+  const [reportType, setReportType] = useState<string>("gst");  // Set default to GST report
   const [date, setDate] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,7 +99,7 @@ const fetchReportData = async (
       apiParams.payment_method = paymentMethod;
     }
     
-    // Add parameter for GST filtering
+    // Add parameter for GST filtering - FIXED: Ensure we always pass this for GST reports
     if (onlyGstEnabled || reportType === 'gst') {
       apiParams.only_gst_enabled = 'true';
     }
@@ -176,13 +175,23 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const loadReport = async () => {
     try {
       setLoading(true);
+      // FIXED: Add debug log for GST filtering
+      console.log('Loading report with params:', {
+        activeTab,
+        dateRange,
+        periodFilter,
+        withGst,
+        paymentMethod,
+        onlyGstEnabled: activeTab === 'gst' ? true : onlyGstEnabled
+      });
+      
       const data = await fetchReportData(
         activeTab, 
         dateRange, 
         periodFilter, 
         withGst, 
         paymentMethod,
-        onlyGstEnabled
+        activeTab === 'gst' ? true : onlyGstEnabled // FIXED: Always filter by GST for GST reports
       );
       console.log('Processed report data:', data);
       setReportData(data);
@@ -385,23 +394,23 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const getTabIcon = (tabValue: string) => {
     switch (tabValue) {
       case 'bookings':
-        return <CalendarCheck className="h-4 w-4 mr-2" />;
+        return <CalendarCheck className="h-4 w-4 mr-2 hidden md:block" />;
       case 'revenue':
-        return <FileText className="h-4 w-4 mr-2" />;
+        return <FileText className="h-4 w-4 mr-2 hidden md:block" />;
       case 'drivers':
-        return <Car className="h-4 w-4 mr-2" />;
+        return <Car className="h-4 w-4 mr-2 hidden md:block" />;
       case 'vehicles':
-        return <Car className="h-4 w-4 mr-2" />;
+        return <Car className="h-4 w-4 mr-2 hidden md:block" />;
       case 'gst':
-        return <Receipt className="h-4 w-4 mr-2" />;
+        return <Receipt className="h-4 w-4 mr-2 hidden md:block" />;
       case 'nongst':
-        return <Receipt className="h-4 w-4 mr-2" />;
+        return <Receipt className="h-4 w-4 mr-2 hidden md:block" />;
       case 'maintenance':
-        return <Wrench className="h-4 w-4 mr-2" />;
+        return <Wrench className="h-4 w-4 mr-2 hidden md:block" />;
       case 'ledger':
-        return <BookOpen className="h-4 w-4 mr-2" />;
+        return <BookOpen className="h-4 w-4 mr-2 hidden md:block" />;
       case 'fuels':
-        return <Fuel className="h-4 w-4 mr-2" />;
+        return <Fuel className="h-4 w-4 mr-2 hidden md:block" />;
       default:
         return null;
     }

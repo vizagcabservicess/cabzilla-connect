@@ -1,13 +1,13 @@
 
 <?php
-// CRITICAL: No output before this point
+// CRITICAL: Ensure no content is output before headers
 // Turn off output buffering and disable implicit flush
 @ini_set('output_buffering', 'off');
 @ini_set('implicit_flush', true);
 @ini_set('zlib.output_compression', false);
 
-// Prevent any unwanted output
-ob_start();
+// CRITICAL: Clear all output buffers at the start
+while (ob_get_level()) ob_end_clean();
 
 // Include configuration file - use absolute path with __DIR__ for reliability
 require_once __DIR__ . '/../config.php';
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Improved error logging function with file path
+// Enhanced error logging function
 function logInvoiceError($message, $data = []) {
     $formattedData = is_array($data) ? json_encode($data) : (string)$data;
     $errorMessage = "INVOICE ERROR: $message " . $formattedData;
@@ -116,6 +116,9 @@ try {
         }
     }
 
+    // FIXED: Log all request parameters for debugging
+    logInvoiceError("Invoice request parameters", $_GET);
+
     // Get GST parameters from GET
     $gstEnabled = isset($_GET['gstEnabled']) ? filter_var($_GET['gstEnabled'], FILTER_VALIDATE_BOOLEAN) : false;
     $gstNumber = isset($_GET['gstNumber']) ? $_GET['gstNumber'] : '';
@@ -131,7 +134,10 @@ try {
     logInvoiceError("Starting invoice generation process", [
         'bookingId' => $bookingId,
         'format' => $format,
-        'directDownload' => $directDownload
+        'directDownload' => $directDownload,
+        'gstEnabled' => $gstEnabled ? 'true' : 'false',
+        'gstNumber' => $gstNumber,
+        'companyName' => $companyName
     ]);
 
     // CRITICAL: Improved autoloader detection with absolute paths
@@ -194,9 +200,18 @@ try {
         throw new Exception("Database connection failed: " . $e->getMessage());
     }
     
-    // Fetch booking data
+    // FIXED: Fetch booking data with GST details if available
     $booking = null;
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+    $stmt = $conn->prepare(
+        "SELECT b.*, 
+                g.gst_number, 
+                g.company_name, 
+                g.company_address 
+         FROM bookings b 
+         LEFT JOIN gst_details g ON b.id = g.booking_id 
+         WHERE b.id = ?"
+    );
+    
     if ($stmt) {
         $stmt->bind_param("i", $bookingId);
         $stmt->execute();
@@ -213,6 +228,37 @@ try {
         }
         
         $booking = $result->fetch_assoc();
+        
+        // FIXED: Log booking data to check GST details
+        logInvoiceError("Booking data retrieved", [
+            'booking_id' => $booking['id'],
+            'gst_enabled' => $booking['gst_enabled'] ?? 'null',
+            'gst_number' => $booking['gst_number'] ?? 'null',
+            'company_name' => $booking['company_name'] ?? 'null'
+        ]);
+        
+        // FIXED: If we got GST details from DB but not from GET params, use DB values
+        if (empty($gstNumber) && !empty($booking['gst_number'])) {
+            $gstNumber = $booking['gst_number'];
+            logInvoiceError("Using GST number from database", ['gstNumber' => $gstNumber]);
+        }
+        
+        if (empty($companyName) && !empty($booking['company_name'])) {
+            $companyName = $booking['company_name'];
+            logInvoiceError("Using company name from database", ['companyName' => $companyName]);
+        }
+        
+        if (empty($companyAddress) && !empty($booking['company_address'])) {
+            $companyAddress = $booking['company_address'];
+            logInvoiceError("Using company address from database", ['companyAddress' => $companyAddress]);
+        }
+        
+        // FIXED: If booking has gst_enabled but param doesn't, use booking value
+        if (!$gstEnabled && !empty($booking['gst_enabled']) && $booking['gst_enabled'] == 1) {
+            $gstEnabled = true;
+            logInvoiceError("Enabling GST based on booking data");
+        }
+        
         $stmt->close();
     } else {
         logInvoiceError("Error preparing statement", ['error' => $conn->error]);
@@ -248,40 +294,27 @@ try {
     // Calculate tax components based on includeTax setting
     $totalAmount = (float)$booking['total_amount'];
     
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
-    
-    // Convert string to number if needed
-    if (!is_numeric($totalAmount)) {
-        $totalAmount = floatval($totalAmount);
-    }
-    
-    // Ensure we have a valid amount
-    if ($totalAmount <= 0) {
-        $totalAmount = 0;
-    }
-    
-    if ($includeTax && $gstEnabled) {
-        // If tax is included in total amount (default)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2);
-    } else if (!$includeTax && $gstEnabled) {
-        // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
-        $taxAmount = round($taxAmount, 2);
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
-        $totalAmount = round($totalAmount, 2);
-    } else {
-        // No tax case
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = 0;
-    }
-    
-    // For GST, split into CGST and SGST or use IGST
+    // GST calculation logic
     if ($gstEnabled) {
+        // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+        $gstRate = 0.12;
+        
+        if ($includeTax) {
+            // If tax is included in total amount (default)
+            $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
+            $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
+            $taxAmount = $totalAmount - $baseAmountBeforeTax;
+            $taxAmount = round($taxAmount, 2);
+        } else {
+            // If tax is excluded from the base amount
+            $baseAmountBeforeTax = $totalAmount;
+            $taxAmount = $totalAmount * $gstRate;
+            $taxAmount = round($taxAmount, 2);
+            $totalAmount = $baseAmountBeforeTax + $taxAmount;
+            $totalAmount = round($totalAmount, 2);
+        }
+        
+        // For GST, split into CGST and SGST or use IGST
         if ($isIGST) {
             // Interstate - Use IGST (12%)
             $igstAmount = $taxAmount;
@@ -296,446 +329,345 @@ try {
             $igstAmount = 0;
         }
     } else {
+        // No tax case
+        $baseAmountBeforeTax = $totalAmount;
+        $taxAmount = 0;
         $cgstAmount = 0;
         $sgstAmount = 0;
         $igstAmount = 0;
     }
     
-    // Calculate grand total with extra charges
+    // Grand total with extra charges
     $grandTotal = $totalAmount + $extraChargesTotal;
-    $grandTotal = round($grandTotal, 2);
 
-    // Instead of searching for CSS, use inline CSS for reliability
+    // Use inline CSS for reliability instead of searching for CSS files
     $cssContent = "
-    body { 
-        font-family: DejaVu Sans, Arial, sans-serif; 
-        line-height: 1.4; 
-        margin: 0; 
-        padding: 10px; 
-        color: #333;
-        font-size: 9pt;
-    }
-    .invoice-container { 
-        width: 100%; 
-        max-width: 800px; 
-        margin: 0 auto; 
-        padding: 15px; 
-    }
-    .invoice-header { 
-        width: 100%; 
-        display: table; 
-        margin-bottom: 15px; 
-        border-bottom: 1px solid #eee; 
-        padding-bottom: 10px; 
-    }
-    .invoice-header div { 
-        display: table-cell; 
-    }
-    .company-info { 
-        text-align: right; 
-    }
-    h1 { 
-        font-size: 18pt; 
-        margin: 0 0 5px 0; 
-    }
-    h2 { 
-        font-size: 14pt; 
-        margin: 0 0 5px 0; 
-    }
-    h3 { 
-        font-size: 11pt; 
-        margin: 10px 0 5px 0; 
-    }
-    .section-title {
-        margin-bottom: 5px;
-        padding-bottom: 3px;
-        border-bottom: 1px solid #eee;
-    }
-    .customer-section { 
-        margin-bottom: 10px; 
-    }
-    .customer-section > div {
-        padding-right: 15px;
-    }
-    p { 
-        margin: 3px 0; 
-    }
-    .fare-table { 
-        width: 100%; 
-        border-collapse: collapse; 
-        margin: 10px 0; 
-    }
-    .fare-table th, .fare-table td { 
-        padding: 5px; 
-        text-align: left; 
-        border-bottom: 1px solid #eee; 
-    }
-    .fare-table th:last-child, .fare-table td:last-child { 
-        text-align: right; 
-    }
-    .total-row { 
-        font-weight: bold; 
-        background-color: #f9f9f9; 
-    }
-    .footer { 
-        margin-top: 20px; 
-        text-align: center; 
-        font-size: 8pt; 
-        color: #666; 
-        border-top: 1px solid #eee; 
-        padding-top: 10px; 
-    }
-    .gst-details {
-        margin: 10px 0;
-        padding: 8px;
-        border: 1px solid #eee;
-        background: #f9f9f9;
-        font-size: 9pt;
-    }
-    .extra-charges {
-        margin-top: 15px;
-        margin-bottom: 15px;
-    }
-    .extra-charges-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 5px;
-    }
-    .extra-charges-table th, .extra-charges-table td {
-        padding: 5px;
-        text-align: left;
-        border-bottom: 1px solid #eee;
-    }
-    .extra-charges-table th:last-child, .extra-charges-table td:last-child {
-        text-align: right;
-    }
+    body { font-family: DejaVu Sans, Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+    .invoice-container { width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; }
+    .invoice-header { width: 100%; display: table; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+    .invoice-header div { display: table-cell; }
+    .company-info { text-align: right; }
+    .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+    .fare-table th:last-child, .fare-table td:last-child { text-align: right; }
+    .total-row { font-weight: bold; background-color: #f9f9f9; }
+    .booking-details { margin-bottom: 30px; }
+    .booking-details table { width: 100%; border-collapse: collapse; }
+    .booking-details th, .booking-details td { padding: 8px; text-align: left; vertical-align: top; }
+    .booking-details th { width: 30%; font-weight: normal; color: #666; }
+    .extra-charges { margin-top: 20px; margin-bottom: 20px; }
+    .extra-charges h3 { margin-bottom: 10px; }
+    .extra-charges-table { width: 100%; border-collapse: collapse; }
+    .extra-charges-table th, .extra-charges-table td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    .extra-charges-table th:last-child, .extra-charges-table td:last-child { text-align: right; }
+    .grand-total { font-size: 1.2em; font-weight: bold; margin-top: 20px; text-align: right; }
     ";
 
-    // Create HTML content for the invoice
-    $content = '
+    // Create HTML content for invoice
+    $htmlContent = "
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset="utf-8">
-        <title>Invoice #'.$invoiceNumber.'</title>
+        <meta charset='utf-8'>
+        <title>Invoice #{$invoiceNumber}</title>
         <style>
-            '.$cssContent.'
+            {$cssContent}
         </style>
     </head>
     <body>
-        <div class="invoice-container">
-            <div class="invoice-header">
+        <div class='invoice-container'>
+            <div class='invoice-header'>
                 <div>
                     <h1>INVOICE</h1>
-                    <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
+                    <p>Invoice #: {$invoiceNumber}</p>
+                    <p>Date: {$currentDate}</p>
+                    <p>Booking #: {$booking['booking_number']}</p>
                 </div>
-                <div class="company-info">
-                    <h2>#'.$invoiceNumber.'</h2>
-                    <p>Date: '.date('d M Y', strtotime($currentDate)).'</p>
-                    <p>Booking #: '.($booking['booking_number'] ?? 'N/A').'</p>
+                <div class='company-info'>
+                    <h2>BE Rides</h2>
+                    <p>Vizag, Andhra Pradesh, India</p>
+                    <p>Phone: +91-7093864511</p>
+                    <p>Email: info@berides.in</p>
                 </div>
             </div>
             
-            <div class="invoice-body">
-                <div class="customer-section" style="display: table; width: 100%; margin-bottom: 20px;">
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Customer Details</h3>
-                        <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
-                        <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
-                        <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
-                    </div>
-                    
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
-                        (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
-                        <p><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                        <p><strong>Vehicle:</strong> '.($booking['cab_type'] ?? 'N/A').'</p>
-                    </div>
-                </div>
+            <div class='customer-info'>
+                <h3>Bill To</h3>
+                <p><strong>{$booking['passenger_name']}</strong></p>
+                <p>Phone: {$booking['passenger_phone']}</p>
+                <p>Email: {$booking['passenger_email']}</p>";
                 
-                <div class="trip-details">
-                    <h3 class="section-title">Trip Details</h3>
-                    <p><strong>Pickup:</strong> '.($booking['pickup_location'] ?? 'N/A').'</p>
-                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p><strong>Drop:</strong> '.$booking['drop_location'].'</p>' : '').'
-                    <p><strong>Pickup Time:</strong> '.(isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                </div>';
-
+    // Add GST info if enabled
     if ($gstEnabled && !empty($gstNumber)) {
-        $content .= '
-                <div class="gst-details" style="margin: 20px 0; padding: 10px; border: 1px solid #eee; background: #f9f9f9;">
-                    <h3 class="section-title">GST Details</h3>
-                    <p><strong>GST Number:</strong> '.htmlspecialchars($gstNumber).'</p>
-                    <p><strong>Company Name:</strong> '.htmlspecialchars($companyName).'</p>
-                    '.(!empty($companyAddress) ? '<p><strong>Company Address:</strong> '.htmlspecialchars($companyAddress).'</p>' : '').'
-                </div>';
+        $htmlContent .= "<p>GST Number: {$gstNumber}</p>";
+        if (!empty($companyName)) {
+            $htmlContent .= "<p>Company: {$companyName}</p>";
+        }
+        if (!empty($companyAddress)) {
+            $htmlContent .= "<p>Address: {$companyAddress}</p>";
+        }
     }
-
-    $content .= '
-                <h3 class="section-title">Fare Breakdown</h3>
-                <table class="fare-table">
+    
+    $htmlContent .= "
+            </div>
+            
+            <div class='booking-details'>
+                <h3>Booking Details</h3>
+                <table>
                     <tr>
-                        <th>Description</th>
-                        <th style="text-align: right;">Amount</th>
+                        <th>Pickup:</th>
+                        <td>{$booking['pickup_location']}</td>
+                    </tr>";
+    
+    if (!empty($booking['drop_location'])) {
+        $htmlContent .= "
+                    <tr>
+                        <th>Drop:</th>
+                        <td>{$booking['drop_location']}</td>
+                    </tr>";
+    }
+    
+    $formattedPickupDate = date('d M Y h:i A', strtotime($booking['pickup_date']));
+    
+    $htmlContent .= "
+                    <tr>
+                        <th>Date:</th>
+                        <td>{$formattedPickupDate}</td>
                     </tr>
                     <tr>
-                        <td>Base Fare'.($includeTax && $gstEnabled ? ' (excluding tax)' : '').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
-                    </tr>';
-
-    // Add extra charges section if there are any extra charges
-    if (!empty($extraCharges)) {
-        $content .= '
+                        <th>Vehicle:</th>
+                        <td>{$booking['cab_type']}</td>
+                    </tr>
                 </table>
-                
-                <div class="extra-charges">
-                    <h3 class="section-title">Extra Charges</h3>
-                    <table class="extra-charges-table">
+            </div>
+            
+            <div class='fare-details'>
+                <h3>Fare Details</h3>
+                <table class='fare-table'>
+                    <thead>
                         <tr>
                             <th>Description</th>
-                            <th style="text-align: right;">Amount</th>
-                        </tr>';
-
-        foreach ($extraCharges as $charge) {
-            $description = isset($charge['description']) ? $charge['description'] : 
-                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
-            $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
-
-            $content .= '
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         <tr>
-                            <td>'.htmlspecialchars($description).'</td>
-                            <td><span class="rupee-symbol">₹</span> '.number_format($amount, 2).'</td>
-                        </tr>';
-        }
-
-        $content .= '
-                    </table>
-                </div>
-                
-                <table class="fare-table">';
-    }
-
+                            <td>Base Fare</td>
+                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                        </tr>";
+    
+    // Add GST rows if applicable
     if ($gstEnabled) {
         if ($isIGST) {
-            $content .= '
-                    <tr>
-                        <td>IGST (12%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($igstAmount, 2).'</td>
-                    </tr>';
+            $htmlContent .= "
+                        <tr>
+                            <td>IGST (12%)</td>
+                            <td>₹ " . number_format($igstAmount, 2) . "</td>
+                        </tr>";
         } else {
-            $content .= '
-                    <tr>
-                        <td>CGST (6%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($cgstAmount, 2).'</td>
-                    </tr>
-                    <tr>
-                        <td>SGST (6%)</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($sgstAmount, 2).'</td>
-                    </tr>';
+            $htmlContent .= "
+                        <tr>
+                            <td>CGST (6%)</td>
+                            <td>₹ " . number_format($cgstAmount, 2) . "</td>
+                        </tr>
+                        <tr>
+                            <td>SGST (6%)</td>
+                            <td>₹ " . number_format($sgstAmount, 2) . "</td>
+                        </tr>";
         }
     }
-
-    $content .= '
-                    <tr class="total-row">
-                        <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($grandTotal, 2).'</td>
+    
+    $htmlContent .= "
+                        <tr class='total-row'>
+                            <td>Subtotal</td>
+                            <td>₹ " . number_format($totalAmount, 2) . "</td>
+                        </tr>";
+    
+    // Add extra charges if there are any
+    if (!empty($extraCharges)) {
+        $htmlContent .= "
+            </tbody>
+        </table>
+        
+        <div class='extra-charges'>
+            <h3>Extra Charges</h3>
+            <table class='extra-charges-table'>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Amount</th>
                     </tr>
-                </table>';
-
-    if ($gstEnabled) {
-        $content .= '
-                <p class="tax-note" style="font-size: 0.9em; color: #666;">This invoice includes GST as per applicable rates. '.
-                ($isIGST ? 'IGST 12%' : 'CGST 6% + SGST 6%').' has been applied.</p>';
+                </thead>
+                <tbody>";
+        
+        foreach ($extraCharges as $charge) {
+            $chargeDesc = isset($charge['description']) ? $charge['description'] : 
+                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+            
+            $htmlContent .= "
+                    <tr>
+                        <td>{$chargeDesc}</td>
+                        <td>₹ " . number_format($chargeAmount, 2) . "</td>
+                    </tr>";
+        }
+        
+        $htmlContent .= "
+                </tbody>
+            </table>
+        </div>
+        
+        <div class='grand-total'>
+            Grand Total: ₹ " . number_format($grandTotal, 2) . "
+        </div>";
+    } else {
+        // If no extra charges, just close the table
+        $htmlContent .= "
+                    </tbody>
+                </table>";
     }
-
-    $content .= '
+    
+    $htmlContent .= "
             </div>
             
-            <div class="footer">
-                <p>Thank you for choosing Vizag Cab Services!</p>
-                <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
-                <p>Generated on: '.date('d M Y H:i:s').'</p>
+            <div class='invoice-footer' style='margin-top: 50px; text-align: center; font-size: 12px;'>
+                <p>Thank you for using BE Rides. For any queries, please contact us at info@berides.in</p>";
+    
+    if ($gstEnabled) {
+        $htmlContent .= "<p>This is a computer-generated invoice and does not require a signature</p>";
+    }
+    
+    $htmlContent .= "
             </div>
         </div>
     </body>
-    </html>';
+    </html>";
 
-    // For HTML output
-    if ($format === 'html' || isset($_GET['show_html'])) {
+    // FIXED: Log generated HTML for debugging
+    logInvoiceError("Generated HTML content length: " . strlen($htmlContent));
+
+    // If the format is HTML, output directly
+    if ($format === 'html') {
+        logInvoiceError("Outputting HTML format");
         header('Content-Type: text/html; charset=utf-8');
-        echo $content;
+        echo $htmlContent;
+        exit;
+    }
+    
+    // If the format is PDF, generate a PDF using mPDF if available
+    try {
+        if ($vendorExists && class_exists('\\Mpdf\\Mpdf')) {
+            logInvoiceError("Generating PDF using mPDF");
+            // CRITICAL: Clear all buffers again before PDF generation
+            while (ob_get_level()) ob_end_clean();
+            
+            // Use mPDF if available
+            $mpdf = new \Mpdf\Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'margin_left' => 15,
+                'margin_right' => 15,
+                'tempDir' => sys_get_temp_dir() // Use system temp directory for better reliability
+            ]);
+            
+            // Set document metadata
+            $mpdf->SetTitle("Invoice #{$invoiceNumber}");
+            $mpdf->SetAuthor('BE Rides');
+            $mpdf->SetCreator('BE Rides Invoice System');
+            
+            // FIXED: Set proper Content-Type header for PDF before any output
+            header('Content-Type: application/pdf');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            
+            // Force download if direct_download is set
+            if ($directDownload) {
+                header('Content-Disposition: attachment; filename="Invoice_' . $invoiceNumber . '.pdf"');
+            } else {
+                header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
+            }
+            
+            // Write HTML content to PDF
+            $mpdf->WriteHTML($htmlContent);
+            
+            // Output PDF
+            logInvoiceError("Outputting PDF");
+            $mpdf->Output("Invoice_{$invoiceNumber}.pdf", 'I'); // 'I' for inline in browser
+            exit;
+        } else if (class_exists('\\Dompdf\\Dompdf')) {
+            logInvoiceError("Generating PDF using DomPDF");
+            // CRITICAL: Clear all buffers again before PDF generation
+            while (ob_get_level()) ob_end_clean();
+            
+            // Use DomPDF as a fallback
+            $options = new Options();
+            $options->set('defaultFont', 'DejaVu Sans');
+            $options->set('isRemoteEnabled', true);
+            
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($htmlContent);
+            $dompdf->setPaper('A4');
+            $dompdf->render();
+            
+            // FIXED: Set proper Content-Type header for PDF before any output
+            header('Content-Type: application/pdf');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            
+            // Force download if direct_download is set
+            if ($directDownload) {
+                header('Content-Disposition: attachment; filename="Invoice_' . $invoiceNumber . '.pdf"');
+            } else {
+                header('Content-Disposition: inline; filename="Invoice_' . $invoiceNumber . '.pdf"');
+            }
+            
+            // Output PDF
+            logInvoiceError("Outputting PDF with DomPDF");
+            $dompdf->stream("Invoice_{$invoiceNumber}.pdf", array('Attachment' => $directDownload));
+            exit;
+        } else {
+            throw new Exception("PDF generation libraries not available");
+        }
+    } catch (Exception $e) {
+        logInvoiceError("Failed to generate PDF: " . $e->getMessage());
+        
+        // Fallback to HTML if PDF generation fails
+        logInvoiceError("Falling back to HTML format due to PDF generation failure");
+        header('Content-Type: text/html; charset=utf-8');
+        echo $htmlContent;
         exit;
     }
 
-    // For PDF output, check if we can use DomPDF
-    if ($vendorExists && class_exists('Dompdf\Dompdf')) {
-        try {
-            debugLog("Starting PDF generation");
-            
-            // Clear ALL output buffers and turn off output buffering
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
-            
-            // Load DomPDF
-            debugLog("Loading DomPDF");
-            
-            // Configure DomPDF options
-            debugLog("Configuring DomPDF options");
-            $options = new \Dompdf\Options();
-            $options->set('isRemoteEnabled', true);
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('isPhpEnabled', false);
-            $options->set('defaultFont', 'DejaVu Sans');
-            $options->set('defaultMediaType', 'print');
-            $options->set('defaultPaperSize', 'A4');
-            $options->set('dpi', 96);
-            
-            // Create DomPDF instance
-            $dompdf = new \Dompdf\Dompdf($options);
-            $dompdf->setPaper('A4', 'portrait');
-            
-            // Load HTML content
-            $dompdf->loadHtml($content);
-            
-            // Render PDF
-            debugLog("Starting PDF render");
-            $dompdf->render();
-            
-            // Get PDF content
-            $output = $dompdf->output();
-            $pdfSize = strlen($output);
-            
-            if ($pdfSize === 0) {
-                throw new Exception("Generated PDF is empty");
-            }
-            
-            // Clear any previous output and disable further output buffering
-            while (ob_get_level()) {
-                ob_end_clean();
-            }
-            
-            // Send headers - NOTHING should be output before this point
-            if (!headers_sent()) {
-                header('Content-Type: application/pdf');
-                header('Content-Length: ' . $pdfSize);
-                
-                // Set content disposition based on direct_download parameter
-                $filename = 'Invoice_' . $invoiceNumber . '.pdf';
-                if (isset($_GET['direct_download']) && $_GET['direct_download'] === '1') {
-                    header('Content-Disposition: attachment; filename="' . $filename . '"');
-                } else {
-                    header('Content-Disposition: inline; filename="' . $filename . '"');
-                }
-                
-                // Cache control headers
-                header('Cache-Control: public, must-revalidate, max-age=0');
-                header('Pragma: public');
-                header('Expires: Sat, 26 Jul 1997 05:00:00 GMT');
-                header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-            } else {
-                debugLog("Headers were already sent!");
-            }
-            
-            // Disable any compression
-            if (function_exists('apache_setenv')) {
-                @apache_setenv('no-gzip', 1);
-            }
-            @ini_set('zlib.output_compression', false);
-            
-            // Output PDF
-            echo $output;
-            exit();
-            
-        } catch (Exception $e) {
-            debugLog("Error in PDF generation", [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-            throw $e;
-        }
-    } else {
-        // DomPDF not available, return HTML content with warning
-        logInvoiceError("DomPDF not available, falling back to HTML", [
-            'autoloader_search_results' => $autoloaderSearchResults
-        ]);
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html>
-        <html>
-        <head>
-            <title>Invoice (HTML Only)</title>
-            <style>
-                .warning-banner { background-color: #ffffdd; border: 1px solid #ffcc00; padding: 10px; margin-bottom: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="warning-banner">
-                <p><strong>PDF Generation Unavailable:</strong> The PDF generation library is not installed or configured correctly.</p>
-                <p>Please run <code>composer require dompdf/dompdf:^2.0</code> and then <code>composer install</code> in your project root.</p>
-                <p>Try <a href="/api/test-pdf.php" style="color: blue;">this diagnostic tool</a> to test PDF generation.</p>
-            </div>
-            ' . $content . '
-        </body>
-        </html>';
-    }
-
 } catch (Exception $e) {
-    logInvoiceError("Critical error in download-invoice.php", [
-        'error' => $e->getMessage(), 
+    logInvoiceError("Exception in download-invoice.php", [
+        'message' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
     ]);
     
-    // Return user-friendly error page
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<!DOCTYPE html>
-    <html>
-    <head>
-        <title>Invoice Generation Error</title>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-            .error-container { max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ffdddd; background-color: #fff9f9; border-radius: 5px; }
-            h1 { color: #cc0000; }
-            .error-details { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; overflow: auto; }
-            .actions { margin-top: 20px; }
-            .actions a { display: inline-block; margin-right: 10px; padding: 8px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
-            .actions a.secondary { background-color: #607d8b; }
-        </style>
-    </head>
-    <body>
-        <div class="error-container">
-            <h1>Invoice Generation Error</h1>
-            <p>We encountered a problem while trying to generate your invoice. We apologize for the inconvenience.</p>
-            <p><strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
-            
-            <div class="error-details">
-                <h3>Troubleshooting Steps:</h3>
-                <ol>
-                    <li>Try viewing the HTML version instead: <a href="?format=html&id=' . htmlspecialchars($bookingId) . '">View HTML Version</a></li>
-                    <li>Make sure composer packages are installed correctly</li>
-                    <li>Check our diagnostic page to verify PDF functionality</li>
-                </ol>
-            </div>
-            
-            ' . ($debugMode ? '<div class="error-details">
-                <h3>Technical Details:</h3>
-                <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>
-            </div>' : '') . '
-            
-            <div class="actions">
-                <a href="javascript:history.back()">Go Back</a>
-                <a href="/api/test-pdf.php" class="secondary">Run Diagnostic Test</a>
-                <a href="?format=html&id=' . htmlspecialchars($bookingId) . '" class="secondary">View HTML Version</a>
-            </div>
-        </div>
-    </body>
-    </html>';
+    if (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Failed to generate invoice: ' . $e->getMessage(),
+            'error_details' => $debugMode ? $e->getTraceAsString() : null
+        ]);
+    } else {
+        // If not expecting JSON, output plain error
+        header('Content-Type: text/html; charset=utf-8');
+        echo "<h1>Error</h1><p>" . htmlspecialchars($e->getMessage()) . "</p>";
+        if ($debugMode) {
+            echo "<pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
+        }
+    }
+    exit;
 }
 
-// Restore normal error handler
-restore_error_handler();
-
-// Close database connection
+// Close any remaining database connections
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
 }

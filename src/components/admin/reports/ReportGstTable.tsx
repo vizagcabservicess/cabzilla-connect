@@ -13,45 +13,82 @@ import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { format } from 'date-fns';
 import { GstReportData, GstInvoice } from '@/types/api';
+import { useToast } from "@/components/ui/use-toast";
 
 interface ReportGstTableProps {
   data: GstReportData | any;
 }
 
 export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
+  const { toast } = useToast();
+  
   // Extract GST invoices and summary from the data
   const { gstInvoices = [], summary = {} } = data || {};
 
+  // FIXED: Added debugging to help track GST data issues
+  React.useEffect(() => {
+    console.log("GST Report Data:", data);
+    console.log("GST Invoices count:", gstInvoices?.length);
+    if (gstInvoices?.length > 0) {
+      console.log("First invoice sample:", gstInvoices[0]);
+    }
+  }, [data, gstInvoices]);
+
   // Function to handle invoice download
   const handleDownloadInvoice = (invoice: GstInvoice) => {
-    // Get the API base URL
-    const apiBaseUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
-      ? `${window.location.protocol}//${window.location.host}`
-      : 'https://vizagup.com';
-    
-    // Build the URL parameters
-    let urlParams = new URLSearchParams({
-      id: invoice.id.toString(),
-      gstEnabled: '1',
-      format: 'pdf',
-      direct_download: '1'
-    });
-    
-    // Add GST number if available
-    if (invoice.gstNumber) {
-      urlParams.append('gstNumber', invoice.gstNumber);
-    }
-    
-    // Add company name if available
-    if (invoice.companyName) {
-      urlParams.append('companyName', invoice.companyName);
-    }
+    try {
+      // Get the API base URL
+      const apiBaseUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
+        ? `${window.location.protocol}//${window.location.host}`
+        : 'https://vizagup.com';
+      
+      // FIXED: Log invoice details to debug GST data
+      console.log("Downloading invoice:", invoice);
+      
+      // Build the URL parameters
+      let urlParams = new URLSearchParams({
+        id: invoice.id.toString(),
+        gstEnabled: '1', // Always enable GST for GST invoices
+        format: 'pdf',
+        direct_download: '1'
+      });
+      
+      // Add GST number if available
+      if (invoice.gstNumber) {
+        urlParams.append('gstNumber', invoice.gstNumber);
+        console.log("Using GST Number:", invoice.gstNumber);
+      } else {
+        console.warn("Missing GST Number for invoice:", invoice.id);
+      }
+      
+      // Add company name if available
+      if (invoice.companyName) {
+        urlParams.append('companyName', invoice.companyName);
+      }
 
-    // Construct the full download URL
-    const downloadUrl = `${apiBaseUrl}/api/download-invoice.php?${urlParams.toString()}`;
-
-    // Open the download URL in a new tab
-    window.open(downloadUrl, '_blank');
+      // FIXED: Add cache-busting param
+      urlParams.append('t', new Date().getTime().toString());
+      
+      // FIXED: Try using admin endpoint for more direct access
+      const downloadUrl = `${apiBaseUrl}/api/admin/download-invoice.php?${urlParams.toString()}`;
+      
+      console.log("Download URL:", downloadUrl);
+      
+      // Open the download URL in a new tab
+      window.open(downloadUrl, '_blank');
+      
+      toast({
+        title: "Invoice Download",
+        description: "Invoice opening in new tab"
+      });
+    } catch (error) {
+      console.error("Error downloading invoice:", error);
+      toast({
+        title: "Download Failed",
+        description: "Failed to download invoice",
+        variant: "destructive"
+      });
+    }
   };
 
   if (!gstInvoices || gstInvoices.length === 0) {
