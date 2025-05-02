@@ -22,13 +22,12 @@ import {
 } from 'recharts';
 
 interface ReportRevenueTableProps {
-  data: any[] | any;
+  data: any[];
   withGst?: boolean;
 }
 
 export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, withGst = false }) => {
-  // Handle empty data case
-  if (!data) {
+  if (!data || data.length === 0) {
     return (
       <div className="text-center p-6">
         <p className="text-muted-foreground">No revenue data available for the selected period.</p>
@@ -37,18 +36,11 @@ export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, wi
   }
 
   // Check if this is a summary or detailed report
-  const isSummary = !Array.isArray(data) || (Array.isArray(data) && data.length === 1 && data[0].totalRevenue !== undefined);
-  
-  // Extract the summary data
-  const summaryData = isSummary ? 
-    (Array.isArray(data) ? data[0] : data) : 
-    null;
-
-  // For array data, make sure it's actually an array we can work with
-  const detailedData = !isSummary && Array.isArray(data) ? data : [];
+  const isSummary = data.length === 1 && data[0].totalRevenue !== undefined;
 
   if (isSummary) {
-    const { totalRevenue, revenueByTripType = {}, dailyRevenue = [], gstSummary } = summaryData || {};
+    const summary = data[0];
+    const { totalRevenue, revenueByTripType, dailyRevenue, gstSummary } = summary;
 
     // Format data for charts
     const tripTypeChartData = revenueByTripType ? 
@@ -75,7 +67,7 @@ export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, wi
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="text-sm font-medium text-muted-foreground">Total Revenue</div>
-                <div className="text-2xl font-bold mt-1">₹{totalRevenue ? totalRevenue.toLocaleString() : '0'}</div>
+                <div className="text-2xl font-bold mt-1">₹{totalRevenue.toLocaleString()}</div>
               </div>
 
               {withGst && gstSummary && (
@@ -118,33 +110,31 @@ export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, wi
         )}
 
         {/* Revenue by Trip Type Table */}
-        {revenueByTripType && Object.keys(revenueByTripType).length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Revenue by Trip Type</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Trip Type</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Revenue by Trip Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Trip Type</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(revenueByTripType || {}).map(([tripType, revenue]) => (
+                  <TableRow key={tripType}>
+                    <TableCell className="font-medium">
+                      {tripType.charAt(0).toUpperCase() + tripType.slice(1).replace('_', ' ')}
+                    </TableCell>
+                    <TableCell className="text-right">₹{(revenue as number).toLocaleString()}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(revenueByTripType || {}).map(([tripType, revenue]) => (
-                    <TableRow key={tripType}>
-                      <TableCell className="font-medium">
-                        {tripType.charAt(0).toUpperCase() + tripType.slice(1).replace('_', ' ')}
-                      </TableCell>
-                      <TableCell className="text-right">₹{(revenue as number).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         {/* GST Summary Section if GST data is available */}
         {withGst && gstSummary && (
@@ -206,48 +196,40 @@ export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, wi
             </TableRow>
           </TableHeader>
           <TableBody>
-            {detailedData.length > 0 ? (
-              detailedData.map((transaction: any) => {
-                // Calculate GST amount if withGst is true
-                const gstAmount = withGst && transaction.gst_amount ? 
-                  transaction.gst_amount : 
-                  (withGst ? transaction.taxable_value * 0.05 : 0);
-                
-                return (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-medium">{transaction.booking_number}</TableCell>
-                    <TableCell>{transaction.passenger_name || 'N/A'}</TableCell>
-                    <TableCell>{transaction.passenger_phone || 'N/A'}</TableCell>
-                    <TableCell>
-                      {transaction.created_at ? 
-                        format(new Date(transaction.created_at), 'dd MMM yyyy') : 
-                        'N/A'
-                      }
-                    </TableCell>
-                    {withGst && (
-                      <>
-                        <TableCell className="text-right">
-                          ₹{(transaction.taxable_value || transaction.total_amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {transaction.gst_rate || '5%'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          ₹{gstAmount.toLocaleString()}
-                        </TableCell>
-                      </>
-                    )}
-                    <TableCell className="text-right">₹{Number(transaction.total_amount).toLocaleString()}</TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={withGst ? 8 : 5} className="text-center py-4">
-                  No transactions found for the selected period
-                </TableCell>
-              </TableRow>
-            )}
+            {data.map((transaction: any) => {
+              // Calculate GST amount if withGst is true
+              const gstAmount = withGst && transaction.gst_amount ? 
+                transaction.gst_amount : 
+                (withGst ? transaction.taxable_value * 0.05 : 0);
+              
+              return (
+                <TableRow key={transaction.id}>
+                  <TableCell className="font-medium">{transaction.booking_number}</TableCell>
+                  <TableCell>{transaction.passenger_name || 'N/A'}</TableCell>
+                  <TableCell>{transaction.passenger_phone || 'N/A'}</TableCell>
+                  <TableCell>
+                    {transaction.created_at ? 
+                      format(new Date(transaction.created_at), 'dd MMM yyyy') : 
+                      'N/A'
+                    }
+                  </TableCell>
+                  {withGst && (
+                    <>
+                      <TableCell className="text-right">
+                        ₹{(transaction.taxable_value || transaction.total_amount).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {transaction.gst_rate || '5%'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ₹{gstAmount.toLocaleString()}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell className="text-right">₹{Number(transaction.total_amount).toLocaleString()}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
