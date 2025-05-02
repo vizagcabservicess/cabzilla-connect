@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Table,
@@ -24,7 +25,7 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
   // Extract GST invoices and summary from the data
   const { gstInvoices = [], summary = {} } = data || {};
 
-  // Add debugging to help track GST data issues
+  // FIXED: Added debugging to help track GST data issues
   React.useEffect(() => {
     console.log("GST Report Data:", data);
     console.log("GST Invoices count:", gstInvoices?.length);
@@ -41,10 +42,10 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
         ? `${window.location.protocol}//${window.location.host}`
         : 'https://vizagup.com';
       
-      // Log invoice details for debugging
+      // FIXED: Log invoice details to debug GST data
       console.log("Downloading invoice:", invoice);
       
-      // Build the URL parameters with improved GST handling
+      // Build the URL parameters
       let urlParams = new URLSearchParams({
         id: invoice.id.toString(),
         gstEnabled: '1', // Always enable GST for GST invoices
@@ -65,13 +66,10 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
         urlParams.append('companyName', invoice.companyName);
       }
 
-      // Add cache-busting param
+      // FIXED: Add cache-busting param
       urlParams.append('t', new Date().getTime().toString());
       
-      // Debug mode to troubleshoot PDF generation
-      urlParams.append('debug', 'true');
-      
-      // Use admin endpoint for more direct access
+      // FIXED: Try using admin endpoint for more direct access
       const downloadUrl = `${apiBaseUrl}/api/admin/download-invoice.php?${urlParams.toString()}`;
       
       console.log("Download URL:", downloadUrl);
