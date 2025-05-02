@@ -1,4 +1,7 @@
+
 import { directVehicleOperation } from '@/utils/apiHelper';
+import { apiBaseUrl, getApiUrl } from '@/config/api';
+import { toast } from 'sonner';
 
 // Define common fare data interface with optional fields to support different fare types
 export interface FareData {
@@ -234,7 +237,7 @@ export async function updateAirportFares(fareData: FareData): Promise<any> {
       `api/admin/airport-fares-update.php?_t=${timestamp}`, 
       'POST',
       { 
-        __data: {
+        data: {
           ...fareData,
           vehicleId: fareData.vehicleId || fareData.vehicle_id,
           vehicle_id: fareData.vehicleId || fareData.vehicle_id
