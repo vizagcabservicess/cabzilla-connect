@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -8,249 +8,210 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from 'date-fns';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
 
-interface ReportRevenueTableProps {
-  data: any[] | any;
-  withGst?: boolean;
+interface RevenueReportData {
+  date: string;
+  total_revenue: number;
+  average_booking_value: number;
+  booking_count: number;
+  trip_type: string;
+  cab_type: string;
 }
 
-export const ReportRevenueTable: React.FC<ReportRevenueTableProps> = ({ data, withGst = false }) => {
-  // Handle empty data case
-  if (!data) {
-    return (
-      <div className="text-center p-6">
-        <p className="text-muted-foreground">No revenue data available for the selected period.</p>
-      </div>
+interface ReportRevenueTableProps {
+  data: RevenueReportData[];
+}
+
+export function ReportRevenueTable({ data }: ReportRevenueTableProps) {
+  // Process data to group by date for daily summary
+  const dailySummary = useMemo(() => {
+    const summary: Record<string, {
+      date: string;
+      total_revenue: number;
+      booking_count: number;
+      average_booking_value: number;
+    }> = {};
+
+    data.forEach(item => {
+      if (!summary[item.date]) {
+        summary[item.date] = {
+          date: item.date,
+          total_revenue: 0,
+          booking_count: 0,
+          average_booking_value: 0,
+        };
+      }
+      
+      summary[item.date].total_revenue += Number(item.total_revenue);
+      summary[item.date].booking_count += Number(item.booking_count);
+    });
+
+    // Calculate average booking value for each day
+    Object.keys(summary).forEach(date => {
+      const day = summary[date];
+      day.average_booking_value = day.booking_count > 0 
+        ? day.total_revenue / day.booking_count 
+        : 0;
+    });
+
+    return Object.values(summary).sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }
+  }, [data]);
 
-  // Check if this is a summary or detailed report
-  const isSummary = !Array.isArray(data) || (Array.isArray(data) && data.length === 1 && data[0].totalRevenue !== undefined);
-  
-  // Extract the summary data
-  const summaryData = isSummary ? 
-    (Array.isArray(data) ? data[0] : data) : 
-    null;
+  // Process data to group by trip and cab types
+  const typeSummary = useMemo(() => {
+    const summary: Record<string, {
+      trip_type: string;
+      cab_type: string;
+      total_revenue: number;
+      booking_count: number;
+      average_booking_value: number;
+    }> = {};
 
-  // For array data, make sure it's actually an array we can work with
-  const detailedData = !isSummary && Array.isArray(data) ? data : [];
+    data.forEach(item => {
+      const key = `${item.trip_type}-${item.cab_type}`;
+      
+      if (!summary[key]) {
+        summary[key] = {
+          trip_type: item.trip_type,
+          cab_type: item.cab_type,
+          total_revenue: 0,
+          booking_count: 0,
+          average_booking_value: 0,
+        };
+      }
+      
+      summary[key].total_revenue += Number(item.total_revenue);
+      summary[key].booking_count += Number(item.booking_count);
+    });
 
-  if (isSummary) {
-    const { totalRevenue, revenueByTripType = {}, dailyRevenue = [], gstSummary } = summaryData || {};
+    // Calculate average booking value for each type
+    Object.keys(summary).forEach(key => {
+      const type = summary[key];
+      type.average_booking_value = type.booking_count > 0 
+        ? type.total_revenue / type.booking_count 
+        : 0;
+    });
 
-    // Format data for charts
-    const tripTypeChartData = revenueByTripType ? 
-      Object.entries(revenueByTripType).map(([key, value]) => ({
-        name: key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' '),
-        value: value as number
-      })) : [];
+    return Object.values(summary).sort((a, b) => b.total_revenue - a.total_revenue);
+  }, [data]);
 
-    // Format daily revenue data for the chart
-    const revenueChartData = dailyRevenue ? 
-      dailyRevenue.map((day: any) => ({
-        date: format(new Date(day.date), 'dd MMM'),
-        revenue: day.total,
-      })) : [];
-
-    return (
-      <div className="space-y-6">
-        {/* Revenue Overview Cards */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Revenue Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-sm font-medium text-muted-foreground">Total Revenue</div>
-                <div className="text-2xl font-bold mt-1">₹{totalRevenue ? totalRevenue.toLocaleString() : '0'}</div>
-              </div>
-
-              {withGst && gstSummary && (
-                <>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="text-sm font-medium text-muted-foreground">Taxable Amount (GST)</div>
-                    <div className="text-2xl font-bold mt-1">₹{gstSummary.taxableAmount.toLocaleString()}</div>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="text-sm font-medium text-muted-foreground">GST Amount ({gstSummary.gstRate})</div>
-                    <div className="text-2xl font-bold mt-1">₹{gstSummary.gstAmount.toLocaleString()}</div>
-                  </div>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Daily Revenue Chart */}
-        {revenueChartData && revenueChartData.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Daily Revenue Trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="w-full h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={revenueChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Revenue']} />
-                    <Legend />
-                    <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Revenue by Trip Type Table */}
-        {revenueByTripType && Object.keys(revenueByTripType).length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Revenue by Trip Type</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Trip Type</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(revenueByTripType || {}).map(([tripType, revenue]) => (
-                    <TableRow key={tripType}>
-                      <TableCell className="font-medium">
-                        {tripType.charAt(0).toUpperCase() + tripType.slice(1).replace('_', ' ')}
-                      </TableCell>
-                      <TableCell className="text-right">₹{(revenue as number).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* GST Summary Section if GST data is available */}
-        {withGst && gstSummary && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">GST Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Taxable Amount</TableCell>
-                    <TableCell className="text-right">₹{gstSummary.taxableAmount.toLocaleString()}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>GST Rate</TableCell>
-                    <TableCell className="text-right">{gstSummary.gstRate}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>GST Amount</TableCell>
-                    <TableCell className="text-right">₹{gstSummary.gstAmount.toLocaleString()}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-bold">Total with GST</TableCell>
-                    <TableCell className="text-right font-bold">₹{gstSummary.totalWithGst.toLocaleString()}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+  // Calculate overall totals
+  const totals = useMemo(() => {
+    return data.reduce(
+      (acc, row) => {
+        acc.total_revenue += Number(row.total_revenue);
+        acc.booking_count += Number(row.booking_count);
+        return acc;
+      },
+      {
+        total_revenue: 0,
+        booking_count: 0,
+        average_booking_value: 0,
+      }
     );
-  } else {
-    // Detailed revenue report view
-    return (
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Booking #</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Date</TableHead>
-              {withGst && (
-                <>
-                  <TableHead className="text-right">Taxable Value</TableHead>
-                  <TableHead className="text-center">GST</TableHead>
-                  <TableHead className="text-right">GST Amount</TableHead>
-                </>
-              )}
-              <TableHead className="text-right">Total Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {detailedData.length > 0 ? (
-              detailedData.map((transaction: any) => {
-                // Calculate GST amount if withGst is true
-                const gstAmount = withGst && transaction.gst_amount ? 
-                  transaction.gst_amount : 
-                  (withGst ? transaction.taxable_value * 0.05 : 0);
-                
-                return (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-medium">{transaction.booking_number}</TableCell>
-                    <TableCell>{transaction.passenger_name || 'N/A'}</TableCell>
-                    <TableCell>{transaction.passenger_phone || 'N/A'}</TableCell>
-                    <TableCell>
-                      {transaction.created_at ? 
-                        format(new Date(transaction.created_at), 'dd MMM yyyy') : 
-                        'N/A'
-                      }
-                    </TableCell>
-                    {withGst && (
-                      <>
-                        <TableCell className="text-right">
-                          ₹{(transaction.taxable_value || transaction.total_amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {transaction.gst_rate || '5%'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          ₹{gstAmount.toLocaleString()}
-                        </TableCell>
-                      </>
-                    )}
-                    <TableCell className="text-right">₹{Number(transaction.total_amount).toLocaleString()}</TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
+  }, [data]);
+
+  // Calculate overall average
+  totals.average_booking_value = totals.booking_count > 0 
+    ? totals.total_revenue / totals.booking_count 
+    : 0;
+
+  // Format date for display
+  const formatReportDate = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), 'dd MMM yyyy');
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium mb-3">Daily Revenue Summary</h3>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={withGst ? 8 : 5} className="text-center py-4">
-                  No transactions found for the selected period
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Total Revenue</TableHead>
+                <TableHead className="text-right">Bookings</TableHead>
+                <TableHead className="text-right">Average Value</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {dailySummary.map((row, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{formatReportDate(row.date)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.total_revenue)}</TableCell>
+                  <TableCell className="text-right">{row.booking_count}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.average_booking_value)}</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 font-medium">
+                <TableCell>Totals</TableCell>
+                <TableCell className="text-right">{formatCurrency(totals.total_revenue)}</TableCell>
+                <TableCell className="text-right">{totals.booking_count}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totals.average_booking_value)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    );
-  }
-};
+
+      <div>
+        <h3 className="text-lg font-medium mb-3">Revenue by Trip & Vehicle Type</h3>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Trip Type</TableHead>
+                <TableHead>Vehicle Type</TableHead>
+                <TableHead className="text-right">Total Revenue</TableHead>
+                <TableHead className="text-right">Bookings</TableHead>
+                <TableHead className="text-right">Average Value</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {typeSummary.map((row, index) => (
+                <TableRow key={index}>
+                  <TableCell className="capitalize">{row.trip_type}</TableCell>
+                  <TableCell>{row.cab_type}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.total_revenue)}</TableCell>
+                  <TableCell className="text-right">{row.booking_count}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.average_booking_value)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+      
+      <div>
+        <h3 className="text-lg font-medium mb-2">Revenue Highlights</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="rounded-md border p-4">
+            <div className="text-sm text-muted-foreground">Total Revenue</div>
+            <div className="text-2xl font-bold">{formatCurrency(totals.total_revenue)}</div>
+          </div>
+          <div className="rounded-md border p-4">
+            <div className="text-sm text-muted-foreground">Total Bookings</div>
+            <div className="text-2xl font-bold">{totals.booking_count}</div>
+          </div>
+          <div className="rounded-md border p-4">
+            <div className="text-sm text-muted-foreground">Average Booking Value</div>
+            <div className="text-2xl font-bold">{formatCurrency(totals.average_booking_value)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
