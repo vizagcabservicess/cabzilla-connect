@@ -78,17 +78,5 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-try {
-    // Forward the request to the admin endpoint
-    require_once __DIR__ . '/admin/direct-airport-fares.php';
-} catch (Exception $e) {
-    // Log any errors
-    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    
-    // Return a properly formatted JSON error response
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Error processing request: ' . $e->getMessage(),
-        'code' => 500
-    ]);
-}
+// Forward the request to the admin endpoint
+require_once __DIR__ . '/admin/direct-airport-fares.php';
