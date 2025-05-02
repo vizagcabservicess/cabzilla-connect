@@ -7,7 +7,8 @@
 
 // Include database utilities
 if (!function_exists('getDbConnection')) {
-    require_once __DIR__ . '/../utils/database.php';
+    require_once __DIR__ . '/../../config.php';
+    require_once __DIR__ . '/../common/db_helper.php';
 }
 
 // Create log directory
@@ -25,187 +26,277 @@ file_put_contents($setupLogFile, "[$setupTimestamp] Running database setup\n", F
 
 try {
     // Connect to database
-    $conn = getDbConnection();
+    $conn = getDbConnectionWithRetry();
     
     if (!$conn) {
         throw new Exception("Database connection failed during setup");
     }
+
+    // Verify and set up the non_gst_bills table
+    $checkNonGstTable = $conn->query("SHOW TABLES LIKE 'non_gst_bills'");
     
-    // Verify vehicles table
-    $checkVehiclesTable = $conn->query("SHOW TABLES LIKE 'vehicles'");
-    
-    if (!$checkVehiclesTable || $checkVehiclesTable->num_rows === 0) {
-        // Create vehicles table
-        $createVehiclesSQL = "
-            CREATE TABLE IF NOT EXISTS vehicles (
-                id VARCHAR(50) NOT NULL,
-                vehicle_id VARCHAR(50) NOT NULL,
-                name VARCHAR(100) NOT NULL,
-                category VARCHAR(50) DEFAULT 'Standard',
-                capacity INT(11) DEFAULT 4,
-                luggage_capacity INT(11) DEFAULT 2,
-                base_price DECIMAL(10,2) DEFAULT 0.00,
-                price_per_km DECIMAL(5,2) DEFAULT 0.00,
-                image VARCHAR(255) DEFAULT '',
+    if (!$checkNonGstTable || $checkNonGstTable->num_rows === 0) {
+        // Create non_gst_bills table
+        $createNonGstSQL = "
+            CREATE TABLE IF NOT EXISTS non_gst_bills (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                bill_number VARCHAR(50) NOT NULL,
+                bill_date DATE NOT NULL,
+                customer_name VARCHAR(100) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
                 description TEXT,
-                amenities TEXT,
-                ac TINYINT(1) DEFAULT 1,
-                is_active TINYINT(1) DEFAULT 1,
-                night_halt_charge DECIMAL(10,2) DEFAULT 0.00,
-                driver_allowance DECIMAL(10,2) DEFAULT 0.00,
+                payment_status ENUM('paid', 'pending', 'partial') DEFAULT 'pending',
+                payment_method VARCHAR(50),
                 created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
+                UNIQUE KEY bill_number (bill_number)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
-        if (!$conn->query($createVehiclesSQL)) {
-            throw new Exception("Failed to create vehicles table: " . $conn->error);
+        if (!$conn->query($createNonGstSQL)) {
+            throw new Exception("Failed to create non_gst_bills table: " . $conn->error);
         }
         
-        file_put_contents($setupLogFile, "[$setupTimestamp] Created vehicles table\n", FILE_APPEND);
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created non_gst_bills table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the vehicle_maintenance table
+    $checkMaintenanceTable = $conn->query("SHOW TABLES LIKE 'vehicle_maintenance'");
+    
+    if (!$checkMaintenanceTable || $checkMaintenanceTable->num_rows === 0) {
+        // Create vehicle_maintenance table
+        $createMaintenanceSQL = "
+            CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                maintenance_date DATE NOT NULL,
+                service_type VARCHAR(100) NOT NULL,
+                description TEXT,
+                cost DECIMAL(10,2) NOT NULL,
+                vendor VARCHAR(100),
+                next_service_date DATE,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
-        // Add default vehicles
-        $defaultVehicles = [
-            ['sedan', 'Sedan', 'Standard', 4, 2],
-            ['ertiga', 'Ertiga', 'Standard', 6, 3],
-            ['innova_crysta', 'Innova Crysta', 'Premium', 6, 4],
-            ['luxury', 'Luxury', 'Luxury', 4, 2],
-            ['tempo_traveller', 'Tempo Traveller', 'Group', 12, 10]
-        ];
+        if (!$conn->query($createMaintenanceSQL)) {
+            throw new Exception("Failed to create vehicle_maintenance table: " . $conn->error);
+        }
         
-        $insertVehicleStmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, category, capacity, luggage_capacity, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created vehicle_maintenance table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the financial_ledger table
+    $checkLedgerTable = $conn->query("SHOW TABLES LIKE 'financial_ledger'");
+    
+    if (!$checkLedgerTable || $checkLedgerTable->num_rows === 0) {
+        // Create financial_ledger table
+        $createLedgerSQL = "
+            CREATE TABLE IF NOT EXISTS financial_ledger (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                transaction_date DATE NOT NULL,
+                description TEXT NOT NULL,
+                type ENUM('income', 'expense') NOT NULL,
+                amount DECIMAL(12,2) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                payment_method VARCHAR(50),
+                reference VARCHAR(100),
+                balance DECIMAL(12,2) NOT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
         
-        if ($insertVehicleStmt) {
-            foreach ($defaultVehicles as $vehicle) {
-                $insertVehicleStmt->bind_param("ssssii", $vehicle[0], $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
-                $insertVehicleStmt->execute();
-            }
-            
-            file_put_contents($setupLogFile, "[$setupTimestamp] Added default vehicles\n", FILE_APPEND);
+        if (!$conn->query($createLedgerSQL)) {
+            throw new Exception("Failed to create financial_ledger table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created financial_ledger table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the fuel_records table
+    $checkFuelTable = $conn->query("SHOW TABLES LIKE 'fuel_records'");
+    
+    if (!$checkFuelTable || $checkFuelTable->num_rows === 0) {
+        // Create fuel_records table
+        $createFuelSQL = "
+            CREATE TABLE IF NOT EXISTS fuel_records (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                fill_date DATE NOT NULL,
+                quantity_liters DECIMAL(8,2) NOT NULL,
+                price_per_liter DECIMAL(6,2) NOT NULL,
+                total_cost DECIMAL(10,2) NOT NULL,
+                odometer_reading INT(11),
+                station VARCHAR(100),
+                payment_method VARCHAR(50),
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createFuelSQL)) {
+            throw new Exception("Failed to create fuel_records table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created fuel_records table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the drivers table if needed
+    $checkDriversTable = $conn->query("SHOW TABLES LIKE 'drivers'");
+    
+    if (!$checkDriversTable || $checkDriversTable->num_rows === 0) {
+        // Create drivers table
+        $createDriversSQL = "
+            CREATE TABLE IF NOT EXISTS drivers (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                name VARCHAR(100) NOT NULL,
+                phone VARCHAR(20) NOT NULL,
+                email VARCHAR(100),
+                license_no VARCHAR(50),
+                vehicle_id VARCHAR(50),
+                status ENUM('available', 'busy', 'offline') DEFAULT 'available',
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createDriversSQL)) {
+            throw new Exception("Failed to create drivers table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created drivers table\n", FILE_APPEND);
+    }
+
+    // Create driver_ratings table if needed
+    $checkRatingsTable = $conn->query("SHOW TABLES LIKE 'driver_ratings'");
+    
+    if (!$checkRatingsTable || $checkRatingsTable->num_rows === 0) {
+        // Create driver_ratings table
+        $createRatingsSQL = "
+            CREATE TABLE IF NOT EXISTS driver_ratings (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                driver_id INT(11) NOT NULL,
+                booking_id INT(11),
+                rating DECIMAL(3,1) NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY driver_id (driver_id),
+                KEY booking_id (booking_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createRatingsSQL)) {
+            throw new Exception("Failed to create driver_ratings table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created driver_ratings table\n", FILE_APPEND);
+    }
+    
+    // Verify and update the bookings table to ensure it has all required columns
+    $checkBookingsTable = $conn->query("SHOW TABLES LIKE 'bookings'");
+    
+    if ($checkBookingsTable && $checkBookingsTable->num_rows > 0) {
+        // Check for and add payment_method column if it doesn't exist
+        $checkPaymentMethod = $conn->query("SHOW COLUMNS FROM bookings LIKE 'payment_method'");
+        if (!$checkPaymentMethod || $checkPaymentMethod->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN payment_method VARCHAR(50) AFTER payment_status";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added payment_method column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add gst_enabled column if it doesn't exist
+        $checkGstEnabled = $conn->query("SHOW COLUMNS FROM bookings LIKE 'gst_enabled'");
+        if (!$checkGstEnabled || $checkGstEnabled->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN gst_enabled TINYINT(1) DEFAULT 0 AFTER payment_method";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added gst_enabled column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add gst_number column if it doesn't exist
+        $checkGstNumber = $conn->query("SHOW COLUMNS FROM bookings LIKE 'gst_number'");
+        if (!$checkGstNumber || $checkGstNumber->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN gst_number VARCHAR(20) AFTER gst_enabled";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added gst_number column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add company_name column if it doesn't exist
+        $checkCompanyName = $conn->query("SHOW COLUMNS FROM bookings LIKE 'company_name'");
+        if (!$checkCompanyName || $checkCompanyName->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN company_name VARCHAR(100) AFTER gst_number";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added company_name column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add company_address column if it doesn't exist
+        $checkCompanyAddress = $conn->query("SHOW COLUMNS FROM bookings LIKE 'company_address'");
+        if (!$checkCompanyAddress || $checkCompanyAddress->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN company_address TEXT AFTER company_name";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added company_address column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add driver_id column if it doesn't exist
+        $checkDriverId = $conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
+        if (!$checkDriverId || $checkDriverId->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN driver_id INT(11) AFTER status";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added driver_id column to bookings table\n", FILE_APPEND);
         }
     } else {
-        // Ensure vehicles table has all required columns
-        $vehiclesColumns = [
-            ['vehicle_id', "ALTER TABLE vehicles ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id"],
-            ['base_price', "ALTER TABLE vehicles ADD COLUMN base_price DECIMAL(10,2) DEFAULT 0.00 AFTER luggage_capacity"],
-            ['price_per_km', "ALTER TABLE vehicles ADD COLUMN price_per_km DECIMAL(5,2) DEFAULT 0.00 AFTER base_price"],
-            ['night_halt_charge', "ALTER TABLE vehicles ADD COLUMN night_halt_charge DECIMAL(10,2) DEFAULT 0.00 AFTER is_active"],
-            ['driver_allowance', "ALTER TABLE vehicles ADD COLUMN driver_allowance DECIMAL(10,2) DEFAULT 0.00 AFTER night_halt_charge"]
-        ];
-        
-        foreach ($vehiclesColumns as $column) {
-            $checkColumn = $conn->query("SHOW COLUMNS FROM vehicles LIKE '{$column[0]}'");
-            if (!$checkColumn || $checkColumn->num_rows === 0) {
-                $conn->query($column[1]);
-                file_put_contents($setupLogFile, "[$setupTimestamp] Added {$column[0]} column to vehicles table\n", FILE_APPEND);
-            }
-        }
-    }
-    
-    // Verify airport_transfer_fares table
-    $checkAirportTable = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-    
-    if (!$checkAirportTable || $checkAirportTable->num_rows === 0) {
-        // Create airport_transfer_fares table
-        $createAirportFaresSQL = "
-            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+        // Create bookings table if it doesn't exist (minimal structure)
+        $createBookingsSQL = "
+            CREATE TABLE IF NOT EXISTS bookings (
                 id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                user_id INT(11),
+                booking_number VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(50) NOT NULL,
+                cab_type VARCHAR(50) NOT NULL,
+                pickup_location VARCHAR(255) NOT NULL,
+                drop_location VARCHAR(255),
+                pickup_date DATETIME NOT NULL,
+                return_date DATETIME,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                driver_id INT(11),
+                driver_name VARCHAR(100),
+                driver_phone VARCHAR(20),
+                vehicle_number VARCHAR(50),
+                total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                payment_status VARCHAR(50) DEFAULT 'pending',
+                payment_method VARCHAR(50),
+                gst_enabled TINYINT(1) DEFAULT 0,
+                gst_number VARCHAR(20),
+                company_name VARCHAR(100),
+                company_address TEXT,
+                passenger_name VARCHAR(100),
+                passenger_phone VARCHAR(20),
+                passenger_email VARCHAR(100),
                 created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                UNIQUE KEY vehicle_id (vehicle_id)
+                UNIQUE KEY booking_number (booking_number)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
-        if (!$conn->query($createAirportFaresSQL)) {
-            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
+        if (!$conn->query($createBookingsSQL)) {
+            throw new Exception("Failed to create bookings table: " . $conn->error);
         }
         
-        file_put_contents($setupLogFile, "[$setupTimestamp] Created airport_transfer_fares table\n", FILE_APPEND);
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created bookings table\n", FILE_APPEND);
     }
-    
-    // Verify vehicle_pricing table
-    $checkVehiclePricingTable = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-    
-    if (!$checkVehiclePricingTable || $checkVehiclePricingTable->num_rows === 0) {
-        // Create vehicle_pricing table
-        $createVehiclePricingSQL = "
-            CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                vehicle_id VARCHAR(50) NOT NULL,
-                trip_type VARCHAR(20) NOT NULL,
-                airport_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                airport_pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                airport_extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ";
-        
-        if (!$conn->query($createVehiclePricingSQL)) {
-            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
-        }
-        
-        file_put_contents($setupLogFile, "[$setupTimestamp] Created vehicle_pricing table\n", FILE_APPEND);
-    }
-    
-    // Populate tables with synced data
-    $syncQuery = "
-        INSERT IGNORE INTO vehicle_pricing (vehicle_id, trip_type)
-        SELECT vehicle_id, 'airport' FROM vehicles
-    ";
-    
-    $conn->query($syncQuery);
-    
-    $syncAirportQuery = "
-        INSERT IGNORE INTO airport_transfer_fares (vehicle_id)
-        SELECT vehicle_id FROM vehicles
-    ";
-    
-    $conn->query($syncAirportQuery);
     
     file_put_contents($setupLogFile, "[$setupTimestamp] Database setup completed successfully\n", FILE_APPEND);
     
-    // If this was called directly as an API, return success response
-    if (basename($_SERVER['PHP_SELF']) == 'db_setup.php') {
-        header('Content-Type: application/json');
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Database setup completed successfully',
-            'timestamp' => time()
-        ]);
-    }
-    
 } catch (Exception $e) {
-    file_put_contents($setupLogFile, "[$setupTimestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    
-    // If this was called directly as an API, return error response
-    if (basename($_SERVER['PHP_SELF']) == 'db_setup.php') {
-        header('Content-Type: application/json');
-        echo json_encode([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'timestamp' => time()
-        ]);
-    }
+    file_put_contents($setupLogFile, "[$setupTimestamp] Error during database setup: " . $e->getMessage() . "\n", FILE_APPEND);
 }
+
+// No need to close connection here, as it will be reused by the calling script

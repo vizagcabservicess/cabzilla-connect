@@ -21,19 +21,49 @@ interface BookingsReportData {
 }
 
 interface ReportBookingsTableProps {
-  data: BookingsReportData[];
+  data: BookingsReportData[] | any;
 }
 
 export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
-  // Calculate totals
-  const totals = data.reduce(
+  // Handle case where data is not in the expected format
+  let reportData: BookingsReportData[] = [];
+  
+  if (Array.isArray(data)) {
+    reportData = data;
+  } else if (data && Array.isArray(data.dailyBookings)) {
+    // Try to extract daily bookings from API response
+    reportData = data.dailyBookings.map((item: any) => ({
+      date: item.date,
+      total_bookings: item.count || 0,
+      completed_bookings: 0,
+      cancelled_bookings: 0,
+      confirmed_bookings: 0,
+      assigned_bookings: 0,
+      pending_bookings: 0,
+    }));
+  } else if (data && typeof data === 'object') {
+    console.log('Received non-array booking data:', data);
+    // If data is a single summary object, create a single entry
+    reportData = [{
+      date: format(new Date(), 'yyyy-MM-dd'),
+      total_bookings: data.totalBookings || 0,
+      completed_bookings: data.bookingsByStatus?.completed || 0,
+      cancelled_bookings: data.bookingsByStatus?.cancelled || 0,
+      confirmed_bookings: data.bookingsByStatus?.confirmed || 0,
+      assigned_bookings: data.bookingsByStatus?.assigned || 0,
+      pending_bookings: data.bookingsByStatus?.pending || 0,
+    }];
+  }
+
+  // Now that we have the data in the correct format, calculate totals
+  const totals = reportData.reduce(
     (acc, row) => {
-      acc.total_bookings += Number(row.total_bookings);
-      acc.completed_bookings += Number(row.completed_bookings);
-      acc.cancelled_bookings += Number(row.cancelled_bookings);
-      acc.confirmed_bookings += Number(row.confirmed_bookings);
-      acc.assigned_bookings += Number(row.assigned_bookings);
-      acc.pending_bookings += Number(row.pending_bookings);
+      acc.total_bookings += Number(row.total_bookings || 0);
+      acc.completed_bookings += Number(row.completed_bookings || 0);
+      acc.cancelled_bookings += Number(row.cancelled_bookings || 0);
+      acc.confirmed_bookings += Number(row.confirmed_bookings || 0);
+      acc.assigned_bookings += Number(row.assigned_bookings || 0);
+      acc.pending_bookings += Number(row.pending_bookings || 0);
       return acc;
     },
     {
@@ -55,6 +85,15 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
     }
   };
 
+  // If we have no data after processing, show an empty message
+  if (reportData.length === 0) {
+    return (
+      <div className="text-center p-6">
+        <p className="text-muted-foreground">No booking data available for the selected period.</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="rounded-md border">
@@ -71,7 +110,7 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row, index) => (
+            {reportData.map((row, index) => (
               <TableRow key={index}>
                 <TableCell className="font-medium">{formatReportDate(row.date)}</TableCell>
                 <TableCell className="text-right">{row.total_bookings}</TableCell>
