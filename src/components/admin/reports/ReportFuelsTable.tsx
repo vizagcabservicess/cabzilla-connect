@@ -11,24 +11,22 @@ import {
 import { format } from 'date-fns';
 import { Fuel } from 'lucide-react';
 
-interface FuelData {
+interface FuelRecord {
   id: string;
   date: string;
   vehicleId: string;
   vehicleName: string;
   vehicleNumber: string;
-  fuelType: string;
-  quantity: number;
-  pricePerUnit: number;
-  totalCost: number;
-  odometerReading: number;
-  fillingStation: string;
-  paidBy: string;
-  paymentMethod: string;
+  liters: number;
+  pricePerLiter: number;
+  cost: number;
+  odometer?: number;
+  fuelStation?: string;
+  paymentMethod?: string;
 }
 
 interface ReportFuelsTableProps {
-  data: FuelData[] | any;
+  data: FuelRecord[] | any;
 }
 
 export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
@@ -48,7 +46,7 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
   };
 
   // Ensure data is an array
-  let reportData: FuelData[] = [];
+  let reportData: FuelRecord[] = [];
   
   if (Array.isArray(data)) {
     reportData = data;
@@ -68,52 +66,46 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
     );
   }
 
-  // Calculate totals and stats
+  // Calculate totals
   const totals = reportData.reduce(
     (acc, row) => {
-      acc.totalQuantity += Number(row.quantity || 0);
-      acc.totalCost += Number(row.totalCost || 0);
+      acc.totalLiters += Number(row.liters || 0);
+      acc.totalCost += Number(row.cost || 0);
       
-      // Group by vehicle
-      const vehicleKey = row.vehicleNumber || row.vehicleId;
+      // Track by vehicle
+      const vehicleKey = row.vehicleName || row.vehicleNumber || row.vehicleId;
       if (!acc.byVehicle[vehicleKey]) {
         acc.byVehicle[vehicleKey] = {
-          quantity: 0,
+          liters: 0,
           cost: 0,
-          name: row.vehicleName || vehicleKey
+          count: 0
         };
       }
-      acc.byVehicle[vehicleKey].quantity += Number(row.quantity || 0);
-      acc.byVehicle[vehicleKey].cost += Number(row.totalCost || 0);
       
-      // Group by fuel type
-      const fuelType = row.fuelType || 'Unknown';
-      if (!acc.byFuelType[fuelType]) {
-        acc.byFuelType[fuelType] = {
-          quantity: 0,
-          cost: 0
-        };
-      }
-      acc.byFuelType[fuelType].quantity += Number(row.quantity || 0);
-      acc.byFuelType[fuelType].cost += Number(row.totalCost || 0);
+      acc.byVehicle[vehicleKey].liters += Number(row.liters || 0);
+      acc.byVehicle[vehicleKey].cost += Number(row.cost || 0);
+      acc.byVehicle[vehicleKey].count += 1;
       
-      // Group by payment method
-      const paymentMethod = row.paymentMethod || 'Unknown';
-      if (!acc.byPaymentMethod[paymentMethod]) {
-        acc.byPaymentMethod[paymentMethod] = 0;
+      // Track by payment method
+      if (row.paymentMethod) {
+        if (!acc.byPaymentMethod[row.paymentMethod]) {
+          acc.byPaymentMethod[row.paymentMethod] = 0;
+        }
+        acc.byPaymentMethod[row.paymentMethod] += Number(row.cost || 0);
       }
-      acc.byPaymentMethod[paymentMethod] += Number(row.totalCost || 0);
       
       return acc;
     },
     {
-      totalQuantity: 0,
+      totalLiters: 0,
       totalCost: 0,
-      byVehicle: {} as Record<string, { quantity: number; cost: number; name: string }>,
-      byFuelType: {} as Record<string, { quantity: number; cost: number }>,
+      byVehicle: {} as Record<string, { liters: number; cost: number; count: number }>,
       byPaymentMethod: {} as Record<string, number>
     }
   );
+
+  // Average price per liter
+  const avgPricePerLiter = totals.totalLiters > 0 ? totals.totalCost / totals.totalLiters : 0;
 
   return (
     <div className="space-y-6">
@@ -125,11 +117,11 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Vehicle</TableHead>
-                <TableHead>Fuel Type</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Price/Unit</TableHead>
-                <TableHead className="text-right">Total Cost</TableHead>
-                <TableHead>Filling Station</TableHead>
+                <TableHead className="text-right">Liters</TableHead>
+                <TableHead className="text-right">₹/L</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Odometer</TableHead>
+                <TableHead>Fuel Station</TableHead>
                 <TableHead>Payment Method</TableHead>
               </TableRow>
             </TableHeader>
@@ -138,23 +130,23 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
                 <TableRow key={index}>
                   <TableCell>{formatReportDate(row.date)}</TableCell>
                   <TableCell className="font-medium">
-                    {row.vehicleName || ''} {row.vehicleNumber ? `(${row.vehicleNumber})` : row.vehicleId}
+                    {row.vehicleName} ({row.vehicleNumber || row.vehicleId})
                   </TableCell>
-                  <TableCell>{row.fuelType}</TableCell>
-                  <TableCell className="text-right">{row.quantity.toFixed(2)} L</TableCell>
-                  <TableCell className="text-right">{formatCurrency(row.pricePerUnit)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(row.totalCost)}</TableCell>
-                  <TableCell>{row.fillingStation}</TableCell>
-                  <TableCell>{row.paymentMethod}</TableCell>
+                  <TableCell className="text-right">{row.liters?.toFixed(2) || '0.00'}</TableCell>
+                  <TableCell className="text-right">₹{row.pricePerLiter?.toFixed(2) || '0.00'}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.cost)}</TableCell>
+                  <TableCell className="text-right">{row.odometer?.toLocaleString() || '-'}</TableCell>
+                  <TableCell>{row.fuelStation || '-'}</TableCell>
+                  <TableCell>{row.paymentMethod || '-'}</TableCell>
                 </TableRow>
               ))}
               <TableRow className="bg-muted/50 font-medium">
                 <TableCell>Totals</TableCell>
                 <TableCell>-</TableCell>
-                <TableCell>-</TableCell>
-                <TableCell className="text-right">{totals.totalQuantity.toFixed(2)} L</TableCell>
-                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">{totals.totalLiters.toFixed(2)}</TableCell>
+                <TableCell className="text-right">₹{avgPricePerLiter.toFixed(2)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(totals.totalCost)}</TableCell>
+                <TableCell>-</TableCell>
                 <TableCell>-</TableCell>
                 <TableCell>-</TableCell>
               </TableRow>
@@ -165,20 +157,22 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
       
       <div>
         <h3 className="text-lg font-medium mb-2">Fuel Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-md border p-4">
-            <div className="text-sm text-muted-foreground">Total Fuel Cost</div>
+            <div className="text-sm text-muted-foreground">Total Fuel (Liters)</div>
+            <div className="text-2xl font-bold">{totals.totalLiters.toFixed(2)} L</div>
+          </div>
+          <div className="rounded-md border p-4">
+            <div className="text-sm text-muted-foreground">Total Cost</div>
             <div className="text-2xl font-bold">{formatCurrency(totals.totalCost)}</div>
           </div>
           <div className="rounded-md border p-4">
-            <div className="text-sm text-muted-foreground">Total Quantity</div>
-            <div className="text-2xl font-bold">{totals.totalQuantity.toFixed(2)} L</div>
+            <div className="text-sm text-muted-foreground">Average Price</div>
+            <div className="text-2xl font-bold">₹{avgPricePerLiter.toFixed(2)}/L</div>
           </div>
           <div className="rounded-md border p-4">
-            <div className="text-sm text-muted-foreground">Average Cost per Liter</div>
-            <div className="text-2xl font-bold">
-              {formatCurrency(totals.totalQuantity > 0 ? totals.totalCost / totals.totalQuantity : 0)}
-            </div>
+            <div className="text-sm text-muted-foreground">Refueling Count</div>
+            <div className="text-2xl font-bold">{reportData.length}</div>
           </div>
         </div>
       </div>
@@ -186,22 +180,24 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {Object.keys(totals.byVehicle).length > 0 && (
           <div>
-            <h3 className="text-lg font-medium mb-2">Fuel Usage by Vehicle</h3>
+            <h3 className="text-lg font-medium mb-2">Fuel by Vehicle</h3>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Vehicle</TableHead>
-                    <TableHead className="text-right">Quantity (L)</TableHead>
+                    <TableHead className="text-right">Liters</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Refills</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(totals.byVehicle).map(([vehicleKey, data], index) => (
+                  {Object.entries(totals.byVehicle).map(([vehicle, stats], index) => (
                     <TableRow key={index}>
-                      <TableCell>{data.name}</TableCell>
-                      <TableCell className="text-right">{data.quantity.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(data.cost)}</TableCell>
+                      <TableCell className="font-medium">{vehicle}</TableCell>
+                      <TableCell className="text-right">{stats.liters.toFixed(2)} L</TableCell>
+                      <TableCell className="text-right">{formatCurrency(stats.cost)}</TableCell>
+                      <TableCell className="text-right">{stats.count}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -210,24 +206,22 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
           </div>
         )}
         
-        {Object.keys(totals.byFuelType).length > 0 && (
+        {Object.keys(totals.byPaymentMethod).length > 0 && (
           <div>
-            <h3 className="text-lg font-medium mb-2">Fuel Usage by Type</h3>
+            <h3 className="text-lg font-medium mb-2">Fuel by Payment Method</h3>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fuel Type</TableHead>
-                    <TableHead className="text-right">Quantity (L)</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead>Payment Method</TableHead>
+                    <TableHead className="text-right">Total Cost</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(totals.byFuelType).map(([fuelType, data], index) => (
+                  {Object.entries(totals.byPaymentMethod).map(([method, cost], index) => (
                     <TableRow key={index}>
-                      <TableCell>{fuelType}</TableCell>
-                      <TableCell className="text-right">{data.quantity.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(data.cost)}</TableCell>
+                      <TableCell className="font-medium">{method}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(cost)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -236,20 +230,6 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
           </div>
         )}
       </div>
-      
-      {Object.keys(totals.byPaymentMethod).length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium mb-2">Payment Methods</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(totals.byPaymentMethod).map(([method, amount], index) => (
-              <div key={index} className="rounded-md border p-4">
-                <div className="text-sm text-muted-foreground">{method}</div>
-                <div className="text-2xl font-bold">{formatCurrency(amount)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
