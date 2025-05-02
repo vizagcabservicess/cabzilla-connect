@@ -2,18 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Download, RefreshCw, FileText, CalendarCheck } from 'lucide-react';
+import { Download, RefreshCw, FileText, CalendarCheck, Fuel, Car, Receipt, BookOpen, Wrench } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { format } from 'date-fns';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Loader2 } from 'lucide-react';
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { DateRange } from 'react-day-picker';
@@ -22,6 +14,10 @@ import { ReportRevenueTable } from './reports/ReportRevenueTable';
 import { ReportDriversTable } from './reports/ReportDriversTable';
 import { ReportVehiclesTable } from './reports/ReportVehiclesTable';
 import { ReportGstTable } from './reports/ReportGstTable';
+import { ReportNonGstTable } from './reports/ReportNonGstTable';
+import { ReportMaintenanceTable } from './reports/ReportMaintenanceTable';
+import { ReportLedgerTable } from './reports/ReportLedgerTable';
+import { ReportFuelsTable } from './reports/ReportFuelsTable';
 import { 
   Select,
   SelectContent, 
@@ -116,12 +112,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const [withGst, setWithGst] = useState<boolean>(false);
   const { toast } = useToast();
 
-  // Effect for handling period filter changes
-  useEffect(() => {
-    // If period filter is not custom, date range becomes disabled
-    // No need to modify dateRange as the backend will calculate it based on period
-  }, [periodFilter]);
-
   // Effect for loading report data
   useEffect(() => {
     loadReport();
@@ -142,6 +132,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      
       // Initialize with empty data structure based on report type
       if (activeTab === 'gst') {
         setReportData({ gstInvoices: [], summary: {} });
@@ -161,12 +152,15 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     // Check if there's data to export based on the report type
     let dataEmpty = false;
     
-    if (activeTab === 'gst') {
+    if (activeTab === 'gst' && reportData) {
       // GST report has a specific structure
-      dataEmpty = !reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0;
-    } else {
+      dataEmpty = !reportData.gstInvoices || reportData.gstInvoices.length === 0;
+    } else if (Array.isArray(reportData)) {
       // For other reports, check if data is an empty array
-      dataEmpty = !reportData || (Array.isArray(reportData) && reportData.length === 0);
+      dataEmpty = reportData.length === 0;
+    } else if (!reportData) {
+      // No data at all
+      dataEmpty = true;
     }
     
     if (dataEmpty) {
@@ -188,6 +182,26 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       } else if (Array.isArray(reportData)) {
         // Regular array data
         dataToExport = reportData;
+      } else if (reportData && typeof reportData === 'object') {
+        // Handle nested data structures
+        if (activeTab === 'bookings' && reportData.dailyBookings) {
+          dataToExport = reportData.dailyBookings;
+        } else if (activeTab === 'drivers' && reportData.drivers) {
+          dataToExport = reportData.drivers;
+        } else if (activeTab === 'vehicles' && reportData.vehicles) {
+          dataToExport = reportData.vehicles;
+        } else if (activeTab === 'maintenance' && reportData.maintenance) {
+          dataToExport = reportData.maintenance;
+        } else if (activeTab === 'nongst' && reportData.bills) {
+          dataToExport = reportData.bills;
+        } else if (activeTab === 'ledger' && reportData.entries) {
+          dataToExport = reportData.entries;
+        } else if (activeTab === 'fuels' && reportData.fuels) {
+          dataToExport = reportData.fuels;
+        } else {
+          // Just use the report data as is (may need to be flattened)
+          dataToExport = [reportData];
+        }
       } else {
         // Single object or other structure, convert appropriately
         dataToExport = [reportData];
@@ -200,7 +214,14 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         // Convert data to CSV rows
         const csvRows = [
           headers.join(','), // Header row
-          ...dataToExport.map(row => headers.map(header => JSON.stringify(row[header] || '')).join(','))
+          ...dataToExport.map(row => headers.map(header => {
+            const value = row[header];
+            // Handle different types of values
+            if (value === null || value === undefined) return '""';
+            if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+            if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+            return `"${value}"`;
+          }).join(','))
         ];
         
         // Join rows with newlines
@@ -226,6 +247,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         });
       }
     } catch (error) {
+      console.error('Export error:', error);
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export data",
@@ -250,7 +272,11 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         return !reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0;
       }
       
-      return !reportData || (Array.isArray(reportData) && reportData.length === 0);
+      if (Array.isArray(reportData)) {
+        return reportData.length === 0;
+      }
+      
+      return !reportData || Object.keys(reportData).length === 0;
     };
 
     if (isEmptyData()) {
@@ -277,6 +303,40 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         return <ReportVehiclesTable data={reportData} />;
       case 'gst':
         return <ReportGstTable data={reportData} />;
+      case 'nongst':
+        return <ReportNonGstTable data={reportData} />;
+      case 'maintenance':
+        return <ReportMaintenanceTable data={reportData} />;
+      case 'ledger':
+        return <ReportLedgerTable data={reportData} />;
+      case 'fuels':
+        return <ReportFuelsTable data={reportData} />;
+      default:
+        return null;
+    }
+  };
+
+  // Get the appropriate icon for each tab
+  const getTabIcon = (tabValue: string) => {
+    switch (tabValue) {
+      case 'bookings':
+        return <CalendarCheck className="h-4 w-4 mr-2" />;
+      case 'revenue':
+        return <FileText className="h-4 w-4 mr-2" />;
+      case 'drivers':
+        return <Car className="h-4 w-4 mr-2" />;
+      case 'vehicles':
+        return <Car className="h-4 w-4 mr-2" />;
+      case 'gst':
+        return <Receipt className="h-4 w-4 mr-2" />;
+      case 'nongst':
+        return <Receipt className="h-4 w-4 mr-2" />;
+      case 'maintenance':
+        return <Wrench className="h-4 w-4 mr-2" />;
+      case 'ledger':
+        return <BookOpen className="h-4 w-4 mr-2" />;
+      case 'fuels':
+        return <Fuel className="h-4 w-4 mr-2" />;
       default:
         return null;
     }
@@ -308,12 +368,43 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       <Card>
         <CardHeader className="pb-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-5">
-              <TabsTrigger value="bookings">Bookings</TabsTrigger>
-              <TabsTrigger value="revenue">Revenue</TabsTrigger>
-              <TabsTrigger value="drivers">Drivers</TabsTrigger>
-              <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
-              <TabsTrigger value="gst">GST</TabsTrigger>
+            <TabsList className="grid grid-cols-3 md:grid-cols-9 gap-1">
+              <TabsTrigger value="bookings" className="flex items-center">
+                <CalendarCheck className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Bookings</span>
+              </TabsTrigger>
+              <TabsTrigger value="revenue" className="flex items-center">
+                <FileText className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Revenue</span>
+              </TabsTrigger>
+              <TabsTrigger value="drivers" className="flex items-center">
+                <Car className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Drivers</span>
+              </TabsTrigger>
+              <TabsTrigger value="vehicles" className="flex items-center">
+                <Car className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Vehicles</span>
+              </TabsTrigger>
+              <TabsTrigger value="gst" className="flex items-center">
+                <Receipt className="h-4 w-4 mr-2 hidden md:block" />
+                <span>GST</span>
+              </TabsTrigger>
+              <TabsTrigger value="nongst" className="flex items-center">
+                <Receipt className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Non-GST</span>
+              </TabsTrigger>
+              <TabsTrigger value="maintenance" className="flex items-center">
+                <Wrench className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Maintenance</span>
+              </TabsTrigger>
+              <TabsTrigger value="ledger" className="flex items-center">
+                <BookOpen className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Ledger</span>
+              </TabsTrigger>
+              <TabsTrigger value="fuels" className="flex items-center">
+                <Fuel className="h-4 w-4 mr-2 hidden md:block" />
+                <span>Fuels</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </CardHeader>
@@ -350,7 +441,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
               </div>
             )}
             
-            {(activeTab === 'revenue' || activeTab === 'gst') && (
+            {(activeTab === 'revenue' || activeTab === 'gst' || activeTab === 'nongst') && (
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="gst-filter" 
