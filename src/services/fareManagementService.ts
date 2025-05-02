@@ -1,14 +1,17 @@
-
-import { toast } from 'sonner';
-import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
 // Define common fare data interface with optional fields to support different fare types
 export interface FareData {
-  id?: number;
-  vehicleId: string;
-  vehicle_id?: string; // Make this optional since we'll set it from vehicleId
-  basePrice?: number; // Make these optional since not all fare types need them
+  vehicleId?: string;
+  vehicle_id?: string;
+  // Local fare fields
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  // Airport fare fields
+  basePrice?: number;
   pricePerKm?: number;
   pickupPrice?: number;
   dropPrice?: number;
@@ -17,12 +20,7 @@ export interface FareData {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
-  price4hrs40km?: number;
-  price8hrs80km?: number;
-  price10hrs100km?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  name?: string; // Vehicle name
+  // For flexible property access
   [key: string]: any;
 }
 
@@ -172,120 +170,93 @@ export const updateLocalFares = async (fareData: FareData): Promise<any> => {
 };
 
 // Get airport fares for a specific vehicle
-export const fetchAirportFares = async (vehicleId: string): Promise<any> => {
+export async function fetchAirportFares(vehicleId: string): Promise<any> {
   try {
-    // Append a timestamp to prevent browser caching
     const timestamp = new Date().getTime();
-    
-    console.log(`Fetching airport fares for vehicle ${vehicleId} at ${timestamp}`);
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-airport-fares.php?vehicleId=${vehicleId}&_t=${timestamp}&force_refresh=true`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
+    const urlParams = new URLSearchParams({
+      vehicleId: vehicleId,
+      _t: timestamp.toString(),
     });
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch airport fares: ${response.status}`);
+    // First try the direct vehicle pricing endpoint
+    try {
+      const response = await directVehicleOperation(
+        `api/admin/direct-airport-fares.php?${urlParams.toString()}`,
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'X-Debug': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          }
+        }
+      );
+      
+      console.log('Direct airport fares response:', response);
+      return response;
+    } catch (err) {
+      console.warn('Error with direct airport fares, trying fallback:', err);
+      
+      // Fallback to the legacy endpoint
+      const fallbackResponse = await directVehicleOperation(
+        `api/airport-fares.php?${urlParams.toString()}`,
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'X-Debug': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          }
+        }
+      );
+      
+      console.log('Fallback airport fares response:', fallbackResponse);
+      return fallbackResponse;
     }
-    
-    // Return the raw response directly to simplify handling
-    const responseData = await response.json();
-    console.log('Airport fares raw response:', responseData);
-    
-    // Return the entire response object to allow for more flexible processing
-    return responseData;
-  } catch (error) {
-    console.error('Error fetching airport fares:', error);
-    throw error;
+  } catch (err) {
+    console.error('Failed to fetch airport fares:', err);
+    throw new Error(`Failed to fetch airport fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
-};
+}
 
 // Update airport fares for a specific vehicle
-export const updateAirportFares = async (fareData: FareData): Promise<any> => {
+export async function updateAirportFares(fareData: FareData): Promise<any> {
   try {
-    if (!fareData.vehicleId) {
+    if (!fareData.vehicleId && !fareData.vehicle_id) {
       throw new Error('Vehicle ID is required');
     }
     
-    // Ensure vehicle_id is set
-    fareData.vehicle_id = fareData.vehicleId;
-    
-    // Create form data to pass to the API
-    const formData = new FormData();
-    formData.append('vehicleId', fareData.vehicleId);
-    formData.append('vehicle_id', fareData.vehicleId);
-    
-    // Append all fare fields (handling optionals with defaults)
-    formData.append('basePrice', String(fareData.basePrice || 0));
-    formData.append('pricePerKm', String(fareData.pricePerKm || 0));
-    formData.append('pickupPrice', String(fareData.pickupPrice || 0));
-    formData.append('dropPrice', String(fareData.dropPrice || 0));
-    formData.append('tier1Price', String(fareData.tier1Price || 0));
-    formData.append('tier2Price', String(fareData.tier2Price || 0));
-    formData.append('tier3Price', String(fareData.tier3Price || 0));
-    formData.append('tier4Price', String(fareData.tier4Price || 0));
-    formData.append('extraKmCharge', String(fareData.extraKmCharge || 0));
-    
-    // Also append in snake_case format for compatibility with PHP backend
-    formData.append('base_price', String(fareData.basePrice || 0));
-    formData.append('price_per_km', String(fareData.pricePerKm || 0));
-    formData.append('pickup_price', String(fareData.pickupPrice || 0));
-    formData.append('drop_price', String(fareData.dropPrice || 0));
-    formData.append('tier1_price', String(fareData.tier1Price || 0));
-    formData.append('tier2_price', String(fareData.tier2Price || 0));
-    formData.append('tier3_price', String(fareData.tier3Price || 0));
-    formData.append('tier4_price', String(fareData.tier4Price || 0));
-    formData.append('extra_km_charge', String(fareData.extraKmCharge || 0));
-    
-    // Append a timestamp to prevent caching
     const timestamp = new Date().getTime();
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to update airport fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Dispatch custom event to notify other components
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'airport',
-          vehicleId: fareData.vehicleId
+    const response = await directVehicleOperation(
+      `api/admin/airport-fares-update.php?_t=${timestamp}`, 
+      'POST',
+      { 
+        __data: {
+          ...fareData,
+          vehicleId: fareData.vehicleId || fareData.vehicle_id,
+          vehicle_id: fareData.vehicleId || fareData.vehicle_id
+        },
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'X-Debug': 'true',
+          'Content-Type': 'application/json',
         }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to update airport fares');
-    }
-  } catch (error) {
-    console.error('Error updating airport fares:', error);
-    throw error;
+      }
+    );
+    
+    return response;
+  } catch (err) {
+    console.error('Failed to update airport fares:', err);
+    throw new Error(`Failed to update airport fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
-};
+}
 
 // Sync local fare tables (update or create tables if needed)
-export const syncLocalFares = async (): Promise<any> => {
+export async function syncLocalFares(): Promise<any> {
   try {
     // Append a timestamp to prevent caching
     const timestamp = new Date().getTime();
@@ -327,49 +298,30 @@ export const syncLocalFares = async (): Promise<any> => {
     console.error('Error syncing local fares:', error);
     throw error;
   }
-};
+}
 
 // Sync airport fare tables (update or create tables if needed)
-export const syncAirportFares = async (): Promise<any> => {
+export async function syncAirportFares(): Promise<any> {
   try {
     // Append a timestamp to prevent caching
     const timestamp = new Date().getTime();
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/sync-airport-fares.php?force_sync=true&_t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to sync airport fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Refresh fare cache
-      clearFareCache();
-      
-      // Dispatch custom event
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'airport',
-          allVehicles: true
+    const response = await directVehicleOperation(
+      `api/admin/sync-airport-fares.php?_t=${timestamp}`, 
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
         }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to sync airport fares');
-    }
-  } catch (error) {
-    console.error('Error syncing airport fares:', error);
-    throw error;
+      }
+    );
+    
+    return response;
+  } catch (err) {
+    console.error('Failed to sync airport fares:', err);
+    throw new Error(`Failed to sync airport fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
-};
+}

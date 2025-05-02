@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
 import { FareData, updateAirportFares, syncAirportFares, fetchAirportFares } from '@/services/fareManagementService';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader, RefreshCw, Database, Save } from 'lucide-react';
+import { Loader, RefreshCw, Save, Database, AlertCircle } from 'lucide-react';
 import { parseNumericValue } from '@/utils/safeStringUtils';
+import { toast } from 'sonner';
 
 interface ApiResponseFare {
   id?: number;
@@ -54,7 +53,7 @@ const AirportFareManagement: React.FC = () => {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [initialized, setInitialized] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const { toast } = useToast();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedVehicleId) {
@@ -68,12 +67,14 @@ const AirportFareManagement: React.FC = () => {
     if (!vehicleId) return;
     
     setLoading(true);
+    setErrorMessage(null);
     try {
       console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
       const response: ApiResponse = await fetchAirportFares(vehicleId);
       console.log('Airport fares response:', response);
       
       const extractFareData = (response: ApiResponse): ApiResponseFare | null => {
+        // First check if we have data in the response.data.fares path
         if (response.data?.fares) {
           if (Array.isArray(response.data.fares) && response.data.fares.length > 0) {
             console.log('Found fares in data.fares array:', response.data.fares.length);
@@ -92,7 +93,7 @@ const AirportFareManagement: React.FC = () => {
             return response.data.fares[0];
           }
           
-          if (typeof response.data.fares === 'object' && response.data.fares !== null) {
+          if (typeof response.data.fares === 'object' && response.data.fares !== null && !Array.isArray(response.data.fares)) {
             console.log('Found fares in data.fares object');
             
             if (response.data.fares[vehicleId]) {
@@ -115,6 +116,7 @@ const AirportFareManagement: React.FC = () => {
           }
         }
         
+        // Direct fares property as fallback
         if (response.fares) {
           if (Array.isArray(response.fares) && response.fares.length > 0) {
             console.log('Found fares in direct fares array:', response.fares.length);
@@ -154,6 +156,12 @@ const AirportFareManagement: React.FC = () => {
               return response.fares[keys[0]];
             }
           }
+        }
+        
+        // Check for direct properties as last resort (non-nested response)
+        if (response.vehicleId === vehicleId || response.vehicle_id === vehicleId) {
+          console.log('Found fare data directly in response', response);
+          return response as unknown as ApiResponseFare;
         }
         
         return null;
@@ -199,11 +207,14 @@ const AirportFareManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading airport fares:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load airport fares. Please try again.",
-        variant: "destructive"
-      });
+      
+      if (error instanceof Error) {
+        setErrorMessage(`Failed to load airport fares: ${error.message}`);
+      } else {
+        setErrorMessage('Failed to load airport fares. Please try again.');
+      }
+      
+      toast.error('Failed to load airport fares. Please try again.');
       
       setFares({
         vehicleId: vehicleId,
@@ -224,13 +235,14 @@ const AirportFareManagement: React.FC = () => {
     }
   };
 
-  const handleVehicleChange = (vehicleId: string) => {
+  function handleVehicleChange(vehicleId: string) {
     console.log('Vehicle selection changed to:', vehicleId);
     setSelectedVehicleId(vehicleId);
     setInitialized(false);
-  };
+    setErrorMessage(null);
+  }
 
-  const handleFareChange = (fareData: FareData) => {
+  function handleFareChange(fareData: FareData) {
     console.log("Fare data changed:", fareData);
     const updatedFareData: FareData = {
       ...fareData,
@@ -247,15 +259,11 @@ const AirportFareManagement: React.FC = () => {
       extraKmCharge: parseFloat(String(fareData.extraKmCharge ?? 0))
     };
     setFares(updatedFareData);
-  };
+  }
 
-  const handleSaveFare = async () => {
+  async function handleSaveFare() {
     if (!fares || !selectedVehicleId) {
-      toast({
-        title: "Error",
-        description: "Please select a vehicle and provide fare details.",
-        variant: "destructive"
-      });
+      toast.error('Please select a vehicle and provide fare details.');
       return;
     }
 
@@ -277,54 +285,60 @@ const AirportFareManagement: React.FC = () => {
     console.log("Saving fare data:", fareToSave);
     
     setLoading(true);
+    setErrorMessage(null);
+    
     try {
       await updateAirportFares(fareToSave);
-      toast({
-        title: "Success",
-        description: "Airport fares saved successfully.",
-      });
+      toast.success('Airport fares saved successfully.');
       
       setTimeout(() => {
         setRefreshKey(prev => prev + 1);
       }, 1000);
     } catch (error) {
       console.error('Error saving fares:', error);
-      toast({
-        title: "Error",
-        description: `Failed to save airport fares: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+      
+      if (error instanceof Error) {
+        setErrorMessage(`Failed to save airport fares: ${error.message}`);
+      } else {
+        setErrorMessage('Failed to save airport fares. Please try again.');
+      }
+      
+      toast.error('Failed to save airport fares. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleSyncTables = async () => {
+  async function handleSyncTables() {
     setSyncing(true);
+    setErrorMessage(null);
+    
     try {
       await syncAirportFares();
-      toast({
-        title: "Success",
-        description: "Airport fare tables synchronized successfully.",
-      });
+      toast.success('Airport fare tables synchronized successfully.');
       
       if (selectedVehicleId) {
         setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
       console.error('Error syncing airport fare tables:', error);
-      toast({
-        title: "Error",
-        description: `Failed to sync airport fare tables: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+      
+      if (error instanceof Error) {
+        setErrorMessage(`Failed to sync airport fare tables: ${error.message}`);
+      } else {
+        setErrorMessage('Failed to sync airport fare tables. Please try again.');
+      }
+      
+      toast.error('Failed to sync airport fare tables. Please try again.');
     } finally {
       setSyncing(false);
     }
-  };
+  }
 
-  const handleFixDatabase = async () => {
+  async function handleFixDatabase() {
     setSyncing(true);
+    setErrorMessage(null);
+    
     try {
       const timestamp = new Date().getTime();
       const response = await fetch(`/api/admin/fix-collation.php?_t=${timestamp}`, {
@@ -340,10 +354,7 @@ const AirportFareManagement: React.FC = () => {
       const result = await response.json();
       
       if (result.status === 'success') {
-        toast({
-          title: "Success",
-          description: `Database collation fixed successfully for ${result.data?.tables_count || 0} tables.`,
-        });
+        toast.success(`Database collation fixed successfully for ${result.data?.tables_count || 0} tables.`);
         
         await syncAirportFares();
         
@@ -353,15 +364,18 @@ const AirportFareManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fixing database collation:', error);
-      toast({
-        title: "Error",
-        description: `Failed to fix database collation: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+      
+      if (error instanceof Error) {
+        setErrorMessage(`Failed to fix database collation: ${error.message}`);
+      } else {
+        setErrorMessage('Failed to fix database collation. Please try again.');
+      }
+      
+      toast.error('Failed to fix database collation. Please try again.');
     } finally {
       setSyncing(false);
     }
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -390,6 +404,22 @@ const AirportFareManagement: React.FC = () => {
           </Button>
         </div>
       </div>
+      
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-1 text-sm text-red-700">
+                {errorMessage}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="grid gap-6">
         <div className="grid gap-2">

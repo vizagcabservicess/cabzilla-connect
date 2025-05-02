@@ -1,11 +1,10 @@
-
 <?php
 /**
- * Direct airport fares API endpoint - Returns airport fares for vehicles
- * This endpoint handles both all fares and vehicle-specific fares
+ * Direct airport fares API endpoint
+ * Returns airport transfer fares for vehicles
  */
 
-// Set headers for CORS and caching
+// Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
@@ -25,462 +24,195 @@ while (ob_get_level()) {
     ob_end_clean();
 }
 
-// Include utility files
-require_once __DIR__ . '/../utils/database.php';
-require_once __DIR__ . '/../utils/response.php';
-
-// Run database setup to ensure tables exist
-require_once __DIR__ . '/db_setup.php';
-
-// Create log directory if it doesn't exist
+// Create log directory
 $logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
 
-$logFile = $logDir . '/admin_airport_fares_' . date('Y-m-d') . '.log';
+$logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
-// For debugging
-file_put_contents($logFile, "[$timestamp] Direct airport fares API called with: " . json_encode($_GET) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] Headers: " . json_encode(getallheaders()) . "\n", FILE_APPEND);
+// Include database utility
+require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../utils/response.php';
 
 try {
     // Get database connection
     $conn = getDbConnection();
-    
     if (!$conn) {
-        throw new Exception("Database connection failed");
+        throw new Exception('Failed to connect to database');
     }
     
-    // Get vehicle ID from query parameters (if provided)
-    $vehicleId = null;
+    // Log request details
+    file_put_contents($logFile, "[$timestamp] Processing airport fares request\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
     
-    // Check for vehicle ID in various possible parameters
-    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'cabType', 'cab_type', 'type'];
-    foreach ($possibleParams as $param) {
-        if (isset($_GET[$param]) && !empty($_GET[$param])) {
-            $vehicleId = trim($_GET[$param]);
-            file_put_contents($logFile, "[$timestamp] Found vehicle ID in param $param: $vehicleId\n", FILE_APPEND);
+    // Get vehicle ID from request
+    $vehicleId = null;
+    $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'id'];
+    
+    foreach ($possibleKeys as $key) {
+        if (isset($_GET[$key]) && !empty($_GET[$key])) {
+            $vehicleId = $_GET[$key];
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in parameter $key: $vehicleId\n", FILE_APPEND);
             break;
         }
     }
     
-    // Debug: Log the vehicle ID found
-    file_put_contents($logFile, "[$timestamp] Processing airport fares for vehicle ID: $vehicleId\n", FILE_APPEND);
+    // Prepare query
+    $query = "SELECT * FROM airport_transfer_fares";
+    $params = [];
+    $types = "";
     
-    // Build query based on whether a specific vehicle ID was provided
     if ($vehicleId) {
-        // Normalize vehicle ID - remove any 'item-' prefix if present
-        if (strpos($vehicleId, 'item-') === 0) {
-            $vehicleId = substr($vehicleId, 5);
-            file_put_contents($logFile, "[$timestamp] Normalized vehicle ID by removing 'item-' prefix: $vehicleId\n", FILE_APPEND);
+        $query .= " WHERE vehicle_id = ?";
+        $params[] = $vehicleId;
+        $types .= "s";
+        file_put_contents($logFile, "[$timestamp] Filtering by vehicle_id: $vehicleId\n", FILE_APPEND);
+    }
+    
+    // Check if the table exists first
+    $tableCheckQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
+    $tableCheckResult = $conn->query($tableCheckQuery);
+    
+    if (!$tableCheckResult || $tableCheckResult->num_rows === 0) {
+        // Create table if it doesn't exist
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create airport_transfer_fares table: " . $conn->error);
         }
         
-        // Clean up vehicle ID for SQL query
-        $vehicleId = $conn->real_escape_string($vehicleId);
+        file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table\n", FILE_APPEND);
         
-        // Query for specific vehicle - using a LOWER() function to handle case sensitivity
-        $query = "
-            SELECT 
-                atf.id, 
-                atf.vehicle_id,
-                v.name,
-                CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
-                CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
-                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
-                CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
-                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
-                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
-                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
-                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
-                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
-            FROM 
-                airport_transfer_fares atf
-            LEFT JOIN 
-                vehicles v ON LOWER(atf.vehicle_id) = LOWER(v.vehicle_id)
-            WHERE 
-                LOWER(atf.vehicle_id) = LOWER('$vehicleId')
-        ";
-        
-        file_put_contents($logFile, "[$timestamp] Vehicle-specific query: $query\n", FILE_APPEND);
-    } else {
-        // Query for all vehicles - ensuring we get complete data with JOINs
-        $query = "
-            SELECT 
-                atf.id, 
-                atf.vehicle_id,
-                v.name,
-                CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
-                CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
-                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
-                CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
-                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
-                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
-                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
-                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
-                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
-            FROM 
-                airport_transfer_fares atf
-            LEFT JOIN 
-                vehicles v ON LOWER(atf.vehicle_id) = LOWER(v.vehicle_id)
-            ORDER BY 
-                atf.id ASC
-        ";
-        
-        file_put_contents($logFile, "[$timestamp] All vehicles query: $query\n", FILE_APPEND);
+        // Return an empty result rather than an error
+        sendSuccessResponse(['fares' => []], 'No airport fares found (new table created)');
+        exit;
     }
     
-    // Execute query
-    $result = $conn->query($query);
+    // Prepare and execute the statement
+    $stmt = $conn->prepare($query);
     
-    if (!$result) {
-        file_put_contents($logFile, "[$timestamp] Database query failed: " . $conn->error . "\n", FILE_APPEND);
-        throw new Exception("Database query failed: " . $conn->error);
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
     }
     
-    // Fetch results
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    if (!$stmt->execute()) {
+        throw new Exception("Execute statement failed: " . $stmt->error);
+    }
+    
+    $result = $stmt->get_result();
     $fares = [];
+    
     while ($row = $result->fetch_assoc()) {
-        // Clean up data - ensure values are properly cast to numeric values
-        $fare = [
-            'id' => (int)$row['id'],
+        // Map database field names to camelCase for consistent API output
+        $fare = array(
+            'id' => $row['id'],
             'vehicleId' => $row['vehicle_id'],
-            'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
-            'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
             'basePrice' => (float)$row['base_price'],
-            'base_price' => (float)$row['base_price'], // Include both formats for compatibility
             'pricePerKm' => (float)$row['price_per_km'],
-            'price_per_km' => (float)$row['price_per_km'], // Include both formats for compatibility
             'pickupPrice' => (float)$row['pickup_price'],
-            'pickup_price' => (float)$row['pickup_price'], // Include both formats for compatibility
             'dropPrice' => (float)$row['drop_price'],
-            'drop_price' => (float)$row['drop_price'], // Include both formats for compatibility
             'tier1Price' => (float)$row['tier1_price'],
-            'tier1_price' => (float)$row['tier1_price'], // Include both formats for compatibility
             'tier2Price' => (float)$row['tier2_price'],
-            'tier2_price' => (float)$row['tier2_price'], // Include both formats for compatibility
             'tier3Price' => (float)$row['tier3_price'],
-            'tier3_price' => (float)$row['tier3_price'], // Include both formats for compatibility
             'tier4Price' => (float)$row['tier4_price'],
-            'tier4_price' => (float)$row['tier4_price'], // Include both formats for compatibility
             'extraKmCharge' => (float)$row['extra_km_charge'],
-            'extra_km_charge' => (float)$row['extra_km_charge'] // Include both formats for compatibility
-        ];
+            // Also include snake_case for backward compatibility
+            'vehicle_id' => $row['vehicle_id'],
+            'base_price' => (float)$row['base_price'],
+            'price_per_km' => (float)$row['price_per_km'],
+            'pickup_price' => (float)$row['pickup_price'],
+            'drop_price' => (float)$row['drop_price'],
+            'tier1_price' => (float)$row['tier1_price'],
+            'tier2_price' => (float)$row['tier2_price'],
+            'tier3_price' => (float)$row['tier3_price'],
+            'tier4_price' => (float)$row['tier4_price'],
+            'extra_km_charge' => (float)$row['extra_km_charge']
+        );
         
-        $fares[] = $fare;
-    }
-    
-    // Debug: Log the query results
-    file_put_contents($logFile, "[$timestamp] Airport fares query returned " . count($fares) . " results\n", FILE_APPEND);
-    
-    // Sync any missing vehicle entries if needed
-    if (empty($fares) && $vehicleId) {
-        file_put_contents($logFile, "[$timestamp] No fares found for vehicleId $vehicleId, checking alternative spellings\n", FILE_APPEND);
-        
-        // Try alternative queries with different cases and formats
-        $altQuery = "
-            SELECT 
-                atf.id, 
-                atf.vehicle_id,
-                v.name,
-                CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
-                CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
-                CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
-                CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
-                CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
-                CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
-                CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
-                CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
-                CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
-            FROM 
-                airport_transfer_fares atf
-            LEFT JOIN 
-                vehicles v ON LOWER(atf.vehicle_id) = LOWER(v.vehicle_id)
-            WHERE 
-                LOWER(atf.vehicle_id) LIKE LOWER('%$vehicleId%')
-        ";
-        
-        file_put_contents($logFile, "[$timestamp] Trying fuzzy vehicle_id matching: $altQuery\n", FILE_APPEND);
-        $altResult = $conn->query($altQuery);
-        
-        if ($altResult && $altResult->num_rows > 0) {
-            while ($row = $altResult->fetch_assoc()) {
-                $fare = [
-                    'id' => (int)$row['id'],
-                    'vehicleId' => $row['vehicle_id'],
-                    'vehicle_id' => $row['vehicle_id'],
-                    'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
-                    'basePrice' => (float)$row['base_price'],
-                    'base_price' => (float)$row['base_price'],
-                    'pricePerKm' => (float)$row['price_per_km'],
-                    'price_per_km' => (float)$row['price_per_km'],
-                    'pickupPrice' => (float)$row['pickup_price'],
-                    'pickup_price' => (float)$row['pickup_price'],
-                    'dropPrice' => (float)$row['drop_price'],
-                    'drop_price' => (float)$row['drop_price'],
-                    'tier1Price' => (float)$row['tier1_price'],
-                    'tier1_price' => (float)$row['tier1_price'],
-                    'tier2Price' => (float)$row['tier2_price'],
-                    'tier2_price' => (float)$row['tier2_price'],
-                    'tier3Price' => (float)$row['tier3_price'],
-                    'tier3_price' => (float)$row['tier3_price'],
-                    'tier4Price' => (float)$row['tier4_price'],
-                    'tier4_price' => (float)$row['tier4_price'],
-                    'extraKmCharge' => (float)$row['extra_km_charge'],
-                    'extra_km_charge' => (float)$row['extra_km_charge']
-                ];
-                
-                $fares[] = $fare;
-                file_put_contents($logFile, "[$timestamp] Found partial match: " . $row['vehicle_id'] . "\n", FILE_APPEND);
-            }
-            
-            file_put_contents($logFile, "[$timestamp] Found " . count($fares) . " partial matches\n", FILE_APPEND);
+        if ($vehicleId) {
+            // If we're querying for a specific vehicle, just return that directly
+            $fares = $fare;
         } else {
-            file_put_contents($logFile, "[$timestamp] No partial matches found, inserting default entry\n", FILE_APPEND);
-            
-            // Before inserting, check if the vehicle exists in the vehicles table
-            $checkVehicleQuery = "SELECT vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
-            $checkStmt = $conn->prepare($checkVehicleQuery);
-            
-            if ($checkStmt) {
-                $checkStmt->bind_param('s', $vehicleId);
-                $checkStmt->execute();
-                $checkResult = $checkStmt->get_result();
-                
-                $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-                
-                if ($checkResult->num_rows > 0) {
-                    // Vehicle exists, get its name
-                    $vehicleData = $checkResult->fetch_assoc();
-                    $vehicleName = $vehicleData['name'] ?? $vehicleName;
-                    file_put_contents($logFile, "[$timestamp] Found vehicle in vehicles table: {$vehicleData['vehicle_id']} with name {$vehicleName}\n", FILE_APPEND);
-                } else {
-                    // Vehicle doesn't exist, try to insert it first with a default name
-                    $insertVehicleQuery = "INSERT IGNORE INTO vehicles (vehicle_id, name, status) VALUES (?, ?, 'active')";
-                    $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
-                    
-                    if ($insertVehicleStmt) {
-                        $insertVehicleStmt->bind_param('ss', $vehicleId, $vehicleName);
-                        $insertVehicleStmt->execute();
-                        file_put_contents($logFile, "[$timestamp] Inserted new vehicle: $vehicleId with name $vehicleName\n", FILE_APPEND);
-                    }
-                }
-                
-                // Now insert a default entry for this vehicle in the airport_transfer_fares table
-                // Use values based on vehicle type
-                $basePrice = 0;
-                $pricePerKm = 0;
-                $pickupPrice = 0;
-                $dropPrice = 0;
-                $tier1Price = 0;
-                $tier2Price = 0;
-                $tier3Price = 0;
-                $tier4Price = 0;
-                $extraKmCharge = 0;
-                
-                // Set default values based on vehicle type
-                $lcVehicleId = strtolower($vehicleId);
-                if (strpos($lcVehicleId, 'sedan') !== false) {
-                    $basePrice = 800;
-                    $pricePerKm = 12;
-                    $pickupPrice = 800;
-                    $dropPrice = 800;
-                    $tier1Price = 800;
-                    $tier2Price = 1000;
-                    $tier3Price = 1000;
-                    $tier4Price = 1200;
-                    $extraKmCharge = 12;
-                } elseif (strpos($lcVehicleId, 'ertiga') !== false) {
-                    $basePrice = 1000;
-                    $pricePerKm = 15;
-                    $pickupPrice = 1000;
-                    $dropPrice = 1000;
-                    $tier1Price = 800;
-                    $tier2Price = 1000;
-                    $tier3Price = 1200;
-                    $tier4Price = 1400;
-                    $extraKmCharge = 15;
-                } elseif (strpos($lcVehicleId, 'innova') !== false || strpos($lcVehicleId, 'crysta') !== false) {
-                    $basePrice = 1200;
-                    $pricePerKm = 17;
-                    $pickupPrice = 1200;
-                    $dropPrice = 1200;
-                    $tier1Price = 1000;
-                    $tier2Price = 1200;
-                    $tier3Price = 1400;
-                    $tier4Price = 1600;
-                    $extraKmCharge = 17;
-                } elseif (strpos($lcVehicleId, 'tempo') !== false) {
-                    $basePrice = 2000;
-                    $pricePerKm = 19;
-                    $pickupPrice = 2000;
-                    $dropPrice = 2000;
-                    $tier1Price = 1600;
-                    $tier2Price = 1800;
-                    $tier3Price = 2000;
-                    $tier4Price = 2500;
-                    $extraKmCharge = 19;
-                }
-                
-                file_put_contents($logFile, "[$timestamp] Using intelligent defaults for vehicle type: $lcVehicleId\n", FILE_APPEND);
-                
-                // Insert default entry for this vehicle
-                $insertQuery = "
-                    INSERT INTO airport_transfer_fares 
-                    (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                    tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                    base_price = VALUES(base_price),
-                    price_per_km = VALUES(price_per_km),
-                    pickup_price = VALUES(pickup_price),
-                    drop_price = VALUES(drop_price),
-                    tier1_price = VALUES(tier1_price),
-                    tier2_price = VALUES(tier2_price),
-                    tier3_price = VALUES(tier3_price),
-                    tier4_price = VALUES(tier4_price),
-                    extra_km_charge = VALUES(extra_km_charge)
-                ";
-                
-                $stmt = $conn->prepare($insertQuery);
-                if ($stmt) {
-                    $stmt->bind_param('sddddddddd', 
-                        $vehicleId, 
-                        $basePrice, 
-                        $pricePerKm, 
-                        $pickupPrice, 
-                        $dropPrice, 
-                        $tier1Price, 
-                        $tier2Price, 
-                        $tier3Price, 
-                        $tier4Price, 
-                        $extraKmCharge
-                    );
-                    $result = $stmt->execute();
-                    file_put_contents($logFile, "[$timestamp] Result of inserting default fare: " . ($result ? "success" : "failed") . "\n", FILE_APPEND);
-                    
-                    // Now try to get the data again
-                    $refetchQuery = "
-                        SELECT 
-                            atf.id, 
-                            atf.vehicle_id,
-                            v.name,
-                            CAST(atf.base_price AS DECIMAL(10,2)) AS base_price,
-                            CAST(atf.price_per_km AS DECIMAL(10,2)) AS price_per_km,
-                            CAST(atf.pickup_price AS DECIMAL(10,2)) AS pickup_price,
-                            CAST(atf.drop_price AS DECIMAL(10,2)) AS drop_price,
-                            CAST(atf.tier1_price AS DECIMAL(10,2)) AS tier1_price,
-                            CAST(atf.tier2_price AS DECIMAL(10,2)) AS tier2_price,
-                            CAST(atf.tier3_price AS DECIMAL(10,2)) AS tier3_price,
-                            CAST(atf.tier4_price AS DECIMAL(10,2)) AS tier4_price,
-                            CAST(atf.extra_km_charge AS DECIMAL(10,2)) AS extra_km_charge
-                        FROM 
-                            airport_transfer_fares atf
-                        LEFT JOIN 
-                            vehicles v ON LOWER(atf.vehicle_id) = LOWER(v.vehicle_id)
-                        WHERE 
-                            LOWER(atf.vehicle_id) = LOWER(?)
-                    ";
-                    
-                    $refetchStmt = $conn->prepare($refetchQuery);
-                    if ($refetchStmt) {
-                        $refetchStmt->bind_param('s', $vehicleId);
-                        $refetchStmt->execute();
-                        
-                        $refetchResult = $refetchStmt->get_result();
-                        if ($refetchResult && $row = $refetchResult->fetch_assoc()) {
-                            $fare = [
-                                'id' => (int)$row['id'],
-                                'vehicleId' => $row['vehicle_id'],
-                                'vehicle_id' => $row['vehicle_id'], // Include both formats for compatibility
-                                'name' => $row['name'] ?? ucfirst(str_replace('_', ' ', $row['vehicle_id'])),
-                                'basePrice' => (float)$row['base_price'],
-                                'base_price' => (float)$row['base_price'],
-                                'pricePerKm' => (float)$row['price_per_km'],
-                                'price_per_km' => (float)$row['price_per_km'],
-                                'pickupPrice' => (float)$row['pickup_price'],
-                                'pickup_price' => (float)$row['pickup_price'],
-                                'dropPrice' => (float)$row['drop_price'],
-                                'drop_price' => (float)$row['drop_price'],
-                                'tier1Price' => (float)$row['tier1_price'],
-                                'tier1_price' => (float)$row['tier1_price'],
-                                'tier2Price' => (float)$row['tier2_price'],
-                                'tier2_price' => (float)$row['tier2_price'],
-                                'tier3Price' => (float)$row['tier3_price'],
-                                'tier3_price' => (float)$row['tier3_price'],
-                                'tier4Price' => (float)$row['tier4_price'],
-                                'tier4_price' => (float)$row['tier4_price'],
-                                'extraKmCharge' => (float)$row['extra_km_charge'],
-                                'extra_km_charge' => (float)$row['extra_km_charge']
-                            ];
-                            
-                            $fares[] = $fare;
-                            file_put_contents($logFile, "[$timestamp] Successfully fetched newly inserted fare data\n", FILE_APPEND);
-                        }
-                    }
-                }
-            }
+            // Otherwise add to the array of fares
+            $fares[] = $fare;
         }
     }
     
-    // If still no fares found for a specific vehicle, create a default response
-    if (empty($fares) && $vehicleId) {
-        file_put_contents($logFile, "[$timestamp] No fares found even after attempted insert, using default object\n", FILE_APPEND);
-        $defaultFare = [
+    // If we got a specific vehicle but no fare, create a default one for response
+    if ($vehicleId && empty($fares)) {
+        $fares = array(
             'vehicleId' => $vehicleId,
+            'basePrice' => 0,
+            'pricePerKm' => 0,
+            'pickupPrice' => 0,
+            'dropPrice' => 0,
+            'tier1Price' => 0,
+            'tier2Price' => 0,
+            'tier3Price' => 0,
+            'tier4Price' => 0,
+            'extraKmCharge' => 0,
+            // Also include snake_case for backward compatibility
             'vehicle_id' => $vehicleId,
-            'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
-            'basePrice' => 0.00,
-            'base_price' => 0.00,
-            'pricePerKm' => 0.00,
-            'price_per_km' => 0.00,
-            'pickupPrice' => 0.00,
-            'pickup_price' => 0.00,
-            'dropPrice' => 0.00,
-            'drop_price' => 0.00,
-            'tier1Price' => 0.00,
-            'tier1_price' => 0.00,
-            'tier2Price' => 0.00,
-            'tier2_price' => 0.00,
-            'tier3Price' => 0.00,
-            'tier3_price' => 0.00,
-            'tier4Price' => 0.00,
-            'tier4_price' => 0.00,
-            'extraKmCharge' => 0.00,
-            'extra_km_charge' => 0.00
-        ];
-        
-        $fares[] = $defaultFare;
+            'base_price' => 0,
+            'price_per_km' => 0,
+            'pickup_price' => 0,
+            'drop_price' => 0,
+            'tier1_price' => 0,
+            'tier2_price' => 0,
+            'tier3_price' => 0,
+            'tier4_price' => 0,
+            'extra_km_charge' => 0
+        );
     }
     
-    // Debug: Log the fares for troubleshooting
-    file_put_contents($logFile, "[$timestamp] Airport fares response for vehicleId $vehicleId: " . json_encode($fares) . "\n", FILE_APPEND);
-    
-    // Return success response with a differently structured response to match what the client expects
     $response = [
         'status' => 'success',
-        'message' => 'Airport fares retrieved successfully',
         'data' => [
             'fares' => $fares
         ],
-        'fares' => $fares, // Include at the top level too for compatibility
-        'count' => count($fares),
-        'debug' => true,
-        'timestamp' => time()
+        'message' => $vehicleId ? 'Airport fares for vehicle retrieved' : 'All airport fares retrieved'
     ];
     
-    // Send the response
-    echo json_encode($response);
-    exit;
+    file_put_contents($logFile, "[$timestamp] Successfully retrieved airport fares\n", FILE_APPEND);
     
+    // Return response as JSON
+    echo json_encode($response, JSON_PRETTY_PRINT);
+
 } catch (Exception $e) {
-    // Log error for troubleshooting
-    file_put_contents($logFile, "[$timestamp] Error fetching airport fares: " . $e->getMessage() . "\n", FILE_APPEND);
+    // Log the error
+    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     
-    // Return error response
-    sendErrorResponse($e->getMessage(), [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ]);
+    // Return error as JSON
+    $errorResponse = [
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'code' => 500
+    ];
+    
+    echo json_encode($errorResponse, JSON_PRETTY_PRINT);
 }
