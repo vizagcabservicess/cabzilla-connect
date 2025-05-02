@@ -29,18 +29,26 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
       ? `${window.location.protocol}//${window.location.host}`
       : 'https://vizagup.com';
     
-    // Construct the invoice download URL with GST parameters
-    const downloadUrl = `${apiBaseUrl}/api/download-invoice.php?id=${invoice.id}&gstEnabled=1&format=pdf&direct_download=1`;
+    // Build the URL parameters
+    let urlParams = new URLSearchParams({
+      id: invoice.id.toString(),
+      gstEnabled: '1',
+      format: 'pdf',
+      direct_download: '1'
+    });
     
-    // If there's a GST number available, include it
+    // Add GST number if available
     if (invoice.gstNumber) {
-      downloadUrl += `&gstNumber=${encodeURIComponent(invoice.gstNumber)}`;
+      urlParams.append('gstNumber', invoice.gstNumber);
     }
     
-    // If there's a company name available, include it
+    // Add company name if available
     if (invoice.companyName) {
-      downloadUrl += `&companyName=${encodeURIComponent(invoice.companyName)}`;
+      urlParams.append('companyName', invoice.companyName);
     }
+
+    // Construct the full download URL
+    const downloadUrl = `${apiBaseUrl}/api/download-invoice.php?${urlParams.toString()}`;
 
     // Open the download URL in a new tab
     window.open(downloadUrl, '_blank');
