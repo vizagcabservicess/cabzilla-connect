@@ -1,4 +1,3 @@
-
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -87,6 +86,7 @@ export interface GstInvoice {
   customerName: string;
   gstNumber?: string;
   companyName?: string;
+  companyAddress?: string;
   taxableValue: number;
   gstRate: string;
   gstAmount: number;

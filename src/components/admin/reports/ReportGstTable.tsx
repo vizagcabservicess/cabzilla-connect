@@ -9,6 +9,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 import { format } from 'date-fns';
 import { GstReportData, GstInvoice } from '@/types/api';
 
@@ -19,6 +21,30 @@ interface ReportGstTableProps {
 export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
   // Extract GST invoices and summary from the data
   const { gstInvoices = [], summary = {} } = data || {};
+
+  // Function to handle invoice download
+  const handleDownloadInvoice = (invoice: GstInvoice) => {
+    // Get the API base URL
+    const apiBaseUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
+      ? `${window.location.protocol}//${window.location.host}`
+      : 'https://vizagup.com';
+    
+    // Construct the invoice download URL with GST parameters
+    const downloadUrl = `${apiBaseUrl}/api/download-invoice.php?id=${invoice.id}&gstEnabled=1&format=pdf&direct_download=1`;
+    
+    // If there's a GST number available, include it
+    if (invoice.gstNumber) {
+      downloadUrl += `&gstNumber=${encodeURIComponent(invoice.gstNumber)}`;
+    }
+    
+    // If there's a company name available, include it
+    if (invoice.companyName) {
+      downloadUrl += `&companyName=${encodeURIComponent(invoice.companyName)}`;
+    }
+
+    // Open the download URL in a new tab
+    window.open(downloadUrl, '_blank');
+  };
 
   if (!gstInvoices || gstInvoices.length === 0) {
     return (
@@ -70,6 +96,7 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
               <TableHead className="text-center">GST Rate</TableHead>
               <TableHead className="text-right">GST Amount</TableHead>
               <TableHead className="text-right">Total Amount</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -85,6 +112,17 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
                 <TableCell className="text-center">{invoice.gstRate}</TableCell>
                 <TableCell className="text-right">₹{invoice.gstAmount.toLocaleString()}</TableCell>
                 <TableCell className="text-right">₹{invoice.totalAmount.toLocaleString()}</TableCell>
+                <TableCell className="text-center">
+                  <Button 
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    onClick={() => handleDownloadInvoice(invoice)}
+                    title="Download Invoice"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
