@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,8 +100,8 @@ const fetchReportData = async (
       apiParams.payment_method = paymentMethod;
     }
     
-    // Add parameter for GST filtering - FIXED: Ensure we always pass this for GST reports
-    if (onlyGstEnabled || reportType === 'gst') {
+    // FIXED: Always pass only_gst_enabled=true for GST reports
+    if (reportType === 'gst' || onlyGstEnabled) {
       apiParams.only_gst_enabled = 'true';
     }
     
@@ -175,7 +176,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const loadReport = async () => {
     try {
       setLoading(true);
-      // FIXED: Add debug log for GST filtering
+      // FIXED: Log detailed params for debugging
       console.log('Loading report with params:', {
         activeTab,
         dateRange,
@@ -191,7 +192,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         periodFilter, 
         withGst, 
         paymentMethod,
-        activeTab === 'gst' ? true : onlyGstEnabled // FIXED: Always filter by GST for GST reports
+        activeTab === 'gst' ? true : onlyGstEnabled // FIXED: Force true for GST reports
       );
       console.log('Processed report data:', data);
       setReportData(data);

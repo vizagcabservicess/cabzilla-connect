@@ -38,7 +38,7 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 
-# FIXED: SPECIAL HANDLING FOR INVOICE DOWNLOAD - Override Content-Type for this file only
+# SPECIAL HANDLING FOR INVOICE DOWNLOAD - Override Content-Type for this file only
 <Files "download-invoice.php">
     # Don't set Content-Type header here, let the script handle it
     SetEnvIf Request_URI "download-invoice\.php" no_content_type=1
@@ -55,6 +55,11 @@ RewriteRule ^(.*)$ $1 [R=200,L]
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+    # FIXED: Remove any conflicting MIME type settings
+    RemoveType application/x-httpd-php
+    RemoveHandler .php
+    # FIXED: Ensure we don't enforce JSON content type
+    Header always unset Content-Type env=no_content_type
 </Files>
 
 # Direct access to PHP files - CRITICAL RULE

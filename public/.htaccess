@@ -74,6 +74,8 @@ RewriteEngine On
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+    # FIXED: Ensure PHP processing
+    php_flag output_buffering off
 </Files>
 
 # Special handling for test-pdf.php

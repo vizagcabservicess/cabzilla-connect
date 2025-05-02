@@ -12,7 +12,7 @@ RewriteBase /api/
     Header set Pragma "no-cache"
     Header set Expires "0"
     # Set content type for API responses
-    Header set Content-Type "application/json"
+    Header set Content-Type "application/json" env=!no_content_type
 </FilesMatch>
 
 # CRITICAL FIXED: Special handling for download-invoice.php - explicitly clear Content-Type
@@ -34,6 +34,9 @@ RewriteBase /api/
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+    # FIXED: Remove any conflicting handlers
+    RemoveHandler .php
+    RemoveType application/x-httpd-php
 </Files>
 
 # CRITICAL FIXED: Same special handling for admin version
@@ -55,6 +58,9 @@ RewriteBase /api/
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+    # FIXED: Remove any conflicting handlers
+    RemoveHandler .php
+    RemoveType application/x-httpd-php
 </Files>
 
 # Special handling for test-pdf.php
