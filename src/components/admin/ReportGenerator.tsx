@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,8 @@ const fetchReportData = async (
     }
     
     const data = await response.json();
+    console.log('Report API response:', data);
+    
     if (data.status === 'success') {
       return data.data;
     } else {
@@ -130,13 +133,21 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     try {
       setLoading(true);
       const data = await fetchReportData(activeTab, dateRange, periodFilter, withGst);
+      console.log('Processed report data:', data);
       setReportData(data);
     } catch (error) {
+      console.error('Error in loadReport:', error);
       toast({
         title: "Failed to load report",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      // Initialize with empty data structure based on report type
+      if (activeTab === 'gst') {
+        setReportData({ gstInvoices: [], summary: {} });
+      } else {
+        setReportData([]);
+      }
     } finally {
       setLoading(false);
     }
