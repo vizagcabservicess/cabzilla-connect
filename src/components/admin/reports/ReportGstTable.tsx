@@ -73,11 +73,11 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {gstInvoices.map((invoice: GstInvoice) => (
-              <TableRow key={invoice.id}>
+            {gstInvoices.map((invoice: GstInvoice, index: number) => (
+              <TableRow key={invoice.id || `invoice-${index}`}>
                 <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                <TableCell>{invoice.customerName}</TableCell>
-                <TableCell>{invoice.gstNumber}</TableCell>
+                <TableCell>{invoice.customerName || 'N/A'}</TableCell>
+                <TableCell>{invoice.gstNumber || 'N/A'}</TableCell>
                 <TableCell>
                   {invoice.invoiceDate ? format(new Date(invoice.invoiceDate), 'dd MMM yyyy') : 'N/A'}
                 </TableCell>

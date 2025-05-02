@@ -1,3 +1,4 @@
+
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -76,5 +77,29 @@ export interface Booking {
     gstNumber: string;
     companyName: string;
     companyAddress: string;
+  };
+}
+
+// GST Report Types
+export interface GstInvoice {
+  id: number | string;
+  invoiceNumber: string;
+  customerName: string;
+  gstNumber?: string;
+  companyName?: string;
+  taxableValue: number;
+  gstRate: string;
+  gstAmount: number;
+  totalAmount: number;
+  invoiceDate: string;
+}
+
+export interface GstReportData {
+  gstInvoices: GstInvoice[];
+  summary: {
+    totalInvoices: number;
+    totalTaxableValue: number;
+    totalGstAmount: number;
+    totalWithGst: number;
   };
 }

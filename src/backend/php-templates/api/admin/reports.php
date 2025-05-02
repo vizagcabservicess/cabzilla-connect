@@ -55,6 +55,7 @@ $detailed = isset($_GET['detailed']) ? filter_var($_GET['detailed'], FILTER_VALI
 $period = isset($_GET['period']) ? $_GET['period'] : 'custom'; // 'daily', 'weekly', 'monthly', 'yearly'
 $withGst = isset($_GET['gst']) ? filter_var($_GET['gst'], FILTER_VALIDATE_BOOLEAN) : false;
 $paymentMethod = isset($_GET['payment_method']) ? $_GET['payment_method'] : '';
+$onlyGstEnabled = isset($_GET['only_gst_enabled']) ? filter_var($_GET['only_gst_enabled'], FILTER_VALIDATE_BOOLEAN) : false;
 
 // Calculate dynamic date range based on period parameter
 if ($period !== 'custom') {
@@ -105,7 +106,8 @@ debugLog("Report request", [
     "format" => $format,
     "detailed" => $detailed,
     "gst" => $withGst,
-    "payment_method" => $paymentMethod
+    "payment_method" => $paymentMethod,
+    "only_gst_enabled" => $onlyGstEnabled
 ]);
 
 try {
@@ -341,7 +343,7 @@ try {
                 $sql .= " FROM bookings 
                         WHERE DATE(created_at) BETWEEN ? AND ?";
                 
-                // If gst_enabled column exists, filter by it
+                // Always filter by gst_enabled for GST reports
                 if ($columnsExist) {
                     $sql .= " AND (gst_enabled = 1 OR gst_enabled = '1')";
                 }
