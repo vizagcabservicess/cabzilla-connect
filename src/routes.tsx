@@ -13,6 +13,10 @@ import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import AdminDatabasePage from './pages/AdminDatabasePage';
 import ReportsPage from './pages/ReportsPage';
+import FleetManagementPage from './pages/FleetManagementPage';
+import FuelManagementPage from './pages/FuelManagementPage';
+import VehicleMaintenancePage from './pages/VehicleMaintenancePage';
+import LedgerPage from './pages/LedgerPage';
 
 export const router = createBrowserRouter([
   {
@@ -43,6 +47,22 @@ export const router = createBrowserRouter([
   {
     path: '/admin/reports',
     element: <ReportsPage />,
+  },
+  {
+    path: '/admin/fleet',
+    element: <FleetManagementPage />,
+  },
+  {
+    path: '/admin/fuel',
+    element: <FuelManagementPage />,
+  },
+  {
+    path: '/admin/maintenance',
+    element: <VehicleMaintenancePage />,
+  },
+  {
+    path: '/admin/ledger',
+    element: <LedgerPage />,
   },
   // Add catch-all route for admin to prevent 404s on admin routes
   {

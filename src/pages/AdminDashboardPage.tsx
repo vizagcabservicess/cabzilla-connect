@@ -16,7 +16,7 @@ import { UserManagement } from "@/components/admin/UserManagement";
 import { DriverManagement } from "@/components/admin/DriverManagement";
 import { Database, Settings, LayoutDashboard, LogOut, 
   BarChart3, User, FileText, Tag, BellRing, CreditCard, Car, CalendarDays, Users, 
-  Map } from 'lucide-react';
+  Map, Fuel, Wrench, Book } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { AdminStatsCards } from '@/components/admin/AdminStatsCards';
@@ -33,6 +33,34 @@ export default function AdminDashboardPage() {
     { id: 'ORD-#5426', customer: 'Raj Patel', date: '24 Apr 2025', status: 'Pending', amount: 1250 },
     { id: 'ORD-#5425', customer: 'Sunita Reddy', date: '24 Apr 2025', status: 'Completed', amount: 3200 },
   ];
+  
+  // Sample data for fleet management (quick overview)
+  const fleetSummary = {
+    totalVehicles: 12,
+    activeVehicles: 10,
+    inMaintenance: 2
+  };
+  
+  // Sample data for fuel management (quick overview)
+  const fuelSummary = {
+    totalCost: 42500,
+    totalLiters: 396.5,
+    averagePrice: 107.2
+  };
+  
+  // Sample data for maintenance (quick overview)
+  const maintenanceSummary = {
+    totalCost: 54500,
+    pendingServices: 3,
+    completedServices: 18
+  };
+  
+  // Sample data for financial ledger (quick overview)
+  const ledgerSummary = {
+    income: 285000,
+    expenses: 152000,
+    balance: 133000
+  };
 
   // Function to get status color
   const getStatusColor = (status: string): string => {
@@ -219,6 +247,138 @@ export default function AdminDashboardPage() {
                 <FareManagement />
               </TabsContent>
             </Tabs>
+          </TabsContent>
+          
+          <TabsContent value="fleet">
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Fleet Management Overview</h3>
+                  <Link to="/admin/fleet">
+                    <Button>Go to Fleet Management</Button>
+                  </Link>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Vehicles</p>
+                    <h3 className="text-2xl font-bold">{fleetSummary.totalVehicles}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Active Vehicles</p>
+                    <h3 className="text-2xl font-bold">{fleetSummary.activeVehicles}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">In Maintenance</p>
+                    <h3 className="text-2xl font-bold">{fleetSummary.inMaintenance}</h3>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="text-center py-6">
+              <Link to="/admin/fleet">
+                <Button size="lg">Manage Fleet</Button>
+              </Link>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="fuel">
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Fuel Management Overview</h3>
+                  <Link to="/admin/fuel">
+                    <Button>Go to Fuel Management</Button>
+                  </Link>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Fuel Cost (This Month)</p>
+                    <h3 className="text-2xl font-bold">₹{fuelSummary.totalCost.toFixed(2)}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Liters</p>
+                    <h3 className="text-2xl font-bold">{fuelSummary.totalLiters.toFixed(1)} L</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Average Price Per Liter</p>
+                    <h3 className="text-2xl font-bold">₹{fuelSummary.averagePrice.toFixed(2)}</h3>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="text-center py-6">
+              <Link to="/admin/fuel">
+                <Button size="lg">Manage Fuel Records</Button>
+              </Link>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="maintenance">
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Vehicle Maintenance Overview</h3>
+                  <Link to="/admin/maintenance">
+                    <Button>Go to Maintenance</Button>
+                  </Link>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Maintenance Cost</p>
+                    <h3 className="text-2xl font-bold">₹{maintenanceSummary.totalCost.toFixed(2)}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Pending Services</p>
+                    <h3 className="text-2xl font-bold">{maintenanceSummary.pendingServices}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Completed Services</p>
+                    <h3 className="text-2xl font-bold">{maintenanceSummary.completedServices}</h3>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="text-center py-6">
+              <Link to="/admin/maintenance">
+                <Button size="lg">Manage Maintenance</Button>
+              </Link>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="ledger">
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Financial Ledger Overview</h3>
+                  <Link to="/admin/ledger">
+                    <Button>Go to Ledger</Button>
+                  </Link>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Income</p>
+                    <h3 className="text-2xl font-bold text-green-600">₹{ledgerSummary.income.toFixed(2)}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Total Expenses</p>
+                    <h3 className="text-2xl font-bold text-red-600">₹{ledgerSummary.expenses.toFixed(2)}</h3>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                    <p className="text-sm text-gray-500">Net Balance</p>
+                    <h3 className="text-2xl font-bold text-green-600">₹{ledgerSummary.balance.toFixed(2)}</h3>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="text-center py-6">
+              <Link to="/admin/ledger">
+                <Button size="lg">Manage Ledger</Button>
+              </Link>
+            </div>
           </TabsContent>
           
           <TabsContent value="users">

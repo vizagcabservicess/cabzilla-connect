@@ -11,7 +11,10 @@ import {
   BarChart3, 
   Settings,
   LogOut,
-  User
+  User,
+  Fuel,
+  Wrench,
+  Book
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -25,6 +28,10 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} /> },
     { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} /> },
     { id: 'fares', label: 'Fares', icon: <Map size={20} /> },
+    { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} /> },
+    { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} /> },
+    { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} /> },
+    { id: 'ledger', label: 'Ledger', icon: <Book size={20} /> },
     { id: 'users', label: 'Users', icon: <Users size={20} /> },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} /> },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} /> },
