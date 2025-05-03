@@ -1,4 +1,3 @@
-
 <?php
 // reports.php - Generate various types of reports
 require_once __DIR__ . '/../../config.php';
@@ -322,77 +321,33 @@ try {
             
         case 'gst':
             try {
-                // Check if gst_enabled column exists
-                $columnsExist = false;
-                try {
-                    $checkColumns = $conn->query("SHOW COLUMNS FROM bookings LIKE 'gst_enabled'");
-                    $columnsExist = ($checkColumns && $checkColumns->num_rows > 0);
-                } catch (Exception $e) {
-                    debugLog("Error checking columns: " . $e->getMessage());
-                }
-                
-                // Specific GST report type
-                $sql = "SELECT id, booking_number, passenger_name, total_amount as taxable_value, 
-                        created_at";
-                        
-                // Add GST specific fields if they exist
-                if ($columnsExist) {
-                    $sql .= ", gst_enabled, gst_number, company_name, company_address";
-                }
-                
-                $sql .= " FROM bookings 
-                        WHERE DATE(created_at) BETWEEN ? AND ?";
-                
-                // Always filter by gst_enabled for GST reports
-                if ($columnsExist) {
-                    $sql .= " AND (gst_enabled = 1 OR gst_enabled = '1')";
-                }
-                
-                // Add payment method filter if specified
-                if (!empty($paymentMethod)) {
-                    $sql .= " AND payment_method = ?";
-                }
-                
-                $sql .= " ORDER BY created_at DESC";
-                
-                if (!empty($paymentMethod)) {
-                    $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("sss", $startDate, $endDate, $paymentMethod);
-                } else {
-                    $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("ss", $startDate, $endDate);
-                }
-                
+                $sql = "SELECT id, invoice_number, gst_number, company_name, company_address, base_amount as taxable_value, tax_amount as gst_amount, total_amount, invoice_date as created_at FROM invoices WHERE DATE(invoice_date) BETWEEN ? AND ? AND (gst_enabled = 1 OR is_igst = 1)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
                 $stmt->execute();
                 $result = $stmt->get_result();
-                
                 $gstReportData = [];
                 $totalTaxableValue = 0;
                 $totalGstAmount = 0;
-                
                 while ($row = $result->fetch_assoc()) {
                     $taxableValue = (float)$row['taxable_value'];
-                    $gstRate = 5; // 5% for transport services
-                    $gstAmount = $taxableValue * ($gstRate / 100);
-                    
+                    $gstAmount = (float)$row['gst_amount'];
+                    $gstRate = $taxableValue > 0 ? round(($gstAmount / $taxableValue) * 100) : 0;
                     $gstReportData[] = [
                         'id' => $row['id'],
-                        'invoiceNumber' => $row['booking_number'],
-                        'customerName' => $row['passenger_name'],
+                        'invoiceNumber' => $row['invoice_number'],
+                        'customerName' => $row['company_name'] ?? 'N/A',
                         'gstNumber' => $row['gst_number'] ?? 'N/A',
                         'companyName' => $row['company_name'] ?? 'N/A',
                         'taxableValue' => $taxableValue,
                         'gstRate' => $gstRate . '%',
                         'gstAmount' => $gstAmount,
-                        'totalAmount' => $taxableValue + $gstAmount,
+                        'totalAmount' => (float)$row['total_amount'],
                         'invoiceDate' => $row['created_at']
                     ];
-                    
                     $totalTaxableValue += $taxableValue;
                     $totalGstAmount += $gstAmount;
                 }
-                
-                // Add summary totals
                 $reportData = [
                     'gstInvoices' => $gstReportData,
                     'summary' => [
@@ -402,18 +357,10 @@ try {
                         'totalWithGst' => $totalTaxableValue + $totalGstAmount
                     ]
                 ];
+                sendResponse(['status' => 'success', 'data' => $reportData]);
             } catch (Exception $e) {
-                debugLog("Error in GST report: " . $e->getMessage());
-                // Provide empty data structure as fallback
-                $reportData = [
-                    'gstInvoices' => [],
-                    'summary' => [
-                        'totalInvoices' => 0,
-                        'totalTaxableValue' => 0,
-                        'totalGstAmount' => 0,
-                        'totalWithGst' => 0
-                    ]
-                ];
+                debugLog("Error in GST report: " . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+                sendResponse(['status' => 'error', 'data' => []]);
             }
             break;
             

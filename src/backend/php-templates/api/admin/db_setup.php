@@ -7,6 +7,7 @@
 
 // Include database utilities
 if (!function_exists('getDbConnection')) {
+    require_once __DIR__ . '/../../utils/database.php';
     require_once __DIR__ . '/../../config.php';
     require_once __DIR__ . '/../common/db_helper.php';
 }
@@ -26,7 +27,7 @@ file_put_contents($setupLogFile, "[$setupTimestamp] Running database setup\n", F
 
 try {
     // Connect to database
-    $conn = getDbConnectionWithRetry();
+    $conn = getDbConnection();
     
     if (!$conn) {
         throw new Exception("Database connection failed during setup");
