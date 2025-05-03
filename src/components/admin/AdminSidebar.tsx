@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -23,19 +23,26 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
+  const navigate = useNavigate();
+  
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} /> },
-    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} /> },
-    { id: 'fares', label: 'Fares', icon: <Map size={20} /> },
-    { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} /> },
-    { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} /> },
-    { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} /> },
-    { id: 'ledger', label: 'Ledger', icon: <Book size={20} /> },
-    { id: 'users', label: 'Users', icon: <Users size={20} /> },
-    { id: 'drivers', label: 'Drivers', icon: <Users size={20} /> },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} /> },
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
+    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin' },
+    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin' },
+    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin' },
+    { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },
+    { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
+    { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
+    { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
+    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin' },
+    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin' },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin' },
   ];
+
+  const handleMenuClick = (item: { id: string; path: string }) => {
+    setActiveTab(item.id);
+    navigate(item.path);
+  };
 
   return (
     <aside className="w-64 bg-gray-900 text-white hidden md:flex md:flex-col">
@@ -61,7 +68,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
                   ? 'bg-gray-800 text-white' 
                   : 'text-gray-400 hover:bg-gray-800 hover:text-white'
               }`}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleMenuClick(item)}
             >
               <span className="mr-3">{item.icon}</span>
               {item.label}
