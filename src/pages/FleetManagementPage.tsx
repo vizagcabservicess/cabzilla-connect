@@ -4,56 +4,46 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { vehicleAPI } from '@/services/api';
 import { useToast } from "@/components/ui/use-toast";
+import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
+import { getVehicles } from '@/services/directVehicleService';
+import { CabType } from '@/types/cab';
 
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fleet");
   const [fleetData, setFleetData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { toast } = useToast();
   
   useEffect(() => {
-    const fetchFleetData = async () => {
-      try {
-        setIsLoading(true);
-        const response = await vehicleAPI.getVehicles();
-        console.log("Fleet data response:", response);
+    fetchFleetData();
+  }, []);
+
+  const fetchFleetData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Try to get vehicles from the directVehicleService first
+      const vehicles = await getVehicles(true);
+      
+      if (vehicles && vehicles.length > 0) {
+        console.log(`Loaded ${vehicles.length} vehicles from API:`, vehicles);
         
-        if (response && response.vehicles && Array.isArray(response.vehicles)) {
-          // Transform vehicle data into fleet data format
-          const transformedData = response.vehicles.map((vehicle, index) => ({
-            id: index + 1,
-            vehicleId: vehicle.id || `VEH-00${index + 1}`,
-            model: vehicle.name,
-            year: 2022 - (index % 3), // Just a sample calculation
-            status: index % 5 === 2 ? 'Maintenance' : index % 5 === 4 ? 'Inactive' : 'Active',
-            lastService: new Date(Date.now() - (index * 3 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0] // Random recent dates
-          }));
-          setFleetData(transformedData);
-        } else {
-          // Fallback to sample data if API doesn't return expected format
-          setFleetData([
-            { id: 1, vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15' },
-            { id: 2, vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10' },
-            { id: 3, vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20' },
-            { id: 4, vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25' },
-            { id: 5, vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05' },
-          ]);
-          toast({
-            title: "Using sample data",
-            description: "Could not fetch real vehicle data from API.",
-            variant: "default",
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching fleet data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load fleet data. Using sample data instead.",
-          variant: "destructive",
-        });
-        // Fallback to sample data
+        // Transform vehicle data into fleet data format
+        const transformedData = vehicles.map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId,
+          vehicleId: vehicle.vehicleId || vehicle.id,
+          model: vehicle.name,
+          year: vehicle.year || new Date().getFullYear(),
+          status: vehicle.isActive ? 'Active' : 'Inactive',
+          lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
+        }));
+        
+        setFleetData(transformedData);
+      } else {
+        // Fallback to sample data if no vehicles returned
+        console.log("No vehicles returned from API, using sample data");
         setFleetData([
           { id: 1, vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15' },
           { id: 2, vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10' },
@@ -61,13 +51,31 @@ export default function FleetManagementPage() {
           { id: 4, vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25' },
           { id: 5, vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05' },
         ]);
-      } finally {
-        setIsLoading(false);
+        toast({
+          title: "Using sample data",
+          description: "Could not fetch real vehicle data from API.",
+          variant: "default",
+        });
       }
-    };
-
-    fetchFleetData();
-  }, [toast]);
+    } catch (error) {
+      console.error("Error fetching fleet data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load fleet data. Using sample data instead.",
+        variant: "destructive",
+      });
+      // Fallback to sample data
+      setFleetData([
+        { id: 1, vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15' },
+        { id: 2, vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10' },
+        { id: 3, vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20' },
+        { id: 4, vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25' },
+        { id: 5, vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05' },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Function to get status color
   const getStatusColor = (status: string): string => {
@@ -83,6 +91,32 @@ export default function FleetManagementPage() {
   const activeVehicles = fleetData.filter(v => v.status === 'Active').length;
   const maintenanceVehicles = fleetData.filter(v => v.status === 'Maintenance').length;
 
+  // Handle adding a new vehicle
+  const handleAddVehicle = (newVehicle: CabType) => {
+    toast({
+      title: "Vehicle Added",
+      description: `${newVehicle.name} has been added to the fleet.`,
+      variant: "default",
+    });
+    
+    // Add the new vehicle to the fleet data
+    const newFleetEntry = {
+      id: newVehicle.id || newVehicle.vehicleId,
+      vehicleId: newVehicle.vehicleId || newVehicle.id,
+      model: newVehicle.name,
+      year: newVehicle.year || new Date().getFullYear(),
+      status: newVehicle.isActive ? 'Active' : 'Inactive',
+      lastService: new Date().toISOString().split('T')[0]
+    };
+    
+    setFleetData([...fleetData, newFleetEntry]);
+    
+    // Refresh data from API after a short delay
+    setTimeout(() => {
+      fetchFleetData();
+    }, 1000);
+  };
+
   return (
     <div className="flex h-screen bg-gray-100">
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -92,7 +126,7 @@ export default function FleetManagementPage() {
             <h1 className="text-2xl font-bold text-gray-900">Fleet Management</h1>
             <p className="text-gray-500">Manage and monitor your vehicle fleet</p>
           </div>
-          <Button>Add New Vehicle</Button>
+          <Button onClick={() => setIsAddDialogOpen(true)}>Add New Vehicle</Button>
         </div>
 
         <Card className="mb-6">
@@ -168,6 +202,13 @@ export default function FleetManagementPage() {
           </CardContent>
         </Card>
       </main>
+      
+      {/* Add Vehicle Dialog */}
+      <AddVehicleDialog
+        open={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onAddVehicle={handleAddVehicle}
+      />
     </div>
   );
 }

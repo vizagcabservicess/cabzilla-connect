@@ -27,16 +27,16 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin' },
-    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin' },
-    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin' },
+    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin/bookings' },
+    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin/vehicles' },
+    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin/fares' },
     { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },
     { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
     { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
     { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
-    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin' },
-    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin' },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin' },
+    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
+    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
   ];
 
   const handleMenuClick = (item: { id: string; path: string }) => {

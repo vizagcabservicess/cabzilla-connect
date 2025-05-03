@@ -1,12 +1,15 @@
 
 import { authAPI } from './authAPI';
+import { vehicleAPI } from './vehicleAPI';
 
 // Export all API services
 export {
-  authAPI
+  authAPI,
+  vehicleAPI
 };
 
 // Default export
 export default {
-  auth: authAPI
+  auth: authAPI,
+  vehicle: vehicleAPI
 };
