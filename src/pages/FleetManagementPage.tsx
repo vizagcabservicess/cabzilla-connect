@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
-import { getVehicles } from '@/services/directVehicleService';
+import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { CabType } from '@/types/cab';
 
 export default function FleetManagementPage() {
@@ -24,19 +24,21 @@ export default function FleetManagementPage() {
     try {
       setIsLoading(true);
       
-      // Try to get vehicles from the directVehicleService first
-      const vehicles = await getVehicles(true);
+      // Try to get vehicles from the API
+      const response = await vehicleAPI.getVehicles(true);
       
-      if (vehicles && vehicles.length > 0) {
-        console.log(`Loaded ${vehicles.length} vehicles from API:`, vehicles);
+      if (response.vehicles && response.vehicles.length > 0) {
+        console.log(`Loaded ${response.vehicles.length} vehicles from API:`, response.vehicles);
         
         // Transform vehicle data into fleet data format
-        const transformedData = vehicles.map(vehicle => ({
+        const transformedData = response.vehicles.map(vehicle => ({
           id: vehicle.id || vehicle.vehicleId,
           vehicleId: vehicle.vehicleId || vehicle.id,
           model: vehicle.name,
+          // Handle the missing year property with a fallback
           year: vehicle.year || new Date().getFullYear(),
           status: vehicle.isActive ? 'Active' : 'Inactive',
+          // Handle the missing lastService property with a fallback
           lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
         }));
         
@@ -104,7 +106,8 @@ export default function FleetManagementPage() {
       id: newVehicle.id || newVehicle.vehicleId,
       vehicleId: newVehicle.vehicleId || newVehicle.id,
       model: newVehicle.name,
-      year: newVehicle.year || new Date().getFullYear(),
+      // Handle the missing year property with a fallback
+      year: newVehicle.year !== undefined ? newVehicle.year : new Date().getFullYear(),
       status: newVehicle.isActive ? 'Active' : 'Inactive',
       lastService: new Date().toISOString().split('T')[0]
     };
