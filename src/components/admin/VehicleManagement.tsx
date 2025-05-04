@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,8 +6,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Wrench, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VehicleCard } from "./VehicleCard";
-import { FleetVehicle } from "@/types/fleet";
-import { CabType } from "@/types/cab";
+import { FleetVehicle, CabType } from "@/types/cab";
 import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
