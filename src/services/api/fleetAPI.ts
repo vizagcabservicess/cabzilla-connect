@@ -42,8 +42,28 @@ export const fleetAPI = {
    */
   addVehicle: async (vehicle: Partial<FleetVehicle>): Promise<FleetVehicle> => {
     try {
-      const response = await axios.post(`${API_URL}/vehicles`, vehicle);
-      return response.data.vehicle;
+      console.log("Adding fleet vehicle:", vehicle);
+      
+      // Try the main fleet API endpoint first
+      try {
+        const response = await axios.post(`${API_URL}/vehicles`, vehicle);
+        return response.data.vehicle;
+      } catch (mainError) {
+        console.error("Error with primary fleet API endpoint:", mainError);
+        
+        // Fall back to direct vehicle API as a backup
+        const fallbackUrl = `${API_BASE_URL}/api/admin/vehicle-create.php`;
+        console.log("Trying fallback API endpoint:", fallbackUrl);
+        
+        const fallbackResponse = await axios.post(fallbackUrl, vehicle, {
+          headers: {
+            'X-Fleet-Vehicle': 'true',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        return fallbackResponse.data.vehicle;
+      }
     } catch (error) {
       console.error("Error in fleetAPI.addVehicle:", error);
       throw error;
