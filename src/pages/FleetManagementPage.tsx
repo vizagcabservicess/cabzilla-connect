@@ -1,39 +1,77 @@
+
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
+import { AddFleetVehicleDialog } from '@/components/admin/AddFleetVehicleDialog';
+import { FleetVehicleAssignmentDialog } from '@/components/admin/FleetVehicleAssignmentDialog';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
-import { CabType, FleetVehicle } from '@/types/cab';
-import { Car, Filter, FileText, Plus, RefreshCw } from 'lucide-react';
+import { FleetVehicle } from '@/types/cab';
+import { Car, Filter, FileText, Plus, RefreshCw, Clipboard } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-
-interface FleetItem {
-  id: string | number;
-  vehicleId?: string;
-  vehicleNumber?: string;
-  model: string;
-  year: number;
-  status: string;
-  lastService: string;
-  make?: string;
-}
+import { Booking } from '@/types/api';
 
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fleet");
-  const [fleetData, setFleetData] = useState<FleetItem[]>([]);
+  const [fleetData, setFleetData] = useState<FleetVehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
+  const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
   const { toast: uiToast } = useToast();
   
   useEffect(() => {
     fetchFleetData();
+    fetchPendingBookings();
   }, []);
+
+  const fetchPendingBookings = async () => {
+    // This is a placeholder. In a real implementation you would fetch pending bookings from your API
+    try {
+      // Mock data for pending bookings
+      const mockBookings: Booking[] = [
+        {
+          id: 1,
+          bookingNumber: 'BK-001',
+          passengerName: 'John Doe',
+          passengerPhone: '+911234567890',
+          passengerEmail: 'john@example.com',
+          pickupLocation: 'Airport Terminal 1',
+          dropLocation: 'City Center Hotel',
+          pickupDate: new Date().toISOString(),
+          cabType: 'sedan',
+          tripType: 'airport',
+          status: 'pending',
+          totalAmount: 1500
+        },
+        {
+          id: 2,
+          bookingNumber: 'BK-002',
+          passengerName: 'Jane Smith',
+          passengerPhone: '+911234567891',
+          passengerEmail: 'jane@example.com',
+          pickupLocation: 'Grand Hotel',
+          dropLocation: 'Railway Station',
+          pickupDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+          cabType: 'suv',
+          tripType: 'local',
+          status: 'confirmed',
+          totalAmount: 2200
+        }
+      ];
+      
+      setPendingBookings(mockBookings);
+    } catch (error) {
+      console.error("Error fetching pending bookings:", error);
+    }
+  };
 
   const fetchFleetData = async () => {
     try {
@@ -45,19 +83,7 @@ export default function FleetManagementPage() {
         
         if (fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
           console.log(`Loaded ${fleetResponse.vehicles.length} fleet vehicles:`, fleetResponse.vehicles);
-          
-          const transformedData = fleetResponse.vehicles.map(vehicle => ({
-            id: vehicle.id,
-            vehicleNumber: vehicle.vehicleNumber,
-            vehicleId: vehicle.cabTypeId,
-            model: vehicle.model || vehicle.name,
-            make: vehicle.make,
-            year: vehicle.year,
-            status: vehicle.status,
-            lastService: vehicle.lastService
-          }));
-          
-          setFleetData(transformedData);
+          setFleetData(fleetResponse.vehicles);
           setDataSource('fleet');
           return;
         }
@@ -77,11 +103,22 @@ export default function FleetManagementPage() {
           const transformedData = response.vehicles.map(vehicle => ({
             id: vehicle.id || vehicle.vehicleId || '',
             vehicleId: vehicle.vehicleId || vehicle.id || '',
-            vehicleNumber: vehicle.vehicleNumber,
+            vehicleNumber: vehicle.vehicleNumber || `VN-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+            name: vehicle.name,
             model: vehicle.name,
+            make: vehicle.make || 'Unknown',
             year: vehicle.year !== undefined ? vehicle.year : new Date().getFullYear(),
             status: vehicle.isActive ? 'Active' : 'Inactive',
-            lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
+            lastService: vehicle.lastService || new Date().toISOString().split('T')[0],
+            nextServiceDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            fuelType: 'Petrol', // Default value
+            vehicleType: vehicle.vehicleType || 'sedan',
+            cabTypeId: vehicle.id || '',
+            capacity: vehicle.capacity || 4,
+            luggageCapacity: vehicle.luggageCapacity || 2,
+            isActive: vehicle.isActive !== undefined ? vehicle.isActive : true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           }));
           
           setFleetData(transformedData);
@@ -95,13 +132,107 @@ export default function FleetManagementPage() {
       // If we reach here, neither fleet nor regular vehicles were loaded
       // Use fallback data
       console.log("No vehicles returned from API, using sample data");
-      setFleetData([
-        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
-        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
-        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
-        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
-        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
-      ]);
+      
+      // Create sample data with all required FleetVehicle properties
+      const sampleData: FleetVehicle[] = [
+        {
+          id: 'sample-1',
+          vehicleNumber: 'AP 31 AB 1234',
+          name: 'Toyota Innova',
+          model: 'Innova Crysta',
+          make: 'Toyota',
+          year: 2022,
+          status: 'Active',
+          lastService: '2025-04-15',
+          nextServiceDue: '2025-07-15',
+          fuelType: 'Diesel',
+          vehicleType: 'suv',
+          cabTypeId: 'cab-001',
+          capacity: 7,
+          luggageCapacity: 3,
+          isActive: true,
+          createdAt: '2025-01-15T10:30:00Z',
+          updatedAt: '2025-04-15T14:20:00Z'
+        },
+        {
+          id: 'sample-2',
+          vehicleNumber: 'AP 31 CD 5678',
+          name: 'Maruti Swift',
+          model: 'Swift Dzire',
+          make: 'Maruti',
+          year: 2021,
+          status: 'Active',
+          lastService: '2025-04-10',
+          nextServiceDue: '2025-07-10',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-002',
+          capacity: 4,
+          luggageCapacity: 2,
+          isActive: true,
+          createdAt: '2025-02-10T11:45:00Z',
+          updatedAt: '2025-04-10T09:30:00Z'
+        },
+        {
+          id: 'sample-3',
+          vehicleNumber: 'AP 31 EF 9012',
+          name: 'Hyundai Creta',
+          model: 'Creta SX',
+          make: 'Hyundai',
+          year: 2023,
+          status: 'Maintenance',
+          lastService: '2025-04-20',
+          nextServiceDue: '2025-07-20',
+          fuelType: 'Diesel',
+          vehicleType: 'suv',
+          cabTypeId: 'cab-003',
+          capacity: 5,
+          luggageCapacity: 2,
+          isActive: false,
+          createdAt: '2025-03-05T16:30:00Z',
+          updatedAt: '2025-04-20T10:15:00Z'
+        },
+        {
+          id: 'sample-4',
+          vehicleNumber: 'AP 31 GH 3456',
+          name: 'Toyota Etios',
+          model: 'Etios VX',
+          make: 'Toyota',
+          year: 2020,
+          status: 'Active',
+          lastService: '2025-03-25',
+          nextServiceDue: '2025-06-25',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-004',
+          capacity: 4,
+          luggageCapacity: 2,
+          isActive: true,
+          createdAt: '2025-01-25T12:00:00Z',
+          updatedAt: '2025-03-25T13:10:00Z'
+        },
+        {
+          id: 'sample-5',
+          vehicleNumber: 'AP 31 IJ 7890',
+          name: 'Honda City',
+          model: 'City ZX',
+          make: 'Honda',
+          year: 2022,
+          status: 'Inactive',
+          lastService: '2025-04-05',
+          nextServiceDue: '2025-07-05',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-005',
+          capacity: 5,
+          luggageCapacity: 2,
+          isActive: false,
+          createdAt: '2025-02-15T09:20:00Z',
+          updatedAt: '2025-04-05T15:45:00Z'
+        },
+      ];
+      
+      setFleetData(sampleData);
       setDataSource('regular');
       
       uiToast({
@@ -116,14 +247,107 @@ export default function FleetManagementPage() {
         description: "Failed to load fleet data. Using sample data instead.",
         variant: "destructive",
       });
-      // Fallback to sample data
-      setFleetData([
-        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
-        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
-        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
-        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
-        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
-      ]);
+      
+      // Fallback to sample data with all required FleetVehicle properties
+      const sampleData: FleetVehicle[] = [
+        {
+          id: 'sample-1',
+          vehicleNumber: 'AP 31 AB 1234',
+          name: 'Toyota Innova',
+          model: 'Innova Crysta',
+          make: 'Toyota',
+          year: 2022,
+          status: 'Active',
+          lastService: '2025-04-15',
+          nextServiceDue: '2025-07-15',
+          fuelType: 'Diesel',
+          vehicleType: 'suv',
+          cabTypeId: 'cab-001',
+          capacity: 7,
+          luggageCapacity: 3,
+          isActive: true,
+          createdAt: '2025-01-15T10:30:00Z',
+          updatedAt: '2025-04-15T14:20:00Z'
+        },
+        {
+          id: 'sample-2',
+          vehicleNumber: 'AP 31 CD 5678',
+          name: 'Maruti Swift',
+          model: 'Swift Dzire',
+          make: 'Maruti',
+          year: 2021,
+          status: 'Active',
+          lastService: '2025-04-10',
+          nextServiceDue: '2025-07-10',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-002',
+          capacity: 4,
+          luggageCapacity: 2,
+          isActive: true,
+          createdAt: '2025-02-10T11:45:00Z',
+          updatedAt: '2025-04-10T09:30:00Z'
+        },
+        {
+          id: 'sample-3',
+          vehicleNumber: 'AP 31 EF 9012',
+          name: 'Hyundai Creta',
+          model: 'Creta SX',
+          make: 'Hyundai',
+          year: 2023,
+          status: 'Maintenance',
+          lastService: '2025-04-20',
+          nextServiceDue: '2025-07-20',
+          fuelType: 'Diesel',
+          vehicleType: 'suv',
+          cabTypeId: 'cab-003',
+          capacity: 5,
+          luggageCapacity: 2,
+          isActive: false,
+          createdAt: '2025-03-05T16:30:00Z',
+          updatedAt: '2025-04-20T10:15:00Z'
+        },
+        {
+          id: 'sample-4',
+          vehicleNumber: 'AP 31 GH 3456',
+          name: 'Toyota Etios',
+          model: 'Etios VX',
+          make: 'Toyota',
+          year: 2020,
+          status: 'Active',
+          lastService: '2025-03-25',
+          nextServiceDue: '2025-06-25',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-004',
+          capacity: 4,
+          luggageCapacity: 2,
+          isActive: true,
+          createdAt: '2025-01-25T12:00:00Z',
+          updatedAt: '2025-03-25T13:10:00Z'
+        },
+        {
+          id: 'sample-5',
+          vehicleNumber: 'AP 31 IJ 7890',
+          name: 'Honda City',
+          model: 'City ZX',
+          make: 'Honda',
+          year: 2022,
+          status: 'Inactive',
+          lastService: '2025-04-05',
+          nextServiceDue: '2025-07-05',
+          fuelType: 'Petrol',
+          vehicleType: 'sedan',
+          cabTypeId: 'cab-005',
+          capacity: 5,
+          luggageCapacity: 2,
+          isActive: false,
+          createdAt: '2025-02-15T09:20:00Z',
+          updatedAt: '2025-04-05T15:45:00Z'
+        },
+      ];
+      
+      setFleetData(sampleData);
       setDataSource('regular');
     } finally {
       setIsLoading(false);
@@ -146,27 +370,38 @@ export default function FleetManagementPage() {
   const inactiveVehicles = fleetData.filter(v => v.status === 'Inactive').length;
 
   // Handle adding a new vehicle
-  const handleAddVehicle = (newVehicle: CabType) => {
-    toast.success(`Vehicle ${newVehicle.name} has been added to the fleet.`);
+  const handleAddVehicle = (newVehicle: FleetVehicle) => {
+    toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
     
     // Add the new vehicle to the fleet data
-    const newFleetEntry: FleetItem = {
-      id: newVehicle.id || newVehicle.vehicleId || '',
-      vehicleId: newVehicle.vehicleId || newVehicle.id || '',
-      vehicleNumber: newVehicle.vehicleNumber,
-      model: newVehicle.name,
-      year: newVehicle.year !== undefined ? newVehicle.year : new Date().getFullYear(),
-      status: newVehicle.isActive ? 'Active' : 'Inactive',
-      lastService: newVehicle.lastService || new Date().toISOString().split('T')[0],
-      make: newVehicle.make
-    };
-    
-    setFleetData([...fleetData, newFleetEntry]);
+    setFleetData([...fleetData, newVehicle]);
     
     // Refresh data from API after a short delay
     setTimeout(() => {
       fetchFleetData();
     }, 1000);
+  };
+
+  // Handle assigning a vehicle to booking
+  const handleAssignVehicle = (vehicle: FleetVehicle, booking: Booking) => {
+    setSelectedVehicle(vehicle);
+    setSelectedBooking(booking);
+    setIsAssignDialogOpen(true);
+  };
+
+  // Handle view specific booking for assignment
+  const handleViewPendingBookings = (vehicle: FleetVehicle) => {
+    setSelectedVehicle(vehicle);
+    // This would typically open a dialog or navigate to a page showing pending bookings
+    toast.info(`Viewing bookings for assignment to vehicle ${vehicle.vehicleNumber}`);
+    
+    // For now, just open the assignment dialog with the first pending booking
+    if (pendingBookings.length > 0) {
+      setSelectedBooking(pendingBookings[0]);
+      setIsAssignDialogOpen(true);
+    } else {
+      toast.warning("No pending bookings available for assignment");
+    }
   };
 
   return (
@@ -296,6 +531,15 @@ export default function FleetManagementPage() {
                           <div className="flex justify-end gap-2">
                             <Button variant="outline" size="sm">View</Button>
                             <Button variant="outline" size="sm">Edit</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-1"
+                              onClick={() => handleViewPendingBookings(vehicle)}
+                              disabled={vehicle.status !== 'Active'}
+                            >
+                              <Clipboard className="h-4 w-4" /> Assign
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -309,10 +553,23 @@ export default function FleetManagementPage() {
       </main>
       
       {/* Add Vehicle Dialog */}
-      <AddVehicleDialog
+      <AddFleetVehicleDialog
         open={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
         onAddVehicle={handleAddVehicle}
+      />
+
+      {/* Assign Vehicle to Booking Dialog */}
+      <FleetVehicleAssignmentDialog
+        open={isAssignDialogOpen}
+        onClose={() => setIsAssignDialogOpen(false)}
+        booking={selectedBooking || undefined}
+        availableVehicles={fleetData.filter(v => v.status === 'Active')}
+        onAssignComplete={() => {
+          // Refresh data after successful assignment
+          fetchFleetData();
+          fetchPendingBookings();
+        }}
       />
     </div>
   );
