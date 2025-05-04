@@ -208,7 +208,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="vehicleNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Registration Number</FormLabel>
+                    <FormLabel>
+                      Registration Number <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="AP 31 AB 1234" {...field} />
                     </FormControl>
@@ -222,7 +224,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="model"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Model</FormLabel>
+                    <FormLabel>
+                      Model <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="Swift Dzire, Innova, etc." {...field} />
                     </FormControl>
@@ -238,7 +242,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="make"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Manufacturer</FormLabel>
+                    <FormLabel>
+                      Manufacturer <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="Maruti, Toyota, etc." {...field} />
                     </FormControl>
@@ -252,7 +258,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="year"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Year of Manufacture</FormLabel>
+                    <FormLabel>
+                      Year of Manufacture <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input 
                         type="number"
@@ -274,7 +282,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Status</FormLabel>
+                    <FormLabel>
+                      Status <span className="text-red-500">*</span>
+                    </FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
@@ -300,7 +310,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="fuelType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Fuel Type</FormLabel>
+                    <FormLabel>
+                      Fuel Type <span className="text-red-500">*</span>
+                    </FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
@@ -330,7 +342,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="lastService"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Last Service Date</FormLabel>
+                    <FormLabel>
+                      Last Service Date <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -344,7 +358,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="nextServiceDue"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Next Service Due</FormLabel>
+                    <FormLabel>
+                      Next Service Due <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -360,7 +376,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="currentOdometer"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Current Odometer (KM)</FormLabel>
+                    <FormLabel>
+                      Current Odometer (KM)
+                    </FormLabel>
                     <FormControl>
                       <Input 
                         type="number"
@@ -380,7 +398,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 name="capacity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel required>Seating Capacity</FormLabel>
+                    <FormLabel>
+                      Seating Capacity <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input 
                         type="number"
@@ -400,7 +420,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
               name="luggageCapacity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Luggage Capacity</FormLabel>
+                  <FormLabel>
+                    Luggage Capacity
+                  </FormLabel>
                   <FormControl>
                     <Input 
                       type="number"
