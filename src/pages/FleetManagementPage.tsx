@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,17 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
+import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
-import { FleetVehicle } from '@/types/cab';
+import { CabType, FleetVehicle } from '@/types/cab';
 import { Car, Filter, FileText, Plus, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
+interface FleetItem {
+  id: string | number;
+  vehicleId?: string;
+  vehicleNumber?: string;
+  model: string;
+  year: number;
+  status: string;
+  lastService: string;
+  make?: string;
+}
+
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fleet");
-  const [fleetData, setFleetData] = useState<FleetVehicle[]>([]);
+  const [fleetData, setFleetData] = useState<FleetItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
   const { toast: uiToast } = useToast();
   
   useEffect(() => {
@@ -27,118 +39,70 @@ export default function FleetManagementPage() {
     try {
       setIsLoading(true);
       
-      // Try to get fleet vehicles
+      // Try to get fleet vehicles first
       try {
         const fleetResponse = await fleetAPI.getVehicles(true);
         
         if (fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
           console.log(`Loaded ${fleetResponse.vehicles.length} fleet vehicles:`, fleetResponse.vehicles);
-          setFleetData(fleetResponse.vehicles);
+          
+          const transformedData = fleetResponse.vehicles.map(vehicle => ({
+            id: vehicle.id,
+            vehicleNumber: vehicle.vehicleNumber,
+            vehicleId: vehicle.cabTypeId,
+            model: vehicle.model || vehicle.name,
+            make: vehicle.make,
+            year: vehicle.year,
+            status: vehicle.status,
+            lastService: vehicle.lastService
+          }));
+          
+          setFleetData(transformedData);
+          setDataSource('fleet');
           return;
         }
       } catch (fleetError) {
         console.error("Error fetching fleet vehicles:", fleetError);
+        // Continue to try regular vehicles
       }
       
-      // If we reach here, no vehicles were loaded - use fallback data
+      // If fleet vehicles not available, try regular vehicles
+      try {
+        const response = await vehicleAPI.getVehicles(true);
+        
+        if (response.vehicles && response.vehicles.length > 0) {
+          console.log(`Loaded ${response.vehicles.length} regular vehicles:`, response.vehicles);
+          
+          // Transform vehicle data into fleet data format
+          const transformedData = response.vehicles.map(vehicle => ({
+            id: vehicle.id || vehicle.vehicleId || '',
+            vehicleId: vehicle.vehicleId || vehicle.id || '',
+            vehicleNumber: vehicle.vehicleNumber,
+            model: vehicle.name,
+            year: vehicle.year !== undefined ? vehicle.year : new Date().getFullYear(),
+            status: vehicle.isActive ? 'Active' : 'Inactive',
+            lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
+          }));
+          
+          setFleetData(transformedData);
+          setDataSource('regular');
+          return;
+        }
+      } catch (vehicleError) {
+        console.error("Error fetching regular vehicles:", vehicleError);
+      }
+      
+      // If we reach here, neither fleet nor regular vehicles were loaded
+      // Use fallback data
       console.log("No vehicles returned from API, using sample data");
       setFleetData([
-        { 
-          id: '1', 
-          vehicleNumber: 'AP 31 AB 1234', 
-          name: 'Toyota Innova #101',
-          model: 'Innova', 
-          make: 'Toyota',
-          year: 2022, 
-          status: 'Active', 
-          lastService: '2025-04-15', 
-          nextServiceDue: '2025-07-15',
-          fuelType: 'Diesel',
-          capacity: 7,
-          luggageCapacity: 3,
-          isActive: true,
-          vehicleType: 'SUV',
-          cabTypeId: 'innova',
-          createdAt: '2025-01-01',
-          updatedAt: '2025-04-01'
-        },
-        { 
-          id: '2', 
-          vehicleNumber: 'AP 31 CD 5678', 
-          name: 'Maruti Swift #202',
-          model: 'Swift', 
-          make: 'Maruti',
-          year: 2021, 
-          status: 'Active', 
-          lastService: '2025-04-10',
-          nextServiceDue: '2025-07-10',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2025-01-05',
-          updatedAt: '2025-04-05'
-        },
-        { 
-          id: '3', 
-          vehicleNumber: 'AP 31 EF 9012', 
-          name: 'Hyundai Creta #303',
-          model: 'Creta', 
-          make: 'Hyundai',
-          year: 2023, 
-          status: 'Maintenance', 
-          lastService: '2025-04-20',
-          nextServiceDue: '2025-07-20',
-          fuelType: 'Petrol',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          vehicleType: 'SUV',
-          cabTypeId: 'suv',
-          createdAt: '2025-02-01',
-          updatedAt: '2025-04-20'
-        },
-        { 
-          id: '4', 
-          vehicleNumber: 'AP 31 GH 3456', 
-          name: 'Toyota Etios #404',
-          model: 'Etios', 
-          make: 'Toyota',
-          year: 2020, 
-          status: 'Active', 
-          lastService: '2025-03-25',
-          nextServiceDue: '2025-06-25',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2024-12-01',
-          updatedAt: '2025-03-25'
-        },
-        { 
-          id: '5', 
-          vehicleNumber: 'AP 31 IJ 7890', 
-          name: 'Honda City #505',
-          model: 'City', 
-          make: 'Honda',
-          year: 2022, 
-          status: 'Inactive', 
-          lastService: '2025-04-05',
-          nextServiceDue: '2025-07-05',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: false,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2025-01-15',
-          updatedAt: '2025-04-05'
-        },
+        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
+        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
+        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
+        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
+        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
       ]);
+      setDataSource('regular');
       
       uiToast({
         title: "Using sample data",
@@ -154,102 +118,13 @@ export default function FleetManagementPage() {
       });
       // Fallback to sample data
       setFleetData([
-        { 
-          id: '1', 
-          vehicleNumber: 'AP 31 AB 1234', 
-          name: 'Toyota Innova #101',
-          model: 'Innova', 
-          make: 'Toyota',
-          year: 2022, 
-          status: 'Active', 
-          lastService: '2025-04-15', 
-          nextServiceDue: '2025-07-15',
-          fuelType: 'Diesel',
-          capacity: 7,
-          luggageCapacity: 3,
-          isActive: true,
-          vehicleType: 'SUV',
-          cabTypeId: 'innova',
-          createdAt: '2025-01-01',
-          updatedAt: '2025-04-01'
-        },
-        { 
-          id: '2', 
-          vehicleNumber: 'AP 31 CD 5678', 
-          name: 'Maruti Swift #202',
-          model: 'Swift', 
-          make: 'Maruti',
-          year: 2021, 
-          status: 'Active', 
-          lastService: '2025-04-10',
-          nextServiceDue: '2025-07-10',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2025-01-05',
-          updatedAt: '2025-04-05'
-        },
-        { 
-          id: '3', 
-          vehicleNumber: 'AP 31 EF 9012', 
-          name: 'Hyundai Creta #303',
-          model: 'Creta', 
-          make: 'Hyundai',
-          year: 2023, 
-          status: 'Maintenance', 
-          lastService: '2025-04-20',
-          nextServiceDue: '2025-07-20',
-          fuelType: 'Petrol',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          vehicleType: 'SUV',
-          cabTypeId: 'suv',
-          createdAt: '2025-02-01',
-          updatedAt: '2025-04-20'
-        },
-        { 
-          id: '4', 
-          vehicleNumber: 'AP 31 GH 3456', 
-          name: 'Toyota Etios #404',
-          model: 'Etios', 
-          make: 'Toyota',
-          year: 2020, 
-          status: 'Active', 
-          lastService: '2025-03-25',
-          nextServiceDue: '2025-06-25',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2024-12-01',
-          updatedAt: '2025-03-25'
-        },
-        { 
-          id: '5', 
-          vehicleNumber: 'AP 31 IJ 7890', 
-          name: 'Honda City #505',
-          model: 'City', 
-          make: 'Honda',
-          year: 2022, 
-          status: 'Inactive', 
-          lastService: '2025-04-05',
-          nextServiceDue: '2025-07-05',
-          fuelType: 'Petrol',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: false,
-          vehicleType: 'Sedan',
-          cabTypeId: 'sedan',
-          createdAt: '2025-01-15',
-          updatedAt: '2025-04-05'
-        },
+        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
+        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
+        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
+        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
+        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
       ]);
+      setDataSource('regular');
     } finally {
       setIsLoading(false);
     }
@@ -271,11 +146,22 @@ export default function FleetManagementPage() {
   const inactiveVehicles = fleetData.filter(v => v.status === 'Inactive').length;
 
   // Handle adding a new vehicle
-  const handleAddVehicle = (newVehicle: FleetVehicle) => {
-    toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
+  const handleAddVehicle = (newVehicle: CabType) => {
+    toast.success(`Vehicle ${newVehicle.name} has been added to the fleet.`);
     
     // Add the new vehicle to the fleet data
-    setFleetData([...fleetData, newVehicle]);
+    const newFleetEntry: FleetItem = {
+      id: newVehicle.id || newVehicle.vehicleId || '',
+      vehicleId: newVehicle.vehicleId || newVehicle.id || '',
+      vehicleNumber: newVehicle.vehicleNumber,
+      model: newVehicle.name,
+      year: newVehicle.year !== undefined ? newVehicle.year : new Date().getFullYear(),
+      status: newVehicle.isActive ? 'Active' : 'Inactive',
+      lastService: newVehicle.lastService || new Date().toISOString().split('T')[0],
+      make: newVehicle.make
+    };
+    
+    setFleetData([...fleetData, newFleetEntry]);
     
     // Refresh data from API after a short delay
     setTimeout(() => {
@@ -302,7 +188,7 @@ export default function FleetManagementPage() {
               <RefreshCw className="h-4 w-4" /> Refresh
             </Button>
             <Button onClick={() => setIsAddDialogOpen(true)} className="flex items-center gap-1">
-              <Plus className="h-4 w-4" /> Add Fleet Vehicle
+              <Plus className="h-4 w-4" /> Add New Vehicle
             </Button>
           </div>
         </div>
@@ -379,10 +265,10 @@ export default function FleetManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Vehicle Number</TableHead>
-                      <TableHead>Name</TableHead>
+                      {dataSource === 'fleet' && <TableHead>Vehicle Number</TableHead>}
+                      {dataSource === 'regular' && <TableHead>Vehicle ID</TableHead>}
                       <TableHead>Model</TableHead>
-                      <TableHead>Make</TableHead>
+                      {dataSource === 'fleet' && <TableHead>Make</TableHead>}
                       <TableHead>Year</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Last Service</TableHead>
@@ -392,10 +278,13 @@ export default function FleetManagementPage() {
                   <TableBody>
                     {fleetData.map((vehicle) => (
                       <TableRow key={vehicle.id}>
-                        <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
-                        <TableCell>{vehicle.name}</TableCell>
+                        {dataSource === 'fleet' ? (
+                          <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
+                        ) : (
+                          <TableCell className="font-medium">{vehicle.vehicleId}</TableCell>
+                        )}
                         <TableCell>{vehicle.model}</TableCell>
-                        <TableCell>{vehicle.make}</TableCell>
+                        {dataSource === 'fleet' && <TableCell>{vehicle.make}</TableCell>}
                         <TableCell>{vehicle.year}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(vehicle.status)}`}>

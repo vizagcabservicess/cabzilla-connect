@@ -63,7 +63,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.3",
     "vite_react_shadcn_ts": "file:",
-    "zod": "^3.24.3"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
