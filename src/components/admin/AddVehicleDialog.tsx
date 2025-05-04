@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { addVehicle } from '@/services/directVehicleService';
@@ -207,7 +209,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Vehicle Number <span className="text-red-500">*</span>
+                      Registration Number <span className="text-red-500">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="AP 31 AB 1234" {...field} />
