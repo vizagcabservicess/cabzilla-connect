@@ -36,6 +36,7 @@ const formSchema = z.object({
   capacity: z.coerce.number().int().min(1, 'Capacity must be at least 1'),
   luggageCapacity: z.coerce.number().int().min(0, 'Luggage capacity cannot be negative'),
   currentOdometer: z.coerce.number().int().min(0, 'Odometer reading cannot be negative').optional(),
+  vehicleType: z.string().min(1, 'Vehicle type is required'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -60,6 +61,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
       capacity: 4,
       luggageCapacity: 2,
       currentOdometer: 0,
+      vehicleType: 'Sedan',
     },
   });
 
@@ -83,6 +85,10 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
         luggageCapacity: values.luggageCapacity,
         isActive: values.status === 'Active',
         currentOdometer: values.currentOdometer,
+        vehicleType: values.vehicleType,
+        cabTypeId: values.model.toLowerCase().replace(/\s+/g, '_'), // Generate a cabTypeId based on model
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       // Add the fleet vehicle
@@ -344,6 +350,34 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="vehicleType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vehicle Type *</FormLabel>
+                  <Select 
+                    value={field.value} 
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select vehicle type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Sedan">Sedan</SelectItem>
+                      <SelectItem value="SUV">SUV</SelectItem>
+                      <SelectItem value="Hatchback">Hatchback</SelectItem>
+                      <SelectItem value="Tempo Traveller">Tempo Traveller</SelectItem>
+                      <SelectItem value="Luxury">Luxury</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>

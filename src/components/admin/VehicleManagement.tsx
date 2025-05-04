@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Wrench, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VehicleCard } from "./VehicleCard";
+import { FleetVehicle } from "@/types/fleet";
 import { CabType } from "@/types/cab";
 import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
@@ -342,8 +343,28 @@ export default function VehicleManagement() {
     };
   }, [loadVehicles, debounce, isRefreshing]);
 
-  const handleAddVehicle = (newVehicle: CabType) => {
-    setVehicles(prevVehicles => [...prevVehicles, newVehicle]);
+  const handleAddVehicle = (newVehicle: FleetVehicle) => {
+    // Convert FleetVehicle to CabType for compatibility with this component
+    const vehicleAsCabType: CabType = {
+      id: newVehicle.id,
+      name: newVehicle.name,
+      model: newVehicle.model || '',
+      make: newVehicle.make || '',
+      capacity: newVehicle.capacity,
+      luggageCapacity: newVehicle.luggageCapacity,
+      year: newVehicle.year,
+      lastService: newVehicle.lastService,
+      vehicleNumber: newVehicle.vehicleNumber,
+      status: newVehicle.status,
+      // Required CabType fields that aren't in FleetVehicle
+      image: '',
+      amenities: [],
+      description: `${newVehicle.make} ${newVehicle.model}`,
+      ac: true,
+      isActive: newVehicle.isActive
+    };
+    
+    setVehicles(prevVehicles => [...prevVehicles, vehicleAsCabType]);
     
     // Re-fetch data after a brief delay to ensure we have the latest from the server
     setTimeout(() => {

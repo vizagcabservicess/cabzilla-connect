@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,7 +56,11 @@ export default function FleetManagementPage() {
           fuelType: 'Diesel',
           capacity: 7,
           luggageCapacity: 3,
-          isActive: true
+          isActive: true,
+          vehicleType: 'SUV',
+          cabTypeId: 'innova',
+          createdAt: '2025-01-01',
+          updatedAt: '2025-04-01'
         },
         { 
           id: '2', 
@@ -70,7 +75,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: true
+          isActive: true,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2025-01-05',
+          updatedAt: '2025-04-05'
         },
         { 
           id: '3', 
@@ -85,7 +94,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 5,
           luggageCapacity: 2,
-          isActive: false
+          isActive: false,
+          vehicleType: 'SUV',
+          cabTypeId: 'suv',
+          createdAt: '2025-02-01',
+          updatedAt: '2025-04-20'
         },
         { 
           id: '4', 
@@ -100,7 +113,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: true
+          isActive: true,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2024-12-01',
+          updatedAt: '2025-03-25'
         },
         { 
           id: '5', 
@@ -115,7 +132,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: false
+          isActive: false,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2025-01-15',
+          updatedAt: '2025-04-05'
         },
       ]);
       
@@ -146,7 +167,11 @@ export default function FleetManagementPage() {
           fuelType: 'Diesel',
           capacity: 7,
           luggageCapacity: 3,
-          isActive: true
+          isActive: true,
+          vehicleType: 'SUV',
+          cabTypeId: 'innova',
+          createdAt: '2025-01-01',
+          updatedAt: '2025-04-01'
         },
         { 
           id: '2', 
@@ -161,7 +186,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: true
+          isActive: true,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2025-01-05',
+          updatedAt: '2025-04-05'
         },
         { 
           id: '3', 
@@ -176,7 +205,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 5,
           luggageCapacity: 2,
-          isActive: false
+          isActive: false,
+          vehicleType: 'SUV',
+          cabTypeId: 'suv',
+          createdAt: '2025-02-01',
+          updatedAt: '2025-04-20'
         },
         { 
           id: '4', 
@@ -191,7 +224,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: true
+          isActive: true,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2024-12-01',
+          updatedAt: '2025-03-25'
         },
         { 
           id: '5', 
@@ -206,7 +243,11 @@ export default function FleetManagementPage() {
           fuelType: 'Petrol',
           capacity: 4,
           luggageCapacity: 2,
-          isActive: false
+          isActive: false,
+          vehicleType: 'Sedan',
+          cabTypeId: 'sedan',
+          createdAt: '2025-01-15',
+          updatedAt: '2025-04-05'
         },
       ]);
     } finally {
