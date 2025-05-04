@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch"; // Added explicit import for Switch component
 import { addVehicle } from '@/services/directVehicleService';
 import { CabType, FleetVehicle } from '@/types/cab';
 import { AlertCircle, Car, Loader2 } from 'lucide-react';
