@@ -147,18 +147,18 @@ export default function FleetManagementPage() {
 
   // Handle adding a new vehicle
   const handleAddVehicle = (newVehicle: CabType) => {
-    toast.success(`Vehicle ${newVehicle.name} has been added to the fleet.`);
+    toast.success(`Vehicle ${newVehicle.vehicleNumber || newVehicle.name} has been added to the fleet.`);
     
     // Add the new vehicle to the fleet data
     const newFleetEntry: FleetItem = {
       id: newVehicle.id || newVehicle.vehicleId || '',
       vehicleId: newVehicle.vehicleId || newVehicle.id || '',
-      vehicleNumber: newVehicle.vehicleNumber,
-      model: newVehicle.name,
-      year: newVehicle.year !== undefined ? newVehicle.year : new Date().getFullYear(),
-      status: newVehicle.isActive ? 'Active' : 'Inactive',
-      lastService: newVehicle.lastService || new Date().toISOString().split('T')[0],
-      make: newVehicle.make
+      vehicleNumber: newVehicle.vehicleNumber || '',
+      model: newVehicle.model || newVehicle.name,
+      make: newVehicle.make || '',
+      year: newVehicle.year || new Date().getFullYear(),
+      status: newVehicle.status || 'Active',
+      lastService: newVehicle.lastService || new Date().toISOString().split('T')[0]
     };
     
     setFleetData([...fleetData, newFleetEntry]);
