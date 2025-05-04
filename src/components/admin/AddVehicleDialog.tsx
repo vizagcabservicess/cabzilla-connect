@@ -4,168 +4,93 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { addVehicle } from '@/services/directVehicleService';
-import { CabType, FleetVehicle } from '@/types/cab';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { fleetAPI } from '@/services/api/fleetAPI';
+import { FleetVehicle } from '@/types/cab';
 import { AlertCircle, Car, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
-import { fleetAPI } from '@/services/api/fleetAPI';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 interface AddVehicleDialogProps {
   open: boolean;
   onClose: () => void;
-  onAddVehicle: (vehicle: CabType) => void;
+  onAddVehicle: (vehicle: FleetVehicle) => void;
 }
+
+// Define the form schema
+const formSchema = z.object({
+  vehicleNumber: z.string().min(1, 'Vehicle number is required'),
+  name: z.string().min(1, 'Vehicle name is required'),
+  model: z.string().min(1, 'Model is required'),
+  make: z.string().min(1, 'Manufacturer is required'),
+  year: z.coerce.number().int().min(2000, 'Year must be at least 2000').max(new Date().getFullYear(), `Year cannot be greater than ${new Date().getFullYear()}`),
+  status: z.enum(['Active', 'Maintenance', 'Inactive']),
+  lastService: z.string(),
+  nextServiceDue: z.string(),
+  fuelType: z.enum(['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid']),
+  capacity: z.coerce.number().int().min(1, 'Capacity must be at least 1'),
+  luggageCapacity: z.coerce.number().int().min(0, 'Luggage capacity cannot be negative'),
+  currentOdometer: z.coerce.number().int().min(0, 'Odometer reading cannot be negative').optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isFixingDatabase, setIsFixingDatabase] = useState(false);
-  const [activeTab, setActiveTab] = useState("basic");
-  
-  const [formData, setFormData] = useState<Partial<CabType & FleetVehicle>>({
-    vehicleId: '',
-    name: '',
-    capacity: 4,
-    luggageCapacity: 2,
-    ac: true,
-    image: '/cars/sedan.png',
-    amenities: ['AC'],
-    description: '',
-    basePrice: 0,
-    pricePerKm: 0,
-    nightHaltCharge: 700,
-    driverAllowance: 250,
-    isActive: true,
-    // Fleet specific fields
-    vehicleNumber: '',
-    model: '',
-    make: '',
-    year: new Date().getFullYear(),
-    status: 'Active',
-    lastService: new Date().toISOString().split('T')[0],
-    nextServiceDue: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
-    fuelType: 'Petrol'
+
+  // Initialize the form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      vehicleNumber: '',
+      name: '',
+      model: '',
+      make: '',
+      year: new Date().getFullYear(),
+      status: 'Active',
+      lastService: new Date().toISOString().split('T')[0],
+      nextServiceDue: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
+      fuelType: 'Petrol',
+      capacity: 4,
+      luggageCapacity: 2,
+      currentOdometer: 0,
+    },
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'capacity' || name === 'luggageCapacity' || 
-              name === 'basePrice' || name === 'pricePerKm' ||
-              name === 'nightHaltCharge' || name === 'driverAllowance' ||
-              name === 'year' || name === 'currentOdometer'
-        ? Number(value) 
-        : value
-    }));
-    
-    if (name === 'name' && !formData.vehicleId) {
-      const generatedId = value.toLowerCase().replace(/\s+/g, '_');
-      setFormData((prev) => ({
-        ...prev,
-        vehicleId: generatedId
-      }));
-    }
-  };
-
-  const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: checked
-    }));
-  };
-
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleAmenitiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const amenitiesList = value.split(',').map(item => item.trim());
-    setFormData((prev) => ({
-      ...prev,
-      amenities: amenitiesList
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     setError(null);
     
     try {
-      if (!formData.vehicleId || !formData.name) {
-        throw new Error('Vehicle ID and Name are required fields');
-      }
+      // Prepare the fleet vehicle data
+      const fleetVehicleData: Partial<FleetVehicle> = {
+        vehicleNumber: values.vehicleNumber,
+        name: values.name,
+        model: values.model,
+        make: values.make,
+        year: values.year,
+        status: values.status as 'Active' | 'Maintenance' | 'Inactive',
+        lastService: values.lastService,
+        nextServiceDue: values.nextServiceDue,
+        fuelType: values.fuelType,
+        capacity: values.capacity,
+        luggageCapacity: values.luggageCapacity,
+        isActive: values.status === 'Active',
+        currentOdometer: values.currentOdometer,
+      };
 
-      if (formData.vehicleNumber) {
-        // If vehicle number is provided, create a fleet vehicle
-        try {
-          // First create the fleet vehicle
-          const fleetVehicleData: Partial<FleetVehicle> = {
-            vehicleNumber: formData.vehicleNumber,
-            name: formData.name,
-            model: formData.model || formData.name,
-            make: formData.make || '',
-            year: formData.year || new Date().getFullYear(),
-            status: formData.status as 'Active' | 'Maintenance' | 'Inactive',
-            lastService: formData.lastService,
-            nextServiceDue: formData.nextServiceDue,
-            fuelType: formData.fuelType,
-            vehicleType: formData.vehicleType,
-            cabTypeId: formData.vehicleId,
-            capacity: formData.capacity,
-            luggageCapacity: formData.luggageCapacity,
-            isActive: formData.isActive || true,
-            currentOdometer: formData.currentOdometer
-          };
-
-          await fleetAPI.addVehicle(fleetVehicleData);
-          toast.success(`Fleet vehicle ${formData.vehicleNumber} added successfully`);
-        } catch (fleetError) {
-          console.error("Error adding fleet vehicle:", fleetError);
-          // Continue with regular vehicle creation even if fleet vehicle creation fails
-        }
-      }
-
-      // Create the regular vehicle
-      const newVehicle = await addVehicle(formData as CabType);
+      // Add the fleet vehicle
+      const newVehicle = await fleetAPI.addVehicle(fleetVehicleData);
       
+      toast.success(`Fleet vehicle ${values.vehicleNumber} added successfully`);
       onAddVehicle(newVehicle);
-      
-      setFormData({
-        vehicleId: '',
-        name: '',
-        capacity: 4,
-        luggageCapacity: 2,
-        ac: true,
-        image: '/cars/sedan.png',
-        amenities: ['AC'],
-        description: '',
-        basePrice: 0,
-        pricePerKm: 0,
-        nightHaltCharge: 700,
-        driverAllowance: 250,
-        isActive: true,
-        // Fleet specific fields
-        vehicleNumber: '',
-        model: '',
-        make: '',
-        year: new Date().getFullYear(),
-        status: 'Active',
-        lastService: new Date().toISOString().split('T')[0],
-        nextServiceDue: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
-        fuelType: 'Petrol'
-      });
+      form.reset(); // Reset form after successful submission
       onClose();
     } catch (err) {
       console.error('Error adding vehicle:', err);
@@ -174,31 +99,14 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
       setIsSubmitting(false);
     }
   };
-  
-  const handleFixDatabase = async () => {
-    setIsFixingDatabase(true);
-    try {
-      const success = await fixDatabaseTables();
-      if (success) {
-        toast.success('Database tables fixed successfully');
-        setError(null);
-      } else {
-        toast.error('Failed to fix database tables');
-      }
-    } catch (err) {
-      console.error('Error fixing database:', err);
-    } finally {
-      setIsFixingDatabase(false);
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add New Vehicle</DialogTitle>
+          <DialogTitle>Add Fleet Vehicle</DialogTitle>
           <DialogDescription>
-            Create a new vehicle to add to your fleet.
+            Add a new vehicle to your fleet management system.
           </DialogDescription>
         </DialogHeader>
 
@@ -206,353 +114,257 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>{error}</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleFixDatabase}
-                disabled={isFixingDatabase}
-              >
-                {isFixingDatabase ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Fixing database...
-                  </>
-                ) : (
-                  'Fix Database Tables'
-                )}
-              </Button>
-            </AlertDescription>
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="fleet">Fleet Details</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-            </TabsList>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="vehicleNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle Number *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="AP 31 AB 1234" {...field} />
+                    </FormControl>
+                    <div className="text-xs text-gray-500">
+                      Registration/license plate number
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <TabsContent value="basic" className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="vehicleId">Vehicle ID</Label>
-                  <Input
-                    id="vehicleId"
-                    name="vehicleId"
-                    placeholder="sedan, suv, etc."
-                    value={formData.vehicleId}
-                    onChange={handleChange}
-                  />
-                  <p className="text-xs text-gray-500">
-                    Unique identifier (lowercase, no spaces)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Vehicle Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    placeholder="Sedan, SUV, etc."
-                    value={formData.name}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Swift Dzire #301" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="capacity">Passenger Capacity</Label>
-                  <Input
-                    id="capacity"
-                    name="capacity"
-                    type="number"
-                    min="1"
-                    value={formData.capacity}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="luggageCapacity">Luggage Capacity</Label>
-                  <Input
-                    id="luggageCapacity"
-                    name="luggageCapacity"
-                    type="number"
-                    min="0"
-                    value={formData.luggageCapacity}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="model"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Model *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Swift Dzire, Innova, etc." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="space-y-2">
-                <Label htmlFor="image">Image URL</Label>
-                <Input
-                  id="image"
-                  name="image"
-                  placeholder="/cars/sedan.png"
-                  value={formData.image}
-                  onChange={handleChange}
-                />
-                <p className="text-xs text-gray-500">
-                  Path to vehicle image (e.g., /cars/sedan.png)
-                </p>
-              </div>
+              <FormField
+                control={form.control}
+                name="make"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Manufacturer *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Maruti, Toyota, etc." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="amenities">Amenities</Label>
-                <Input
-                  id="amenities"
-                  name="amenities"
-                  placeholder="AC, Bottle Water, Music System"
-                  value={formData.amenities?.join(', ')}
-                  onChange={handleAmenitiesChange}
-                />
-                <p className="text-xs text-gray-500">
-                  Comma-separated list of amenities
-                </p>
-              </div>
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="year"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Year *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={2000} 
+                        max={new Date().getFullYear()} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Describe the vehicle..."
-                  value={formData.description}
-                  onChange={handleChange}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status *</FormLabel>
+                    <Select 
+                      value={field.value} 
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Maintenance">Maintenance</SelectItem>
+                        <SelectItem value="Inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="ac"
-                    checked={formData.ac}
-                    onCheckedChange={(checked) => handleSwitchChange('ac', checked)}
-                  />
-                  <Label htmlFor="ac">Air Conditioned</Label>
-                </div>
+              <FormField
+                control={form.control}
+                name="fuelType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fuel Type *</FormLabel>
+                    <Select 
+                      value={field.value} 
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select fuel type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Petrol">Petrol</SelectItem>
+                        <SelectItem value="Diesel">Diesel</SelectItem>
+                        <SelectItem value="CNG">CNG</SelectItem>
+                        <SelectItem value="Electric">Electric</SelectItem>
+                        <SelectItem value="Hybrid">Hybrid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="isActive"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => handleSwitchChange('isActive', checked)}
-                  />
-                  <Label htmlFor="isActive">Active</Label>
-                </div>
-              </div>
-            </TabsContent>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="lastService"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Service Date *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <TabsContent value="fleet" className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="vehicleNumber" className="font-medium">Vehicle Number *</Label>
-                  <Input
-                    id="vehicleNumber"
-                    name="vehicleNumber"
-                    placeholder="AP 31 AB 1234"
-                    value={formData.vehicleNumber}
-                    onChange={handleChange}
-                  />
-                  <p className="text-xs text-gray-500">
-                    Registration/license plate number
-                  </p>
-                </div>
+              <FormField
+                control={form.control}
+                name="nextServiceDue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Next Service Due *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
-                  <Input
-                    id="model"
-                    name="model"
-                    placeholder="Swift Dzire, Innova, etc."
-                    value={formData.model}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="capacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Passenger Capacity *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={1} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="make">Manufacturer</Label>
-                  <Input
-                    id="make"
-                    name="make"
-                    placeholder="Maruti, Toyota, etc."
-                    value={formData.make}
-                    onChange={handleChange}
-                  />
-                </div>
+              <FormField
+                control={form.control}
+                name="luggageCapacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Luggage Capacity *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={0} 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <div className="space-y-2">
-                  <Label htmlFor="year">Year of Manufacture</Label>
-                  <Input
-                    id="year"
-                    name="year"
-                    type="number"
-                    min="2000"
-                    max={new Date().getFullYear()}
-                    value={formData.year}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="currentOdometer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Odometer (KM)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={0} 
+                        placeholder="0"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select 
-                    value={formData.status} 
-                    onValueChange={(value) => handleSelectChange('status', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Maintenance">Maintenance</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="fuelType">Fuel Type</Label>
-                  <Select 
-                    value={formData.fuelType} 
-                    onValueChange={(value) => handleSelectChange('fuelType', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select fuel type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Petrol">Petrol</SelectItem>
-                      <SelectItem value="Diesel">Diesel</SelectItem>
-                      <SelectItem value="CNG">CNG</SelectItem>
-                      <SelectItem value="Electric">Electric</SelectItem>
-                      <SelectItem value="Hybrid">Hybrid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="lastService">Last Service Date</Label>
-                  <Input
-                    id="lastService"
-                    name="lastService"
-                    type="date"
-                    value={formData.lastService}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="nextServiceDue">Next Service Due</Label>
-                  <Input
-                    id="nextServiceDue"
-                    name="nextServiceDue"
-                    type="date"
-                    value={formData.nextServiceDue}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currentOdometer">Current Odometer (KM)</Label>
-                <Input
-                  id="currentOdometer"
-                  name="currentOdometer"
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={formData.currentOdometer || ''}
-                  onChange={handleChange}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="pricing" className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="basePrice">Base Price (₹)</Label>
-                  <Input
-                    id="basePrice"
-                    name="basePrice"
-                    type="number"
-                    min="0"
-                    step="10"
-                    value={formData.basePrice}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pricePerKm">Price per KM (₹)</Label>
-                  <Input
-                    id="pricePerKm"
-                    name="pricePerKm"
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={formData.pricePerKm}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nightHaltCharge">Night Halt Charge (₹)</Label>
-                  <Input
-                    id="nightHaltCharge"
-                    name="nightHaltCharge"
-                    type="number"
-                    min="0"
-                    step="50"
-                    value={formData.nightHaltCharge}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="driverAllowance">Driver Allowance (₹)</Label>
-                  <Input
-                    id="driverAllowance"
-                    name="driverAllowance"
-                    type="number"
-                    min="0"
-                    step="10"
-                    value={formData.driverAllowance}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Car className="mr-2 h-4 w-4" />
-                  Add Vehicle
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Car className="mr-2 h-4 w-4" />
+                    Add Vehicle
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
