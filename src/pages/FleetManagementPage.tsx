@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +8,7 @@ import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { CabType, FleetVehicle } from '@/types/cab';
-import { Car, Filter, FileExport, Plus, RefreshCw } from 'lucide-react';
+import { Car, Filter, FileText, Plus, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
@@ -249,7 +248,7 @@ export default function FleetManagementPage() {
               <h3 className="text-lg font-semibold">Fleet Inventory</h3>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex items-center gap-1">
-                  <FileExport className="h-4 w-4" /> Export
+                  <FileText className="h-4 w-4" /> Export
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center gap-1">
                   <Filter className="h-4 w-4" /> Filter
