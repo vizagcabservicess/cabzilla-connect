@@ -15,6 +15,13 @@ export interface CabType {
   basePrice?: number;
   vehicleId?: string;
   vehicleType?: string;
+  // Fleet management properties
+  year?: number;
+  lastService?: string;
+  vehicleNumber?: string;
+  model?: string;
+  make?: string;
+  status?: 'Active' | 'Maintenance' | 'Inactive';
   // Fare properties
   outstationFares?: OutstationFare;
   localPackageFares?: LocalFare;
@@ -162,4 +169,70 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
+}
+
+export interface FleetVehicle {
+  id: string;
+  vehicleNumber: string;  // Registration/license plate number
+  name: string;           // Display name
+  model: string;          // Vehicle model
+  make: string;           // Manufacturer
+  year: number;           // Year of manufacture
+  status: 'Active' | 'Maintenance' | 'Inactive';
+  lastService: string;    // Date of last service
+  nextServiceDue: string; // Date when next service is due
+  fuelType: string;       // Petrol, Diesel, CNG, Electric
+  vehicleType: string;    // Sedan, SUV, etc.
+  cabTypeId: string;      // Reference to the cab type
+  capacity: number;       // Passenger capacity
+  luggageCapacity: number; // Luggage capacity
+  isActive: boolean;      // Whether the vehicle is active
+  assignedDriverId?: string; // Reference to assigned driver
+  currentOdometer?: number;  // Current odometer reading
+  documents?: VehicleDocument[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehicleDocument {
+  id: string;
+  vehicleId: string;
+  type: 'registration' | 'insurance' | 'permit' | 'fitness' | 'pollution' | 'other';
+  number: string;
+  issuedDate: string;
+  expiryDate: string;
+  fileUrl?: string;
+  status: 'valid' | 'expired' | 'expiring_soon';
+  notes?: string;
+}
+
+export interface MaintenanceRecord {
+  id: string;
+  vehicleId: string;
+  serviceDate: string;
+  serviceType: string;
+  description: string;
+  cost: number;
+  vendor: string;
+  odometer: number;
+  nextServiceDue: string;
+  nextServiceOdometer: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FuelRecord {
+  id: string;
+  vehicleId: string;
+  fillDate: string;
+  quantity: number;
+  pricePerUnit: number;
+  totalCost: number;
+  odometer: number;
+  fuelStation: string;
+  paymentMethod: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -7,14 +7,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { AddVehicleDialog } from '@/components/admin/AddVehicleDialog';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
-import { CabType } from '@/types/cab';
+import { fleetAPI } from '@/services/api/fleetAPI';
+import { CabType, FleetVehicle } from '@/types/cab';
+import { Car, Filter, FileExport, Plus, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+
+interface FleetItem {
+  id: string | number;
+  vehicleId?: string;
+  vehicleNumber?: string;
+  model: string;
+  year: number;
+  status: string;
+  lastService: string;
+  make?: string;
+}
 
 export default function FleetManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fleet");
-  const [fleetData, setFleetData] = useState<any[]>([]);
+  const [fleetData, setFleetData] = useState<FleetItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const { toast } = useToast();
+  const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
+  const { toast: uiToast } = useToast();
   
   useEffect(() => {
     fetchFleetData();
@@ -24,56 +40,92 @@ export default function FleetManagementPage() {
     try {
       setIsLoading(true);
       
-      // Try to get vehicles from the API
-      const response = await vehicleAPI.getVehicles(true);
-      
-      if (response.vehicles && response.vehicles.length > 0) {
-        console.log(`Loaded ${response.vehicles.length} vehicles from API:`, response.vehicles);
+      // Try to get fleet vehicles first
+      try {
+        const fleetResponse = await fleetAPI.getVehicles(true);
         
-        // Transform vehicle data into fleet data format
-        const transformedData = response.vehicles.map(vehicle => ({
-          id: vehicle.id || vehicle.vehicleId,
-          vehicleId: vehicle.vehicleId || vehicle.id,
-          model: vehicle.name,
-          // Handle the missing year property with a fallback
-          year: vehicle.year || new Date().getFullYear(),
-          status: vehicle.isActive ? 'Active' : 'Inactive',
-          // Handle the missing lastService property with a fallback
-          lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
-        }));
-        
-        setFleetData(transformedData);
-      } else {
-        // Fallback to sample data if no vehicles returned
-        console.log("No vehicles returned from API, using sample data");
-        setFleetData([
-          { id: 1, vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15' },
-          { id: 2, vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10' },
-          { id: 3, vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20' },
-          { id: 4, vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25' },
-          { id: 5, vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05' },
-        ]);
-        toast({
-          title: "Using sample data",
-          description: "Could not fetch real vehicle data from API.",
-          variant: "default",
-        });
+        if (fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
+          console.log(`Loaded ${fleetResponse.vehicles.length} fleet vehicles:`, fleetResponse.vehicles);
+          
+          const transformedData = fleetResponse.vehicles.map(vehicle => ({
+            id: vehicle.id,
+            vehicleNumber: vehicle.vehicleNumber,
+            vehicleId: vehicle.cabTypeId,
+            model: vehicle.model || vehicle.name,
+            make: vehicle.make,
+            year: vehicle.year,
+            status: vehicle.status,
+            lastService: vehicle.lastService
+          }));
+          
+          setFleetData(transformedData);
+          setDataSource('fleet');
+          return;
+        }
+      } catch (fleetError) {
+        console.error("Error fetching fleet vehicles:", fleetError);
+        // Continue to try regular vehicles
       }
+      
+      // If fleet vehicles not available, try regular vehicles
+      try {
+        const response = await vehicleAPI.getVehicles(true);
+        
+        if (response.vehicles && response.vehicles.length > 0) {
+          console.log(`Loaded ${response.vehicles.length} regular vehicles:`, response.vehicles);
+          
+          // Transform vehicle data into fleet data format
+          const transformedData = response.vehicles.map(vehicle => ({
+            id: vehicle.id || vehicle.vehicleId || '',
+            vehicleId: vehicle.vehicleId || vehicle.id || '',
+            vehicleNumber: vehicle.vehicleNumber,
+            model: vehicle.name,
+            year: vehicle.year !== undefined ? vehicle.year : new Date().getFullYear(),
+            status: vehicle.isActive ? 'Active' : 'Inactive',
+            lastService: vehicle.lastService || new Date().toISOString().split('T')[0]
+          }));
+          
+          setFleetData(transformedData);
+          setDataSource('regular');
+          return;
+        }
+      } catch (vehicleError) {
+        console.error("Error fetching regular vehicles:", vehicleError);
+      }
+      
+      // If we reach here, neither fleet nor regular vehicles were loaded
+      // Use fallback data
+      console.log("No vehicles returned from API, using sample data");
+      setFleetData([
+        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
+        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
+        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
+        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
+        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
+      ]);
+      setDataSource('regular');
+      
+      uiToast({
+        title: "Using sample data",
+        description: "Could not fetch real vehicle data from API.",
+        variant: "default",
+      });
     } catch (error) {
       console.error("Error fetching fleet data:", error);
-      toast({
+      uiToast({
         title: "Error",
         description: "Failed to load fleet data. Using sample data instead.",
         variant: "destructive",
       });
       // Fallback to sample data
       setFleetData([
-        { id: 1, vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15' },
-        { id: 2, vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10' },
-        { id: 3, vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20' },
-        { id: 4, vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25' },
-        { id: 5, vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05' },
+        { id: 1, vehicleNumber: 'AP 31 AB 1234', vehicleId: 'VEH-001', model: 'Toyota Innova', year: 2022, status: 'Active', lastService: '2025-04-15', make: 'Toyota' },
+        { id: 2, vehicleNumber: 'AP 31 CD 5678', vehicleId: 'VEH-002', model: 'Maruti Swift', year: 2021, status: 'Active', lastService: '2025-04-10', make: 'Maruti' },
+        { id: 3, vehicleNumber: 'AP 31 EF 9012', vehicleId: 'VEH-003', model: 'Hyundai Creta', year: 2023, status: 'Maintenance', lastService: '2025-04-20', make: 'Hyundai' },
+        { id: 4, vehicleNumber: 'AP 31 GH 3456', vehicleId: 'VEH-004', model: 'Toyota Etios', year: 2020, status: 'Active', lastService: '2025-03-25', make: 'Toyota' },
+        { id: 5, vehicleNumber: 'AP 31 IJ 7890', vehicleId: 'VEH-005', model: 'Honda City', year: 2022, status: 'Inactive', lastService: '2025-04-05', make: 'Honda' },
       ]);
+      setDataSource('regular');
     } finally {
       setIsLoading(false);
     }
@@ -92,24 +144,22 @@ export default function FleetManagementPage() {
   // Calculate summary data
   const activeVehicles = fleetData.filter(v => v.status === 'Active').length;
   const maintenanceVehicles = fleetData.filter(v => v.status === 'Maintenance').length;
+  const inactiveVehicles = fleetData.filter(v => v.status === 'Inactive').length;
 
   // Handle adding a new vehicle
   const handleAddVehicle = (newVehicle: CabType) => {
-    toast({
-      title: "Vehicle Added",
-      description: `${newVehicle.name} has been added to the fleet.`,
-      variant: "default",
-    });
+    toast.success(`Vehicle ${newVehicle.name} has been added to the fleet.`);
     
     // Add the new vehicle to the fleet data
-    const newFleetEntry = {
-      id: newVehicle.id || newVehicle.vehicleId,
-      vehicleId: newVehicle.vehicleId || newVehicle.id,
+    const newFleetEntry: FleetItem = {
+      id: newVehicle.id || newVehicle.vehicleId || '',
+      vehicleId: newVehicle.vehicleId || newVehicle.id || '',
+      vehicleNumber: newVehicle.vehicleNumber,
       model: newVehicle.name,
-      // Handle the missing year property with a fallback
       year: newVehicle.year !== undefined ? newVehicle.year : new Date().getFullYear(),
       status: newVehicle.isActive ? 'Active' : 'Inactive',
-      lastService: new Date().toISOString().split('T')[0]
+      lastService: newVehicle.lastService || new Date().toISOString().split('T')[0],
+      make: newVehicle.make
     };
     
     setFleetData([...fleetData, newFleetEntry]);
@@ -129,23 +179,65 @@ export default function FleetManagementPage() {
             <h1 className="text-2xl font-bold text-gray-900">Fleet Management</h1>
             <p className="text-gray-500">Manage and monitor your vehicle fleet</p>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>Add New Vehicle</Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchFleetData}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="flex items-center gap-1">
+              <Plus className="h-4 w-4" /> Add New Vehicle
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-6">
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <p className="text-sm text-gray-500">Total Vehicles</p>
-                <h3 className="text-2xl font-bold">{fleetData.length}</h3>
+                <div className="flex items-center">
+                  <Car className="h-10 w-10 text-gray-500 mr-3" />
+                  <div>
+                    <p className="text-sm text-gray-500">Total Vehicles</p>
+                    <h3 className="text-2xl font-bold">{fleetData.length}</h3>
+                  </div>
+                </div>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <p className="text-sm text-gray-500">Active Vehicles</p>
-                <h3 className="text-2xl font-bold">{activeVehicles}</h3>
+                <div className="flex items-center">
+                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-green-100 text-green-800 rounded-full mr-3">
+                    A
+                  </Badge>
+                  <div>
+                    <p className="text-sm text-gray-500">Active Vehicles</p>
+                    <h3 className="text-2xl font-bold">{activeVehicles}</h3>
+                  </div>
+                </div>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <p className="text-sm text-gray-500">In Maintenance</p>
-                <h3 className="text-2xl font-bold">{maintenanceVehicles}</h3>
+                <div className="flex items-center">
+                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-amber-100 text-amber-800 rounded-full mr-3">
+                    M
+                  </Badge>
+                  <div>
+                    <p className="text-sm text-gray-500">In Maintenance</p>
+                    <h3 className="text-2xl font-bold">{maintenanceVehicles}</h3>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                <div className="flex items-center">
+                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-red-100 text-red-800 rounded-full mr-3">
+                    I
+                  </Badge>
+                  <div>
+                    <p className="text-sm text-gray-500">Inactive Vehicles</p>
+                    <h3 className="text-2xl font-bold">{inactiveVehicles}</h3>
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -156,8 +248,12 @@ export default function FleetManagementPage() {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Fleet Inventory</h3>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">Export</Button>
-                <Button variant="outline" size="sm">Filter</Button>
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                  <FileExport className="h-4 w-4" /> Export
+                </Button>
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                  <Filter className="h-4 w-4" /> Filter
+                </Button>
               </div>
             </div>
             
@@ -170,8 +266,10 @@ export default function FleetManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Vehicle ID</TableHead>
+                      {dataSource === 'fleet' && <TableHead>Vehicle Number</TableHead>}
+                      {dataSource === 'regular' && <TableHead>Vehicle ID</TableHead>}
                       <TableHead>Model</TableHead>
+                      {dataSource === 'fleet' && <TableHead>Make</TableHead>}
                       <TableHead>Year</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Last Service</TableHead>
@@ -181,8 +279,13 @@ export default function FleetManagementPage() {
                   <TableBody>
                     {fleetData.map((vehicle) => (
                       <TableRow key={vehicle.id}>
-                        <TableCell className="font-medium">{vehicle.vehicleId}</TableCell>
+                        {dataSource === 'fleet' ? (
+                          <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
+                        ) : (
+                          <TableCell className="font-medium">{vehicle.vehicleId}</TableCell>
+                        )}
                         <TableCell>{vehicle.model}</TableCell>
+                        {dataSource === 'fleet' && <TableCell>{vehicle.make}</TableCell>}
                         <TableCell>{vehicle.year}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(vehicle.status)}`}>
