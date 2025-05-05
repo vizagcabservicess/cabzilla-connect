@@ -35,7 +35,7 @@ export default function FleetManagementPage() {
   const fetchPendingBookings = async () => {
     // This is a placeholder. In a real implementation you would fetch pending bookings from your API
     try {
-      // Mock data for pending bookings
+      // Mock data for pending bookings with all required properties
       const mockBookings: Booking[] = [
         {
           id: 1,
@@ -48,8 +48,12 @@ export default function FleetManagementPage() {
           pickupDate: new Date().toISOString(),
           cabType: 'sedan',
           tripType: 'airport',
+          tripMode: 'one-way',
           status: 'pending',
-          totalAmount: 1500
+          totalAmount: 1500,
+          distance: 25,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         {
           id: 2,
@@ -62,8 +66,12 @@ export default function FleetManagementPage() {
           pickupDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
           cabType: 'suv',
           tripType: 'local',
+          tripMode: 'one-way',
           status: 'confirmed',
-          totalAmount: 2200
+          totalAmount: 2200,
+          distance: 15,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }
       ];
       
@@ -99,10 +107,9 @@ export default function FleetManagementPage() {
         if (response.vehicles && response.vehicles.length > 0) {
           console.log(`Loaded ${response.vehicles.length} regular vehicles:`, response.vehicles);
           
-          // Transform vehicle data into fleet data format
-          const transformedData = response.vehicles.map(vehicle => ({
+          // Transform vehicle data into fleet data format - ensuring status is always a valid enum value
+          const transformedData: FleetVehicle[] = response.vehicles.map(vehicle => ({
             id: vehicle.id || vehicle.vehicleId || '',
-            vehicleId: vehicle.vehicleId || vehicle.id || '',
             vehicleNumber: vehicle.vehicleNumber || `VN-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
             name: vehicle.name,
             model: vehicle.name,
@@ -500,10 +507,9 @@ export default function FleetManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {dataSource === 'fleet' && <TableHead>Vehicle Number</TableHead>}
-                      {dataSource === 'regular' && <TableHead>Vehicle ID</TableHead>}
+                      <TableHead>Vehicle Number</TableHead>
                       <TableHead>Model</TableHead>
-                      {dataSource === 'fleet' && <TableHead>Make</TableHead>}
+                      <TableHead>Make</TableHead>
                       <TableHead>Year</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Last Service</TableHead>
@@ -513,13 +519,9 @@ export default function FleetManagementPage() {
                   <TableBody>
                     {fleetData.map((vehicle) => (
                       <TableRow key={vehicle.id}>
-                        {dataSource === 'fleet' ? (
-                          <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
-                        ) : (
-                          <TableCell className="font-medium">{vehicle.vehicleId}</TableCell>
-                        )}
+                        <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
                         <TableCell>{vehicle.model}</TableCell>
-                        {dataSource === 'fleet' && <TableCell>{vehicle.make}</TableCell>}
+                        <TableCell>{vehicle.make}</TableCell>
                         <TableCell>{vehicle.year}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(vehicle.status)}`}>
