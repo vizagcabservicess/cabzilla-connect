@@ -1,38 +1,37 @@
 
+import React from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { CabType } from '@/types/cab';
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Edit, Trash2, Eye } from "lucide-react";
+import { CabType } from "@/types/cab";
 
+// Define the columns for the vehicle table
 export const columns: ColumnDef<CabType>[] = [
   {
+    accessorKey: "id",
+    header: "ID",
+    cell: ({ row }) => <div className="font-medium">{row.getValue("id")}</div>,
+  },
+  {
     accessorKey: "name",
-    header: "Name",
-    cell: ({ row }) => {
-      const name = row.getValue("name") as string;
-      return <div className="font-medium">{name}</div>;
-    },
+    header: "Vehicle Name",
+    cell: ({ row }) => <div>{row.getValue("name")}</div>,
   },
   {
-    accessorKey: "make",
-    header: "Make",
+    accessorKey: "vehicleType",
+    header: "Type",
+    cell: ({ row }) => <div>{row.getValue("vehicleType")}</div>,
   },
   {
-    accessorKey: "model",
-    header: "Model",
+    accessorKey: "capacity",
+    header: "Capacity",
+    cell: ({ row }) => <div>{row.getValue("capacity")} persons</div>,
   },
   {
-    accessorKey: "vehicleNumber",
-    header: "Vehicle Number",
+    accessorKey: "luggageCapacity",
+    header: "Luggage",
+    cell: ({ row }) => <div>{row.getValue("luggageCapacity")} bags</div>,
   },
   {
     accessorKey: "status",
@@ -40,12 +39,12 @@ export const columns: ColumnDef<CabType>[] = [
     cell: ({ row }) => {
       const status = row.getValue("status") as string;
       return (
-        <Badge
+        <Badge 
           variant={
             status === "Active" 
               ? "default" 
               : status === "Maintenance"
-              ? "outline"  // Changed from "warning" to "outline"
+              ? "outline"  
               : "secondary"
           }
         >
@@ -55,39 +54,23 @@ export const columns: ColumnDef<CabType>[] = [
     },
   },
   {
-    accessorKey: "capacity",
-    header: "Capacity",
-  },
-  {
-    accessorKey: "vehicleType",
-    header: "Type",
-  },
-  {
     id: "actions",
+    header: "Actions",
     cell: ({ row }) => {
       const vehicle = row.original;
 
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm">
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm">
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
       );
     },
   },
