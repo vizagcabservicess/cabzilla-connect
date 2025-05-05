@@ -57,9 +57,8 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           status: "Active",
           lastService: "2023-01-15",
           fuelType: "Diesel",
-          seatingCapacity: 7,
-          // Removed mileage property as it doesn't exist in FleetVehicle type
-          currentOdometer: 25000 // Using currentOdometer instead which is in the FleetVehicle type
+          capacity: 7, // Changed from seatingCapacity to capacity which exists in FleetVehicle
+          currentOdometer: 25000 
         },
         {
           id: "v-mock-002",
@@ -71,9 +70,8 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           status: "Active",
           lastService: "2023-02-20",
           fuelType: "Petrol",
-          seatingCapacity: 5,
-          // Removed mileage property as it doesn't exist in FleetVehicle type
-          currentOdometer: 15000 // Using currentOdometer instead which is in the FleetVehicle type
+          capacity: 5, // Changed from seatingCapacity to capacity which exists in FleetVehicle
+          currentOdometer: 15000
         }
       ]);
     } finally {
