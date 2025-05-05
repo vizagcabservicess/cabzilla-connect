@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
@@ -119,6 +118,45 @@ const mockDrivers = [
   }
 ];
 
+// Test API connection to check if the server is responding
+const testApiConnection = async () => {
+  try {
+    console.log('Testing API connection...');
+    const testEndpoints = [
+      '/api/health-check',
+      '/api/admin/ping',
+      '/api/admin/direct-vehicle-modify.php?action=ping'
+    ];
+    
+    for (const endpoint of testEndpoints) {
+      try {
+        const url = getApiUrl(endpoint);
+        console.log(`Testing endpoint: ${url}`);
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...forceRefreshHeaders
+          },
+          cache: 'no-store'
+        });
+        
+        if (response.ok) {
+          console.log(`Connection successful to ${endpoint}`);
+          return true;
+        }
+      } catch (err) {
+        console.log(`Failed to connect to ${endpoint}`);
+      }
+    }
+    
+    console.warn('All test endpoints failed');
+    return false;
+  } catch (error) {
+    console.error('Error testing API connection:', error);
+    return false;
+  }
+};
+
 export const fleetAPI = {
   /**
    * Get all fleet vehicles
@@ -128,58 +166,103 @@ export const fleetAPI = {
     try {
       console.log('Fetching fleet vehicles, includeAll:', includeAll);
       
-      // Try direct API call with the correct domain
-      try {
-        const apiUrl = getApiUrl('/api/admin/fleet-vehicles');
-        console.log("Fetching vehicles from:", apiUrl);
-        
-        const response = await axios.get(apiUrl, {
-          headers: {
-            ...forceRefreshHeaders
-          },
-          params: { 
-            include_all: includeAll ? 1 : 0 
-          }
-        });
-        
-        console.log("Fleet API response:", response.data);
-        
-        if (response.data && (Array.isArray(response.data.vehicles) || Array.isArray(response.data))) {
-          const vehicles = Array.isArray(response.data.vehicles) ? response.data.vehicles : response.data;
-          return { vehicles };
-        }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
-        
-        // Try with explicit API_BASE_URL from config
+      // First test API connection
+      const isApiConnected = await testApiConnection();
+      console.log('API connection test result:', isApiConnected);
+      
+      // Try multiple endpoints in sequence
+      const endpoints = [
+        '/api/admin/fleet-vehicles',
+        '/api/admin/vehicles-data',
+        '/api/admin/direct-vehicle-modify.php?action=load',
+        '/api/fares/vehicles'
+      ];
+      
+      // Try each endpoint until we get a valid response
+      for (const endpoint of endpoints) {
         try {
-          const apiUrl = `${API_BASE_URL}/api/admin/fleet-vehicles.php`;
-          console.log("Trying alternative URL:", apiUrl);
+          const apiUrl = getApiUrl(endpoint);
+          console.log("Fetching vehicles from:", apiUrl);
           
           const response = await axios.get(apiUrl, {
             headers: {
               ...forceRefreshHeaders
             },
             params: { 
-              include_all: includeAll ? 1 : 0 
+              include_all: includeAll ? 1 : 0,
+              _t: Date.now() // Prevent caching
             }
           });
           
-          if (response.data && (Array.isArray(response.data.vehicles) || Array.isArray(response.data))) {
-            const vehicles = Array.isArray(response.data.vehicles) ? response.data.vehicles : response.data;
-            return { vehicles };
+          console.log("Fleet API response from " + endpoint + ":", response.data);
+          
+          if (response.data) {
+            // Different endpoints may return data in different formats
+            let vehicles = [];
+            
+            if (Array.isArray(response.data)) {
+              vehicles = response.data;
+            } else if (Array.isArray(response.data.vehicles)) {
+              vehicles = response.data.vehicles;
+            } else if (response.data.data && Array.isArray(response.data.data)) {
+              vehicles = response.data.data;
+            } else if (typeof response.data === 'object' && Object.keys(response.data).length > 0) {
+              // Try to extract vehicle data from any valid object
+              const firstKey = Object.keys(response.data)[0];
+              if (Array.isArray(response.data[firstKey])) {
+                vehicles = response.data[firstKey];
+              }
+            }
+            
+            if (vehicles.length > 0) {
+              console.log(`Successfully fetched ${vehicles.length} vehicles from ${endpoint}`);
+              return { vehicles };
+            }
           }
-        } catch (baseUrlError) {
-          console.warn("API_BASE_URL call failed:", baseUrlError);
-          throw new Error("Failed to fetch vehicles from API");
+        } catch (endpointError) {
+          console.warn(`Failed to fetch from ${endpoint}:`, endpointError);
+          // Continue to next endpoint
         }
       }
       
-      // If both API calls fail, use mock data
-      console.log("Using mock fleet data");
+      // Try with explicit API_BASE_URL as a fallback
+      try {
+        const apiUrl = `${API_BASE_URL}/api/admin/direct-vehicle-modify.php`;
+        console.log("Trying final fallback URL:", apiUrl);
+        
+        const response = await axios.get(apiUrl, {
+          headers: {
+            ...forceRefreshHeaders
+          },
+          params: { 
+            action: 'load',
+            include_all: includeAll ? 1 : 0,
+            _t: Date.now() // Prevent caching
+          }
+        });
+        
+        if (response.data && (Array.isArray(response.data) || 
+            Array.isArray(response.data.vehicles) || 
+            (response.data.data && Array.isArray(response.data.data)))) {
+          
+          const vehicles = Array.isArray(response.data) ? response.data : 
+                          Array.isArray(response.data.vehicles) ? response.data.vehicles :
+                          response.data.data;
+                          
+          console.log("Successfully fetched vehicles from fallback URL");
+          return { vehicles };
+        }
+      } catch (fallbackError) {
+        console.warn("Fallback API call failed:", fallbackError);
+      }
+      
+      // If all API calls fail, show a warning and use mock data
+      console.log("All API endpoints failed. Using mock fleet data as last resort");
+      toast.warning("Could not connect to vehicle database. Using demo data.");
       return { vehicles: mockVehicles };
     } catch (error) {
       console.error("Error fetching fleet vehicles:", error);
+      toast.error("Failed to fetch vehicle data");
       // If any error occurs, fall back to mock data
       return { vehicles: mockVehicles };
     }

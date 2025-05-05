@@ -1,7 +1,7 @@
 
 // API configuration
 
-// Base API URL - use vizagup.com as the domain
+// Base API URL - use www.vizagup.com as the domain
 export const apiBaseUrl = window.location.hostname.includes('localhost') 
   ? 'https://www.vizagup.com' 
   : 'https://www.vizagup.com';
