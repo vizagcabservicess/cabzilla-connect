@@ -6,7 +6,12 @@ export type BookingStatus =
   | 'assigned' 
   | 'in-progress' 
   | 'completed' 
-  | 'cancelled';
+  | 'cancelled'
+  | 'payment_received'
+  | 'payment_pending'
+  | 'continued';
+
+export type DriverStatus = 'available' | 'busy' | 'offline';
 
 export interface Booking {
   id: number;
@@ -30,6 +35,17 @@ export interface Booking {
   driverPhone?: string;
   vehicleNumber?: string;
   notes?: string;
+  billingAddress?: string;
+  extraCharges?: {
+    amount: number;
+    description: string;
+  }[];
+  gstEnabled?: boolean;
+  gstDetails?: {
+    gstNumber: string;
+    companyName: string;
+    companyAddress: string;
+  };
 }
 
 export interface BookingRequest {
@@ -54,8 +70,133 @@ export interface Driver {
   name: string;
   phone: string;
   email?: string;
+  license_no?: string;
+  license_number?: string;
   vehicleNumber?: string;
   vehicle?: string;
-  status?: string;
+  vehicle_id?: string;
+  status?: DriverStatus;
   profileImage?: string;
+  location?: string;
+}
+
+export interface Location {
+  id: string | number;
+  name: string;
+  type?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  lat?: number;
+  lng?: number;
+  popularity?: number;
+}
+
+// DashboardMetrics interface
+export interface DashboardMetrics {
+  totalBookings: number;
+  completedBookings: number;
+  cancelledBookings: number;
+  pendingBookings: number;
+  revenue: {
+    total: number;
+    today: number;
+    weekly: number;
+    monthly: number;
+  };
+  popularRoutes: {
+    route: string;
+    count: number;
+  }[];
+  recentBookings: Booking[];
+}
+
+// GST Report Types
+export interface GstInvoice {
+  id: number | string;
+  invoiceNumber: string;
+  customerName: string;
+  gstNumber?: string;
+  companyName?: string;
+  companyAddress?: string;
+  taxableValue: number;
+  gstRate: string;
+  gstAmount: number;
+  totalAmount: number;
+  invoiceDate: string;
+}
+
+export interface GstReportData {
+  gstInvoices: GstInvoice[];
+  summary: {
+    totalInvoices: number;
+    totalTaxableValue: number;
+    totalGstAmount: number;
+    totalWithGst: number;
+  };
+}
+
+// User related interfaces
+export interface User {
+  id: number | string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: 'user' | 'admin' | 'driver';
+  createdAt?: string;
+  updatedAt?: string;
+  address?: string;
+  profileImage?: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}
+
+// Fare related interfaces
+export interface TourFare {
+  id: number | string;
+  name: string;
+  description?: string;
+  basePrice: number;
+  perKmRate?: number;
+  perHourRate?: number;
+  destination?: string;
+  vehicleType?: string;
+  isActive: boolean;
+}
+
+export interface VehiclePricing {
+  id: number | string;
+  vehicleType: string;
+  basePrice: number;
+  perKmRate: number;
+  perHourRate?: number;
+  minHours?: number;
+  capacityText?: string;
+  isActive: boolean;
+}
+
+export interface FareUpdateRequest {
+  id: number | string;
+  basePrice?: number;
+  perKmRate?: number;
+  perHourRate?: number;
+  isActive?: boolean;
+}
+
+export interface VehiclePricingUpdateRequest extends FareUpdateRequest {
+  vehicleType?: string;
+  capacityText?: string;
+  minHours?: number;
 }

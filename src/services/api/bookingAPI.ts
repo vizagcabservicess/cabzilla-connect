@@ -1,7 +1,7 @@
 
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
-import { Booking, BookingStatus } from '@/types/api';
+import { Booking, BookingStatus, BookingRequest } from '@/types/api';
 import { toast } from 'sonner';
 
 // Helper function to generate cache busting parameters
@@ -228,6 +228,142 @@ export const bookingAPI = {
       return await bookingAPI.updateBookingStatus(bookingId, 'cancelled');
     } catch (error) {
       console.error('Error in cancelBooking:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Create a new booking
+   * @param bookingData Booking data
+   */
+  createBooking: async (bookingData: BookingRequest) => {
+    try {
+      console.log('Creating new booking with data:', bookingData);
+      
+      const response = await axios.post(`${API_BASE_URL}/api/booking/create.php`, bookingData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      if (response.status === 200 || response.status === 201) {
+        return response.data;
+      }
+      
+      throw new Error(`Failed to create booking: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in createBooking:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Delete a booking
+   * @param bookingId Booking ID
+   */
+  deleteBooking: async (bookingId: number | string) => {
+    try {
+      console.log(`Deleting booking ${bookingId}`);
+      
+      const response = await axios.post(`${API_BASE_URL}/api/admin/delete-booking.php`, {
+        bookingId
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      if (response.status === 200) {
+        return response.data;
+      }
+      
+      throw new Error(`Failed to delete booking: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in deleteBooking:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get user bookings
+   * @param userId User ID
+   */
+  getUserBookings: async (userId?: number) => {
+    try {
+      console.log(`Fetching bookings for user ${userId || 'current user'}...`);
+      
+      const endpoint = userId 
+        ? `${API_BASE_URL}/api/user/bookings.php?userId=${userId}&${generateCacheBuster()}`
+        : `${API_BASE_URL}/api/user/my-bookings.php?${generateCacheBuster()}`;
+      
+      const response = await axios.get(endpoint, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.status === 200) {
+        if (response.data && Array.isArray(response.data)) {
+          return response.data;
+        }
+        
+        if (response.data && response.data.bookings && Array.isArray(response.data.bookings)) {
+          return response.data.bookings;
+        }
+        
+        if (response.data && response.data.data && Array.isArray(response.data.data)) {
+          return response.data.data;
+        }
+        
+        return [];
+      }
+      
+      throw new Error(`Failed to fetch user bookings: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in getUserBookings:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get admin dashboard metrics
+   * @param period Time period for metrics
+   */
+  getAdminDashboardMetrics: async (period: string, options?: { startDate?: string; endDate?: string }) => {
+    try {
+      console.log(`Fetching admin dashboard metrics for period: ${period}...`);
+      
+      let queryParams = `period=${period}&${generateCacheBuster()}`;
+      
+      if (options?.startDate) {
+        queryParams += `&startDate=${options.startDate}`;
+      }
+      
+      if (options?.endDate) {
+        queryParams += `&endDate=${options.endDate}`;
+      }
+      
+      const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard-metrics.php?${queryParams}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.status === 200) {
+        return response.data.data || response.data;
+      }
+      
+      throw new Error(`Failed to fetch dashboard metrics: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in getAdminDashboardMetrics:', error);
       throw error;
     }
   },
