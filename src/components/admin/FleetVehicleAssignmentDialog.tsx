@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -50,6 +49,7 @@ export function FleetVehicleAssignmentDialog({
   const [availableDrivers, setAvailableDrivers] = useState<{id: string, name: string}[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | undefined>(booking);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>(availableVehicles || []);
 
   const form = useForm<AssignmentFormData>({
     defaultValues: {
@@ -68,9 +68,24 @@ export function FleetVehicleAssignmentDialog({
         bookingId: booking?.id.toString() || "" 
       });
       fetchDrivers();
+      fetchVehicles();
       setSelectedBooking(booking);
     }
   }, [open, booking, form]);
+
+  // Fetch available vehicles when dialog opens
+  const fetchVehicles = async () => {
+    try {
+      const response = await fleetAPI.getVehicles(true);
+      if (response && response.vehicles && Array.isArray(response.vehicles)) {
+        setVehicles(response.vehicles);
+        console.log("FleetVehicleAssignmentDialog: Fetched vehicles:", response.vehicles.length);
+      }
+    } catch (error) {
+      console.error("Error fetching vehicles:", error);
+      // Keep the passed availableVehicles as fallback
+    }
+  };
 
   // Update selected booking when bookingId changes
   const handleBookingChange = (bookingId: string) => {
@@ -110,6 +125,11 @@ export function FleetVehicleAssignmentDialog({
     }
   };
 
+  // Format vehicle display for better readability
+  const formatVehicleDisplay = (vehicle: FleetVehicle) => {
+    return `${vehicle.vehicleNumber} - ${vehicle.make} ${vehicle.model} (${vehicle.year || ""})`;
+  };
+
   // Handle assignment submission
   const handleSubmit = async (data: AssignmentFormData) => {
     const currentBooking = selectedBooking || (data.bookingId ? availableBookings.find(b => b.id.toString() === data.bookingId) : null);
@@ -122,8 +142,7 @@ export function FleetVehicleAssignmentDialog({
     try {
       setIsSubmitting(true);
       
-      // Call the API to assign vehicle to booking with corrected parameter order
-      // The correct parameter order is (bookingId, vehicleId, driverId)
+      // Call the API to assign vehicle to booking
       const success = await fleetAPI.assignVehicleToBooking(
         currentBooking.id.toString(),
         data.vehicleId,
@@ -222,10 +241,10 @@ export function FleetVehicleAssignmentDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {availableVehicles.length > 0 ? (
-                        availableVehicles.map(vehicle => (
+                      {vehicles.length > 0 ? (
+                        vehicles.map(vehicle => (
                           <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {vehicle.vehicleNumber} - {vehicle.make} {vehicle.model}
+                            {formatVehicleDisplay(vehicle)}
                           </SelectItem>
                         ))
                       ) : (

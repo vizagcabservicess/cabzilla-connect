@@ -20,6 +20,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [isLoadingVehicles, setIsLoadingVehicles] = useState<boolean>(false);
   const [isAssigningVehicle, setIsAssigningVehicle] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAvailableVehicles();
@@ -28,19 +29,51 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
   const fetchAvailableVehicles = async () => {
     try {
       setIsLoadingVehicles(true);
-      // Get all vehicles including inactive ones, and filter later
+      setError(null);
+      
+      // Get all vehicles including inactive ones to show a comprehensive list
       const response = await fleetAPI.getVehicles(true);
       
       if (response && response.vehicles) {
-        // Don't filter by active status to show all vehicles
+        console.log("Fetched vehicles for assignment:", response.vehicles);
         setAvailableVehicles(response.vehicles);
-        console.log("Fetched vehicles:", response.vehicles.length);
       } else {
         throw new Error("Invalid response format from fleet API");
       }
     } catch (error) {
       console.error("Error fetching available vehicles:", error);
+      setError("Failed to load available vehicles");
       toast.error("Failed to load available vehicles");
+      
+      // Provide fallback mock data in case of API failure
+      setAvailableVehicles([
+        {
+          id: "v-mock-001",
+          vehicleNumber: "KA01AB1234",
+          make: "Toyota",
+          model: "Innova Crysta",
+          year: "2022",
+          vehicleType: "innova_crysta",
+          status: "Active",
+          lastMaintenance: "2023-01-15",
+          mileage: 25000,
+          fuelType: "Diesel",
+          seatingCapacity: 7
+        },
+        {
+          id: "v-mock-002",
+          vehicleNumber: "KA02CD5678",
+          make: "Maruti Suzuki",
+          model: "Swift Dzire",
+          year: "2021",
+          vehicleType: "sedan",
+          status: "Active",
+          lastMaintenance: "2023-02-20",
+          mileage: 15000,
+          fuelType: "Petrol",
+          seatingCapacity: 5
+        }
+      ]);
     } finally {
       setIsLoadingVehicles(false);
     }
@@ -89,6 +122,11 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
     }
   };
 
+  // Helper function to format vehicle display name
+  const formatVehicleDisplay = (vehicle: FleetVehicle) => {
+    return `${vehicle.vehicleNumber} - ${vehicle.make} ${vehicle.model} (${vehicle.year})`;
+  };
+
   return (
     <Card className="p-6">
       <h3 className="text-lg font-semibold mb-4">Assign Vehicle</h3>
@@ -106,7 +144,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
             <SelectContent>
               {availableVehicles.map((vehicle) => (
                 <SelectItem key={vehicle.id} value={vehicle.id}>
-                  {vehicle.vehicleNumber} - {vehicle.make} {vehicle.model} ({vehicle.year})
+                  {formatVehicleDisplay(vehicle)}
                 </SelectItem>
               ))}
               {availableVehicles.length === 0 && !isLoadingVehicles && (
@@ -116,6 +154,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           </Select>
           <p className="text-xs text-gray-500 mt-1">
             {availableVehicles.length} vehicles available
+            {error && <span className="text-red-500 ml-2">{error}</span>}
           </p>
         </div>
         
