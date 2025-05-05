@@ -16,6 +16,9 @@ interface LocationInputProps {
   className?: string;
   location?: Location;
   onLocationChange?: (location: Location) => void;
+  isPickupLocation?: boolean;
+  isAirportTransfer?: boolean;
+  readOnly?: boolean;
 }
 
 export function LocationInput({
@@ -30,6 +33,9 @@ export function LocationInput({
   className = "",
   location,
   onLocationChange,
+  isPickupLocation = false,
+  isAirportTransfer = false,
+  readOnly = false,
 }: LocationInputProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Location[]>([]);
@@ -105,6 +111,7 @@ export function LocationInput({
         onChange={handleInputChange}
         placeholder={placeholder}
         disabled={disabled}
+        readOnly={readOnly}
         onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
         onBlur={handleInputBlur}
       />

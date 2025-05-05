@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -119,7 +120,7 @@ export function UserManagement() {
     }
   };
 
-  const handleUserRoleUpdate = async (userId: string | number, role: string) => {
+  const handleUserRoleUpdate = async (userId: string | number, role: "user" | "admin" | "driver") => {
     try {
       // Convert userId to a number if possible
       const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? 
