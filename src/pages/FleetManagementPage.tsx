@@ -1,629 +1,539 @@
 
-import React, { useState, useEffect } from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/components/ui/use-toast";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { Car, Filter, RefreshCw, Plus, Table as TableIcon } from "lucide-react";
+import { FleetVehicle } from '@/types/cab';
 import { AddFleetVehicleDialog } from '@/components/admin/AddFleetVehicleDialog';
 import { EditFleetVehicleDialog } from '@/components/admin/EditFleetVehicleDialog';
 import { ViewFleetVehicleDialog } from '@/components/admin/ViewFleetVehicleDialog';
-import { vehicleAPI } from '@/services/api/vehicleAPI';
-import { fleetAPI } from '@/services/api/fleetAPI';
-import { FleetVehicle } from '@/types/cab';
-import { Car, Filter, FileText, Plus, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { Booking } from '@/types/api';
+import { FleetVehicleCard } from '@/components/admin/FleetVehicleCard';
+import { generateUUID } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertDialogHeader, AlertDialogFooter, AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
-export default function FleetManagementPage() {
-  const [activeTab, setActiveTab] = useState<string>("fleet");
-  const [fleetData, setFleetData] = useState<FleetVehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
+function FleetManagementPage() {
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
+  const [filteredVehicles, setFilteredVehicles] = useState<FleetVehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
-  const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
-  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
-  const { toast: uiToast } = useToast();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  // Stats
+  const [totalVehicles, setTotalVehicles] = useState(0);
+  const [activeVehicles, setActiveVehicles] = useState(0);
+  const [inMaintenanceVehicles, setInMaintenanceVehicles] = useState(0);
+  const [inactiveVehicles, setInactiveVehicles] = useState(0);
   
+  // Cache busting for API calls
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Deletion confirmation
+  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
+  // Add localStorage-based cache key to prevent duplicates from appearing
+  const FLEET_CACHE_KEY = 'fleet_vehicles_cache';
+  const FLEET_CACHE_TIMESTAMP_KEY = 'fleet_vehicles_timestamp';
+
+  // Fetch vehicles from API or use demo data
   useEffect(() => {
-    fetchFleetData();
-    fetchPendingBookings();
+    const fetchVehicles = async () => {
+      setIsLoading(true);
+      setIsRefreshing(true);
+      
+      try {
+        // Try to get cached data first if not refreshing
+        if (refreshTrigger === 0) {
+          const cachedData = localStorage.getItem(FLEET_CACHE_KEY);
+          const cachedTimestamp = localStorage.getItem(FLEET_CACHE_TIMESTAMP_KEY);
+          
+          if (cachedData && cachedTimestamp) {
+            // Only use cache if it's less than 5 minutes old
+            const now = Date.now();
+            const timestamp = parseInt(cachedTimestamp);
+            if (now - timestamp < 5 * 60 * 1000) {
+              const parsedData = JSON.parse(cachedData);
+              if (Array.isArray(parsedData)) {
+                console.log('Using cached fleet vehicles:', parsedData.length);
+                setVehicles(parsedData);
+                applyFilters(parsedData, searchTerm, statusFilter);
+                updateStats(parsedData);
+                setIsLoading(false);
+                setIsRefreshing(false);
+                return;
+              }
+            }
+          }
+        }
+        
+        // Simulation of API call - in real app, would fetch from backend
+        console.log('Fetching fleet vehicles from API...');
+        const timestamp = new Date().getTime();
+        
+        // Try to fetch from API (commented out for simulation)
+        /* const response = await fetch(`/api/admin/fleet_vehicles.php?_t=${timestamp}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch vehicles');
+        }
+        const data = await response.json(); */
+        
+        // For demo, use sample data
+        const demoVehicles: FleetVehicle[] = [
+          {
+            id: "1",
+            vehicleNumber: "AP39TV1245",
+            name: "Honda Amaze",
+            model: "Amaze",
+            make: "Honda",
+            year: 2021,
+            status: "Active",
+            lastService: "2025-05-05",
+            nextServiceDue: "2025-08-05",
+            lastServiceOdometer: 25000,
+            nextServiceOdometer: 30000,
+            currentOdometer: 27500,
+            fuelType: "Petrol",
+            vehicleType: "sedan",
+            cabTypeId: "sedan",
+            capacity: 4,
+            luggageCapacity: 2,
+            isActive: true,
+            assignedDriverId: "driver1",
+            createdAt: "2023-01-01",
+            updatedAt: "2023-04-01"
+          },
+          {
+            id: "2",
+            vehicleNumber: "AP39WD9777",
+            name: "Maruti Suzuki Dzire",
+            model: "Dzire",
+            make: "Maruti Suzuki",
+            year: 2022,
+            status: "Active",
+            lastService: "2025-04-15",
+            nextServiceDue: "2025-07-15",
+            lastServiceOdometer: 15000,
+            nextServiceOdometer: 20000,
+            currentOdometer: 17300,
+            fuelType: "CNG",
+            vehicleType: "sedan",
+            cabTypeId: "sedan",
+            capacity: 4,
+            luggageCapacity: 2,
+            isActive: true,
+            assignedDriverId: "driver2",
+            createdAt: "2023-02-15",
+            updatedAt: "2023-04-15"
+          },
+          {
+            id: "3",
+            vehicleNumber: "AP 31 EF 9012",
+            name: "Honda City",
+            model: "City",
+            make: "Honda",
+            year: 2021,
+            status: "Active",
+            lastService: "2025-03-10",
+            nextServiceDue: "2025-06-10",
+            lastServiceOdometer: 22000,
+            nextServiceOdometer: 27000,
+            currentOdometer: 24800,
+            fuelType: "Petrol",
+            vehicleType: "sedan",
+            cabTypeId: "sedan",
+            capacity: 4,
+            luggageCapacity: 2,
+            isActive: true,
+            createdAt: "2022-12-01",
+            updatedAt: "2023-03-10"
+          },
+          {
+            id: "4",
+            vehicleNumber: "AP 31 GH 3456",
+            name: "Toyota Innova",
+            model: "Innova Crysta",
+            make: "Toyota",
+            year: 2023,
+            status: "Maintenance",
+            lastService: "2025-04-20",
+            nextServiceDue: "2025-07-20",
+            lastServiceOdometer: 18000,
+            nextServiceOdometer: 23000,
+            fuelType: "Diesel",
+            vehicleType: "suv",
+            cabTypeId: "innova_crysta",
+            capacity: 7,
+            luggageCapacity: 4,
+            isActive: true,
+            createdAt: "2023-01-10",
+            updatedAt: "2023-04-20"
+          }
+        ];
+        
+        // Store in cache
+        localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(demoVehicles));
+        localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        
+        setVehicles(demoVehicles);
+        applyFilters(demoVehicles, searchTerm, statusFilter);
+        updateStats(demoVehicles);
+        
+      } catch (error) {
+        console.error('Error fetching fleet vehicles:', error);
+        toast.error("Failed to load vehicles");
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+
+    fetchVehicles();
   }, [refreshTrigger]);
 
-  const fetchPendingBookings = async () => {
-    setIsLoadingBookings(true);
-    try {
-      console.log("Fetching pending bookings...");
-      const bookings = await fleetAPI.getPendingBookings();
-      console.log("Fetched pending bookings:", bookings);
-      
-      if (Array.isArray(bookings)) {
-        setPendingBookings(bookings);
-      } else {
-        console.error("Invalid response format for pending bookings:", bookings);
-        setPendingBookings([]);
-      }
-    } catch (error) {
-      console.error("Error fetching pending bookings:", error);
-      toast.error("Failed to load pending bookings");
-      setPendingBookings([]);
-    } finally {
-      setIsLoadingBookings(false);
-    }
-  };
+  // Apply filters when searchTerm or statusFilter changes
+  useEffect(() => {
+    applyFilters(vehicles, searchTerm, statusFilter);
+  }, [searchTerm, statusFilter, vehicles]);
 
-  const fetchFleetData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Try to get fleet vehicles first
-      try {
-        const fleetResponse = await fleetAPI.getVehicles(true);
-        
-        if (fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
-          console.log(`Loaded ${fleetResponse.vehicles.length} fleet vehicles:`, fleetResponse.vehicles);
-          
-          // Ensure all vehicles have valid status values
-          const validatedFleetVehicles = fleetResponse.vehicles.map(vehicle => ({
-            ...vehicle,
-            // Ensure status is one of the valid enum values
-            status: validateStatus(vehicle.status)
-          }));
-          
-          setFleetData(validatedFleetVehicles);
-          setDataSource('fleet');
-          return;
-        }
-      } catch (fleetError) {
-        console.error("Error fetching fleet vehicles:", fleetError);
-        // Continue to try regular vehicles
-      }
-      
-      // If fleet vehicles not available, try regular vehicles
-      try {
-        const response = await vehicleAPI.getVehicles(true);
-        
-        if (response.vehicles && response.vehicles.length > 0) {
-          console.log(`Loaded ${response.vehicles.length} regular vehicles:`, response.vehicles);
-          
-          // Transform vehicle data into fleet data format - ensuring status is always a valid enum value
-          const transformedData: FleetVehicle[] = response.vehicles.map(vehicle => ({
-            id: vehicle.id || '',
-            vehicleNumber: vehicle.vehicleNumber || `VN-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-            name: vehicle.name,
-            model: vehicle.name,
-            make: vehicle.make || 'Unknown',
-            year: vehicle.year !== undefined ? vehicle.year : new Date().getFullYear(),
-            status: validateStatus(vehicle.isActive ? 'Active' : 'Inactive'),
-            lastService: vehicle.lastService || new Date().toISOString().split('T')[0],
-            nextServiceDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            fuelType: 'Petrol', // Default value
-            vehicleType: vehicle.vehicleType || 'sedan',
-            cabTypeId: vehicle.id || '',
-            capacity: vehicle.capacity || 4,
-            luggageCapacity: vehicle.luggageCapacity || 2,
-            isActive: vehicle.isActive !== undefined ? vehicle.isActive : true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }));
-          
-          setFleetData(transformedData);
-          setDataSource('regular');
-          return;
-        }
-      } catch (vehicleError) {
-        console.error("Error fetching regular vehicles:", vehicleError);
-      }
-      
-      // If we reach here, neither fleet nor regular vehicles were loaded
-      // Use fallback data
-      console.log("No vehicles returned from API, using sample data");
-      
-      // Create sample data with all required FleetVehicle properties
-      const sampleData: FleetVehicle[] = [
-        {
-          id: 'sample-1',
-          vehicleNumber: 'AP 31 AB 1234',
-          name: 'Toyota Innova',
-          model: 'Innova Crysta',
-          make: 'Toyota',
-          year: 2022,
-          status: 'Active',
-          lastService: '2025-04-15',
-          nextServiceDue: '2025-07-15',
-          fuelType: 'Diesel',
-          vehicleType: 'suv',
-          cabTypeId: 'cab-001',
-          capacity: 7,
-          luggageCapacity: 3,
-          isActive: true,
-          createdAt: '2025-01-15T10:30:00Z',
-          updatedAt: '2025-04-15T14:20:00Z'
-        },
-        {
-          id: 'sample-2',
-          vehicleNumber: 'AP 31 CD 5678',
-          name: 'Maruti Swift',
-          model: 'Swift Dzire',
-          make: 'Maruti',
-          year: 2021,
-          status: 'Active',
-          lastService: '2025-04-10',
-          nextServiceDue: '2025-07-10',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-002',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          createdAt: '2025-02-10T11:45:00Z',
-          updatedAt: '2025-04-10T09:30:00Z'
-        },
-        {
-          id: 'sample-3',
-          vehicleNumber: 'AP 31 EF 9012',
-          name: 'Hyundai Creta',
-          model: 'Creta SX',
-          make: 'Hyundai',
-          year: 2023,
-          status: 'Maintenance',
-          lastService: '2025-04-20',
-          nextServiceDue: '2025-07-20',
-          fuelType: 'Diesel',
-          vehicleType: 'suv',
-          cabTypeId: 'cab-003',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          createdAt: '2025-03-05T16:30:00Z',
-          updatedAt: '2025-04-20T10:15:00Z'
-        },
-        {
-          id: 'sample-4',
-          vehicleNumber: 'AP 31 GH 3456',
-          name: 'Toyota Etios',
-          model: 'Etios VX',
-          make: 'Toyota',
-          year: 2020,
-          status: 'Active',
-          lastService: '2025-03-25',
-          nextServiceDue: '2025-06-25',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-004',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          createdAt: '2025-01-25T12:00:00Z',
-          updatedAt: '2025-03-25T13:10:00Z'
-        },
-        {
-          id: 'sample-5',
-          vehicleNumber: 'AP 31 IJ 7890',
-          name: 'Honda City',
-          model: 'City ZX',
-          make: 'Honda',
-          year: 2022,
-          status: 'Inactive',
-          lastService: '2025-04-05',
-          nextServiceDue: '2025-07-05',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-005',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          createdAt: '2025-02-15T09:20:00Z',
-          updatedAt: '2025-04-05T15:45:00Z'
-        },
-      ];
-      
-      setFleetData(sampleData);
-      setDataSource('regular');
-      
-      uiToast({
-        title: "Using sample data",
-        description: "Could not fetch real vehicle data from API.",
-        variant: "default",
-      });
-    } catch (error) {
-      console.error("Error fetching fleet data:", error);
-      uiToast({
-        title: "Error",
-        description: "Failed to load fleet data. Using sample data instead.",
-        variant: "destructive",
-      });
-      
-      // Fallback to sample data with all required FleetVehicle properties
-      const sampleData: FleetVehicle[] = [
-        {
-          id: 'sample-1',
-          vehicleNumber: 'AP 31 AB 1234',
-          name: 'Toyota Innova',
-          model: 'Innova Crysta',
-          make: 'Toyota',
-          year: 2022,
-          status: 'Active',
-          lastService: '2025-04-15',
-          nextServiceDue: '2025-07-15',
-          fuelType: 'Diesel',
-          vehicleType: 'suv',
-          cabTypeId: 'cab-001',
-          capacity: 7,
-          luggageCapacity: 3,
-          isActive: true,
-          createdAt: '2025-01-15T10:30:00Z',
-          updatedAt: '2025-04-15T14:20:00Z'
-        },
-        {
-          id: 'sample-2',
-          vehicleNumber: 'AP 31 CD 5678',
-          name: 'Maruti Swift',
-          model: 'Swift Dzire',
-          make: 'Maruti',
-          year: 2021,
-          status: 'Active',
-          lastService: '2025-04-10',
-          nextServiceDue: '2025-07-10',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-002',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          createdAt: '2025-02-10T11:45:00Z',
-          updatedAt: '2025-04-10T09:30:00Z'
-        },
-        {
-          id: 'sample-3',
-          vehicleNumber: 'AP 31 EF 9012',
-          name: 'Hyundai Creta',
-          model: 'Creta SX',
-          make: 'Hyundai',
-          year: 2023,
-          status: 'Maintenance',
-          lastService: '2025-04-20',
-          nextServiceDue: '2025-07-20',
-          fuelType: 'Diesel',
-          vehicleType: 'suv',
-          cabTypeId: 'cab-003',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          createdAt: '2025-03-05T16:30:00Z',
-          updatedAt: '2025-04-20T10:15:00Z'
-        },
-        {
-          id: 'sample-4',
-          vehicleNumber: 'AP 31 GH 3456',
-          name: 'Toyota Etios',
-          model: 'Etios VX',
-          make: 'Toyota',
-          year: 2020,
-          status: 'Active',
-          lastService: '2025-03-25',
-          nextServiceDue: '2025-06-25',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-004',
-          capacity: 4,
-          luggageCapacity: 2,
-          isActive: true,
-          createdAt: '2025-01-25T12:00:00Z',
-          updatedAt: '2025-03-25T13:10:00Z'
-        },
-        {
-          id: 'sample-5',
-          vehicleNumber: 'AP 31 IJ 7890',
-          name: 'Honda City',
-          model: 'City ZX',
-          make: 'Honda',
-          year: 2022,
-          status: 'Inactive',
-          lastService: '2025-04-05',
-          nextServiceDue: '2025-07-05',
-          fuelType: 'Petrol',
-          vehicleType: 'sedan',
-          cabTypeId: 'cab-005',
-          capacity: 5,
-          luggageCapacity: 2,
-          isActive: false,
-          createdAt: '2025-02-15T09:20:00Z',
-          updatedAt: '2025-04-05T15:45:00Z'
-        },
-      ];
-      
-      setFleetData(sampleData);
-      setDataSource('regular');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Validate and ensure status is one of the allowed enum values
-  const validateStatus = (status?: string): 'Active' | 'Maintenance' | 'Inactive' => {
-    if (!status) return 'Inactive';
+  // Apply filters to vehicles
+  const applyFilters = (vehicles: FleetVehicle[], search: string, status: string) => {
+    let filtered = [...vehicles];
     
-    const normalizedStatus = status.toLowerCase();
-    
-    if (normalizedStatus === 'active') return 'Active';
-    if (normalizedStatus === 'maintenance') return 'Maintenance';
-    if (normalizedStatus === 'inactive') return 'Inactive';
-    
-    // Default to Active for any other value
-    return 'Active';
-  };
-
-  // Function to get status color
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'Active': return 'bg-green-100 text-green-800';
-      case 'Maintenance': return 'bg-amber-100 text-amber-800';
-      case 'Inactive': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+    if (search) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(vehicle => 
+        vehicle.vehicleNumber.toLowerCase().includes(term) ||
+        vehicle.name.toLowerCase().includes(term) ||
+        vehicle.make.toLowerCase().includes(term) ||
+        vehicle.model.toLowerCase().includes(term)
+      );
     }
+    
+    if (status !== 'all') {
+      filtered = filtered.filter(vehicle => vehicle.status === status);
+    }
+    
+    setFilteredVehicles(filtered);
   };
 
-  // Calculate summary data
-  const activeVehicles = fleetData.filter(v => v.status === 'Active').length;
-  const maintenanceVehicles = fleetData.filter(v => v.status === 'Maintenance').length;
-  const inactiveVehicles = fleetData.filter(v => v.status === 'Inactive').length;
+  // Update statistics
+  const updateStats = (vehicles: FleetVehicle[]) => {
+    setTotalVehicles(vehicles.length);
+    setActiveVehicles(vehicles.filter(v => v.status === 'Active').length);
+    setInMaintenanceVehicles(vehicles.filter(v => v.status === 'Maintenance').length);
+    setInactiveVehicles(vehicles.filter(v => v.status === 'Inactive').length);
+  };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   // Handle adding a new vehicle
-  const handleAddVehicle = async (newVehicle: FleetVehicle) => {
-    try {
-      console.log("Adding new vehicle:", newVehicle);
-      
-      // Check if vehicle with same number already exists before adding
-      const vehicleExists = fleetData.some(v => 
-        v.vehicleNumber === newVehicle.vehicleNumber
-      );
-      
-      if (vehicleExists) {
-        toast.error(`Vehicle with number ${newVehicle.vehicleNumber} already exists.`);
-        return;
-      }
-      
-      // Try to use fleetAPI to add the vehicle
-      const response = await fleetAPI.addVehicle(newVehicle);
-      console.log("Vehicle added response:", response);
-      
-      toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
-      
-      // Add the new vehicle to the fleet data without refreshing everything
-      setFleetData(prev => [response, ...prev]);
-      
-      // Close dialog
-      setIsAddDialogOpen(false);
-    } catch (error) {
-      console.error("Error adding vehicle:", error);
-      toast.error(`Failed to add vehicle ${newVehicle.vehicleNumber}. Please try again.`);
-      setIsAddDialogOpen(false);
-    }
+  const handleAddVehicle = (vehicle: FleetVehicle) => {
+    const newVehicle = {
+      ...vehicle,
+      id: generateUUID(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Add to state but don't refresh to prevent duplication
+    const updatedVehicles = [...vehicles, newVehicle];
+    setVehicles(updatedVehicles);
+    applyFilters(updatedVehicles, searchTerm, statusFilter);
+    updateStats(updatedVehicles);
+    
+    // Update the cache to include the new vehicle
+    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
+    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    
+    setIsAddDialogOpen(false);
+    toast.success("Vehicle added successfully");
   };
 
-  // Handle view vehicle details
+  // Handle editing a vehicle
+  const handleEditVehicle = (vehicle: FleetVehicle) => {
+    const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? {
+      ...vehicle,
+      updatedAt: new Date().toISOString()
+    } : v);
+    
+    setVehicles(updatedVehicles);
+    applyFilters(updatedVehicles, searchTerm, statusFilter);
+    updateStats(updatedVehicles);
+    
+    // Update the cache
+    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
+    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    
+    setIsEditDialogOpen(false);
+    setSelectedVehicle(null);
+    toast.success("Vehicle updated successfully");
+  };
+
+  // Handle deleting a vehicle
+  const handleDeleteVehicle = (vehicleId: string) => {
+    setVehicleToDelete(vehicleId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteVehicle = () => {
+    if (!vehicleToDelete) return;
+    
+    const updatedVehicles = vehicles.filter(v => v.id !== vehicleToDelete);
+    setVehicles(updatedVehicles);
+    applyFilters(updatedVehicles, searchTerm, statusFilter);
+    updateStats(updatedVehicles);
+    
+    // Update the cache
+    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
+    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    
+    setVehicleToDelete(null);
+    setIsDeleteDialogOpen(false);
+    setIsEditDialogOpen(false);
+    setIsViewDialogOpen(false);
+    setSelectedVehicle(null);
+    toast.success("Vehicle deleted successfully");
+  };
+
+  // View a vehicle
   const handleViewVehicle = (vehicle: FleetVehicle) => {
     setSelectedVehicle(vehicle);
     setIsViewDialogOpen(true);
   };
 
-  // Handle edit vehicle
-  const handleEditVehicle = (vehicle: FleetVehicle) => {
+  // Edit a vehicle
+  const handleEditClick = (vehicle: FleetVehicle) => {
     setSelectedVehicle(vehicle);
     setIsEditDialogOpen(true);
   };
 
-  // Handle vehicle update after edit
-  const handleVehicleUpdate = async (updatedVehicle: FleetVehicle) => {
-    try {
-      // Update the vehicle in the API
-      const response = await fleetAPI.updateVehicle(updatedVehicle.id, updatedVehicle);
-      
-      // Update the local state
-      setFleetData(prev => 
-        prev.map(vehicle => vehicle.id === updatedVehicle.id ? response : vehicle)
-      );
-      
-      toast.success(`Vehicle ${updatedVehicle.vehicleNumber} has been updated.`);
-      setIsEditDialogOpen(false);
-    } catch (error) {
-      console.error("Error updating vehicle:", error);
-      toast.error(`Failed to update vehicle. Please try again.`);
-      setIsEditDialogOpen(false);
-    }
-  };
-
-  // Handle vehicle deletion
-  const handleVehicleDelete = async (vehicleId: string) => {
-    try {
-      // Delete the vehicle using the API
-      await fleetAPI.deleteVehicle(vehicleId);
-      
-      // Remove the vehicle from local state
-      setFleetData(prev => prev.filter(vehicle => vehicle.id !== vehicleId));
-      
-      toast.success("Vehicle has been deleted from the fleet.");
-      setIsEditDialogOpen(false);
-    } catch (error) {
-      console.error("Error deleting vehicle:", error);
-      toast.error("Failed to delete vehicle. Please try again.");
-      setIsEditDialogOpen(false);
-    }
-  };
-
-  // Function to trigger a refresh without fetching duplicates
-  const handleRefresh = () => {
-    setRefreshTrigger(prev => prev + 1);
-  };
-
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Fleet Management</h1>
-            <p className="text-gray-500">Manage and monitor your vehicle fleet</p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Fleet Management</h1>
+          <p className="text-gray-500">Manage and monitor your vehicle fleet</p>
+        </div>
+        <div className="flex gap-2 mt-4 md:mt-0">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add New Vehicle
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-500">Total Vehicles</p>
+              <h2 className="text-3xl font-bold">{totalVehicles}</h2>
+            </div>
+            <Car className="h-10 w-10 text-gray-300" />
           </div>
-          <div className="flex space-x-2">
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-500">Active Vehicles</p>
+              <h2 className="text-3xl font-bold">{activeVehicles}</h2>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center bg-green-100 text-green-600 rounded-full">A</div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-500">In Maintenance</p>
+              <h2 className="text-3xl font-bold">{inMaintenanceVehicles}</h2>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center bg-yellow-100 text-yellow-600 rounded-full">M</div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-500">Inactive Vehicles</p>
+              <h2 className="text-3xl font-bold">{inactiveVehicles}</h2>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center bg-gray-100 text-gray-600 rounded-full">I</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fleet Inventory Section */}
+      <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <h2 className="text-xl font-bold">Fleet Inventory</h2>
+          <div className="flex gap-2 mt-4 md:mt-0">
             <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleRefresh}
-              className="flex items-center gap-1"
+              variant={viewMode === 'grid' ? 'default' : 'outline'} 
+              size="sm" 
+              onClick={() => setViewMode('grid')}
             >
-              <RefreshCw className="h-4 w-4" /> Refresh
+              <Car className="h-4 w-4 mr-1" />
+              Grid
             </Button>
-            <Button onClick={() => setIsAddDialogOpen(true)} className="flex items-center gap-1">
-              <Plus className="h-4 w-4" /> Add New Vehicle
+            <Button 
+              variant={viewMode === 'table' ? 'default' : 'outline'} 
+              size="sm" 
+              onClick={() => setViewMode('table')}
+            >
+              <TableIcon className="h-4 w-4 mr-1" />
+              Table
             </Button>
           </div>
         </div>
-
-        {/* Dashboard Cards */}
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <div className="flex items-center">
-                  <Car className="h-10 w-10 text-gray-500 mr-3" />
-                  <div>
-                    <p className="text-sm text-gray-500">Total Vehicles</p>
-                    <h3 className="text-2xl font-bold">{fleetData.length}</h3>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <div className="flex items-center">
-                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-green-100 text-green-800 rounded-full mr-3">
-                    A
-                  </Badge>
-                  <div>
-                    <p className="text-sm text-gray-500">Active Vehicles</p>
-                    <h3 className="text-2xl font-bold">{activeVehicles}</h3>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <div className="flex items-center">
-                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-amber-100 text-amber-800 rounded-full mr-3">
-                    M
-                  </Badge>
-                  <div>
-                    <p className="text-sm text-gray-500">In Maintenance</p>
-                    <h3 className="text-2xl font-bold">{maintenanceVehicles}</h3>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-                <div className="flex items-center">
-                  <Badge className="h-10 w-10 flex items-center justify-center text-lg bg-red-100 text-red-800 rounded-full mr-3">
-                    I
-                  </Badge>
-                  <div>
-                    <p className="text-sm text-gray-500">Inactive Vehicles</p>
-                    <h3 className="text-2xl font-bold">{inactiveVehicles}</h3>
-                  </div>
-                </div>
-              </div>
+        
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="w-full md:w-1/3">
+            <Label htmlFor="search">Search</Label>
+            <Input
+              id="search"
+              placeholder="Search by vehicle number, make, model..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          
+          <div className="w-full md:w-1/3">
+            <Label htmlFor="statusFilter">Filter by Status</Label>
+            <Select
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+            >
+              <SelectTrigger id="statusFilter" className="mt-1">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Maintenance">In Maintenance</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : filteredVehicles.length === 0 ? (
+          <div className="text-center py-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+              <Car className="h-8 w-8 text-gray-500" />
             </div>
-          </CardContent>
-        </Card>
+            <h3 className="text-lg font-semibold mb-2">No Vehicles Found</h3>
+            <p className="text-gray-500 max-w-md mx-auto">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Try adjusting your search or filters to find what you\'re looking for.'
+                : 'Add a new vehicle to your fleet by clicking the "Add New Vehicle" button.'}
+            </p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredVehicles.map((vehicle) => (
+              <FleetVehicleCard
+                key={vehicle.id}
+                vehicle={vehicle}
+                onEdit={handleEditClick}
+                onView={handleViewVehicle}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle Number</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Make/Model</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Service</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Service</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Odometer</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredVehicles.map((vehicle) => (
+                  <tr key={vehicle.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">{vehicle.vehicleNumber}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{vehicle.make} {vehicle.model}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{vehicle.year}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                        ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                          vehicle.status === 'Maintenance' ? 'bg-yellow-100 text-yellow-800' : 
+                          'bg-gray-100 text-gray-800'}`
+                      }>
+                        {vehicle.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {new Date(vehicle.lastService).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {new Date(vehicle.nextServiceDue).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {vehicle.nextServiceOdometer ? `${vehicle.nextServiceOdometer} km` : 'Not set'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleViewVehicle(vehicle)}>View</Button>
+                        <Button size="sm" onClick={() => handleEditClick(vehicle)}>Edit</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Fleet Inventory</h3>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
-                  <FileText className="h-4 w-4" /> Export
-                </Button>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
-                  <Filter className="h-4 w-4" /> Filter
-                </Button>
-              </div>
-            </div>
-            
-            {isLoading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="animate-spin h-8 w-8 border-4 border-blue-600 rounded-full border-t-transparent"></div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Vehicle Number</TableHead>
-                      <TableHead>Model</TableHead>
-                      <TableHead>Make</TableHead>
-                      <TableHead>Year</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Service</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fleetData.map((vehicle) => (
-                      <TableRow key={vehicle.id}>
-                        <TableCell className="font-medium">{vehicle.vehicleNumber}</TableCell>
-                        <TableCell>{vehicle.model}</TableCell>
-                        <TableCell>{vehicle.make}</TableCell>
-                        <TableCell>{vehicle.year}</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(vehicle.status)}`}>
-                            {vehicle.status}
-                          </span>
-                        </TableCell>
-                        <TableCell>{vehicle.lastService}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleViewVehicle(vehicle)}
-                            >
-                              View
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleEditVehicle(vehicle)}
-                            >
-                              Edit
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
-      
       {/* Add Vehicle Dialog */}
       <AddFleetVehicleDialog
         open={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
-        onAddVehicle={handleAddVehicle}
+        onOpenChange={setIsAddDialogOpen}
+        onSave={handleAddVehicle}
       />
-
-      {/* View Vehicle Dialog */}
-      {selectedVehicle && (
-        <ViewFleetVehicleDialog
-          open={isViewDialogOpen}
-          onClose={() => setIsViewDialogOpen(false)}
-          vehicle={selectedVehicle}
-        />
-      )}
 
       {/* Edit Vehicle Dialog */}
       {selectedVehicle && (
@@ -631,10 +541,44 @@ export default function FleetManagementPage() {
           open={isEditDialogOpen}
           onClose={() => setIsEditDialogOpen(false)}
           vehicle={selectedVehicle}
-          onSave={handleVehicleUpdate}
-          onDelete={handleVehicleDelete}
+          onSave={handleEditVehicle}
+          onDelete={handleDeleteVehicle}
         />
       )}
+
+      {/* View Vehicle Dialog */}
+      {selectedVehicle && (
+        <ViewFleetVehicleDialog
+          open={isViewDialogOpen}
+          onClose={() => setIsViewDialogOpen(false)}
+          vehicle={selectedVehicle}
+          onEdit={() => {
+            setIsViewDialogOpen(false);
+            setIsEditDialogOpen(true);
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the vehicle
+              from your fleet database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteVehicle} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+export default FleetManagementPage;

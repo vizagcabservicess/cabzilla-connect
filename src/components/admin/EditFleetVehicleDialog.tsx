@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { FleetVehicle } from '@/types/cab';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Clock, Timer } from 'lucide-react';
 
 interface EditFleetVehicleDialogProps {
   open: boolean;
@@ -253,7 +254,10 @@ export function EditFleetVehicleDialog({
                     name="lastServiceOdometer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Service Odometer (km)</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          Last Service Odometer (km)
+                        </FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
@@ -287,7 +291,10 @@ export function EditFleetVehicleDialog({
                     name="nextServiceOdometer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Next Service Odometer (km)</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          <Timer className="h-4 w-4" />
+                          Next Service Odometer (km)
+                        </FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 

@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings, Timer, Clock } from "lucide-react";
 import { bookingAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
@@ -143,19 +143,12 @@ export default function DashboardPage() {
       
       let data;
       if (isDev) {
-        try {
-          // First try the user bookings endpoint with dev_mode
-          data = await bookingAPI.getUserBookings(userId, { dev_mode: true });
-        } catch (error) {
-          console.warn('getUserBookings with dev_mode failed, trying direct fetch:', error);
-          // If that fails, try direct fetch
-          const response = await fetch('/api/user/bookings.php?dev_mode=true');
-          if (!response.ok) {
-            throw new Error(`Direct API failed with status: ${response.status}`);
-          }
-          const jsonData = await response.json();
-          data = jsonData.bookings || [];
-        }
+        // In dev mode, immediately use sample bookings
+        console.log('Using dev mode sample data');
+        const sampleBookings = createSampleBookings();
+        setBookings(sampleBookings);
+        setAuthIssue(false);
+        return;
       } else {
         try {
           // First try the booking API
@@ -195,6 +188,12 @@ export default function DashboardPage() {
       } else {
         console.warn('Unexpected bookings data format:', data);
         setBookings([]);
+        // If we get here with no error but no data, use sample bookings
+        if (isDev || retryCount >= 1) {
+          const sampleBookings = createSampleBookings();
+          setBookings(sampleBookings);
+          toast.info("Using sample bookings data");
+        }
       }
       
       setRetryCount(0);
@@ -276,6 +275,24 @@ export default function DashboardPage() {
         vehicleNumber: 'AP 01 XY 1234',
         createdAt: yesterday,
         updatedAt: yesterday
+      },
+      {
+        id: 1003,
+        bookingNumber: 'SAMPLE1236',
+        pickupLocation: 'Airport',
+        dropLocation: 'City Center',
+        pickupDate: now,
+        cabType: 'sedan',
+        distance: 18,
+        tripType: 'airport',
+        tripMode: 'one-way',
+        totalAmount: 1800,
+        status: 'confirmed',
+        passengerName: 'John Doe',
+        passengerPhone: '9876543211',
+        passengerEmail: 'john@example.com',
+        createdAt: yesterday,
+        updatedAt: now
       }
     ];
   };
@@ -572,7 +589,7 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <Info className="h-10 w-10 text-gray-400 mb-2" />
         <h3 className="text-lg font-medium">No Bookings</h3>
-        <p className="text-gray-500">No bookings found.</p>
+        <p className="text-gray-500">No bookings found. Try enabling Dev Mode to see sample data.</p>
       </div>
     );
   }

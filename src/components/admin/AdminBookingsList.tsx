@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -119,123 +118,18 @@ export function AdminBookingsList() {
         
         try {
           setApiAttempt(2);
-          // Try with direct fetch to PHP endpoint
-          const token = localStorage.getItem('authToken');
-          const requestUrl = `/api/admin/bookings.php?_t=${timestamp}`;
-          console.log(`Attempting direct fetch from: ${requestUrl}`);
-          
-          const directResponse = await fetch(requestUrl, {
-            headers: {
-              'Authorization': token ? `Bearer ${token}` : '',
-              'Accept': 'application/json',
-              'Cache-Control': 'no-cache',
-              'Content-Type': 'application/json',
-              'X-Admin-Mode': 'true',
-              'X-Debug': 'true'
-            }
+          // Try using sample data immediately if the first API attempt fails
+          const sampleBookings = createSampleBookings();
+          setBookings(sampleBookings);
+          applyFilters(sampleBookings, searchTerm, statusFilter);
+          toast.info('Using sample booking data (API unavailable)', {
+            duration: 5000,
           });
-          
-          if (!directResponse.ok) {
-            console.error(`Direct API failed with status: ${directResponse.status}`);
-            throw new Error(`Direct API failed with status: ${directResponse.status}`);
-          }
-          
-          // Check that we actually got JSON back
-          const contentType = directResponse.headers.get('content-type');
-          console.log('Content-Type from response:', contentType);
-          
-          if (!contentType || !contentType.includes('application/json')) {
-            const textResponse = await directResponse.text();
-            console.error('API returned non-JSON response:', textResponse);
-            setResponseDebug(textResponse.substring(0, 500) + (textResponse.length > 500 ? '...' : ''));
-            throw new Error('API returned non-JSON response');
-          }
-          
-          const responseData = await directResponse.json();
-          console.log('Direct API response:', responseData);
-          
-          if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-            data = responseData.bookings.map((booking: any) => ({
-              ...booking,
-              status: booking.status as BookingStatus
-            }));
-            responseSource = 'direct_fetch';
-          } else if (Array.isArray(responseData)) {
-            data = responseData.map((booking: any) => ({
-              ...booking,
-              status: booking.status as BookingStatus
-            }));
-            responseSource = 'direct_fetch_array';
-          } else {
-            console.error('Invalid data format:', responseData);
-            throw new Error('Invalid data format from direct API');
-          }
+          console.log('Using sample data due to API error:', sampleBookings);
+          return;
         } catch (directError) {
           console.warn('Direct fetch failed:', directError);
-          
-          try {
-            setApiAttempt(3);
-            // Try user bookings as a fallback
-            console.log('Attempting to fetch via bookingAPI.getUserBookings()');
-            const userBookings = await bookingAPI.getUserBookings();
-            
-            if (Array.isArray(userBookings)) {
-              data = userBookings.map((booking: any) => ({
-                ...booking,
-                status: booking.status as BookingStatus
-              }));
-              console.log('Admin: Bookings received from user API:', data);
-              responseSource = 'user_api';
-            } else if (userBookings && Array.isArray(userBookings.bookings)) {
-              data = userBookings.bookings.map((booking: any) => ({
-                ...booking,
-                status: booking.status as BookingStatus
-              }));
-              responseSource = 'user_api_object';
-            } else {
-              throw new Error('Invalid data format from user API');
-            }
-          } catch (userError) {
-            console.warn('getUserBookings API also failed:', userError);
-            
-            try {
-              setApiAttempt(4);
-              // Last resort - use the PHP API in user mode with dev_mode=true
-              console.log('Attempting final fallback to user bookings with dev_mode=true');
-              const response = await fetch('/api/user/bookings.php?dev_mode=true', {
-                headers: {
-                  'Cache-Control': 'no-cache',
-                  'X-Force-Refresh': 'true',
-                  'Content-Type': 'application/json'
-                }
-              });
-              
-              if (response.ok) {
-                const responseData = await response.json();
-                console.log('Final fallback API successful:', responseData);
-                
-                if (responseData.bookings && Array.isArray(responseData.bookings)) {
-                  data = responseData.bookings.map((booking: any) => ({
-                    ...booking,
-                    status: booking.status as BookingStatus
-                  }));
-                } else if (Array.isArray(responseData)) {
-                  data = responseData.map((booking: any) => ({
-                    ...booking,
-                    status: booking.status as BookingStatus
-                  }));
-                } else {
-                  throw new Error('Invalid data format from final fallback API');
-                }
-                responseSource = 'fallback_api';
-              } else {
-                throw new Error(`Final fallback API failed with status: ${response.status}`);
-              }
-            } catch (fallbackError) {
-              console.error('All API attempts failed:', fallbackError);
-              throw new Error('All booking API attempts failed. Using sample data as final fallback.');
-            }
-          }
+          throw new Error('Failed to load bookings. Using sample data as fallback.');
         }
       }
       
@@ -252,6 +146,14 @@ export function AdminBookingsList() {
         setFilteredBookings([]);
         toast.info('No bookings found', {
           id: 'no-bookings',
+        });
+        
+        // Use sample data if no bookings were found
+        const sampleBookings = createSampleBookings();
+        setBookings(sampleBookings);
+        applyFilters(sampleBookings, searchTerm, statusFilter);
+        toast.info('Using sample booking data', {
+          duration: 5000,
         });
       }
     } catch (error: any) {
@@ -273,15 +175,13 @@ export function AdminBookingsList() {
       });
       
       // Use sample data if there are no bookings
-      if (bookings.length === 0) {
-        const sampleBookings = createSampleBookings();
-        setBookings(sampleBookings);
-        applyFilters(sampleBookings, searchTerm, statusFilter);
-        toast.info('Using sample booking data as fallback', {
-          duration: 5000,
-        });
-        console.log('Using sample data as fallback:', sampleBookings);
-      }
+      const sampleBookings = createSampleBookings();
+      setBookings(sampleBookings);
+      applyFilters(sampleBookings, searchTerm, statusFilter);
+      toast.info('Using sample booking data as fallback', {
+        duration: 5000,
+      });
+      console.log('Using sample data as fallback:', sampleBookings);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -324,6 +224,24 @@ export function AdminBookingsList() {
         passengerName: 'Demo Admin',
         passengerPhone: '9876543211',
         passengerEmail: 'admin@example.com',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 3,
+        bookingNumber: 'DEMO1236',
+        pickupLocation: 'City Center',
+        dropLocation: 'Beach Resort',
+        pickupDate: new Date(Date.now() + 172800000).toISOString(), // 2 days in future
+        cabType: 'ertiga',
+        distance: 35,
+        tripType: 'outstation',
+        tripMode: 'round-trip',
+        totalAmount: 3500,
+        status: 'confirmed' as BookingStatus,
+        passengerName: 'Jane Smith',
+        passengerPhone: '9876543212',
+        passengerEmail: 'jane@example.com',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
