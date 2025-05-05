@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
@@ -170,11 +171,10 @@ export const fleetAPI = {
       const isApiConnected = await testApiConnection();
       console.log('API connection test result:', isApiConnected);
       
-      // Try multiple endpoints in sequence
+      // Define working endpoints in order of preference - remove the non-existent fleet-vehicles.php
       const endpoints = [
-        '/api/admin/fleet-vehicles',
-        '/api/admin/vehicles-data',
         '/api/admin/direct-vehicle-modify.php?action=load',
+        '/api/admin/vehicles-data',
         '/api/fares/vehicles'
       ];
       
@@ -190,6 +190,7 @@ export const fleetAPI = {
             },
             params: { 
               include_all: includeAll ? 1 : 0,
+              includeInactive: includeAll ? 'true' : 'false',
               _t: Date.now() // Prevent caching
             }
           });

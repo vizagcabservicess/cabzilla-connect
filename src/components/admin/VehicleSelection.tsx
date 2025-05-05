@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getVehicleData } from '@/services/vehicleDataService';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { fleetAPI } from '@/services/api/fleetAPI';
 
 interface VehicleSelectionProps {
   onVehicleSelect: (vehicleId: string) => void;
@@ -33,8 +34,25 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
     setLoadError(null);
     
     try {
-      // Force refresh to ensure we get the most up-to-date data with the correct domain
-      const vehicleData = await getVehicleData(true, includeInactive);
+      // Try both methods to load vehicles
+      let vehicleData = null;
+      
+      // First try using fleetAPI which has better fallback mechanisms
+      try {
+        const fleetResponse = await fleetAPI.getVehicles(includeInactive);
+        if (fleetResponse && fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
+          vehicleData = fleetResponse.vehicles;
+          console.log("VehicleSelection: Loaded vehicles using fleetAPI:", vehicleData.length);
+        }
+      } catch (fleetError) {
+        console.warn("VehicleSelection: Failed to load from fleetAPI:", fleetError);
+      }
+      
+      // If fleetAPI fails, try the original getVehicleData method
+      if (!vehicleData) {
+        vehicleData = await getVehicleData(true, includeInactive);
+        console.log("VehicleSelection: Loaded vehicles using vehicleDataService");
+      }
       
       if (vehicleData && Array.isArray(vehicleData) && vehicleData.length > 0) {
         console.log(`VehicleSelection: Loaded ${vehicleData.length} vehicles`);

@@ -36,14 +36,23 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
       
       console.log(`Attempting to fetch vehicles (attempt ${fetchAttempts + 1}, backup endpoint: ${useBackupEndpoint})`);
       
-      let response;
+      // Use the fleetAPI service to fetch vehicles (which has fallbacks for multiple endpoints)
+      const response = await fleetAPI.getVehicles(true);
+      
+      if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
+        console.log("Fetched vehicles for assignment:", response.vehicles);
+        setAvailableVehicles(response.vehicles);
+        return;
+      }
+      
+      // If the fleetAPI service didn't return any vehicles, try the backup endpoint
       try {
         if (useBackupEndpoint) {
-          // Try alternate API endpoint
-          const apiUrl = getApiUrl('/api/fares/vehicles');
+          // Use a specific working endpoint from the network requests we've observed
+          const apiUrl = getApiUrl('/api/admin/direct-vehicle-modify.php?action=load');
           console.log("Fetching vehicles from backup endpoint:", apiUrl);
           
-          response = await fetch(apiUrl, {
+          const response = await fetch(apiUrl, {
             headers: {
               'Cache-Control': 'no-cache',
               'X-Force-Refresh': 'true',
@@ -56,40 +65,9 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
             console.log("Fetched vehicles from backup endpoint:", data);
             
             if (data && data.vehicles && Array.isArray(data.vehicles)) {
-              // Map the response data to match FleetVehicle type
-              const vehicles = data.vehicles.map((v: any) => ({
-                id: v.id || v.vehicleId,
-                vehicleNumber: v.vehicleNumber || `${v.id}-${v.name}`,
-                name: v.name,
-                make: v.make || v.name.split(' ')[0],
-                model: v.model || v.name,
-                year: v.year || new Date().getFullYear(),
-                vehicleType: v.vehicleType || v.id,
-                status: v.status || "Active",
-                lastService: v.lastService || new Date().toISOString().split('T')[0],
-                nextServiceDue: v.nextServiceDue || '2024-12-31',
-                fuelType: v.fuelType || "Petrol",
-                capacity: v.capacity,
-                cabTypeId: v.cabTypeId || v.id,
-                luggageCapacity: v.luggageCapacity || 2,
-                isActive: v.isActive !== undefined ? v.isActive : true,
-                currentOdometer: v.currentOdometer || 0,
-                createdAt: v.createdAt || new Date().toISOString().split('T')[0],
-                updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
-              }));
-              
-              setAvailableVehicles(vehicles);
+              setAvailableVehicles(data.vehicles);
               return;
             }
-          }
-        } else {
-          // Try primary API - this uses the fleetAPI service with updated URLs
-          response = await fleetAPI.getVehicles(true);
-          
-          if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
-            console.log("Fetched vehicles for assignment from primary API:", response.vehicles);
-            setAvailableVehicles(response.vehicles);
-            return;
           }
         }
       } catch (apiError) {
@@ -97,46 +75,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
         // Continue to fallback
       }
       
-      // If we've tried both endpoints and still don't have vehicles, try to load from static JSON
-      try {
-        const jsonResponse = await fetch(`${getApiUrl('/data/vehicles.json')}?_t=${Date.now()}`);
-        if (jsonResponse.ok) {
-          const jsonData = await jsonResponse.json();
-          console.log("Fetched vehicles from JSON file:", jsonData);
-          
-          if (Array.isArray(jsonData) && jsonData.length > 0) {
-            // Map the JSON data to match FleetVehicle type
-            const vehicles = jsonData.map((v: any) => ({
-              id: v.id || v.vehicleId,
-              vehicleNumber: v.vehicleNumber || `${v.id}-${v.name}`,
-              name: v.name,
-              make: v.make || v.name.split(' ')[0],
-              model: v.model || v.name,
-              year: v.year || new Date().getFullYear(),
-              vehicleType: v.vehicleType || v.id,
-              status: v.status || "Active",
-              lastService: v.lastService || new Date().toISOString().split('T')[0],
-              nextServiceDue: v.nextServiceDue || '2024-12-31',
-              fuelType: v.fuelType || "Petrol",
-              capacity: v.capacity,
-              cabTypeId: v.cabTypeId || v.id,
-              luggageCapacity: v.luggageCapacity || 2,
-              isActive: v.isActive !== undefined ? v.isActive : true,
-              currentOdometer: v.currentOdometer || 0,
-              createdAt: v.createdAt || new Date().toISOString().split('T')[0],
-              updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
-            }));
-            
-            setAvailableVehicles(vehicles);
-            return;
-          }
-        }
-      } catch (jsonError) {
-        console.error("JSON fetch error:", jsonError);
-        // Continue to mock data
-      }
-      
-      // If we get here, all attempts failed, use mock data as last resort
+      // If we've tried both endpoints and still don't have vehicles, use mock data
       console.warn("All vehicle fetching attempts failed. Using mock data.");
       setError("Could not load vehicles from database. Using mock data.");
       
