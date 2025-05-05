@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +11,7 @@ import { ViewFleetVehicleDialog } from '@/components/admin/ViewFleetVehicleDialo
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { FleetVehicle } from '@/types/cab';
-import { Car, Filter, FileText, Plus, RefreshCw, Clipboard } from 'lucide-react';
+import { Car, Filter, FileText, Plus, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Booking } from '@/types/api';
@@ -380,26 +379,25 @@ export default function FleetManagementPage() {
   const handleAddVehicle = async (newVehicle: FleetVehicle) => {
     try {
       console.log("Adding new vehicle:", newVehicle);
+      
+      // Check if vehicle with same number already exists before adding
+      const vehicleExists = fleetData.some(v => 
+        v.vehicleNumber === newVehicle.vehicleNumber
+      );
+      
+      if (vehicleExists) {
+        toast.error(`Vehicle with number ${newVehicle.vehicleNumber} already exists.`);
+        return;
+      }
+      
       // Try to use fleetAPI to add the vehicle
       const response = await fleetAPI.addVehicle(newVehicle);
       console.log("Vehicle added response:", response);
       
       toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
       
-      // Prevent duplicate entries by checking if vehicle already exists
-      const vehicleExists = fleetData.some(v => 
-        v.id === response.id || v.vehicleNumber === response.vehicleNumber
-      );
-      
-      if (!vehicleExists) {
-        // Add the new vehicle to the fleet data
-        setFleetData(prev => [...prev, response]);
-      }
-      
-      // Refresh fleet data to ensure we have the latest data
-      setTimeout(() => {
-        fetchFleetData();
-      }, 1000);
+      // Add the new vehicle to the fleet data without refreshing everything
+      setFleetData(prev => [response, ...prev]);
     } catch (error) {
       console.error("Error adding vehicle:", error);
       toast.error(`Failed to add vehicle ${newVehicle.vehicleNumber}. Please try again.`);
@@ -433,11 +431,6 @@ export default function FleetManagementPage() {
       );
       
       toast.success(`Vehicle ${updatedVehicle.vehicleNumber} has been updated.`);
-      
-      // Refresh data
-      setTimeout(() => {
-        fetchFleetData();
-      }, 1000);
     } catch (error) {
       console.error("Error updating vehicle:", error);
       toast.error(`Failed to update vehicle. Please try again.`);
@@ -447,21 +440,23 @@ export default function FleetManagementPage() {
     setIsEditDialogOpen(false);
   };
 
-  // Handle assigning a vehicle to booking
-  const handleAssignVehicle = async (vehicle: FleetVehicle) => {
-    setSelectedVehicle(vehicle);
-    setSelectedBooking(null); // Reset selected booking when opening dialog
-    setIsAssignDialogOpen(true);
-  };
-
-  // Handle assignment completion
-  const handleAssignmentComplete = () => {
-    toast.success("Vehicle assigned to booking successfully");
-    // Refresh data
-    fetchFleetData();
-    fetchPendingBookings();
-    // Close dialog
-    setIsAssignDialogOpen(false);
+  // Handle vehicle deletion
+  const handleVehicleDelete = async (vehicleId: string) => {
+    try {
+      // Delete the vehicle using the API
+      await fleetAPI.deleteVehicle(vehicleId);
+      
+      // Remove the vehicle from local state
+      setFleetData(prev => prev.filter(vehicle => vehicle.id !== vehicleId));
+      
+      toast.success("Vehicle has been deleted from the fleet.");
+    } catch (error) {
+      console.error("Error deleting vehicle:", error);
+      toast.error("Failed to delete vehicle. Please try again.");
+    }
+    
+    // Close the edit dialog
+    setIsEditDialogOpen(false);
   };
 
   return (
@@ -602,15 +597,6 @@ export default function FleetManagementPage() {
                             >
                               Edit
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-1"
-                              onClick={() => handleAssignVehicle(vehicle)}
-                              disabled={vehicle.status !== 'Active'}
-                            >
-                              <Clipboard className="h-4 w-4" /> Assign
-                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -646,18 +632,9 @@ export default function FleetManagementPage() {
           onClose={() => setIsEditDialogOpen(false)}
           vehicle={selectedVehicle}
           onSave={handleVehicleUpdate}
+          onDelete={handleVehicleDelete}
         />
       )}
-
-      {/* Assign Vehicle to Booking Dialog */}
-      <FleetVehicleAssignmentDialog
-        open={isAssignDialogOpen}
-        onClose={() => setIsAssignDialogOpen(false)}
-        booking={selectedBooking || undefined}
-        availableVehicles={fleetData.filter(v => v.status === 'Active')}
-        onAssignComplete={handleAssignmentComplete}
-        availableBookings={pendingBookings}
-      />
     </div>
   );
 }

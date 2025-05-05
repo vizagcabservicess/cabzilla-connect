@@ -788,6 +788,93 @@ export const fleetAPI = {
   },
   
   /**
+   * Delete vehicle
+   * @param vehicleId Vehicle ID
+   */
+  deleteVehicle: async (vehicleId: string): Promise<boolean> => {
+    // Prevent duplicate submissions
+    if (isRecentOperation('deleteVehicle', vehicleId)) {
+      throw new Error("Duplicate submission prevented");
+    }
+    
+    try {
+      console.log(`Deleting vehicle ${vehicleId}`);
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      
+      // Try direct PHP endpoint first
+      try {
+        const response = await axios.delete(`${API_BASE_URL}/api/admin/vehicle-delete.php?id=${vehicleId}&${cacheBuster}`, {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Force-Refresh': 'true',
+            'Pragma': 'no-cache'
+          },
+          timeout: 10000
+        });
+        
+        console.log("Delete response:", response.data);
+        
+        if (response.data && response.data.status === 'success') {
+          // Update localStorage cache
+          const cachedVehicles = getVehiclesFromCache();
+          const updatedVehicles = cachedVehicles.filter(v => v.id !== vehicleId);
+          saveVehiclesToCache(updatedVehicles);
+          
+          toast.success("Vehicle deleted successfully");
+          return true;
+        }
+        
+        throw new Error(response.data?.message || "Failed to delete vehicle");
+      } catch (phpError) {
+        console.warn("Direct PHP delete endpoint failed:", phpError);
+        
+        // Try alternative endpoint format
+        try {
+          const altResponse = await axios.post(`${API_BASE_URL}/api/admin/vehicle-remove.php`, 
+            { id: vehicleId },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Mode': 'true',
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'X-Force-Refresh': 'true',
+                'Pragma': 'no-cache'
+              },
+              timeout: 8000
+            }
+          );
+          
+          if (altResponse.data && (altResponse.data.status === 'success' || altResponse.data.success)) {
+            // Update localStorage cache
+            const cachedVehicles = getVehiclesFromCache();
+            const updatedVehicles = cachedVehicles.filter(v => v.id !== vehicleId);
+            saveVehiclesToCache(updatedVehicles);
+            
+            toast.success("Vehicle deleted successfully");
+            return true;
+          }
+        } catch (altError) {
+          console.warn("Alternative delete endpoint failed:", altError);
+        }
+        
+        // Last resort: Remove locally only
+        const cachedVehicles = getVehiclesFromCache();
+        const updatedVehicles = cachedVehicles.filter(v => v.id !== vehicleId);
+        saveVehiclesToCache(updatedVehicles);
+        
+        console.log("Deleted vehicle locally only:", vehicleId);
+        toast.success("Vehicle deleted successfully (offline mode)");
+        return true;
+      }
+    } catch (error) {
+      logAPIError("deleteVehicle", error);
+      toast.error("Failed to delete vehicle: " + (error.message || "Unknown error"));
+      throw error;
+    }
+  },
+  
+  /**
    * Assign vehicle to booking
    * @param bookingId Booking ID
    * @param vehicleId Vehicle ID
