@@ -93,8 +93,60 @@ export function AdminBookingsList() {
       
       try {
         setApiAttempt(1);
-        // First try the bookingAPI.getAllBookings method
-        console.log('Attempting to fetch via bookingAPI.getAllBookings()');
+        // Try the direct-booking-data.php endpoint first
+        console.log('Attempting to fetch via direct-booking-data.php');
+        const directResponse = await fetch(`/api/admin/direct-booking-data.php?_t=${timestamp}`, {
+          headers: {
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (directResponse.ok) {
+          const contentType = directResponse.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const directData = await directResponse.json();
+            
+            if (Array.isArray(directData)) {
+              data = directData.map((booking: any) => ({
+                ...booking,
+                status: booking.status as BookingStatus
+              }));
+              console.log('Admin: Bookings received from direct endpoint:', data);
+              responseSource = 'direct_api';
+            } else if (directData && Array.isArray(directData.bookings)) {
+              data = directData.bookings.map((booking: any) => ({
+                ...booking,
+                status: booking.status as BookingStatus
+              }));
+              responseSource = 'direct_api_bookings_property';
+            } else if (directData && Array.isArray(directData.data)) {
+              data = directData.data.map((booking: any) => ({
+                ...booking,
+                status: booking.status as BookingStatus
+              }));
+              responseSource = 'direct_api_data_property';
+            }
+            
+            if (data.length > 0) {
+              setBookings(data);
+              applyFilters(data, searchTerm, statusFilter);
+              toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
+                id: 'bookings-loaded',
+              });
+              setIsLoading(false);
+              setIsRefreshing(false);
+              return;
+            }
+          } else {
+            console.warn('Direct API returned non-JSON response:', await directResponse.text());
+          }
+        }
+        
+        // If direct fetch failed, try using the bookingAPI
+        setApiAttempt(2);
+        console.log('Direct fetch failed, trying bookingAPI.getAllBookings()');
         const apiData = await bookingAPI.getAllBookings();
         
         if (Array.isArray(apiData)) {
@@ -102,7 +154,7 @@ export function AdminBookingsList() {
             ...booking,
             status: booking.status as BookingStatus
           }));
-          console.log('Admin: Bookings received from admin API:', data);
+          console.log('Admin: Bookings received from booking API:', data);
           responseSource = 'booking_api';
         } else if (apiData && Array.isArray(apiData.bookings)) {
           data = apiData.bookings.map((booking: any) => ({
@@ -114,11 +166,11 @@ export function AdminBookingsList() {
           throw new Error('Invalid data format from booking API');
         }
       } catch (apiError) {
-        console.warn('getAllBookings admin API failed:', apiError);
+        console.warn('All API attempts failed:', apiError);
         
         try {
-          setApiAttempt(2);
-          // Try using sample data immediately if the first API attempt fails
+          // Try using fallback sample data if both API attempts fail
+          setApiAttempt(3);
           const sampleBookings = createSampleBookings();
           setBookings(sampleBookings);
           applyFilters(sampleBookings, searchTerm, statusFilter);
@@ -126,9 +178,11 @@ export function AdminBookingsList() {
             duration: 5000,
           });
           console.log('Using sample data due to API error:', sampleBookings);
+          setIsLoading(false);
+          setIsRefreshing(false);
           return;
         } catch (directError) {
-          console.warn('Direct fetch failed:', directError);
+          console.warn('Sample data fallback failed:', directError);
           throw new Error('Failed to load bookings. Using sample data as fallback.');
         }
       }
@@ -263,7 +317,28 @@ export function AdminBookingsList() {
     try {
       console.log('Updating booking:', selectedBooking.id, updatedData);
       
-      // Make a direct fetch to bypass API helper for better debugging
+      // Try bookingAPI first
+      try {
+        const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
+        console.log('Booking update response:', response);
+        
+        // Update the bookings list with the updated data from the response
+        const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
+        
+        const updatedBookings = bookings.map(booking => 
+          booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
+        );
+        setBookings(updatedBookings);
+        applyFilters(updatedBookings, searchTerm, statusFilter);
+        
+        toast.success("Booking updated successfully");
+        handleCloseDetails();
+        return;
+      } catch (apiError) {
+        console.warn('bookingAPI.updateBooking failed, trying direct fetch:', apiError);
+      }
+      
+      // If bookingAPI fails, try direct fetch
       const directResponse = await fetch('/api/admin/update-booking.php', {
         method: 'POST',
         headers: {
@@ -326,6 +401,27 @@ export function AdminBookingsList() {
         status: 'assigned' as BookingStatus
       };
       
+      // Try bookingAPI first
+      try {
+        const response = await bookingAPI.assignDriver(selectedBooking.id, driverData);
+        console.log('Driver assignment response:', response);
+        
+        // Update the bookings list with the updated data from the response
+        const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
+        
+        const updatedBookings = bookings.map(booking => 
+          booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
+        );
+        setBookings(updatedBookings);
+        applyFilters(updatedBookings, searchTerm, statusFilter);
+        
+        toast.success("Driver assigned successfully");
+        handleCloseDetails();
+        return;
+      } catch (apiError) {
+        console.warn('bookingAPI.assignDriver failed, trying direct fetch:', apiError);
+      }
+      
       // Direct fetch for better debugging
       const directResponse = await fetch('/api/admin/update-booking.php', {
         method: 'POST',
@@ -382,6 +478,24 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
+      // Try bookingAPI first
+      try {
+        await bookingAPI.cancelBooking(selectedBooking.id);
+        
+        // Update the bookings list
+        const updatedBookings = bookings.map(booking => 
+          booking.id === selectedBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
+        );
+        setBookings(updatedBookings);
+        applyFilters(updatedBookings, searchTerm, statusFilter);
+        
+        toast.success("Booking cancelled successfully");
+        handleCloseDetails();
+        return;
+      } catch (apiError) {
+        console.warn('bookingAPI.cancelBooking failed, trying direct fetch:', apiError);
+      }
+      
       // Direct fetch for better debugging
       const directResponse = await fetch('/api/admin/update-booking.php', {
         method: 'POST',
@@ -426,6 +540,23 @@ export function AdminBookingsList() {
     
     setIsSubmitting(true);
     try {
+      // Try bookingAPI first
+      try {
+        await bookingAPI.updateBookingStatus(selectedBooking.id, newStatus);
+        
+        // Update the bookings list
+        const updatedBookings = bookings.map(booking => 
+          booking.id === selectedBooking.id ? { ...booking, status: newStatus } : booking
+        );
+        setBookings(updatedBookings);
+        applyFilters(updatedBookings, searchTerm, statusFilter);
+        
+        toast.success(`Booking status updated to ${newStatus}`);
+        return;
+      } catch (apiError) {
+        console.warn('bookingAPI.updateBookingStatus failed, trying direct fetch:', apiError);
+      }
+      
       // Direct fetch for better debugging
       const directResponse = await fetch('/api/admin/update-booking.php', {
         method: 'POST',
@@ -684,6 +815,7 @@ export function AdminBookingsList() {
   }
 
   return (
+    
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="grid gap-2 md:w-60">
@@ -770,105 +902,4 @@ export function AdminBookingsList() {
         />
       )}
 
-      {filteredBookings.length > 0 ? (
-        <div className="rounded-md border overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Booking #</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Trip Details</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredBookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.bookingNumber}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{booking.passengerName}</div>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <Phone className="h-3 w-3 mr-1" /> {booking.passengerPhone}
-                      </div>
-                      <div className="flex items-center text-xs text-gray-500 truncate max-w-[150px]">
-                        <Mail className="h-3 w-3 mr-1" /> {booking.passengerEmail}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{booking.tripType?.toUpperCase() || 'N/A'} - {booking.tripMode || 'N/A'}</div>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <MapPin className="h-3 w-3 mr-1" /> From: {booking.pickupLocation}
-                      </div>
-                      {booking.dropLocation && (
-                        <div className="flex items-center text-xs text-gray-500">
-                          <MapPin className="h-3 w-3 mr-1" /> To: {booking.dropLocation}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        {new Date(booking.pickupDate).toLocaleDateString('en-US', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(booking.pickupDate).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </TableCell>
-                    <TableCell>₹{booking.totalAmount}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getStatusColorClass(booking.status)}>
-                        {booking.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {booking.driverName ? (
-                        <div>
-                          <div className="font-medium">{booking.driverName}</div>
-                          <div className="text-xs text-gray-500">{booking.driverPhone}</div>
-                          <div className="text-xs text-gray-500">{booking.vehicleNumber}</div>
-                        </div>
-                      ) : (
-                        <div className="text-gray-500 text-sm">Not assigned</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-white">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
-                            View Details
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-10">
-          <p className="text-gray-500">No bookings found.</p>
-        </div>
-      )}
-    </div>
-  );
-}
+      {filteredBookings.
