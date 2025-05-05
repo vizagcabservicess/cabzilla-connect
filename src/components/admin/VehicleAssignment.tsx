@@ -55,10 +55,11 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           year: 2022,
           vehicleType: "innova_crysta",
           status: "Active",
-          lastService: "2023-01-15", // Changed from lastMaintenance to lastService
-          mileage: 25000,
+          lastService: "2023-01-15",
           fuelType: "Diesel",
-          seatingCapacity: 7
+          seatingCapacity: 7,
+          // Removed mileage property as it doesn't exist in FleetVehicle type
+          currentOdometer: 25000 // Using currentOdometer instead which is in the FleetVehicle type
         },
         {
           id: "v-mock-002",
@@ -68,10 +69,11 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           year: 2021,
           vehicleType: "sedan",
           status: "Active",
-          lastService: "2023-02-20", // Changed from lastMaintenance to lastService
-          mileage: 15000,
+          lastService: "2023-02-20",
           fuelType: "Petrol",
-          seatingCapacity: 5
+          seatingCapacity: 5,
+          // Removed mileage property as it doesn't exist in FleetVehicle type
+          currentOdometer: 15000 // Using currentOdometer instead which is in the FleetVehicle type
         }
       ]);
     } finally {
