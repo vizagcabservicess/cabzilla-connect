@@ -8,8 +8,7 @@ import { toast } from 'sonner';
 import { Booking } from '@/types/api';
 import { FleetVehicle } from '@/types/cab';
 import { fleetAPI } from '@/services/api/fleetAPI';
-import { Loader2, RefreshCw } from 'lucide-react';
-import { getFleetVehicles, clearVehicleCache } from '@/utils/fleetDataUtils';
+import { Loader2 } from 'lucide-react';
 
 interface VehicleAssignmentProps {
   booking: Booking;
@@ -24,31 +23,172 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
   const [isAssigningVehicle, setIsAssigningVehicle] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchAttempts, setFetchAttempts] = useState<number>(0);
+  const [useBackupEndpoint, setUseBackupEndpoint] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchAvailableVehicles(false);
-  }, []);
+    fetchAvailableVehicles();
+  }, [useBackupEndpoint]);
 
-  const fetchAvailableVehicles = async (forceRefresh = false) => {
+  const fetchAvailableVehicles = async () => {
     try {
       setIsLoadingVehicles(true);
       setError(null);
       
-      console.log(`Attempting to fetch vehicles (attempt ${fetchAttempts + 1}, forceRefresh: ${forceRefresh})`);
+      console.log(`Attempting to fetch vehicles (attempt ${fetchAttempts + 1}, backup endpoint: ${useBackupEndpoint})`);
       
-      // Use the utility function for fetching vehicles
-      const vehicles = await getFleetVehicles(forceRefresh, true);
-      
-      if (vehicles && vehicles.length > 0) {
-        console.log(`Fetched ${vehicles.length} vehicles for assignment`);
-        setAvailableVehicles(vehicles);
-      } else {
-        setError("No vehicles available. Please try refreshing.");
-        toast.error("No vehicles available");
+      let response;
+      try {
+        if (useBackupEndpoint) {
+          // Try alternate API endpoint
+          response = await fetch('/api/fares/vehicles.php?includeInactive=true', {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'X-Force-Refresh': 'true',
+              'X-Database-First': 'true'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log("Fetched vehicles from backup endpoint:", data);
+            
+            if (data && data.vehicles && Array.isArray(data.vehicles)) {
+              // Map the response data to match FleetVehicle type
+              const vehicles = data.vehicles.map((v: any) => ({
+                id: v.id || v.vehicleId,
+                vehicleNumber: v.vehicleNumber || `${v.id}-${v.name}`,
+                name: v.name,
+                make: v.make || v.name.split(' ')[0],
+                model: v.model || v.name,
+                year: v.year || new Date().getFullYear(),
+                vehicleType: v.vehicleType || v.id,
+                status: v.status || "Active",
+                lastService: v.lastService || new Date().toISOString().split('T')[0],
+                nextServiceDue: v.nextServiceDue || '2024-12-31',
+                fuelType: v.fuelType || "Petrol",
+                capacity: v.capacity,
+                cabTypeId: v.cabTypeId || v.id,
+                luggageCapacity: v.luggageCapacity || 2,
+                isActive: v.isActive !== undefined ? v.isActive : true,
+                currentOdometer: v.currentOdometer || 0,
+                createdAt: v.createdAt || new Date().toISOString().split('T')[0],
+                updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
+              }));
+              
+              setAvailableVehicles(vehicles);
+              return;
+            }
+          }
+        } else {
+          // Try primary API
+          response = await fleetAPI.getVehicles(true);
+          
+          if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
+            console.log("Fetched vehicles for assignment from primary API:", response.vehicles);
+            setAvailableVehicles(response.vehicles);
+            return;
+          }
+        }
+      } catch (apiError) {
+        console.error("API error:", apiError);
+        // Continue to fallback
       }
       
-      // Increment fetch attempts counter
-      setFetchAttempts(prev => prev + 1);
+      // If we've tried both endpoints and still don't have vehicles, try to load from static JSON
+      try {
+        const jsonResponse = await fetch(`/data/vehicles.json?_t=${Date.now()}`);
+        if (jsonResponse.ok) {
+          const jsonData = await jsonResponse.json();
+          console.log("Fetched vehicles from JSON file:", jsonData);
+          
+          if (Array.isArray(jsonData) && jsonData.length > 0) {
+            // Map the JSON data to match FleetVehicle type
+            const vehicles = jsonData.map((v: any) => ({
+              id: v.id || v.vehicleId,
+              vehicleNumber: v.vehicleNumber || `${v.id}-${v.name}`,
+              name: v.name,
+              make: v.make || v.name.split(' ')[0],
+              model: v.model || v.name,
+              year: v.year || new Date().getFullYear(),
+              vehicleType: v.vehicleType || v.id,
+              status: v.status || "Active",
+              lastService: v.lastService || new Date().toISOString().split('T')[0],
+              nextServiceDue: v.nextServiceDue || '2024-12-31',
+              fuelType: v.fuelType || "Petrol",
+              capacity: v.capacity,
+              cabTypeId: v.cabTypeId || v.id,
+              luggageCapacity: v.luggageCapacity || 2,
+              isActive: v.isActive !== undefined ? v.isActive : true,
+              currentOdometer: v.currentOdometer || 0,
+              createdAt: v.createdAt || new Date().toISOString().split('T')[0],
+              updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
+            }));
+            
+            setAvailableVehicles(vehicles);
+            return;
+          }
+        }
+      } catch (jsonError) {
+        console.error("JSON fetch error:", jsonError);
+        // Continue to mock data
+      }
+      
+      // If we get here, all attempts failed, use mock data as last resort
+      console.warn("All vehicle fetching attempts failed. Using mock data.");
+      setError("Could not load vehicles from database. Using mock data.");
+      
+      // Use mock data as last resort
+      setAvailableVehicles([
+        {
+          id: "v-mock-001",
+          vehicleNumber: "KA01AB1234",
+          name: "Toyota Innova Crysta",
+          make: "Toyota",
+          model: "Innova Crysta",
+          year: 2022,
+          vehicleType: "innova_crysta",
+          status: "Active",
+          lastService: "2023-01-15",
+          nextServiceDue: "2023-07-15",
+          fuelType: "Diesel",
+          capacity: 7,
+          cabTypeId: "innova_crysta",
+          luggageCapacity: 3,
+          isActive: true,
+          currentOdometer: 25000,
+          createdAt: "2023-01-01",
+          updatedAt: "2023-01-15"
+        },
+        {
+          id: "v-mock-002",
+          vehicleNumber: "KA02CD5678",
+          name: "Maruti Suzuki Swift Dzire",
+          make: "Maruti Suzuki",
+          model: "Swift Dzire",
+          year: 2021,
+          vehicleType: "sedan",
+          status: "Active",
+          lastService: "2023-02-20",
+          nextServiceDue: "2023-08-20",
+          fuelType: "Petrol",
+          capacity: 5,
+          cabTypeId: "sedan",
+          luggageCapacity: 2,
+          isActive: true,
+          currentOdometer: 15000,
+          createdAt: "2022-12-01",
+          updatedAt: "2023-02-20"
+        }
+      ]);
+      
+      // Increment fetch attempts to try backup endpoint on next try
+      const newAttempts = fetchAttempts + 1;
+      setFetchAttempts(newAttempts);
+      
+      // Toggle to use backup endpoint after 2 failed attempts with the primary
+      if (newAttempts >= 2 && !useBackupEndpoint) {
+        setUseBackupEndpoint(true);
+      }
       
     } catch (error) {
       console.error("Error fetching available vehicles:", error);
@@ -100,8 +240,8 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
   };
 
   const retryFetchVehicles = () => {
-    clearVehicleCache();
-    fetchAvailableVehicles(true);
+    setUseBackupEndpoint(!useBackupEndpoint);
+    fetchAvailableVehicles();
   };
 
   // Helper function to format vehicle display name
@@ -111,19 +251,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
 
   return (
     <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Assign Vehicle</h3>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={retryFetchVehicles}
-          disabled={isLoadingVehicles}
-          className="flex items-center gap-1"
-        >
-          {isLoadingVehicles ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          {isLoadingVehicles ? "Loading..." : "Refresh"}
-        </Button>
-      </div>
+      <h3 className="text-lg font-semibold mb-4">Assign Vehicle</h3>
       <div className="space-y-4">
         <div>
           <Label htmlFor="fleetVehicle">Select Fleet Vehicle</Label>
@@ -151,6 +279,18 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
               {availableVehicles.length} vehicles available
               {error && <span className="text-red-500 ml-2">{error}</span>}
             </p>
+            {error && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={retryFetchVehicles}
+                className="text-xs"
+                disabled={isLoadingVehicles}
+              >
+                {isLoadingVehicles ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Retry Fetch
+              </Button>
+            )}
           </div>
         </div>
         

@@ -29,15 +29,4 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  optimizeDeps: {
-    include: ['@tanstack/react-table'],
-  },
-  build: {
-    commonjsOptions: {
-      include: [/node_modules/],
-    },
-    rollupOptions: {
-      external: [],
-    }
-  }
 }));

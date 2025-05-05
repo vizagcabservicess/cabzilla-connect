@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getFleetVehicles } from '@/utils/fleetDataUtils';
+import { getVehicleData } from '@/services/vehicleDataService';
 
 interface VehicleSelectionProps {
   onVehicleSelect: (vehicleId: string) => void;
@@ -28,7 +28,7 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
   const loadVehicles = async () => {
     setLoading(true);
     try {
-      const vehicleData = await getFleetVehicles(false, includeInactive);
+      const vehicleData = await getVehicleData(true, includeInactive);
       if (vehicleData && Array.isArray(vehicleData)) {
         setVehicles(vehicleData);
       }
@@ -58,7 +58,7 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
             key={vehicle.id || vehicle.vehicle_id} 
             value={vehicle.vehicle_id || vehicle.id}
           >
-            {vehicle.name || vehicle.label || vehicle.vehicleNumber || vehicle.vehicle_id || vehicle.id}
+            {vehicle.name || vehicle.label || vehicle.vehicle_id || vehicle.id}
           </SelectItem>
         ))}
       </SelectContent>

@@ -4,7 +4,6 @@ import { getVehicleData, clearVehicleDataCache } from '@/services/vehicleDataSer
 import { TripType, TripMode, isAdminTripType, isTourTripType, isRegularTripType } from '@/lib/tripTypes';
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
-import { convertFleetVehiclesToCabTypes } from '@/utils/vehicleTypeConverters';
 
 interface CabOptionsProps {
   tripType: TripType;
@@ -129,23 +128,20 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         console.log('Admin trip - clearing cache and fetching fresh data');
         clearVehicleDataCache();
         
-        const rawVehicles = await getVehicleData(true, true);
+        const vehicles = await getVehicleData(true, true);
         
-        if (!rawVehicles || rawVehicles.length === 0) {
+        if (!vehicles || vehicles.length === 0) {
           setError('No vehicles found. Please try refreshing the data.');
           setIsLoading(false);
           loadingRef.current = false;
           return [];
         }
         
-        // Convert FleetVehicle[] to CabType[]
-        const convertedVehicles = convertFleetVehiclesToCabTypes(rawVehicles);
-        
-        console.log(`Loaded ${convertedVehicles.length} vehicles for admin view`);
-        setCabOptions(convertedVehicles);
+        console.log(`Loaded ${vehicles.length} vehicles for admin view`);
+        setCabOptions(vehicles);
         setIsLoading(false);
         loadingRef.current = false;
-        return convertedVehicles;
+        return vehicles;
       }
       
       const cacheValidityDuration = isAdminTrip ? 5000 : 30000;
@@ -190,38 +186,30 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       const includeInactive = shouldIncludeInactive;
       console.log(`Getting vehicle data with includeInactive=${includeInactive}, forceRefresh=${forceRefresh}`);
       
-      const timeoutPromise = new Promise<any>((_, reject) => {
+      const timeoutPromise = new Promise<CabType[]>((_, reject) => {
         setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 5000);
       });
       
       const dataPromise = getVehicleData(forceRefresh, includeInactive);
       
-      let rawVehicles;
+      let vehicles: CabType[];
       try {
-        rawVehicles = await Promise.race([dataPromise, timeoutPromise]);
+        vehicles = await Promise.race([dataPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Fetch with timeout failed, falling back to direct API call');
-        rawVehicles = await getVehicleData(true, includeInactive);
+        vehicles = await getVehicleData(true, includeInactive);
       }
       
-      // Convert FleetVehicle[] to CabType[] for compatibility
-      const convertedVehicles = convertFleetVehiclesToCabTypes(rawVehicles);
+      console.log(`Received ${vehicles?.length || 0} vehicles from getVehicleData:`, vehicles);
       
-      console.log(`Received ${convertedVehicles?.length || 0} vehicles from getVehicleData:`, convertedVehicles);
-      
-      if (!convertedVehicles || convertedVehicles.length === 0) {
+      if (!vehicles || vehicles.length === 0) {
         const cachedVehicles = localStorage.getItem(`cabOptions_all`);
         if (cachedVehicles) {
           try {
             const parsedVehicles = JSON.parse(cachedVehicles);
             if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
               console.log('Using older cached vehicles as last resort');
-              const fallbackVehicles = parsedVehicles;
-              const filteredVehicles = filterVehiclesByTripType(fallbackVehicles, tripType);
-              setCabOptions(filteredVehicles);
-              setIsLoading(false);
-              loadingRef.current = false;
-              return filteredVehicles;
+              vehicles = parsedVehicles;
             }
           } catch (error) {
             console.error('Error parsing cached vehicles:', error);
@@ -229,7 +217,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         }
       }
       
-      if (!convertedVehicles || convertedVehicles.length === 0) {
+      if (!vehicles || vehicles.length === 0) {
         if (cabOptions.length > 0) {
           console.log('No new vehicles available, keeping existing options');
           setIsLoading(false);
@@ -237,8 +225,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
           return cabOptions;
         }
         
-        // Default vehicles as last resort
-        const defaultVehicles = [
+        vehicles = [
           {
             id: 'sedan',
             name: 'Sedan',
@@ -286,15 +273,10 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
           }
         ];
         
-        console.log('Using default vehicles:', defaultVehicles.length);
-        const filteredDefaultVehicles = filterVehiclesByTripType(defaultVehicles, tripType);
-        setCabOptions(filteredDefaultVehicles);
-        setIsLoading(false);
-        loadingRef.current = false;
-        return filteredDefaultVehicles;
+        console.log('Using default vehicles:', vehicles.length);
       }
       
-      const filteredVehicles = filterVehiclesByTripType(convertedVehicles, tripType);
+      const filteredVehicles = filterVehiclesByTripType(vehicles, tripType);
       console.log(`Loaded ${filteredVehicles.length} vehicles for ${tripType} trip`);
       setCabOptions(filteredVehicles);
       
