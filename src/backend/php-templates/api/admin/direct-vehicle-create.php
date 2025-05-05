@@ -263,21 +263,21 @@ try {
     }
     
     // Check if vehicle number already exists (to prevent duplicates)
-    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM fleet_vehicles WHERE vehicle_number = ?");
-    if (!$checkStmt) {
+    $checkVehicleNumber = $conn->prepare("SELECT COUNT(*) as count FROM fleet_vehicles WHERE vehicle_number = ?");
+    if (!$checkVehicleNumber) {
         logDebug("Prepare statement error for fleet_vehicles: " . $conn->error);
         
         // Try with vehicles table instead
-        $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_number = ?");
-        if (!$checkStmt) {
+        $checkVehicleNumber = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_number = ?");
+        if (!$checkVehicleNumber) {
             logDebug("Prepare statement error for vehicles: " . $conn->error);
             throw new Exception("Database error: " . $conn->error);
         }
     }
     
-    $checkStmt->bind_param("s", $vehicleNumber);
-    $checkStmt->execute();
-    $result = $checkStmt->get_result();
+    $checkVehicleNumber->bind_param("s", $vehicleNumber);
+    $checkVehicleNumber->execute();
+    $result = $checkVehicleNumber->get_result();
     $row = $result->fetch_assoc();
     
     if ($row['count'] > 0) {
@@ -285,6 +285,23 @@ try {
         logDebug("Vehicle with number $vehicleNumber already exists");
         sendJsonResponse('error', "Vehicle with number $vehicleNumber already exists. Use update endpoint instead.");
         exit;
+    }
+    
+    // Also check if vehicleId already exists (to prevent duplicates)
+    $checkVehicleId = $conn->prepare("SELECT COUNT(*) as count FROM fleet_vehicles WHERE id = ?");
+    if ($checkVehicleId) {
+        $checkVehicleId->bind_param("s", $vehicleId);
+        $checkVehicleId->execute();
+        $resultId = $checkVehicleId->get_result();
+        $rowId = $resultId->fetch_assoc();
+        
+        if ($rowId['count'] > 0) {
+            // Generate a new unique ID to prevent duplicates
+            $vehicleId = generateUniqueId('fleet_');
+            $vehicleData['id'] = $vehicleId;
+            $vehicleData['vehicleId'] = $vehicleId;
+            logDebug("Generated new ID to prevent duplicate: $vehicleId");
+        }
     }
     
     // Check if fleet_vehicles table exists, if not, create it

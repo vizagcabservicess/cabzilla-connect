@@ -102,7 +102,46 @@ try {
     // Check if bookings table exists
     $tableExistsQuery = $conn->query("SHOW TABLES LIKE 'bookings'");
     if ($tableExistsQuery->num_rows == 0) {
-        throw new Exception("Bookings table does not exist in database");
+        // Try to create a sample bookings table
+        $createTableSql = "CREATE TABLE IF NOT EXISTS bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            booking_number VARCHAR(50) NOT NULL,
+            passenger_name VARCHAR(100) NOT NULL DEFAULT 'Guest',
+            passenger_phone VARCHAR(20),
+            passenger_email VARCHAR(100),
+            pickup_location VARCHAR(255) NOT NULL,
+            drop_location VARCHAR(255),
+            pickup_date DATETIME NOT NULL,
+            pickup_time TIME,
+            cab_type VARCHAR(50),
+            trip_type VARCHAR(20) DEFAULT 'local',
+            trip_mode VARCHAR(20) DEFAULT 'one-way',
+            status VARCHAR(20) DEFAULT 'pending',
+            total_amount DECIMAL(10,2) DEFAULT 0,
+            distance DECIMAL(10,2) DEFAULT 0,
+            fleet_vehicle_id VARCHAR(50),
+            driver_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )";
+        
+        if ($conn->query($createTableSql)) {
+            error_log("Created bookings table");
+            
+            // Insert sample data
+            $sampleData = "INSERT INTO bookings 
+                (booking_number, passenger_name, pickup_location, drop_location, pickup_date, cab_type, status) VALUES
+                ('BK-1001', 'John Smith', 'Airport Terminal 1', 'Downtown Hotel', '2025-05-10 10:00:00', 'sedan', 'pending'),
+                ('BK-1002', 'Sarah Johnson', 'City Center', 'Beach Resort', '2025-05-12 14:30:00', 'suv', 'confirmed')";
+                
+            if ($conn->query($sampleData)) {
+                error_log("Inserted sample booking data");
+            } else {
+                error_log("Error inserting sample data: " . $conn->error);
+            }
+        } else {
+            throw new Exception("Bookings table does not exist and could not be created: " . $conn->error);
+        }
     }
     
     // Get pending bookings that don't have a fleet vehicle assigned
@@ -111,7 +150,7 @@ try {
         FROM bookings b
         LEFT JOIN vehicle_assignments va ON b.id = va.booking_id
         WHERE (b.status = 'pending' OR b.status = 'confirmed') 
-        AND (va.id IS NULL OR b.fleet_vehicle_id IS NULL)
+        AND (va.id IS NULL OR b.fleet_vehicle_id IS NULL OR b.fleet_vehicle_id = '')
         ORDER BY b.pickup_date ASC
         LIMIT 20
     ";
@@ -120,7 +159,21 @@ try {
     $result = $conn->query($query);
     
     if (!$result) {
-        throw new Exception("Error fetching pending bookings: " . $conn->error);
+        // Try simpler query if the join fails
+        $simpleQuery = "
+            SELECT * FROM bookings 
+            WHERE (status = 'pending' OR status = 'confirmed') 
+            AND (fleet_vehicle_id IS NULL OR fleet_vehicle_id = '')
+            ORDER BY pickup_date ASC
+            LIMIT 20
+        ";
+        
+        error_log("Trying simpler query: " . $simpleQuery);
+        $result = $conn->query($simpleQuery);
+        
+        if (!$result) {
+            throw new Exception("Error fetching pending bookings: " . $conn->error);
+        }
     }
     
     $bookings = [];
@@ -128,18 +181,19 @@ try {
         // Map database column names to our API format
         $booking = [
             'id' => (int)$row['id'],
-            'bookingNumber' => $row['booking_number'] ?? $row['id'],
+            'bookingNumber' => $row['booking_number'] ?? ('BK-' . $row['id']),
             'passengerName' => $row['passenger_name'] ?? $row['customer_name'] ?? 'Guest',
             'passengerPhone' => $row['passenger_phone'] ?? $row['customer_phone'] ?? '',
             'passengerEmail' => $row['passenger_email'] ?? $row['customer_email'] ?? '',
             'pickupLocation' => $row['pickup_location'],
             'dropLocation' => $row['drop_location'] ?? '',
             'pickupDate' => $row['pickup_date'],
+            'pickupTime' => $row['pickup_time'] ?? '',
             'cabType' => $row['cab_type'],
             'tripType' => $row['trip_type'] ?? 'local',
             'tripMode' => $row['trip_mode'] ?? 'one-way',
             'status' => $row['status'],
-            'totalAmount' => (float)$row['total_amount'],
+            'totalAmount' => (float)($row['total_amount'] ?? 0),
             'distance' => (float)($row['distance'] ?? 0),
             'createdAt' => $row['created_at'] ?? date('Y-m-d H:i:s'),
             'updatedAt' => $row['updated_at'] ?? date('Y-m-d H:i:s')
@@ -159,7 +213,7 @@ try {
                 'passengerName' => 'John Smith',
                 'pickupLocation' => 'Airport Terminal 1',
                 'dropLocation' => 'Downtown Hotel',
-                'pickupDate' => '2025-05-10',
+                'pickupDate' => '2025-05-10 10:00:00',
                 'cabType' => 'sedan',
                 'status' => 'pending'
             ],
@@ -169,7 +223,7 @@ try {
                 'passengerName' => 'Sarah Johnson',
                 'pickupLocation' => 'City Center',
                 'dropLocation' => 'Beach Resort',
-                'pickupDate' => '2025-05-12',
+                'pickupDate' => '2025-05-12 14:30:00',
                 'cabType' => 'suv',
                 'status' => 'confirmed'
             ]

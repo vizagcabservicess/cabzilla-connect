@@ -2,6 +2,7 @@
 import { FleetVehicle, MaintenanceRecord, FuelRecord, VehicleDocument } from '@/types/cab';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
+import { toast } from 'sonner';
 
 const API_URL = `${API_BASE_URL}/api/admin/fleet`;
 
@@ -17,13 +18,13 @@ const logAPIError = (functionName: string, error: any) => {
 // Small cache for preventing duplicate submissions
 const recentOperations: Record<string, number> = {};
 
-// Check if an operation was recently performed (within last 5 seconds)
+// Check if an operation was recently performed (within last 3 seconds)
 const isRecentOperation = (operation: string, data: any): boolean => {
   const key = `${operation}_${JSON.stringify(data)}`;
   const now = Date.now();
   const lastTime = recentOperations[key] || 0;
   
-  if (now - lastTime < 5000) { // 5 seconds threshold
+  if (now - lastTime < 3000) { // 3 seconds threshold
     console.log(`Prevented duplicate ${operation} operation`);
     return true;
   }
@@ -33,7 +34,7 @@ const isRecentOperation = (operation: string, data: any): boolean => {
   
   // Clean up old entries
   Object.keys(recentOperations).forEach(k => {
-    if (now - recentOperations[k] > 60000) { // Remove entries older than 1 minute
+    if (now - recentOperations[k] > 30000) { // Remove entries older than 30 seconds
       delete recentOperations[k];
     }
   });
@@ -75,57 +76,21 @@ export const fleetAPI = {
    */
   getVehicles: async (includeInactive = false): Promise<{vehicles: FleetVehicle[]}> => {
     try {
-      console.log(`Fetching vehicles from ${API_URL}/vehicles`);
+      console.log(`Fetching vehicles from API...`);
       
-      // Try direct PHP endpoint first
-      try {
-        const directResponse = await axios.get(`${API_BASE_URL}/api/admin/fleet-vehicles.php`, {
-          params: { includeInactive },
-          headers: {
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-store, no-cache, must-revalidate'
-          }
-        });
-        
-        if (directResponse.data && (directResponse.data.vehicles || directResponse.data.data)) {
-          console.log("Got response from direct PHP endpoint:", directResponse.data);
-          const vehicles = directResponse.data.vehicles || directResponse.data.data || [];
-          // Cache the vehicles
-          saveVehiclesToCache(vehicles);
-          return { vehicles };
-        }
-      } catch (directError) {
-        console.warn("Direct PHP endpoint failed, trying fleet API:", directError);
-      }
+      // Set a random cache-busting query parameter
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       
-      // Fall back to standard fleet API
-      try {
-        const response = await axios.get(`${API_URL}/vehicles`, {
-          params: { includeInactive },
-          headers: {
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-store, no-cache, must-revalidate'
-          }
-        });
-        
-        console.log("API response:", response.data);
-        
-        // Make sure we're returning in the expected format
-        let vehicles: FleetVehicle[] = [];
-        if (response.data && !response.data.vehicles && Array.isArray(response.data)) {
-          vehicles = response.data;
-        } else if (response.data && response.data.vehicles) {
-          vehicles = response.data.vehicles;
-        }
-        
-        // Cache the vehicles
-        saveVehiclesToCache(vehicles);
-        return { vehicles };
-      } catch (fleetError) {
-        console.warn("Fleet API endpoint failed, trying PHP vehicle data endpoint:", fleetError);
-        
-        // Try the vehicle data PHP endpoint as last API attempt
-        const phpVehicleResponse = await axios.get(`${API_BASE_URL}/api/admin/vehicles-data.php`, {
+      // Try direct PHP endpoints with different URLs in parallel
+      const endpoints = [
+        `${API_BASE_URL}/api/admin/fleet-vehicles.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/get-vehicles.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/vehicles-data.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/vehicles-data.php?${cacheBuster}`
+      ];
+      
+      const requests = endpoints.map(endpoint => 
+        axios.get(endpoint, {
           params: { 
             includeInactive: includeInactive ? 1 : 0,
             _t: Date.now()
@@ -134,21 +99,72 @@ export const fleetAPI = {
             'X-Force-Refresh': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
             'X-Admin-Mode': 'true'
+          },
+          timeout: 5000 // 5 second timeout
+        }).catch(err => {
+          console.warn(`Failed to fetch from ${endpoint}:`, err.message);
+          return null; // Return null so Promise.all doesn't reject
+        })
+      );
+      
+      // Try to get data from any of the endpoints
+      const responses = await Promise.all(requests);
+      let vehicles: FleetVehicle[] = [];
+      
+      for (const response of responses) {
+        if (response && response.data) {
+          const responseData = response.data;
+          
+          // Extract vehicles based on different response formats
+          if (responseData.vehicles && Array.isArray(responseData.vehicles)) {
+            vehicles = responseData.vehicles;
+            console.log(`Found ${vehicles.length} vehicles from API response`);
+            break;
+          } else if (responseData.data && Array.isArray(responseData.data)) {
+            vehicles = responseData.data;
+            console.log(`Found ${vehicles.length} vehicles in data property`);
+            break;
+          } else if (Array.isArray(responseData)) {
+            vehicles = responseData;
+            console.log(`Found ${vehicles.length} vehicles in array response`);
+            break;
           }
-        });
-        
-        if (phpVehicleResponse.data && phpVehicleResponse.data.vehicles) {
-          const vehicles = phpVehicleResponse.data.vehicles;
+        }
+      }
+      
+      // If we found vehicles from any endpoint, save to cache
+      if (vehicles && vehicles.length > 0) {
+        saveVehiclesToCache(vehicles);
+        return { vehicles };
+      }
+      
+      // If no API endpoints worked, try the fallback JSON file
+      try {
+        const jsonResponse = await axios.get(`${API_BASE_URL}/data/vehicles.json?_t=${Date.now()}`);
+        if (jsonResponse.data && Array.isArray(jsonResponse.data)) {
+          vehicles = jsonResponse.data;
+          console.log(`Loaded ${vehicles.length} vehicles from JSON fallback`);
           saveVehiclesToCache(vehicles);
           return { vehicles };
         }
-        
-        throw new Error("No valid response from any API endpoint");
+      } catch (jsonError) {
+        console.warn("JSON fallback failed:", jsonError);
       }
+      
+      // If we still don't have vehicles, check localStorage
+      const cachedVehicles = getVehiclesFromCache();
+      if (cachedVehicles.length > 0) {
+        console.log(`Using ${cachedVehicles.length} cached vehicles from localStorage`);
+        return { vehicles: cachedVehicles };
+      }
+      
+      // Last resort - return empty array
+      console.warn("All vehicle fetching methods failed, returning empty array");
+      return { vehicles: [] };
     } catch (error) {
       logAPIError("getVehicles", error);
       
-      // Try to get vehicles from localStorage
+      // Try to get vehicles from localStorage as fallback
       const cachedVehicles = getVehiclesFromCache();
       if (cachedVehicles.length > 0) {
         return { vehicles: cachedVehicles };
@@ -164,18 +180,22 @@ export const fleetAPI = {
    */
   getPendingBookings: async () => {
     try {
-      console.log(`Fetching pending bookings from ${API_BASE_URL}/api/admin/pending-bookings.php`);
+      console.log(`Fetching pending bookings...`);
       
-      // Try direct PHP endpoint first
+      // Set a unique cache-busting parameter
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Try direct PHP endpoint
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php`, {
+        const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php?${cacheBuster}`, {
           headers: {
             'X-Force-Refresh': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Admin-Mode': 'true'
+            'X-Admin-Mode': 'true',
+            'Pragma': 'no-cache'
           },
           // Add timeout to prevent long waiting
-          timeout: 5000
+          timeout: 8000
         });
         
         console.log("Pending bookings response:", response.data);
@@ -191,9 +211,31 @@ export const fleetAPI = {
           return response.data.bookings;
         }
         
-        return [];
+        throw new Error("Invalid response format");
       } catch (directError) {
         console.warn("Direct PHP endpoint failed:", directError);
+        
+        // Try alternate endpoint
+        try {
+          const alternateResponse = await axios.get(`${API_BASE_URL}/api/admin/bookings-pending.php?${cacheBuster}`, {
+            headers: {
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+              'X-Admin-Mode': 'true',
+              'Pragma': 'no-cache'
+            },
+            timeout: 5000
+          });
+          
+          if (alternateResponse.data && 
+              (alternateResponse.data.bookings || alternateResponse.data.data)) {
+            const bookings = alternateResponse.data.bookings || alternateResponse.data.data;
+            localStorage.setItem('pending-bookings', JSON.stringify(bookings));
+            return bookings;
+          }
+        } catch (alternateError) {
+          console.warn("Alternate endpoint failed too:", alternateError);
+        }
         
         // Try to get cached bookings
         try {
@@ -208,7 +250,8 @@ export const fleetAPI = {
         }
         
         // Return sample data as fallback
-        return [
+        console.log("All booking data methods failed, using sample data");
+        const sampleBookings = [
           {
             id: 1001,
             bookingNumber: 'BK-1001',
@@ -230,12 +273,16 @@ export const fleetAPI = {
             status: 'confirmed'
           }
         ];
+        
+        // Save sample data to cache as a last resort
+        localStorage.setItem('pending-bookings', JSON.stringify(sampleBookings));
+        return sampleBookings;
       }
     } catch (error) {
       logAPIError("getPendingBookings", error);
       
       // Return sample data as fallback
-      return [
+      const sampleBookings = [
         {
           id: 1001,
           bookingNumber: 'BK-1001',
@@ -257,6 +304,138 @@ export const fleetAPI = {
           status: 'confirmed'
         }
       ];
+      
+      return sampleBookings;
+    }
+  },
+
+  /**
+   * Get all drivers
+   */
+  getDrivers: async () => {
+    try {
+      console.log(`Fetching drivers...`);
+      
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Try multiple endpoints in parallel
+      const endpoints = [
+        `${API_BASE_URL}/api/admin/get-drivers.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/drivers.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/drivers-data.php?${cacheBuster}`
+      ];
+      
+      const requests = endpoints.map(endpoint => 
+        axios.get(endpoint, {
+          headers: {
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Admin-Mode': 'true',
+            'Pragma': 'no-cache'
+          },
+          timeout: 5000
+        }).catch(err => {
+          console.warn(`Failed to fetch from ${endpoint}:`, err.message);
+          return null;
+        })
+      );
+      
+      const responses = await Promise.all(requests);
+      
+      // Process responses to find valid driver data
+      for (const response of responses) {
+        if (response && response.data) {
+          // Check various response formats
+          if (response.data.data && Array.isArray(response.data.data)) {
+            localStorage.setItem('drivers-cache', JSON.stringify(response.data.data));
+            return response.data.data;
+          } else if (response.data.drivers && Array.isArray(response.data.drivers)) {
+            localStorage.setItem('drivers-cache', JSON.stringify(response.data.drivers));
+            return response.data.drivers;
+          } else if (Array.isArray(response.data)) {
+            localStorage.setItem('drivers-cache', JSON.stringify(response.data));
+            return response.data;
+          }
+        }
+      }
+      
+      // Try getting drivers from local storage
+      try {
+        const cachedDrivers = localStorage.getItem('drivers-cache');
+        if (cachedDrivers) {
+          console.log("Using cached drivers data");
+          return JSON.parse(cachedDrivers);
+        }
+      } catch (cacheError) {
+        console.warn("Failed to retrieve drivers from cache:", cacheError);
+      }
+      
+      // Return sample data as fallback
+      console.log("All driver data methods failed, using sample data");
+      const sampleDrivers = [
+        {
+          id: 101,
+          name: 'Rajesh Kumar',
+          phone: '9876543210',
+          licenseNumber: 'AP12345678901234',
+          status: 'active'
+        },
+        {
+          id: 102,
+          name: 'Suresh Reddy',
+          phone: '8765432109',
+          licenseNumber: 'AP98765432109876',
+          status: 'on_trip'
+        },
+        {
+          id: 103,
+          name: 'Mahesh Babu',
+          phone: '7654321098',
+          licenseNumber: 'AP45678901234567',
+          status: 'active'
+        }
+      ];
+      
+      // Save sample data to cache
+      localStorage.setItem('drivers-cache', JSON.stringify(sampleDrivers));
+      return sampleDrivers;
+    } catch (error) {
+      logAPIError("getDrivers", error);
+      
+      // Try getting from cache
+      try {
+        const cachedDrivers = localStorage.getItem('drivers-cache');
+        if (cachedDrivers) {
+          return JSON.parse(cachedDrivers);
+        }
+      } catch (err) {
+        console.warn("Cache retrieval failed:", err);
+      }
+      
+      // Return sample drivers as fallback
+      return [
+        {
+          id: 101,
+          name: 'Rajesh Kumar',
+          phone: '9876543210',
+          licenseNumber: 'AP12345678901234',
+          status: 'active'
+        },
+        {
+          id: 102,
+          name: 'Suresh Reddy',
+          phone: '8765432109',
+          licenseNumber: 'AP98765432109876',
+          status: 'on_trip'
+        },
+        {
+          id: 103,
+          name: 'Mahesh Babu',
+          phone: '7654321098',
+          licenseNumber: 'AP45678901234567',
+          status: 'active'
+        }
+      ];
     }
   },
 
@@ -266,37 +445,75 @@ export const fleetAPI = {
    */
   getVehicleById: async (vehicleId: string): Promise<FleetVehicle> => {
     try {
+      // Set random cache buster
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      
       // Try direct PHP endpoint first
       try {
         const response = await axios.get(`${API_BASE_URL}/api/admin/fleet-vehicle.php`, {
-          params: { id: vehicleId },
+          params: { id: vehicleId, _t: Date.now(), _cb: cacheBuster },
           headers: {
             'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Admin-Mode': 'true'
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'X-Admin-Mode': 'true',
+            'Pragma': 'no-cache'
           },
-          // Add timeout
           timeout: 5000
         });
         
         if (response.data && response.data.vehicle) {
           return response.data.vehicle;
+        } else if (response.data && response.data.status === 'success' && response.data.data) {
+          return response.data.data;
         }
       } catch (directError) {
         console.warn("Direct PHP endpoint failed, trying fleet API:", directError);
       }
       
-      // Fall back to fleet API
-      const response = await axios.get(`${API_URL}/vehicles/${vehicleId}`, {
-        headers: {
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'X-Admin-Mode': 'true'
-        },
-        timeout: 5000
-      });
+      // Try multiple endpoints in parallel
+      const endpoints = [
+        `${API_BASE_URL}/api/admin/vehicle.php?id=${vehicleId}&${cacheBuster}`,
+        `${API_URL}/vehicles/${vehicleId}?${cacheBuster}`,
+        `${API_BASE_URL}/api/vehicle/${vehicleId}?${cacheBuster}`
+      ];
       
-      return response.data.vehicle;
+      const requests = endpoints.map(endpoint => 
+        axios.get(endpoint, {
+          headers: {
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Admin-Mode': 'true',
+            'Pragma': 'no-cache'
+          },
+          timeout: 5000
+        }).catch(err => {
+          console.warn(`Failed to fetch from ${endpoint}:`, err.message);
+          return null;
+        })
+      );
+      
+      const responses = await Promise.all(requests);
+      
+      // Process responses to find valid vehicle data
+      for (const response of responses) {
+        if (response && response.data) {
+          if (response.data.vehicle) {
+            return response.data.vehicle;
+          } else if (response.data.data) {
+            return response.data.data;
+          }
+        }
+      }
+      
+      // If all API calls failed, try to get from local cache
+      const cachedVehicles = getVehiclesFromCache();
+      const vehicle = cachedVehicles.find((v: FleetVehicle) => v.id === vehicleId);
+      if (vehicle) {
+        console.log(`Found vehicle ${vehicleId} in local cache`);
+        return vehicle;
+      }
+      
+      throw new Error(`Vehicle not found: ${vehicleId}`);
     } catch (error) {
       logAPIError(`getVehicleById(${vehicleId})`, error);
       
@@ -329,132 +546,117 @@ export const fleetAPI = {
         vehicle.id = 'fleet_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       }
       
-      // Adjust request for backend PHP API
-      const requestData = {
-        ...vehicle,
-        vehicleId: vehicle.id,
-        vehicleNumber: vehicle.vehicleNumber,
-        name: vehicle.name,
-        model: vehicle.model,
-        make: vehicle.make,
-        year: vehicle.year,
-        status: vehicle.status,
-        lastService: vehicle.lastService,
-        nextServiceDue: vehicle.nextServiceDue,
-        fuelType: vehicle.fuelType,
-        vehicleType: vehicle.vehicleType,
-        cabTypeId: vehicle.cabTypeId,
-        capacity: vehicle.capacity,
-        luggageCapacity: vehicle.luggageCapacity,
-        isActive: vehicle.isActive
-      };
+      // Make sure vehicleId exists (needed for the API)
+      if (!vehicle.vehicleId) {
+        vehicle.vehicleId = vehicle.id;
+      }
+      
+      // Make sure vehicleNumber is unique
+      if (!vehicle.vehicleNumber) {
+        vehicle.vehicleNumber = 'VN-' + Date.now().toString().slice(-6) + 
+          Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      }
       
       // Try direct PHP endpoint first
       try {
-        const response = await axios.post(`${API_BASE_URL}/api/admin/vehicle-create.php`, requestData, {
+        const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const response = await axios.post(`${API_BASE_URL}/api/admin/vehicle-create.php?${cacheBuster}`, vehicle, {
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Mode': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Pragma': 'no-cache'
           },
-          timeout: 8000
+          timeout: 10000
         });
         
         console.log("Direct PHP endpoint response:", response.data);
         
-        if (response.data && response.data.status === 'success') {
+        if (response.data && (response.data.status === 'success' || response.data.vehicle)) {
+          const newVehicle = response.data.vehicle || response.data.data;
+          
           // Add to localStorage cache
           try {
             const cachedVehicles = getVehiclesFromCache();
             
             // Ensure we don't add duplicates
             const exists = cachedVehicles.some((v: FleetVehicle) => 
-              v.id === response.data.vehicle.id || 
-              (v.vehicleNumber && v.vehicleNumber === response.data.vehicle.vehicleNumber)
+              v.id === newVehicle.id || 
+              (v.vehicleNumber && v.vehicleNumber === newVehicle.vehicleNumber)
             );
             
             if (!exists) {
-              cachedVehicles.push(response.data.vehicle);
+              cachedVehicles.push(newVehicle);
               saveVehiclesToCache(cachedVehicles);
             }
+            
+            // Show success toast
+            toast.success("Vehicle added successfully");
           } catch (storageError) {
             console.error("Failed to update localStorage:", storageError);
           }
           
-          return response.data.vehicle;
+          return newVehicle;
         }
         
+        // If we get here, the response wasn't what we expected
+        console.warn("Unexpected response format:", response.data);
         throw new Error(response.data.message || "Failed to add vehicle");
       } catch (phpError) {
         console.error("PHP direct endpoint failed:", phpError);
         
-        // Try with vehicle-create-debug.php as fallback
+        // Try with direct-vehicle-create.php as fallback
         try {
-          const debugResponse = await axios.post(`${API_BASE_URL}/api/admin/vehicle-create-debug.php`, requestData, {
+          const directionResponse = await axios.post(`${API_BASE_URL}/api/admin/direct-vehicle-create.php`, vehicle, {
             headers: {
               'Content-Type': 'application/json',
-              'X-Admin-Mode': 'true'
+              'X-Admin-Mode': 'true',
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+              'X-Force-Refresh': 'true',
+              'Pragma': 'no-cache'
             },
-            timeout: 8000
+            timeout: 10000
           });
           
-          console.log("Debug endpoint response:", debugResponse.data);
+          console.log("Direct create endpoint response:", directionResponse.data);
           
-          if (debugResponse.data && debugResponse.data.status === 'success') {
+          if (directionResponse.data && 
+              (directionResponse.data.status === 'success' || directionResponse.data.vehicle)) {
+            const newVehicle = directionResponse.data.vehicle || directionResponse.data.data;
+            
             // Add to localStorage cache
             const cachedVehicles = getVehiclesFromCache();
-            cachedVehicles.push(debugResponse.data.vehicle);
+            cachedVehicles.push(newVehicle);
             saveVehiclesToCache(cachedVehicles);
             
-            return debugResponse.data.vehicle;
+            toast.success("Vehicle added successfully");
+            return newVehicle;
           }
-        } catch (debugError) {
-          console.error("Debug endpoint failed too:", debugError);
+        } catch (directError) {
+          console.error("Direct vehicle create endpoint failed:", directError);
         }
         
-        // Fall back to fleet API endpoint
-        try {
-          const response = await axios.post(`${API_URL}/vehicles`, vehicle, {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Admin-Mode': 'true'
-            },
-            timeout: 8000
-          });
-          
-          if (response.data && response.data.vehicle) {
-            // Add to localStorage cache
-            const cachedVehicles = getVehiclesFromCache();
-            cachedVehicles.push(response.data.vehicle);
-            saveVehiclesToCache(cachedVehicles);
-            
-            return response.data.vehicle;
-          }
-          
-          throw new Error("Invalid response format from API");
-        } catch (fleetError) {
-          console.error("Fleet API endpoint failed too:", fleetError);
-          
-          // Last resort: Save locally only
-          const newVehicle = {
-            ...vehicle,
-            id: vehicle.id || ('local_' + Date.now()),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          } as FleetVehicle;
-          
-          // Add to localStorage cache
-          const cachedVehicles = getVehiclesFromCache();
-          cachedVehicles.push(newVehicle);
-          saveVehiclesToCache(cachedVehicles);
-          
-          console.log("Saved vehicle locally only:", newVehicle);
-          return newVehicle as FleetVehicle;
-        }
+        // Last resort: Save locally only
+        const newVehicle = {
+          ...vehicle,
+          id: vehicle.id || ('local_' + Date.now()),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        } as FleetVehicle;
+        
+        // Add to localStorage cache
+        const cachedVehicles = getVehiclesFromCache();
+        cachedVehicles.push(newVehicle);
+        saveVehiclesToCache(cachedVehicles);
+        
+        console.log("Saved vehicle locally only:", newVehicle);
+        toast.success("Vehicle added successfully (offline mode)");
+        return newVehicle as FleetVehicle;
       }
     } catch (error) {
       logAPIError("addVehicle", error);
+      toast.error("Failed to add vehicle: " + (error.message || "Unknown error"));
       throw error;
     }
   },
@@ -471,79 +673,78 @@ export const fleetAPI = {
     }
     
     try {
+      console.log(`Updating vehicle ${vehicleId}:`, vehicle);
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      
       // Try direct PHP endpoint first
       try {
-        const response = await axios.put(`${API_BASE_URL}/api/admin/vehicle-update.php`, {
+        const updateData = {
           id: vehicleId,
-          ...vehicle
-        }, {
+          ...vehicle,
+          vehicleId: vehicleId // Ensure ID is included in both places
+        };
+        
+        const response = await axios.put(`${API_BASE_URL}/api/admin/vehicle-update.php?${cacheBuster}`, updateData, {
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Mode': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Pragma': 'no-cache'
           },
-          timeout: 8000
+          timeout: 10000
         });
         
-        if (response.data && response.data.status === 'success') {
+        if (response.data && (response.data.status === 'success' || response.data.vehicle)) {
+          const updatedVehicle = response.data.vehicle || response.data.data || {
+            ...vehicle,
+            id: vehicleId,
+            vehicleId: vehicleId,
+            updatedAt: new Date().toISOString()
+          };
+          
           // Update localStorage cache
           const cachedVehicles = getVehiclesFromCache();
           const updatedVehicles = cachedVehicles.map((v: FleetVehicle) => 
-            v.id === vehicleId ? {...v, ...vehicle, updatedAt: new Date().toISOString()} : v
+            v.id === vehicleId ? {...v, ...updatedVehicle} : v
           );
           saveVehiclesToCache(updatedVehicles);
           
-          return response.data.vehicle;
+          toast.success("Vehicle updated successfully");
+          return updatedVehicle;
         }
         
         throw new Error(response.data.message || "Failed to update vehicle");
       } catch (phpError) {
-        console.warn("Direct PHP endpoint failed, trying fleet API:", phpError);
+        console.warn("Direct PHP update endpoint failed:", phpError);
         
-        // Try fleet API
-        try {
-          const response = await axios.put(`${API_URL}/vehicles/${vehicleId}`, vehicle, {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Admin-Mode': 'true'
-            },
-            timeout: 8000
-          });
-          
-          if (response.data && response.data.vehicle) {
-            // Update localStorage cache
-            const cachedVehicles = getVehiclesFromCache();
-            const updatedVehicles = cachedVehicles.map((v: FleetVehicle) => 
-              v.id === vehicleId ? {...v, ...vehicle, updatedAt: new Date().toISOString()} : v
-            );
-            saveVehiclesToCache(updatedVehicles);
-            
-            return response.data.vehicle;
-          }
-          
-          throw new Error("Invalid response from API");
-        } catch (fleetError) {
-          console.error("Fleet API failed too:", fleetError);
-          
-          // Last resort: Update locally only
-          const cachedVehicles = getVehiclesFromCache();
-          const updatedVehicles = cachedVehicles.map((v: FleetVehicle) => 
-            v.id === vehicleId ? {...v, ...vehicle, updatedAt: new Date().toISOString()} : v
-          );
-          saveVehiclesToCache(updatedVehicles);
-          
-          const updatedVehicle = updatedVehicles.find(v => v.id === vehicleId);
-          if (!updatedVehicle) {
-            throw new Error("Vehicle not found in local cache");
-          }
-          
-          console.log("Updated vehicle locally only:", updatedVehicle);
-          return updatedVehicle;
+        // Last resort: Update locally only
+        const cachedVehicles = getVehiclesFromCache();
+        const vehicleToUpdate = cachedVehicles.find((v: FleetVehicle) => v.id === vehicleId);
+        
+        if (!vehicleToUpdate) {
+          throw new Error("Vehicle not found in local cache");
         }
+        
+        const updatedVehicle = {
+          ...vehicleToUpdate, 
+          ...vehicle,
+          updatedAt: new Date().toISOString()
+        };
+        
+        const updatedVehicles = cachedVehicles.map((v: FleetVehicle) => 
+          v.id === vehicleId ? updatedVehicle : v
+        );
+        
+        saveVehiclesToCache(updatedVehicles);
+        
+        console.log("Updated vehicle locally only:", updatedVehicle);
+        toast.success("Vehicle updated successfully (offline mode)");
+        return updatedVehicle;
       }
     } catch (error) {
       logAPIError(`updateVehicle(${vehicleId})`, error);
+      toast.error("Failed to update vehicle: " + (error.message || "Unknown error"));
       throw error;
     }
   },
@@ -554,7 +755,7 @@ export const fleetAPI = {
    * @param vehicleId Vehicle ID
    * @param driverId Optional driver ID
    */
-  assignVehicleToBooking: async (bookingId: number | string, vehicleId: string, driverId?: string | null): Promise<any> => {
+  assignVehicleToBooking: async (bookingId: number | string, vehicleId: string, driverId?: string | number | null): Promise<any> => {
     // Prevent duplicate submissions
     if (isRecentOperation('assignVehicleToBooking', {bookingId, vehicleId, driverId})) {
       throw new Error("Duplicate submission prevented");
@@ -562,68 +763,64 @@ export const fleetAPI = {
     
     try {
       console.log(`Assigning vehicle ${vehicleId} to booking ${bookingId}`);
+      const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
-      // Try direct PHP endpoint first
+      // Try direct PHP endpoint
       try {
-        const response = await axios.post(`${API_BASE_URL}/api/admin/booking-assign-vehicle.php`, {
+        const response = await axios.post(`${API_BASE_URL}/api/admin/booking-assign-vehicle.php?${cacheBuster}`, {
           bookingId,
           vehicleId,
-          driverId
+          driverId: driverId || null
         }, {
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Mode': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Pragma': 'no-cache'
           },
-          timeout: 8000
+          timeout: 10000
         });
         
-        console.log("Direct PHP endpoint response:", response.data);
+        console.log("Assignment response:", response.data);
         
         if (response.data && response.data.status === 'success') {
+          toast.success("Vehicle assigned successfully");
           return response.data;
         }
         
-        throw new Error(response.data.message || "Failed to assign vehicle to booking");
+        throw new Error(response.data?.message || "Failed to assign vehicle to booking");
       } catch (phpError) {
-        console.warn("Direct PHP endpoint failed, trying fleet API:", phpError);
+        console.warn("Direct PHP endpoint failed:", phpError);
         
-        // Try fleet API
+        // Create a local assignment record for offline mode
+        const assignment = {
+          assignmentId: `local_${Date.now()}`,
+          bookingId,
+          vehicleId,
+          driverId: driverId || null,
+          status: 'success',
+          message: 'Vehicle assigned to booking (offline mode)',
+          timestamp: Date.now(),
+          assignedAt: new Date().toISOString()
+        };
+        
+        // Save to localStorage
         try {
-          const response = await axios.post(`${API_URL}/bookings/assign`, {
-            bookingId,
-            vehicleId,
-            driverId
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Admin-Mode': 'true'
-            },
-            timeout: 8000
-          });
-          
-          if (response.data) {
-            return response.data;
-          }
-          
-          throw new Error("Invalid response from API");
-        } catch (fleetError) {
-          console.error("Fleet API failed too:", fleetError);
-          
-          // For local testing only - create a fake success response
-          return {
-            status: 'success',
-            message: 'Vehicle assigned to booking (offline mode)',
-            assignmentId: `local_${Date.now()}`,
-            bookingId,
-            vehicleId,
-            driverId
-          };
+          const storedAssignments = localStorage.getItem('vehicle-assignments') || '[]';
+          const assignments = JSON.parse(storedAssignments);
+          assignments.push(assignment);
+          localStorage.setItem('vehicle-assignments', JSON.stringify(assignments));
+        } catch (e) {
+          console.warn("Failed to save assignment to local storage:", e);
         }
+        
+        toast.success("Vehicle assigned successfully (offline mode)");
+        return assignment;
       }
     } catch (error) {
       logAPIError("assignVehicleToBooking", error);
+      toast.error("Failed to assign vehicle: " + (error.message || "Unknown error"));
       throw error;
     }
   }

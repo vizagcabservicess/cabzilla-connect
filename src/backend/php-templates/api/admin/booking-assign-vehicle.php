@@ -6,7 +6,7 @@
 
 // Set CORS headers FIRST
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -24,26 +24,43 @@ if (ob_get_level()) {
     ob_end_clean();
 }
 
+// Create logs directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+$logFile = $logDir . '/vehicle_assignments_' . date('Y-m-d') . '.log';
+
 // Log the request for debugging
-error_log('Booking-vehicle assignment API accessed. Method: ' . $_SERVER['REQUEST_METHOD']);
-error_log('Request body: ' . file_get_contents('php://input'));
+$timestamp = date('Y-m-d H:i:s');
+file_put_contents($logFile, "[$timestamp] Booking-assign-vehicle API accessed. Method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 
-// Initialize response
-$response = [
-    'status' => 'error',
-    'message' => 'Unknown error',
-    'timestamp' => time()
-];
+// Function to log debug info
+function logDebug($message, $data = null) {
+    global $logFile;
+    $timestamp = date('Y-m-d H:i:s');
+    
+    $logMessage = "[$timestamp] $message";
+    if ($data !== null) {
+        if (is_array($data) || is_object($data)) {
+            $logMessage .= ": " . json_encode($data);
+        } else {
+            $logMessage .= ": " . $data;
+        }
+    }
+    
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+}
 
-// Function to send a JSON response
-function sendJsonResponse($status, $message, $data = []) {
+// Function to return a JSON response
+function sendJsonResponse($status, $message, $data = null) {
     $response = [
         'status' => $status,
         'message' => $message,
         'timestamp' => time()
     ];
     
-    if (!empty($data)) {
+    if ($data !== null) {
         $response = array_merge($response, $data);
     }
     
@@ -51,36 +68,11 @@ function sendJsonResponse($status, $message, $data = []) {
     exit;
 }
 
-// Get request data
-$rawData = file_get_contents('php://input');
-$data = json_decode($rawData, true);
-
-if (!$data) {
-    // Try to parse as form data
-    parse_str($rawData, $data);
+// Only allow POST method
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    logDebug("Invalid method: " . $_SERVER['REQUEST_METHOD']);
+    sendJsonResponse('error', 'Only POST method is allowed');
 }
-
-// Also check POST data
-if (empty($data) && !empty($_POST)) {
-    $data = $_POST;
-}
-
-// Log received data
-error_log('Parsed data: ' . json_encode($data));
-
-// Validate required fields
-if (empty($data['vehicle_id']) && empty($data['vehicleId'])) {
-    sendJsonResponse('error', 'Vehicle ID is required');
-}
-
-if (empty($data['booking_id']) && empty($data['bookingId'])) {
-    sendJsonResponse('error', 'Booking ID is required');
-}
-
-// Get normalized data
-$vehicleId = $data['vehicle_id'] ?? $data['vehicleId'];
-$bookingId = $data['booking_id'] ?? $data['bookingId'];
-$driverId = $data['driver_id'] ?? $data['driverId'] ?? null;
 
 // Get database connection
 try {
@@ -88,11 +80,11 @@ try {
     if (file_exists(dirname(__FILE__) . '/../../config.php')) {
         require_once dirname(__FILE__) . '/../../config.php';
         $conn = getDbConnection();
-        error_log("Connected to database using config.php");
+        logDebug("Connected to database using config.php");
     } 
     // Fallback to hardcoded credentials
     else {
-        error_log("Config file not found, using hardcoded credentials");
+        logDebug("Config file not found, using hardcoded credentials");
         $dbHost = 'localhost';
         $dbName = 'u644605165_new_bookingdb';
         $dbUser = 'u644605165_new_bookingusr';
@@ -104,217 +96,149 @@ try {
             throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
-        error_log("Connected to database using hardcoded credentials");
+        logDebug("Connected to database using hardcoded credentials");
     }
-} catch (Exception $e) {
-    // Return success with fake data if database connection fails
-    // This allows the UI to continue working in development/testing
-    sendJsonResponse('success', 'Vehicle assigned to booking (simulated - DB connection failed)', [
-        'bookingId' => $bookingId,
-        'vehicleId' => $vehicleId,
-        'driverId' => $driverId,
-        'assignmentId' => 'sim_' . time(),
-        'isSimulated' => true
-    ]);
-}
-
-try {
-    // Begin transaction
-    $conn->begin_transaction();
     
-    // Check if vehicle_assignments table exists
-    $vaTableExists = $conn->query("SHOW TABLES LIKE 'vehicle_assignments'");
-    if ($vaTableExists->num_rows == 0) {
-        // Create the table if it doesn't exist
-        $createVaTableSql = "CREATE TABLE IF NOT EXISTS vehicle_assignments (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            vehicle_id VARCHAR(50) NOT NULL,
+    // Get raw input
+    $rawInput = file_get_contents('php://input');
+    logDebug("Raw input received", $rawInput);
+    
+    // Try to decode JSON input
+    $input = json_decode($rawInput, true);
+    $jsonError = json_last_error();
+    
+    // Fall back to POST data if JSON parsing fails
+    if ($jsonError !== JSON_ERROR_NONE) {
+        logDebug("JSON decode error: " . json_last_error_msg() . " (code: $jsonError)");
+        if (!empty($_POST)) {
+            logDebug("Using POST data instead");
+            $input = $_POST;
+        }
+    }
+    
+    // Verify we have valid data
+    if (empty($input)) {
+        logDebug("Input data is empty after processing");
+        throw new Exception("No data provided or invalid format");
+    }
+    
+    // Extract required fields
+    $bookingId = isset($input['bookingId']) ? $input['bookingId'] : null;
+    $vehicleId = isset($input['vehicleId']) ? $input['vehicleId'] : null;
+    $driverId = isset($input['driverId']) ? $input['driverId'] : null;
+    
+    if (!$bookingId || !$vehicleId) {
+        throw new Exception("Missing required fields: bookingId and vehicleId are required");
+    }
+    
+    // Check if vehicle_assignments table exists, if not, create it
+    $tableExistsQuery = $conn->query("SHOW TABLES LIKE 'vehicle_assignments'");
+    if ($tableExistsQuery->num_rows == 0) {
+        // Create the table
+        $createTableSql = "CREATE TABLE IF NOT EXISTS vehicle_assignments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             booking_id INT NOT NULL,
-            driver_id VARCHAR(50) NULL,
-            start_date DATETIME,
-            status VARCHAR(20) DEFAULT 'scheduled',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+            vehicle_id VARCHAR(50) NOT NULL,
+            driver_id INT,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'assigned',
+            notes TEXT,
+            UNIQUE KEY (booking_id)
+        )";
         
-        if (!$conn->query($createVaTableSql)) {
+        if (!$conn->query($createTableSql)) {
             throw new Exception("Failed to create vehicle_assignments table: " . $conn->error);
         }
         
-        error_log("Created vehicle_assignments table");
+        logDebug("Created vehicle_assignments table");
     }
     
-    // Check if booking exists
-    $checkBookingStmt = $conn->prepare("SELECT id, status FROM bookings WHERE id = ?");
-    if (!$checkBookingStmt) {
-        throw new Exception("Failed to prepare booking check statement: " . $conn->error);
-    }
+    // Begin transaction
+    $conn->begin_transaction();
     
-    $checkBookingStmt->bind_param("i", $bookingId);
-    $checkBookingStmt->execute();
-    $bookingResult = $checkBookingStmt->get_result();
-    
-    if ($bookingResult->num_rows == 0) {
-        // If booking doesn't exist, simulate a successful response for testing
-        $conn->rollback();
-        sendJsonResponse('success', 'Vehicle assigned to booking (simulated - booking not found)', [
-            'bookingId' => $bookingId,
-            'vehicleId' => $vehicleId,
-            'driverId' => $driverId,
-            'assignmentId' => 'sim_' . time(),
-            'isSimulated' => true
-        ]);
-    }
-    
-    $bookingRow = $bookingResult->fetch_assoc();
-    
-    // Check if vehicle exists in fleet_vehicles or vehicles table
-    $vehicleFound = false;
-    
-    // Check in fleet_vehicles first
-    $fleetVehiclesTableExists = $conn->query("SHOW TABLES LIKE 'fleet_vehicles'");
-    if ($fleetVehiclesTableExists->num_rows > 0) {
-        $checkFleetVehicleStmt = $conn->prepare("SELECT id FROM fleet_vehicles WHERE id = ?");
-        if ($checkFleetVehicleStmt) {
-            $checkFleetVehicleStmt->bind_param("s", $vehicleId);
-            $checkFleetVehicleStmt->execute();
-            $fleetVehicleResult = $checkFleetVehicleStmt->get_result();
-            if ($fleetVehicleResult->num_rows > 0) {
-                $vehicleFound = true;
+    try {
+        // Check if assignment already exists
+        $checkSql = "SELECT id FROM vehicle_assignments WHERE booking_id = ?";
+        $checkStmt = $conn->prepare($checkSql);
+        $checkStmt->bind_param("i", $bookingId);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // Assignment exists, update it
+            $row = $result->fetch_assoc();
+            $assignmentId = $row['id'];
+            
+            $updateSql = "UPDATE vehicle_assignments 
+                         SET vehicle_id = ?, driver_id = ?, updated_at = NOW() 
+                         WHERE id = ?";
+            $updateStmt = $conn->prepare($updateSql);
+            
+            if ($driverId) {
+                $updateStmt->bind_param("sii", $vehicleId, $driverId, $assignmentId);
+            } else {
+                $updateSql = "UPDATE vehicle_assignments 
+                             SET vehicle_id = ?, updated_at = NOW() 
+                             WHERE id = ?";
+                $updateStmt = $conn->prepare($updateSql);
+                $updateStmt->bind_param("si", $vehicleId, $assignmentId);
             }
-        }
-    }
-    
-    // If not found in fleet_vehicles, check in vehicles
-    if (!$vehicleFound) {
-        $vehiclesTableExists = $conn->query("SHOW TABLES LIKE 'vehicles'");
-        if ($vehiclesTableExists->num_rows > 0) {
-            $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ?");
-            if ($checkVehicleStmt) {
-                $checkVehicleStmt->bind_param("s", $vehicleId);
-                $checkVehicleStmt->execute();
-                $vehicleResult = $checkVehicleStmt->get_result();
-                if ($vehicleResult->num_rows > 0) {
-                    $vehicleFound = true;
-                }
+            
+            if (!$updateStmt->execute()) {
+                throw new Exception("Failed to update assignment: " . $updateStmt->error);
             }
-        }
-    }
-    
-    if (!$vehicleFound) {
-        // If vehicle doesn't exist, simulate a successful response for testing
-        $conn->rollback();
-        sendJsonResponse('success', 'Vehicle assigned to booking (simulated - vehicle not found)', [
-            'bookingId' => $bookingId,
-            'vehicleId' => $vehicleId,
-            'driverId' => $driverId,
-            'assignmentId' => 'sim_' . time(),
-            'isSimulated' => true
-        ]);
-    }
-    
-    // Check if assignment already exists
-    $checkAssignmentStmt = $conn->prepare("SELECT id FROM vehicle_assignments WHERE booking_id = ?");
-    $checkAssignmentStmt->bind_param("i", $bookingId);
-    $checkAssignmentStmt->execute();
-    $assignmentResult = $checkAssignmentStmt->get_result();
-    
-    if ($assignmentResult->num_rows > 0) {
-        // Update existing assignment
-        $assignmentRow = $assignmentResult->fetch_assoc();
-        $assignmentId = $assignmentRow['id'];
-        
-        $updateStmt = $conn->prepare("
-            UPDATE vehicle_assignments 
-            SET vehicle_id = ?, driver_id = ?, updated_at = NOW() 
-            WHERE id = ?
-        ");
-        
-        $updateStmt->bind_param("ssi", $vehicleId, $driverId, $assignmentId);
-        $updateStmt->execute();
-        
-        error_log("Updated vehicle assignment: " . $assignmentId);
-    } else {
-        // Create new assignment
-        $insertStmt = $conn->prepare("
-            INSERT INTO vehicle_assignments (
-                vehicle_id, booking_id, driver_id, start_date, status, created_at, updated_at
-            ) VALUES (?, ?, ?, NOW(), 'scheduled', NOW(), NOW())
-        ");
-        
-        $insertStmt->bind_param("sis", $vehicleId, $bookingId, $driverId);
-        $insertStmt->execute();
-        
-        $assignmentId = $conn->insert_id;
-        error_log("Created new vehicle assignment: " . $assignmentId);
-    }
-    
-    // Check if fleet_vehicle_id column exists in bookings table
-    $fleetVehicleIdColumnExists = false;
-    $columnsResult = $conn->query("SHOW COLUMNS FROM bookings LIKE 'fleet_vehicle_id'");
-    if ($columnsResult->num_rows > 0) {
-        $fleetVehicleIdColumnExists = true;
-    }
-    
-    // Update booking status if needed
-    if ($bookingRow['status'] === 'pending') {
-        if ($fleetVehicleIdColumnExists) {
-            $updateBookingStmt = $conn->prepare("
-                UPDATE bookings 
-                SET status = 'assigned', fleet_vehicle_id = ?, updated_at = NOW() 
-                WHERE id = ?
-            ");
-            $updateBookingStmt->bind_param("si", $vehicleId, $bookingId);
+            
+            logDebug("Updated assignment #$assignmentId for booking #$bookingId with vehicle $vehicleId" . ($driverId ? " and driver $driverId" : ""));
         } else {
-            $updateBookingStmt = $conn->prepare("
-                UPDATE bookings 
-                SET status = 'assigned', updated_at = NOW() 
-                WHERE id = ?
-            ");
-            $updateBookingStmt->bind_param("i", $bookingId);
+            // Create new assignment
+            if ($driverId) {
+                $insertSql = "INSERT INTO vehicle_assignments (booking_id, vehicle_id, driver_id) VALUES (?, ?, ?)";
+                $insertStmt = $conn->prepare($insertSql);
+                $insertStmt->bind_param("isi", $bookingId, $vehicleId, $driverId);
+            } else {
+                $insertSql = "INSERT INTO vehicle_assignments (booking_id, vehicle_id) VALUES (?, ?)";
+                $insertStmt = $conn->prepare($insertSql);
+                $insertStmt->bind_param("is", $bookingId, $vehicleId);
+            }
+            
+            if (!$insertStmt->execute()) {
+                throw new Exception("Failed to create assignment: " . $insertStmt->error);
+            }
+            
+            $assignmentId = $conn->insert_id;
+            logDebug("Created assignment #$assignmentId for booking #$bookingId with vehicle $vehicleId" . ($driverId ? " and driver $driverId" : ""));
         }
         
-        $updateBookingStmt->execute();
-        error_log("Updated booking status to assigned: " . $bookingId);
-    } else if ($fleetVehicleIdColumnExists) {
-        // Just update the fleet_vehicle_id if the column exists
-        $updateBookingStmt = $conn->prepare("
-            UPDATE bookings 
-            SET fleet_vehicle_id = ?, updated_at = NOW() 
-            WHERE id = ?
-        ");
+        // Update the booking table with vehicle_id and update status to confirmed
+        $updateBookingSql = "UPDATE bookings SET fleet_vehicle_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?";
+        $updateBookingStmt = $conn->prepare($updateBookingSql);
         $updateBookingStmt->bind_param("si", $vehicleId, $bookingId);
-        $updateBookingStmt->execute();
         
-        error_log("Updated booking fleet_vehicle_id: " . $bookingId);
+        if (!$updateBookingStmt->execute()) {
+            logDebug("Warning: Could not update booking table: " . $updateBookingStmt->error);
+            // Not throwing exception as assignment was successful
+        } else {
+            logDebug("Updated booking #$bookingId with vehicle $vehicleId");
+        }
+        
+        // Commit transaction
+        $conn->commit();
+        
+        // Return success
+        sendJsonResponse('success', 'Vehicle assigned to booking successfully', [
+            'assignmentId' => $assignmentId,
+            'bookingId' => $bookingId,
+            'vehicleId' => $vehicleId,
+            'driverId' => $driverId
+        ]);
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
     }
-    
-    // Commit transaction
-    $conn->commit();
-    
-    // Return success
-    sendJsonResponse('success', 'Vehicle assigned to booking successfully', [
-        'assignmentId' => $assignmentId,
-        'bookingId' => $bookingId,
-        'vehicleId' => $vehicleId,
-        'driverId' => $driverId
-    ]);
     
 } catch (Exception $e) {
-    // Rollback transaction
-    if (isset($conn)) {
-        $conn->rollback();
-    }
-    
-    error_log("Error assigning vehicle to booking: " . $e->getMessage());
-    
-    // Return simulated success for UI testing purposes
-    sendJsonResponse('success', 'Vehicle assigned to booking (simulated - error occurred: ' . $e->getMessage() . ')', [
-        'bookingId' => $bookingId,
-        'vehicleId' => $vehicleId,
-        'driverId' => $driverId,
-        'assignmentId' => 'sim_' . time(),
-        'isSimulated' => true,
-        'error' => $e->getMessage()
-    ]);
+    logDebug("Error: " . $e->getMessage());
+    sendJsonResponse('error', 'Failed to assign vehicle: ' . $e->getMessage());
 }
