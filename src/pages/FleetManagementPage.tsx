@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { AddFleetVehicleDialog } from '@/components/admin/AddFleetVehicleDialog';
 import { FleetVehicleAssignmentDialog } from '@/components/admin/FleetVehicleAssignmentDialog';
+import { EditFleetVehicleDialog } from '@/components/admin/EditFleetVehicleDialog';
+import { ViewFleetVehicleDialog } from '@/components/admin/ViewFleetVehicleDialog';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { FleetVehicle } from '@/types/cab';
@@ -20,6 +23,8 @@ export default function FleetManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -381,8 +386,15 @@ export default function FleetManagementPage() {
       
       toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
       
-      // Add the new vehicle to the fleet data
-      setFleetData(prev => [...prev, response]);
+      // Prevent duplicate entries by checking if vehicle already exists
+      const vehicleExists = fleetData.some(v => 
+        v.id === response.id || v.vehicleNumber === response.vehicleNumber
+      );
+      
+      if (!vehicleExists) {
+        // Add the new vehicle to the fleet data
+        setFleetData(prev => [...prev, response]);
+      }
       
       // Refresh fleet data to ensure we have the latest data
       setTimeout(() => {
@@ -395,6 +407,44 @@ export default function FleetManagementPage() {
     
     // Close dialog
     setIsAddDialogOpen(false);
+  };
+
+  // Handle view vehicle details
+  const handleViewVehicle = (vehicle: FleetVehicle) => {
+    setSelectedVehicle(vehicle);
+    setIsViewDialogOpen(true);
+  };
+
+  // Handle edit vehicle
+  const handleEditVehicle = (vehicle: FleetVehicle) => {
+    setSelectedVehicle(vehicle);
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle vehicle update after edit
+  const handleVehicleUpdate = async (updatedVehicle: FleetVehicle) => {
+    try {
+      // Update the vehicle in the API
+      const response = await fleetAPI.updateVehicle(updatedVehicle.id, updatedVehicle);
+      
+      // Update the local state
+      setFleetData(prev => 
+        prev.map(vehicle => vehicle.id === updatedVehicle.id ? response : vehicle)
+      );
+      
+      toast.success(`Vehicle ${updatedVehicle.vehicleNumber} has been updated.`);
+      
+      // Refresh data
+      setTimeout(() => {
+        fetchFleetData();
+      }, 1000);
+    } catch (error) {
+      console.error("Error updating vehicle:", error);
+      toast.error(`Failed to update vehicle. Please try again.`);
+    }
+    
+    // Close dialog
+    setIsEditDialogOpen(false);
   };
 
   // Handle assigning a vehicle to booking
@@ -441,6 +491,7 @@ export default function FleetManagementPage() {
           </div>
         </div>
 
+        {/* Dashboard Cards */}
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -537,8 +588,20 @@ export default function FleetManagementPage() {
                         <TableCell>{vehicle.lastService}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm">View</Button>
-                            <Button variant="outline" size="sm">Edit</Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleViewVehicle(vehicle)}
+                            >
+                              View
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleEditVehicle(vehicle)}
+                            >
+                              Edit
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -566,6 +629,25 @@ export default function FleetManagementPage() {
         onClose={() => setIsAddDialogOpen(false)}
         onAddVehicle={handleAddVehicle}
       />
+
+      {/* View Vehicle Dialog */}
+      {selectedVehicle && (
+        <ViewFleetVehicleDialog
+          open={isViewDialogOpen}
+          onClose={() => setIsViewDialogOpen(false)}
+          vehicle={selectedVehicle}
+        />
+      )}
+
+      {/* Edit Vehicle Dialog */}
+      {selectedVehicle && (
+        <EditFleetVehicleDialog
+          open={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          vehicle={selectedVehicle}
+          onSave={handleVehicleUpdate}
+        />
+      )}
 
       {/* Assign Vehicle to Booking Dialog */}
       <FleetVehicleAssignmentDialog

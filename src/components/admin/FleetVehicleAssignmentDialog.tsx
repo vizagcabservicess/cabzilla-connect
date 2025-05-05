@@ -49,6 +49,7 @@ export function FleetVehicleAssignmentDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableDrivers, setAvailableDrivers] = useState<{id: string, name: string}[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | undefined>(booking);
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
 
   const form = useForm<AssignmentFormData>({
     defaultValues: {
@@ -78,16 +79,22 @@ export function FleetVehicleAssignmentDialog({
     form.setValue("bookingId", bookingId);
   };
 
-  // Fetch available drivers
+  // Fetch available drivers using fleetAPI
   const fetchDrivers = async () => {
+    setIsLoadingDrivers(true);
     try {
-      // This is a placeholder. In a real implementation, you would fetch drivers from your API
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/drivers`);
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableDrivers(data.drivers || []);
+      const drivers = await fleetAPI.getDrivers();
+      console.log("Fetched drivers:", drivers);
+      
+      if (Array.isArray(drivers)) {
+        // Transform driver data to expected format
+        const formattedDrivers = drivers.map(driver => ({
+          id: driver.id.toString(),
+          name: driver.name || `Driver ${driver.id}`
+        }));
+        setAvailableDrivers(formattedDrivers);
       } else {
-        throw new Error("Failed to fetch drivers");
+        throw new Error("Invalid drivers data format");
       }
     } catch (error) {
       console.error("Error fetching drivers:", error);
@@ -98,6 +105,8 @@ export function FleetVehicleAssignmentDialog({
         { id: "driver-1", name: "John Driver (Default)" },
         { id: "driver-2", name: "Alice Driver (Default)" }
       ]);
+    } finally {
+      setIsLoadingDrivers(false);
     }
   };
 
@@ -113,15 +122,16 @@ export function FleetVehicleAssignmentDialog({
     try {
       setIsSubmitting(true);
       
-      // Call the API to assign vehicle to booking
+      // Call the API to assign vehicle to booking with corrected parameter order
+      // The correct parameter order is (bookingId, vehicleId, driverId)
       const success = await fleetAPI.assignVehicleToBooking(
-        data.vehicleId,
         currentBooking.id.toString(),
+        data.vehicleId,
         data.driverId
       );
       
       if (success) {
-        toast.success(`Vehicle successfully assigned to booking #${currentBooking.bookingNumber}`);
+        toast.success(`Vehicle successfully assigned to booking #${currentBooking.bookingNumber || currentBooking.id}`);
         onAssignComplete();
       } else {
         // This shouldn't happen with our fallback mechanism, but just in case
@@ -129,7 +139,7 @@ export function FleetVehicleAssignmentDialog({
       }
     } catch (error) {
       console.error("Error assigning vehicle:", error);
-      toast.error(`Failed to assign vehicle to booking #${currentBooking.bookingNumber}`);
+      toast.error(`Failed to assign vehicle to booking #${currentBooking.bookingNumber || currentBooking.id}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -164,7 +174,7 @@ export function FleetVehicleAssignmentDialog({
                       <SelectContent>
                         {availableBookings.map(booking => (
                           <SelectItem key={booking.id} value={booking.id.toString()}>
-                            #{booking.bookingNumber} - {booking.passengerName} - {booking.cabType}
+                            #{booking.bookingNumber || booking.id} - {booking.passengerName} - {booking.cabType}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -179,7 +189,7 @@ export function FleetVehicleAssignmentDialog({
               <div className="bg-muted/50 p-3 rounded-md mb-4">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="font-medium">Booking #:</span> {selectedBooking.bookingNumber}
+                    <span className="font-medium">Booking #:</span> {selectedBooking.bookingNumber || selectedBooking.id}
                   </div>
                   <div>
                     <span className="font-medium">Customer:</span> {selectedBooking.passengerName}
@@ -237,15 +247,19 @@ export function FleetVehicleAssignmentDialog({
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a driver" />
+                        <SelectValue placeholder={isLoadingDrivers ? "Loading drivers..." : "Select a driver"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {availableDrivers.map(driver => (
-                        <SelectItem key={driver.id} value={driver.id}>
-                          {driver.name}
-                        </SelectItem>
-                      ))}
+                      {isLoadingDrivers ? (
+                        <SelectItem value="loading" disabled>Loading drivers...</SelectItem>
+                      ) : (
+                        availableDrivers.map(driver => (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {driver.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

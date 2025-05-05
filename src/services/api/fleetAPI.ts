@@ -184,103 +184,123 @@ export const fleetAPI = {
       // Set a unique cache-busting parameter
       const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       
-      // Try direct PHP endpoint
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php?${cacheBuster}`, {
+      // Try multiple endpoints in parallel for better reliability
+      const endpoints = [
+        `${API_BASE_URL}/api/admin/pending-bookings.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/bookings-pending.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/bookings/pending?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/unassigned-bookings.php?${cacheBuster}`
+      ];
+      
+      // Make requests to all endpoints simultaneously
+      const requests = endpoints.map(endpoint => 
+        axios.get(endpoint, {
           headers: {
             'X-Force-Refresh': 'true',
             'Cache-Control': 'no-store, no-cache, must-revalidate',
             'X-Admin-Mode': 'true',
             'Pragma': 'no-cache'
           },
-          // Add timeout to prevent long waiting
-          timeout: 8000
-        });
-        
-        console.log("Pending bookings response:", response.data);
-        
-        if (response.data && response.data.bookings) {
-          // Cache the bookings locally
-          try {
-            localStorage.setItem('pending-bookings', JSON.stringify(response.data.bookings));
-          } catch (err) {
-            console.warn("Could not cache pending bookings:", err);
+          timeout: 8000 // 8-second timeout
+        }).catch(err => {
+          console.warn(`Failed to fetch from ${endpoint}:`, err.message);
+          return null; // Return null to prevent Promise.all from failing
+        })
+      );
+      
+      // Wait for all requests to complete
+      const responses = await Promise.all(requests);
+      
+      // Process each response to find valid booking data
+      for (const response of responses) {
+        if (response && response.data) {
+          // Try to extract data in various formats
+          if (response.data.bookings && Array.isArray(response.data.bookings)) {
+            // Store in localStorage as a cache
+            try {
+              localStorage.setItem('pending-bookings-cache', JSON.stringify(response.data.bookings));
+              console.log(`Cached ${response.data.bookings.length} bookings to localStorage`);
+            } catch (cacheErr) {
+              console.warn("Failed to cache bookings:", cacheErr);
+            }
+            return response.data.bookings;
+          } else if (response.data.data && Array.isArray(response.data.data)) {
+            try {
+              localStorage.setItem('pending-bookings-cache', JSON.stringify(response.data.data));
+            } catch (cacheErr) {
+              console.warn("Failed to cache bookings:", cacheErr);
+            }
+            return response.data.data;
+          } else if (Array.isArray(response.data)) {
+            try {
+              localStorage.setItem('pending-bookings-cache', JSON.stringify(response.data));
+            } catch (cacheErr) {
+              console.warn("Failed to cache bookings:", cacheErr);
+            }
+            return response.data;
           }
-          
-          return response.data.bookings;
         }
-        
-        throw new Error("Invalid response format");
-      } catch (directError) {
-        console.warn("Direct PHP endpoint failed:", directError);
-        
-        // Try alternate endpoint
-        try {
-          const alternateResponse = await axios.get(`${API_BASE_URL}/api/admin/bookings-pending.php?${cacheBuster}`, {
-            headers: {
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-store, no-cache, must-revalidate',
-              'X-Admin-Mode': 'true',
-              'Pragma': 'no-cache'
-            },
-            timeout: 5000
-          });
-          
-          if (alternateResponse.data && 
-              (alternateResponse.data.bookings || alternateResponse.data.data)) {
-            const bookings = alternateResponse.data.bookings || alternateResponse.data.data;
-            localStorage.setItem('pending-bookings', JSON.stringify(bookings));
-            return bookings;
-          }
-        } catch (alternateError) {
-          console.warn("Alternate endpoint failed too:", alternateError);
-        }
-        
-        // Try to get cached bookings
-        try {
-          const cachedBookings = localStorage.getItem('pending-bookings');
-          if (cachedBookings) {
-            const bookings = JSON.parse(cachedBookings);
-            console.log("Using cached pending bookings:", bookings);
-            return bookings;
-          }
-        } catch (cacheErr) {
-          console.warn("Could not retrieve cached bookings:", cacheErr);
-        }
-        
-        // Return sample data as fallback
-        console.log("All booking data methods failed, using sample data");
-        const sampleBookings = [
-          {
-            id: 1001,
-            bookingNumber: 'BK-1001',
-            passengerName: 'John Smith',
-            pickupLocation: 'Airport Terminal 1',
-            dropLocation: 'Downtown Hotel',
-            pickupDate: '2025-05-10',
-            cabType: 'sedan',
-            status: 'pending'
-          },
-          {
-            id: 1002,
-            bookingNumber: 'BK-1002',
-            passengerName: 'Sarah Johnson',
-            pickupLocation: 'City Center',
-            dropLocation: 'Beach Resort',
-            pickupDate: '2025-05-12',
-            cabType: 'suv',
-            status: 'confirmed'
-          }
-        ];
-        
-        // Save sample data to cache as a last resort
-        localStorage.setItem('pending-bookings', JSON.stringify(sampleBookings));
-        return sampleBookings;
       }
+      
+      // If we reach here, try to load from localStorage
+      try {
+        const cachedBookings = localStorage.getItem('pending-bookings-cache');
+        if (cachedBookings) {
+          const bookings = JSON.parse(cachedBookings);
+          console.log("Using cached pending bookings:", bookings.length);
+          return bookings;
+        }
+      } catch (cacheErr) {
+        console.warn("Failed to retrieve cached bookings:", cacheErr);
+      }
+      
+      // If all else fails, return sample data
+      console.log("All booking endpoints failed, using sample data");
+      const sampleBookings = [
+        {
+          id: 1001,
+          bookingNumber: 'BK-1001',
+          passengerName: 'John Smith',
+          pickupLocation: 'Airport Terminal 1',
+          dropLocation: 'Downtown Hotel',
+          pickupDate: '2025-05-10',
+          cabType: 'sedan',
+          status: 'pending'
+        },
+        {
+          id: 1002,
+          bookingNumber: 'BK-1002',
+          passengerName: 'Sarah Johnson',
+          pickupLocation: 'City Center',
+          dropLocation: 'Beach Resort',
+          pickupDate: '2025-05-12',
+          cabType: 'suv',
+          status: 'confirmed'
+        }
+      ];
+      
+      // Save sample data to cache
+      try {
+        localStorage.setItem('pending-bookings-cache', JSON.stringify(sampleBookings));
+      } catch (err) {
+        console.warn("Failed to cache sample bookings:", err);
+      }
+      
+      return sampleBookings;
     } catch (error) {
       logAPIError("getPendingBookings", error);
       
-      // Return sample data as fallback
+      // Try to retrieve from cache first
+      try {
+        const cachedBookings = localStorage.getItem('pending-bookings-cache');
+        if (cachedBookings) {
+          return JSON.parse(cachedBookings);
+        }
+      } catch (cacheErr) {
+        console.warn("Failed to retrieve cached bookings:", cacheErr);
+      }
+      
+      // Fallback to sample data
       const sampleBookings = [
         {
           id: 1001,
@@ -317,11 +337,13 @@ export const fleetAPI = {
       
       const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       
-      // Try multiple endpoints in parallel
+      // Try multiple endpoints in parallel with improved reliability
       const endpoints = [
         `${API_BASE_URL}/api/admin/get-drivers.php?${cacheBuster}`,
         `${API_BASE_URL}/api/admin/drivers.php?${cacheBuster}`,
-        `${API_BASE_URL}/api/drivers-data.php?${cacheBuster}`
+        `${API_BASE_URL}/api/drivers-data.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/admin/drivers-list.php?${cacheBuster}`,
+        `${API_BASE_URL}/api/fleet/drivers?${cacheBuster}`
       ];
       
       const requests = endpoints.map(endpoint => 
@@ -367,6 +389,22 @@ export const fleetAPI = {
         }
       } catch (cacheError) {
         console.warn("Failed to retrieve drivers from cache:", cacheError);
+      }
+      
+      // Try direct PHP endpoint with different URL pattern
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/admin/drivers`);
+        if (response.ok) {
+          const data = await response.json();
+          const drivers = data.drivers || data.data || data;
+          
+          if (Array.isArray(drivers)) {
+            localStorage.setItem('drivers-cache', JSON.stringify(drivers));
+            return drivers;
+          }
+        }
+      } catch (directError) {
+        console.warn("Direct drivers fetch failed:", directError);
       }
       
       // Return sample data as fallback
@@ -792,6 +830,31 @@ export const fleetAPI = {
         throw new Error(response.data?.message || "Failed to assign vehicle to booking");
       } catch (phpError) {
         console.warn("Direct PHP endpoint failed:", phpError);
+        
+        // Try alternate endpoint
+        try {
+          const altResponse = await axios.post(`${API_BASE_URL}/api/admin/assign-vehicle.php?${cacheBuster}`, {
+            booking_id: bookingId,
+            vehicle_id: vehicleId,
+            driver_id: driverId || null
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Admin-Mode': 'true',
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+              'X-Force-Refresh': 'true',
+              'Pragma': 'no-cache'
+            },
+            timeout: 8000
+          });
+          
+          if (altResponse.data && (altResponse.data.status === 'success' || altResponse.data.success)) {
+            toast.success("Vehicle assigned successfully (alternate endpoint)");
+            return altResponse.data;
+          }
+        } catch (altError) {
+          console.warn("Alternate endpoint failed:", altError);
+        }
         
         // Create a local assignment record for offline mode
         const assignment = {
