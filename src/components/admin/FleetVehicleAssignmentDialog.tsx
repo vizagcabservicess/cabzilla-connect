@@ -29,11 +29,13 @@ interface FleetVehicleAssignmentDialogProps {
   booking?: Booking;
   availableVehicles: FleetVehicle[];
   onAssignComplete: () => void;
+  availableBookings?: Booking[];
 }
 
 interface AssignmentFormData {
   vehicleId: string;
   driverId?: string;
+  bookingId?: string;
 }
 
 export function FleetVehicleAssignmentDialog({
@@ -41,35 +43,52 @@ export function FleetVehicleAssignmentDialog({
   onClose,
   booking,
   availableVehicles,
-  onAssignComplete
+  onAssignComplete,
+  availableBookings = []
 }: FleetVehicleAssignmentDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableDrivers, setAvailableDrivers] = useState<{id: string, name: string}[]>([]);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | undefined>(booking);
 
   const form = useForm<AssignmentFormData>({
     defaultValues: {
       vehicleId: "",
-      driverId: ""
+      driverId: "",
+      bookingId: booking?.id.toString() || ""
     }
   });
 
   // Reset form when dialog opens or booking changes
   useEffect(() => {
     if (open) {
-      form.reset({ vehicleId: "", driverId: "" });
+      form.reset({ 
+        vehicleId: "", 
+        driverId: "", 
+        bookingId: booking?.id.toString() || "" 
+      });
       fetchDrivers();
+      setSelectedBooking(booking);
     }
   }, [open, booking, form]);
+
+  // Update selected booking when bookingId changes
+  const handleBookingChange = (bookingId: string) => {
+    const selected = availableBookings.find(b => b.id.toString() === bookingId);
+    setSelectedBooking(selected);
+    form.setValue("bookingId", bookingId);
+  };
 
   // Fetch available drivers
   const fetchDrivers = async () => {
     try {
       // This is a placeholder. In a real implementation, you would fetch drivers from your API
-      setAvailableDrivers([
-        { id: "driver-1", name: "John Driver" },
-        { id: "driver-2", name: "Alice Driver" },
-        { id: "driver-3", name: "Bob Driver" }
-      ]);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/drivers`);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableDrivers(data.drivers || []);
+      } else {
+        throw new Error("Failed to fetch drivers");
+      }
     } catch (error) {
       console.error("Error fetching drivers:", error);
       toast.error("Failed to load available drivers");
@@ -84,7 +103,9 @@ export function FleetVehicleAssignmentDialog({
 
   // Handle assignment submission
   const handleSubmit = async (data: AssignmentFormData) => {
-    if (!booking) {
+    const currentBooking = selectedBooking || (data.bookingId ? availableBookings.find(b => b.id.toString() === data.bookingId) : null);
+    
+    if (!currentBooking) {
       toast.error("No booking selected for assignment");
       return;
     }
@@ -95,12 +116,12 @@ export function FleetVehicleAssignmentDialog({
       // Call the API to assign vehicle to booking
       const success = await fleetAPI.assignVehicleToBooking(
         data.vehicleId,
-        booking.id.toString(),
+        currentBooking.id.toString(),
         data.driverId
       );
       
       if (success) {
-        toast.success(`Vehicle successfully assigned to booking #${booking.bookingNumber}`);
+        toast.success(`Vehicle successfully assigned to booking #${currentBooking.bookingNumber}`);
         onAssignComplete();
       } else {
         // This shouldn't happen with our fallback mechanism, but just in case
@@ -108,11 +129,7 @@ export function FleetVehicleAssignmentDialog({
       }
     } catch (error) {
       console.error("Error assigning vehicle:", error);
-      
-      // Even if the API fails, we'll show a success message
-      // This allows the app to continue functioning when API is down
-      toast.success(`Vehicle assigned to booking #${booking.bookingNumber} (local only)`);
-      onAssignComplete();
+      toast.error(`Failed to assign vehicle to booking #${currentBooking.bookingNumber}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -125,31 +142,62 @@ export function FleetVehicleAssignmentDialog({
           <DialogTitle>Assign Vehicle to Booking</DialogTitle>
         </DialogHeader>
 
-        {booking ? (
-          <div className="bg-muted/50 p-3 rounded-md mb-4">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="font-medium">Booking #:</span> {booking.bookingNumber}
-              </div>
-              <div>
-                <span className="font-medium">Customer:</span> {booking.passengerName}
-              </div>
-              <div>
-                <span className="font-medium">Pickup:</span> {new Date(booking.pickupDate).toLocaleString()}
-              </div>
-              <div>
-                <span className="font-medium">Vehicle Type:</span> {booking.cabType}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-4 text-muted-foreground">
-            No booking selected
-          </div>
-        )}
-
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            {!booking && availableBookings.length > 0 && (
+              <FormField
+                control={form.control}
+                name="bookingId"
+                rules={{ required: "Booking selection is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Booking</FormLabel>
+                    <Select 
+                      onValueChange={(value) => handleBookingChange(value)} 
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a booking" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableBookings.map(booking => (
+                          <SelectItem key={booking.id} value={booking.id.toString()}>
+                            #{booking.bookingNumber} - {booking.passengerName} - {booking.cabType}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {selectedBooking ? (
+              <div className="bg-muted/50 p-3 rounded-md mb-4">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="font-medium">Booking #:</span> {selectedBooking.bookingNumber}
+                  </div>
+                  <div>
+                    <span className="font-medium">Customer:</span> {selectedBooking.passengerName}
+                  </div>
+                  <div>
+                    <span className="font-medium">Pickup:</span> {new Date(selectedBooking.pickupDate).toLocaleString()}
+                  </div>
+                  <div>
+                    <span className="font-medium">Vehicle Type:</span> {selectedBooking.cabType}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                No booking selected
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="vehicleId"
@@ -216,7 +264,7 @@ export function FleetVehicleAssignmentDialog({
               </Button>
               <Button 
                 type="submit"
-                disabled={isSubmitting || !booking}
+                disabled={isSubmitting || (!selectedBooking && !form.watch("bookingId"))}
               >
                 {isSubmitting ? (
                   <>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +24,7 @@ export default function FleetManagementPage() {
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
   const { toast: uiToast } = useToast();
   
   useEffect(() => {
@@ -33,51 +33,24 @@ export default function FleetManagementPage() {
   }, []);
 
   const fetchPendingBookings = async () => {
-    // This is a placeholder. In a real implementation you would fetch pending bookings from your API
+    setIsLoadingBookings(true);
     try {
-      // Mock data for pending bookings with all required properties
-      const mockBookings: Booking[] = [
-        {
-          id: 1,
-          bookingNumber: 'BK-001',
-          passengerName: 'John Doe',
-          passengerPhone: '+911234567890',
-          passengerEmail: 'john@example.com',
-          pickupLocation: 'Airport Terminal 1',
-          dropLocation: 'City Center Hotel',
-          pickupDate: new Date().toISOString(),
-          cabType: 'sedan',
-          tripType: 'airport',
-          tripMode: 'one-way',
-          status: 'pending',
-          totalAmount: 1500,
-          distance: 25,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: 2,
-          bookingNumber: 'BK-002',
-          passengerName: 'Jane Smith',
-          passengerPhone: '+911234567891',
-          passengerEmail: 'jane@example.com',
-          pickupLocation: 'Grand Hotel',
-          dropLocation: 'Railway Station',
-          pickupDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
-          cabType: 'suv',
-          tripType: 'local',
-          tripMode: 'one-way',
-          status: 'confirmed',
-          totalAmount: 2200,
-          distance: 15,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
+      console.log("Fetching pending bookings...");
+      const bookings = await fleetAPI.getPendingBookings();
+      console.log("Fetched pending bookings:", bookings);
       
-      setPendingBookings(mockBookings);
+      if (Array.isArray(bookings)) {
+        setPendingBookings(bookings);
+      } else {
+        console.error("Invalid response format for pending bookings:", bookings);
+        setPendingBookings([]);
+      }
     } catch (error) {
       console.error("Error fetching pending bookings:", error);
+      toast.error("Failed to load pending bookings");
+      setPendingBookings([]);
+    } finally {
+      setIsLoadingBookings(false);
     }
   };
 
@@ -401,25 +374,23 @@ export default function FleetManagementPage() {
   // Handle adding a new vehicle
   const handleAddVehicle = async (newVehicle: FleetVehicle) => {
     try {
+      console.log("Adding new vehicle:", newVehicle);
       // Try to use fleetAPI to add the vehicle
-      await fleetAPI.addVehicle(newVehicle).then(response => {
-        toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
-        // Add the new vehicle to the fleet data
-        setFleetData(prev => [...prev, response]);
-      });
-    } catch (error) {
-      console.error("Error in API call:", error);
-      // Fallback - just add to local state
-      toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added locally to the fleet.`);
+      const response = await fleetAPI.addVehicle(newVehicle);
+      console.log("Vehicle added response:", response);
       
-      // Generate a mock ID if one doesn't exist
-      const vehicleWithId = {
-        ...newVehicle,
-        id: newVehicle.id || `local-${Date.now()}`
-      };
+      toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
       
       // Add the new vehicle to the fleet data
-      setFleetData(prev => [...prev, vehicleWithId]);
+      setFleetData(prev => [...prev, response]);
+      
+      // Refresh fleet data to ensure we have the latest data
+      setTimeout(() => {
+        fetchFleetData();
+      }, 1000);
+    } catch (error) {
+      console.error("Error adding vehicle:", error);
+      toast.error(`Failed to add vehicle ${newVehicle.vehicleNumber}. Please try again.`);
     }
     
     // Close dialog
@@ -427,25 +398,10 @@ export default function FleetManagementPage() {
   };
 
   // Handle assigning a vehicle to booking
-  const handleAssignVehicle = async (vehicle: FleetVehicle, booking: Booking) => {
+  const handleAssignVehicle = async (vehicle: FleetVehicle) => {
     setSelectedVehicle(vehicle);
-    setSelectedBooking(booking);
+    setSelectedBooking(null); // Reset selected booking when opening dialog
     setIsAssignDialogOpen(true);
-  };
-
-  // Handle view specific booking for assignment
-  const handleViewPendingBookings = (vehicle: FleetVehicle) => {
-    setSelectedVehicle(vehicle);
-    // This would typically open a dialog or navigate to a page showing pending bookings
-    toast.info(`Viewing bookings for assignment to vehicle ${vehicle.vehicleNumber}`);
-    
-    // For now, just open the assignment dialog with the first pending booking
-    if (pendingBookings.length > 0) {
-      setSelectedBooking(pendingBookings[0]);
-      setIsAssignDialogOpen(true);
-    } else {
-      toast.warning("No pending bookings available for assignment");
-    }
   };
 
   // Handle assignment completion
@@ -471,7 +427,10 @@ export default function FleetManagementPage() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={fetchFleetData}
+              onClick={() => {
+                fetchFleetData();
+                fetchPendingBookings();
+              }}
               className="flex items-center gap-1"
             >
               <RefreshCw className="h-4 w-4" /> Refresh
@@ -584,7 +543,7 @@ export default function FleetManagementPage() {
                               variant="outline"
                               size="sm"
                               className="flex items-center gap-1"
-                              onClick={() => handleViewPendingBookings(vehicle)}
+                              onClick={() => handleAssignVehicle(vehicle)}
                               disabled={vehicle.status !== 'Active'}
                             >
                               <Clipboard className="h-4 w-4" /> Assign
@@ -615,6 +574,7 @@ export default function FleetManagementPage() {
         booking={selectedBooking || undefined}
         availableVehicles={fleetData.filter(v => v.status === 'Active')}
         onAssignComplete={handleAssignmentComplete}
+        availableBookings={pendingBookings}
       />
     </div>
   );
