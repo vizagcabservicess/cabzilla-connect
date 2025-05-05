@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -815,7 +816,6 @@ export function AdminBookingsList() {
   }
 
   return (
-    
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="grid gap-2 md:w-60">
@@ -902,4 +902,101 @@ export function AdminBookingsList() {
         />
       )}
 
-      {filteredBookings.
+      {filteredBookings.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Booking #</TableHead>
+              <TableHead>Passenger</TableHead>
+              <TableHead className="hidden md:table-cell">Pickup</TableHead>
+              <TableHead className="hidden md:table-cell">Date</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredBookings.map((booking) => (
+              <TableRow key={booking.id}>
+                <TableCell>{booking.bookingNumber}</TableCell>
+                <TableCell className="font-medium">
+                  {booking.passengerName}
+                  {booking.passengerPhone && (
+                    <div className="flex items-center text-xs text-gray-500 mt-1">
+                      <Phone className="h-3 w-3 mr-1" />
+                      {booking.passengerPhone}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex items-start">
+                    <MapPin className="h-4 w-4 mr-1 mt-0.5 text-gray-400" />
+                    <span>{booking.pickupLocation}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {new Date(booking.pickupDate).toLocaleDateString('en-US', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    className={getStatusColorClass(booking.status)}
+                  >
+                    {booking.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Open menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
+                          View details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {booking.status === 'pending' && (
+                          <DropdownMenuItem 
+                            onClick={() => handleStatusChange('confirmed')}
+                          >
+                            Confirm booking
+                          </DropdownMenuItem>
+                        )}
+                        {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                          <DropdownMenuItem 
+                            onClick={() => handleCancelBooking()}
+                          >
+                            Cancel booking
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : (
+        <div className="text-center py-10">
+          <p className="text-gray-500">No bookings found matching your criteria.</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={handleRetry}
+          >
+            Refresh Bookings
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
