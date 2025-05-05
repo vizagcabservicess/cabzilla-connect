@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -195,6 +194,21 @@ export interface FleetVehicle {
   documents?: VehicleDocument[];
   createdAt: string;
   updatedAt: string;
+  
+  // Additional properties to match CabType (for type compatibility)
+  vehicleId?: string;     // Alias for id in some contexts
+  price?: number;         // Base price
+  basePrice?: number;     // Alternative name for price
+  pricePerKm?: number;    // Price per kilometer
+  image?: string;         // Vehicle image URL
+  amenities?: string[];   // Available amenities
+  description?: string;   // Vehicle description
+  ac?: boolean;           // Whether the vehicle has AC
+  nightHaltCharge?: number; // Night halt charges
+  driverAllowance?: number; // Driver allowance
+  outstationFares?: OutstationFare; // Outstation fare details
+  localPackageFares?: LocalFare; // Local package fare details
+  airportFares?: AirportFare; // Airport fare details
 }
 
 export interface VehicleDocument {

@@ -1,4 +1,3 @@
-
 import { FleetVehicle } from '@/types/cab';
 import { toast } from 'sonner';
 import { fleetAPI } from '@/services/api/fleetAPI';
@@ -35,7 +34,8 @@ export const fetchVehiclesWithFallback = async (includeInactive = true): Promise
           if ('id' in v && 'name' in v) {
             // Convert standard vehicle data to FleetVehicle format
             return {
-              id: v.id || v.vehicleId || `v-${Math.random().toString(36).substring(2, 9)}`,
+              id: v.id || `v-${Math.random().toString(36).substring(2, 9)}`,
+              vehicleId: v.id || v.vehicle_id, // Add vehicleId as alias for id
               vehicleNumber: v.vehicleNumber || `VN-${v.id || v.name}`,
               name: v.name,
               make: v.make || v.name.split(' ')[0],

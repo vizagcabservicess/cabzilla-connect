@@ -4,6 +4,7 @@ import { getVehicleData, clearVehicleDataCache } from '@/services/vehicleDataSer
 import { TripType, TripMode, isAdminTripType, isTourTripType, isRegularTripType } from '@/lib/tripTypes';
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
+import { convertFleetVehiclesToCabTypes } from '@/utils/vehicleTypeConverters';
 
 interface CabOptionsProps {
   tripType: TripType;
@@ -192,13 +193,16 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       const dataPromise = getVehicleData(forceRefresh, includeInactive);
       
-      let vehicles: CabType[];
+      let rawVehicles;
       try {
-        vehicles = await Promise.race([dataPromise, timeoutPromise]);
+        rawVehicles = await Promise.race([dataPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Fetch with timeout failed, falling back to direct API call');
-        vehicles = await getVehicleData(true, includeInactive);
+        rawVehicles = await getVehicleData(true, includeInactive);
       }
+      
+      // Convert FleetVehicle[] to CabType[] for compatibility
+      const vehicles = convertFleetVehiclesToCabTypes(rawVehicles);
       
       console.log(`Received ${vehicles?.length || 0} vehicles from getVehicleData:`, vehicles);
       

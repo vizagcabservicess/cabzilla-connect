@@ -15,6 +15,7 @@ import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { VehiclePricing, TourFare, VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { FleetVehicle } from '@/types/cab';
 
 // Vehicle pricing form schema
 const vehiclePricingSchema = z.object({
