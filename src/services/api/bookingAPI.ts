@@ -9,8 +9,8 @@ export const bookingAPI = {
    */
   getAllBookings: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/bookings.php`);
-      return response.data;
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php`);
+      return response.data.bookings || [];
     } catch (error) {
       console.error('Error fetching all bookings:', error);
       throw error;
@@ -22,8 +22,8 @@ export const bookingAPI = {
    */
   getUserBookings: async (userId: number) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/bookings.php?user_id=${userId}`);
-      return response.data;
+      const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`);
+      return response.data.bookings || [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       throw error;
@@ -183,6 +183,24 @@ export const bookingAPI = {
       return response.data;
     } catch (error) {
       console.error('Error assigning driver to booking:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get pending bookings that need assignment
+   */
+  getPendingBookings: async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php`, {
+        headers: {
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      return response.data.bookings || [];
+    } catch (error) {
+      console.error('Error fetching pending bookings:', error);
       throw error;
     }
   }
