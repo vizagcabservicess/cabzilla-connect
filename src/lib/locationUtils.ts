@@ -1,4 +1,3 @@
-
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
@@ -36,7 +35,7 @@ export const createLocationChangeHandler = (
     }
     
     // Handle potentially incomplete location data
-    const id = newLocation.id || `loc_${Date.now()}`;
+    const id = newLocation.id !== undefined ? newLocation.id : `loc_${Date.now()}`;
     
     // Safely extract address information
     const locationAddress = newLocation.address || newLocation.name || '';

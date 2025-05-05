@@ -4,6 +4,7 @@ import { vehicleAPI } from './vehicleAPI';
 import { fleetAPI } from './fleetAPI';
 import { bookingAPI } from './bookingAPI';
 import { fareAPI } from './fareAPI';
+import { userAPI } from './userAPI';
 
 // Export all API services
 export {
@@ -11,7 +12,8 @@ export {
   vehicleAPI,
   fleetAPI,
   bookingAPI,
-  fareAPI
+  fareAPI,
+  userAPI
 };
 
 // Default export
@@ -20,5 +22,6 @@ export default {
   vehicle: vehicleAPI,
   fleet: fleetAPI,
   booking: bookingAPI,
-  fare: fareAPI
+  fare: fareAPI,
+  user: userAPI
 };

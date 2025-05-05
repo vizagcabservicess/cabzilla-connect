@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,12 +9,14 @@ import { AlertCircle, Clock, CheckCheck, X, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BookingStatusManagerProps {
-  bookingId: number | string;
+  bookingId?: number | string;
   currentStatus: BookingStatus;
   onStatusChange?: (newStatus: BookingStatus) => void;
   className?: string;
   variant?: 'default' | 'compact';
   showLabel?: boolean;
+  isAdmin?: boolean;
+  onDelete?: () => void;
 }
 
 export function BookingStatusManager({
@@ -22,7 +25,9 @@ export function BookingStatusManager({
   onStatusChange,
   className = '',
   variant = 'default',
-  showLabel = true
+  showLabel = true,
+  isAdmin = false,
+  onDelete
 }: BookingStatusManagerProps) {
   const [status, setStatus] = useState<BookingStatus>(currentStatus);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -84,6 +89,12 @@ export function BookingStatusManager({
   };
   
   const updateStatus = async (newStatus: BookingStatus) => {
+    if (!bookingId) {
+      onStatusChange?.(newStatus);
+      setStatus(newStatus);
+      return;
+    }
+    
     setIsUpdating(true);
     setError(null);
     
@@ -197,6 +208,18 @@ export function BookingStatusManager({
             Next
             <RefreshCcw className="ml-2 h-4 w-4" />
           </Button>
+          
+          {isAdmin && onDelete && (
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              onClick={onDelete} 
+              className="ml-2"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </>
       )}
       

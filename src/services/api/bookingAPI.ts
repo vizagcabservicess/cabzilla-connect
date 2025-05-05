@@ -162,11 +162,18 @@ export const bookingAPI = {
   /**
    * Assign driver to booking
    */
-  assignDriver: async (bookingId: number | string, driverId: number | string) => {
+  assignDriver: async (bookingId: number | string, driverDetails: { 
+    driverName: string; 
+    driverPhone: string; 
+    vehicleNumber: string;
+  }) => {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/assign-driver.php`,
-        { booking_id: bookingId, driver_id: driverId },
+        { 
+          booking_id: bookingId, 
+          ...driverDetails
+        },
         {
           headers: {
             'Content-Type': 'application/json',

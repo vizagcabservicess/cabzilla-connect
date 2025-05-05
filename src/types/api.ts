@@ -19,6 +19,7 @@ export interface Booking {
   pickupLocation: string;
   dropLocation?: string;
   pickupDate: string;
+  returnDate?: string;
   cabType: string;
   distance?: number;
   tripType: string;
@@ -52,6 +53,7 @@ export interface BookingRequest {
   pickupLocation: string;
   dropLocation?: string;
   pickupDate: string;
+  returnDate?: string | null;
   cabType: string;
   distance?: number;
   tripType: string;
@@ -184,7 +186,7 @@ export interface TourFare {
   isActive: boolean;
   
   // Additional properties used in FareManagement component
-  tourId: string;
+  tourId: string; 
   tourName: string;
   sedan: number;
   ertiga: number;
