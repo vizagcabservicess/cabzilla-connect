@@ -139,7 +139,7 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             booking_id INT NOT NULL,
             vehicle_id VARCHAR(50) NOT NULL,
-            driver_id INT,
+            driver_id VARCHAR(50),
             assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             status VARCHAR(20) DEFAULT 'assigned',
@@ -176,7 +176,7 @@ try {
             $updateStmt = $conn->prepare($updateSql);
             
             if ($driverId) {
-                $updateStmt->bind_param("sii", $vehicleId, $driverId, $assignmentId);
+                $updateStmt->bind_param("ssi", $vehicleId, $driverId, $assignmentId);
             } else {
                 $updateSql = "UPDATE vehicle_assignments 
                              SET vehicle_id = ?, updated_at = NOW() 
@@ -195,7 +195,7 @@ try {
             if ($driverId) {
                 $insertSql = "INSERT INTO vehicle_assignments (booking_id, vehicle_id, driver_id) VALUES (?, ?, ?)";
                 $insertStmt = $conn->prepare($insertSql);
-                $insertStmt->bind_param("isi", $bookingId, $vehicleId, $driverId);
+                $insertStmt->bind_param("iss", $bookingId, $vehicleId, $driverId);
             } else {
                 $insertSql = "INSERT INTO vehicle_assignments (booking_id, vehicle_id) VALUES (?, ?)";
                 $insertStmt = $conn->prepare($insertSql);

@@ -24,7 +24,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
 import { Booking, BookingStatus } from '@/types/api';
-import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi } from 'lucide-react';
+import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -36,9 +36,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
-import { BookingDetails } from './BookingDetails';
+import { BookingDetailsModal } from './BookingDetailsModal';
 import { getStatusColorClass } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
+import { formatPrice } from '@/lib/utils';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -56,13 +57,6 @@ export function AdminBookingsList() {
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [devMode, setDevMode] = useState<boolean>(false);
-  
-  // Check if dev mode is enabled
-  useEffect(() => {
-    const devModeEnabled = localStorage.getItem('dev_mode') === 'true';
-    setDevMode(devModeEnabled);
-  }, []);
   
   const fetchBookings = async () => {
     try {
@@ -77,20 +71,6 @@ export function AdminBookingsList() {
       
       let data: Booking[] = [];
       let responseSource = '';
-      
-      // If dev mode is enabled, use sample data
-      if (devMode) {
-        console.log('Using dev mode sample data');
-        const sampleBookings = createSampleBookings();
-        setBookings(sampleBookings);
-        applyFilters(sampleBookings, searchTerm, statusFilter);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        toast.success(`${sampleBookings.length} sample bookings loaded (dev mode)`, {
-          id: 'bookings-loaded',
-        });
-        return;
-      }
       
       try {
         setApiAttempt(1);
@@ -167,25 +147,8 @@ export function AdminBookingsList() {
           throw new Error('Invalid data format from booking API');
         }
       } catch (apiError) {
-        console.warn('All API attempts failed:', apiError);
-        
-        try {
-          // Try using fallback sample data if both API attempts fail
-          setApiAttempt(3);
-          const sampleBookings = createSampleBookings();
-          setBookings(sampleBookings);
-          applyFilters(sampleBookings, searchTerm, statusFilter);
-          toast.info('Using sample booking data (API unavailable)', {
-            duration: 5000,
-          });
-          console.log('Using sample data due to API error:', sampleBookings);
-          setIsLoading(false);
-          setIsRefreshing(false);
-          return;
-        } catch (directError) {
-          console.warn('Sample data fallback failed:', directError);
-          throw new Error('Failed to load bookings. Using sample data as fallback.');
-        }
+        console.error('API attempts failed:', apiError);
+        throw new Error('Failed to load bookings from API');
       }
       
       if (Array.isArray(data) && data.length > 0) {
@@ -195,20 +158,11 @@ export function AdminBookingsList() {
           id: 'bookings-loaded',
         });
       } else {
-        // If we got an empty array, that's valid but we should show a message
         console.log('No bookings found in the response');
         setBookings([]);
         setFilteredBookings([]);
         toast.info('No bookings found', {
           id: 'no-bookings',
-        });
-        
-        // Use sample data if no bookings were found
-        const sampleBookings = createSampleBookings();
-        setBookings(sampleBookings);
-        applyFilters(sampleBookings, searchTerm, statusFilter);
-        toast.info('Using sample booking data', {
-          duration: 5000,
         });
       }
     } catch (error: any) {
@@ -228,79 +182,10 @@ export function AdminBookingsList() {
         description: errorMessage,
         duration: 5000,
       });
-      
-      // Use sample data if there are no bookings
-      const sampleBookings = createSampleBookings();
-      setBookings(sampleBookings);
-      applyFilters(sampleBookings, searchTerm, statusFilter);
-      toast.info('Using sample booking data as fallback', {
-        duration: 5000,
-      });
-      console.log('Using sample data as fallback:', sampleBookings);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
-  
-  // Function to create sample bookings for fallback
-  const createSampleBookings = (): Booking[] => {
-    return [
-      {
-        id: 1,
-        bookingNumber: 'DEMO1234',
-        pickupLocation: 'Demo Airport',
-        dropLocation: 'Demo Hotel',
-        pickupDate: new Date().toISOString(),
-        cabType: 'sedan',
-        distance: 15,
-        tripType: 'airport',
-        tripMode: 'one-way',
-        totalAmount: 1500,
-        status: 'pending' as BookingStatus,
-        passengerName: 'Demo User',
-        passengerPhone: '9876543210',
-        passengerEmail: 'demo@example.com',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        bookingNumber: 'DEMO1235',
-        pickupLocation: 'Demo Hotel',
-        dropLocation: 'Demo Beach',
-        pickupDate: new Date(Date.now() + 86400000).toISOString(),
-        cabType: 'innova_crysta',
-        distance: 25,
-        tripType: 'local',
-        tripMode: 'round-trip',
-        totalAmount: 2500,
-        status: 'confirmed' as BookingStatus,
-        passengerName: 'Demo Admin',
-        passengerPhone: '9876543211',
-        passengerEmail: 'admin@example.com',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 3,
-        bookingNumber: 'DEMO1236',
-        pickupLocation: 'City Center',
-        dropLocation: 'Beach Resort',
-        pickupDate: new Date(Date.now() + 172800000).toISOString(), // 2 days in future
-        cabType: 'ertiga',
-        distance: 35,
-        tripType: 'outstation',
-        tripMode: 'round-trip',
-        totalAmount: 3500,
-        status: 'confirmed' as BookingStatus,
-        passengerName: 'Jane Smith',
-        passengerPhone: '9876543212',
-        passengerEmail: 'jane@example.com',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ];
   };
   
   const handleViewDetails = (booking: Booking) => {
@@ -333,7 +218,6 @@ export function AdminBookingsList() {
         applyFilters(updatedBookings, searchTerm, statusFilter);
         
         toast.success("Booking updated successfully");
-        handleCloseDetails();
         return;
       } catch (apiError) {
         console.warn('bookingAPI.updateBooking failed, trying direct fetch:', apiError);
@@ -383,7 +267,6 @@ export function AdminBookingsList() {
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Booking updated successfully");
-      handleCloseDetails();
     } catch (error) {
       console.error('Error updating booking:', error);
       toast.error("Failed to update booking: " + (error instanceof Error ? error.message : 'Unknown error'));
@@ -417,7 +300,6 @@ export function AdminBookingsList() {
         applyFilters(updatedBookings, searchTerm, statusFilter);
         
         toast.success("Driver assigned successfully");
-        handleCloseDetails();
         return;
       } catch (apiError) {
         console.warn('bookingAPI.assignDriver failed, trying direct fetch:', apiError);
@@ -465,7 +347,6 @@ export function AdminBookingsList() {
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Driver assigned successfully");
-      handleCloseDetails();
     } catch (error) {
       console.error('Error assigning driver:', error);
       toast.error("Failed to assign driver: " + (error instanceof Error ? error.message : 'Unknown error'));
@@ -491,7 +372,6 @@ export function AdminBookingsList() {
         applyFilters(updatedBookings, searchTerm, statusFilter);
         
         toast.success("Booking cancelled successfully");
-        handleCloseDetails();
         return;
       } catch (apiError) {
         console.warn('bookingAPI.cancelBooking failed, trying direct fetch:', apiError);
@@ -527,7 +407,6 @@ export function AdminBookingsList() {
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
       toast.success("Booking cancelled successfully");
-      handleCloseDetails();
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error("Failed to cancel booking: " + (error instanceof Error ? error.message : 'Unknown error'));
@@ -720,13 +599,16 @@ export function AdminBookingsList() {
     }
   };
 
-  const enableDevMode = () => {
-    localStorage.setItem('dev_mode', 'true');
-    setDevMode(true);
-    toast.success('Development mode enabled', {
-      description: 'Using sample data for bookings'
+  // Helper to format date and time nicely
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: '2-digit',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     });
-    handleRetry();
   };
 
   if (isLoading && retryCount === 0) {
@@ -760,13 +642,6 @@ export function AdminBookingsList() {
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               {isRefreshing ? 'Retrying...' : 'Retry Connection'}
             </Button>
-            <Button
-              variant="outline"
-              onClick={enableDevMode}
-              className="md:self-end"
-            >
-              Enable Dev Mode
-            </Button>
           </div>
         </div>
         
@@ -786,9 +661,6 @@ export function AdminBookingsList() {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleRetry}>
                   Retry API Call
-                </Button>
-                <Button variant="outline" size="sm" onClick={enableDevMode}>
-                  Enable Dev Mode
                 </Button>
               </div>
             </div>
@@ -853,15 +725,6 @@ export function AdminBookingsList() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          {!devMode && (
-            <Button 
-              variant="outline" 
-              onClick={enableDevMode}
-              className="md:self-end h-10 mt-auto"
-            >
-              Dev Mode
-            </Button>
-          )}
         </div>
       </div>
 
@@ -880,18 +743,10 @@ export function AdminBookingsList() {
         </Alert>
       )}
 
-      {devMode && (
-        <Alert className="mb-4 bg-amber-50 border-amber-200">
-          <AlertTitle className="text-amber-800">Development Mode Enabled</AlertTitle>
-          <AlertDescription className="text-amber-700">
-            Using sample booking data for development. This will not affect production data.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {selectedBooking && (
-        <BookingDetails
+        <BookingDetailsModal
           booking={selectedBooking}
+          isOpen={!!selectedBooking}
           onClose={handleCloseDetails}
           onEdit={handleEditBooking}
           onAssignDriver={handleAssignDriver}
@@ -908,8 +763,10 @@ export function AdminBookingsList() {
             <TableRow>
               <TableHead>Booking #</TableHead>
               <TableHead>Passenger</TableHead>
-              <TableHead className="hidden md:table-cell">Pickup</TableHead>
-              <TableHead className="hidden md:table-cell">Date</TableHead>
+              <TableHead className="hidden lg:table-cell">Pickup Location</TableHead>
+              <TableHead className="hidden md:table-cell">Pickup Date & Time</TableHead>
+              <TableHead className="hidden md:table-cell">Vehicle Type</TableHead>
+              <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -927,19 +784,29 @@ export function AdminBookingsList() {
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
+                <TableCell className="hidden lg:table-cell">
                   <div className="flex items-start">
                     <MapPin className="h-4 w-4 mr-1 mt-0.5 text-gray-400" />
                     <span>{booking.pickupLocation}</span>
                   </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  {new Date(booking.pickupDate).toLocaleDateString('en-US', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                    {formatDateTime(booking.pickupDate)}
+                  </div>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex items-center">
+                    <Car className="h-4 w-4 mr-1 text-gray-400" />
+                    {booking.cabType}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center font-medium">
+                    <IndianRupee className="h-3.5 w-3.5 mr-1" />
+                    {formatPrice(booking.totalAmount)}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge 

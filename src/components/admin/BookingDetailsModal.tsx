@@ -45,8 +45,15 @@ export function BookingDetailsModal({
 
   if (!booking) return null;
 
+  // Prevent modal from closing when clicking outside if submitting
+  const handleOpenChange = (open: boolean) => {
+    if (!isSubmitting && !open) {
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50">
         <DialogHeader className="sticky top-0 z-[51] bg-white pb-4 border-b">
           <DialogTitle>Booking #{booking.bookingNumber}</DialogTitle>

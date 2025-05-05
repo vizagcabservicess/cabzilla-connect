@@ -1,19 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
+import { VehicleAssignment } from './VehicleAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
-import { fleetAPI } from '@/services/api/fleetAPI';
-import { FleetVehicle } from '@/types/cab';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -37,79 +33,18 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
-  const [availableVehicles, setAvailableVehicles] = useState<FleetVehicle[]>([]);
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
-  const [isLoadingVehicles, setIsLoadingVehicles] = useState<boolean>(false);
-  const [isAssigningVehicle, setIsAssigningVehicle] = useState<boolean>(false);
-
-  useEffect(() => {
-    // Load available vehicles when the assignment tab is active
-    if (activeTab === 'assignment') {
-      fetchAvailableVehicles();
-    }
-  }, [activeTab]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
   };
-
-  const fetchAvailableVehicles = async () => {
-    try {
-      setIsLoadingVehicles(true);
-      const response = await fleetAPI.getVehicles(false);
-      const activeVehicles = response.vehicles.filter(v => v.status === 'Active');
-      setAvailableVehicles(activeVehicles);
-    } catch (error) {
-      console.error("Error fetching available vehicles:", error);
-      toast.error("Failed to load available vehicles");
-    } finally {
-      setIsLoadingVehicles(false);
-    }
-  };
-
-  const handleVehicleSelect = (vehicleId: string) => {
-    setSelectedVehicleId(vehicleId);
-  };
-
-  const handleAssignVehicleToBooking = async () => {
-    if (!selectedVehicleId) {
-      toast.error("Please select a vehicle");
-      return;
-    }
-
-    try {
-      setIsAssigningVehicle(true);
-      
-      // Find the selected vehicle to get its number
-      const selectedVehicle = availableVehicles.find(v => v.id === selectedVehicleId);
-      if (!selectedVehicle) {
-        throw new Error("Selected vehicle not found");
-      }
-      
-      // Assign the vehicle to the booking
-      await fleetAPI.assignVehicleToBooking(booking.id.toString(), selectedVehicleId);
-      
-      // Call the onAssignDriver function with the vehicle details
-      await onAssignDriver({
-        driverName: '', // This will be filled in by the DriverAssignment component
-        driverPhone: '', // This will be filled in by the DriverAssignment component
-        vehicleNumber: selectedVehicle.vehicleNumber
-      });
-      
-      toast.success("Vehicle assigned successfully");
-      
-      // Reset selection
-      setSelectedVehicleId('');
-      
-      // Refresh available vehicles
-      fetchAvailableVehicles();
-      
-    } catch (error) {
-      console.error("Error assigning vehicle:", error);
-      toast.error("Failed to assign vehicle to booking");
-    } finally {
-      setIsAssigningVehicle(false);
-    }
+  
+  // Handle vehicle assignment (will update booking.vehicleNumber)
+  const handleAssignVehicle = async (vehicleData: { vehicleNumber: string }) => {
+    // Only update the vehicle number, let the driver assignment handle the rest
+    await onEdit({ 
+      vehicleNumber: vehicleData.vehicleNumber,
+      status: 'confirmed' as BookingStatus 
+    });
   };
 
   const isCompleted = booking.status === 'completed';
@@ -152,7 +87,8 @@ export function BookingDetails({
         <TabsList className="w-full border-b justify-start">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
-          <TabsTrigger value="assignment" disabled={isAssignmentDisabled}>Vehicle & Driver</TabsTrigger>
+          <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Vehicle</TabsTrigger>
+          <TabsTrigger value="driver" disabled={isAssignmentDisabled}>Assign Driver</TabsTrigger>
           <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
         </TabsList>
 
@@ -216,6 +152,13 @@ export function BookingDetails({
                     Cancel Booking
                   </Button>
                 )}
+                <Button 
+                  variant="outline" 
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                >
+                  Close
+                </Button>
               </div>
             </div>
           </Card>
@@ -230,51 +173,15 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="assignment" className="py-4">
-          {/* Vehicle Assignment Section */}
-          <Card className="p-6 mb-4">
-            <h3 className="text-lg font-semibold mb-4">Assign Vehicle</h3>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="fleetVehicle">Select Fleet Vehicle</Label>
-                <Select
-                  value={selectedVehicleId}
-                  onValueChange={handleVehicleSelect}
-                  disabled={isLoadingVehicles}
-                >
-                  <SelectTrigger id="fleetVehicle" className="w-full">
-                    <SelectValue placeholder={isLoadingVehicles ? "Loading vehicles..." : "Select a vehicle"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableVehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.vehicleNumber} - {vehicle.make} {vehicle.model} ({vehicle.year})
-                      </SelectItem>
-                    ))}
-                    {availableVehicles.length === 0 && !isLoadingVehicles && (
-                      <SelectItem value="none" disabled>No available vehicles</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleAssignVehicleToBooking}
-                  disabled={!selectedVehicleId || isAssigningVehicle}
-                >
-                  {isAssigningVehicle ? (
-                    <>
-                      <span className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white"></span>
-                      Assigning...
-                    </>
-                  ) : "Assign Vehicle"}
-                </Button>
-              </div>
-            </div>
-          </Card>
-          
-          {/* Driver Assignment Section */}
+        <TabsContent value="vehicle" className="py-4">
+          <VehicleAssignment
+            booking={booking}
+            onAssign={handleAssignVehicle}
+            isSubmitting={isSubmitting}
+          />
+        </TabsContent>
+
+        <TabsContent value="driver" className="py-4">
           <DriverAssignment 
             booking={booking}
             onAssign={onAssignDriver}
