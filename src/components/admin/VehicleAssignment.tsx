@@ -52,7 +52,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           vehicleNumber: "KA01AB1234",
           make: "Toyota",
           model: "Innova Crysta",
-          year: "2022",
+          year: 2022, // Convert string to number
           vehicleType: "innova_crysta",
           status: "Active",
           lastMaintenance: "2023-01-15",
@@ -65,7 +65,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           vehicleNumber: "KA02CD5678",
           make: "Maruti Suzuki",
           model: "Swift Dzire",
-          year: "2021",
+          year: 2021, // Convert string to number
           vehicleType: "sedan",
           status: "Active",
           lastMaintenance: "2023-02-20",
