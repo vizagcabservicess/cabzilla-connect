@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -181,6 +182,8 @@ export interface FleetVehicle {
   status: 'Active' | 'Maintenance' | 'Inactive';
   lastService: string;    // Date of last service
   nextServiceDue: string; // Date when next service is due
+  lastServiceOdometer?: number; // Odometer reading at last service
+  nextServiceOdometer?: number; // Odometer reading for next service due
   fuelType: string;       // Petrol, Diesel, CNG, Electric
   vehicleType: string;    // Sedan, SUV, etc.
   cabTypeId: string;      // Reference to the cab type

@@ -353,7 +353,7 @@ export function AddFleetVehicleDialog({
                       <FormControl>
                         <Input 
                           type="number" 
-                          {...field} 
+                          value={field.value || 0}
                           onChange={e => field.onChange(parseInt(e.target.value))} 
                         />
                       </FormControl>
@@ -371,7 +371,7 @@ export function AddFleetVehicleDialog({
                       <FormControl>
                         <Input 
                           type="number" 
-                          {...field} 
+                          value={field.value || 5000}
                           onChange={e => field.onChange(parseInt(e.target.value))} 
                         />
                       </FormControl>
