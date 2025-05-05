@@ -56,6 +56,13 @@ export function AdminBookingsList() {
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [devMode, setDevMode] = useState<boolean>(false);
+  
+  // Check if dev mode is enabled
+  useEffect(() => {
+    const devModeEnabled = localStorage.getItem('dev_mode') === 'true';
+    setDevMode(devModeEnabled);
+  }, []);
   
   const fetchBookings = async () => {
     try {
@@ -71,201 +78,181 @@ export function AdminBookingsList() {
       let data: Booking[] = [];
       let responseSource = '';
       
+      // If dev mode is enabled, use sample data
+      if (devMode) {
+        console.log('Using dev mode sample data');
+        const sampleBookings = createSampleBookings();
+        setBookings(sampleBookings);
+        applyFilters(sampleBookings, searchTerm, statusFilter);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        toast.success(`${sampleBookings.length} sample bookings loaded (dev mode)`, {
+          id: 'bookings-loaded',
+        });
+        return;
+      }
+      
       try {
         setApiAttempt(1);
-        // Try direct fetch first with explicit API url and proper headers
-        const token = localStorage.getItem('authToken');
-        const requestUrl = `/api/admin/booking.php?_t=${timestamp}`;
-        console.log(`Attempting direct fetch from: ${requestUrl}`);
+        // First try the bookingAPI.getAllBookings method
+        console.log('Attempting to fetch via bookingAPI.getAllBookings()');
+        const apiData = await bookingAPI.getAllBookings();
         
-        const directResponse = await fetch(requestUrl, {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Content-Type': 'application/json',
-            'X-Force-Refresh': 'true',
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
-          }
-        });
-        
-        // Check for non-200 responses
-        if (!directResponse.ok) {
-          console.error(`Direct API failed with status: ${directResponse.status}`);
-          throw new Error(`Direct API failed with status: ${directResponse.status}`);
-        }
-        
-        // Check that we actually got JSON back
-        const contentType = directResponse.headers.get('content-type');
-        console.log('Content-Type from response:', contentType);
-        
-        if (!contentType || !contentType.includes('application/json')) {
-          const textResponse = await directResponse.text();
-          console.error('API returned non-JSON response:', textResponse);
-          setResponseDebug(textResponse.substring(0, 500) + (textResponse.length > 500 ? '...' : ''));
-          throw new Error('API returned non-JSON response');
-        }
-        
-        const responseData = await directResponse.json();
-        console.log('Direct API response:', responseData);
-        
-        if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
-          data = responseData.bookings.map((booking: any) => ({
+        if (Array.isArray(apiData)) {
+          data = apiData.map((booking: any) => ({
             ...booking,
             status: booking.status as BookingStatus
           }));
-          responseSource = 'direct_fetch';
-        } else if (Array.isArray(responseData)) {
-          data = responseData.map((booking: any) => ({
+          console.log('Admin: Bookings received from admin API:', data);
+          responseSource = 'booking_api';
+        } else if (apiData && Array.isArray(apiData.bookings)) {
+          data = apiData.bookings.map((booking: any) => ({
             ...booking,
             status: booking.status as BookingStatus
           }));
-          responseSource = 'direct_fetch_array';
+          responseSource = 'booking_api_object';
         } else {
-          console.error('Invalid data format:', responseData);
-          throw new Error('Invalid data format from direct API');
+          throw new Error('Invalid data format from booking API');
         }
-      } catch (directError) {
-        console.warn('Direct fetch failed:', directError);
+      } catch (apiError) {
+        console.warn('getAllBookings admin API failed:', apiError);
         
-        // Try with a more explicit server path
         try {
           setApiAttempt(2);
+          // Try with direct fetch to PHP endpoint
           const token = localStorage.getItem('authToken');
-          const requestUrl = `/api/admin/booking?_t=${timestamp}`;
-          console.log(`Attempting alternative fetch from: ${requestUrl}`);
+          const requestUrl = `/api/admin/bookings.php?_t=${timestamp}`;
+          console.log(`Attempting direct fetch from: ${requestUrl}`);
           
-          const altDirectResponse = await fetch(requestUrl, {
-            ...getForcedRequestConfig(),
+          const directResponse = await fetch(requestUrl, {
             headers: {
-              ...getForcedRequestConfig().headers,
               'Authorization': token ? `Bearer ${token}` : '',
               'Accept': 'application/json',
+              'Cache-Control': 'no-cache',
               'Content-Type': 'application/json',
               'X-Admin-Mode': 'true',
               'X-Debug': 'true'
             }
           });
           
-          if (!altDirectResponse.ok) {
-            console.error(`Alternative direct API failed with status: ${altDirectResponse.status}`);
-            throw new Error(`Alternative direct API failed with status: ${altDirectResponse.status}`);
+          if (!directResponse.ok) {
+            console.error(`Direct API failed with status: ${directResponse.status}`);
+            throw new Error(`Direct API failed with status: ${directResponse.status}`);
           }
           
-          const contentType = altDirectResponse.headers.get('content-type');
-          console.log('Content-Type from alternative response:', contentType);
+          // Check that we actually got JSON back
+          const contentType = directResponse.headers.get('content-type');
+          console.log('Content-Type from response:', contentType);
           
           if (!contentType || !contentType.includes('application/json')) {
-            const textResponse = await altDirectResponse.text();
-            console.error('Alternative API returned non-JSON response:', textResponse);
+            const textResponse = await directResponse.text();
+            console.error('API returned non-JSON response:', textResponse);
             setResponseDebug(textResponse.substring(0, 500) + (textResponse.length > 500 ? '...' : ''));
-            throw new Error('Alternative API returned non-JSON response');
+            throw new Error('API returned non-JSON response');
           }
           
-          const responseData = await altDirectResponse.json();
-          console.log('Alternative direct API response:', responseData);
+          const responseData = await directResponse.json();
+          console.log('Direct API response:', responseData);
           
           if (responseData && responseData.bookings && Array.isArray(responseData.bookings)) {
             data = responseData.bookings.map((booking: any) => ({
               ...booking,
               status: booking.status as BookingStatus
             }));
-            responseSource = 'alt_direct_fetch';
+            responseSource = 'direct_fetch';
           } else if (Array.isArray(responseData)) {
             data = responseData.map((booking: any) => ({
               ...booking,
               status: booking.status as BookingStatus
             }));
-            responseSource = 'alt_direct_fetch_array';
+            responseSource = 'direct_fetch_array';
           } else {
-            throw new Error('Invalid data format from alternative direct API');
+            console.error('Invalid data format:', responseData);
+            throw new Error('Invalid data format from direct API');
           }
-        } catch (altDirectError) {
-          console.warn('Alternative direct fetch failed:', altDirectError);
+        } catch (directError) {
+          console.warn('Direct fetch failed:', directError);
           
           try {
             setApiAttempt(3);
-            // Fallback to using the bookingAPI service
-            console.log('Attempting to fetch via bookingAPI.getAllBookings()');
-            const apiData = await bookingAPI.getAllBookings();
-            data = apiData.map((booking: any) => ({
-              ...booking,
-              status: booking.status as BookingStatus
-            }));
-            console.log('Admin: Bookings received from admin API:', data);
-            responseSource = 'booking_api';
-          } catch (adminError) {
-            console.warn('getAllBookings admin API failed:', adminError);
+            // Try user bookings as a fallback
+            console.log('Attempting to fetch via bookingAPI.getUserBookings()');
+            const userBookings = await bookingAPI.getUserBookings();
             
-            try {
-              setApiAttempt(4);
-              // Try user bookings as a final fallback
-              console.log('Attempting to fetch via bookingAPI.getUserBookings()');
-              const userBookings = await bookingAPI.getUserBookings();
+            if (Array.isArray(userBookings)) {
               data = userBookings.map((booking: any) => ({
                 ...booking,
                 status: booking.status as BookingStatus
               }));
               console.log('Admin: Bookings received from user API:', data);
               responseSource = 'user_api';
-            } catch (userError) {
-              console.warn('getUserBookings API also failed:', userError);
-              
-              try {
-                setApiAttempt(5);
-                // Last resort try
-                const token = localStorage.getItem('authToken');
-                console.log('Attempting final fallback to /api/user/bookings.php');
-                const response = await fetch('/api/user/bookings.php', {
-                  headers: {
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'Cache-Control': 'no-cache',
-                    'X-Force-Refresh': 'true',
-                    'X-Admin-Mode': 'true',
-                    'Content-Type': 'application/json'
-                  }
-                });
-                
-                if (response.ok) {
-                  const responseData = await response.json();
-                  console.log('Final fallback API successful:', responseData);
-                  
-                  if (responseData.bookings && Array.isArray(responseData.bookings)) {
-                    data = responseData.bookings.map((booking: any) => ({
-                      ...booking,
-                      status: booking.status as BookingStatus
-                    }));
-                  } else if (Array.isArray(responseData)) {
-                    data = responseData.map((booking: any) => ({
-                      ...booking,
-                      status: booking.status as BookingStatus
-                    }));
-                  } else {
-                    throw new Error('Invalid data format from final fallback API');
-                  }
-                  responseSource = 'fallback_api';
-                } else {
-                  throw new Error(`Final fallback API failed with status: ${response.status}`);
+            } else if (userBookings && Array.isArray(userBookings.bookings)) {
+              data = userBookings.bookings.map((booking: any) => ({
+                ...booking,
+                status: booking.status as BookingStatus
+              }));
+              responseSource = 'user_api_object';
+            } else {
+              throw new Error('Invalid data format from user API');
+            }
+          } catch (userError) {
+            console.warn('getUserBookings API also failed:', userError);
+            
+            try {
+              setApiAttempt(4);
+              // Last resort - use the PHP API in user mode with dev_mode=true
+              console.log('Attempting final fallback to user bookings with dev_mode=true');
+              const response = await fetch('/api/user/bookings.php?dev_mode=true', {
+                headers: {
+                  'Cache-Control': 'no-cache',
+                  'X-Force-Refresh': 'true',
+                  'Content-Type': 'application/json'
                 }
-              } catch (directError) {
-                console.error('All API attempts failed:', directError);
-                throw new Error('All booking API attempts failed. Please check your network connection and server status.');
+              });
+              
+              if (response.ok) {
+                const responseData = await response.json();
+                console.log('Final fallback API successful:', responseData);
+                
+                if (responseData.bookings && Array.isArray(responseData.bookings)) {
+                  data = responseData.bookings.map((booking: any) => ({
+                    ...booking,
+                    status: booking.status as BookingStatus
+                  }));
+                } else if (Array.isArray(responseData)) {
+                  data = responseData.map((booking: any) => ({
+                    ...booking,
+                    status: booking.status as BookingStatus
+                  }));
+                } else {
+                  throw new Error('Invalid data format from final fallback API');
+                }
+                responseSource = 'fallback_api';
+              } else {
+                throw new Error(`Final fallback API failed with status: ${response.status}`);
               }
+            } catch (fallbackError) {
+              console.error('All API attempts failed:', fallbackError);
+              throw new Error('All booking API attempts failed. Using sample data as final fallback.');
             }
           }
         }
       }
       
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         setBookings(data);
         applyFilters(data, searchTerm, statusFilter);
         toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
           id: 'bookings-loaded',
         });
       } else {
-        console.error('Admin: Invalid data format received:', data);
-        throw new Error('Invalid data format received from server');
+        // If we got an empty array, that's valid but we should show a message
+        console.log('No bookings found in the response');
+        setBookings([]);
+        setFilteredBookings([]);
+        toast.info('No bookings found', {
+          id: 'no-bookings',
+        });
       }
     } catch (error: any) {
       console.error('Admin: Error fetching bookings:', error);
@@ -285,62 +272,62 @@ export function AdminBookingsList() {
         duration: 5000,
       });
       
-      uiToast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
-      });
-      
-      // Only use sample data for development if there are no bookings
+      // Use sample data if there are no bookings
       if (bookings.length === 0) {
-        const sampleBookings: Booking[] = [
-          {
-            id: 1,
-            bookingNumber: 'DEMO1234',
-            pickupLocation: 'Demo Airport',
-            dropLocation: 'Demo Hotel',
-            pickupDate: new Date().toISOString(),
-            cabType: 'sedan',
-            distance: 15,
-            tripType: 'airport',
-            tripMode: 'one-way',
-            totalAmount: 1500,
-            status: 'pending' as BookingStatus,
-            passengerName: 'Demo User',
-            passengerPhone: '9876543210',
-            passengerEmail: 'demo@example.com',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 2,
-            bookingNumber: 'DEMO1235',
-            pickupLocation: 'Demo Hotel',
-            dropLocation: 'Demo Beach',
-            pickupDate: new Date(Date.now() + 86400000).toISOString(),
-            cabType: 'innova_crysta',
-            distance: 25,
-            tripType: 'local',
-            tripMode: 'round-trip',
-            totalAmount: 2500,
-            status: 'confirmed' as BookingStatus,
-            passengerName: 'Demo Admin',
-            passengerPhone: '9876543211',
-            passengerEmail: 'admin@example.com',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
-        
+        const sampleBookings = createSampleBookings();
         setBookings(sampleBookings);
         applyFilters(sampleBookings, searchTerm, statusFilter);
-        
-        console.log('Using sample data for development:', sampleBookings);
+        toast.info('Using sample booking data as fallback', {
+          duration: 5000,
+        });
+        console.log('Using sample data as fallback:', sampleBookings);
       }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+  };
+  
+  // Function to create sample bookings for fallback
+  const createSampleBookings = (): Booking[] => {
+    return [
+      {
+        id: 1,
+        bookingNumber: 'DEMO1234',
+        pickupLocation: 'Demo Airport',
+        dropLocation: 'Demo Hotel',
+        pickupDate: new Date().toISOString(),
+        cabType: 'sedan',
+        distance: 15,
+        tripType: 'airport',
+        tripMode: 'one-way',
+        totalAmount: 1500,
+        status: 'pending' as BookingStatus,
+        passengerName: 'Demo User',
+        passengerPhone: '9876543210',
+        passengerEmail: 'demo@example.com',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        bookingNumber: 'DEMO1235',
+        pickupLocation: 'Demo Hotel',
+        dropLocation: 'Demo Beach',
+        pickupDate: new Date(Date.now() + 86400000).toISOString(),
+        cabType: 'innova_crysta',
+        distance: 25,
+        tripType: 'local',
+        tripMode: 'round-trip',
+        totalAmount: 2500,
+        status: 'confirmed' as BookingStatus,
+        passengerName: 'Demo Admin',
+        passengerPhone: '9876543211',
+        passengerEmail: 'admin@example.com',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
   };
   
   const handleViewDetails = (booking: Booking) => {
@@ -683,6 +670,15 @@ export function AdminBookingsList() {
     }
   };
 
+  const enableDevMode = () => {
+    localStorage.setItem('dev_mode', 'true');
+    setDevMode(true);
+    toast.success('Development mode enabled', {
+      description: 'Using sample data for bookings'
+    });
+    handleRetry();
+  };
+
   if (isLoading && retryCount === 0) {
     return (
       <div className="flex justify-center p-10">
@@ -716,34 +712,33 @@ export function AdminBookingsList() {
             </Button>
             <Button
               variant="outline"
-              onClick={handleVerifyConnectivity}
-              disabled={isRefreshing}
+              onClick={enableDevMode}
               className="md:self-end"
             >
-              <Wifi className="h-4 w-4 mr-2" />
-              Verify API
+              Enable Dev Mode
             </Button>
           </div>
         </div>
         
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>API Error: HTML Response Instead of JSON</AlertTitle>
+          <AlertTitle>API Error</AlertTitle>
           <AlertDescription>
-            <p className="mb-2">The API is returning HTML instead of JSON data. This typically happens when:</p>
+            <p className="mb-2">{error}</p>
+            <p>This typically happens when:</p>
             <ul className="list-disc pl-5 mb-3">
               <li>The API endpoint is not correctly set up</li>
               <li>There's a server-side error or redirection</li>
-              <li>The API is returning a web page instead of JSON data</li>
+              <li>The API is returning HTML instead of JSON data</li>
             </ul>
             <div className="mt-2">
-              <p className="text-sm text-gray-700 mb-2">API Attempt: {apiAttempt}/5</p>
+              <p className="text-sm text-gray-700 mb-2">API Attempt: {apiAttempt}/4</p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleRetry}>
                   Retry API Call
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleVerifyConnectivity}>
-                  Check API Status
+                <Button variant="outline" size="sm" onClick={enableDevMode}>
+                  Enable Dev Mode
                 </Button>
               </div>
             </div>
@@ -808,6 +803,15 @@ export function AdminBookingsList() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          {!devMode && (
+            <Button 
+              variant="outline" 
+              onClick={enableDevMode}
+              className="md:self-end h-10 mt-auto"
+            >
+              Dev Mode
+            </Button>
+          )}
         </div>
       </div>
 
@@ -822,6 +826,15 @@ export function AdminBookingsList() {
                 Retry
               </Button>
             </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {devMode && (
+        <Alert className="mb-4 bg-amber-50 border-amber-200">
+          <AlertTitle className="text-amber-800">Development Mode Enabled</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            Using sample booking data for development. This will not affect production data.
           </AlertDescription>
         </Alert>
       )}
@@ -941,4 +954,3 @@ export function AdminBookingsList() {
     </div>
   );
 }
-

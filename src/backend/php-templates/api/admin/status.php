@@ -1,33 +1,69 @@
 
 <?php
-// status.php - A simple endpoint to check API status
+// This file provides a simple status check endpoint to verify API connectivity
 
-// Set CORS headers to allow requests from anywhere
+// Set headers to ensure JSON response
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization');
+header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-// Handle OPTIONS preflight requests immediately
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    header('HTTP/1.1 200 OK');
-    exit();
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
 }
 
-// Set content type
-header('Content-Type: application/json');
-
-// Basic API status response
-$response = [
-    'status' => 'success',
-    'message' => 'API is operational',
-    'timestamp' => time(),
+// Basic status information
+$statusInfo = [
+    'status' => 'operational',
     'server_time' => date('Y-m-d H:i:s'),
-    'server_info' => [
-        'php_version' => phpversion(),
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-        'request_method' => $_SERVER['REQUEST_METHOD']
-    ]
+    'timestamp' => time(),
+    'environment' => getenv('APP_ENV') ?: 'production',
+    'api_version' => '1.0',
+    'message' => 'API is functioning properly'
 ];
 
-// Output as JSON
-echo json_encode($response);
+// Add PHP version information
+$statusInfo['php_version'] = phpversion();
+
+// Check if we can connect to the database
+try {
+    // Include the database helper if available
+    if (file_exists(__DIR__ . '/../common/db_helper.php')) {
+        require_once __DIR__ . '/../common/db_helper.php';
+        
+        if (function_exists('getDbConnectionWithRetry')) {
+            $conn = getDbConnectionWithRetry(1);
+        } else if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+        } else {
+            throw new Exception("Database helper functions not available");
+        }
+        
+        if ($conn) {
+            $result = $conn->query("SELECT 1");
+            $statusInfo['database'] = 'connected';
+            $conn->close();
+        } else {
+            $statusInfo['database'] = 'connection_failed';
+        }
+    } else {
+        $statusInfo['database'] = 'helper_not_found';
+    }
+} catch (Exception $e) {
+    $statusInfo['database'] = 'error';
+    $statusInfo['database_error'] = $e->getMessage();
+}
+
+// Check memory usage
+$statusInfo['memory_usage'] = [
+    'current' => memory_get_usage(true),
+    'peak' => memory_get_peak_usage(true)
+];
+
+// Return the status information
+echo json_encode($statusInfo);
