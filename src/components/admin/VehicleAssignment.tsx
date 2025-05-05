@@ -52,10 +52,10 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           vehicleNumber: "KA01AB1234",
           make: "Toyota",
           model: "Innova Crysta",
-          year: 2022, // Convert string to number
+          year: 2022,
           vehicleType: "innova_crysta",
           status: "Active",
-          lastMaintenance: "2023-01-15",
+          lastService: "2023-01-15", // Changed from lastMaintenance to lastService
           mileage: 25000,
           fuelType: "Diesel",
           seatingCapacity: 7
@@ -65,10 +65,10 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
           vehicleNumber: "KA02CD5678",
           make: "Maruti Suzuki",
           model: "Swift Dzire",
-          year: 2021, // Convert string to number
+          year: 2021,
           vehicleType: "sedan",
           status: "Active",
-          lastMaintenance: "2023-02-20",
+          lastService: "2023-02-20", // Changed from lastMaintenance to lastService
           mileage: 15000,
           fuelType: "Petrol",
           seatingCapacity: 5
