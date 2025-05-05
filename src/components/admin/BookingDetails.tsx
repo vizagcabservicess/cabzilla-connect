@@ -43,8 +43,8 @@ export function BookingDetails({
   const [isAssigningVehicle, setIsAssigningVehicle] = useState<boolean>(false);
 
   useEffect(() => {
-    // Load available vehicles when the driver tab is active
-    if (activeTab === 'driver') {
+    // Load available vehicles when the assignment tab is active
+    if (activeTab === 'assignment') {
       fetchAvailableVehicles();
     }
   }, [activeTab]);
@@ -117,7 +117,7 @@ export function BookingDetails({
 
   // Determine which tabs should be enabled based on booking status
   const isEditDisabled = isCancelled;
-  const isDriverDisabled = isCancelled || isCompleted;
+  const isAssignmentDisabled = isCancelled || isCompleted;
   const isInvoiceDisabled = isCancelled;
 
   // Construct the PDF URL for the invoice download
@@ -152,7 +152,7 @@ export function BookingDetails({
         <TabsList className="w-full border-b justify-start">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
-          <TabsTrigger value="driver" disabled={isDriverDisabled}>Driver</TabsTrigger>
+          <TabsTrigger value="assignment" disabled={isAssignmentDisabled}>Vehicle & Driver</TabsTrigger>
           <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
         </TabsList>
 
@@ -230,8 +230,8 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="driver" className="py-4">
-          {/* Fleet Vehicle Assignment Section */}
+        <TabsContent value="assignment" className="py-4">
+          {/* Vehicle Assignment Section */}
           <Card className="p-6 mb-4">
             <h3 className="text-lg font-semibold mb-4">Assign Vehicle</h3>
             <div className="space-y-4">
@@ -274,6 +274,7 @@ export function BookingDetails({
             </div>
           </Card>
           
+          {/* Driver Assignment Section */}
           <DriverAssignment 
             booking={booking}
             onAssign={onAssignDriver}

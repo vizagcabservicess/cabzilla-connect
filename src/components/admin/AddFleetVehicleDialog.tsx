@@ -45,6 +45,8 @@ export function AddFleetVehicleDialog({
       vehicleType: 'sedan',
       capacity: 4,
       luggageCapacity: 2,
+      lastServiceOdometer: 0,
+      nextServiceOdometer: 5000,
       isActive: true,
     }
   });
@@ -63,6 +65,8 @@ export function AddFleetVehicleDialog({
         vehicleType: 'sedan',
         capacity: 4,
         luggageCapacity: 2,
+        lastServiceOdometer: 0,
+        nextServiceOdometer: 5000,
         isActive: true,
       });
       setHasSubmitted(false);
@@ -84,31 +88,27 @@ export function AddFleetVehicleDialog({
       const nextServiceDate = new Date();
       nextServiceDate.setMonth(today.getMonth() + 3);
       
-      const vehicleData = {
-        ...data,
+      // Create a complete FleetVehicle object with odometer readings
+      const vehicleToSubmit: Partial<FleetVehicle> = {
+        vehicleNumber: data.vehicleNumber || '',
+        name: data.name || data.model || '',
+        model: data.model || '',
+        make: data.make || '',
+        year: data.year || new Date().getFullYear(),
+        status: data.status as 'Active' | 'Maintenance' | 'Inactive',
         lastService: today.toISOString().split('T')[0],
         nextServiceDue: nextServiceDate.toISOString().split('T')[0],
+        lastServiceOdometer: data.lastServiceOdometer || 0,
+        nextServiceOdometer: data.nextServiceOdometer || 5000,
+        fuelType: data.fuelType || 'Petrol',
+        vehicleType: data.vehicleType || 'sedan',
+        cabTypeId: data.vehicleType || '', // Use vehicle type as cab type id
+        capacity: data.capacity || 4,
+        luggageCapacity: data.luggageCapacity || 2,
+        isActive: data.isActive !== undefined ? data.isActive : true
       };
-
+      
       try {
-        // Create a complete FleetVehicle object without temporary ID
-        const vehicleToSubmit: Partial<FleetVehicle> = {
-          vehicleNumber: data.vehicleNumber || '',
-          name: data.name || data.model || '',
-          model: data.model || '',
-          make: data.make || '',
-          year: data.year || new Date().getFullYear(),
-          status: data.status as 'Active' | 'Maintenance' | 'Inactive',
-          lastService: today.toISOString().split('T')[0],
-          nextServiceDue: nextServiceDate.toISOString().split('T')[0],
-          fuelType: data.fuelType || 'Petrol',
-          vehicleType: data.vehicleType || 'sedan',
-          cabTypeId: data.vehicleType || '', // Use vehicle type as cab type id
-          capacity: data.capacity || 4,
-          luggageCapacity: data.luggageCapacity || 2,
-          isActive: data.isActive !== undefined ? data.isActive : true
-        };
-        
         // Try to use fleetAPI to add the vehicle
         const response = await fleetAPI.addVehicle(vehicleToSubmit);
         
@@ -203,41 +203,22 @@ export function AddFleetVehicleDialog({
               />
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="year"
+                rules={{ required: "Year is required" }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Year</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 2023" 
+                        {...field}
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                      />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="vehicleType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehicle Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="sedan">Sedan</SelectItem>
-                        <SelectItem value="suv">SUV</SelectItem>
-                        <SelectItem value="hatchback">Hatchback</SelectItem>
-                        <SelectItem value="tempo_traveller">Tempo Traveller</SelectItem>
-                        <SelectItem value="luxury">Luxury</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -252,7 +233,7 @@ export function AddFleetVehicleDialog({
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select fuel" />
+                          <SelectValue placeholder="Select fuel type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -269,30 +250,28 @@ export function AddFleetVehicleDialog({
               />
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="capacity"
+                name="vehicleType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Passenger Capacity</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="luggageCapacity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Luggage Capacity</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
-                    </FormControl>
+                    <FormLabel>Vehicle Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vehicle type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="sedan">Sedan</SelectItem>
+                        <SelectItem value="suv">SUV</SelectItem>
+                        <SelectItem value="hatchback">Hatchback</SelectItem>
+                        <SelectItem value="luxury">Luxury</SelectItem>
+                        <SelectItem value="minivan">Minivan</SelectItem>
+                        <SelectItem value="tempo">Tempo Traveller</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -322,19 +301,92 @@ export function AddFleetVehicleDialog({
               />
             </div>
             
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="capacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Seating Capacity</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field}
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="luggageCapacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Luggage Capacity</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field}
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            {/* Service Information Section */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="font-medium mb-3">Service Information</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="lastServiceOdometer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Odometer Reading (km)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value))} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="nextServiceOdometer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Service at (km)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value))} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+            
             <DialogFooter>
-              <Button 
-                variant="outline" 
-                type="button" 
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button 
-                type="submit"
-                disabled={isSubmitting || hasSubmitted}
-              >
+              <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <span className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white"></span>

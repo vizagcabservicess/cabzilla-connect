@@ -41,14 +41,20 @@ export function EditFleetVehicleDialog({
 
   const form = useForm<FleetVehicle>({
     defaultValues: {
-      ...vehicle
+      ...vehicle,
+      lastServiceOdometer: vehicle.lastServiceOdometer || 0,
+      nextServiceOdometer: vehicle.nextServiceOdometer || 0
     }
   });
 
   // Reset form when dialog opens with new vehicle data
   useEffect(() => {
     if (open) {
-      form.reset(vehicle);
+      form.reset({
+        ...vehicle,
+        lastServiceOdometer: vehicle.lastServiceOdometer || 0,
+        nextServiceOdometer: vehicle.nextServiceOdometer || 0
+      });
     }
   }, [open, vehicle, form]);
 
@@ -222,35 +228,78 @@ export function EditFleetVehicleDialog({
                   )}
                 />
               </div>
+              
+              {/* Service Information Section */}
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-medium mb-3">Service Information</h3>
                 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="lastService"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Service Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <FormField
+                    control={form.control}
+                    name="lastService"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Service Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="lastServiceOdometer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Service Odometer (km)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            {...field} 
+                            onChange={e => field.onChange(parseInt(e.target.value))} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="nextServiceDue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Next Service Due</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="nextServiceDue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Next Service Due Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="nextServiceOdometer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Next Service Odometer (km)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            {...field} 
+                            onChange={e => field.onChange(parseInt(e.target.value))} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
               
               <DialogFooter className="gap-2 sm:gap-0">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { AddFleetVehicleDialog } from '@/components/admin/AddFleetVehicleDialog';
-import { FleetVehicleAssignmentDialog } from '@/components/admin/FleetVehicleAssignmentDialog';
 import { EditFleetVehicleDialog } from '@/components/admin/EditFleetVehicleDialog';
 import { ViewFleetVehicleDialog } from '@/components/admin/ViewFleetVehicleDialog';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
@@ -21,20 +21,19 @@ export default function FleetManagementPage() {
   const [fleetData, setFleetData] = useState<FleetVehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [dataSource, setDataSource] = useState<'fleet' | 'regular'>('fleet');
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const { toast: uiToast } = useToast();
   
   useEffect(() => {
     fetchFleetData();
     fetchPendingBookings();
-  }, []);
+  }, [refreshTrigger]);
 
   const fetchPendingBookings = async () => {
     setIsLoadingBookings(true);
@@ -398,13 +397,14 @@ export default function FleetManagementPage() {
       
       // Add the new vehicle to the fleet data without refreshing everything
       setFleetData(prev => [response, ...prev]);
+      
+      // Close dialog
+      setIsAddDialogOpen(false);
     } catch (error) {
       console.error("Error adding vehicle:", error);
       toast.error(`Failed to add vehicle ${newVehicle.vehicleNumber}. Please try again.`);
+      setIsAddDialogOpen(false);
     }
-    
-    // Close dialog
-    setIsAddDialogOpen(false);
   };
 
   // Handle view vehicle details
@@ -431,13 +431,12 @@ export default function FleetManagementPage() {
       );
       
       toast.success(`Vehicle ${updatedVehicle.vehicleNumber} has been updated.`);
+      setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Error updating vehicle:", error);
       toast.error(`Failed to update vehicle. Please try again.`);
+      setIsEditDialogOpen(false);
     }
-    
-    // Close dialog
-    setIsEditDialogOpen(false);
   };
 
   // Handle vehicle deletion
@@ -450,13 +449,17 @@ export default function FleetManagementPage() {
       setFleetData(prev => prev.filter(vehicle => vehicle.id !== vehicleId));
       
       toast.success("Vehicle has been deleted from the fleet.");
+      setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Error deleting vehicle:", error);
       toast.error("Failed to delete vehicle. Please try again.");
+      setIsEditDialogOpen(false);
     }
-    
-    // Close the edit dialog
-    setIsEditDialogOpen(false);
+  };
+
+  // Function to trigger a refresh without fetching duplicates
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -472,10 +475,7 @@ export default function FleetManagementPage() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => {
-                fetchFleetData();
-                fetchPendingBookings();
-              }}
+              onClick={handleRefresh}
               className="flex items-center gap-1"
             >
               <RefreshCw className="h-4 w-4" /> Refresh
