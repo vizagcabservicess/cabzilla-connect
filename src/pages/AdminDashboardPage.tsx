@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,7 +9,7 @@ import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
 import OutstationFareManagement from "@/components/admin/OutstationFareManagement";
 import { DashboardMetrics } from "@/components/admin/DashboardMetrics";
 import { AdminBookingsList } from "@/components/admin/AdminBookingsList";
-import VehicleManagement from "@/components/admin/VehicleManagement";
+import { VehicleManagement } from '@/components/admin/VehicleManagement';
 import { VehiclePricingManagement } from "@/components/admin/VehiclePricingManagement";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { DriverManagement } from "@/components/admin/DriverManagement";

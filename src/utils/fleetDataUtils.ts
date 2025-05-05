@@ -35,7 +35,7 @@ export const fetchVehiclesWithFallback = async (includeInactive = true): Promise
             // Convert standard vehicle data to FleetVehicle format
             return {
               id: v.id || `v-${Math.random().toString(36).substring(2, 9)}`,
-              vehicleId: v.id || v.vehicle_id, // Add vehicleId as alias for id
+              vehicleId: v.id || v.vehicleId, // Fixed: Use vehicleId instead of vehicle_id
               vehicleNumber: v.vehicleNumber || `VN-${v.id || v.name}`,
               name: v.name,
               make: v.make || v.name.split(' ')[0],
@@ -247,7 +247,7 @@ export const getFleetVehicles = async (forceRefresh = false, includeInactive = t
     // Update cache
     vehicleDataCache = {
       vehicles,
-      timestamp: now
+      timestamp: Date.now()
     };
     
     return vehicles;

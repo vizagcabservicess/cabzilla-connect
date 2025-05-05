@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
-import { DataTable } from "@/components/ui/data-table"
+import { DataTable } from "@/components/ui/data-table";
 import { CabType, FleetVehicle } from '@/types/cab';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { columns } from './vehicle-table/columns';
@@ -39,8 +40,8 @@ const formSchema = z.object({
   vehicleType: z.string().min(2, {
     message: "Vehicle Type must be at least 2 characters.",
   }),
-  status: z.string().min(2, {
-    message: "Status must be at least 2 characters.",
+  status: z.enum(["Active", "Maintenance", "Inactive"], {
+    message: "Status must be Active, Maintenance, or Inactive.",
   }),
   lastService: z.string().min(2, {
     message: "Last Service must be at least 2 characters.",
@@ -81,7 +82,7 @@ export function VehicleManagement() {
       model: "",
       year: "",
       vehicleType: "",
-      status: "",
+      status: "Active" as "Active" | "Maintenance" | "Inactive",
       lastService: "",
       nextServiceDue: "",
       fuelType: "",
