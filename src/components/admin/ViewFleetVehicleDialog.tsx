@@ -68,6 +68,31 @@ export function ViewFleetVehicleDialog({
           </div>
         </div>
         
+        {/* Add odometer readings section */}
+        <div className="border-t border-gray-200 pt-4 mt-2">
+          <h3 className="font-medium mb-2">Service Information</h3>
+          <div className="grid grid-cols-2 gap-4">
+            {vehicle.lastServiceOdometer && (
+              <div>
+                <p className="text-sm font-medium text-gray-500">Last Service Odometer</p>
+                <p>{vehicle.lastServiceOdometer} km</p>
+              </div>
+            )}
+            {vehicle.nextServiceOdometer && (
+              <div>
+                <p className="text-sm font-medium text-gray-500">Next Service Due At</p>
+                <p>{vehicle.nextServiceOdometer} km</p>
+              </div>
+            )}
+            {vehicle.currentOdometer && (
+              <div>
+                <p className="text-sm font-medium text-gray-500">Current Odometer</p>
+                <p>{vehicle.currentOdometer} km</p>
+              </div>
+            )}
+          </div>
+        </div>
+        
         <div>
           <p className="text-sm font-medium text-gray-500">Vehicle Type</p>
           <p>{vehicle.vehicleType}</p>

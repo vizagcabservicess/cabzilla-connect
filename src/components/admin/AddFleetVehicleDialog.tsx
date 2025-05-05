@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { 
@@ -16,7 +15,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
-import { fleetAPI } from '@/services/api/fleetAPI';
 import { FleetVehicle } from '@/types/cab';
 
 interface AddFleetVehicleDialogProps {
@@ -109,16 +107,13 @@ export function AddFleetVehicleDialog({
       };
       
       try {
-        // Try to use fleetAPI to add the vehicle
-        const response = await fleetAPI.addVehicle(vehicleToSubmit);
-        
-        // Pass the response to the parent component
-        onAddVehicle(response);
-        toast.success(`Vehicle ${data.vehicleNumber} added successfully`);
+        // In this example, we'll directly call onAddVehicle instead of using an API
+        // In a real app with a backend, you would call the API here first
+        onAddVehicle(vehicleToSubmit as FleetVehicle);
         form.reset();
         onClose();
       } catch (apiError: any) {
-        console.error("API Error adding fleet vehicle:", apiError);
+        console.error("Error adding fleet vehicle:", apiError);
         toast.error(apiError.message || "Failed to add vehicle. Please try again.");
         setHasSubmitted(false);
       }

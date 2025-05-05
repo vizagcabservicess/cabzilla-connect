@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -531,8 +530,8 @@ function FleetManagementPage() {
       {/* Add Vehicle Dialog */}
       <AddFleetVehicleDialog
         open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
-        onSave={handleAddVehicle}
+        onClose={() => setIsAddDialogOpen(false)}
+        onAddVehicle={handleAddVehicle}
       />
 
       {/* Edit Vehicle Dialog */}
@@ -552,10 +551,6 @@ function FleetManagementPage() {
           open={isViewDialogOpen}
           onClose={() => setIsViewDialogOpen(false)}
           vehicle={selectedVehicle}
-          onEdit={() => {
-            setIsViewDialogOpen(false);
-            setIsEditDialogOpen(true);
-          }}
         />
       )}
 
