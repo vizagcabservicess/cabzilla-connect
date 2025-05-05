@@ -91,7 +91,15 @@ export default function FleetManagementPage() {
         
         if (fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
           console.log(`Loaded ${fleetResponse.vehicles.length} fleet vehicles:`, fleetResponse.vehicles);
-          setFleetData(fleetResponse.vehicles);
+          
+          // Ensure all vehicles have valid status values
+          const validatedFleetVehicles = fleetResponse.vehicles.map(vehicle => ({
+            ...vehicle,
+            // Ensure status is one of the valid enum values
+            status: validateStatus(vehicle.status)
+          }));
+          
+          setFleetData(validatedFleetVehicles);
           setDataSource('fleet');
           return;
         }
@@ -109,13 +117,13 @@ export default function FleetManagementPage() {
           
           // Transform vehicle data into fleet data format - ensuring status is always a valid enum value
           const transformedData: FleetVehicle[] = response.vehicles.map(vehicle => ({
-            id: vehicle.id || vehicle.vehicleId || '',
+            id: vehicle.id || '',
             vehicleNumber: vehicle.vehicleNumber || `VN-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
             name: vehicle.name,
             model: vehicle.name,
             make: vehicle.make || 'Unknown',
             year: vehicle.year !== undefined ? vehicle.year : new Date().getFullYear(),
-            status: vehicle.isActive ? 'Active' : 'Inactive',
+            status: validateStatus(vehicle.isActive ? 'Active' : 'Inactive'),
             lastService: vehicle.lastService || new Date().toISOString().split('T')[0],
             nextServiceDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             fuelType: 'Petrol', // Default value
@@ -361,6 +369,20 @@ export default function FleetManagementPage() {
     }
   };
 
+  // Validate and ensure status is one of the allowed enum values
+  const validateStatus = (status?: string): 'Active' | 'Maintenance' | 'Inactive' => {
+    if (!status) return 'Inactive';
+    
+    const normalizedStatus = status.toLowerCase();
+    
+    if (normalizedStatus === 'active') return 'Active';
+    if (normalizedStatus === 'maintenance') return 'Maintenance';
+    if (normalizedStatus === 'inactive') return 'Inactive';
+    
+    // Default to Active for any other value
+    return 'Active';
+  };
+
   // Function to get status color
   const getStatusColor = (status: string): string => {
     switch (status) {
@@ -377,20 +399,35 @@ export default function FleetManagementPage() {
   const inactiveVehicles = fleetData.filter(v => v.status === 'Inactive').length;
 
   // Handle adding a new vehicle
-  const handleAddVehicle = (newVehicle: FleetVehicle) => {
-    toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
+  const handleAddVehicle = async (newVehicle: FleetVehicle) => {
+    try {
+      // Try to use fleetAPI to add the vehicle
+      await fleetAPI.addVehicle(newVehicle).then(response => {
+        toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added to the fleet.`);
+        // Add the new vehicle to the fleet data
+        setFleetData(prev => [...prev, response]);
+      });
+    } catch (error) {
+      console.error("Error in API call:", error);
+      // Fallback - just add to local state
+      toast.success(`Vehicle ${newVehicle.vehicleNumber} has been added locally to the fleet.`);
+      
+      // Generate a mock ID if one doesn't exist
+      const vehicleWithId = {
+        ...newVehicle,
+        id: newVehicle.id || `local-${Date.now()}`
+      };
+      
+      // Add the new vehicle to the fleet data
+      setFleetData(prev => [...prev, vehicleWithId]);
+    }
     
-    // Add the new vehicle to the fleet data
-    setFleetData([...fleetData, newVehicle]);
-    
-    // Refresh data from API after a short delay
-    setTimeout(() => {
-      fetchFleetData();
-    }, 1000);
+    // Close dialog
+    setIsAddDialogOpen(false);
   };
 
   // Handle assigning a vehicle to booking
-  const handleAssignVehicle = (vehicle: FleetVehicle, booking: Booking) => {
+  const handleAssignVehicle = async (vehicle: FleetVehicle, booking: Booking) => {
     setSelectedVehicle(vehicle);
     setSelectedBooking(booking);
     setIsAssignDialogOpen(true);
@@ -409,6 +446,16 @@ export default function FleetManagementPage() {
     } else {
       toast.warning("No pending bookings available for assignment");
     }
+  };
+
+  // Handle assignment completion
+  const handleAssignmentComplete = () => {
+    toast.success("Vehicle assigned to booking successfully");
+    // Refresh data
+    fetchFleetData();
+    fetchPendingBookings();
+    // Close dialog
+    setIsAssignDialogOpen(false);
   };
 
   return (
@@ -567,11 +614,7 @@ export default function FleetManagementPage() {
         onClose={() => setIsAssignDialogOpen(false)}
         booking={selectedBooking || undefined}
         availableVehicles={fleetData.filter(v => v.status === 'Active')}
-        onAssignComplete={() => {
-          // Refresh data after successful assignment
-          fetchFleetData();
-          fetchPendingBookings();
-        }}
+        onAssignComplete={handleAssignmentComplete}
       />
     </div>
   );

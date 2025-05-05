@@ -47,6 +47,25 @@ export function AddFleetVehicleDialog({
       isActive: true,
     }
   });
+  
+  // Reset form when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      form.reset({
+        vehicleNumber: '',
+        name: '',
+        model: '',
+        make: '',
+        year: new Date().getFullYear(),
+        status: 'Active',
+        fuelType: 'Petrol',
+        vehicleType: 'sedan',
+        capacity: 4,
+        luggageCapacity: 2,
+        isActive: true,
+      });
+    }
+  }, [open, form]);
 
   const handleSubmit = async (data: Partial<FleetVehicle>) => {
     try {
@@ -63,13 +82,34 @@ export function AddFleetVehicleDialog({
         nextServiceDue: nextServiceDate.toISOString().split('T')[0],
       };
 
-      // Try to use fleetAPI to add the vehicle
       try {
-        const response = await fleetAPI.addVehicle(vehicleData);
+        // Create a complete FleetVehicle object
+        const completeVehicle: FleetVehicle = {
+          id: `fleet-${Date.now()}`, // Generate a temporary ID
+          vehicleNumber: data.vehicleNumber || '',
+          name: data.name || data.model || '',
+          model: data.model || '',
+          make: data.make || '',
+          year: data.year || new Date().getFullYear(),
+          status: data.status as 'Active' | 'Maintenance' | 'Inactive',
+          lastService: today.toISOString().split('T')[0],
+          nextServiceDue: nextServiceDate.toISOString().split('T')[0],
+          fuelType: data.fuelType || 'Petrol',
+          vehicleType: data.vehicleType || 'sedan',
+          cabTypeId: '', // Will be assigned by the API
+          capacity: data.capacity || 4,
+          luggageCapacity: data.luggageCapacity || 2,
+          isActive: data.isActive !== undefined ? data.isActive : true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Try to use fleetAPI to add the vehicle
+        const response = await fleetAPI.addVehicle(completeVehicle);
+        
+        // Pass the response to the parent component
         onAddVehicle(response);
         toast.success(`Vehicle ${data.vehicleNumber} added successfully`);
-        form.reset();
-        onClose();
       } catch (apiError) {
         console.error("API Error adding fleet vehicle:", apiError);
         
@@ -86,7 +126,7 @@ export function AddFleetVehicleDialog({
           nextServiceDue: nextServiceDate.toISOString().split('T')[0],
           fuelType: data.fuelType || 'Petrol',
           vehicleType: data.vehicleType || 'sedan',
-          cabTypeId: data.cabTypeId || '',
+          cabTypeId: '',
           capacity: data.capacity || 4,
           luggageCapacity: data.luggageCapacity || 2,
           isActive: data.isActive !== undefined ? data.isActive : true,
@@ -96,9 +136,10 @@ export function AddFleetVehicleDialog({
         
         onAddVehicle(syntheticVehicle);
         toast.success(`Vehicle ${data.vehicleNumber} added locally`);
-        form.reset();
-        onClose();
       }
+      
+      form.reset();
+      onClose();
     } catch (error) {
       console.error("Error adding vehicle:", error);
       toast.error("Failed to add vehicle. Please try again.");
