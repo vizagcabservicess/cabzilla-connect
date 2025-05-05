@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
 import { UseFormReturn } from "react-hook-form";
-import { getVehicleTypes } from "@/services/vehicleDataService";
 
 interface VehicleDialogProps {
   open: boolean;
@@ -33,24 +32,6 @@ export function VehicleDialog({
   onSubmit, 
   isSubmitting 
 }: VehicleDialogProps) {
-  const [vehicleTypes, setVehicleTypes] = useState<string[]>(['sedan', 'suv', 'luxury', 'hatchback', 'tempo']);
-  
-  useEffect(() => {
-    // Fetch vehicle types when the component mounts
-    const loadVehicleTypes = async () => {
-      try {
-        const types = await getVehicleTypes();
-        if (types && types.length > 0) {
-          setVehicleTypes(types);
-        }
-      } catch (error) {
-        console.error("Error loading vehicle types:", error);
-      }
-    };
-    
-    loadVehicleTypes();
-  }, []);
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[600px]">
@@ -141,11 +122,11 @@ export function VehicleDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {vehicleTypes.map(type => (
-                          <SelectItem key={type} value={type}>
-                            {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="sedan">Sedan</SelectItem>
+                        <SelectItem value="suv">SUV</SelectItem>
+                        <SelectItem value="luxury">Luxury</SelectItem>
+                        <SelectItem value="hatchback">Hatchback</SelectItem>
+                        <SelectItem value="tempo">Tempo Traveller</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
