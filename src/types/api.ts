@@ -92,6 +92,7 @@ export interface Location {
   lat?: number;
   lng?: number;
   popularity?: number;
+  isInVizag?: boolean;
 }
 
 // DashboardMetrics interface
@@ -100,6 +101,13 @@ export interface DashboardMetrics {
   completedBookings: number;
   cancelledBookings: number;
   pendingBookings: number;
+  activeRides?: number;
+  upcomingRides?: number;
+  totalRevenue?: number;
+  availableDrivers?: number;
+  busyDrivers?: number;
+  avgRating?: number;
+  availableStatuses?: string[] | Record<string, string>;
   revenue: {
     total: number;
     today: number;
@@ -174,6 +182,15 @@ export interface TourFare {
   destination?: string;
   vehicleType?: string;
   isActive: boolean;
+  
+  // Additional properties used in FareManagement component
+  tourId: string;
+  tourName: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
 }
 
 export interface VehiclePricing {
@@ -185,18 +202,30 @@ export interface VehiclePricing {
   minHours?: number;
   capacityText?: string;
   isActive: boolean;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  pricePerKm?: number;
 }
 
 export interface FareUpdateRequest {
-  id: number | string;
+  id?: number | string;
   basePrice?: number;
   perKmRate?: number;
   perHourRate?: number;
   isActive?: boolean;
+  tourId?: string;
+  sedan?: number;
+  ertiga?: number; 
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 export interface VehiclePricingUpdateRequest extends FareUpdateRequest {
   vehicleType?: string;
   capacityText?: string;
   minHours?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }

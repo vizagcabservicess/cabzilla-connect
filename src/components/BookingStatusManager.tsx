@@ -1,209 +1,206 @@
-
-import { useState } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { BookingStatus } from "@/types/api";
-import { Check, CheckCheck, Loader2, Trash2, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
-import { cn } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { bookingAPI } from '@/services/api';
+import { BookingStatus } from '@/types/api';
+import { AlertCircle, Clock, CheckCheck, X, RefreshCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface BookingStatusManagerProps {
+  bookingId: number | string;
   currentStatus: BookingStatus;
-  onStatusChange: (newStatus: BookingStatus) => Promise<void>;
-  isAdmin?: boolean;
-  onDelete?: () => Promise<void>;
+  onStatusChange?: (newStatus: BookingStatus) => void;
+  className?: string;
+  variant?: 'default' | 'compact';
+  showLabel?: boolean;
 }
 
-export function BookingStatusManager({ 
-  currentStatus, 
-  onStatusChange, 
-  isAdmin = false,
-  onDelete
+export function BookingStatusManager({
+  bookingId,
+  currentStatus,
+  onStatusChange,
+  className = '',
+  variant = 'default',
+  showLabel = true
 }: BookingStatusManagerProps) {
+  const [status, setStatus] = useState<BookingStatus>(currentStatus);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const { toast } = useToast();
-
-  const getStatusIcon = (status: BookingStatus) => {
-    switch (status) {
+  const [error, setError] = useState<string | null>(null);
+  
+  // Update local state when the prop changes
+  useEffect(() => {
+    setStatus(currentStatus);
+  }, [currentStatus]);
+  
+  const getNextStatus = (current: BookingStatus): BookingStatus | null => {
+    switch (current) {
+      case 'pending':
+        return 'confirmed';
+      case 'confirmed':
+        return 'assigned';
       case 'assigned':
-        return <Check className="h-4 w-4" />;
+        return 'in-progress';
+      case 'in-progress':
+        return 'completed';
       case 'payment_received':
-        return <CheckCheck className="h-4 w-4" />;
+        return 'completed';
       case 'payment_pending':
-        return <Loader2 className="h-4 w-4" />;
+        return 'payment_received';
       case 'completed':
-        return <CheckCircle className="h-4 w-4" />;
+        return null;
       case 'continued':
-        return <AlertCircle className="h-4 w-4" />;
+        return 'completed';
       case 'cancelled':
-        return <XCircle className="h-4 w-4" />;
+        return null;
       default:
-        return <Check className="h-4 w-4" />;
+        return null;
     }
   };
-
-  const getStatusColor = (status: BookingStatus) => {
-    switch (status) {
+  
+  const getPrevStatus = (current: BookingStatus): BookingStatus | null => {
+    switch (current) {
+      case 'pending':
+        return null;
+      case 'confirmed':
+        return 'pending';
       case 'assigned':
-        return 'text-blue-600';
+        return 'confirmed';
+      case 'in-progress':
+        return 'assigned';
       case 'payment_received':
-        return 'text-green-600';
+        return 'payment_pending';
       case 'payment_pending':
-        return 'text-yellow-600';
+        return 'in-progress';
       case 'completed':
-        return 'text-green-600';
+        return 'in-progress';
       case 'continued':
-        return 'text-orange-600';
+        return 'in-progress';
       case 'cancelled':
-        return 'text-red-600';
+        return null;
       default:
-        return 'text-gray-600';
+        return null;
     }
   };
-
-  const handleStatusChange = async (newStatus: string) => {
-    if (newStatus === currentStatus) return;
-    
+  
+  const updateStatus = async (newStatus: BookingStatus) => {
     setIsUpdating(true);
+    setError(null);
+    
     try {
-      await onStatusChange(newStatus as BookingStatus);
-      toast({
-        title: "Status Updated",
-        description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
-      });
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast({
-        variant: "destructive",
-        title: "Status Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update status",
-      });
+      await bookingAPI.updateBookingStatus(bookingId, newStatus);
+      setStatus(newStatus);
+      onStatusChange?.(newStatus);
+    } catch (error: any) {
+      console.error("Error updating booking status:", error);
+      setError(error.message || "Failed to update status");
     } finally {
       setIsUpdating(false);
     }
   };
-
-  const handleDelete = async () => {
-    if (!onDelete) return;
-    
-    // Confirm before deleting
-    if (!window.confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
-      return;
-    }
-    
-    setIsDeleting(true);
-    try {
-      await onDelete();
-      toast({
-        title: "Booking Deleted",
-        description: "The booking has been successfully deleted",
-      });
-    } catch (error) {
-      console.error("Error deleting booking:", error);
-      toast({
-        variant: "destructive",
-        title: "Delete Failed",
-        description: error instanceof Error ? error.message : "Failed to delete the booking",
-      });
-    } finally {
-      setIsDeleting(false);
+  
+  const handleNextStatus = () => {
+    const next = getNextStatus(status);
+    if (next) {
+      updateStatus(next);
     }
   };
-
+  
+  const handlePrevStatus = () => {
+    const prev = getPrevStatus(status);
+    if (prev) {
+      updateStatus(prev);
+    }
+  };
+  
+  const renderStatusBadge = () => {
+    let badgeText = status.replace(/_/g, ' ');
+    badgeText = badgeText.charAt(0).toUpperCase() + badgeText.slice(1);
+    
+    let badgeColor = "bg-gray-100 text-gray-800";
+    
+    switch (status) {
+      case 'pending':
+        badgeColor = "bg-yellow-100 text-yellow-800";
+        break;
+      case 'confirmed':
+        badgeColor = "bg-blue-100 text-blue-800";
+        break;
+      case 'assigned':
+        badgeColor = "bg-purple-100 text-purple-800";
+        break;
+      case 'in-progress':
+        badgeColor = "bg-orange-100 text-orange-800";
+        break;
+      case 'completed':
+        badgeColor = "bg-green-100 text-green-800";
+        break;
+      case 'payment_received':
+        badgeColor = "bg-green-100 text-green-800";
+        break;
+      case 'payment_pending':
+        badgeColor = "bg-red-100 text-red-800";
+        break;
+      case 'continued':
+        badgeColor = "bg-blue-100 text-blue-800";
+        break;
+      case 'cancelled':
+        badgeColor = "bg-red-100 text-red-800";
+        break;
+    }
+    
+    return (
+      <Badge className={cn(badgeColor, "font-medium", className)}>
+        {showLabel && <span className="mr-1">{badgeText}</span>}
+        {status === 'pending' && <Clock className="h-4 w-4" />}
+        {status === 'confirmed' && <CheckCheck className="h-4 w-4" />}
+        {status === 'assigned' && <CheckCheck className="h-4 w-4" />}
+        {status === 'in-progress' && <Clock className="h-4 w-4" />}
+        {status === 'completed' && <CheckCheck className="h-4 w-4" />}
+        {status === 'payment_received' && <CheckCheck className="h-4 w-4" />}
+        {status === 'payment_pending' && <Clock className="h-4 w-4" />}
+        {status === 'continued' && <Clock className="h-4 w-4" />}
+        {status === 'cancelled' && <X className="h-4 w-4" />}
+      </Badge>
+    );
+  };
+  
   return (
-    <div className="space-y-4">
-      {isAdmin ? (
-        <div className="flex items-center gap-4">
-          <Select
-            disabled={isUpdating}
-            value={currentStatus}
-            onValueChange={handleStatusChange}
-          >
-            <SelectTrigger className="w-[200px] bg-white">
-              <SelectValue>
-                <span className="flex items-center gap-2">
-                  <span className={cn("flex items-center gap-2", getStatusColor(currentStatus))}>
-                    {getStatusIcon(currentStatus)}
-                    {currentStatus.replace('_', ' ').toUpperCase()}
-                  </span>
-                </span>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <Check className="h-4 w-4" />
-                  PENDING
-                </span>
-              </SelectItem>
-              <SelectItem value="confirmed">
-                <span className="flex items-center gap-2 text-blue-600">
-                  <Check className="h-4 w-4" />
-                  CONFIRMED
-                </span>
-              </SelectItem>
-              <SelectItem value="assigned">
-                <span className="flex items-center gap-2 text-blue-600">
-                  <Check className="h-4 w-4" />
-                  ASSIGNED
-                </span>
-              </SelectItem>
-              <SelectItem value="payment_received">
-                <span className="flex items-center gap-2 text-green-600">
-                  <CheckCheck className="h-4 w-4" />
-                  PAYMENT RECEIVED
-                </span>
-              </SelectItem>
-              <SelectItem value="payment_pending">
-                <span className="flex items-center gap-2 text-yellow-600">
-                  <Loader2 className="h-4 w-4" />
-                  PAYMENT PENDING
-                </span>
-              </SelectItem>
-              <SelectItem value="completed">
-                <span className="flex items-center gap-2 text-green-600">
-                  <CheckCircle className="h-4 w-4" />
-                  COMPLETED
-                </span>
-              </SelectItem>
-              <SelectItem value="continued">
-                <span className="flex items-center gap-2 text-orange-600">
-                  <AlertCircle className="h-4 w-4" />
-                  CONTINUED
-                </span>
-              </SelectItem>
-              <SelectItem value="cancelled">
-                <span className="flex items-center gap-2 text-red-600">
-                  <XCircle className="h-4 w-4" />
-                  CANCELLED
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          
-          {onDelete && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDelete}
-              disabled={isUpdating || isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Delete Booking
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className={cn("flex items-center gap-2 font-medium", getStatusColor(currentStatus))}>
-          {getStatusIcon(currentStatus)}
-          {currentStatus.replace('_', ' ').toUpperCase()}
-        </div>
+    <div className="flex items-center space-x-2">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
+      
+      {variant === 'default' && (
+        <>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handlePrevStatus} 
+            disabled={!getPrevStatus(status) || isUpdating}
+          >
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Previous
+          </Button>
+          
+          {renderStatusBadge()}
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleNextStatus} 
+            disabled={!getNextStatus(status) || isUpdating}
+          >
+            Next
+            <RefreshCcw className="ml-2 h-4 w-4" />
+          </Button>
+        </>
+      )}
+      
+      {variant === 'compact' && renderStatusBadge()}
     </div>
   );
 }

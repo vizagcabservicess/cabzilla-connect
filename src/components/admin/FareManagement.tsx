@@ -101,7 +101,7 @@ export function FareManagement() {
       
       await reloadCabTypes();
       
-      const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
+      const data = await fareAPI.updateTourFare(values.tourId, values);
       console.log("Fare update response:", data);
       
       toast.success("Tour fare updated successfully");
@@ -127,7 +127,10 @@ export function FareManagement() {
         ertiga: values.ertiga,
         innova: values.innova,
         tempo: values.tempo,
-        luxury: values.luxury
+        luxury: values.luxury,
+        basePrice: 0,  // Required by the interface
+        isActive: true,
+        name: values.tourName // Required by the interface
       };
       
       localStorage.removeItem('cabFares');

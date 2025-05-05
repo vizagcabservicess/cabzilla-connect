@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,15 +37,22 @@ export function DashboardMetrics({
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
   useEffect(() => {
-    if (metricsData?.availableStatuses) {
-      let statusesArray: string[] = [];
+    if (metricsData) {
+      // Default to some basic statuses if none are provided
+      const defaultStatuses = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'];
       
-      if (Array.isArray(metricsData.availableStatuses)) {
-        statusesArray = metricsData.availableStatuses.map(status => String(status));
-      } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
-        statusesArray = Object.values(metricsData.availableStatuses).map(status => String(status));
-      } else if (typeof metricsData.availableStatuses === 'string') {
-        statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
+      let statusesArray: string[] = [];
+      if (metricsData.availableStatuses) {
+        if (Array.isArray(metricsData.availableStatuses)) {
+          statusesArray = metricsData.availableStatuses.map(status => String(status));
+        } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
+          statusesArray = Object.values(metricsData.availableStatuses).map(status => String(status));
+        } else if (typeof metricsData.availableStatuses === 'string') {
+          statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
+        }
+      } else {
+        // Use default statuses if none provided
+        statusesArray = defaultStatuses;
       }
       
       const statuses: Array<BookingStatus | 'all'> = ['all'];
@@ -53,7 +61,7 @@ export function DashboardMetrics({
         if (typeof status === 'string') {
           const isValidStatus = [
             'pending', 'confirmed', 'assigned', 'payment_received', 
-            'payment_pending', 'completed', 'continued', 'cancelled'
+            'payment_pending', 'completed', 'continued', 'cancelled', 'in-progress'
           ].includes(status);
           
           if (isValidStatus) {
@@ -138,7 +146,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Active Rides"
-          value={metricsData?.activeRides}
+          value={metricsData?.activeRides || 0}
           icon={<CarTaxiFront />}
           description="Currently ongoing"
           isLoading={isLoading}
@@ -148,7 +156,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Total Revenue"
-          value={metricsData?.totalRevenue}
+          value={metricsData?.totalRevenue || metricsData?.revenue?.total || 0}
           icon={<CircleDollarSign />}
           description={`${currentPeriod === 'today' ? 'Today' : currentPeriod === 'week' ? 'This week' : 'This month'}`}
           isLoading={isLoading}
@@ -159,7 +167,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Upcoming Rides"
-          value={metricsData?.upcomingRides}
+          value={metricsData?.upcomingRides || 0}
           icon={<CarTaxiFront />}
           description="Next 24 hours"
           isLoading={isLoading}
@@ -171,7 +179,7 @@ export function DashboardMetrics({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Available Drivers"
-          value={metricsData?.availableDrivers}
+          value={metricsData?.availableDrivers || 0}
           icon={<Users />}
           description="Ready for assignment"
           isLoading={isLoading}
@@ -181,7 +189,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Busy Drivers"
-          value={metricsData?.busyDrivers}
+          value={metricsData?.busyDrivers || 0}
           icon={<Users />}
           description="Currently on duty"
           isLoading={isLoading}
@@ -191,7 +199,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Average Rating"
-          value={metricsData?.avgRating}
+          value={metricsData?.avgRating || 0}
           icon={<Star />}
           description="Customer satisfaction"
           isLoading={isLoading}

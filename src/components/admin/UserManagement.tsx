@@ -1,577 +1,332 @@
-
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from 'react';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  ArrowDownUp, 
-  AlertCircle,
-  Database,
-  RefreshCw, 
-  Search, 
-  Shield, 
-  ShieldAlert, 
-  UserCheck, 
-  Users 
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertCircle, RefreshCw, Save, User, UserPlus, UserX } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { authAPI } from '@/services/api/authAPI';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { User } from '@/types/api';
-import { format } from 'date-fns';
-import { getApiUrl, forceRefreshHeaders } from '@/config/api';
-import axios from 'axios';
+import { userAPI } from '@/services/api/userAPI';
+import { User as UserType } from '@/types/api';
+import { reloadUsers } from '@/lib/userData';
+
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Username must be at least 2 characters.",
+  }),
+  email: z.string().email({
+    message: "Please enter a valid email address.",
+  }),
+  phone: z.string().optional(),
+  role: z.enum(['user', 'admin', 'driver']).default('user'),
+});
 
 export function UserManagement() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
-  const [sortField, setSortField] = useState<'name' | 'email' | 'createdAt'>('createdAt');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const { toast: uiToast } = useToast();
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const [dataSource, setDataSource] = useState<'database' | 'sample' | 'cache'>('sample');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [username, setUsername] = useState<string>('');
   
-  // Define sampleUsers within the component to fix the reference error
-  const sampleUsers: User[] = [
-    {
-      id: 101,
-      name: 'Admin User',
-      email: 'admin@example.com',
-      phone: '9876543210',
-      role: 'admin',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 102,
-      name: 'Test User',
-      email: 'user@example.com',
-      phone: '8765432109',
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
       role: 'user',
-      createdAt: new Date().toISOString()
-    }
-  ];
+    },
+  });
   
   useEffect(() => {
-    // Get current user ID from auth API
-    const getCurrentUser = async () => {
-      try {
-        const userData = await authAPI.getCurrentUser();
-        if (userData) {
-          setCurrentUserId(userData.id);
-        }
-      } catch (error) {
-        console.error('Error getting current user:', error);
-      }
-    };
-    
-    getCurrentUser();
     fetchUsers();
   }, []);
   
-  const fetchUsers = async (forceRefresh = false) => {
+  const fetchUsers = async () => {
     try {
-      setIsLoading(true);
+      setIsRefreshing(true);
       setError(null);
       
-      // Try to get cached users first if not forcing refresh
-      if (!forceRefresh) {
-        try {
-          const cachedUsers = localStorage.getItem('cachedUsers');
-          if (cachedUsers) {
-            const parsedUsers = JSON.parse(cachedUsers);
-            console.log('Using cached users from localStorage:', parsedUsers);
-            setUsers(parsedUsers);
-            setDataSource('cache');
-            setIsLoading(false);
-            
-            // Fetch fresh data in the background
-            setTimeout(() => {
-              fetchFreshUsers();
-            }, 500);
-            
-            return;
-          }
-        } catch (cacheError) {
-          console.error('Error using cached users:', cacheError);
-        }
+      const data = await userAPI.getAllUsers();
+      
+      if (Array.isArray(data)) {
+        setUsers(data);
+      } else {
+        console.warn("Invalid user data format:", data);
+        setError("Failed to load users. Invalid data format.");
       }
-      
-      // Fetch fresh users
-      fetchFreshUsers();
-      
     } catch (error) {
-      console.error('Error fetching users:', error);
-      handleFetchError(error);
+      console.error("Error fetching users:", error);
+      setError("Failed to load users. Please try again.");
+    } finally {
+      setIsRefreshing(false);
     }
   };
   
-  const fetchFreshUsers = async () => {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      console.log('Fetching fresh users via authAPI.getAllUsers...');
-      const userData = await authAPI.getAllUsers();
+      setIsLoading(true);
       
-      if (userData && userData.length > 0) {
-        console.log('Users fetched successfully via authAPI:', userData);
-        setUsers(userData);
-        setDataSource(userData === sampleUsers ? 'sample' : 'database');
-        
-        // Cache the users for offline access
-        localStorage.setItem('cachedUsers', JSON.stringify(userData));
-        
-        setIsLoading(false);
-        return;
-      }
+      localStorage.removeItem('users');
+      sessionStorage.removeItem('users');
+      
+      await reloadUsers();
+      
+      const data = await userAPI.createUser(values);
+      
+      toast.success("User created successfully");
+      fetchUsers();
+      form.reset();
     } catch (error) {
-      console.error('Error fetching fresh users:', error);
-      handleFetchError(error);
+      console.error("Error creating user:", error);
+      toast.error("Failed to create user. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleFetchError = (error: any) => {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to load users';
-    setError(errorMessage);
-    
-    uiToast({
-      title: "Error",
-      description: errorMessage,
-      variant: "destructive",
-    });
-    
-    // Try to get users from cache as fallback
+  const handleUserDelete = async (userId: string | number) => {
     try {
-      const cachedUsers = localStorage.getItem('cachedUsers');
-      if (cachedUsers) {
-        const parsedUsers = JSON.parse(cachedUsers);
-        setUsers(parsedUsers);
-        setDataSource('cache');
-        toast.info('Using cached user data due to connection error');
-        return;
-      }
-    } catch (cacheError) {
-      console.error('Error using cached users:', cacheError);
-    }
-    
-    // Use sample data as last resort
-    const sampleUsers: User[] = [
-      {
-        id: 101,
-        name: 'Admin User',
-        email: 'admin@example.com',
-        phone: '9876543210',
-        role: 'admin',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 102,
-        name: 'Test User',
-        email: 'user@example.com',
-        phone: '8765432109',
-        role: 'user',
-        createdAt: new Date().toISOString()
-      }
-    ];
-    
-    setUsers(sampleUsers);
-    setDataSource('sample');
-    toast.warning('Using sample data due to connection error');
-  };
-  
-  const handlePromoteToAdmin = async (userId: number) => {
-    // Prevent admins from removing their own admin status
-    if (userId === currentUserId) {
-      toast.error("You cannot modify your own admin status");
-      return;
-    }
-    
-    try {
-      const user = users.find(u => u.id === userId);
-      if (!user) return;
+      // Convert userId to a number if possible, otherwise leave it as string
+      const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? 
+        Number(userId) : userId;
       
-      const isCurrentlyAdmin = user.role === 'admin';
-      const newRole = isCurrentlyAdmin ? 'user' : 'admin' as 'admin' | 'user';
-      const actionText = isCurrentlyAdmin ? 'Remove admin' : 'Make admin';
-      
-      // Confirm before changing role
-      if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} for ${user.name}?`)) {
+      // Handle confirmation dialog
+      if (!window.confirm(`Are you sure you want to delete user ${username}?`)) {
         return;
       }
       
-      // Update the local state to provide immediate feedback
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, role: newRole } : u
-      ));
+      setIsLoading(true);
       
-      try {
-        // Attempt to update on server
-        await authAPI.updateUserRole(userId, newRole);
-        
-        // Success notification
-        toast.success(`User ${isCurrentlyAdmin ? 'removed from' : 'promoted to'} admin successfully`);
-        
-        // Update the cache
-        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
-          u.id === userId ? { ...u, role: newRole } : u
-        )));
-      } catch (updateError) {
-        console.error('Error updating user role on server:', updateError);
-        
-        // Show warning but keep the UI updated
-        toast.warning(`Role updated in UI only. Server update failed: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
-        
-        // Still update the cache for consistency
-        localStorage.setItem('cachedUsers', JSON.stringify(users.map(u => 
-          u.id === userId ? { ...u, role: newRole } : u
-        )));
-      }
+      // Call the API with numericId
+      await userAPI.deleteUser(numericId);
+      
+      toast.success("User deleted successfully");
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      
+      // Refresh user list after deletion
+      fetchUsers();
     } catch (error) {
-      console.error('Error updating user role:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update user role');
-    }
-  };
-  
-  // Filter and sort users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = searchTerm === '' || 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.phone && user.phone.includes(searchTerm));
-      
-    const matchesRole = roleFilter === 'all' || 
-      (roleFilter === 'admin' && user.role === 'admin') ||
-      (roleFilter === 'user' && user.role === 'user');
-      
-    return matchesSearch && matchesRole;
-  });
-  
-  // Sort users
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    let comparison = 0;
-    
-    switch (sortField) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'email':
-        comparison = a.email.localeCompare(b.email);
-        break;
-      case 'createdAt':
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        break;
-    }
-    
-    return sortDirection === 'asc' ? comparison : -comparison;
-  });
-  
-  const toggleSort = (field: 'name' | 'email' | 'createdAt') => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+      console.error('Error deleting user:', error);
+      toast.error("Failed to delete user. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Helper to get data source badge
-  const getDataSourceBadge = () => {
-    switch(dataSource) {
-      case 'database':
-        return <span className="bg-green-100 text-green-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <Database className="h-3 w-3" /> Live Data
-        </span>;
-      case 'cache':
-        return <span className="bg-blue-100 text-blue-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <UserCheck className="h-3 w-3" /> Cached Data
-        </span>;
-      case 'sample':
-        return <span className="bg-amber-100 text-amber-800 px-2 py-1 text-xs rounded-full flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" /> Sample Data
-        </span>;
+  const handleUserRoleUpdate = async (userId: string | number, role: string) => {
+    try {
+      // Convert userId to a number if possible
+      const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? 
+        Number(userId) : userId;
+      
+      setIsLoading(true);
+      
+      // Call the API with numericId
+      await userAPI.updateUserRole(numericId, role);
+      
+      toast.success(`User role updated to ${role}`);
+      
+      // Update the local user list
+      setUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, role } : user
+      ));
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast.error("Failed to update user role. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
   
-  if (error && !users.length) {
-    return (
-      <ApiErrorFallback 
-        error={error} 
-        onRetry={() => fetchUsers(true)} 
-        title="User Management Error" 
-        description="Unable to load user data. This may be due to a network issue or server problem."
-      />
-    );
-  }
-  
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" /> User Management
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {getDataSourceBadge()}
+    <div className="container mx-auto py-10">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" /> Add New User
+            </CardTitle>
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => fetchUsers(true)} 
-              disabled={isLoading}
+              onClick={fetchUsers} 
+              disabled={isRefreshing}
             >
-              <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert className="mb-4">
-            <AlertDescription>
-              {error} - Showing {dataSource === 'database' ? 'live' : dataSource === 'cache' ? 'cached' : 'sample'} data.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <Tabs defaultValue="list">
-          <TabsList className="mb-4">
-            <TabsTrigger value="list" className="flex items-center gap-1">
-              <Users className="h-4 w-4" /> User List
-            </TabsTrigger>
-            <TabsTrigger value="admins" className="flex items-center gap-1">
-              <ShieldAlert className="h-4 w-4" /> Admins
-            </TabsTrigger>
-          </TabsList>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            
-            <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as 'all' | 'admin' | 'user')}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="admin">Admins</SelectItem>
-                <SelectItem value="user">Users</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <TabsContent value="list">
-            {isLoading ? (
-              <div className="flex justify-center p-8">
-                <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-              </div>
-            ) : sortedUsers.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('name')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Name
-                          {sortField === 'name' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('email')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Email
-                          {sortField === 'email' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50" 
-                        onClick={() => toggleSort('createdAt')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Created
-                          {sortField === 'createdAt' && (
-                            <ArrowDownUp className="h-3 w-3" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone || '-'}</TableCell>
-                        <TableCell>
-                          {user.role === 'admin' ? (
-                            <div className="flex items-center gap-1 text-purple-600">
-                              <Shield className="h-4 w-4" />
-                              Admin
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-gray-600">
-                              <UserCheck className="h-4 w-4" />
-                              User
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {user.createdAt ? format(new Date(user.createdAt), 'MMM d, yyyy') : 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant={user.role === 'admin' ? "destructive" : "default"}
-                            size="sm"
-                            onClick={() => handlePromoteToAdmin(user.id)}
-                            disabled={user.id === currentUserId}
-                            title={user.id === currentUserId ? "You cannot modify your own admin status" : ""}
-                          >
-                            {user.role === 'admin' ? (
-                              <>
-                                <Shield className="h-4 w-4 mr-1" />
-                                Remove Admin
-                              </>
-                            ) : (
-                              <>
-                                <ShieldAlert className="h-4 w-4 mr-1" />
-                                Make Admin
-                              </>
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="py-2 px-4 text-sm text-gray-500 border-t">
-                  Showing {sortedUsers.length} of {users.length} users
-                </div>
-              </div>
-            ) : (
-              <Alert>
-                <AlertDescription>
-                  {searchTerm || roleFilter !== 'all' 
-                    ? "No users matching your filters" 
-                    : "No users found in the system"}
-                </AlertDescription>
-              </Alert>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="admins">
-            {isLoading ? (
-              <div className="flex justify-center p-8">
-                <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Alert>
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-5 w-5" />
-                    <AlertDescription>
-                      <strong>Admin users</strong> have full access to all dashboard features including user management, fare control, and booking operations.
-                    </AlertDescription>
-                  </div>
-                </Alert>
-                
-                {sortedUsers.filter(user => user.role === 'admin').length > 0 ? (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sortedUsers
-                          .filter(user => user.role === 'admin')
-                          .map((admin) => (
-                            <TableRow key={admin.id}>
-                              <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-purple-600" />
-                                  {admin.name}
-                                  {admin.id === currentUserId && (
-                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                                      You
-                                    </span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>{admin.email}</TableCell>
-                              <TableCell>{admin.phone || '-'}</TableCell>
-                              <TableCell>
-                                {admin.createdAt ? format(new Date(admin.createdAt), 'MMM d, yyyy') : 'N/A'}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handlePromoteToAdmin(admin.id)}
-                                  disabled={admin.id === currentUserId}
-                                  title={admin.id === currentUserId ? "You cannot remove your own admin status" : ""}
-                                >
-                                  <Shield className="h-4 w-4 mr-1" />
-                                  Remove Admin
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No admin users found
-                  </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John Doe" {...field} onChange={(e) => {
+                        field.onChange(e);
+                        setUsername(e.target.value);
+                      }} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+              />
+              
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="johndoe@example.com" type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123-456-7890" type="tel" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="driver">Driver</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Create User
+                  </>
+                )}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+      
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" /> Existing Users
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isRefreshing ? (
+            <div className="flex justify-center p-10">
+              <RefreshCw className="h-10 w-10 animate-spin text-gray-400" />
+            </div>
+          ) : users.length > 0 ? (
+            <Table>
+              <TableCaption>A list of all registered users.</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[200px]">Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.phone || '-'}</TableCell>
+                    <TableCell>
+                      <Select 
+                        value={user.role}
+                        onValueChange={(role) => handleUserRoleUpdate(user.id, role)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={user.role} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="driver">Driver</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                          setUsername(user.name);
+                          handleUserDelete(user.id);
+                        }}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <UserX className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              No users found.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

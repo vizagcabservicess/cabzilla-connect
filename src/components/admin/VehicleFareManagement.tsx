@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -161,7 +160,7 @@ export function VehicleFareManagement() {
     if (selectedVehicle) {
       vehiclePricingForm.setValue("vehicleType", selectedVehicle.vehicleType);
       vehiclePricingForm.setValue("basePrice", selectedVehicle.basePrice);
-      vehiclePricingForm.setValue("pricePerKm", selectedVehicle.pricePerKm);
+      vehiclePricingForm.setValue("pricePerKm", selectedVehicle.pricePerKm || selectedVehicle.perKmRate);
       vehiclePricingForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
       vehiclePricingForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
     }
@@ -189,11 +188,12 @@ export function VehicleFareManagement() {
         vehicleType: values.vehicleType,
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
+        perKmRate: values.pricePerKm,  // Add this for compatibility
         nightHaltCharge: values.nightHaltCharge,
         driverAllowance: values.driverAllowance
       };
       
-      const data = await fareAPI.updateVehiclePricing(updateData);
+      const data = await fareAPI.updateVehiclePricing(updateData.vehicleType, updateData);
       console.log("Vehicle pricing update response:", data);
       
       toast.success("Vehicle pricing updated successfully");
@@ -224,7 +224,7 @@ export function VehicleFareManagement() {
         luxury: values.luxury
       };
       
-      const data = await fareAPI.updateTourFares(fareUpdateData);
+      const data = await fareAPI.updateTourFare(values.tourId, fareUpdateData);
       console.log("Tour fare update response:", data);
       
       toast.success("Tour fare updated successfully");

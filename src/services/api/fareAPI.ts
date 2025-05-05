@@ -109,5 +109,63 @@ export const fareAPI = {
       console.error('Error in updateTourFare:', error);
       throw error;
     }
+  },
+
+  /**
+   * Update tour fares (wrapper method for backward compatibility)
+   */
+  updateTourFares: async (data: FareUpdateRequest) => {
+    const id = data.tourId || data.id || 0;
+    return await fareAPI.updateTourFare(id, data);
+  },
+
+  /**
+   * Add a new tour fare
+   */
+  addTourFare: async (data: TourFare) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/admin/add-tour-fare.php`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.status === 200) {
+        return response.data;
+      }
+      
+      throw new Error(`Failed to add tour fare: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in addTourFare:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a tour fare
+   */
+  deleteTourFare: async (tourId: string) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/admin/delete-tour-fare.php`, {
+        tourId
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (response.status === 200) {
+        return response.data;
+      }
+      
+      throw new Error(`Failed to delete tour fare: ${response.statusText}`);
+    } catch (error) {
+      console.error('Error in deleteTourFare:', error);
+      throw error;
+    }
   }
 };
