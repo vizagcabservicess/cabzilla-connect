@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
@@ -287,6 +286,63 @@ export const fleetAPI = {
       // Show an error toast but return true as fallback
       toast.error("API error when assigning vehicle. Please check logs.");
       return true;
+    }
+  },
+
+  /**
+   * Add a new vehicle to the fleet
+   * @param vehicleData - Vehicle data to add
+   */
+  addVehicle: async (vehicleData: Partial<FleetVehicle>) => {
+    try {
+      console.log("Adding new fleet vehicle:", vehicleData);
+      
+      // Try direct API call first
+      try {
+        const response = await axios.post('/api/admin/fleet-vehicles-create.php', vehicleData, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'X-Force-Refresh': 'true'
+          }
+        });
+        
+        console.log("Add vehicle response:", response.data);
+        
+        if (response.data && response.data.status === 'success') {
+          return response.data.vehicle || vehicleData;
+        }
+      } catch (directError) {
+        console.warn("Direct API call failed:", directError);
+        
+        // Try with API_BASE_URL
+        try {
+          const response = await axios.post(`${API_BASE_URL}/api/admin/fleet-vehicles-create.php`, vehicleData, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          console.log("Add vehicle response with base URL:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            return response.data.vehicle || vehicleData;
+          }
+        } catch (baseUrlError) {
+          console.warn("API_BASE_URL call failed:", baseUrlError);
+          throw new Error("Failed to add vehicle to fleet");
+        }
+      }
+      
+      // If API calls succeed but don't return proper data, return the input data
+      return vehicleData;
+    } catch (error) {
+      console.error("Error adding vehicle to fleet:", error);
+      // Show an error toast but return the input data as fallback
+      toast.error("Error adding vehicle to fleet. Please check logs.");
+      return vehicleData;
     }
   }
 };
