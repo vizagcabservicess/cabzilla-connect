@@ -31,6 +31,7 @@ export function AddFleetVehicleDialog({
   onAddVehicle
 }: AddFleetVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const form = useForm<Partial<FleetVehicle>>({
     defaultValues: {
@@ -64,12 +65,19 @@ export function AddFleetVehicleDialog({
         luggageCapacity: 2,
         isActive: true,
       });
+      setHasSubmitted(false);
     }
   }, [open, form]);
 
   const handleSubmit = async (data: Partial<FleetVehicle>) => {
+    if (hasSubmitted) {
+      toast.warning("Form already submitted, please wait...");
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
+      setHasSubmitted(true);
       
       // Calculate next service due date (3 months from now)
       const today = new Date();
@@ -83,9 +91,8 @@ export function AddFleetVehicleDialog({
       };
 
       try {
-        // Create a complete FleetVehicle object
-        const completeVehicle: FleetVehicle = {
-          id: `fleet-${Date.now()}`, // Generate a temporary ID
+        // Create a complete FleetVehicle object without temporary ID
+        const vehicleToSubmit: Partial<FleetVehicle> = {
           vehicleNumber: data.vehicleNumber || '',
           name: data.name || data.model || '',
           model: data.model || '',
@@ -96,53 +103,29 @@ export function AddFleetVehicleDialog({
           nextServiceDue: nextServiceDate.toISOString().split('T')[0],
           fuelType: data.fuelType || 'Petrol',
           vehicleType: data.vehicleType || 'sedan',
-          cabTypeId: '', // Will be assigned by the API
+          cabTypeId: data.vehicleType || '', // Use vehicle type as cab type id
           capacity: data.capacity || 4,
           luggageCapacity: data.luggageCapacity || 2,
-          isActive: data.isActive !== undefined ? data.isActive : true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          isActive: data.isActive !== undefined ? data.isActive : true
         };
         
         // Try to use fleetAPI to add the vehicle
-        const response = await fleetAPI.addVehicle(completeVehicle);
+        const response = await fleetAPI.addVehicle(vehicleToSubmit);
         
         // Pass the response to the parent component
         onAddVehicle(response);
         toast.success(`Vehicle ${data.vehicleNumber} added successfully`);
-      } catch (apiError) {
+        form.reset();
+        onClose();
+      } catch (apiError: any) {
         console.error("API Error adding fleet vehicle:", apiError);
-        
-        // If API fails, create a synthetic response with all required fields
-        const syntheticVehicle: FleetVehicle = {
-          id: `fleet-${Date.now()}`,
-          vehicleNumber: data.vehicleNumber || '',
-          name: data.name || data.model || '',
-          model: data.model || '',
-          make: data.make || '',
-          year: data.year || new Date().getFullYear(),
-          status: data.status as 'Active' | 'Maintenance' | 'Inactive',
-          lastService: today.toISOString().split('T')[0],
-          nextServiceDue: nextServiceDate.toISOString().split('T')[0],
-          fuelType: data.fuelType || 'Petrol',
-          vehicleType: data.vehicleType || 'sedan',
-          cabTypeId: '',
-          capacity: data.capacity || 4,
-          luggageCapacity: data.luggageCapacity || 2,
-          isActive: data.isActive !== undefined ? data.isActive : true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        onAddVehicle(syntheticVehicle);
-        toast.success(`Vehicle ${data.vehicleNumber} added locally`);
+        toast.error(apiError.message || "Failed to add vehicle. Please try again.");
+        setHasSubmitted(false);
       }
-      
-      form.reset();
-      onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding vehicle:", error);
-      toast.error("Failed to add vehicle. Please try again.");
+      toast.error(error.message || "Failed to add vehicle. Please try again.");
+      setHasSubmitted(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -350,7 +333,7 @@ export function AddFleetVehicleDialog({
               </Button>
               <Button 
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || hasSubmitted}
               >
                 {isSubmitting ? (
                   <>

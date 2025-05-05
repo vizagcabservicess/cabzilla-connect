@@ -32,4 +32,3 @@ error_log('Request body: ' . file_get_contents('php://input'));
 
 // Include the direct-vehicle-create.php file which has the full implementation
 require_once(__DIR__ . '/direct-vehicle-create.php');
-?>
