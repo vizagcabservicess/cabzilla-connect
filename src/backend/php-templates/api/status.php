@@ -1,42 +1,31 @@
 
 <?php
-/**
- * status.php - Simple API health check endpoint
- */
+// Simple status endpoint to check API connectivity
 
-// Set CORS headers
+// Set response headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Health-Check');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    echo json_encode(['status' => 'success', 'message' => 'CORS preflight successful']);
     exit;
 }
 
-// Add debug information to help diagnose routing issues
-$requestInfo = [
-    'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
-    'script' => $_SERVER['SCRIPT_NAME'] ?? 'unknown',
-    'query' => $_SERVER['QUERY_STRING'] ?? '',
-    'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
-    'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+// Basic info about the server environment
+$info = [
+    'status' => 'ok',
+    'message' => 'API is running',
+    'timestamp' => time(),
+    'datetime' => date('Y-m-d H:i:s'),
+    'php_version' => phpversion(),
+    'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+    'host' => $_SERVER['HTTP_HOST'] ?? 'unknown'
 ];
 
-// Simple status check - no database connection required
-echo json_encode([
-    'status' => 'success',
-    'message' => 'API is operational',
-    'timestamp' => time(),
-    'version' => '1.0.4',
-    'server_time' => date('Y-m-d H:i:s'),
-    'server_info' => [
-        'php_version' => phpversion(),
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-        'request_method' => $_SERVER['REQUEST_METHOD']
-    ],
-    'request_info' => $requestInfo
-]);
+// Return JSON response
+echo json_encode($info);
+exit;

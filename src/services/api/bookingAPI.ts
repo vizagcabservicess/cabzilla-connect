@@ -1,34 +1,70 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { BookingRequest, BookingStatus, Booking } from '@/types/api';
+
+// Helper function to create API URLs that work in both development and production
+const createApiUrl = (path) => {
+  // Try without base URL first (relative path)
+  // This helps when the app is deployed at the same domain as the API
+  return path.startsWith('/') ? path : `/${path}`;
+};
 
 export const bookingAPI = {
   /**
    * Get all bookings
    */
   getAllBookings: async () => {
+    console.log('Fetching all bookings...');
+    const headers = {
+      'Cache-Control': 'no-cache',
+      'X-Force-Refresh': 'true',
+      'Content-Type': 'application/json'
+    };
+    
+    // First try direct fetch without any domain prefix
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        },
+      console.log('Direct fetch attempt...');
+      const response = await axios.get(`/api/admin/bookings.php`, {
+        headers,
         timeout: 15000 // Extended timeout to allow for slower DB connections
       });
       
       // Check if the response has bookings array
       if (response.data && Array.isArray(response.data.bookings)) {
+        console.log('Success with direct fetch (bookings property):', response.data.bookings.length);
         return response.data.bookings;
       } else if (Array.isArray(response.data)) {
+        console.log('Success with direct fetch (array):', response.data.length);
         return response.data;
       } else {
         console.error('Unexpected bookings response format:', response.data);
         throw new Error('Invalid response format from API');
       }
-    } catch (error) {
-      console.error('Error fetching all bookings:', error);
-      throw error; // Let the calling code handle the error
+    } catch (directError) {
+      console.warn('Direct fetch failed:', directError);
+      
+      // Try with API_BASE_URL
+      try {
+        console.log('Trying with API_BASE_URL...');
+        const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php`, {
+          headers,
+          timeout: 15000 // Extended timeout
+        });
+        
+        if (response.data && Array.isArray(response.data.bookings)) {
+          console.log('Success with API_BASE_URL (bookings property):', response.data.bookings.length);
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          console.log('Success with API_BASE_URL (array):', response.data.length);
+          return response.data;
+        } else {
+          console.error('Unexpected bookings response format with API_BASE_URL:', response.data);
+          throw new Error('Invalid response format from API with API_BASE_URL');
+        }
+      } catch (baseUrlError) {
+        console.error('Both fetch attempts failed:', directError, baseUrlError);
+        throw directError; // Throw the original error
+      }
     }
   },
   
@@ -37,29 +73,47 @@ export const bookingAPI = {
    */
   getUserBookings: async (userId: number) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 15000 // Extended timeout
-      });
+      const headers = {
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+        'Content-Type': 'application/json'
+      };
       
-      // Check if the response has bookings array
-      if (response.data && Array.isArray(response.data.bookings)) {
-        return response.data.bookings;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
-      } else {
-        console.error('Unexpected user bookings response format:', response.data);
-        throw new Error('Invalid response format from API');
+      // First try direct path
+      try {
+        const response = await axios.get(`/api/user/bookings.php?user_id=${userId}`, {
+          headers,
+          timeout: 15000
+        });
+        
+        if (response.data && Array.isArray(response.data.bookings)) {
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        } else {
+          throw new Error('Invalid response format from API');
+        }
+      } catch (directError) {
+        // Try with API_BASE_URL
+        const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`, {
+          headers,
+          timeout: 15000
+        });
+        
+        if (response.data && Array.isArray(response.data.bookings)) {
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        } else {
+          throw new Error('Invalid response format from API');
+        }
       }
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       throw error; // Let the calling code handle the error
     }
   },
-
+  
   /**
    * Get booking by ID
    */
@@ -226,22 +280,42 @@ export const bookingAPI = {
    */
   getPendingBookings: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php`, {
-        headers: {
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache'
-        },
-        timeout: 15000 // Extended timeout
-      });
+      const headers = {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json'
+      };
       
-      // Check if the response has bookings array
-      if (response.data && Array.isArray(response.data.bookings)) {
-        return response.data.bookings;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
-      } else {
-        console.error('Unexpected pending bookings response format:', response.data);
-        throw new Error('Invalid response format from API');
+      // Try direct path first
+      try {
+        const response = await axios.get(`/api/admin/pending-bookings.php`, {
+          headers,
+          timeout: 15000
+        });
+        
+        // Check if the response has bookings array
+        if (response.data && Array.isArray(response.data.bookings)) {
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        } else {
+          throw new Error('Invalid response format from API');
+        }
+      } catch (directError) {
+        // Try with API_BASE_URL
+        const response = await axios.get(`${API_BASE_URL}/api/admin/pending-bookings.php`, {
+          headers,
+          timeout: 15000
+        });
+        
+        // Check if the response has bookings array
+        if (response.data && Array.isArray(response.data.bookings)) {
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        } else {
+          throw new Error('Invalid response format from API');
+        }
       }
     } catch (error) {
       console.error('Error fetching pending bookings:', error);

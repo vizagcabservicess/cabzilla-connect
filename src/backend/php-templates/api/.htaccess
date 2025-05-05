@@ -15,50 +15,11 @@ RewriteBase /api/
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# CRITICAL: Special handling for download-invoice.php - explicitly clear Content-Type
-<Files "download-invoice.php">
-    # Remove all output buffering before processing
-    php_flag output_buffering off
-    # Remove Content-Type header to let PHP script set it
-    Header unset Content-Type
-    # Ensure PHP processing
-    SetHandler application/x-httpd-php
-    # Force allow all CORS headers
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # Ensure no caching for PDF files
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# Special handling for test-pdf.php
-<Files "test-pdf.php">
-    # Remove Content-Type header to let PHP script set it
-    Header unset Content-Type
-    SetHandler application/x-httpd-php
-    # Force allow all CORS headers
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-    # Ensure no caching
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-</Files>
-
-# PDF MimeType handling - don't force Content-Type
-<FilesMatch "\.pdf$">
-    ForceType application/pdf
-    Header always set X-Content-Type-Options "nosniff"
-</FilesMatch>
-
 # CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Set access headers for all responses
+# Set access headers for all responses - IMPORTANT FOR AXIOS REQUESTS
 <IfModule mod_headers.c>
     # Set CORS headers unconditionally for all responses
     Header always set Access-Control-Allow-Origin "*"
@@ -69,11 +30,7 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Add public download-invoice endpoint with special handling for PDFs
-RewriteRule ^download-invoice\.php$ /api/download-invoice.php [L,NC,QSA]
-RewriteRule ^download-invoice$ /api/download-invoice.php [L,NC,QSA]
-
-# Direct access to all PHP files - CRITICAL NEW RULE
+# Direct access to all PHP files - CRITICAL RULE
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
@@ -81,27 +38,23 @@ RewriteRule ^download-invoice$ /api/download-invoice.php [L,NC,QSA]
 </Files>
 
 # Special handling for admin API endpoints
-RewriteRule ^admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^admin/update-booking$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
-RewriteRule ^admin/booking$ /api/admin/booking.php [L,NC,QSA]
+RewriteRule ^admin/bookings\.php$ /api/admin/bookings.php [L,NC,QSA]
+RewriteRule ^admin/bookings$ /api/admin/bookings.php [L,NC,QSA]
+RewriteRule ^admin/pending-bookings\.php$ /api/admin/pending-bookings.php [L,NC,QSA]
+RewriteRule ^admin/pending-bookings$ /api/admin/pending-bookings.php [L,NC,QSA]
 
 # Force MIME types
-AddType application/pdf .pdf
+AddType application/json .json
 AddType application/x-httpd-php .php
-
-# Invoice and receipt endpoints with high priority
-RewriteRule ^invoice/([0-9]+)/?$ /api/admin/generate-invoice.php?id=$1 [L,NC,QSA]
-RewriteRule ^receipt/([0-9]+)/?$ /api/admin/receipt.php?id=$1 [L,NC,QSA]
-
-# Diagnostic endpoints with high priority  
-RewriteRule ^test$ /api/test.php [L,NC,QSA]
-RewriteRule ^test-pdf$ /api/test-pdf.php [L,NC,QSA]
-RewriteRule ^test-paths$ /api/test-paths.php [L,NC,QSA]
 
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
-# Send all other requests to index.html for React to handle
+# Add explicit rules for our API endpoints
+RewriteRule ^status\.php$ /api/status.php [L,NC,QSA]
+RewriteRule ^admin/check-connection\.php$ /api/admin/check-connection.php [L,NC,QSA]
+
+# Send all other requests to index.html for React to handle only if not an API path
+RewriteCond %{REQUEST_URI} !^/api/.*\.php
 RewriteRule ^(.*)$ /index.html [L]
