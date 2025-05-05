@@ -45,7 +45,7 @@ export const columns: ColumnDef<CabType>[] = [
             status === "Active" 
               ? "default" 
               : status === "Maintenance"
-              ? "warning"
+              ? "outline"  // Changed from "warning" to "outline"
               : "secondary"
           }
         >
