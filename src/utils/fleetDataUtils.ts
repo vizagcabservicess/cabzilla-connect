@@ -1,272 +1,111 @@
+
 import { FleetVehicle } from '@/types/cab';
-import { toast } from 'sonner';
 import { fleetAPI } from '@/services/api/fleetAPI';
-import { getVehicleData } from '@/services/vehicleDataService';
+import { toast } from 'sonner';
+
+// Cache variables
+let vehicleCache: FleetVehicle[] | null = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Attempts to fetch vehicle data from multiple sources with fallbacks
- * @param includeInactive Whether to include inactive vehicles
- * @returns Promise with array of fleet vehicles
+ * Clears the vehicle cache
  */
-export const fetchVehiclesWithFallback = async (includeInactive = true): Promise<FleetVehicle[]> => {
-  try {
-    console.log(`Fetching fleet vehicles with fallback strategy, includeInactive: ${includeInactive}`);
-    
-    // Attempt 1: Try fleetAPI
-    try {
-      const response = await fleetAPI.getVehicles(includeInactive);
-      if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
-        console.log(`Successfully fetched ${response.vehicles.length} vehicles from fleetAPI`);
-        return response.vehicles;
-      }
-    } catch (error) {
-      console.warn("fleetAPI.getVehicles failed:", error);
-    }
-    
-    // Attempt 2: Try vehicleDataService
-    try {
-      const vehicles = await getVehicleData(true, includeInactive);
-      if (vehicles && Array.isArray(vehicles) && vehicles.length > 0) {
-        console.log(`Successfully fetched ${vehicles.length} vehicles from vehicleDataService`);
-        
-        // Convert to FleetVehicle format if needed
-        const fleetVehicles = vehicles.map(v => {
-          if ('id' in v && 'name' in v) {
-            // Convert standard vehicle data to FleetVehicle format
-            return {
-              id: v.id || `v-${Math.random().toString(36).substring(2, 9)}`,
-              vehicleId: v.id || v.vehicleId, // Fixed: Use vehicleId instead of vehicle_id
-              vehicleNumber: v.vehicleNumber || `VN-${v.id || v.name}`,
-              name: v.name,
-              make: v.make || v.name.split(' ')[0],
-              model: v.model || v.name,
-              year: v.year || new Date().getFullYear(),
-              vehicleType: v.vehicleType || v.id,
-              status: v.status || "Active",
-              lastService: v.lastService || new Date().toISOString().split('T')[0],
-              nextServiceDue: v.nextServiceDue || '2024-12-31',
-              fuelType: v.fuelType || "Petrol",
-              capacity: v.capacity || 4,
-              cabTypeId: v.cabTypeId || v.id,
-              luggageCapacity: v.luggageCapacity || 2,
-              isActive: v.isActive !== undefined ? v.isActive : true,
-              currentOdometer: v.currentOdometer || 0,
-              createdAt: v.createdAt || new Date().toISOString().split('T')[0],
-              updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
-            };
-          }
-          return v as FleetVehicle;
-        });
-        
-        return fleetVehicles;
-      }
-    } catch (error) {
-      console.warn("getVehicleData failed:", error);
-    }
-    
-    // Attempt 3: Try direct fetch from alternate endpoints
-    try {
-      const response = await fetch('/api/vehicles-data.php?includeInactive=true&_t=' + Date.now(), {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true',
-          'X-Admin-Mode': 'true'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.vehicles && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-          console.log(`Successfully fetched ${data.vehicles.length} vehicles from direct API call`);
-          
-          // Convert to FleetVehicle format
-          const fleetVehicles = data.vehicles.map(v => ({
-            id: v.id || v.vehicleId || `v-${Math.random().toString(36).substring(2, 9)}`,
-            vehicleNumber: v.vehicleNumber || `VN-${v.id}`,
-            name: v.name,
-            make: v.make || v.name.split(' ')[0],
-            model: v.model || v.name,
-            year: v.year || new Date().getFullYear(),
-            vehicleType: v.vehicleType || v.id,
-            status: v.status || "Active",
-            lastService: v.lastService || new Date().toISOString().split('T')[0],
-            nextServiceDue: v.nextServiceDue || '2024-12-31',
-            fuelType: v.fuelType || "Petrol",
-            capacity: v.capacity || 4,
-            cabTypeId: v.cabTypeId || v.id,
-            luggageCapacity: v.luggageCapacity || 2,
-            isActive: v.isActive !== undefined ? v.isActive : true,
-            currentOdometer: v.currentOdometer || 0,
-            createdAt: v.createdAt || new Date().toISOString().split('T')[0],
-            updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
-          }));
-          
-          return fleetVehicles;
-        }
-      }
-    } catch (error) {
-      console.warn("Direct API call failed:", error);
-    }
-    
-    // Attempt 4: Try fetching from static JSON file
-    try {
-      const jsonResponse = await fetch(`/data/vehicles.json?_t=${Date.now()}`);
-      if (jsonResponse.ok) {
-        const jsonData = await jsonResponse.json();
-        console.log("Fetched vehicles from JSON file:", jsonData);
-        
-        if (Array.isArray(jsonData) && jsonData.length > 0) {
-          // Map the JSON data to match FleetVehicle type
-          const fleetVehicles = jsonData.map((v: any) => ({
-            id: v.id || v.vehicleId || `v-${Math.random().toString(36).substring(2, 9)}`,
-            vehicleNumber: v.vehicleNumber || `VN-${v.id || v.name}`,
-            name: v.name,
-            make: v.make || v.name.split(' ')[0],
-            model: v.model || v.name,
-            year: v.year || new Date().getFullYear(),
-            vehicleType: v.vehicleType || v.id,
-            status: v.status || "Active",
-            lastService: v.lastService || new Date().toISOString().split('T')[0],
-            nextServiceDue: v.nextServiceDue || '2024-12-31',
-            fuelType: v.fuelType || "Petrol",
-            capacity: v.capacity || 4,
-            cabTypeId: v.cabTypeId || v.id,
-            luggageCapacity: v.luggageCapacity || 2,
-            isActive: v.isActive !== undefined ? v.isActive : true,
-            currentOdometer: v.currentOdometer || 0,
-            createdAt: v.createdAt || new Date().toISOString().split('T')[0],
-            updatedAt: v.updatedAt || new Date().toISOString().split('T')[0]
-          }));
-          
-          return fleetVehicles;
-        }
-      }
-    } catch (jsonError) {
-      console.error("JSON fetch error:", jsonError);
-    }
-    
-    // If all attempts fail, return mock data as last resort
-    console.warn("All vehicle fetching attempts failed. Using mock data.");
-    
-    // Use mock data as last resort
-    return [
-      {
-        id: "v-mock-001",
-        vehicleNumber: "KA01AB1234",
-        name: "Toyota Innova Crysta",
-        make: "Toyota",
-        model: "Innova Crysta",
-        year: 2022,
-        vehicleType: "innova_crysta",
-        status: "Active",
-        lastService: "2023-01-15",
-        nextServiceDue: "2023-07-15",
-        fuelType: "Diesel",
-        capacity: 7,
-        cabTypeId: "innova_crysta",
-        luggageCapacity: 3,
-        isActive: true,
-        currentOdometer: 25000,
-        createdAt: "2023-01-01",
-        updatedAt: "2023-01-15"
-      },
-      {
-        id: "v-mock-002",
-        vehicleNumber: "KA02CD5678",
-        name: "Maruti Suzuki Swift Dzire",
-        make: "Maruti Suzuki",
-        model: "Swift Dzire",
-        year: 2021,
-        vehicleType: "sedan",
-        status: "Active",
-        lastService: "2023-02-20",
-        nextServiceDue: "2023-08-20",
-        fuelType: "Petrol",
-        capacity: 5,
-        cabTypeId: "sedan",
-        luggageCapacity: 2,
-        isActive: true,
-        currentOdometer: 15000,
-        createdAt: "2022-12-01",
-        updatedAt: "2023-02-20"
-      },
-      {
-        id: "v-mock-003",
-        vehicleNumber: "KA03EF9012",
-        name: "Mahindra Xylo",
-        make: "Mahindra",
-        model: "Xylo",
-        year: 2020,
-        vehicleType: "suv",
-        status: "Active",
-        lastService: "2023-03-10",
-        nextServiceDue: "2023-09-10",
-        fuelType: "Diesel",
-        capacity: 8,
-        cabTypeId: "suv",
-        luggageCapacity: 4,
-        isActive: true,
-        currentOdometer: 30000,
-        createdAt: "2022-10-01",
-        updatedAt: "2023-03-10"
-      }
-    ];
-  } catch (error) {
-    console.error("Error in fetchVehiclesWithFallback:", error);
-    toast.error("Failed to load vehicle data");
-    throw error;
-  }
+export const clearVehicleCache = () => {
+  console.log("Clearing vehicle cache");
+  vehicleCache = null;
+  lastFetchTime = 0;
 };
 
 /**
- * Cache for vehicle data to reduce API calls
- */
-let vehicleDataCache: {
-  vehicles: FleetVehicle[];
-  timestamp: number;
-} | null = null;
-
-/**
- * Get cached vehicle data with auto-refresh if stale
- * @param forceRefresh Force refresh of data
+ * Get all fleet vehicles with caching
+ * @param forceRefresh Force a refresh from the API
  * @param includeInactive Include inactive vehicles
  * @returns Promise with array of fleet vehicles
  */
-export const getFleetVehicles = async (forceRefresh = false, includeInactive = true): Promise<FleetVehicle[]> => {
-  // Check if cache is valid (less than 5 minutes old)
+export const getFleetVehicles = async (
+  forceRefresh = false,
+  includeInactive = false
+): Promise<FleetVehicle[]> => {
   const now = Date.now();
-  const cacheValid = vehicleDataCache && (now - vehicleDataCache.timestamp < 5 * 60 * 1000);
+  const cacheExpired = now - lastFetchTime > CACHE_DURATION;
   
-  if (!forceRefresh && cacheValid) {
-    return vehicleDataCache!.vehicles;
+  // Use cache if available and not expired and not forcing refresh
+  if (!forceRefresh && vehicleCache && !cacheExpired) {
+    console.log(`Using cached vehicles (${vehicleCache.length} items)`);
+    return includeInactive 
+      ? vehicleCache 
+      : vehicleCache.filter(v => v.isActive);
   }
   
   try {
-    const vehicles = await fetchVehiclesWithFallback(includeInactive);
+    console.log(`Fetching fleet vehicles from API (forceRefresh: ${forceRefresh}, includeInactive: ${includeInactive})`);
     
-    // Update cache
-    vehicleDataCache = {
-      vehicles,
-      timestamp: Date.now()
-    };
+    const response = await fleetAPI.getVehicles(includeInactive);
     
-    return vehicles;
+    if (response && Array.isArray(response.vehicles)) {
+      // Update cache with all vehicles
+      vehicleCache = response.vehicles;
+      lastFetchTime = now;
+      
+      console.log(`Updated vehicle cache with ${vehicleCache.length} vehicles`);
+      
+      // Return vehicles based on includeInactive flag
+      return includeInactive 
+        ? vehicleCache 
+        : vehicleCache.filter(v => v.isActive);
+    } else {
+      console.error("Invalid response format from getVehicles:", response);
+      throw new Error("Invalid response from fleet API");
+    }
   } catch (error) {
     console.error("Error in getFleetVehicles:", error);
     
-    // If cache exists, return it even if stale on error
-    if (vehicleDataCache) {
-      return vehicleDataCache.vehicles;
+    // If we have cached data and this is not a forced refresh, use it as fallback
+    if (vehicleCache && !forceRefresh) {
+      console.warn("Using cached vehicles as fallback after API error");
+      toast.error("Failed to refresh vehicles, using cached data");
+      
+      return includeInactive 
+        ? vehicleCache 
+        : vehicleCache.filter(v => v.isActive);
     }
     
-    throw error;
+    // Handle the case where we have no cache and API failed
+    toast.error("Failed to load vehicles. Please try again later.");
+    return [];
   }
 };
 
 /**
- * Clear the vehicle data cache to force refresh on next request
+ * Get vehicle by ID from fleet
+ * @param vehicleId Vehicle ID to find
+ * @param forceRefresh Force a refresh from the API
+ * @returns Promise with the vehicle or null if not found
  */
-export const clearVehicleCache = () => {
-  vehicleDataCache = null;
-  console.log("Vehicle data cache cleared");
+export const getFleetVehicleById = async (
+  vehicleId: string,
+  forceRefresh = false
+): Promise<FleetVehicle | null> => {
+  try {
+    const vehicles = await getFleetVehicles(forceRefresh, true);
+    
+    // First try direct match
+    let vehicle = vehicles.find(v => v.id === vehicleId);
+    
+    // If not found, try case-insensitive match
+    if (!vehicle) {
+      vehicle = vehicles.find(v => v.id.toLowerCase() === vehicleId.toLowerCase());
+    }
+    
+    // If still not found, try matching by vehicleNumber
+    if (!vehicle) {
+      vehicle = vehicles.find(v => v.vehicleNumber === vehicleId);
+    }
+    
+    return vehicle || null;
+  } catch (error) {
+    console.error(`Error finding vehicle by ID (${vehicleId}):`, error);
+    return null;
+  }
 };

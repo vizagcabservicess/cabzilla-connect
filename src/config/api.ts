@@ -1,10 +1,10 @@
 
 // API configuration
 
-// Base API URL - auto-detect between development and production
+// Base API URL - use the vizagup.com domain
 export const apiBaseUrl = window.location.hostname.includes('localhost') 
   ? 'http://localhost' 
-  : window.location.origin;
+  : 'https://vizagup.com';
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string): string => {

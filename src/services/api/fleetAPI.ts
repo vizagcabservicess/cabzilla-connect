@@ -2,6 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
 import { FleetVehicle } from '@/types/cab';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 
 // Mock data for demo purposes
 const mockVehicles = [
@@ -126,15 +127,15 @@ export const fleetAPI = {
     try {
       console.log('Fetching fleet vehicles, includeAll:', includeAll);
       
-      // Try direct API call first
+      // Use consistent API URL with getApiUrl helper
+      const url = getApiUrl(`api/admin/fleet-vehicles.php?include_all=${includeAll ? 1 : 0}&_t=${Date.now()}`);
+      console.log('Fetching vehicles from URL:', url);
+      
       try {
-        const response = await axios.get('/api/admin/fleet-vehicles.php', {
+        const response = await axios.get(url, {
           headers: {
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
-          },
-          params: { 
-            include_all: includeAll ? 1 : 0 
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true'
           }
         });
         
@@ -143,38 +144,40 @@ export const fleetAPI = {
         if (response.data && (Array.isArray(response.data.vehicles) || Array.isArray(response.data))) {
           const vehicles = Array.isArray(response.data.vehicles) ? response.data.vehicles : response.data;
           return { vehicles };
+        } else {
+          console.warn("Invalid response format:", response.data);
+          throw new Error("Invalid response format from fleet vehicles API");
         }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
+      } catch (apiError) {
+        console.warn("API call failed:", apiError);
         
-        // Try with API_BASE_URL
-        try {
-          const response = await axios.get(`${API_BASE_URL}/api/admin/fleet-vehicles.php`, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
-            },
-            params: { 
-              include_all: includeAll ? 1 : 0 
-            }
-          });
-          
-          if (response.data && (Array.isArray(response.data.vehicles) || Array.isArray(response.data))) {
-            const vehicles = Array.isArray(response.data.vehicles) ? response.data.vehicles : response.data;
-            return { vehicles };
+        // Try fallback endpoint if first one fails
+        const fallbackUrl = getApiUrl(`api/admin/get-vehicles.php?includeInactive=${includeAll ? 'true' : 'false'}&_t=${Date.now()}`);
+        console.log('Trying fallback URL:', fallbackUrl);
+        
+        const fallbackResponse = await axios.get(fallbackUrl, {
+          headers: {
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true'
           }
-        } catch (baseUrlError) {
-          console.warn("API_BASE_URL call failed:", baseUrlError);
-          throw new Error("Failed to fetch vehicles from API");
+        });
+        
+        if (fallbackResponse.data && (Array.isArray(fallbackResponse.data.vehicles) || Array.isArray(fallbackResponse.data))) {
+          const vehicles = Array.isArray(fallbackResponse.data.vehicles) 
+            ? fallbackResponse.data.vehicles 
+            : fallbackResponse.data;
+          return { vehicles };
+        } else {
+          throw new Error("Invalid response from fleet vehicles API (fallback)");
         }
       }
-      
-      // If both API calls fail, use mock data
-      console.log("Using mock fleet data");
-      return { vehicles: mockVehicles };
     } catch (error) {
       console.error("Error fetching fleet vehicles:", error);
+      // Log the full error for debugging
+      console.error("Full error:", JSON.stringify(error));
       // If any error occurs, fall back to mock data
+      console.log("Using mock fleet data as fallback");
+      toast.error("Failed to fetch vehicles from API, using backup data");
       return { vehicles: mockVehicles };
     }
   },
@@ -184,47 +187,51 @@ export const fleetAPI = {
    */
   getDrivers: async () => {
     try {
-      // Try direct API call first
+      // Use consistent API URL with getApiUrl helper
+      const url = getApiUrl(`api/admin/fleet-drivers.php?_t=${Date.now()}`);
+      console.log('Fetching drivers from URL:', url);
+      
       try {
-        const response = await axios.get('/api/admin/fleet-drivers.php', {
+        const response = await axios.get(url, {
           headers: {
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true'
           }
         });
         
         if (response.data && (Array.isArray(response.data.drivers) || Array.isArray(response.data))) {
           const drivers = Array.isArray(response.data.drivers) ? response.data.drivers : response.data;
           return drivers;
+        } else {
+          throw new Error("Invalid response format from drivers API");
         }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
+      } catch (apiError) {
+        console.warn("Primary drivers API call failed:", apiError);
         
-        // Try with API_BASE_URL
-        try {
-          const response = await axios.get(`${API_BASE_URL}/api/admin/fleet-drivers.php`, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
-            }
-          });
-          
-          if (response.data && (Array.isArray(response.data.drivers) || Array.isArray(response.data))) {
-            const drivers = Array.isArray(response.data.drivers) ? response.data.drivers : response.data;
-            return drivers;
+        // Try fallback endpoint
+        const fallbackUrl = getApiUrl(`api/admin/drivers.php?_t=${Date.now()}`);
+        console.log('Trying drivers fallback URL:', fallbackUrl);
+        
+        const fallbackResponse = await axios.get(fallbackUrl, {
+          headers: {
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true'
           }
-        } catch (baseUrlError) {
-          console.warn("API_BASE_URL call failed:", baseUrlError);
-          throw new Error("Failed to fetch drivers from API");
+        });
+        
+        if (fallbackResponse.data && (Array.isArray(fallbackResponse.data.drivers) || Array.isArray(fallbackResponse.data.data))) {
+          const drivers = Array.isArray(fallbackResponse.data.drivers) 
+            ? fallbackResponse.data.drivers 
+            : fallbackResponse.data.data;
+          return drivers;
+        } else {
+          throw new Error("Invalid response from drivers API (fallback)");
         }
       }
-      
-      // If both API calls fail, use mock data
-      console.log("Using mock driver data");
-      return mockDrivers;
     } catch (error) {
       console.error("Error fetching drivers:", error);
       // If any error occurs, fall back to mock data
+      toast.error("Failed to fetch drivers from API, using backup data");
       return mockDrivers;
     }
   },
@@ -245,42 +252,26 @@ export const fleetAPI = {
       
       console.log("Assigning vehicle to booking:", payload);
       
-      // Try direct API call first
-      try {
-        const response = await axios.post('/api/admin/booking-assign-vehicle.php', payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        console.log("Vehicle assignment response:", response.data);
-        
-        if (response.data && response.data.status === 'success') {
-          return true;
-        }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
-        
-        // Try with API_BASE_URL
-        const response = await axios.post(`${API_BASE_URL}/api/admin/booking-assign-vehicle.php`, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        console.log("Vehicle assignment response with base URL:", response.data);
-        
-        if (response.data && response.data.status === 'success') {
-          return true;
-        }
-      }
+      // Use consistent API URL with getApiUrl helper
+      const url = getApiUrl(`api/admin/booking-assign-vehicle.php?_t=${Date.now()}`);
+      console.log('Assigning vehicle using URL:', url);
       
-      // If API calls succeed, return true
-      return true;
+      const response = await axios.post(url, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      console.log("Vehicle assignment response:", response.data);
+      
+      if (response.data && response.data.status === 'success') {
+        toast.success("Vehicle assignment successful");
+        return true;
+      } else {
+        throw new Error(response.data?.message || "Unknown error in vehicle assignment");
+      }
     } catch (error) {
       console.error("Error assigning vehicle to booking:", error);
       // Show an error toast but return true as fallback
@@ -297,49 +288,50 @@ export const fleetAPI = {
     try {
       console.log("Adding new fleet vehicle:", vehicleData);
       
-      // Try direct API call first
+      // Use consistent API URL with getApiUrl helper
+      const url = getApiUrl(`api/admin/fleet-vehicles-create.php?_t=${Date.now()}`);
+      console.log('Adding vehicle using URL:', url);
+      
+      const response = await axios.post(url, vehicleData, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      console.log("Add vehicle response:", response.data);
+      
+      if (response.data && response.data.status === 'success') {
+        toast.success("Vehicle added successfully");
+        return response.data.vehicle || vehicleData;
+      } else {
+        throw new Error(response.data?.message || "Unknown error adding vehicle");
+      }
+    } catch (error) {
+      console.error("Error adding vehicle to fleet:", error);
+      
+      // Try fallback endpoint
       try {
-        const response = await axios.post('/api/admin/fleet-vehicles-create.php', vehicleData, {
+        console.log("Trying fallback endpoint for adding vehicle");
+        const fallbackUrl = getApiUrl(`api/admin/add-vehicle.php?_t=${Date.now()}`);
+        
+        const fallbackResponse = await axios.post(fallbackUrl, vehicleData, {
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': 'true'
           }
         });
         
-        console.log("Add vehicle response:", response.data);
-        
-        if (response.data && response.data.status === 'success') {
-          return response.data.vehicle || vehicleData;
+        if (fallbackResponse.data && fallbackResponse.data.status === 'success') {
+          toast.success("Vehicle added successfully (fallback)");
+          return fallbackResponse.data.vehicle || vehicleData;
         }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
-        
-        // Try with API_BASE_URL
-        try {
-          const response = await axios.post(`${API_BASE_URL}/api/admin/fleet-vehicles-create.php`, vehicleData, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
-            }
-          });
-          
-          console.log("Add vehicle response with base URL:", response.data);
-          
-          if (response.data && response.data.status === 'success') {
-            return response.data.vehicle || vehicleData;
-          }
-        } catch (baseUrlError) {
-          console.warn("API_BASE_URL call failed:", baseUrlError);
-          throw new Error("Failed to add vehicle to fleet");
-        }
+      } catch (fallbackError) {
+        console.error("Fallback also failed:", fallbackError);
       }
       
-      // If API calls succeed but don't return proper data, return the input data
-      return vehicleData;
-    } catch (error) {
-      console.error("Error adding vehicle to fleet:", error);
       // Show an error toast but return the input data as fallback
       toast.error("Error adding vehicle to fleet. Please check logs.");
       return vehicleData;
