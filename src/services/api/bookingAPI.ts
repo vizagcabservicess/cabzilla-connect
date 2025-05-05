@@ -9,10 +9,40 @@ export const bookingAPI = {
    */
   getAllBookings: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php`);
-      return response.data.bookings || [];
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 8000 // Add timeout to avoid hanging requests
+      });
+      
+      // Check if the response has bookings array
+      if (response.data && Array.isArray(response.data.bookings)) {
+        return response.data.bookings;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      } else {
+        console.warn('Unexpected bookings response format:', response.data);
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching all bookings:', error);
+      
+      // For development, try a fallback to enable testing
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const fallbackUrl = `${API_BASE_URL}/api/admin/bookings.php?dev_mode=true`;
+          console.log('Attempting fallback request to:', fallbackUrl);
+          const fallbackResponse = await axios.get(fallbackUrl);
+          if (fallbackResponse.data && fallbackResponse.data.bookings) {
+            return fallbackResponse.data.bookings;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback request also failed:', fallbackError);
+        }
+      }
+      
       throw error;
     }
   },
@@ -22,10 +52,40 @@ export const bookingAPI = {
    */
   getUserBookings: async (userId: number) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`);
-      return response.data.bookings || [];
+      const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 8000 // Add timeout to avoid hanging requests
+      });
+      
+      // Check if the response has bookings array
+      if (response.data && Array.isArray(response.data.bookings)) {
+        return response.data.bookings;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      } else {
+        console.warn('Unexpected user bookings response format:', response.data);
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching user bookings:', error);
+      
+      // For development, try a fallback to enable testing
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const fallbackUrl = `${API_BASE_URL}/api/user/bookings.php?user_id=${userId}&dev_mode=true`;
+          console.log('Attempting fallback request to:', fallbackUrl);
+          const fallbackResponse = await axios.get(fallbackUrl);
+          if (fallbackResponse.data && fallbackResponse.data.bookings) {
+            return fallbackResponse.data.bookings;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback request also failed:', fallbackError);
+        }
+      }
+      
       throw error;
     }
   },
@@ -35,7 +95,11 @@ export const bookingAPI = {
    */
   getBookingById: async (id: number | string) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/booking-details.php?id=${id}`);
+      const response = await axios.get(`${API_BASE_URL}/api/booking-details.php?id=${id}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       return response.data;
     } catch (error) {
       console.error(`Error fetching booking with id ${id}:`, error);
@@ -196,11 +260,36 @@ export const bookingAPI = {
         headers: {
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache'
-        }
+        },
+        timeout: 8000 // Add timeout to avoid hanging requests
       });
-      return response.data.bookings || [];
+      
+      // Check if the response has bookings array
+      if (response.data && Array.isArray(response.data.bookings)) {
+        return response.data.bookings;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      } else {
+        console.warn('Unexpected pending bookings response format:', response.data);
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching pending bookings:', error);
+      
+      // For development, try a fallback to enable testing
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const fallbackUrl = `${API_BASE_URL}/api/admin/pending-bookings.php?dev_mode=true`;
+          console.log('Attempting fallback request to:', fallbackUrl);
+          const fallbackResponse = await axios.get(fallbackUrl);
+          if (fallbackResponse.data && fallbackResponse.data.bookings) {
+            return fallbackResponse.data.bookings;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback request also failed:', fallbackError);
+        }
+      }
+      
       throw error;
     }
   }
