@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -147,6 +146,7 @@ export function UserManagement() {
   
   return (
     <div className="container mx-auto py-10">
+      {/* Add User Card */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -260,6 +260,7 @@ export function UserManagement() {
         </CardContent>
       </Card>
       
+      {/* Users Table Card */}
       <Card className="mt-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -292,7 +293,11 @@ export function UserManagement() {
                     <TableCell>
                       <Select 
                         value={user.role}
-                        onValueChange={(role) => handleUserRoleUpdate(user.id, role)}
+                        onValueChange={(newRole) => {
+                          // Cast the role value to ensure it's one of the allowed types
+                          const typedRole = newRole as "user" | "admin" | "driver";
+                          handleUserRoleUpdate(user.id, typedRole);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder={user.role} />
