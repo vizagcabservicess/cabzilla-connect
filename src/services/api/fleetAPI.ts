@@ -1,4 +1,3 @@
-
 import { FleetVehicle, MaintenanceRecord, FuelRecord, VehicleDocument } from '@/types/cab';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
@@ -546,10 +545,12 @@ export const fleetAPI = {
         vehicle.id = 'fleet_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       }
       
-      // Make sure vehicleId exists (needed for the API)
-      if (!vehicle.vehicleId) {
-        vehicle.vehicleId = vehicle.id;
-      }
+      // Make sure vehicle ID property exists (needed for the API)
+      // Instead of using vehicleId which doesn't exist on the type, use id
+      const vehicleWithId = {
+        ...vehicle,
+        // Do not set vehicleId property here as it doesn't exist on the type
+      };
       
       // Make sure vehicleNumber is unique
       if (!vehicle.vehicleNumber) {
@@ -560,7 +561,7 @@ export const fleetAPI = {
       // Try direct PHP endpoint first
       try {
         const cacheBuster = `_cb=${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        const response = await axios.post(`${API_BASE_URL}/api/admin/vehicle-create.php?${cacheBuster}`, vehicle, {
+        const response = await axios.post(`${API_BASE_URL}/api/admin/vehicle-create.php?${cacheBuster}`, vehicleWithId, {
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Mode': 'true',
@@ -608,7 +609,7 @@ export const fleetAPI = {
         
         // Try with direct-vehicle-create.php as fallback
         try {
-          const directionResponse = await axios.post(`${API_BASE_URL}/api/admin/direct-vehicle-create.php`, vehicle, {
+          const directionResponse = await axios.post(`${API_BASE_URL}/api/admin/direct-vehicle-create.php`, vehicleWithId, {
             headers: {
               'Content-Type': 'application/json',
               'X-Admin-Mode': 'true',
@@ -654,7 +655,7 @@ export const fleetAPI = {
         toast.success("Vehicle added successfully (offline mode)");
         return newVehicle as FleetVehicle;
       }
-    } catch (error) {
+    } catch (error: any) {
       logAPIError("addVehicle", error);
       toast.error("Failed to add vehicle: " + (error.message || "Unknown error"));
       throw error;
@@ -681,7 +682,7 @@ export const fleetAPI = {
         const updateData = {
           id: vehicleId,
           ...vehicle,
-          vehicleId: vehicleId // Ensure ID is included in both places
+          // Don't set vehicleId as it doesn't exist on the FleetVehicle type
         };
         
         const response = await axios.put(`${API_BASE_URL}/api/admin/vehicle-update.php?${cacheBuster}`, updateData, {
@@ -699,7 +700,6 @@ export const fleetAPI = {
           const updatedVehicle = response.data.vehicle || response.data.data || {
             ...vehicle,
             id: vehicleId,
-            vehicleId: vehicleId,
             updatedAt: new Date().toISOString()
           };
           
@@ -742,7 +742,7 @@ export const fleetAPI = {
         toast.success("Vehicle updated successfully (offline mode)");
         return updatedVehicle;
       }
-    } catch (error) {
+    } catch (error: any) {
       logAPIError(`updateVehicle(${vehicleId})`, error);
       toast.error("Failed to update vehicle: " + (error.message || "Unknown error"));
       throw error;
