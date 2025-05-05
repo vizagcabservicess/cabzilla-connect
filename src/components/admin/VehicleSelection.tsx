@@ -28,8 +28,10 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
   const loadVehicles = async () => {
     setLoading(true);
     try {
+      // Force refresh to ensure we get the most up-to-date data with the correct domain
       const vehicleData = await getVehicleData(true, includeInactive);
       if (vehicleData && Array.isArray(vehicleData)) {
+        console.log(`VehicleSelection: Loaded ${vehicleData.length} vehicles`);
         setVehicles(vehicleData);
       }
     } catch (error) {

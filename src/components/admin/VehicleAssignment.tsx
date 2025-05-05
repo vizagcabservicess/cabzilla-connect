@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { Booking } from '@/types/api';
 import { FleetVehicle } from '@/types/cab';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { Loader2 } from 'lucide-react';
+import { getApiUrl } from '@/config/api';
 
 interface VehicleAssignmentProps {
   booking: Booking;
@@ -40,7 +40,10 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
       try {
         if (useBackupEndpoint) {
           // Try alternate API endpoint
-          response = await fetch('/api/fares/vehicles.php?includeInactive=true', {
+          const apiUrl = getApiUrl('/api/fares/vehicles');
+          console.log("Fetching vehicles from backup endpoint:", apiUrl);
+          
+          response = await fetch(apiUrl, {
             headers: {
               'Cache-Control': 'no-cache',
               'X-Force-Refresh': 'true',
@@ -80,7 +83,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
             }
           }
         } else {
-          // Try primary API
+          // Try primary API - this uses the fleetAPI service with updated URLs
           response = await fleetAPI.getVehicles(true);
           
           if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
@@ -96,7 +99,7 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
       
       // If we've tried both endpoints and still don't have vehicles, try to load from static JSON
       try {
-        const jsonResponse = await fetch(`/data/vehicles.json?_t=${Date.now()}`);
+        const jsonResponse = await fetch(`${getApiUrl('/data/vehicles.json')}?_t=${Date.now()}`);
         if (jsonResponse.ok) {
           const jsonData = await jsonResponse.json();
           console.log("Fetched vehicles from JSON file:", jsonData);

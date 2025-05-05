@@ -1,9 +1,11 @@
+
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
 import { FleetVehicle } from '@/types/cab';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 
-// Mock data for demo purposes
+// Mock data for demo purposes - will only be used as a last resort fallback
 const mockVehicles = [
   {
     id: "v-001",
@@ -126,12 +128,14 @@ export const fleetAPI = {
     try {
       console.log('Fetching fleet vehicles, includeAll:', includeAll);
       
-      // Try direct API call first
+      // Try direct API call with the correct domain
       try {
-        const response = await axios.get('/api/admin/fleet-vehicles.php', {
+        const apiUrl = getApiUrl('/api/admin/fleet-vehicles');
+        console.log("Fetching vehicles from:", apiUrl);
+        
+        const response = await axios.get(apiUrl, {
           headers: {
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders
           },
           params: { 
             include_all: includeAll ? 1 : 0 
@@ -147,12 +151,14 @@ export const fleetAPI = {
       } catch (directError) {
         console.warn("Direct API call failed:", directError);
         
-        // Try with API_BASE_URL
+        // Try with explicit API_BASE_URL from config
         try {
-          const response = await axios.get(`${API_BASE_URL}/api/admin/fleet-vehicles.php`, {
+          const apiUrl = `${API_BASE_URL}/api/admin/fleet-vehicles.php`;
+          console.log("Trying alternative URL:", apiUrl);
+          
+          const response = await axios.get(apiUrl, {
             headers: {
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
+              ...forceRefreshHeaders
             },
             params: { 
               include_all: includeAll ? 1 : 0 
@@ -184,12 +190,14 @@ export const fleetAPI = {
    */
   getDrivers: async () => {
     try {
-      // Try direct API call first
+      // Try direct API call first with correct domain
       try {
-        const response = await axios.get('/api/admin/fleet-drivers.php', {
+        const apiUrl = getApiUrl('/api/admin/fleet-drivers');
+        console.log("Fetching drivers from:", apiUrl);
+        
+        const response = await axios.get(apiUrl, {
           headers: {
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders
           }
         });
         
@@ -200,12 +208,14 @@ export const fleetAPI = {
       } catch (directError) {
         console.warn("Direct API call failed:", directError);
         
-        // Try with API_BASE_URL
+        // Try with explicit API_BASE_URL
         try {
-          const response = await axios.get(`${API_BASE_URL}/api/admin/fleet-drivers.php`, {
+          const apiUrl = `${API_BASE_URL}/api/admin/fleet-drivers.php`;
+          console.log("Trying alternative URL:", apiUrl);
+          
+          const response = await axios.get(apiUrl, {
             headers: {
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
+              ...forceRefreshHeaders
             }
           });
           
@@ -245,13 +255,15 @@ export const fleetAPI = {
       
       console.log("Assigning vehicle to booking:", payload);
       
-      // Try direct API call first
+      // Try direct API call first with correct domain
       try {
-        const response = await axios.post('/api/admin/booking-assign-vehicle.php', payload, {
+        const apiUrl = getApiUrl('/api/admin/booking-assign-vehicle');
+        console.log("Posting to:", apiUrl);
+        
+        const response = await axios.post(apiUrl, payload, {
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders
           }
         });
         
@@ -263,23 +275,54 @@ export const fleetAPI = {
       } catch (directError) {
         console.warn("Direct API call failed:", directError);
         
-        // Try with API_BASE_URL
-        const response = await axios.post(`${API_BASE_URL}/api/admin/booking-assign-vehicle.php`, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+        // Try with explicit API_BASE_URL
+        try {
+          const apiUrl = `${API_BASE_URL}/api/admin/booking-assign-vehicle.php`;
+          console.log("Trying alternative URL:", apiUrl);
+          
+          const response = await axios.post(apiUrl, payload, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...forceRefreshHeaders
+            }
+          });
+          
+          console.log("Vehicle assignment response with base URL:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            return true;
           }
-        });
-        
-        console.log("Vehicle assignment response with base URL:", response.data);
-        
-        if (response.data && response.data.status === 'success') {
-          return true;
+        } catch (baseUrlError) {
+          console.warn("Base URL API call failed:", baseUrlError);
+          // Continue to fallback
         }
       }
       
-      // If API calls succeed, return true
+      // If API calls failed but didn't throw, try one more approach
+      try {
+        const apiUrl = `${API_BASE_URL}/api/update-booking.php`;
+        console.log("Trying booking update endpoint:", apiUrl);
+        
+        const response = await axios.post(apiUrl, {
+          booking_id: bookingId,
+          vehicleNumber: vehicleId,
+          status: "confirmed"
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...forceRefreshHeaders
+          }
+        });
+        
+        if (response.status === 200) {
+          return true;
+        }
+      } catch (updateError) {
+        console.warn("Update booking API call failed:", updateError);
+      }
+      
+      // If all API calls fail but we want to allow the user to continue
+      toast.warning("API connection issue - changes may not be saved to the server");
       return true;
     } catch (error) {
       console.error("Error assigning vehicle to booking:", error);
@@ -297,13 +340,15 @@ export const fleetAPI = {
     try {
       console.log("Adding new fleet vehicle:", vehicleData);
       
-      // Try direct API call first
+      // Try direct API call first with correct domain
       try {
-        const response = await axios.post('/api/admin/fleet-vehicles-create.php', vehicleData, {
+        const apiUrl = getApiUrl('/api/admin/fleet-vehicles-create');
+        console.log("Posting to:", apiUrl);
+        
+        const response = await axios.post(apiUrl, vehicleData, {
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true'
+            ...forceRefreshHeaders
           }
         });
         
@@ -317,11 +362,13 @@ export const fleetAPI = {
         
         // Try with API_BASE_URL
         try {
-          const response = await axios.post(`${API_BASE_URL}/api/admin/fleet-vehicles-create.php`, vehicleData, {
+          const apiUrl = `${API_BASE_URL}/api/admin/fleet-vehicles-create.php`;
+          console.log("Trying alternative URL:", apiUrl);
+          
+          const response = await axios.post(apiUrl, vehicleData, {
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true'
+              ...forceRefreshHeaders
             }
           });
           

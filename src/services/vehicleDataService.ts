@@ -1,5 +1,6 @@
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
 
@@ -152,14 +153,14 @@ export const clearVehicleDataCache = () => {
  */
 const refreshVehicleData = async (forceRefresh = false, includeInactive = false): Promise<CabType[]> => {
   try {
-    // First, try direct database endpoints
+    // First, try direct database endpoints with updated domain
     const endpoints = [
-      // Prioritize direct database endpoints
-      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
-      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
-      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`,
+      // Prioritize direct database endpoints with www.vizagup.com domain
+      `${API_BASE_URL}/api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
+      `${API_BASE_URL}/api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
+      `${API_BASE_URL}/api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`,
       // Add admin endpoint specifically for fare management
-      `api/admin/direct-vehicle-pricing.php?action=load_vehicles&_t=${Date.now()}`
+      `${API_BASE_URL}/api/admin/direct-vehicle-pricing.php?action=load_vehicles&_t=${Date.now()}`
     ];
     
     let vehicles: CabType[] | null = null;
@@ -168,8 +169,8 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
     // Try each endpoint in sequence until we get valid data
     for (const endpoint of endpoints) {
       try {
-        console.log(`Fetching vehicle data from: ${window.location.origin}/${endpoint}`);
-        const response = await fetch(getApiUrl(endpoint), {
+        console.log(`Fetching vehicle data from: ${endpoint}`);
+        const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             ...forceRefreshHeaders,
@@ -439,17 +440,17 @@ export const getAllVehiclesForAdmin = async (forceRefresh = true): Promise<CabTy
       processQueue();
     }
     
-    // Try direct admin endpoints first
+    // Try direct admin endpoints first with updated domain
     const adminEndpoints = [
-      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
-      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=${forceRefresh}`,
-      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=true`
+      `${API_BASE_URL}/api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
+      `${API_BASE_URL}/api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=${forceRefresh}`,
+      `${API_BASE_URL}/api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=true`
     ];
     
     for (const endpoint of adminEndpoints) {
       try {
-        console.log(`Fetching admin vehicles from: ${window.location.origin}/${endpoint}`);
-        const response = await fetch(getApiUrl(endpoint), {
+        console.log(`Fetching admin vehicles from: ${endpoint}`);
+        const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             ...forceRefreshHeaders,

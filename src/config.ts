@@ -1,8 +1,8 @@
 
 // API configuration
 export const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://api.vizagtaxihub.com' 
-  : 'http://localhost:3000';
+  ? 'https://www.vizagup.com' 
+  : 'https://www.vizagup.com';
 
 // Application configuration
 export const APP_CONFIG = {
