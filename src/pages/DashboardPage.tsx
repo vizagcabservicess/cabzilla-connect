@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings, Timer, Clock } from "lucide-react";
 import { bookingAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
+import { apiHealthCheck } from '@/services/api/healthCheck';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
@@ -32,35 +33,41 @@ export default function DashboardPage() {
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
   const [authIssue, setAuthIssue] = useState(false);
-  const [isDev, setIsDev] = useState(false);
+  const [apiStatus, setApiStatus] = useState<{ connected: boolean; message: string }>({
+    connected: false,
+    message: 'Checking connection...'
+  });
 
+  // Check API connectivity on component mount
   useEffect(() => {
-    const devMode = localStorage.getItem('dev_mode') === 'true';
-    setIsDev(devMode);
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('dev_mode') === 'true') {
-      setIsDev(true);
-      localStorage.setItem('dev_mode', 'true');
-    }
+    const checkApiStatus = async () => {
+      try {
+        const result = await apiHealthCheck.checkConnection();
+        if (result.success) {
+          setApiStatus({
+            connected: true,
+            message: 'Connected to API'
+          });
+        } else {
+          setApiStatus({
+            connected: false,
+            message: `API unavailable: ${result.error}`
+          });
+          console.error('API connectivity issue:', result);
+        }
+      } catch (error) {
+        setApiStatus({
+          connected: false,
+          message: `Error checking API: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
+    };
+
+    checkApiStatus();
   }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (isDev) {
-        console.log('Dev mode enabled, skipping authentication check');
-        const devUser = { 
-          id: 1, 
-          name: 'Dev User', 
-          email: 'dev@example.com', 
-          role: 'admin' 
-        };
-        setUser(devUser);
-        setIsAdmin(true);
-        localStorage.setItem('userData', JSON.stringify(devUser));
-        return;
-      }
-
       if (!authAPI.isAuthenticated()) {
         console.log('No authentication token found, redirecting to login');
         navigate('/login', { state: { from: location.pathname } });
@@ -90,18 +97,25 @@ export default function DashboardPage() {
       }
 
       if (!userData) {
-        userData = await authAPI.getCurrentUser();
-        if (userData) {
-          setUser({
-            id: userData.id || 0,
-            name: userData.name || '',
-            email: userData.email || '',
-            role: userData.role || 'user'
-          });
-          setIsAdmin(userData.role === 'admin');
-          console.log('User data loaded from API:', userData);
-        } else {
-          throw new Error('User data not found');
+        try {
+          userData = await authAPI.getCurrentUser();
+          if (userData) {
+            setUser({
+              id: userData.id || 0,
+              name: userData.name || '',
+              email: userData.email || '',
+              role: userData.role || 'user'
+            });
+            setIsAdmin(userData.role === 'admin');
+            console.log('User data loaded from API:', userData);
+          } else {
+            throw new Error('User data not found');
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          toast.error('Could not fetch user data. Please log in again.');
+          navigate('/login');
+          return;
         }
       }
       
@@ -111,10 +125,10 @@ export default function DashboardPage() {
     };
 
     checkAuth();
-  }, [navigate, location.pathname, isDev]);
+  }, [navigate, location.pathname]);
 
   const fetchBookings = useCallback(async () => {
-    if (!isDev && !authAPI.isAuthenticated() && !authIssue) {
+    if (!authAPI.isAuthenticated() && !authIssue) {
       console.log('No authentication token found, redirecting to login');
       navigate('/login');
       return;
@@ -125,74 +139,76 @@ export default function DashboardPage() {
       setError(null);
       
       const userDataStr = localStorage.getItem('userData');
-      if (!userDataStr && !isDev) {
+      if (!userDataStr) {
         throw new Error('User data not found in localStorage');
       }
       
-      let userId = 1;
-      
-      if (userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        if (!userData || !userData.id) {
-          throw new Error('Invalid user data in localStorage');
-        }
-        userId = userData.id;
+      const userData = JSON.parse(userDataStr);
+      if (!userData || !userData.id) {
+        throw new Error('Invalid user data in localStorage');
       }
       
-      console.log('Fetching bookings for user ID:', userId, 'Dev mode:', isDev);
+      const userId = userData.id;
+      console.log('Fetching bookings for user ID:', userId);
       
       let data;
-      if (isDev) {
-        // In dev mode, immediately use sample bookings
-        console.log('Using dev mode sample data');
-        const sampleBookings = createSampleBookings();
-        setBookings(sampleBookings);
-        setAuthIssue(false);
-        return;
-      } else {
-        try {
-          // First try the booking API
-          data = await bookingAPI.getUserBookings(userId);
-        } catch (error) {
-          console.warn('bookingAPI.getUserBookings failed, trying direct fetch:', error);
-          // If that fails, try direct fetch
-          const token = localStorage.getItem('authToken');
-          const response = await fetch(`/api/user/bookings.php?user_id=${userId}`, {
-            headers: {
-              'Authorization': token ? `Bearer ${token}` : '',
-              'Cache-Control': 'no-cache',
-              'X-Force-Refresh': 'true',
-              'Content-Type': 'application/json'
-            }
-          });
-          if (!response.ok) {
-            throw new Error(`Direct API failed with status: ${response.status}`);
+      try {
+        // Attempt to fetch real booking data from the API
+        data = await bookingAPI.getUserBookings(userId);
+        console.log('Fetched bookings data:', data);
+        
+        if (Array.isArray(data)) {
+          setBookings(data);
+          if (data.length > 0) {
+            setAuthIssue(false);
+            toast.success(`Loaded ${data.length} bookings`);
+          } else {
+            toast.info('No bookings found');
           }
-          const jsonData = await response.json();
-          data = jsonData.bookings || [];
+        } else if (data && Array.isArray(data.bookings)) {
+          setBookings(data.bookings);
+          if (data.bookings.length > 0) {
+            setAuthIssue(false);
+            toast.success(`Loaded ${data.bookings.length} bookings`);
+          } else {
+            toast.info('No bookings found');
+          }
+        } else {
+          console.warn('Unexpected bookings data format:', data);
+          toast.error('Received unexpected data format from server');
+          setBookings([]);
+          throw new Error('Invalid booking data format received');
         }
-      }
-      
-      if (Array.isArray(data)) {
-        setBookings(data);
+      } catch (apiError) {
+        console.warn('bookingAPI.getUserBookings failed, trying direct fetch:', apiError);
         
-        if (data.length > 0) {
-          setAuthIssue(false);
-        }
-      } else if (data && Array.isArray(data.bookings)) {
-        setBookings(data.bookings);
+        // If API call fails, try direct fetch as fallback
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`/api/user/bookings.php?user_id=${userId}`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Cache-Control': 'no-cache',
+            'X-Force-Refresh': 'true',
+            'Content-Type': 'application/json'
+          }
+        });
         
-        if (data.bookings.length > 0) {
-          setAuthIssue(false);
+        if (!response.ok) {
+          throw new Error(`API failed with status: ${response.status}`);
         }
-      } else {
-        console.warn('Unexpected bookings data format:', data);
-        setBookings([]);
-        // If we get here with no error but no data, use sample bookings
-        if (isDev || retryCount >= 1) {
-          const sampleBookings = createSampleBookings();
-          setBookings(sampleBookings);
-          toast.info("Using sample bookings data");
+        
+        const jsonData = await response.json();
+        if (jsonData && (Array.isArray(jsonData) || Array.isArray(jsonData.bookings))) {
+          const bookingsData = Array.isArray(jsonData) ? jsonData : jsonData.bookings;
+          setBookings(bookingsData);
+          console.log('Fetched bookings via direct API:', bookingsData);
+          if (bookingsData.length > 0) {
+            setAuthIssue(false);
+          } else {
+            toast.info('No bookings found');
+          }
+        } else {
+          throw new Error('Invalid response format from direct API call');
         }
       }
       
@@ -214,12 +230,7 @@ export default function DashboardPage() {
         setAuthIssue(true);
       }
       
-      // Create sample data if all attempts fail
-      if (retryCount >= MAX_RETRIES - 1) {
-        const sampleBookings = createSampleBookings();
-        setBookings(sampleBookings);
-        toast.info("Using sample bookings data");
-      } else if (retryCount < MAX_RETRIES) {
+      if (retryCount < MAX_RETRIES - 1) {
         setTimeout(() => {
           fetchBookings();
         }, 3000);
@@ -228,92 +239,21 @@ export default function DashboardPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [navigate, retryCount, authIssue, isDev]);
-
-  // Create sample bookings for fallback
-  const createSampleBookings = (): Booking[] => {
-    const now = new Date().toISOString();
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
-    const tomorrow = new Date(Date.now() + 86400000).toISOString();
-    
-    return [
-      {
-        id: 1001,
-        bookingNumber: 'SAMPLE1234',
-        pickupLocation: 'Sample Location',
-        dropLocation: 'Sample Destination',
-        pickupDate: tomorrow,
-        cabType: 'sedan',
-        distance: 15,
-        tripType: 'airport',
-        tripMode: 'one-way',
-        totalAmount: 1500,
-        status: 'pending',
-        passengerName: 'Sample User',
-        passengerPhone: '9876543210',
-        passengerEmail: 'sample@example.com',
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        id: 1002,
-        bookingNumber: 'SAMPLE1235',
-        pickupLocation: 'Sample Hotel',
-        dropLocation: 'Sample Beach',
-        pickupDate: yesterday,
-        cabType: 'innova_crysta',
-        distance: 25,
-        tripType: 'local',
-        tripMode: 'round-trip',
-        totalAmount: 2500,
-        status: 'completed',
-        passengerName: 'Sample User',
-        passengerPhone: '9876543210',
-        passengerEmail: 'sample@example.com',
-        driverName: 'Sample Driver',
-        driverPhone: '9876123456',
-        vehicleNumber: 'AP 01 XY 1234',
-        createdAt: yesterday,
-        updatedAt: yesterday
-      },
-      {
-        id: 1003,
-        bookingNumber: 'SAMPLE1236',
-        pickupLocation: 'Airport',
-        dropLocation: 'City Center',
-        pickupDate: now,
-        cabType: 'sedan',
-        distance: 18,
-        tripType: 'airport',
-        tripMode: 'one-way',
-        totalAmount: 1800,
-        status: 'confirmed',
-        passengerName: 'John Doe',
-        passengerPhone: '9876543211',
-        passengerEmail: 'john@example.com',
-        createdAt: yesterday,
-        updatedAt: now
-      }
-    ];
-  };
+  }, [navigate, retryCount, authIssue]);
 
   const fetchAdminMetrics = useCallback(async () => {
-    if ((!isAdmin && !isDev) || !user?.id) return;
+    if (!isAdmin || !user?.id) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      console.log('Fetching admin metrics for user ID:', user.id, 'Dev mode:', isDev);
+      console.log('Fetching admin metrics for user ID:', user.id);
       
-      let data;
-      if (isDev) {
-        data = await bookingAPI.getAdminDashboardMetrics('week', { dev_mode: true });
-      } else {
-        data = await bookingAPI.getAdminDashboardMetrics('week');
-      }
+      const data = await bookingAPI.getAdminDashboardMetrics('week');
       
       if (data) {
         setAdminMetrics(data);
+        console.log('Admin metrics loaded:', data);
       } else {
         console.warn('No admin metrics data received');
         setAdminMetrics(null);
@@ -321,26 +261,26 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
+      toast.error('Could not load admin metrics');
     } finally {
       setIsLoadingAdminMetrics(false);
     }
-  }, [isAdmin, user, isDev]);
+  }, [isAdmin, user]);
 
   useEffect(() => {
-    if (user?.id || isDev) {
+    if (user?.id) {
       fetchBookings();
     }
-  }, [fetchBookings, user, isDev]);
+  }, [fetchBookings, user]);
 
   useEffect(() => {
-    if ((isAdmin || isDev) && (user?.id || isDev)) {
+    if (isAdmin && user?.id) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics, user, isDev]);
+  }, [isAdmin, fetchAdminMetrics, user]);
 
   const handleLogout = () => {
     authAPI.logout();
-    localStorage.removeItem('dev_mode');
     navigate('/login');
     toast.success('Logged out successfully');
   };
@@ -371,12 +311,6 @@ export default function DashboardPage() {
     }
   };
 
-  const enableDevMode = () => {
-    localStorage.setItem('dev_mode', 'true');
-    setIsDev(true);
-    window.location.reload();
-  };
-
   if (authIssue) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -387,9 +321,8 @@ export default function DashboardPage() {
             Your session may have expired or there was a problem with your authentication. 
             Please try logging in again.
           </AlertDescription>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4">
             <Button onClick={handleRelogin}>Log In Again</Button>
-            <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
           </div>
         </Alert>
         
@@ -447,23 +380,24 @@ export default function DashboardPage() {
         onRetry={fetchBookings}
         title="Error Loading Dashboard"
         description="We couldn't load your bookings. Please try again."
-      >
-        <Button variant="outline" onClick={enableDevMode}>Enable Dev Mode</Button>
-      </ApiErrorFallback>
+      />
     );
   }
 
   return (
     <div className="container mx-auto py-10 px-4">
+      {!apiStatus.connected && (
+        <Alert variant="warning" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>API Connection Issue</AlertTitle>
+          <AlertDescription>{apiStatus.message}</AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
-          {isDev && (
-            <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800">
-              Dev Mode
-            </Badge>
-          )}
         </div>
         <div className="flex flex-col md:flex-row gap-2">
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
@@ -471,15 +405,6 @@ export default function DashboardPage() {
             Refresh
           </Button>
           <Button onClick={() => navigate('/')}>Book New Cab</Button>
-          {isDev && (
-            <Button variant="outline" onClick={() => {
-              localStorage.removeItem('dev_mode');
-              window.location.reload();
-            }}>
-              <Settings className="h-4 w-4 mr-1" />
-              Disable Dev Mode
-            </Button>
-          )}
           <Button variant="outline" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-1" />
             Logout
@@ -487,7 +412,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {(isAdmin || isDev) && (
+      {(isAdmin) && (
         <div className="mb-8">
           <Card>
             <CardHeader>
@@ -589,7 +514,7 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <Info className="h-10 w-10 text-gray-400 mb-2" />
         <h3 className="text-lg font-medium">No Bookings</h3>
-        <p className="text-gray-500">No bookings found. Try enabling Dev Mode to see sample data.</p>
+        <p className="text-gray-500">You don't have any bookings yet.</p>
       </div>
     );
   }

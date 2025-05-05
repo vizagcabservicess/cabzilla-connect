@@ -27,6 +27,29 @@ export const apiHealthCheck = {
   },
   
   /**
+   * Check database connectivity directly
+   */
+  checkDatabase: async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/check-connection.php`, {
+        timeout: 8000
+      });
+      return {
+        success: true,
+        status: response.status,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('Database health check failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: error.response?.status || 0
+      };
+    }
+  },
+  
+  /**
    * Log diagnostic information
    */
   logDiagnostics: () => {
