@@ -50,28 +50,42 @@ export function VehicleAssignment({ booking, onAssign, isSubmitting }: VehicleAs
         {
           id: "v-mock-001",
           vehicleNumber: "KA01AB1234",
+          name: "Toyota Innova Crysta",
           make: "Toyota",
           model: "Innova Crysta",
           year: 2022,
           vehicleType: "innova_crysta",
           status: "Active",
           lastService: "2023-01-15",
+          nextServiceDue: "2023-07-15",
           fuelType: "Diesel",
-          capacity: 7, // Changed from seatingCapacity to capacity which exists in FleetVehicle
-          currentOdometer: 25000 
+          capacity: 7,
+          cabTypeId: "innova_crysta",
+          luggageCapacity: 3,
+          isActive: true,
+          currentOdometer: 25000,
+          createdAt: "2023-01-01",
+          updatedAt: "2023-01-15"
         },
         {
           id: "v-mock-002",
           vehicleNumber: "KA02CD5678",
+          name: "Maruti Suzuki Swift Dzire",
           make: "Maruti Suzuki",
           model: "Swift Dzire",
           year: 2021,
           vehicleType: "sedan",
           status: "Active",
           lastService: "2023-02-20",
+          nextServiceDue: "2023-08-20",
           fuelType: "Petrol",
-          capacity: 5, // Changed from seatingCapacity to capacity which exists in FleetVehicle
-          currentOdometer: 15000
+          capacity: 5,
+          cabTypeId: "sedan",
+          luggageCapacity: 2,
+          isActive: true,
+          currentOdometer: 15000,
+          createdAt: "2022-12-01",
+          updatedAt: "2023-02-20"
         }
       ]);
     } finally {
