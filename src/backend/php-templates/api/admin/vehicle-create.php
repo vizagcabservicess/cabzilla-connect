@@ -30,5 +30,17 @@ if (ob_get_level()) {
 error_log('Vehicle create proxy accessed. Method: ' . $_SERVER['REQUEST_METHOD']);
 error_log('Request body: ' . file_get_contents('php://input'));
 
-// Include the direct-vehicle-create.php file which has the full implementation
-require_once(__DIR__ . '/direct-vehicle-create.php');
+try {
+    // Include the direct-vehicle-create.php file which has the full implementation
+    require_once(__DIR__ . '/direct-vehicle-create.php');
+} catch (Exception $e) {
+    // If there's an error including the file, return a JSON error response
+    $response = [
+        'status' => 'error',
+        'message' => 'Failed to process request: ' . $e->getMessage(),
+        'timestamp' => time()
+    ];
+    
+    echo json_encode($response);
+    exit;
+}
