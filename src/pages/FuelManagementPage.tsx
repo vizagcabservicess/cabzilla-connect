@@ -38,6 +38,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 
 export default function FuelManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fuel");
@@ -54,6 +56,8 @@ export default function FuelManagementPage() {
   const [editingRecord, setEditingRecord] = useState<FuelRecord | null>(null);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [dateRangeType, setDateRangeType] = useState<string>("all");
   
   useEffect(() => {
     fetchData();
@@ -121,12 +125,11 @@ export default function FuelManagementPage() {
       filtered = filtered.filter(record => record.paymentMethod === filterPaymentMethod);
     }
 
-    // Apply date range filter
-    if (filterDateRange !== 'all') {
+    // Apply built-in date range filter
+    if (dateRangeType !== 'all' && dateRangeType !== 'custom') {
       const today = new Date();
       let startDate: Date;
-      
-      switch(filterDateRange) {
+      switch(dateRangeType) {
         case 'today':
           startDate = new Date(today.setHours(0, 0, 0, 0));
           break;
@@ -136,11 +139,32 @@ export default function FuelManagementPage() {
         case 'month':
           startDate = new Date(today.getFullYear(), today.getMonth(), 1);
           break;
+        case 'lastMonth':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          break;
+        case 'quarter':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+          break;
+        case 'year':
+          startDate = new Date(today.getFullYear(), 0, 1);
+          break;
+        case 'lastYear':
+          startDate = new Date(today.getFullYear() - 1, 0, 1);
+          break;
         default:
-          startDate = new Date(0); // Beginning of time
+          startDate = new Date(0);
       }
-      
       filtered = filtered.filter(record => new Date(record.fillDate) >= startDate);
+    }
+
+    // Apply custom date range filter only if selected
+    if (dateRangeType === 'custom' && dateRange && dateRange.from && dateRange.to) {
+      const from = new Date(dateRange.from).setHours(0,0,0,0);
+      const to = new Date(dateRange.to).setHours(23,59,59,999);
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.fillDate).getTime();
+        return recordDate >= from && recordDate <= to;
+      });
     }
 
     setFilteredFuelData(filtered);
@@ -301,6 +325,15 @@ export default function FuelManagementPage() {
       default:
         return method;
     }
+  };
+
+  const handleApplyFilters = () => {
+    if (dateRange && dateRange.from && dateRange.to && dateRangeType !== 'custom') {
+      toast.warning('Please select "Custom Date Range" in the Date Range dropdown to apply your selected dates.');
+      return;
+    }
+    setIsFilterDialogOpen(false);
+    applyFilters();
   };
 
   return (
@@ -563,18 +596,38 @@ export default function FuelManagementPage() {
               </div>
 
               <div>
-                <Label htmlFor="filterDateRange">Date Range</Label>
-                <Select value={filterDateRange} onValueChange={setFilterDateRange}>
+                <Label htmlFor="dateRangeType">Date Range</Label>
+                <Select value={dateRangeType} onValueChange={setDateRangeType}>
                   <SelectTrigger>
                     <SelectValue placeholder="All time" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All time</SelectItem>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="week">Last 7 days</SelectItem>
-                    <SelectItem value="month">This month</SelectItem>
+                    <SelectItem value="today">Daily (Today)</SelectItem>
+                    <SelectItem value="week">Weekly (This Week)</SelectItem>
+                    <SelectItem value="month">Monthly (This Month)</SelectItem>
+                    <SelectItem value="lastMonth">Last Month</SelectItem>
+                    <SelectItem value="quarter">Quarterly</SelectItem>
+                    <SelectItem value="year">Yearly (This Year)</SelectItem>
+                    <SelectItem value="lastYear">Last Year</SelectItem>
+                    <SelectItem value="custom">Custom Date Range</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="dateRange">Custom Date Range</Label>
+                <DatePickerWithRange 
+                  date={dateRange} 
+                  setDate={(range) => {
+                    setDateRange(range);
+                    if (range && range.from && range.to && dateRangeType !== 'custom') {
+                      setDateRangeType('custom');
+                      toast.info('Custom Date Range selected.');
+                    }
+                  }} 
+                  disabled={dateRangeType !== 'custom'}
+                />
               </div>
             </div>
 
@@ -582,7 +635,7 @@ export default function FuelManagementPage() {
               <Button variant="outline" onClick={resetFilters}>
                 Reset
               </Button>
-              <Button onClick={() => setIsFilterDialogOpen(false)}>
+              <Button onClick={handleApplyFilters}>
                 Apply Filters
               </Button>
             </DialogFooter>
