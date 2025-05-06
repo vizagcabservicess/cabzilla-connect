@@ -75,8 +75,9 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
         setTotalCost(editingRecord.totalCost.toString());
         setOdometer(editingRecord.odometer.toString());
         setFuelStation(editingRecord.fuelStation || '');
-        setFuelType(editingRecord.fuelType || 'Petrol');
-        setPaymentMethod(editingRecord.paymentMethod || 'Cash');
+        // Cast the string to the specific type to avoid TypeScript errors
+        setFuelType(editingRecord.fuelType as 'Petrol' | 'Diesel' | 'CNG' | 'Electric');
+        setPaymentMethod(editingRecord.paymentMethod as 'Cash' | 'Card' | 'Company' | 'Customer');
         if (editingRecord.paymentDetails) {
           setBankName(editingRecord.paymentDetails.bankName || '');
           setLastFourDigits(editingRecord.paymentDetails.lastFourDigits || '');
@@ -231,7 +232,6 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
       if (paymentMethod === 'Card' && bankName) {
         fuelRecord.paymentDetails = {
           bankName,
-          cardType: 'Debit/Credit',
           lastFourDigits: lastFourDigits.substring(0, 4)
         };
       }
@@ -355,7 +355,10 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
 
           <div className="grid w-full items-center gap-2">
             <Label htmlFor="fuelType">Fuel Type</Label>
-            <Select value={fuelType} onValueChange={(value: 'Petrol' | 'Diesel' | 'CNG' | 'Electric') => setFuelType(value)}>
+            <Select 
+              value={fuelType} 
+              onValueChange={(value: 'Petrol' | 'Diesel' | 'CNG' | 'Electric') => setFuelType(value)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select fuel type" />
               </SelectTrigger>

@@ -234,8 +234,8 @@ export interface FuelRecord {
   totalCost: number;
   odometer: number;
   fuelStation: string;
-  fuelType: string;
-  paymentMethod: string;
+  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
+  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
   paymentDetails?: {
     bankName?: string;
     lastFourDigits?: string;

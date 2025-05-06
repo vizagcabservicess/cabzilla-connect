@@ -327,6 +327,12 @@ export default function FuelManagementPage() {
     }
   };
 
+  // Type-safe function to handle confirmation ID setting
+  const handleConfirmDelete = (id: string | number) => {
+    // Convert to string to ensure type compatibility with state
+    setConfirmDeleteRecord(id.toString());
+  };
+
   const handleApplyFilters = () => {
     if (dateRange && dateRange.from && dateRange.to && dateRangeType !== 'custom') {
       toast.warning('Please select "Custom Date Range" in the Date Range dropdown to apply your selected dates.');
@@ -512,7 +518,12 @@ export default function FuelManagementPage() {
                               <Button variant="outline" size="sm" onClick={() => handleEditFuelRecord(record)}>
                                 <Edit className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="outline" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setConfirmDeleteRecord(record.id)}>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-red-500 hover:text-red-700" 
+                                onClick={() => handleConfirmDelete(record.id)}
+                              >
                                 <Trash className="h-3.5 w-3.5" />
                               </Button>
                             </div>
