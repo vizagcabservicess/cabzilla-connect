@@ -29,7 +29,8 @@ export function DriverAssignment({
   const { toast } = useToast();
   const [driverData, setDriverData] = useState({
     driverName: booking.driverName || '',
-    driverPhone: booking.driverPhone || ''
+    driverPhone: booking.driverPhone || '',
+    vehicleNumber: booking.vehicleNumber || ''  // Add vehicleNumber to state
   });
   
   const [driverType, setDriverType] = useState<string>('new');
@@ -107,7 +108,8 @@ export function DriverAssignment({
     if (selectedDriver) {
       setDriverData({
         driverName: selectedDriver.name,
-        driverPhone: selectedDriver.phone
+        driverPhone: selectedDriver.phone,
+        vehicleNumber: selectedDriver.vehicleNumber || selectedDriver.vehicle || 'Unknown' // Set vehicleNumber from selected driver
       });
       setErrors({});
     }

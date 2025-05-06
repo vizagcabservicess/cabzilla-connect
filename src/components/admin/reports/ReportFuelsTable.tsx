@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Table,
@@ -9,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from 'date-fns';
-import { Fuel, Mileage, CreditCard, Cash, CircleDollarSign } from 'lucide-react';
+import { Fuel, Gauge, CreditCard, Banknote, CircleDollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface FuelRecord {
@@ -144,7 +143,7 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
       case 'Cash':
         return (
           <div className="flex items-center">
-            <Cash className="h-4 w-4 mr-1 text-green-600" />
+            <Banknote className="h-4 w-4 mr-1 text-green-600" />
             <span>Cash</span>
           </div>
         );
@@ -229,7 +228,7 @@ export function ReportFuelsTable({ data }: ReportFuelsTableProps) {
                   <TableCell className="text-right">
                     {row.mileage ? (
                       <span className="inline-flex items-center">
-                        <Mileage className="h-3 w-3 mr-1 text-green-600" />
+                        <Gauge className="h-3 w-3 mr-1 text-green-600" />
                         {row.mileage.toFixed(1)}
                       </span>
                     ) : '-'}

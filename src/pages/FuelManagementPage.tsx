@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from 'sonner';
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { FuelRecord, FuelPrice, FleetVehicle } from '@/types/cab';
 import { format, subDays } from 'date-fns';
 import { FuelPriceManager } from '@/components/admin/fuel/FuelPriceManager';
@@ -17,10 +17,10 @@ import {
   Filter, 
   Search, 
   CreditCard, 
-  Cash, 
+  Banknote, 
   CircleDollarSign,
   Calendar,
-  Mileage 
+  Gauge 
 } from 'lucide-react';
 import { 
   Select, 
@@ -359,7 +359,7 @@ export default function FuelManagementPage() {
       case 'Cash':
         return (
           <div className="flex items-center">
-            <Cash className="h-4 w-4 mr-1 text-green-600" />
+            <Banknote className="h-4 w-4 mr-1 text-green-600" />
             <span>Cash</span>
           </div>
         );
@@ -555,7 +555,7 @@ export default function FuelManagementPage() {
                           <TableCell className="text-right">
                             {record.mileage ? (
                               <span className="inline-flex items-center">
-                                <Mileage className="h-3 w-3 mr-1 text-green-600" />
+                                <Gauge className="h-3 w-3 mr-1 text-green-600" />
                                 {record.mileage.toFixed(1)}
                               </span>
                             ) : '-'}
