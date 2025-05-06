@@ -234,8 +234,25 @@ export interface FuelRecord {
   totalCost: number;
   odometer: number;
   fuelStation: string;
-  paymentMethod: string;
+  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
+  mileage?: number;
+  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
+  paymentDetails?: {
+    cardType?: string;
+    bankName?: string;
+    lastFourDigits?: string;
+  };
   notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FuelPrice {
+  id: string;
+  fuelType: 'Petrol' | 'Diesel' | 'CNG';
+  price: number;
+  effectiveDate: string;
+  location?: string;
   createdAt: string;
   updatedAt: string;
 }
