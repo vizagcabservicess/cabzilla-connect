@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
-import { VehicleAssignment } from './VehicleAssignment';
+import { FleetVehicleAssignment } from './FleetVehicleAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
@@ -87,7 +86,7 @@ export function BookingDetails({
         <TabsList className="w-full border-b justify-start">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
-          <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Vehicle</TabsTrigger>
+          <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Fleet Vehicle</TabsTrigger>
           <TabsTrigger value="driver" disabled={isAssignmentDisabled}>Assign Driver</TabsTrigger>
           <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
         </TabsList>
@@ -174,7 +173,7 @@ export function BookingDetails({
         </TabsContent>
 
         <TabsContent value="vehicle" className="py-4">
-          <VehicleAssignment
+          <FleetVehicleAssignment
             booking={booking}
             onAssign={handleAssignVehicle}
             isSubmitting={isSubmitting}

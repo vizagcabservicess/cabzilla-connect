@@ -171,7 +171,7 @@ export const fleetAPI = {
       const isApiConnected = await testApiConnection();
       console.log('API connection test result:', isApiConnected);
       
-      // Define working endpoints in order of preference - remove the non-existent fleet-vehicles.php
+      // Define working endpoints in order of preference - focus on direct-vehicle-modify.php which works
       const endpoints = [
         '/api/admin/direct-vehicle-modify.php?action=load',
         '/api/admin/vehicles-data',
@@ -182,7 +182,7 @@ export const fleetAPI = {
       for (const endpoint of endpoints) {
         try {
           const apiUrl = getApiUrl(endpoint);
-          console.log("Fetching vehicles from:", apiUrl);
+          console.log("Fetching fleet vehicles from:", apiUrl);
           
           const response = await axios.get(apiUrl, {
             headers: {
@@ -216,7 +216,7 @@ export const fleetAPI = {
             }
             
             if (vehicles.length > 0) {
-              console.log(`Successfully fetched ${vehicles.length} vehicles from ${endpoint}`);
+              console.log(`Successfully fetched ${vehicles.length} fleet vehicles from ${endpoint}`);
               return { vehicles };
             }
           }
@@ -250,7 +250,7 @@ export const fleetAPI = {
                           Array.isArray(response.data.vehicles) ? response.data.vehicles :
                           response.data.data;
                           
-          console.log("Successfully fetched vehicles from fallback URL");
+          console.log("Successfully fetched fleet vehicles from fallback URL");
           return { vehicles };
         }
       } catch (fallbackError) {
@@ -337,7 +337,7 @@ export const fleetAPI = {
         driverId
       };
       
-      console.log("Assigning vehicle to booking:", payload);
+      console.log("Assigning fleet vehicle to booking:", payload);
       
       // Try direct API call first with correct domain
       try {
@@ -351,7 +351,7 @@ export const fleetAPI = {
           }
         });
         
-        console.log("Vehicle assignment response:", response.data);
+        console.log("Fleet vehicle assignment response:", response.data);
         
         if (response.data && response.data.status === 'success') {
           return true;
@@ -371,7 +371,7 @@ export const fleetAPI = {
             }
           });
           
-          console.log("Vehicle assignment response with base URL:", response.data);
+          console.log("Fleet vehicle assignment response with base URL:", response.data);
           
           if (response.data && response.data.status === 'success') {
             return true;
@@ -409,7 +409,7 @@ export const fleetAPI = {
       toast.warning("API connection issue - changes may not be saved to the server");
       return true;
     } catch (error) {
-      console.error("Error assigning vehicle to booking:", error);
+      console.error("Error assigning fleet vehicle to booking:", error);
       // Show an error toast but return true as fallback
       toast.error("API error when assigning vehicle. Please check logs.");
       return true;
