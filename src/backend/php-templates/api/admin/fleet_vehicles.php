@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 require_once '../common/db_helper.php';
@@ -122,6 +121,8 @@ try {
                     'isActive' => (bool)$row['is_active'],
                     'assignedDriverId' => $row['assigned_driver_id'],
                     'currentOdometer' => (int)$row['current_odometer'],
+                    'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
+                    'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                     'createdAt' => $row['created_at'],
                     'updatedAt' => $row['updated_at']
                 ];
@@ -167,6 +168,8 @@ try {
                 'isActive' => (bool)$row['is_active'],
                 'assignedDriverId' => $row['assigned_driver_id'],
                 'currentOdometer' => (int)$row['current_odometer'],
+                'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
+                'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at']
             ];
@@ -308,8 +311,9 @@ try {
             $stmt = $conn->prepare("
                 INSERT INTO fleet_vehicles (
                     vehicle_number, name, model, make, year, status, last_service_date, next_service_due,
-                    fuel_type, vehicle_type, cab_type_id, capacity, luggage_capacity, is_active, current_odometer
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    fuel_type, vehicle_type, cab_type_id, capacity, luggage_capacity, is_active, current_odometer,
+                    last_service_odometer, next_service_odometer
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $name = $data['name'] ?? $data['vehicleNumber'];
@@ -326,13 +330,16 @@ try {
             $luggageCapacity = $data['luggageCapacity'] ?? 2;
             $isActive = $data['isActive'] ?? true;
             $currentOdometer = $data['currentOdometer'] ?? 0;
+            $lastServiceOdometer = isset($data['lastServiceOdometer']) ? (int)$data['lastServiceOdometer'] : 0;
+            $nextServiceOdometer = isset($data['nextServiceOdometer']) ? (int)$data['nextServiceOdometer'] : 0;
             
             $isActiveInt = $isActive ? 1 : 0;
             
             $stmt->bind_param(
-                "ssssssssssiiiii",
+                "ssssssssssiiiiii",
                 $data['vehicleNumber'], $name, $model, $make, $year, $status, $lastService, $nextServiceDue,
-                $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $isActiveInt, $currentOdometer
+                $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $isActiveInt, $currentOdometer,
+                $lastServiceOdometer, $nextServiceOdometer
             );
             
             if (!$stmt->execute()) {
@@ -365,6 +372,8 @@ try {
                 'luggageCapacity' => (int)$row['luggage_capacity'],
                 'isActive' => (bool)$row['is_active'],
                 'currentOdometer' => (int)$row['current_odometer'],
+                'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
+                'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at']
             ];
@@ -640,6 +649,17 @@ try {
                 }
             }
             
+            if (isset($data['lastServiceOdometer'])) {
+                $updateFields[] = "last_service_odometer = ?";
+                $params[] = (int)$data['lastServiceOdometer'];
+                $types .= "i";
+            }
+            if (isset($data['nextServiceOdometer'])) {
+                $updateFields[] = "next_service_odometer = ?";
+                $params[] = (int)$data['nextServiceOdometer'];
+                $types .= "i";
+            }
+            
             if (empty($updateFields)) {
                 http_response_code(400);
                 echo json_encode(['error' => 'No valid fields to update']);
@@ -684,6 +704,8 @@ try {
                 'isActive' => (bool)$row['is_active'],
                 'assignedDriverId' => $row['assigned_driver_id'],
                 'currentOdometer' => (int)$row['current_odometer'],
+                'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
+                'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at']
             ];

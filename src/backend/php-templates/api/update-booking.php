@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -59,6 +58,8 @@ if (isset($_GET['id'])) {
         $bookingId = $data['id'];
     } else if (isset($data['bookingId'])) {
         $bookingId = $data['bookingId'];
+    } else if (isset($data['booking_id'])) {
+        $bookingId = $data['booking_id'];
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
         exit;

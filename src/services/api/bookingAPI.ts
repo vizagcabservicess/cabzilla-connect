@@ -254,14 +254,21 @@ export const bookingAPI = {
     driverName: string; 
     driverPhone: string; 
     vehicleNumber: string;
+    id?: string | number;
+    driverId?: string | number;
   }) => {
     try {
+      const driverId = driverDetails.driverId || driverDetails.id;
+      const payload = {
+        bookingId,
+        driverId,
+        driverName: driverDetails.driverName,
+        driverPhone: driverDetails.driverPhone,
+        vehicleNumber: driverDetails.vehicleNumber
+      };
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/assign-driver.php`,
-        { 
-          booking_id: bookingId, 
-          ...driverDetails
-        },
+        payload,
         {
           headers: {
             'Content-Type': 'application/json',

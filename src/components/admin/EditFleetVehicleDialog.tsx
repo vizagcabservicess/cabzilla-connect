@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -254,16 +253,9 @@ export function EditFleetVehicleDialog({
                     name="lastServiceOdometer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
-                          Last Service Odometer (km)
-                        </FormLabel>
+                        <FormLabel>Last Service Odometer (km)</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            value={field.value || 0}
-                            onChange={e => field.onChange(parseInt(e.target.value))} 
-                          />
+                          <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -291,16 +283,9 @@ export function EditFleetVehicleDialog({
                     name="nextServiceOdometer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="flex items-center gap-1">
-                          <Timer className="h-4 w-4" />
-                          Next Service Odometer (km)
-                        </FormLabel>
+                        <FormLabel>Next Service Odometer (km)</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            value={field.value || 0}
-                            onChange={e => field.onChange(parseInt(e.target.value))} 
-                          />
+                          <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

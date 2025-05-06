@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,23 +26,29 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
     fetchFleetVehicles();
   }, []);
 
+  useEffect(() => {
+    console.log('Booking vehicleNumber:', booking?.vehicleNumber);
+    console.log('Fleet vehicles:', fleetVehicles.map(v => v.vehicleNumber));
+    if (booking?.vehicleNumber && fleetVehicles.length > 0) {
+      const assigned = fleetVehicles.find(v => v.vehicleNumber === booking.vehicleNumber);
+      if (assigned) {
+        setSelectedVehicleId(assigned.id);
+      }
+    }
+  }, [booking, fleetVehicles]);
+
   const fetchFleetVehicles = async () => {
     try {
       setIsLoadingVehicles(true);
       setError(null);
       
       console.log("Fetching fleet vehicles for assignment");
-      
-      // Use the fleetAPI service to fetch vehicles (will use direct-vehicle-modify.php?action=load)
-      const response = await fleetAPI.getVehicles(true);
-      
-      if (response && response.vehicles && Array.isArray(response.vehicles) && response.vehicles.length > 0) {
-        console.log("Fetched fleet vehicles for assignment:", response.vehicles);
-        setFleetVehicles(response.vehicles);
-      } else {
-        setError("Could not load fleet vehicles. Please try again.");
-        toast.error("Failed to load fleet vehicles");
-      }
+      // Fetch from the real fleet vehicles endpoint
+      const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
+      const response = await fetch(apiUrl).then(res => res.json());
+      const vehicles = response.vehicles || [];
+      setFleetVehicles(vehicles);
+      console.log("Fetched fleet vehicles:", vehicles);
     } catch (error) {
       console.error("Error fetching fleet vehicles:", error);
       setError("Failed to load fleet vehicles. Please try again.");
@@ -82,8 +87,8 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
       
       toast.success("Fleet vehicle assigned successfully");
       
-      // Reset selection
-      setSelectedVehicleId('');
+      // Do NOT reset selection here
+      // setSelectedVehicleId('');
       
     } catch (error) {
       console.error("Error assigning fleet vehicle:", error);
@@ -99,8 +104,20 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
 
   // Helper function to format vehicle display name
   const formatVehicleDisplay = (vehicle: FleetVehicle) => {
-    return `${vehicle.vehicleNumber} - ${vehicle.make} ${vehicle.model} (${vehicle.year})`;
+    // Try both camelCase and snake_case for vehicle number
+    const vehicleNumber = vehicle.vehicleNumber || vehicle.vehicle_number || 'No Number';
+    const name = vehicle.name || 'No Name';
+    const model = vehicle.model || '';
+    const year = vehicle.year || 'No Year';
+    return `${vehicleNumber} - ${name} ${model} (${year})`;
   };
+
+  // Filter to only show true fleet vehicles (with vehicleNumber, name, and year)
+  const filteredFleetVehicles = fleetVehicles.filter((v) =>
+    typeof v.vehicleNumber === 'string' && v.vehicleNumber.trim() !== '' &&
+    typeof v.name === 'string' && v.name.trim() !== '' &&
+    typeof v.year === 'number' && v.year > 1900
+  );
 
   return (
     <Card className="p-6">
@@ -117,16 +134,21 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
               <SelectValue placeholder={isLoadingVehicles ? "Loading fleet vehicles..." : "Select a fleet vehicle"} />
             </SelectTrigger>
             <SelectContent>
-              {fleetVehicles.map((vehicle) => (
+              {filteredFleetVehicles.map((vehicle) => (
                 <SelectItem key={vehicle.id} value={vehicle.id}>
                   {formatVehicleDisplay(vehicle)}
                 </SelectItem>
               ))}
-              {fleetVehicles.length === 0 && !isLoadingVehicles && (
+              {filteredFleetVehicles.length === 0 && !isLoadingVehicles && (
                 <SelectItem value="none" disabled>No available fleet vehicles</SelectItem>
               )}
             </SelectContent>
           </Select>
+          {booking?.vehicleNumber && (
+            <div className="text-xs text-green-600 mt-1">
+              Currently assigned: {booking.vehicleNumber}
+            </div>
+          )}
           <div className="flex justify-between items-center mt-1">
             <p className="text-xs text-gray-500">
               {fleetVehicles.length} fleet vehicles available

@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
@@ -61,10 +64,25 @@ try {
         error_log("Assign driver request data: " . print_r($data, true));
     }
 
-    // Validate required fields
-    if (!isset($data['bookingId']) || !isset($data['driverId'])) {
-        logAssignDriverError('Missing required data', $data);
+    $bookingId = null;
+    $driverId = null;
+
+    if (isset($data['bookingId'])) {
+        $bookingId = $data['bookingId'];
+    } elseif (isset($data['booking_id'])) {
+        $bookingId = $data['booking_id'];
+    }
+
+    if (isset($data['driverId'])) {
+        $driverId = $data['driverId'];
+    } elseif (isset($data['driver_id'])) {
+        $driverId = $data['driver_id'];
+    }
+
+    if (!$bookingId || !$driverId) {
+        error_log('Missing required data: bookingId=' . var_export($bookingId, true) . ', driverId=' . var_export($driverId, true));
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required data (bookingId, driverId)'], 400);
+        exit;
     }
 
     // Connect to database
@@ -85,7 +103,7 @@ try {
             throw new Exception("Failed to prepare driver statement: " . $conn->error);
         }
         
-        $driverStmt->bind_param("i", $data['driverId']);
+        $driverStmt->bind_param("i", $driverId);
         if (!$driverStmt->execute()) {
             throw new Exception("Failed to fetch driver: " . $driverStmt->error);
         }
@@ -108,7 +126,7 @@ try {
             throw new Exception("Failed to prepare booking statement: " . $conn->error);
         }
         
-        $bookingStmt->bind_param("i", $data['bookingId']);
+        $bookingStmt->bind_param("i", $bookingId);
         if (!$bookingStmt->execute()) {
             throw new Exception("Failed to fetch booking: " . $bookingStmt->error);
         }
@@ -120,7 +138,11 @@ try {
         
         $booking = $bookingResult->fetch_assoc();
         
-        // Check if booking can be assigned
+        // PATCH: Check for missing or empty status
+        if (!isset($booking['status']) || $booking['status'] === null || $booking['status'] === '') {
+            throw new Exception("Booking status is missing for booking ID: {$bookingId}");
+        }
+
         if (!in_array($booking['status'], ['pending', 'confirmed'])) {
             throw new Exception("Booking cannot be assigned (current status: {$booking['status']})");
         }
@@ -147,7 +169,7 @@ try {
             $driver['name'],
             $driver['phone'],
             $driver['vehicle'],
-            $data['bookingId']
+            $bookingId
         );
         
         if (!$updateBookingStmt->execute()) {
@@ -179,7 +201,7 @@ try {
             'status' => 'success',
             'message' => 'Driver assigned successfully',
             'data' => [
-                'bookingId' => (int)$data['bookingId'],
+                'bookingId' => (int)$bookingId,
                 'bookingNumber' => $booking['booking_number'],
                 'driverId' => (int)$driver['id'],
                 'driverName' => $driver['name'],
@@ -196,8 +218,8 @@ try {
         
         logAssignDriverError('Failed to assign driver', [
             'error' => $e->getMessage(),
-            'booking_id' => $data['bookingId'],
-            'driver_id' => $data['driverId']
+            'booking_id' => $bookingId,
+            'driver_id' => $driverId
         ]);
         
         sendJsonResponse([

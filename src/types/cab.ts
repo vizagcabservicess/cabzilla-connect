@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -195,6 +194,7 @@ export interface FleetVehicle {
   documents?: VehicleDocument[];
   createdAt: string;
   updatedAt: string;
+  vehicle_number?: string;
 }
 
 export interface VehicleDocument {

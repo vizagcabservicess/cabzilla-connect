@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,168 +57,14 @@ function FleetManagementPage() {
     const fetchVehicles = async () => {
       setIsLoading(true);
       setIsRefreshing(true);
-      
       try {
-        // Try to get cached data first if not refreshing
-        if (refreshTrigger === 0) {
-          const cachedData = localStorage.getItem(FLEET_CACHE_KEY);
-          const cachedTimestamp = localStorage.getItem(FLEET_CACHE_TIMESTAMP_KEY);
-          
-          if (cachedData && cachedTimestamp) {
-            // Only use cache if it's less than 5 minutes old
-            const now = Date.now();
-            const timestamp = parseInt(cachedTimestamp);
-            if (now - timestamp < 5 * 60 * 1000) {
-              const parsedData = JSON.parse(cachedData);
-              if (Array.isArray(parsedData) && parsedData.length > 0) {
-                console.log('Using cached fleet vehicles:', parsedData.length);
-                setVehicles(parsedData);
-                applyFilters(parsedData, searchTerm, statusFilter);
-                updateStats(parsedData);
-                setIsLoading(false);
-                setIsRefreshing(false);
-                return;
-              }
-            }
-          }
-        }
-        
-        // Get already stored vehicles from localStorage without timestamp check
-        // to make sure we don't lose user-added vehicles 
-        const persistedData = localStorage.getItem(FLEET_CACHE_KEY);
-        let existingVehicles: FleetVehicle[] = [];
-        
-        if (persistedData) {
-          try {
-            const parsed = JSON.parse(persistedData);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              existingVehicles = parsed;
-              console.log('Retrieved persisted vehicles:', existingVehicles.length);
-            }
-          } catch (e) {
-            console.error('Error parsing persisted vehicles:', e);
-          }
-        }
-        
-        // If we have existing vehicles, use them instead of demo data
-        if (existingVehicles.length > 0) {
-          setVehicles(existingVehicles);
-          applyFilters(existingVehicles, searchTerm, statusFilter);
-          updateStats(existingVehicles);
-          
-          // Update the cache timestamp
-          localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(existingVehicles));
-          localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
-          
-          setIsLoading(false);
-          setIsRefreshing(false);
-          return;
-        }
-        
-        // Simulation of API call - in real app, would fetch from backend
-        console.log('No cached data, using demo vehicles data...');
-        
-        // For demo, use sample data
-        const demoVehicles: FleetVehicle[] = [
-          {
-            id: "1",
-            vehicleNumber: "AP39TV1245",
-            name: "Honda Amaze",
-            model: "Amaze",
-            make: "Honda",
-            year: 2021,
-            status: "Active",
-            lastService: "2025-05-05",
-            nextServiceDue: "2025-08-05",
-            lastServiceOdometer: 25000,
-            nextServiceOdometer: 30000,
-            currentOdometer: 27500,
-            fuelType: "Petrol",
-            vehicleType: "sedan",
-            cabTypeId: "sedan",
-            capacity: 4,
-            luggageCapacity: 2,
-            isActive: true,
-            assignedDriverId: "driver1",
-            createdAt: "2023-01-01",
-            updatedAt: "2023-04-01"
-          },
-          {
-            id: "2",
-            vehicleNumber: "AP39WD9777",
-            name: "Maruti Suzuki Dzire",
-            model: "Dzire",
-            make: "Maruti Suzuki",
-            year: 2022,
-            status: "Active",
-            lastService: "2025-04-15",
-            nextServiceDue: "2025-07-15",
-            lastServiceOdometer: 15000,
-            nextServiceOdometer: 20000,
-            currentOdometer: 17300,
-            fuelType: "CNG",
-            vehicleType: "sedan",
-            cabTypeId: "sedan",
-            capacity: 4,
-            luggageCapacity: 2,
-            isActive: true,
-            assignedDriverId: "driver2",
-            createdAt: "2023-02-15",
-            updatedAt: "2023-04-15"
-          },
-          {
-            id: "3",
-            vehicleNumber: "AP 31 EF 9012",
-            name: "Honda City",
-            model: "City",
-            make: "Honda",
-            year: 2021,
-            status: "Active",
-            lastService: "2025-03-10",
-            nextServiceDue: "2025-06-10",
-            lastServiceOdometer: 22000,
-            nextServiceOdometer: 27000,
-            currentOdometer: 24800,
-            fuelType: "Petrol",
-            vehicleType: "sedan",
-            cabTypeId: "sedan",
-            capacity: 4,
-            luggageCapacity: 2,
-            isActive: true,
-            createdAt: "2022-12-01",
-            updatedAt: "2023-03-10"
-          },
-          {
-            id: "4",
-            vehicleNumber: "AP 31 GH 3456",
-            name: "Toyota Innova",
-            model: "Innova Crysta",
-            make: "Toyota",
-            year: 2023,
-            status: "Maintenance",
-            lastService: "2025-04-20",
-            nextServiceDue: "2025-07-20",
-            lastServiceOdometer: 18000,
-            nextServiceOdometer: 23000,
-            fuelType: "Diesel",
-            vehicleType: "suv",
-            cabTypeId: "innova_crysta",
-            capacity: 7,
-            luggageCapacity: 4,
-            isActive: true,
-            createdAt: "2023-01-10",
-            updatedAt: "2023-04-20"
-          }
-        ];
-        
-        // Store in cache
-        localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(demoVehicles));
-        localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
-        
-        setVehicles(demoVehicles);
-        applyFilters(demoVehicles, searchTerm, statusFilter);
-        updateStats(demoVehicles);
-        
+        // Fetch from backend API
+        const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
+        const response = await fetch(apiUrl).then(res => res.json());
+        const vehicles = response.vehicles || [];
+        setVehicles(vehicles);
+        applyFilters(vehicles, searchTerm, statusFilter);
+        updateStats(vehicles);
       } catch (error) {
         console.error('Error fetching fleet vehicles:', error);
         toast.error("Failed to load vehicles");
@@ -228,7 +73,6 @@ function FleetManagementPage() {
         setIsRefreshing(false);
       }
     };
-
     fetchVehicles();
   }, [refreshTrigger]);
 
@@ -272,46 +116,41 @@ function FleetManagementPage() {
   };
 
   // Handle adding a new vehicle
-  const handleAddVehicle = (vehicle: FleetVehicle) => {
-    const newVehicle = {
-      ...vehicle,
-      id: generateUUID(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Add to state but don't refresh to prevent duplication
-    const updatedVehicles = [...vehicles, newVehicle];
-    setVehicles(updatedVehicles);
-    applyFilters(updatedVehicles, searchTerm, statusFilter);
-    updateStats(updatedVehicles);
-    
-    // Update the cache to include the new vehicle
-    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
-    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
-    
-    setIsAddDialogOpen(false);
-    toast.success("Vehicle added successfully");
+  const handleAddVehicle = async (vehicle: FleetVehicle) => {
+    try {
+      // Call backend API to add vehicle
+      const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vehicle)
+      });
+      if (!response.ok) throw new Error('Failed to add vehicle');
+      toast.success('Vehicle added successfully');
+      setIsAddDialogOpen(false);
+      setRefreshTrigger(prev => prev + 1); // Refresh list
+    } catch (error) {
+      toast.error('Failed to add vehicle');
+    }
   };
 
   // Handle editing a vehicle
-  const handleEditVehicle = (vehicle: FleetVehicle) => {
-    const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? {
-      ...vehicle,
-      updatedAt: new Date().toISOString()
-    } : v);
-    
-    setVehicles(updatedVehicles);
-    applyFilters(updatedVehicles, searchTerm, statusFilter);
-    updateStats(updatedVehicles);
-    
-    // Update the cache
-    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
-    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
-    
-    setIsEditDialogOpen(false);
-    setSelectedVehicle(null);
-    toast.success("Vehicle updated successfully");
+  const handleEditVehicle = async (vehicle: FleetVehicle) => {
+    try {
+      const apiUrl = `/api/admin/fleet_vehicles.php/vehicles/${vehicle.id}`;
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vehicle)
+      });
+      if (!response.ok) throw new Error('Failed to update vehicle');
+      toast.success('Vehicle updated successfully');
+      setIsEditDialogOpen(false);
+      setSelectedVehicle(null);
+      setRefreshTrigger(prev => prev + 1); // Refresh list
+    } catch (error) {
+      toast.error('Failed to update vehicle');
+    }
   };
 
   // Handle deleting a vehicle
@@ -320,24 +159,22 @@ function FleetManagementPage() {
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDeleteVehicle = () => {
+  const confirmDeleteVehicle = async () => {
     if (!vehicleToDelete) return;
-    
-    const updatedVehicles = vehicles.filter(v => v.id !== vehicleToDelete);
-    setVehicles(updatedVehicles);
-    applyFilters(updatedVehicles, searchTerm, statusFilter);
-    updateStats(updatedVehicles);
-    
-    // Update the cache
-    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify(updatedVehicles));
-    localStorage.setItem(FLEET_CACHE_TIMESTAMP_KEY, Date.now().toString());
-    
-    setVehicleToDelete(null);
-    setIsDeleteDialogOpen(false);
-    setIsEditDialogOpen(false);
-    setIsViewDialogOpen(false);
-    setSelectedVehicle(null);
-    toast.success("Vehicle deleted successfully");
+    try {
+      const apiUrl = `/api/admin/fleet_vehicles.php/vehicles/${vehicleToDelete}`;
+      const response = await fetch(apiUrl, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete vehicle');
+      toast.success('Vehicle deleted successfully');
+      setVehicleToDelete(null);
+      setIsDeleteDialogOpen(false);
+      setIsEditDialogOpen(false);
+      setIsViewDialogOpen(false);
+      setSelectedVehicle(null);
+      setRefreshTrigger(prev => prev + 1); // Refresh list
+    } catch (error) {
+      toast.error('Failed to delete vehicle');
+    }
   };
 
   // View a vehicle

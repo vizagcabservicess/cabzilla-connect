@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ import { getApiUrl } from '@/config/api';
 
 interface DriverAssignmentProps {
   booking: Booking;
-  onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string; bookingId: string }) => Promise<void>;
+  onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string; bookingId: string; driverId: string }) => Promise<void>;
   onClose?: () => void;
   onCancel?: () => void;
   isSubmitting: boolean;
@@ -30,8 +29,7 @@ export function DriverAssignment({
   const { toast } = useToast();
   const [driverData, setDriverData] = useState({
     driverName: booking.driverName || '',
-    driverPhone: booking.driverPhone || '',
-    vehicleNumber: booking.vehicleNumber || ''
+    driverPhone: booking.driverPhone || ''
   });
   
   const [driverType, setDriverType] = useState<string>('new');
@@ -39,6 +37,7 @@ export function DriverAssignment({
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
 
   // Use onClose if provided, otherwise fall back to onCancel
   const closeHandler = onCancel || onClose;
@@ -103,14 +102,13 @@ export function DriverAssignment({
   };
 
   const handleSelectDriver = (driverId: string) => {
+    setSelectedDriverId(driverId);
     const selectedDriver = availableDrivers.find(d => d.id.toString() === driverId);
     if (selectedDriver) {
       setDriverData({
         driverName: selectedDriver.name,
-        driverPhone: selectedDriver.phone,
-        vehicleNumber: selectedDriver.vehicleNumber || selectedDriver.vehicle || ''
+        driverPhone: selectedDriver.phone
       });
-      
       setErrors({});
     }
   };
@@ -132,23 +130,20 @@ export function DriverAssignment({
       newErrors.driverPhone = 'Enter a valid 10-digit phone number';
     }
     
-    if (!driverData.vehicleNumber) {
-      newErrors.vehicleNumber = 'Vehicle number is required';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) {
+    if (!validate() || !selectedDriverId) {
       return;
     }
     try {
       await onAssign({
         ...driverData,
-        bookingId: booking.id.toString() // Convert number to string here
+        bookingId: booking.id.toString(),
+        driverId: selectedDriverId
       });
     } catch (error) {
       console.error('Error assigning driver:', error);
@@ -273,24 +268,6 @@ export function DriverAssignment({
               <p className="text-red-500 text-xs mt-1">{errors.driverPhone}</p>
             )}
           </div>
-          
-          <div>
-            <Label htmlFor="vehicleNumber">
-              Vehicle Number
-              <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="vehicleNumber"
-              name="vehicleNumber"
-              placeholder="Enter vehicle number"
-              value={driverData.vehicleNumber}
-              onChange={handleDriverChange}
-              className={errors.vehicleNumber ? "border-red-500" : ""}
-            />
-            {errors.vehicleNumber && (
-              <p className="text-red-500 text-xs mt-1">{errors.vehicleNumber}</p>
-            )}
-          </div>
         </div>
         
         <Separator />
@@ -306,10 +283,13 @@ export function DriverAssignment({
           </Button>
           <Button 
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !selectedDriverId}
           >
             {isSubmitting ? "Assigning..." : "Assign Driver"}
           </Button>
+          {!selectedDriverId && (
+            <p className="text-red-500 text-xs mt-1">Please select an existing driver to assign.</p>
+          )}
         </div>
       </div>
     </form>
