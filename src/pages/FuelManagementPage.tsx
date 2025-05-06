@@ -47,9 +47,9 @@ export default function FuelManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterVehicle, setFilterVehicle] = useState<string>("");
-  const [filterFuelType, setFilterFuelType] = useState<string>("");
-  const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>("");
+  const [filterVehicle, setFilterVehicle] = useState<string>("all");
+  const [filterFuelType, setFilterFuelType] = useState<string>("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>("all");
   const [filterDateRange, setFilterDateRange] = useState<string>("all");
   const [editingRecord, setEditingRecord] = useState<FuelRecord | null>(null);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -107,17 +107,17 @@ export default function FuelManagementPage() {
     }
 
     // Apply vehicle filter
-    if (filterVehicle) {
+    if (filterVehicle !== "all") {
       filtered = filtered.filter(record => record.vehicleId === filterVehicle);
     }
 
     // Apply fuel type filter
-    if (filterFuelType) {
+    if (filterFuelType !== "all") {
       filtered = filtered.filter(record => record.fuelType === filterFuelType);
     }
 
     // Apply payment method filter
-    if (filterPaymentMethod) {
+    if (filterPaymentMethod !== "all") {
       filtered = filtered.filter(record => record.paymentMethod === filterPaymentMethod);
     }
 
@@ -207,9 +207,9 @@ export default function FuelManagementPage() {
 
   const resetFilters = () => {
     setSearchTerm("");
-    setFilterVehicle("");
-    setFilterFuelType("");
-    setFilterPaymentMethod("");
+    setFilterVehicle("all");
+    setFilterFuelType("all");
+    setFilterPaymentMethod("all");
     setFilterDateRange("all");
     setIsFilterDialogOpen(false);
   };
@@ -373,28 +373,28 @@ export default function FuelManagementPage() {
             </div>
             
             {/* Filter indicators */}
-            {(filterVehicle || filterFuelType || filterPaymentMethod || filterDateRange !== 'all') && (
+            {(filterVehicle !== "all" || filterFuelType !== "all" || filterPaymentMethod !== "all" || filterDateRange !== 'all') && (
               <div className="flex flex-wrap gap-2 mb-4">
-                {filterVehicle && (
+                {filterVehicle !== "all" && (
                   <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded flex items-center">
                     Vehicle: {getVehicleDisplayName(filterVehicle)}
-                    <button onClick={() => setFilterVehicle("")} className="ml-1 text-blue-800 hover:text-blue-900">
+                    <button onClick={() => setFilterVehicle("all")} className="ml-1 text-blue-800 hover:text-blue-900">
                       ×
                     </button>
                   </div>
                 )}
-                {filterFuelType && (
+                {filterFuelType !== "all" && (
                   <div className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded flex items-center">
                     Fuel: {filterFuelType}
-                    <button onClick={() => setFilterFuelType("")} className="ml-1 text-green-800 hover:text-green-900">
+                    <button onClick={() => setFilterFuelType("all")} className="ml-1 text-green-800 hover:text-green-900">
                       ×
                     </button>
                   </div>
                 )}
-                {filterPaymentMethod && (
+                {filterPaymentMethod !== "all" && (
                   <div className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded flex items-center">
                     Payment: {filterPaymentMethod}
-                    <button onClick={() => setFilterPaymentMethod("")} className="ml-1 text-purple-800 hover:text-purple-900">
+                    <button onClick={() => setFilterPaymentMethod("all")} className="ml-1 text-purple-800 hover:text-purple-900">
                       ×
                     </button>
                   </div>
@@ -520,7 +520,7 @@ export default function FuelManagementPage() {
                     <SelectValue placeholder="All vehicles" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All vehicles</SelectItem>
+                    <SelectItem value="all">All vehicles</SelectItem>
                     {vehicles.map((vehicle) => (
                       <SelectItem key={vehicle.id} value={vehicle.id}>
                         {vehicle.vehicleNumber} - {vehicle.name} {vehicle.model}
@@ -537,7 +537,7 @@ export default function FuelManagementPage() {
                     <SelectValue placeholder="All fuel types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All fuel types</SelectItem>
+                    <SelectItem value="all">All fuel types</SelectItem>
                     <SelectItem value="Petrol">Petrol</SelectItem>
                     <SelectItem value="Diesel">Diesel</SelectItem>
                     <SelectItem value="CNG">CNG</SelectItem>
@@ -553,7 +553,7 @@ export default function FuelManagementPage() {
                     <SelectValue placeholder="All payment methods" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All payment methods</SelectItem>
+                    <SelectItem value="all">All payment methods</SelectItem>
                     <SelectItem value="Cash">Cash</SelectItem>
                     <SelectItem value="Card">Card</SelectItem>
                     <SelectItem value="Company">Company Account</SelectItem>
