@@ -68,138 +68,25 @@ export default function FuelManagementPage() {
       setIsLoading(true);
       
       // Fetch vehicles
-      const vehiclesResponse = await fetch('/api/admin/fleet_vehicles.php/vehicles')
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch vehicles');
-          return res.json();
-        })
-        .catch(err => {
-          console.error("Error fetching vehicles:", err);
-          // If API fails, use sample data
-          return {
-            vehicles: [
-              { id: 'VEH-001', vehicleNumber: 'AP31AA1234', name: 'Swift', model: 'Dzire', make: 'Suzuki', year: 2022 },
-              { id: 'VEH-002', vehicleNumber: 'AP31BB5678', name: 'Innova', model: 'Crysta', make: 'Toyota', year: 2023 },
-              { id: 'VEH-003', vehicleNumber: 'AP31CC9012', name: 'Alto', model: 'K10', make: 'Suzuki', year: 2021 }
-            ]
-          };
-        });
-      
-      if (vehiclesResponse.vehicles) {
-        setVehicles(vehiclesResponse.vehicles);
+      const vehiclesResponse = await fetch('/api/admin/fleet_vehicles.php/vehicles');
+      if (!vehiclesResponse.ok) throw new Error('Failed to fetch vehicles');
+      const vehiclesJson = await vehiclesResponse.json();
+      if (vehiclesJson.vehicles) {
+        setVehicles(vehiclesJson.vehicles);
       }
       
       // Fetch fuel records
-      const fuelResponse = await fetch('/api/admin/fuel_records.php')
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch fuel records');
-          return res.json();
-        })
-        .catch(err => {
-          console.error("Error fetching fuel records:", err);
-          // If API fails, use sample data
-          return {
-            status: 'success',
-            data: {
-              fuelRecords: [
-                { 
-                  id: '1', 
-                  vehicleId: 'VEH-001', 
-                  fillDate: '2025-05-01', 
-                  quantity: 45.2, 
-                  pricePerUnit: 107.5, 
-                  totalCost: 4859, 
-                  odometer: 15420, 
-                  fuelStation: 'HPCL, Gajuwaka', 
-                  fuelType: 'Petrol',
-                  paymentMethod: 'Cash',
-                  mileage: 16.2,
-                  createdAt: '2025-05-01T10:30:00Z',
-                  updatedAt: '2025-05-01T10:30:00Z'
-                },
-                { 
-                  id: '2', 
-                  vehicleId: 'VEH-002', 
-                  fillDate: '2025-04-30', 
-                  quantity: 35.8, 
-                  pricePerUnit: 107.2, 
-                  totalCost: 3837.76, 
-                  odometer: 12540, 
-                  fuelStation: 'Indian Oil, Siripuram', 
-                  fuelType: 'Diesel',
-                  paymentMethod: 'Card',
-                  paymentDetails: {
-                    bankName: 'HDFC Bank',
-                    lastFourDigits: '1234'
-                  },
-                  mileage: 14.8,
-                  createdAt: '2025-04-30T14:15:00Z',
-                  updatedAt: '2025-04-30T14:15:00Z'
-                },
-                { 
-                  id: '3', 
-                  vehicleId: 'VEH-003', 
-                  fillDate: '2025-04-29', 
-                  quantity: 42.5, 
-                  pricePerUnit: 107.5, 
-                  totalCost: 4568.75, 
-                  odometer: 14250, 
-                  fuelStation: 'HPCL, Dwaraka Nagar', 
-                  fuelType: 'Petrol',
-                  paymentMethod: 'Company',
-                  mileage: 18.5,
-                  createdAt: '2025-04-29T09:45:00Z',
-                  updatedAt: '2025-04-29T09:45:00Z'
-                },
-                { 
-                  id: '4', 
-                  vehicleId: 'VEH-002', 
-                  fillDate: '2025-04-28', 
-                  quantity: 38.6, 
-                  pricePerUnit: 107.3, 
-                  totalCost: 4141.78, 
-                  odometer: 13680, 
-                  fuelStation: 'BP, Maddilapalem', 
-                  fuelType: 'Diesel',
-                  paymentMethod: 'Customer',
-                  mileage: 13.7,
-                  createdAt: '2025-04-28T16:20:00Z',
-                  updatedAt: '2025-04-28T16:20:00Z'
-                },
-                { 
-                  id: '5', 
-                  vehicleId: 'VEH-001', 
-                  fillDate: '2025-04-27', 
-                  quantity: 43.8, 
-                  pricePerUnit: 106.9, 
-                  totalCost: 4682.22, 
-                  odometer: 14980, 
-                  fuelStation: 'HPCL, Gajuwaka', 
-                  fuelType: 'Petrol',
-                  paymentMethod: 'Card',
-                  paymentDetails: {
-                    bankName: 'SBI',
-                    lastFourDigits: '5678'
-                  },
-                  mileage: 17.1,
-                  createdAt: '2025-04-27T11:10:00Z',
-                  updatedAt: '2025-04-27T11:10:00Z'
-                }
-              ]
-            }
-          };
-        });
-      
-      if (fuelResponse.status === 'success' && fuelResponse.data?.fuelRecords) {
-        setFuelData(fuelResponse.data.fuelRecords);
+      const fuelResponse = await fetch('/api/admin/fuel_records.php');
+      if (!fuelResponse.ok) throw new Error('Failed to fetch fuel records');
+      const fuelJson = await fuelResponse.json();
+      if (fuelJson.status === 'success' && fuelJson.data?.fuelRecords) {
+        setFuelData(fuelJson.data.fuelRecords);
+      } else if (fuelJson.records) {
+        setFuelData(fuelJson.records);
       }
-      
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast.error('Failed to load data. Using sample data instead.');
-      
-      // Set default sample data in case of errors
-      setFuelData([]);
+      toast.error('Failed to load data from the server.');
     } finally {
       setIsLoading(false);
     }
@@ -271,45 +158,45 @@ export default function FuelManagementPage() {
 
   const handleSaveFuelRecord = async (record: Partial<FuelRecord>): Promise<void> => {
     try {
-      // In a real app, this would be an API call to save the fuel record
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       if (!record.id) {
-        // Adding a new record
-        const newRecord: FuelRecord = {
-          id: `temp-${Date.now()}`,
-          ...record as any,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        } as FuelRecord;
-        
-        setFuelData(prev => [newRecord, ...prev]);
+        // Add new record (POST)
+        const response = await fetch('/api/admin/fuel_records.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        const data = await response.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to add record');
         toast.success('Fuel record added successfully');
       } else {
-        // Updating an existing record
-        setFuelData(prev => 
-          prev.map(item => 
-            item.id === record.id 
-              ? { ...item, ...record, updatedAt: new Date().toISOString() } 
-              : item
-          )
-        );
+        // Update existing record (PUT)
+        const response = await fetch(`/api/admin/fuel_records.php?id=${record.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        const data = await response.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to update record');
         toast.success('Fuel record updated successfully');
       }
+      // Refresh data from backend
+      fetchData();
     } catch (error) {
       console.error("Error saving fuel record:", error);
       toast.error('Failed to save fuel record');
-      throw error; // Re-throw to be handled by the form component
+      throw error;
     }
   };
 
   const handleDeleteFuelRecord = async (id: string) => {
     try {
-      // In a real app, this would be an API call to delete the fuel record
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setFuelData(prev => prev.filter(record => record.id !== id));
+      const response = await fetch(`/api/admin/fuel_records.php?id=${id}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      if (data.status !== 'success') throw new Error(data.message || 'Failed to delete record');
       toast.success('Fuel record deleted successfully');
+      fetchData();
     } catch (error) {
       console.error("Error deleting fuel record:", error);
       toast.error('Failed to delete fuel record');
@@ -333,15 +220,40 @@ export default function FuelManagementPage() {
     return `${vehicle.vehicleNumber} - ${vehicle.name} ${vehicle.model}`;
   };
 
+  // Utility to calculate mileage for each record
+  function calculateMileage(records: FuelRecord[]): FuelRecord[] {
+    // Group records by vehicleId
+    const grouped: { [vehicleId: string]: FuelRecord[] } = {};
+    records.forEach(record => {
+      if (!grouped[record.vehicleId]) grouped[record.vehicleId] = [];
+      grouped[record.vehicleId].push(record);
+    });
+    // For each vehicle, sort by fillDate and calculate mileage
+    Object.values(grouped).forEach(vehicleRecords => {
+      vehicleRecords.sort((a, b) => new Date(a.fillDate).getTime() - new Date(b.fillDate).getTime());
+      for (let i = 1; i < vehicleRecords.length; i++) {
+        const prev = vehicleRecords[i - 1];
+        const curr = vehicleRecords[i];
+        const distance = curr.odometer - prev.odometer;
+        const fuel = curr.quantity;
+        curr.calculatedMileage = (fuel > 0 && distance > 0) ? distance / fuel : null;
+      }
+      // First record has no previous, so no mileage
+      if (vehicleRecords.length > 0) vehicleRecords[0].calculatedMileage = null;
+    });
+    return records;
+  }
+
   // Calculate totals for the filtered data
-  const totalFuelCost = filteredFuelData.reduce((sum, record) => sum + record.totalCost, 0);
-  const totalLiters = filteredFuelData.reduce((sum, record) => sum + record.quantity, 0);
+  const recordsWithMileage = calculateMileage(filteredFuelData);
+  const totalFuelCost = recordsWithMileage.reduce((sum, record) => sum + record.totalCost, 0);
+  const totalLiters = recordsWithMileage.reduce((sum, record) => sum + record.quantity, 0);
   const averageCostPerLiter = totalLiters > 0 ? totalFuelCost / totalLiters : 0;
   
-  // Calculate average mileage
-  const recordsWithMileage = filteredFuelData.filter(record => record.mileage);
-  const averageMileage = recordsWithMileage.length > 0 
-    ? recordsWithMileage.reduce((sum, record) => sum + (record.mileage || 0), 0) / recordsWithMileage.length 
+  // Calculate average mileage from calculatedMileage
+  const mileageRecords = recordsWithMileage.filter(r => r.calculatedMileage && r.calculatedMileage > 0);
+  const averageMileage = mileageRecords.length > 0 
+    ? mileageRecords.reduce((sum, r) => sum + r.calculatedMileage, 0) / mileageRecords.length
     : 0;
 
   // Format date for display
@@ -553,10 +465,10 @@ export default function FuelManagementPage() {
                           <TableCell className="text-right font-medium">₹{record.totalCost.toFixed(2)}</TableCell>
                           <TableCell className="text-right">{record.odometer.toLocaleString()}</TableCell>
                           <TableCell className="text-right">
-                            {record.mileage ? (
+                            {record.calculatedMileage ? (
                               <span className="inline-flex items-center">
                                 <Gauge className="h-3 w-3 mr-1 text-green-600" />
-                                {record.mileage.toFixed(1)}
+                                {record.calculatedMileage.toFixed(1)}
                               </span>
                             ) : '-'}
                           </TableCell>

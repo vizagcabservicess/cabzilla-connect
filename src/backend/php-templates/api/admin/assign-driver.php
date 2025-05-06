@@ -86,7 +86,7 @@ try {
     }
 
     // Connect to database
-    $conn = getDbConnectionWithRetry();
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     
     if (!$conn) {
         logAssignDriverError('Database connection failed');

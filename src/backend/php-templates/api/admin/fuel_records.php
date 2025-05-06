@@ -1,5 +1,5 @@
-
 <?php
+require_once __DIR__ . '/../../config.php';
 /**
  * Fuel Records API Endpoint
  * Manages fuel records for the fleet.
@@ -57,7 +57,7 @@ function ensureFuelRecordsTableExists($conn) {
 // Handle GET request - Fetch fuel records
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        $conn = getDbConnectionWithRetry();
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
         
         // Build query with filters
@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // Connect to database
-        $conn = getDbConnectionWithRetry();
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
         
         // Prepare data
@@ -187,8 +187,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Insert new fuel record
         $stmt = $conn->prepare("INSERT INTO fuel_records (
-            vehicle_id, fill_date, quantity, price_per_unit, total_cost, 
-            odometer, fuel_station, fuel_type, mileage, payment_method, 
+            vehicle_id, fill_date, quantity_liters, price_per_liter, total_cost, 
+            odometer_reading, station, fuel_type, mileage, payment_method, 
             bank_name, last_four_digits, notes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
@@ -234,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         }
         
         // Connect to database
-        $conn = getDbConnectionWithRetry();
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
         
         // Check if record exists
@@ -267,13 +267,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         }
         
         if (isset($data['quantity'])) {
-            $updateFields[] = "quantity = ?";
+            $updateFields[] = "quantity_liters = ?";
             $params[] = floatval($data['quantity']);
             $types .= "d";
         }
         
         if (isset($data['pricePerUnit'])) {
-            $updateFields[] = "price_per_unit = ?";
+            $updateFields[] = "price_per_liter = ?";
             $params[] = floatval($data['pricePerUnit']);
             $types .= "d";
         }
@@ -285,13 +285,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         }
         
         if (isset($data['odometer'])) {
-            $updateFields[] = "odometer = ?";
+            $updateFields[] = "odometer_reading = ?";
             $params[] = intval($data['odometer']);
             $types .= "i";
         }
         
         if (isset($data['fuelStation'])) {
-            $updateFields[] = "fuel_station = ?";
+            $updateFields[] = "station = ?";
             $params[] = $data['fuelStation'];
             $types .= "s";
         }
@@ -387,7 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         }
         
         // Connect to database
-        $conn = getDbConnectionWithRetry();
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
         
         // Delete record
@@ -421,11 +421,11 @@ function formatFuelRecord($row) {
         'id' => $row['id'],
         'vehicleId' => $row['vehicle_id'],
         'fillDate' => $row['fill_date'],
-        'quantity' => (float)$row['quantity'],
-        'pricePerUnit' => (float)$row['price_per_unit'],
+        'quantity' => (float)$row['quantity_liters'],
+        'pricePerUnit' => (float)$row['price_per_liter'],
         'totalCost' => (float)$row['total_cost'],
-        'odometer' => (int)$row['odometer'],
-        'fuelStation' => $row['fuel_station'],
+        'odometer' => (int)$row['odometer_reading'],
+        'fuelStation' => $row['station'],
         'fuelType' => $row['fuel_type'],
         'mileage' => $row['mileage'] ? (float)$row['mileage'] : null,
         'paymentMethod' => $row['payment_method'],

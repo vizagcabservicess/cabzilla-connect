@@ -1,5 +1,5 @@
-
 <?php
+require_once __DIR__ . '/../../config.php';
 /**
  * Fuel Prices API Endpoint
  * Manages fuel prices for various fuel types.
@@ -56,7 +56,7 @@ function ensureFuelPricesTableExists($conn) {
 // Handle GET request - Fetch fuel prices
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        $conn = getDbConnectionWithRetry();
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelPricesTableExists($conn);
         
         // Fetch all fuel prices
@@ -87,85 +87,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 // Handle POST request - Update fuel price
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // Get request body
         $data = json_decode(file_get_contents('php://input'), true);
-        
-        // Validate request data
+        error_log('POST DATA: ' . json_encode($data)); // Log incoming data
         if (!isset($data['fuelType']) || !isset($data['price'])) {
             sendErrorResponse('Missing required fields: fuelType, price', [], 400);
             exit;
         }
-        
         $fuelType = $data['fuelType'];
         $price = floatval($data['price']);
         $location = isset($data['location']) ? $data['location'] : 'Visakhapatnam';
         $effectiveDate = isset($data['effectiveDate']) ? $data['effectiveDate'] : date('Y-m-d');
-        
-        if ($price <= 0) {
-            sendErrorResponse('Price must be greater than 0', [], 400);
-            exit;
-        }
-        
-        // Connect to database
-        $conn = getDbConnectionWithRetry();
-        ensureFuelPricesTableExists($conn);
-        
-        // Check if fuel type exists
-        $stmt = $conn->prepare("SELECT id FROM fuel_prices WHERE fuel_type = ? AND location = ?");
-        $stmt->bind_param("ss", $fuelType, $location);
+
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+
+        // Log the SQL and parameters
+        error_log('SQL: INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE price = VALUES(price), effective_date = VALUES(effective_date)');
+        error_log('PARAMS: fuelType=' . $fuelType . ', price=' . $price . ', effectiveDate=' . $effectiveDate . ', location=' . $location);
+
+        $stmt = $conn->prepare("INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE price = VALUES(price), effective_date = VALUES(effective_date)");
+        $stmt->bind_param("sdss", $fuelType, $price, $effectiveDate, $location);
         $stmt->execute();
-        $result = $stmt->get_result();
-        $exists = $result->num_rows > 0;
-        
-        if ($exists) {
-            // Update existing fuel price
-            $stmt = $conn->prepare("UPDATE fuel_prices SET price = ?, effective_date = ? WHERE fuel_type = ? AND location = ?");
-            $stmt->bind_param("dsss", $price, $effectiveDate, $fuelType, $location);
-            $stmt->execute();
-            
-            // Get the updated record
-            $stmt = $conn->prepare("SELECT * FROM fuel_prices WHERE fuel_type = ? AND location = ?");
-            $stmt->bind_param("ss", $fuelType, $location);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            
-            $updatedPrice = [
-                'id' => $row['id'],
-                'fuelType' => $row['fuel_type'],
-                'price' => (float)$row['price'],
-                'effectiveDate' => $row['effective_date'],
-                'location' => $row['location'],
-                'createdAt' => $row['created_at'],
-                'updatedAt' => $row['updated_at']
-            ];
-            
-            sendSuccessResponse(['fuelPrice' => $updatedPrice], 'Fuel price updated successfully');
+        error_log('SQL EXECUTED: affected_rows=' . $stmt->affected_rows . ', error=' . $stmt->error); // Log SQL result
+
+        if ($stmt->affected_rows > 0) {
+            sendSuccessResponse([], 'Fuel price updated successfully');
         } else {
-            // Insert new fuel price
-            $stmt = $conn->prepare("INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("sdss", $fuelType, $price, $effectiveDate, $location);
-            $stmt->execute();
-            $id = $stmt->insert_id;
-            
-            // Get the new record
-            $stmt = $conn->prepare("SELECT * FROM fuel_prices WHERE id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            
-            $newPrice = [
-                'id' => $row['id'],
-                'fuelType' => $row['fuel_type'],
-                'price' => (float)$row['price'],
-                'effectiveDate' => $row['effective_date'],
-                'location' => $row['location'],
-                'createdAt' => $row['created_at'],
-                'updatedAt' => $row['updated_at']
-            ];
-            
-            sendSuccessResponse(['fuelPrice' => $newPrice], 'Fuel price added successfully');
+            sendErrorResponse('No rows updated. Check if the data matches an existing row and the values are actually different.', [], 400);
         }
     } catch (Exception $e) {
         sendErrorResponse('Failed to update fuel price: ' . $e->getMessage());
