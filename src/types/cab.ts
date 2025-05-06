@@ -226,7 +226,7 @@ export interface MaintenanceRecord {
 }
 
 export interface FuelRecord {
-  id: string;
+  id: string | number;
   vehicleId: string;
   fillDate: string;
   quantity: number;
@@ -234,17 +234,22 @@ export interface FuelRecord {
   totalCost: number;
   odometer: number;
   fuelStation: string;
-  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
-  mileage?: number;
-  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
+  fuelType: string;
+  paymentMethod: string;
   paymentDetails?: {
-    cardType?: string;
     bankName?: string;
     lastFourDigits?: string;
   };
   notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+  mileage?: number;
+  calculatedMileage?: number | null;
+  
+  // Vehicle join fields
+  vehicleName?: string;
+  vehicleNumber?: string;
+  vehicleModel?: string;
 }
 
 export interface FuelPrice {
