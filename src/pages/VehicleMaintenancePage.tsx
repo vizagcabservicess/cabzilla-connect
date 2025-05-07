@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -374,9 +375,9 @@ export function VehicleMaintenancePage() {
                       <>
                         {format(new Date(record.nextServiceDate), 'MMM dd, yyyy')}
                         {isUpcoming(record) ? (
-                          <CheckCircle className="ml-1 inline-block h-4 w-4 text-green-500" title="Upcoming" />
+                          <CheckCircle className="ml-1 inline-block h-4 w-4 text-green-500" aria-label="Upcoming" />
                         ) : (
-                          <Circle className="ml-1 inline-block h-4 w-4 text-amber-500" title="Overdue" />
+                          <Circle className="ml-1 inline-block h-4 w-4 text-amber-500" aria-label="Overdue" />
                         )}
                       </>
                     ) : (
@@ -419,3 +420,5 @@ export function VehicleMaintenancePage() {
     </>
   );
 }
+
+export default VehicleMaintenancePage;

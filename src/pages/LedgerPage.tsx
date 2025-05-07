@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -246,7 +247,7 @@ const LedgerPage: React.FC = () => {
                   <TableCell>{format(new Date(transaction.date), 'MMM dd, yyyy')}</TableCell>
                   <TableCell>{transaction.description}</TableCell>
                   <TableCell>
-                    <Badge variant={transaction.type === 'income' ? 'success' : 'destructive'}>
+                    <Badge variant={transaction.type === 'income' ? "outline" : "destructive"}>
                       {transaction.type === 'income' ? (
                         <div className="flex items-center">
                           Income

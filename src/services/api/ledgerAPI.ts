@@ -9,7 +9,7 @@ export const ledgerAPI = {
   /**
    * Get all transactions with optional filters
    */
-  getTransactions: async (filters?: LedgerFilters): Promise<any> => {
+  getTransactions: async (filters: LedgerFilters = {}): Promise<any> => {
     try {
       const params: Record<string, string> = {};
       
