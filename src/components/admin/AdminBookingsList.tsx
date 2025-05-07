@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Table, 
@@ -57,6 +56,10 @@ export function AdminBookingsList() {
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const customScrollRef = useRef<HTMLDivElement>(null);
+  const [showCustomScrollbar, setShowCustomScrollbar] = useState(false);
   
   const fetchBookings = async () => {
     try {
@@ -611,6 +614,29 @@ export function AdminBookingsList() {
     });
   };
 
+  // Sync scroll positions
+  const handleTableScroll = () => {
+    if (tableScrollRef.current && customScrollRef.current) {
+      customScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
+  const handleCustomScroll = () => {
+    if (tableScrollRef.current && customScrollRef.current) {
+      tableScrollRef.current.scrollLeft = customScrollRef.current.scrollLeft;
+    }
+  };
+  // Check if horizontal scroll is needed
+  useEffect(() => {
+    const checkScroll = () => {
+      if (tableScrollRef.current) {
+        setShowCustomScrollbar(tableScrollRef.current.scrollWidth > tableScrollRef.current.clientWidth);
+      }
+    };
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, [filteredBookings]);
+
   if (isLoading && retryCount === 0) {
     return (
       <div className="flex justify-center p-10">
@@ -758,100 +784,135 @@ export function AdminBookingsList() {
       )}
 
       {filteredBookings.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Booking #</TableHead>
-              <TableHead>Passenger</TableHead>
-              <TableHead className="hidden lg:table-cell">Pickup Location</TableHead>
-              <TableHead className="hidden md:table-cell">Pickup Date & Time</TableHead>
-              <TableHead className="hidden md:table-cell">Vehicle Type</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredBookings.map((booking) => (
-              <TableRow key={booking.id}>
-                <TableCell>{booking.bookingNumber}</TableCell>
-                <TableCell className="font-medium">
-                  {booking.passengerName}
-                  {booking.passengerPhone && (
-                    <div className="flex items-center text-xs text-gray-500 mt-1">
-                      <Phone className="h-3 w-3 mr-1" />
-                      {booking.passengerPhone}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  <div className="flex items-start">
-                    <MapPin className="h-4 w-4 mr-1 mt-0.5 text-gray-400" />
-                    <span>{booking.pickupLocation}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                    {formatDateTime(booking.pickupDate)}
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="flex items-center">
-                    <Car className="h-4 w-4 mr-1 text-gray-400" />
-                    {booking.cabType}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center font-medium">
-                    <IndianRupee className="h-3.5 w-3.5 mr-1" />
-                    {formatPrice(booking.totalAmount)}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge 
-                    className={getStatusColorClass(booking.status)}
-                  >
-                    {booking.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
-                          View details
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {booking.status === 'pending' && (
-                          <DropdownMenuItem 
-                            onClick={() => handleStatusChange('confirmed')}
-                          >
-                            Confirm booking
-                          </DropdownMenuItem>
-                        )}
-                        {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                          <DropdownMenuItem 
-                            onClick={() => handleCancelBooking()}
-                          >
-                            Cancel booking
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="relative" style={{ maxHeight: '70vh' }}>
+          <div
+            ref={tableScrollRef}
+            className="w-full"
+            style={{ maxHeight: '70vh', overflowX: 'auto', overflowY: 'auto' }}
+            onScroll={handleTableScroll}
+          >
+            <Table className="text-sm min-w-[2000px]">
+              <TableHeader>
+                <TableRow className="text-xs">
+                  <TableHead className="text-xs">Booking #</TableHead>
+                  <TableHead className="text-xs">Passenger</TableHead>
+                  <TableHead className="text-xs">Route</TableHead>
+                  <TableHead className="text-xs">Pickup Date & Time</TableHead>
+                  <TableHead className="text-xs">Vehicle & Trip Type</TableHead>
+                  <TableHead className="text-xs">Amount</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Payment Status</TableHead>
+                  <TableHead className="text-xs">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredBookings.map((booking) => (
+                  <TableRow key={booking.id} className="text-sm">
+                    <TableCell>{booking.bookingNumber}</TableCell>
+                    <TableCell className="font-medium">
+                      {booking.passengerName}
+                      {booking.passengerPhone && (
+                        <div className="flex items-center text-xs text-gray-500 mt-1">
+                          <Phone className="h-3 w-3 mr-1" />
+                          {booking.passengerPhone}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className="flex items-center gap-1 max-w-lg whitespace-normal"
+                        title={`${booking.pickupLocation} → ${booking.dropLocation}`}
+                        style={{ whiteSpace: 'normal' }}
+                      >
+                        <MapPin className="h-3 w-3 text-gray-400" />
+                        <span className="whitespace-normal break-words">{booking.pickupLocation}</span>
+                        <span className="mx-1 text-gray-400">→</span>
+                        <MapPin className="h-3 w-3 text-gray-400" />
+                        <span className="whitespace-normal break-words">{booking.dropLocation}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                        {formatDateTime(booking.pickupDate)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Car className="h-4 w-4 text-gray-400" />
+                        <span>{booking.cabType}</span>
+                        <span className="text-gray-500">({booking.tripType})</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center font-medium">
+                        <IndianRupee className="h-3.5 w-3.5 mr-1" />
+                        {formatPrice(booking.totalAmount)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        className={getStatusColorClass(booking.status)}
+                      >
+                        {booking.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={booking.payment_status === 'payment_received' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
+                      >
+                        {booking.payment_status === 'payment_received' ? 'Paid' : 'Pending'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
+                              View details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {booking.status === 'pending' && (
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange('confirmed')}
+                              >
+                                Confirm booking
+                              </DropdownMenuItem>
+                            )}
+                            {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                              <DropdownMenuItem 
+                                onClick={() => handleCancelBooking()}
+                              >
+                                Cancel booking
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {showCustomScrollbar && (
+            <div
+              ref={customScrollRef}
+              className="absolute left-0 right-0 bg-white border-t"
+              style={{ bottom: 0, height: 16, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', pointerEvents: 'auto' }}
+              onScroll={handleCustomScroll}
+            >
+              <div style={{ width: tableScrollRef.current ? Math.max(tableScrollRef.current.scrollWidth, 2000) : 2000 }} />
+            </div>
+          )}
+        </div>
       ) : (
         <div className="text-center py-10">
           <p className="text-gray-500">No bookings found matching your criteria.</p>

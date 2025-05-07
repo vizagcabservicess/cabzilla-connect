@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +52,13 @@ export function BookingInvoice({
   const [activeTab, setActiveTab] = useState<string>("html");
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [pdfGenerationAvailable, setPdfGenerationAvailable] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedStatus, setEditedStatus] = useState(booking.payment_status || invoiceData?.paymentStatus || 'pending');
+  const [editedMethod, setEditedMethod] = useState(booking.payment_method || invoiceData?.paymentMethod || '');
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const paymentMethods = [
+    'Cash', 'Credit Card', 'Current Account', 'Overdraft account', 'PhonePe'
+  ];
 
   useEffect(() => {
     if (booking && booking.id) {
@@ -354,6 +360,37 @@ export function BookingInvoice({
     }, 100);
   };
 
+  // Placeholder for backend update
+  async function updateBookingPayment(bookingId, status, method) {
+    setIsSavingPayment(true);
+    try {
+      const response = await fetch('/api/update-booking.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: bookingId,
+          payment_status: status,
+          payment_method: method,
+        }),
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        setInvoiceData((prev) => ({ ...prev, paymentStatus: status, paymentMethod: method }));
+        booking.payment_status = status;
+        booking.payment_method = method;
+        setEditMode(false);
+        toast({ title: 'Payment status updated!' });
+      } else {
+        console.error('Update failed:', result);
+        toast({ title: 'Failed to update payment status', description: result.message || '', variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: 'Failed to update payment status', variant: 'destructive' });
+    } finally {
+      setIsSavingPayment(false);
+    }
+  }
+
   const renderInvoiceSettings = () => {
     return (
       <div className="p-4 border rounded-md space-y-4">
@@ -546,6 +583,89 @@ export function BookingInvoice({
           <div className="mb-4 flex justify-between">
             <h3 className="font-medium">Invoice #{invoiceData?.invoiceNumber || 'Generated'}</h3>
             <span>Generated: {invoiceData?.invoiceDate || new Date().toLocaleDateString()}</span>
+          </div>
+          
+          {/* Payment Status and Method */}
+          <div className="mb-4 flex items-center gap-6">
+            {editMode ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">Payment Status:</span>
+                  <select
+                    value={editedStatus}
+                    onChange={e => setEditedStatus(e.target.value)}
+                    className="border rounded px-2 py-1"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="payment_received">Paid</option>
+                  </select>
+                </div>
+                {editedStatus === 'payment_received' && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Mode:</span>
+                    <select
+                      value={editedMethod}
+                      onChange={e => setEditedMethod(e.target.value)}
+                      className="border rounded px-2 py-1"
+                    >
+                      <option value="">Select</option>
+                      {paymentMethods.map(method => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  className="ml-2"
+                  loading={isSavingPayment}
+                  onClick={() => updateBookingPayment(booking.id, editedStatus, editedMethod)}
+                  disabled={isSavingPayment || (editedStatus === 'payment_received' && !editedMethod)}
+                >
+                  Save
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-2"
+                  onClick={() => setEditMode(false)}
+                  disabled={isSavingPayment}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">Payment Status:</span>
+                  <span className={
+                    (booking.payment_status || invoiceData?.paymentStatus) === 'payment_received'
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }>
+                    {(booking.payment_status || invoiceData?.paymentStatus) === 'payment_received' ? 'Paid' : 'Pending'}
+                  </span>
+                </div>
+                {(booking.payment_status === 'payment_received' || invoiceData?.paymentStatus === 'payment_received') && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Mode:</span>
+                    <span>{booking.payment_method || invoiceData?.paymentMethod || 'N/A'}</span>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-2"
+                  onClick={() => {
+                    setEditedStatus(booking.payment_status || invoiceData?.paymentStatus || 'pending');
+                    setEditedMethod(booking.payment_method || invoiceData?.paymentMethod || '');
+                    setEditMode(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              </>
+            )}
           </div>
           
           <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>

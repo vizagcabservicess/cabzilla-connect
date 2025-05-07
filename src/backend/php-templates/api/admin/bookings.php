@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -143,6 +142,8 @@ try {
             'vehicleNumber' => $row['vehicle_number'] ?? null,
             'billingAddress' => $row['billing_address'] ?? null,
             'extraCharges' => json_decode($row['extra_charges'] ?? '[]'),
+            'payment_status' => $row['payment_status'] ?? 'pending',
+            'payment_method' => $row['payment_method'] ?? '',
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'] ?? $row['created_at']
         ];

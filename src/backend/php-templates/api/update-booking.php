@@ -191,7 +191,9 @@ try {
         'admin_notes' => 'adminNotes',
         'total_amount' => 'totalAmount',
         'billing_address' => 'billingAddress',
-        'cab_type' => 'cabType'
+        'cab_type' => 'cabType',
+        'payment_status' => 'payment_status',
+        'payment_method' => 'payment_method',
     ];
     
     // Handle extra charges separately to ensure proper JSON encoding and standardized field naming
