@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MaintenanceRecord, ServiceType } from '@/types/maintenance';
 import { FleetVehicle } from '@/types/cab';
@@ -62,7 +61,9 @@ export function MaintenanceRecordForm({
     cost: 0,
     vendor: '',
     nextServiceDate: format(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'), // 90 days in future
-    notes: ''
+    notes: '',
+    odometer: 0,
+    nextServiceOdometer: 0
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,9 +72,17 @@ export function MaintenanceRecordForm({
     if (editingRecord) {
       setFormValues({
         ...editingRecord,
-        // Ensure date formats are correct
-        date: editingRecord.date ? format(new Date(editingRecord.date), 'yyyy-MM-dd') : '',
-        nextServiceDate: editingRecord.nextServiceDate ? format(new Date(editingRecord.nextServiceDate), 'yyyy-MM-dd') : ''
+        // Map snake_case to camelCase for all relevant fields
+        vehicleId: editingRecord.vehicleId || editingRecord.vehicle_id || '',
+        serviceType: editingRecord.serviceType || editingRecord.service_type || '',
+        date: editingRecord.date || editingRecord.serviceDate || editingRecord.service_date || '',
+        nextServiceDate: editingRecord.nextServiceDate || editingRecord.next_service_date || '',
+        odometer: editingRecord.odometer ?? editingRecord.odometer ?? '',
+        nextServiceOdometer: editingRecord.nextServiceOdometer ?? editingRecord.next_service_odometer ?? '',
+        cost: editingRecord.cost,
+        vendor: editingRecord.vendor,
+        description: editingRecord.description,
+        notes: editingRecord.notes,
       });
     } else {
       // Reset form for new record
@@ -85,7 +94,9 @@ export function MaintenanceRecordForm({
         cost: 0,
         vendor: '',
         nextServiceDate: format(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-        notes: ''
+        notes: '',
+        odometer: 0,
+        nextServiceOdometer: 0
       });
     }
     setErrors({});
@@ -153,7 +164,7 @@ export function MaintenanceRecordForm({
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto max-h-[70vh]">
           <div className="space-y-2">
             <Label htmlFor="vehicleId">Vehicle</Label>
             <Select
@@ -253,6 +264,30 @@ export function MaintenanceRecordForm({
               id="nextServiceDate"
               value={formValues.nextServiceDate || ''}
               onChange={(e) => handleChange('nextServiceDate', e.target.value)}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="odometer">Odometer (km)</Label>
+            <Input
+              type="number"
+              id="odometer"
+              value={formValues.odometer?.toString() || ''}
+              onChange={(e) => handleChange('odometer', parseInt(e.target.value))}
+              min="0"
+              step="1"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="nextServiceOdometer">Next Service Odometer (km)</Label>
+            <Input
+              type="number"
+              id="nextServiceOdometer"
+              value={formValues.nextServiceOdometer?.toString() || ''}
+              onChange={(e) => handleChange('nextServiceOdometer', parseInt(e.target.value))}
+              min="0"
+              step="1"
             />
           </div>
           

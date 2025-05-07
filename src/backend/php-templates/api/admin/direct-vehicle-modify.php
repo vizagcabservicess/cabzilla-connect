@@ -68,42 +68,47 @@ logModifyDebug("Received vehicle modify request", [
     'data' => $vehicleData
 ]);
 
-// Validate vehicle data
-if (empty($vehicleData)) {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'No vehicle data provided'
-    ]);
-    exit;
-}
+// Only require vehicle ID or name for actions other than load/list
+if (!(
+    isset($_GET['action']) && in_array($_GET['action'], ['load', 'list']) && $_SERVER['REQUEST_METHOD'] === 'GET'
+)) {
+    // Validate vehicle data
+    if (empty($vehicleData)) {
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'No vehicle data provided'
+        ]);
+        exit;
+    }
 
-// Get vehicle ID (required for updating, optional for new vehicles)
-$vehicleId = null;
-if (isset($vehicleData['id'])) {
-    $vehicleId = $vehicleData['id'];
-} elseif (isset($vehicleData['vehicleId'])) {
-    $vehicleId = $vehicleData['vehicleId'];
-} elseif (isset($vehicleData['vehicle_id'])) {
-    $vehicleId = $vehicleData['vehicle_id'];
-} elseif (isset($_GET['id'])) {
-    $vehicleId = $_GET['id'];
-}
+    // Get vehicle ID (required for updating, optional for new vehicles)
+    $vehicleId = null;
+    if (isset($vehicleData['id'])) {
+        $vehicleId = $vehicleData['id'];
+    } elseif (isset($vehicleData['vehicleId'])) {
+        $vehicleId = $vehicleData['vehicleId'];
+    } elseif (isset($vehicleData['vehicle_id'])) {
+        $vehicleId = $vehicleData['vehicle_id'];
+    } elseif (isset($_GET['id'])) {
+        $vehicleId = $_GET['id'];
+    }
 
-// For new vehicles without ID, generate one
-if (!$vehicleId && isset($vehicleData['name'])) {
-    $vehicleId = strtolower(str_replace(' ', '_', $vehicleData['name']));
-    logModifyDebug("Generated vehicle ID from name: $vehicleId");
-}
+    // For new vehicles without ID, generate one
+    if (!$vehicleId && isset($vehicleData['name'])) {
+        $vehicleId = strtolower(str_replace(' ', '_', $vehicleData['name']));
+        logModifyDebug("Generated vehicle ID from name: $vehicleId");
+    }
 
-// If we still don't have an ID, error out
-if (!$vehicleId) {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID or name is required'
-    ]);
-    exit;
+    // If we still don't have an ID, error out
+    if (!$vehicleId) {
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Vehicle ID or name is required'
+        ]);
+        exit;
+    }
 }
 
 // Prepare vehicle data for database

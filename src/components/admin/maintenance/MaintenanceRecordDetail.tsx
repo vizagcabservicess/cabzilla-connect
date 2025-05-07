@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MaintenanceRecord } from '@/types/maintenance';
 import { format } from 'date-fns';
@@ -88,7 +87,7 @@ export function MaintenanceRecordDetail({
           <div className="grid grid-cols-2 gap-4 border-b pb-4">
             <div>
               <p className="text-sm text-gray-500">Cost</p>
-              <p className="font-medium text-xl">₹{record.cost.toFixed(2)}</p>
+              <p className="font-medium text-xl">₹{Number(record.cost).toFixed(2)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Service Center/Vendor</p>

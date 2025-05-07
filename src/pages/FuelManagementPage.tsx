@@ -632,12 +632,11 @@ export default function FuelManagementPage() {
                   date={dateRange} 
                   setDate={(range) => {
                     setDateRange(range);
-                    if (range && range.from && range.to && dateRangeType !== 'custom') {
+                    if (range && range.from && range.to && (typeof dateRangeType !== 'string' || dateRangeType.trim().toLowerCase() !== 'custom')) {
                       setDateRangeType('custom');
                       toast.info('Custom Date Range selected.');
                     }
                   }} 
-                  disabled={dateRangeType !== 'custom'}
                 />
               </div>
             </div>

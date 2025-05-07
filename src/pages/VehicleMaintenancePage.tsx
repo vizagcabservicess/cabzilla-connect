@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +35,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 
 export default function VehicleMaintenancePage() {
   const [activeTab, setActiveTab] = useState<string>("maintenance");
@@ -51,6 +52,8 @@ export default function VehicleMaintenancePage() {
   const [filterServiceType, setFilterServiceType] = useState<string>("all");
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<string | number | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [dateRangeType, setDateRangeType] = useState<string>('all');
   const { toast } = useToast();
   
   useEffect(() => {
@@ -59,22 +62,33 @@ export default function VehicleMaintenancePage() {
 
   useEffect(() => {
     applyFilters();
-  }, [maintenanceData, searchTerm, filterVehicle, filterServiceType]);
+  }, [maintenanceData, searchTerm, filterVehicle, filterServiceType, dateRange, dateRangeType]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      
-      // Fetch vehicles from fleetAPI
-      const vehiclesData = await fleetAPI.getVehicles(true);
-      if (vehiclesData && vehiclesData.vehicles) {
-        setVehicles(vehiclesData.vehicles);
-      }
-      
+
+      // Fetch vehicles from the same endpoint as FleetManagementPage
+      const response = await fetch('/api/admin/fleet_vehicles.php/vehicles');
+      const data = await response.json();
+      const vehicles = data.vehicles || [];
+      setVehicles(vehicles);
+
       // Fetch maintenance records
       const records = await maintenanceAPI.getMaintenanceRecords();
-      setMaintenanceData(records);
-      
+      const mappedRecords = records.map((r: any) => ({
+        ...r,
+        vehicleNumber: r.vehicleNumber || r.vehicle_number || '',
+        serviceType: r.serviceType || r.service_type || '',
+        serviceDate: r.serviceDate || r.service_date || '',
+        nextServiceDate: r.nextServiceDate || r.next_service_date || '',
+        odometer: r.odometer ?? r.odometer ?? null,
+        nextServiceOdometer: r.nextServiceOdometer ?? r.next_service_odometer ?? null,
+        make: r.make || r.vehicleMake || '',
+        model: r.model || r.vehicleModel || '',
+      }));
+      setMaintenanceData(mappedRecords);
+
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -97,7 +111,7 @@ export default function VehicleMaintenancePage() {
         record.description.toLowerCase().includes(search) ||
         record.serviceType.toLowerCase().includes(search) ||
         record.vendor.toLowerCase().includes(search) ||
-        getVehicleDisplayName(record.vehicleId).toLowerCase().includes(search)
+        getVehicleDisplayName(record.vehicleId, record).toLowerCase().includes(search)
       );
     }
     
@@ -109,6 +123,55 @@ export default function VehicleMaintenancePage() {
     // Apply service type filter
     if (filterServiceType !== "all") {
       filtered = filtered.filter(record => record.serviceType === filterServiceType);
+    }
+    
+    // Apply built-in date range filter
+    if (dateRangeType !== 'all' && dateRangeType !== 'custom') {
+      const today = new Date();
+      let startDate: Date;
+      switch(dateRangeType) {
+        case 'today':
+          startDate = new Date(today.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 7);
+          break;
+        case 'month':
+          startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+          break;
+        case 'lastMonth':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          break;
+        case 'quarter':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+          break;
+        case 'year':
+          startDate = new Date(today.getFullYear(), 0, 1);
+          break;
+        case 'lastYear':
+          startDate = new Date(today.getFullYear() - 1, 0, 1);
+          break;
+        default:
+          startDate = new Date(0);
+      }
+      filtered = filtered.filter(record => {
+        const d = record.serviceDate || record.date;
+        if (!d) return false;
+        const recordDate = new Date(d);
+        return recordDate >= startDate;
+      });
+    }
+    // Apply custom date range filter
+    if (dateRangeType === 'custom' && dateRange && dateRange.from && dateRange.to) {
+      const from = new Date(dateRange.from).setHours(0,0,0,0);
+      const to = new Date(dateRange.to).setHours(23,59,59,999);
+      filtered = filtered.filter(record => {
+        const d = record.serviceDate || record.date;
+        if (!d) return false;
+        const recordDate = new Date(d).getTime();
+        return recordDate >= from && recordDate <= to;
+      });
     }
     
     setFilteredData(filtered);
@@ -177,10 +240,15 @@ export default function VehicleMaintenancePage() {
     setSearchTerm("");
     setFilterVehicle("all");
     setFilterServiceType("all");
+    setDateRange(undefined);
+    setDateRangeType('all');
     setIsFilterDialogOpen(false);
   };
 
-  const getVehicleDisplayName = (vehicleId: string): string => {
+  const getVehicleDisplayName = (vehicleId: string, record?: any): string => {
+    if (record && (record.vehicleNumber || record.make || record.model)) {
+      return `${record.vehicleNumber || ''} - ${record.make || ''} ${record.model || ''}`.trim();
+    }
     const vehicle = vehicles.find(v => v.id === vehicleId);
     if (!vehicle) return vehicleId;
     return `${vehicle.vehicleNumber} - ${vehicle.make} ${vehicle.model}`;
@@ -196,7 +264,7 @@ export default function VehicleMaintenancePage() {
   };
 
   // Calculate total maintenance cost
-  const totalMaintenanceCost = filteredData.reduce((sum, record) => sum + record.cost, 0);
+  const totalMaintenanceCost = filteredData.reduce((sum, record) => sum + Number(record.cost), 0);
   
   // Get unique service types for filter
   const serviceTypes = Array.from(new Set(maintenanceData.map(record => record.serviceType)));
@@ -229,7 +297,7 @@ export default function VehicleMaintenancePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Total Maintenance Cost</p>
-                <h3 className="text-2xl font-bold">₹{totalMaintenanceCost.toFixed(2)}</h3>
+                <h3 className="text-2xl font-bold">₹{Number(totalMaintenanceCost).toFixed(2)}</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Maintenance Records</p>
@@ -311,6 +379,7 @@ export default function VehicleMaintenancePage() {
                       <TableHead className="text-right">Cost (₹)</TableHead>
                       <TableHead>Vendor</TableHead>
                       <TableHead>Next Service</TableHead>
+                      <TableHead>Odometer</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -324,8 +393,8 @@ export default function VehicleMaintenancePage() {
                     ) : (
                       filteredData.map((record) => (
                         <TableRow key={record.id}>
-                          <TableCell className="font-medium">{getVehicleDisplayName(record.vehicleId)}</TableCell>
-                          <TableCell>{formatDate(record.date)}</TableCell>
+                          <TableCell className="font-medium">{getVehicleDisplayName(record.vehicleId, record)}</TableCell>
+                          <TableCell>{formatDate(record.serviceDate || record.date)}</TableCell>
                           <TableCell>
                             <div className="flex items-center">
                               <Wrench className="h-4 w-4 mr-1 text-blue-600" />
@@ -333,14 +402,15 @@ export default function VehicleMaintenancePage() {
                             </div>
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">{record.description}</TableCell>
-                          <TableCell className="text-right">₹{record.cost.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">₹{Number(record.cost).toFixed(2)}</TableCell>
                           <TableCell>{record.vendor}</TableCell>
                           <TableCell>
                             <div className="flex items-center">
                               <Calendar className="h-4 w-4 mr-1 text-green-600" />
-                              {record.nextServiceDate ? formatDate(record.nextServiceDate) : 'N/A'}
+                              {record.nextServiceDate && record.nextServiceDate !== 'null' && record.nextServiceDate !== '' ? formatDate(record.nextServiceDate) : 'N/A'}
                             </div>
                           </TableCell>
+                          <TableCell className="text-right">{record.odometer !== null && record.odometer !== undefined && record.odometer !== '' ? record.odometer : "N/A"}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button 
@@ -396,7 +466,6 @@ export default function VehicleMaintenancePage() {
                 Apply filters to narrow down the maintenance records.
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4 py-4">
               <div>
                 <Label htmlFor="filterVehicle">Vehicle</Label>
@@ -414,7 +483,6 @@ export default function VehicleMaintenancePage() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
                 <Label htmlFor="filterServiceType">Service Type</Label>
                 <Select value={filterServiceType} onValueChange={setFilterServiceType}>
@@ -429,13 +497,41 @@ export default function VehicleMaintenancePage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="dateRangeType">Date Range</Label>
+                <Select value={dateRangeType} onValueChange={setDateRangeType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All time</SelectItem>
+                    <SelectItem value="today">Daily (Today)</SelectItem>
+                    <SelectItem value="week">Weekly (This Week)</SelectItem>
+                    <SelectItem value="month">Monthly (This Month)</SelectItem>
+                    <SelectItem value="lastMonth">Last Month</SelectItem>
+                    <SelectItem value="quarter">Quarterly</SelectItem>
+                    <SelectItem value="year">Yearly (This Year)</SelectItem>
+                    <SelectItem value="lastYear">Last Year</SelectItem>
+                    <SelectItem value="custom">Custom Date Range</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {dateRangeType === 'custom' && (
+                <div>
+                  <Label htmlFor="dateRange">Custom Date Range</Label>
+                  <DatePickerWithRange
+                    date={dateRange}
+                    setDate={setDateRange}
+                    className="w-full"
+                  />
+                </div>
+              )}
             </div>
-
             <DialogFooter>
               <Button variant="outline" onClick={resetFilters}>
                 Reset
               </Button>
-              <Button onClick={() => setIsFilterDialogOpen(false)}>
+              <Button onClick={() => { setIsFilterDialogOpen(false); applyFilters(); }}>
                 Apply Filters
               </Button>
             </DialogFooter>

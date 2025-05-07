@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Global Configuration File
@@ -12,9 +11,9 @@ define('APP_DEBUG', true);
 
 // Database Configuration
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'u644605165_db_be');
-define('DB_USER', 'u644605165_usr_be');
-define('DB_PASS', 'Vizag@1213');
+define('DB_NAME', 'your_db_name');
+define('DB_USER', 'your_db_user');
+define('DB_PASS', 'your_db_password');
 
 // Database Connection Settings - Increased timeouts for stability
 ini_set('mysql.connect_timeout', '30');
@@ -57,30 +56,12 @@ foreach ($directories as $dir) {
 
 // Enhanced database connection function
 function getDbConnection() {
-    try {
-        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set proper charset and collation
-        $conn->set_charset("utf8mb4");
-        $conn->query("SET collation_connection = 'utf8mb4_unicode_ci'");
-        
-        // Set session timeouts - increased for stability
-        $conn->query("SET session wait_timeout=180");
-        $conn->query("SET session interactive_timeout=180");
-        
-        return $conn;
-    } catch (Exception $e) {
-        // Log error with timestamp
-        $timestamp = date('Y-m-d H:i:s');
-        $logMessage = "[$timestamp] Database connection error: " . $e->getMessage() . "\n";
-        file_put_contents(LOG_DIR . '/db_error_' . date('Y-m-d') . '.log', $logMessage, FILE_APPEND);
-        
-        return null;
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
     }
+    $conn->set_charset("utf8mb4");
+    return $conn;
 }
 
 // JSON Response Helper with CORS headers

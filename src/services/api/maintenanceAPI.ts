@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
@@ -79,19 +78,30 @@ export const maintenanceAPI = {
     try {
       const apiUrl = getApiUrl('/api/maintenance_records.php');
       console.log('Adding maintenance record:', record);
-      
-      const response = await axios.post(apiUrl, record, {
+
+      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      const payload = {
+        ...record,
+        vehicle_id: record.vehicleId || record.vehicle_id || '',
+        service_type: record.serviceType || record.service_type || '',
+        service_date: record.date || record.serviceDate || record.service_date || '',
+        next_service_date: record.nextServiceDate || record.next_service_date || '',
+        odometer: record.odometer ?? record.odometer ?? '',
+        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+      };
+
+      const response = await axios.post(apiUrl, payload, {
         headers: {
           'Content-Type': 'application/json',
           ...forceRefreshHeaders
         }
       });
-      
+
       if (response.data.status === 'success') {
         toast.success('Maintenance record added successfully');
         return { ...record, id: response.data.id } as MaintenanceRecord;
       }
-      
+
       toast.error('Failed to add maintenance record');
       throw new Error('API returned error status');
     } catch (error) {
@@ -108,19 +118,30 @@ export const maintenanceAPI = {
     try {
       const apiUrl = getApiUrl(`/api/maintenance_records.php?id=${id}`);
       console.log('Updating maintenance record:', id, record);
-      
-      const response = await axios.put(apiUrl, record, {
+
+      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      const payload = {
+        ...record,
+        vehicle_id: record.vehicleId || record.vehicle_id || '',
+        service_type: record.serviceType || record.service_type || '',
+        service_date: record.date || record.serviceDate || record.service_date || '',
+        next_service_date: record.nextServiceDate || record.next_service_date || '',
+        odometer: record.odometer ?? record.odometer ?? '',
+        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+      };
+
+      const response = await axios.put(apiUrl, payload, {
         headers: {
           'Content-Type': 'application/json',
           ...forceRefreshHeaders
         }
       });
-      
+
       if (response.data.status === 'success') {
         toast.success('Maintenance record updated successfully');
         return { ...record, id } as MaintenanceRecord;
       }
-      
+
       toast.error('Failed to update maintenance record');
       throw new Error('API returned error status');
     } catch (error) {

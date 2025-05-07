@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
@@ -216,8 +215,14 @@ export const fleetAPI = {
             }
             
             if (vehicles.length > 0) {
-              console.log(`Successfully fetched ${vehicles.length} fleet vehicles from ${endpoint}`);
-              return { vehicles };
+              const mappedVehicles = vehicles.map((v: any) => ({
+                ...v,
+                vehicleNumber: v.vehicleNumber || v.vehicle_number || '',
+                make: v.make || v.Make || '',
+                model: v.model || v.Model || '',
+              }));
+              console.log(`Successfully fetched ${mappedVehicles.length} fleet vehicles from ${endpoint}`);
+              return { vehicles: mappedVehicles };
             }
           }
         } catch (endpointError) {
@@ -250,8 +255,15 @@ export const fleetAPI = {
                           Array.isArray(response.data.vehicles) ? response.data.vehicles :
                           response.data.data;
                           
+          const mappedVehicles = vehicles.map((v: any) => ({
+            ...v,
+            vehicleNumber: v.vehicleNumber || v.vehicle_number || '',
+            make: v.make || v.Make || '',
+            model: v.model || v.Model || '',
+          }));
+          
           console.log("Successfully fetched fleet vehicles from fallback URL");
-          return { vehicles };
+          return { vehicles: mappedVehicles };
         }
       } catch (fallbackError) {
         console.warn("Fallback API call failed:", fallbackError);
