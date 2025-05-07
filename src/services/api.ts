@@ -8,7 +8,8 @@ import { vehicleAPI } from './api/vehicleAPI';
 import { fareAPI } from './api/fareAPI';
 import { fleetAPI } from './api/fleetAPI';
 import { userAPI } from './api/userAPI';
-import { ledgerAPI, LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from './api/ledgerAPI';
+import { ledgerAPI } from './api/ledgerAPI';
+import type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from './api/ledgerAPI';
 
 const API_URL = '/api';
 
@@ -77,11 +78,10 @@ export {
   fleetAPI, 
   userAPI, 
   ledgerAPI,
-  // Export the types as well
-  LedgerTransaction, 
-  LedgerFilters, 
-  CreateLedgerTransaction 
 };
+
+// Export the types using the 'export type' syntax
+export type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction };
 
 // Also export a default object for compatibility
 export default {

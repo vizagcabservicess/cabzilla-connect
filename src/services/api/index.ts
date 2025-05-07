@@ -7,6 +7,7 @@ import { fareAPI } from './fareAPI';
 import { userAPI } from './userAPI';
 import { apiHealthCheck } from './healthCheck';
 import { ledgerAPI } from './ledgerAPI';
+import type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from './ledgerAPI';
 
 // Export all API services
 export {
@@ -19,6 +20,9 @@ export {
   apiHealthCheck,
   ledgerAPI
 };
+
+// Export types with the 'export type' syntax
+export type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction };
 
 // Default export
 export default {
