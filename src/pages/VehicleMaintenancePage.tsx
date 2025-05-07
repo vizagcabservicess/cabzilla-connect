@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -38,7 +37,8 @@ import { MaintenanceForm } from '@/components/maintenance/MaintenanceForm';
 import { DeleteMaintenanceRecordDialog } from '@/components/maintenance/DeleteMaintenanceRecordDialog';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getApiUrl } from '@/config/api';
-import { Navbar } from '@/components/Navbar';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { AdminPageExplanation } from '@/components/admin/AdminPageExplanation';
 
 const defaultMaintenanceRecord: MaintenanceRecord = {
   id: '',
@@ -227,22 +227,29 @@ export function VehicleMaintenancePage() {
   const isUpcoming = (record: MaintenanceRecord) => record.nextServiceDate && new Date(record.nextServiceDate) > new Date();
 
   if (isLoading) {
-    return <div className="flex justify-center p-10"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div></div>;
+    return (
+      <AdminLayout activeTab="maintenance">
+        <div className="flex justify-center p-10">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
+        </div>
+      </AdminLayout>
+    );
   }
 
   if (error) {
     return (
-      <ApiErrorFallback
-        error={error}
-        onRetry={fetchMaintenanceRecords}
-        title="Unable to Load Maintenance Records"
-      />
+      <AdminLayout activeTab="maintenance">
+        <ApiErrorFallback
+          error={error}
+          onRetry={fetchMaintenanceRecords}
+          title="Unable to Load Maintenance Records"
+        />
+      </AdminLayout>
     );
   }
 
   return (
-    <>
-      <Navbar />
+    <AdminLayout activeTab="maintenance">
       <div className="container mx-auto py-10">
         <MaintenanceForm
           isOpen={isAdding}
@@ -268,9 +275,25 @@ export function VehicleMaintenancePage() {
         />
 
         <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">Vehicle Maintenance</h2>
-            <p className="text-gray-500">Manage and track maintenance records for your vehicles.</p>
+          <div className="flex items-center space-y-2">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">Vehicle Maintenance</h2>
+              <p className="text-gray-500">Manage and track maintenance records for your vehicles.</p>
+            </div>
+            <AdminPageExplanation 
+              title="About Vehicle Maintenance"
+              description="Track all maintenance activities performed on your fleet vehicles."
+            >
+              <div className="pt-2">
+                <h5 className="font-medium text-xs">Features:</h5>
+                <ul className="text-xs list-disc pl-4 text-gray-500 space-y-1 pt-1">
+                  <li>Add new maintenance records</li>
+                  <li>Schedule upcoming maintenance</li>
+                  <li>Filter by service type or date range</li>
+                  <li>Track maintenance costs</li>
+                </ul>
+              </div>
+            </AdminPageExplanation>
           </div>
           <Button onClick={handleAddRecord}><Plus className="mr-2 h-4 w-4" /> Add Record</Button>
         </div>
@@ -417,7 +440,7 @@ export function VehicleMaintenancePage() {
           {isLoading ? 'Refreshing...' : 'Refresh Records'}
         </Button>
       </div>
-    </>
+    </AdminLayout>
   );
 }
 
