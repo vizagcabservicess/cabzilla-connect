@@ -3,7 +3,7 @@ import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from '@/types/api';
 
-const API_BASE_URL = getApiUrl();
+const API_BASE_URL = getApiUrl('/');
 
 export const ledgerAPI = {
   /**
