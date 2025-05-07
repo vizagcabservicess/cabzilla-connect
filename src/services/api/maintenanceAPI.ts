@@ -79,15 +79,14 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl('/api/maintenance_records.php');
       console.log('Adding maintenance record:', record);
 
-      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      // Convert to proper payload format
       const payload = {
         ...record,
-        vehicle_id: record.vehicleId || record.vehicle_id || '',
-        service_type: record.serviceType || record.service_type || '',
-        service_date: record.date || record.serviceDate || record.service_date || '',
-        next_service_date: record.nextServiceDate || record.next_service_date || '',
-        odometer: record.odometer ?? record.odometer ?? '',
-        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+        vehicle_id: record.vehicleId,
+        service_type: record.serviceType,
+        service_date: record.date,
+        next_service_date: record.nextServiceDate,
+        next_service_odometer: record.nextServiceOdometer
       };
 
       const response = await axios.post(apiUrl, payload, {
@@ -119,15 +118,14 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl(`/api/maintenance_records.php?id=${id}`);
       console.log('Updating maintenance record:', id, record);
 
-      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      // Convert to proper payload format
       const payload = {
         ...record,
-        vehicle_id: record.vehicleId || record.vehicle_id || '',
-        service_type: record.serviceType || record.service_type || '',
-        service_date: record.date || record.serviceDate || record.service_date || '',
-        next_service_date: record.nextServiceDate || record.next_service_date || '',
-        odometer: record.odometer ?? record.odometer ?? '',
-        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+        vehicle_id: record.vehicleId,
+        service_type: record.serviceType,
+        service_date: record.date,
+        next_service_date: record.nextServiceDate,
+        next_service_odometer: record.nextServiceOdometer
       };
 
       const response = await axios.put(apiUrl, payload, {

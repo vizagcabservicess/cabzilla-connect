@@ -12,6 +12,10 @@ export interface MaintenanceRecord {
   created_at?: string;
   updated_at?: string;
   
+  // Added odometer fields
+  odometer?: number;
+  nextServiceOdometer?: number;
+  
   // Joined fields from fleet_vehicles
   vehicleNumber?: string;
   vehicleMake?: string;
@@ -44,4 +48,6 @@ export interface MaintenanceFormValues {
   vendor: string;
   nextServiceDate?: string;
   notes?: string;
+  odometer?: number;
+  nextServiceOdometer?: number;
 }

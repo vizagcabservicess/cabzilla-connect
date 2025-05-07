@@ -618,11 +618,10 @@ export function BookingInvoice({
                 <Button
                   size="sm"
                   className="ml-2"
-                  loading={isSavingPayment}
-                  onClick={() => updateBookingPayment(booking.id, editedStatus, editedMethod)}
                   disabled={isSavingPayment || (editedStatus === 'payment_received' && !editedMethod)}
+                  onClick={() => updateBookingPayment(booking.id, editedStatus, editedMethod)}
                 >
-                  Save
+                  {isSavingPayment ? 'Saving...' : 'Save'}
                 </Button>
                 <Button
                   size="sm"
@@ -708,6 +707,91 @@ export function BookingInvoice({
         <Button onClick={handleGenerateInvoice}>Generate Invoice</Button>
       </div>
     );
+  };
+
+  const renderPaymentStatusSection = () => {
+    if (editMode) {
+      return (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Payment Status:</span>
+            <select
+              value={editedStatus}
+              onChange={e => setEditedStatus(e.target.value)}
+              className="border rounded px-2 py-1"
+            >
+              <option value="pending">Pending</option>
+              <option value="payment_received">Paid</option>
+            </select>
+          </div>
+          {editedStatus === 'payment_received' && (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Mode:</span>
+              <select
+                value={editedMethod}
+                onChange={e => setEditedMethod(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                <option value="">Select</option>
+                {paymentMethods.map(method => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <Button
+            size="sm"
+            className="ml-2"
+            disabled={isSavingPayment || (editedStatus === 'payment_received' && !editedMethod)}
+            onClick={() => updateBookingPayment(booking.id, editedStatus, editedMethod)}
+          >
+            {isSavingPayment ? 'Saving...' : 'Save'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-2"
+            onClick={() => setEditMode(false)}
+            disabled={isSavingPayment}
+          >
+            Cancel
+          </Button>
+        </>
+      );
+    } else {
+      return (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Payment Status:</span>
+            <span className={
+              (booking.payment_status || invoiceData?.paymentStatus) === 'payment_received'
+                ? 'text-green-600'
+                : 'text-red-600'
+            }>
+              {(booking.payment_status || invoiceData?.paymentStatus) === 'payment_received' ? 'Paid' : 'Pending'}
+            </span>
+          </div>
+          {(booking.payment_status === 'payment_received' || invoiceData?.paymentStatus === 'payment_received') && (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Mode:</span>
+              <span>{booking.payment_method || invoiceData?.paymentMethod || 'N/A'}</span>
+            </div>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-2"
+            onClick={() => {
+              setEditedStatus(booking.payment_status || invoiceData?.paymentStatus || 'pending');
+              setEditedMethod(booking.payment_method || invoiceData?.paymentMethod || '');
+              setEditMode(true);
+            }}
+          >
+            Edit
+          </Button>
+        </>
+      );
+    }
   };
 
   return (

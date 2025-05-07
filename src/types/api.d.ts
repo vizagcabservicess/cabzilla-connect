@@ -1,4 +1,3 @@
-
 export interface BookingDetails {
   id: number;
   bookingNumber: string;
@@ -27,6 +26,8 @@ export interface BookingDetails {
     amount: number;
     description: string;
   }[];
+  payment_status?: string;
+  payment_method?: string;
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
@@ -78,6 +79,8 @@ export interface Booking {
     companyName: string;
     companyAddress: string;
   };
+  payment_status?: string;
+  payment_method?: string;
 }
 
 // GST Report Types
