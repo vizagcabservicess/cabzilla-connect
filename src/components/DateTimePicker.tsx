@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -28,21 +28,43 @@ export function DateTimePicker({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  // Safe date formatting function to prevent invalid date errors
+  const safeDateFormat = (date: Date | undefined, formatString: string): string => {
+    if (!date || !isValid(date)) return '';
+    try {
+      return format(date, formatString);
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return '';
+    }
+  };
+
   useEffect(() => {
-    const now = new Date();
-    const currentTime = format(now, "HH:mm");
-    
-    if (!date) {
-      setSelectedTime(currentTime);
+    try {
+      const now = new Date();
+      if (!date) {
+        setSelectedTime(safeDateFormat(now, "HH:mm"));
+        onDateChange(now);
+      } else if (isValid(date)) {
+        setSelectedTime(safeDateFormat(date, "HH:mm"));
+      } else {
+        // If date is invalid, reset to current date/time
+        console.warn("Invalid date provided to DateTimePicker, using current time instead");
+        setSelectedTime(safeDateFormat(now, "HH:mm"));
+        onDateChange(now);
+      }
+    } catch (error) {
+      console.error("Error in DateTimePicker initialization:", error);
+      // Fallback to current time
+      const now = new Date();
+      setSelectedTime(safeDateFormat(now, "HH:mm"));
       onDateChange(now);
-    } else {
-      setSelectedTime(format(date, "HH:mm"));
     }
   }, []);
 
   useEffect(() => {
-    if (date) {
-      setSelectedTime(format(date, "HH:mm"));
+    if (date && isValid(date)) {
+      setSelectedTime(safeDateFormat(date, "HH:mm"));
     }
   }, [date]);
 
@@ -56,32 +78,51 @@ export function DateTimePicker({
     
     if (!selectedTime) return;
 
-    const [hours, minutes] = selectedTime.split(":").map(Number);
-    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-      alert("Invalid time format. Please use HH:mm (24-hour format).");
-      return;
-    }
+    try {
+      const [hours, minutes] = selectedTime.split(":").map(Number);
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        alert("Invalid time format. Please use HH:mm (24-hour format).");
+        return;
+      }
 
-    const newDate = date ? new Date(date) : new Date();
-    newDate.setHours(hours);
-    newDate.setMinutes(minutes);
-    onDateChange(newDate);
-    
-    setOpen(false);
+      const newDate = date && isValid(date) ? new Date(date) : new Date();
+      newDate.setHours(hours);
+      newDate.setMinutes(minutes);
+      
+      if (isValid(newDate)) {
+        onDateChange(newDate);
+        setOpen(false);
+      } else {
+        throw new Error("Invalid date created");
+      }
+    } catch (error) {
+      console.error("Error applying time:", error);
+      alert("Could not set the time. Please try again.");
+    }
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
-    if (selectedDate) {
-      if (date && selectedTime) {
-        const [hours, minutes] = selectedTime.split(":").map(Number);
-        selectedDate.setHours(hours);
-        selectedDate.setMinutes(minutes);
+    if (selectedDate && isValid(selectedDate)) {
+      try {
+        if (date && selectedTime && isValid(date)) {
+          const [hours, minutes] = selectedTime.split(":").map(Number);
+          if (!isNaN(hours) && !isNaN(minutes)) {
+            selectedDate.setHours(hours);
+            selectedDate.setMinutes(minutes);
+          }
+        }
+        onDateChange(selectedDate);
+      } catch (error) {
+        console.error("Error selecting calendar date:", error);
       }
-      onDateChange(selectedDate);
     } else {
       onDateChange(undefined);
     }
   };
+
+  const displayDate = date && isValid(date) 
+    ? safeDateFormat(date, "PPP, hh:mm a") 
+    : "Select date and time";
 
   return (
     <div className="space-y-2">
@@ -103,9 +144,7 @@ export function DateTimePicker({
           >
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-sm">
-                {date ? format(date, "PPP, hh:mm a") : "Select date and time"}
-              </span>
+              <span className="text-sm">{displayDate}</span>
             </div>
           </Button>
         </PopoverTrigger>
@@ -115,7 +154,7 @@ export function DateTimePicker({
         >
           <Calendar
             mode="single"
-            selected={date}
+            selected={date && isValid(date) ? date : undefined}
             onSelect={handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
