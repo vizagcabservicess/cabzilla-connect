@@ -12,8 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, ArrowDown, ArrowUp } from "lucide-react";
-import { ledgerAPI } from '@/services/api';
-import { LedgerTransaction, LedgerFilters } from '@/types/api';
+import { ledgerAPI, LedgerTransaction, LedgerFilters } from '@/services/api/ledgerAPI';
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { IndianRupee } from 'lucide-react';
@@ -38,10 +37,10 @@ const LedgerPage: React.FC = () => {
     setLoading(true);
     try {
       const response = await ledgerAPI.getTransactions(filters);
-      setTransactions(response.transactions);
-      setTotalIncome(response.totalIncome);
-      setTotalExpenses(response.totalExpenses);
-      setNetBalance(response.netBalance);
+      setTransactions(response.transactions || []);
+      setTotalIncome(response.totalIncome || 0);
+      setTotalExpenses(response.totalExpenses || 0);
+      setNetBalance(response.netBalance || 0);
     } catch (error: any) {
       console.error('Error fetching transactions:', error);
       toast({
@@ -146,12 +145,12 @@ const LedgerPage: React.FC = () => {
             </div>
             <div>
               <Label htmlFor="type">Type</Label>
-              <Select name="type" value={filters.type || ''} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
+              <Select name="type" value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="income">Income</SelectItem>
                   <SelectItem value="expense">Expense</SelectItem>
                 </SelectContent>
@@ -188,7 +187,7 @@ const LedgerPage: React.FC = () => {
         <h2 className="text-xl font-semibold mb-4">Summary</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
-            <CardContent className="flex flex-col gap-2">
+            <CardContent className="flex flex-col gap-2 pt-6">
               <span className="text-sm font-medium text-muted-foreground">Total Income</span>
               <span className="text-2xl font-bold">
                 <IndianRupee className="inline-block h-4 w-4 mr-1" />
@@ -197,7 +196,7 @@ const LedgerPage: React.FC = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="flex flex-col gap-2">
+            <CardContent className="flex flex-col gap-2 pt-6">
               <span className="text-sm font-medium text-muted-foreground">Total Expenses</span>
               <span className="text-2xl font-bold">
                 <IndianRupee className="inline-block h-4 w-4 mr-1" />
@@ -206,7 +205,7 @@ const LedgerPage: React.FC = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="flex flex-col gap-2">
+            <CardContent className="flex flex-col gap-2 pt-6">
               <span className="text-sm font-medium text-muted-foreground">Net Balance</span>
               <span className="text-2xl font-bold">
                 <IndianRupee className="inline-block h-4 w-4 mr-1" />

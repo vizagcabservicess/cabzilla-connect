@@ -6,6 +6,7 @@ import { bookingAPI } from './bookingAPI';
 import { fareAPI } from './fareAPI';
 import { userAPI } from './userAPI';
 import { apiHealthCheck } from './healthCheck';
+import { ledgerAPI } from './ledgerAPI';
 
 // Export all API services
 export {
@@ -15,7 +16,8 @@ export {
   bookingAPI,
   fareAPI,
   userAPI,
-  apiHealthCheck
+  apiHealthCheck,
+  ledgerAPI
 };
 
 // Default export
@@ -26,5 +28,6 @@ export default {
   booking: bookingAPI,
   fare: fareAPI,
   user: userAPI,
-  health: apiHealthCheck
+  health: apiHealthCheck,
+  ledger: ledgerAPI
 };

@@ -8,7 +8,7 @@ import { vehicleAPI } from './api/vehicleAPI';
 import { fareAPI } from './api/fareAPI';
 import { fleetAPI } from './api/fleetAPI';
 import { userAPI } from './api/userAPI';
-import { ledgerAPI } from './api/ledgerAPI';
+import { ledgerAPI, LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from './api/ledgerAPI';
 
 const API_URL = '/api';
 
@@ -69,7 +69,19 @@ const getCurrentUserId = (): number | null => {
 };
 
 // Export the APIs from the separate modules directly
-export { bookingAPI, authAPI, vehicleAPI, fareAPI, fleetAPI, userAPI, ledgerAPI };
+export { 
+  bookingAPI, 
+  authAPI, 
+  vehicleAPI, 
+  fareAPI, 
+  fleetAPI, 
+  userAPI, 
+  ledgerAPI,
+  // Export the types as well
+  LedgerTransaction, 
+  LedgerFilters, 
+  CreateLedgerTransaction 
+};
 
 // Also export a default object for compatibility
 export default {

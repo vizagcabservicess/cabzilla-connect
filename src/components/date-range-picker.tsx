@@ -21,3 +21,5 @@ export function DateRangePicker({ date, onSelect }: DateRangePickerProps) {
     />
   )
 }
+
+export default DateRangePicker;

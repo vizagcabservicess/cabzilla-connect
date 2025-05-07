@@ -1,7 +1,37 @@
 
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from '@/types/api';
+
+// Define the types if they don't exist in the API types
+export interface LedgerTransaction {
+  id: string;
+  date: string;
+  description: string;
+  type: 'income' | 'expense';
+  category: string;
+  paymentMethod: string;
+  amount: number;
+  balance: number;
+  vehicleId?: string;
+}
+
+export interface LedgerFilters {
+  startDate?: string;
+  endDate?: string;
+  type?: string;
+  category?: string;
+  vehicleId?: string;
+}
+
+export interface CreateLedgerTransaction {
+  date: string;
+  description: string;
+  type: 'income' | 'expense';
+  category: string;
+  paymentMethod: string;
+  amount: number;
+  vehicleId?: string;
+}
 
 const API_BASE_URL = getApiUrl('/');
 
@@ -9,7 +39,12 @@ export const ledgerAPI = {
   /**
    * Get all transactions with optional filters
    */
-  getTransactions: async (filters: LedgerFilters = {}): Promise<any> => {
+  getTransactions: async (filters: LedgerFilters = {}): Promise<{
+    transactions: LedgerTransaction[];
+    totalIncome: number;
+    totalExpenses: number;
+    netBalance: number;
+  }> => {
     try {
       const params: Record<string, string> = {};
       
