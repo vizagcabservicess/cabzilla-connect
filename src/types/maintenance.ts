@@ -1,4 +1,29 @@
 
+export interface MaintenanceRecord {
+  id: number | string;
+  vehicleId: string;
+  date: string;
+  serviceType: string;
+  description: string;
+  cost: number;
+  vendor: string;
+  nextServiceDate?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  
+  // Added odometer fields
+  odometer?: number;
+  nextServiceOdometer?: number;
+  
+  // Joined fields from fleet_vehicles
+  vehicleNumber?: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  make?: string;
+  model?: string;
+}
+
 export type ServiceType = 
   | 'Oil Change'
   | 'Tire Replacement'
@@ -14,8 +39,7 @@ export type ServiceType =
   | 'Regular Maintenance'
   | 'Other';
 
-export interface MaintenanceRecord {
-  id: string | number;
+export interface MaintenanceFormValues {
   vehicleId: string;
   date: string;
   serviceType: string;
@@ -26,9 +50,4 @@ export interface MaintenanceRecord {
   notes?: string;
   odometer?: number;
   nextServiceOdometer?: number;
-  vehicleNumber?: string;
-  vehicleMake?: string;
-  vehicleModel?: string;
-  make?: string;
-  model?: string;
 }
