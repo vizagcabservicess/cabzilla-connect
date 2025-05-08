@@ -10,7 +10,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  Cell
 } from 'recharts';
 import { ExpenseCategory, ExpenseSummary } from '@/types/ledger';
 
@@ -112,11 +113,11 @@ export function MonthlyBudgetChart({ data, categories, monthlyBudget = 50000 }: 
                     label={{ value: 'Budget', position: 'insideTopRight' }}
                   />
                 )}
-                <Bar 
-                  dataKey="amount" 
-                  name="Amount" 
-                  fill={(data) => data.color}
-                />
+                <Bar dataKey="amount" name="Amount">
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
