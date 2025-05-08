@@ -132,7 +132,7 @@ const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> =
 /**
  * Add a new expense
  */
-const addExpense = async (expense: Omit<ExpenseEntry, 'id' | 'balance'>): Promise<ExpenseEntry> => {
+const addExpense = async (expense: Omit<ExpenseEntry, 'id'>): Promise<ExpenseEntry> => {
   try {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 600));
@@ -142,7 +142,6 @@ const addExpense = async (expense: Omit<ExpenseEntry, 'id' | 'balance'>): Promis
       ...expense,
       id: `exp-${Date.now()}`,
       type: 'expense',
-      balance: 0, // This would be calculated on the server
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -169,7 +168,6 @@ const updateExpense = async (id: string | number, expense: Partial<ExpenseEntry>
       ...expense,
       id,
       type: 'expense',
-      balance: 0, // This would be calculated on the server
       updated_at: new Date().toISOString(),
     } as ExpenseEntry;
     
@@ -365,7 +363,6 @@ function generateMockExpenses(): ExpenseEntry[] {
         paymentMethod,
         vendor,
         status,
-        balance: 0, // This will be calculated in a real app
         billNumber: `BILL-${Math.floor(Math.random() * 10000)}`,
         billDate: format(expenseDate, 'yyyy-MM-dd'),
       });

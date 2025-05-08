@@ -101,7 +101,8 @@ export interface ExpenseSummary {
   }[];
 }
 
-export interface ExpenseFilter extends Omit<LedgerFilter, 'type'> {
+// Fixed the ExpenseFilter interface to correctly extend LedgerFilter
+export interface ExpenseFilter extends Omit<LedgerFilter, "type" | "category"> {
   category?: string | string[];
   vendor?: string;
   minAmount?: number;

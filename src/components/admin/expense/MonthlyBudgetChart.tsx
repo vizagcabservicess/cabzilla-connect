@@ -115,9 +115,7 @@ export function MonthlyBudgetChart({ data, categories, monthlyBudget = 50000 }: 
                 <Bar 
                   dataKey="amount" 
                   name="Amount" 
-                  fill="#8884d8"
-                  // Use the category color for each bar
-                  fill={(entry) => entry.color}
+                  fill={(data) => data.color}
                 />
               </BarChart>
             </ResponsiveContainer>
