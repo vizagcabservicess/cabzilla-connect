@@ -39,7 +39,7 @@ export function LedgerExportActions({ dateRange, activeTab }: LedgerExportAction
       setIsExporting(true);
       
       // Get the current filters based on active tab and date range
-      const filters: LedgerFilter = {
+      const filters: any = {
         dateRange,
         type: activeTab === 'all' ? 'all' : 
               activeTab === 'payments' ? 'income' : 

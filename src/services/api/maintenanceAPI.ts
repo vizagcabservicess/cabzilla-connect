@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
@@ -79,15 +80,15 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl('/api/maintenance_records.php');
       console.log('Adding maintenance record:', record);
 
-      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      // Patch: Send both camelCase (for frontend) and snake_case (for backend)
       const payload = {
         ...record,
-        vehicle_id: record.vehicleId || record.vehicle_id || '',
-        service_type: record.serviceType || record.service_type || '',
-        service_date: record.date || record.serviceDate || record.service_date || '',
-        next_service_date: record.nextServiceDate || record.next_service_date || '',
-        odometer: record.odometer ?? record.odometer ?? '',
-        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+        vehicle_id: record.vehicleId || '',
+        service_type: record.serviceType || '',
+        service_date: record.date || record.serviceDate || '',
+        next_service_date: record.nextServiceDate || '',
+        odometer: record.odometer ?? 0,
+        next_service_odometer: record.nextServiceOdometer ?? 0,
       };
 
       const response = await axios.post(apiUrl, payload, {
@@ -119,15 +120,15 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl(`/api/maintenance_records.php?id=${id}`);
       console.log('Updating maintenance record:', id, record);
 
-      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
+      // Patch: Send both camelCase (for frontend) and snake_case (for backend)
       const payload = {
         ...record,
-        vehicle_id: record.vehicleId || record.vehicle_id || '',
-        service_type: record.serviceType || record.service_type || '',
-        service_date: record.date || record.serviceDate || record.service_date || '',
-        next_service_date: record.nextServiceDate || record.next_service_date || '',
-        odometer: record.odometer ?? record.odometer ?? '',
-        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
+        vehicle_id: record.vehicleId || '',
+        service_type: record.serviceType || '',
+        service_date: record.date || record.serviceDate || '',
+        next_service_date: record.nextServiceDate || '',
+        odometer: record.odometer ?? 0,
+        next_service_odometer: record.nextServiceOdometer ?? 0,
       };
 
       const response = await axios.put(apiUrl, payload, {

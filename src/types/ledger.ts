@@ -38,7 +38,7 @@ export interface LedgerFilter {
     type: 'vehicle' | 'driver' | 'customer' | 'project';
     id: string;
   };
-  status?: 'reconciled' | 'pending' | 'all';
+  status?: 'completed' | 'pending' | 'cancelled' | 'all';
 }
 
 export interface LedgerExportOptions {
