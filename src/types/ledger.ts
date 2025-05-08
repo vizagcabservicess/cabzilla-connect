@@ -11,7 +11,7 @@ export interface LedgerTransaction {
   reference?: string;
   paymentMethod?: string;
   vehicleId?: string;
-  driverId?: string;
+  driverId?: string | number; // Updated to match PayrollEntry
   customerId?: string;
   projectId?: string;
   notes?: string;

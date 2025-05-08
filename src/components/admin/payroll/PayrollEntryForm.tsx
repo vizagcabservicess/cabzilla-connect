@@ -151,7 +151,7 @@ export function PayrollEntryForm({
         type: 'expense' as const,
         category: 'Salary',
         paymentMethod: 'Bank Transfer',
-        status: data.paymentStatus === 'paid' ? 'reconciled' : 'pending',
+        status: data.paymentStatus === 'paid' ? 'reconciled' : 'pending' as 'reconciled' | 'pending', // Explicitly cast to the expected type
         payPeriod: {
           startDate: format(data.payPeriodStart, 'yyyy-MM-dd'),
           endDate: format(data.payPeriodEnd, 'yyyy-MM-dd'),
