@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ledgerAPI } from '@/services/api/ledgerAPI';
 import { DateRange } from 'react-day-picker';
+import { LedgerFilter } from '@/types/ledger';
 
 interface ExportOptions {
   format: 'pdf' | 'excel' | 'csv';
@@ -38,9 +39,12 @@ export function LedgerExportActions({ dateRange, activeTab }: LedgerExportAction
       setIsExporting(true);
       
       // Get the current filters based on active tab and date range
-      const filters = {
+      const filters: LedgerFilter = {
         dateRange,
-        type: activeTab === 'all' ? 'all' : activeTab === 'payments' ? 'income' : activeTab === 'expenses' ? 'expense' : activeTab === 'emis' ? 'emi' : undefined
+        type: activeTab === 'all' ? 'all' : 
+              activeTab === 'payments' ? 'income' : 
+              activeTab === 'expenses' ? 'expense' : 
+              activeTab === 'emis' ? 'emi' : 'all'
       };
       
       // Call the API to export
