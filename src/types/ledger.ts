@@ -109,3 +109,102 @@ export interface ExpenseFilter extends Omit<LedgerFilter, "type" | "category"> {
   maxAmount?: number;
   isPaid?: boolean;
 }
+
+// Payroll specific types
+export interface AttendanceRecord {
+  id: string | number;
+  driverId: string | number;
+  date: string;
+  status: 'present' | 'absent' | 'half-day' | 'paid-leave' | 'unpaid-leave' | 'holiday';
+  hoursWorked?: number;
+  overtimeHours?: number;
+  notes?: string;
+}
+
+export interface SalaryComponent {
+  id: string | number;
+  name: string;
+  type: 'basic' | 'allowance' | 'deduction' | 'advance' | 'bonus';
+  amount: number;
+  isFixed: boolean;
+  calculationMethod?: 'fixed' | 'percentage' | 'perDay' | 'perTrip';
+  calculationBase?: 'basic' | 'gross';
+  calculationValue?: number;
+  description?: string;
+}
+
+export interface PayrollEntry extends LedgerTransaction {
+  driverId: string | number;
+  payPeriod: {
+    startDate: string;
+    endDate: string;
+  };
+  basicSalary: number;
+  allowances: {
+    type: string;
+    amount: number;
+  }[];
+  deductions: {
+    type: string;
+    amount: number;
+  }[];
+  advances: {
+    date: string;
+    amount: number;
+    notes?: string;
+  }[];
+  daysWorked: number;
+  daysLeave: number;
+  overtimeHours?: number;
+  tripBonus?: number;
+  netSalary: number;
+  paymentStatus: 'pending' | 'partial' | 'paid';
+  paymentDate?: string;
+  payslipIssued: boolean;
+}
+
+export interface DriverPaySummary {
+  driverId: string | number;
+  driverName: string;
+  basicSalary: number;
+  totalEarnings: number;
+  totalDeductions: number;
+  totalAdvances: number;
+  pendingAmount: number;
+  attendanceSummary: {
+    daysPresent: number;
+    daysAbsent: number;
+    paidLeaves: number;
+    unpaidLeaves: number;
+  };
+  previousPayments: {
+    month: string;
+    amount: number;
+    paymentDate: string;
+  }[];
+}
+
+export interface PayrollFilter extends Omit<LedgerFilter, "type" | "entity"> {
+  driverId?: string | number;
+  paymentStatus?: 'pending' | 'partial' | 'paid' | 'all';
+  payPeriod?: {
+    month: number;
+    year: number;
+  };
+}
+
+export interface PayrollSummary {
+  totalPaid: number;
+  totalPending: number;
+  totalDrivers: number;
+  byDriver: {
+    driverId: string | number;
+    driverName: string;
+    amount: number;
+    status: 'pending' | 'partial' | 'paid';
+  }[];
+  byMonth: {
+    month: string;
+    amount: number;
+  }[];
+}

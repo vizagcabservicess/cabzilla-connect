@@ -8,6 +8,8 @@ import { vehicleAPI } from './api/vehicleAPI';
 import { fareAPI } from './api/fareAPI';
 import { fleetAPI } from './api/fleetAPI';
 import { userAPI } from './api/userAPI';
+import { expenseAPI } from './api/expenseAPI';
+import { payrollAPI } from './api/payrollAPI';
 
 const API_URL = '/api';
 
@@ -68,7 +70,16 @@ const getCurrentUserId = (): number | null => {
 };
 
 // Export the APIs from the separate modules directly
-export { bookingAPI, authAPI, vehicleAPI, fareAPI, fleetAPI, userAPI };
+export { 
+  bookingAPI, 
+  authAPI, 
+  vehicleAPI, 
+  fareAPI, 
+  fleetAPI, 
+  userAPI,
+  expenseAPI,
+  payrollAPI
+};
 
 // Also export a default object for compatibility
 export default {
@@ -77,5 +88,7 @@ export default {
   vehicle: vehicleAPI,
   fare: fareAPI,
   fleet: fleetAPI,
-  user: userAPI
+  user: userAPI,
+  expense: expenseAPI,
+  payroll: payrollAPI
 };
