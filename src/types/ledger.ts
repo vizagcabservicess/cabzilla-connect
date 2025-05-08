@@ -38,7 +38,7 @@ export interface LedgerFilter {
     type: 'vehicle' | 'driver' | 'customer' | 'project';
     id: string;
   };
-  status?: 'completed' | 'pending' | 'cancelled' | 'all';
+  status?: 'completed' | 'pending' | 'cancelled' | 'reconciled' | 'all';
 }
 
 export interface LedgerExportOptions {
@@ -46,4 +46,65 @@ export interface LedgerExportOptions {
   filters?: LedgerFilter;
   email?: string;
   frequency?: 'daily' | 'weekly' | 'monthly';
+}
+
+// Expense management specific types
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  description?: string;
+  budgetAmount?: number;
+  color?: string;
+}
+
+export interface ExpenseEntry extends LedgerTransaction {
+  type: 'expense';
+  category: string;
+  billNumber?: string;
+  billDate?: string;
+  dueDate?: string;
+  vendor?: string;
+  isRecurring?: boolean;
+  recurringFrequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  budgetId?: string;
+}
+
+export interface ExpenseBudget {
+  id: string;
+  name: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  categories: {
+    categoryId: string;
+    amount: number;
+  }[];
+}
+
+export interface ExpenseSummary {
+  totalAmount: number;
+  byCategory: {
+    category: string;
+    amount: number;
+    percentage: number;
+    budget?: number;
+    remaining?: number;
+  }[];
+  byMonth: {
+    month: string;
+    amount: number;
+  }[];
+  byPaymentMethod: {
+    method: string;
+    amount: number;
+    percentage: number;
+  }[];
+}
+
+export interface ExpenseFilter extends Omit<LedgerFilter, 'type'> {
+  category?: string | string[];
+  vendor?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  isPaid?: boolean;
 }
