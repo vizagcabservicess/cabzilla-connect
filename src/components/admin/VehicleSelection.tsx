@@ -82,7 +82,7 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
   return (
     <div>
       <Select
-        value={selectedVehicleId || undefined}
+        value={selectedVehicleId}
         onValueChange={handleVehicleChange}
         disabled={loading}
       >
@@ -98,21 +98,16 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
         </SelectTrigger>
         <SelectContent>
           {vehicles.length > 0 ? (
-            vehicles.map((vehicle) => {
-              const vehicleId = vehicle.vehicle_id || vehicle.id || '';
-              if (!vehicleId) return null; // Skip items without an ID
-              
-              return (
-                <SelectItem 
-                  key={vehicleId} 
-                  value={vehicleId}
-                >
-                  {vehicle.name || vehicle.label || (vehicle.make + ' ' + vehicle.model) || vehicleId}
-                </SelectItem>
-              );
-            })
+            vehicles.map((vehicle) => (
+              <SelectItem 
+                key={vehicle.id || vehicle.vehicle_id} 
+                value={vehicle.vehicle_id || vehicle.id}
+              >
+                {vehicle.name || vehicle.label || vehicle.make + ' ' + vehicle.model || vehicle.vehicle_id || vehicle.id}
+              </SelectItem>
+            ))
           ) : (
-            <SelectItem value="no-vehicles-found" disabled>
+            <SelectItem value="no-vehicles" disabled>
               {loadError || 'No vehicles available'}
             </SelectItem>
           )}

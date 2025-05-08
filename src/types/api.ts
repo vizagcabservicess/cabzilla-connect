@@ -1,3 +1,4 @@
+
 // If this file doesn't exist, we'll create it with the needed types
 export type BookingStatus = 
   | 'pending' 
@@ -46,8 +47,6 @@ export interface Booking {
     companyName: string;
     companyAddress: string;
   };
-  payment_status?: string;
-  payment_method?: string;
 }
 
 export interface BookingRequest {
@@ -231,47 +230,4 @@ export interface VehiclePricingUpdateRequest extends FareUpdateRequest {
   pricePerKm?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
-}
-
-// Financial Ledger Types - adding these missing types
-export interface LedgerTransaction {
-  id: number;
-  date: string;
-  description: string;
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  paymentMethod: string;
-  reference: string;
-  bookingId?: number | null;
-  vehicleId?: string | null;
-  balance: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LedgerSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  netBalance: number;
-}
-
-export interface LedgerFilters {
-  startDate?: string;
-  endDate?: string;
-  type?: string;
-  category?: string;
-  vehicleId?: string;
-}
-
-export interface CreateLedgerTransaction {
-  date: string;
-  description: string;
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  paymentMethod: string;
-  reference?: string;
-  bookingId?: number;
-  vehicleId?: string;
 }

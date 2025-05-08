@@ -26,8 +26,6 @@ export interface BookingDetails {
     amount: number;
     description: string;
   }[];
-  payment_status?: string;
-  payment_method?: string;
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
@@ -79,8 +77,6 @@ export interface Booking {
     companyName: string;
     companyAddress: string;
   };
-  payment_status?: string;
-  payment_method?: string;
 }
 
 // GST Report Types
@@ -106,47 +102,4 @@ export interface GstReportData {
     totalGstAmount: number;
     totalWithGst: number;
   };
-}
-
-// Financial Ledger Types
-export interface LedgerTransaction {
-  id: number;
-  date: string;
-  description: string;
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  paymentMethod: string;
-  reference: string;
-  bookingId?: number | null;
-  vehicleId?: string | null;
-  balance: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LedgerSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  netBalance: number;
-}
-
-export interface LedgerFilters {
-  startDate?: string;
-  endDate?: string;
-  type?: string;
-  category?: string;
-  vehicleId?: string;
-}
-
-export interface CreateLedgerTransaction {
-  date: string;
-  description: string;
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  paymentMethod: string;
-  reference?: string;
-  bookingId?: number;
-  vehicleId?: string;
 }

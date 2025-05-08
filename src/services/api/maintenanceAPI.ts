@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
@@ -34,47 +33,6 @@ const sampleMaintenanceData: MaintenanceRecord[] = [
   }
 ];
 
-// Helper function to validate and sanitize date fields
-const sanitizeRecord = (record: any): MaintenanceRecord => {
-  try {
-    // Validate and format date fields
-    const validDate = (dateStr: string | undefined): string | undefined => {
-      if (!dateStr) return undefined;
-      
-      // Check if date is in YYYY-MM-DD format
-      const isValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
-      
-      if (!isValidFormat) {
-        try {
-          const date = new Date(dateStr);
-          if (isNaN(date.getTime())) {
-            console.warn(`Invalid date: ${dateStr}`);
-            return undefined;
-          }
-          return date.toISOString().split('T')[0];
-        } catch (e) {
-          console.warn(`Error parsing date: ${dateStr}`, e);
-          return undefined;
-        }
-      }
-      
-      return dateStr;
-    };
-    
-    return {
-      ...record,
-      date: validDate(record.date) || new Date().toISOString().split('T')[0],
-      nextServiceDate: validDate(record.nextServiceDate),
-      cost: typeof record.cost === 'number' ? record.cost : parseInt(record.cost) || 0,
-      odometer: record.odometer ? parseInt(record.odometer) : undefined,
-      nextServiceOdometer: record.nextServiceOdometer ? parseInt(record.nextServiceOdometer) : undefined,
-    };
-  } catch (error) {
-    console.error('Error sanitizing record:', error);
-    return record;
-  }
-};
-
 export const maintenanceAPI = {
   /**
    * Get all maintenance records
@@ -96,19 +54,16 @@ export const maintenanceAPI = {
       console.log('Maintenance records response:', response.data);
       
       // Check if response has records
-      let records: MaintenanceRecord[] = [];
-      
       if (response.data.status === 'success' && response.data.data?.records) {
-        records = response.data.data.records;
-      } else if (response.data.records) {
-        records = response.data.records;
-      } else {
-        console.warn('Unexpected API response format, using sample data');
-        return sampleMaintenanceData;
+        return response.data.data.records;
       }
       
-      // Sanitize all records to ensure valid dates
-      return records.map(sanitizeRecord);
+      if (response.data.records) {
+        return response.data.records;
+      }
+      
+      console.warn('Unexpected API response format, using sample data');
+      return sampleMaintenanceData;
     } catch (error) {
       console.error('Error fetching maintenance records:', error);
       toast.error('Failed to load maintenance records');
@@ -124,17 +79,15 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl('/api/maintenance_records.php');
       console.log('Adding maintenance record:', record);
 
-      // Sanitize record before sending
-      const sanitizedRecord = sanitizeRecord(record);
-
-      // Convert to proper payload format
+      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
       const payload = {
-        ...sanitizedRecord,
-        vehicle_id: sanitizedRecord.vehicleId,
-        service_type: sanitizedRecord.serviceType,
-        service_date: sanitizedRecord.date,
-        next_service_date: sanitizedRecord.nextServiceDate,
-        next_service_odometer: sanitizedRecord.nextServiceOdometer
+        ...record,
+        vehicle_id: record.vehicleId || record.vehicle_id || '',
+        service_type: record.serviceType || record.service_type || '',
+        service_date: record.date || record.serviceDate || record.service_date || '',
+        next_service_date: record.nextServiceDate || record.next_service_date || '',
+        odometer: record.odometer ?? record.odometer ?? '',
+        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
       };
 
       const response = await axios.post(apiUrl, payload, {
@@ -146,7 +99,7 @@ export const maintenanceAPI = {
 
       if (response.data.status === 'success') {
         toast.success('Maintenance record added successfully');
-        return { ...sanitizedRecord, id: response.data.id } as MaintenanceRecord;
+        return { ...record, id: response.data.id } as MaintenanceRecord;
       }
 
       toast.error('Failed to add maintenance record');
@@ -166,17 +119,15 @@ export const maintenanceAPI = {
       const apiUrl = getApiUrl(`/api/maintenance_records.php?id=${id}`);
       console.log('Updating maintenance record:', id, record);
 
-      // Sanitize record before sending
-      const sanitizedRecord = sanitizeRecord(record);
-
-      // Convert to proper payload format
+      // Patch: Ensure all relevant fields are sent in both camelCase and snake_case
       const payload = {
-        ...sanitizedRecord,
-        vehicle_id: sanitizedRecord.vehicleId,
-        service_type: sanitizedRecord.serviceType,
-        service_date: sanitizedRecord.date,
-        next_service_date: sanitizedRecord.nextServiceDate,
-        next_service_odometer: sanitizedRecord.nextServiceOdometer
+        ...record,
+        vehicle_id: record.vehicleId || record.vehicle_id || '',
+        service_type: record.serviceType || record.service_type || '',
+        service_date: record.date || record.serviceDate || record.service_date || '',
+        next_service_date: record.nextServiceDate || record.next_service_date || '',
+        odometer: record.odometer ?? record.odometer ?? '',
+        next_service_odometer: record.nextServiceOdometer ?? record.next_service_odometer ?? '',
       };
 
       const response = await axios.put(apiUrl, payload, {
@@ -188,7 +139,7 @@ export const maintenanceAPI = {
 
       if (response.data.status === 'success') {
         toast.success('Maintenance record updated successfully');
-        return { ...sanitizedRecord, id } as MaintenanceRecord;
+        return { ...record, id } as MaintenanceRecord;
       }
 
       toast.error('Failed to update maintenance record');

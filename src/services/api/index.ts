@@ -6,8 +6,6 @@ import { bookingAPI } from './bookingAPI';
 import { fareAPI } from './fareAPI';
 import { userAPI } from './userAPI';
 import { apiHealthCheck } from './healthCheck';
-import { ledgerAPI } from './ledgerAPI';
-import type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction } from './ledgerAPI';
 
 // Export all API services
 export {
@@ -17,12 +15,8 @@ export {
   bookingAPI,
   fareAPI,
   userAPI,
-  apiHealthCheck,
-  ledgerAPI
+  apiHealthCheck
 };
-
-// Export types with the 'export type' syntax
-export type { LedgerTransaction, LedgerFilters, CreateLedgerTransaction };
 
 // Default export
 export default {
@@ -32,6 +26,5 @@ export default {
   booking: bookingAPI,
   fare: fareAPI,
   user: userAPI,
-  health: apiHealthCheck,
-  ledger: ledgerAPI
+  health: apiHealthCheck
 };

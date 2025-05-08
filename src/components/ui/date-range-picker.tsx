@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/popover"
 
 interface DatePickerWithRangeProps {
-  className?: string;
-  date: DateRange | undefined;
-  setDate: (date: DateRange | undefined) => void;
-  disabled?: boolean;
+  className?: string
+  date: DateRange | undefined
+  setDate: (date: DateRange | undefined) => void
+  disabled?: boolean
 }
 
 export function DatePickerWithRange({

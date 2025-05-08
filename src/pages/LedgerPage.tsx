@@ -1,302 +1,165 @@
+
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { DateRange } from 'react-day-picker';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { CalendarIcon, ArrowDown, ArrowUp } from "lucide-react";
-import { ledgerAPI, LedgerTransaction, LedgerFilters } from '@/services/api/ledgerAPI';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { Badge } from "@/components/ui/badge";
-import { IndianRupee } from 'lucide-react';
-import AdminLayout from '@/components/admin/AdminLayout';
-import { AdminPageExplanation } from '@/components/admin/AdminPageExplanation';
 
-const LedgerPage: React.FC = () => {
-  const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
-  const [filters, setFilters] = useState<LedgerFilters>({
-    startDate: '',
-    endDate: '',
-    type: '',
-    category: '',
-    vehicleId: ''
-  });
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [loading, setLoading] = useState(false);
+export default function LedgerPage() {
+  const [activeTab, setActiveTab] = useState<string>("ledger");
+  const [ledgerData, setLedgerData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [totalIncome, setTotalIncome] = useState(0);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [netBalance, setNetBalance] = useState(0);
-
-  const fetchTransactions = async (filters: LedgerFilters = {}) => {
-    setLoading(true);
-    try {
-      const response = await ledgerAPI.getTransactions(filters);
-      setTransactions(response.transactions || []);
-      setTotalIncome(response.totalIncome || 0);
-      setTotalExpenses(response.totalExpenses || 0);
-      setNetBalance(response.netBalance || 0);
-    } catch (error: any) {
-      console.error('Error fetching transactions:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to fetch transactions",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  
   useEffect(() => {
-    fetchTransactions(filters);
-  }, [filters]);
+    // In a real application, this would be an API call to fetch ledger data
+    const fetchLedgerData = async () => {
+      try {
+        setIsLoading(true);
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
+        // Sample ledger data - in a real app this would come from an API
+        const sampleLedgerData = [
+          { id: 1, date: '2025-05-01', description: 'Fare collection - Airport trip', type: 'income', amount: 3200, category: 'Trip Revenue', paymentMethod: 'Online', reference: 'ORD-#5428', balance: 352000 },
+          { id: 2, date: '2025-04-30', description: 'Fuel payment - VEH-001', type: 'expense', amount: 4850, category: 'Fuel', paymentMethod: 'Card', reference: 'INV-4532', balance: 348800 },
+          { id: 3, date: '2025-04-30', description: 'Driver salary - Ravi Kumar', type: 'expense', amount: 12500, category: 'Salary', paymentMethod: 'Bank Transfer', reference: 'SAL-APR-21', balance: 336300 },
+          { id: 4, date: '2025-04-29', description: 'Vehicle maintenance - VEH-003', type: 'expense', amount: 8500, category: 'Maintenance', paymentMethod: 'Card', reference: 'MECH-352', balance: 327800 },
+          { id: 5, date: '2025-04-29', description: 'Fare collection - Outstation trip', type: 'income', amount: 12500, category: 'Trip Revenue', paymentMethod: 'Cash', reference: 'ORD-#5426', balance: 340300 },
+          { id: 6, date: '2025-04-28', description: 'Office rent payment', type: 'expense', amount: 15000, category: 'Rent', paymentMethod: 'Bank Transfer', reference: 'RENT-APR', balance: 325300 },
+          { id: 7, date: '2025-04-28', description: 'Insurance payment - Fleet', type: 'expense', amount: 24500, category: 'Insurance', paymentMethod: 'Bank Transfer', reference: 'INS-Q2-25', balance: 300800 },
+        ];
+        
+        setLedgerData(sampleLedgerData);
+        
+        console.log("Ledger data loaded:", sampleLedgerData);
+      } catch (error) {
+        console.error("Error fetching ledger data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load ledger data. Using sample data instead.",
+          variant: "destructive",
+        });
+        
+        // Fallback to empty dataset
+        setLedgerData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFilters(prevFilters => ({
-      ...prevFilters,
-      [name]: value
-    }));
+    fetchLedgerData();
+  }, [toast]);
+  
+  // Calculate financial metrics
+  const totalIncome = ledgerData.filter(item => item.type === 'income').reduce((sum, record) => sum + record.amount, 0);
+  const totalExpenses = ledgerData.filter(item => item.type === 'expense').reduce((sum, record) => sum + record.amount, 0);
+  const netBalance = totalIncome - totalExpenses;
+
+  // Function to get styling for income/expense
+  const getAmountStyle = (type: string): string => {
+    return type === 'income' ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
   };
 
-  const handleDateRangeChange = (newDateRange: DateRange | undefined) => {
-    setDateRange(newDateRange);
-    if (newDateRange?.from) {
-      setFilters(prevFilters => ({
-        ...prevFilters,
-        startDate: format(newDateRange.from!, 'yyyy-MM-dd'),
-        endDate: newDateRange.to ? format(newDateRange.to, 'yyyy-MM-dd') : format(newDateRange.from!, 'yyyy-MM-dd')
-      }));
-    } else {
-      setFilters(prevFilters => ({
-        ...prevFilters,
-        startDate: '',
-        endDate: ''
-      }));
-    }
-  };
-
-  const clearFilters = () => {
-    setDateRange(undefined);
-    setFilters({
-      startDate: '',
-      endDate: '',
-      type: '',
-      category: '',
-      vehicleId: ''
+  const handleAddTransaction = (type: 'income' | 'expense') => {
+    toast({
+      title: "Feature Coming Soon",
+      description: `The ability to add ${type} transactions will be available in the next update.`,
     });
   };
 
   return (
-    <AdminLayout activeTab="ledger">
-      <div className="container mx-auto py-10">
-        <Card>
-          <CardHeader className="flex flex-row items-center">
-            <div>
-              <CardTitle className="text-2xl">Financial Ledger</CardTitle>
-              <CardDescription>View and filter financial transactions</CardDescription>
-            </div>
-            <AdminPageExplanation 
-              title="About Financial Ledger"
-              description="The Financial Ledger tracks all income and expenses for your business. Use filters to view specific transactions."
-            >
-              <div className="pt-2">
-                <h5 className="font-medium text-xs">How to use:</h5>
-                <ul className="text-xs list-disc pl-4 text-gray-500 space-y-1 pt-1">
-                  <li>Filter by date range, transaction type, category, or vehicle</li>
-                  <li>View summary totals at the top</li>
-                  <li>All transactions appear in the table below</li>
-                </ul>
-              </div>
-            </AdminPageExplanation>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <Label htmlFor="startDate">Date Range</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateRange?.from && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          `${format(dateRange.from, "MMM dd, yyyy")} - ${format(
-                            dateRange.to,
-                            "MMM dd, yyyy"
-                          )}`
-                        ) : (
-                          format(dateRange.from, "MMM dd, yyyy")
-                        )
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="center" side="bottom">
-                    <Calendar
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={handleDateRangeChange}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date('2023-01-01')
-                      }
-                      numberOfMonths={2}
-                      pagedNavigation
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label htmlFor="type">Type</Label>
-                <Select name="type" value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="income">Income</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="category">Category</Label>
-                <Input
-                  type="text"
-                  id="category"
-                  name="category"
-                  value={filters.category || ''}
-                  onChange={handleFilterChange}
-                  placeholder="All Categories"
-                />
-              </div>
-              <div>
-                <Label htmlFor="vehicleId">Vehicle ID</Label>
-                <Input
-                  type="text"
-                  id="vehicleId"
-                  name="vehicleId"
-                  value={filters.vehicleId || ''}
-                  onChange={handleFilterChange}
-                  placeholder="All Vehicle IDs"
-                />
-              </div>
-            </div>
-            <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
-          </CardContent>
-        </Card>
-
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-4">Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="flex flex-col gap-2 pt-6">
-                <span className="text-sm font-medium text-muted-foreground">Total Income</span>
-                <span className="text-2xl font-bold">
-                  <IndianRupee className="inline-block h-4 w-4 mr-1" />
-                  {totalIncome.toLocaleString()}
-                </span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-2 pt-6">
-                <span className="text-sm font-medium text-muted-foreground">Total Expenses</span>
-                <span className="text-2xl font-bold">
-                  <IndianRupee className="inline-block h-4 w-4 mr-1" />
-                  {totalExpenses.toLocaleString()}
-                </span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-2 pt-6">
-                <span className="text-sm font-medium text-muted-foreground">Net Balance</span>
-                <span className="text-2xl font-bold">
-                  <IndianRupee className="inline-block h-4 w-4 mr-1" />
-                  {netBalance.toLocaleString()}
-                </span>
-              </CardContent>
-            </Card>
+    <div className="flex h-screen bg-gray-100">
+      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main className="flex-1 overflow-y-auto p-8">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Financial Ledger</h1>
+            <p className="text-gray-500">Track income, expenses and financial transactions</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => handleAddTransaction('income')}>Add Income</Button>
+            <Button variant="outline" onClick={() => handleAddTransaction('expense')}>Add Expense</Button>
           </div>
         </div>
 
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-4">Transactions</h2>
-          <Table>
-            <TableCaption>A list of your recent transactions.</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Payment Method</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center">Loading...</TableCell>
-                </TableRow>
-              ) : transactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center">No transactions found.</TableCell>
-                </TableRow>
-              ) : (
-                transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>{format(new Date(transaction.date), 'MMM dd, yyyy')}</TableCell>
-                    <TableCell>{transaction.description}</TableCell>
-                    <TableCell>
-                      <Badge variant={transaction.type === 'income' ? "outline" : "destructive"}>
-                        {transaction.type === 'income' ? (
-                          <div className="flex items-center">
-                            Income
-                            <ArrowUp className="ml-1 h-4 w-4" />
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            Expense
-                            <ArrowDown className="ml-1 h-4 w-4" />
-                          </div>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{transaction.category}</TableCell>
-                    <TableCell>{transaction.paymentMethod}</TableCell>
-                    <TableCell className="text-right">
-                      {transaction.type === 'income' ? '+' : '-'}
-                      <IndianRupee className="inline-block h-3 w-3 mr-1" />
-                      {transaction.amount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <IndianRupee className="inline-block h-3 w-3 mr-1" />
-                      {transaction.balance.toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </AdminLayout>
-  );
-};
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                <p className="text-sm text-gray-500">Total Income</p>
+                <h3 className="text-2xl font-bold text-green-600">₹{totalIncome.toFixed(2)}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                <p className="text-sm text-gray-500">Total Expenses</p>
+                <h3 className="text-2xl font-bold text-red-600">₹{totalExpenses.toFixed(2)}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+                <p className="text-sm text-gray-500">Net Balance</p>
+                <h3 className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{netBalance.toFixed(2)}
+                </h3>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-export default LedgerPage;
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Transaction History</h3>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm">Export</Button>
+                <Button variant="outline" size="sm">Filter</Button>
+              </div>
+            </div>
+            
+            {isLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin h-8 w-8 border-4 border-blue-600 rounded-full border-t-transparent"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Amount (₹)</TableHead>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Balance (₹)</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledgerData.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell>{record.date}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{record.description}</TableCell>
+                        <TableCell className="capitalize">{record.type}</TableCell>
+                        <TableCell>{record.category}</TableCell>
+                        <TableCell className={getAmountStyle(record.type)}>
+                          {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
+                        </TableCell>
+                        <TableCell>{record.paymentMethod}</TableCell>
+                        <TableCell>{record.reference}</TableCell>
+                        <TableCell className="font-medium">{record.balance.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm">Details</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+}

@@ -1,3 +1,4 @@
+
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -34,7 +35,7 @@ export const router = createBrowserRouter([
     path: '/dashboard',
     element: <DashboardPage />,
   },
-  // Make sure admin routes have consistent naming and structure
+  // Main admin route
   {
     path: '/admin',
     element: <AdminDashboardPage />,

@@ -72,13 +72,13 @@ export function MaintenanceRecordForm({
     if (editingRecord) {
       setFormValues({
         ...editingRecord,
-        // Ensure all fields are set correctly
-        vehicleId: editingRecord.vehicleId || '',
-        serviceType: editingRecord.serviceType || '',
-        date: editingRecord.date || '',
-        nextServiceDate: editingRecord.nextServiceDate || '',
-        odometer: editingRecord.odometer || 0,
-        nextServiceOdometer: editingRecord.nextServiceOdometer || 0,
+        // Map snake_case to camelCase for all relevant fields
+        vehicleId: editingRecord.vehicleId || editingRecord.vehicle_id || '',
+        serviceType: editingRecord.serviceType || editingRecord.service_type || '',
+        date: editingRecord.date || editingRecord.serviceDate || editingRecord.service_date || '',
+        nextServiceDate: editingRecord.nextServiceDate || editingRecord.next_service_date || '',
+        odometer: editingRecord.odometer ?? editingRecord.odometer ?? '',
+        nextServiceOdometer: editingRecord.nextServiceOdometer ?? editingRecord.next_service_odometer ?? '',
         cost: editingRecord.cost,
         vendor: editingRecord.vendor,
         description: editingRecord.description,
