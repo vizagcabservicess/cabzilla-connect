@@ -780,146 +780,122 @@ export function AdminBookingsList() {
       )}
 
       {filteredBookings.length > 0 ? (
-        <div className="relative" style={{ maxHeight: '70vh' }}>
-          <div
-            ref={tableScrollRef}
-            className="w-full"
-            style={{ 
-              maxHeight: 'calc(70vh - 20px)', 
-              overflowX: 'scroll',  // Always show horizontal scrollbar
-              overflowY: 'auto',
-              scrollbarWidth: 'thin'
-            }}
-            onScroll={handleTableScroll}
-          >
-            <Table className="text-sm min-w-[2000px]">
-              <TableHeader>
-                <TableRow className="text-xs">
-                  <TableHead className="text-xs">Booking #</TableHead>
-                  <TableHead className="text-xs">Passenger</TableHead>
-                  <TableHead className="text-xs">Route</TableHead>
-                  <TableHead className="text-xs">Pickup Date & Time</TableHead>
-                  <TableHead className="text-xs">Vehicle & Trip Type</TableHead>
-                  <TableHead className="text-xs">Amount</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Payment Status</TableHead>
-                  <TableHead className="text-xs">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredBookings.map((booking) => (
-                  <TableRow key={booking.id} className="text-sm">
-                    <TableCell>{booking.bookingNumber}</TableCell>
-                    <TableCell className="font-medium">
-                      {booking.passengerName}
-                      {booking.passengerPhone && (
-                        <div className="flex items-center text-xs text-gray-500 mt-1">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {booking.passengerPhone}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div
-                        className="flex items-center gap-1 max-w-lg whitespace-normal"
-                        title={`${booking.pickupLocation} → ${booking.dropLocation}`}
-                        style={{ whiteSpace: 'normal' }}
-                      >
-                        <MapPin className="h-3 w-3 text-gray-400" />
-                        <span className="whitespace-normal break-words">{booking.pickupLocation}</span>
-                        <span className="mx-1 text-gray-400">→</span>
-                        <MapPin className="h-3 w-3 text-gray-400" />
-                        <span className="whitespace-normal break-words">{booking.dropLocation}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                        {formatDateTime(booking.pickupDate)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Car className="h-4 w-4 text-gray-400" />
-                        <span>{booking.cabType}</span>
-                        <span className="text-gray-500">({booking.tripType})</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center font-medium">
-                        <IndianRupee className="h-3.5 w-3.5 mr-1" />
-                        {formatPrice(booking.totalAmount)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        className={getStatusColorClass(booking.status)}
-                      >
-                        {booking.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={booking.payment_status === 'payment_received' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
-                      >
-                        {booking.payment_status === 'payment_received' ? 'Paid' : 'Pending'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
-                              View details
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {booking.status === 'pending' && (
-                              <DropdownMenuItem 
-                                onClick={() => handleStatusChange('confirmed')}
-                              >
-                                Confirm booking
-                              </DropdownMenuItem>
-                            )}
-                            {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                              <DropdownMenuItem 
-                                onClick={() => handleCancelBooking()}
-                              >
-                                Cancel booking
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
+        <div className="relative">
+          <ScrollArea className="h-[calc(70vh-20px)] w-full rounded-md border">
+            <div className="min-w-[2000px]"> {/* Force minimum width to ensure scrolling */}
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-xs">
+                    <TableHead className="text-xs">Booking #</TableHead>
+                    <TableHead className="text-xs">Passenger</TableHead>
+                    <TableHead className="text-xs">Route</TableHead>
+                    <TableHead className="text-xs">Pickup Date & Time</TableHead>
+                    <TableHead className="text-xs">Vehicle & Trip Type</TableHead>
+                    <TableHead className="text-xs">Amount</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Payment Status</TableHead>
+                    <TableHead className="text-xs">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          
-          {/* Always visible custom scrollbar */}
-          <div
-            ref={customScrollRef}
-            className="sticky bottom-0 left-0 right-0 bg-white border-t shadow-md z-10"
-            style={{ 
-              height: '16px', 
-              overflowX: 'scroll', 
-              overflowY: 'hidden', 
-              WebkitOverflowScrolling: 'touch', 
-              pointerEvents: 'auto',
-              display: 'block' // Always visible
-            }}
-            onScroll={handleCustomScroll}
-          >
-            <div style={{ width: tableScrollRef.current ? Math.max(tableScrollRef.current.scrollWidth, 2000) : 2000, height: '1px' }} />
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredBookings.map((booking) => (
+                    <TableRow key={booking.id} className="text-sm">
+                      <TableCell>{booking.bookingNumber}</TableCell>
+                      <TableCell className="font-medium">
+                        {booking.passengerName}
+                        {booking.passengerPhone && (
+                          <div className="flex items-center text-xs text-gray-500 mt-1">
+                            <Phone className="h-3 w-3 mr-1" />
+                            {booking.passengerPhone}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className="flex items-center gap-1 max-w-lg whitespace-normal"
+                          title={`${booking.pickupLocation} → ${booking.dropLocation}`}
+                          style={{ whiteSpace: 'normal' }}
+                        >
+                          <MapPin className="h-3 w-3 text-gray-400" />
+                          <span className="whitespace-normal break-words">{booking.pickupLocation}</span>
+                          <span className="mx-1 text-gray-400">→</span>
+                          <MapPin className="h-3 w-3 text-gray-400" />
+                          <span className="whitespace-normal break-words">{booking.dropLocation}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                          {formatDateTime(booking.pickupDate)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Car className="h-4 w-4 text-gray-400" />
+                          <span>{booking.cabType}</span>
+                          <span className="text-gray-500">({booking.tripType})</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center font-medium">
+                          <IndianRupee className="h-3.5 w-3.5 mr-1" />
+                          {formatPrice(booking.totalAmount)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          className={getStatusColorClass(booking.status)}
+                        >
+                          {booking.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={booking.payment_status === 'payment_received' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
+                        >
+                          {booking.payment_status === 'payment_received' ? 'Paid' : 'Pending'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
+                                View details
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {booking.status === 'pending' && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleStatusChange('confirmed')}
+                                >
+                                  Confirm booking
+                                </DropdownMenuItem>
+                              )}
+                              {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleCancelBooking()}
+                                >
+                                  Cancel booking
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ScrollBar orientation="horizontal" className="h-3 bg-gray-100" />
+          </ScrollArea>
         </div>
       ) : (
         <div className="text-center py-10">
