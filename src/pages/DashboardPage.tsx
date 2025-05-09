@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -500,8 +500,6 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
 }) {
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-
   if (isRefreshing) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -522,83 +520,79 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <ScrollArea className="h-[calc(100vh-300px)]" scrollHideDelay={0}>
-        <div className="min-w-[1000px]"> {/* Force minimum width to ensure scrolling */}
-          <div className="space-y-4 p-4">
-            {bookings.map((booking) => (
-              <Card key={booking.id} className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">
-                        {booking.pickupLocation} to {booking.dropLocation}
-                      </CardTitle>
-                      <p className="text-sm text-gray-500">
-                        Booking #{booking.bookingNumber}
+    <ScrollArea className="h-[calc(100vh-300px)] pr-4">
+      <div className="space-y-4">
+        {bookings.map((booking) => (
+          <Card key={booking.id} className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">
+                    {booking.pickupLocation} to {booking.dropLocation}
+                  </CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Booking #{booking.bookingNumber}
+                  </p>
+                </div>
+                <Badge className={getStatusColor(booking.status)}>
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" /> Pickup Date
+                  </p>
+                  <p className="text-sm">{formatDate(booking.pickupDate)}</p>
+                  
+                  {booking.returnDate && (
+                    <>
+                      <p className="text-sm font-medium mt-2 flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" /> Return Date
                       </p>
-                    </div>
-                    <Badge className={getStatusColor(booking.status)}>
-                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm font-medium flex items-center">
-                        <Calendar className="h-4 w-4 mr-1" /> Pickup Date
-                      </p>
-                      <p className="text-sm">{formatDate(booking.pickupDate)}</p>
-                      
-                      {booking.returnDate && (
-                        <>
-                          <p className="text-sm font-medium mt-2 flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" /> Return Date
-                          </p>
-                          <p className="text-sm">{formatDate(booking.returnDate)}</p>
-                        </>
+                      <p className="text-sm">{formatDate(booking.returnDate)}</p>
+                    </>
+                  )}
+                </div>
+                
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <MapPin className="h-4 w-4 mr-1" /> Trip Details
+                  </p>
+                  <p className="text-sm">
+                    {booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)}, {' '}
+                    {booking.tripMode === 'one-way' ? 'One Way' : 'Round Trip'}
+                  </p>
+                  <p className="text-sm">
+                    Cab: {booking.cabType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </p>
+                  <p className="text-sm">Distance: {booking.distance} km</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm font-medium">Fare Details</p>
+                  <p className="text-xl font-bold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                  
+                  {booking.driverName && (
+                    <>
+                      <p className="text-sm font-medium mt-2">Driver</p>
+                      <p className="text-sm">{booking.driverName}</p>
+                      {booking.driverPhone && (
+                        <p className="text-sm">{booking.driverPhone}</p>
                       )}
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium flex items-center">
-                        <MapPin className="h-4 w-4 mr-1" /> Trip Details
-                      </p>
-                      <p className="text-sm">
-                        {booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)}, {' '}
-                        {booking.tripMode === 'one-way' ? 'One Way' : 'Round Trip'}
-                      </p>
-                      <p className="text-sm">
-                        Cab: {booking.cabType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                      </p>
-                      <p className="text-sm">Distance: {booking.distance} km</p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium">Fare Details</p>
-                      <p className="text-xl font-bold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
-                      
-                      {booking.driverName && (
-                        <>
-                          <p className="text-sm font-medium mt-2">Driver</p>
-                          <p className="text-sm">{booking.driverName}</p>
-                          {booking.driverPhone && (
-                            <p className="text-sm">{booking.driverPhone}</p>
-                          )}
-                          {booking.vehicleNumber && (
-                            <p className="text-sm">Vehicle: {booking.vehicleNumber}</p>
-                          )}
-                        </>
+                      {booking.vehicleNumber && (
+                        <p className="text-sm">Vehicle: {booking.vehicleNumber}</p>
                       )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </ScrollArea>
-    </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

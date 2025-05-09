@@ -14,10 +14,7 @@ import {
   User,
   Fuel,
   Wrench,
-  Book,
-  CircleDollarSign,
-  Banknote,
-  CreditCard
+  Book
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -37,9 +34,6 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
     { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
     { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
-    { id: 'expenses', label: 'Expenses', icon: <CircleDollarSign size={20} />, path: '/admin/expenses' },
-    { id: 'payroll', label: 'Payroll', icon: <Banknote size={20} />, path: '/admin/payroll' },
-    { id: 'payments', label: 'Payments', icon: <CreditCard size={20} />, path: '/admin/payments' },
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },

@@ -17,9 +17,6 @@ import FleetManagementPage from './pages/FleetManagementPage';
 import FuelManagementPage from './pages/FuelManagementPage';
 import VehicleMaintenancePage from './pages/VehicleMaintenancePage';
 import LedgerPage from './pages/LedgerPage';
-import ExpensesPage from './pages/ExpensesPage';
-import PayrollPage from './pages/PayrollPage';
-import PaymentsManagementPage from './pages/PaymentsManagementPage';
 
 export const router = createBrowserRouter([
   {
@@ -66,18 +63,6 @@ export const router = createBrowserRouter([
   {
     path: '/admin/ledger',
     element: <LedgerPage />,
-  },
-  {
-    path: '/admin/expenses',
-    element: <ExpensesPage />,
-  },
-  {
-    path: '/admin/payroll',
-    element: <PayrollPage />,
-  },
-  {
-    path: '/admin/payments',
-    element: <PaymentsManagementPage />,
   },
   // Add catch-all route for admin to prevent 404s on admin routes
   {

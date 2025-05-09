@@ -618,10 +618,11 @@ export function BookingInvoice({
                 <Button
                   size="sm"
                   className="ml-2"
+                  loading={isSavingPayment}
                   onClick={() => updateBookingPayment(booking.id, editedStatus, editedMethod)}
                   disabled={isSavingPayment || (editedStatus === 'payment_received' && !editedMethod)}
                 >
-                  {isSavingPayment ? "Saving..." : "Save"}
+                  Save
                 </Button>
                 <Button
                   size="sm"

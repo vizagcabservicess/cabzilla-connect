@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MaintenanceRecord, ServiceType } from '@/types/maintenance';
 import { FleetVehicle } from '@/types/cab';
@@ -73,13 +72,13 @@ export function MaintenanceRecordForm({
     if (editingRecord) {
       setFormValues({
         ...editingRecord,
-        // Map properties consistently using camelCase
-        vehicleId: editingRecord.vehicleId || '',
-        serviceType: editingRecord.serviceType || '',
-        date: editingRecord.date || editingRecord.serviceDate || '',
-        nextServiceDate: editingRecord.nextServiceDate || '',
-        odometer: editingRecord.odometer || 0,
-        nextServiceOdometer: editingRecord.nextServiceOdometer || 0,
+        // Map snake_case to camelCase for all relevant fields
+        vehicleId: editingRecord.vehicleId || editingRecord.vehicle_id || '',
+        serviceType: editingRecord.serviceType || editingRecord.service_type || '',
+        date: editingRecord.date || editingRecord.serviceDate || editingRecord.service_date || '',
+        nextServiceDate: editingRecord.nextServiceDate || editingRecord.next_service_date || '',
+        odometer: editingRecord.odometer ?? editingRecord.odometer ?? '',
+        nextServiceOdometer: editingRecord.nextServiceOdometer ?? editingRecord.next_service_odometer ?? '',
         cost: editingRecord.cost,
         vendor: editingRecord.vendor,
         description: editingRecord.description,
@@ -273,7 +272,7 @@ export function MaintenanceRecordForm({
             <Input
               type="number"
               id="odometer"
-              value={formValues.odometer?.toString() || '0'}
+              value={formValues.odometer?.toString() || ''}
               onChange={(e) => handleChange('odometer', parseInt(e.target.value))}
               min="0"
               step="1"
@@ -285,7 +284,7 @@ export function MaintenanceRecordForm({
             <Input
               type="number"
               id="nextServiceOdometer"
-              value={formValues.nextServiceOdometer?.toString() || '0'}
+              value={formValues.nextServiceOdometer?.toString() || ''}
               onChange={(e) => handleChange('nextServiceOdometer', parseInt(e.target.value))}
               min="0"
               step="1"

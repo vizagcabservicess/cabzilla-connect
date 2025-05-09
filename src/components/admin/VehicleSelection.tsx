@@ -1,105 +1,130 @@
 
 import React, { useState, useEffect } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getVehicleData } from '@/services/vehicleDataService';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
+import { fleetAPI } from '@/services/api/fleetAPI';
 
 interface VehicleSelectionProps {
   onVehicleSelect: (vehicleId: string) => void;
   selectedVehicleId?: string;
+  label?: string;
+  placeholder?: string;
+  includeInactive?: boolean;
 }
 
-interface Vehicle {
-  id: string;
-  vehicleId?: string;
-  name: string;
-}
-
-const VehicleSelection: React.FC<VehicleSelectionProps> = ({ onVehicleSelect, selectedVehicleId }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+const VehicleSelection: React.FC<VehicleSelectionProps> = ({
+  onVehicleSelect,
+  selectedVehicleId = '',
+  label = 'Select Vehicle',
+  placeholder = 'Select a vehicle...',
+  includeInactive = false
+}) => {
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchVehicles();
-  }, []);
+    loadVehicles();
+  }, [includeInactive]);
 
-  const fetchVehicles = async () => {
-    setIsLoading(true);
+  const loadVehicles = async () => {
+    setLoading(true);
+    setLoadError(null);
+    
     try {
-      const timestamp = Date.now();
-      const response = await directVehicleOperation(
-        `api/admin/direct-vehicle-modify.php?action=load&includeInactive=false&_t=${timestamp}`, 
-        'GET', 
-        {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
+      // Try both methods to load vehicles
+      let vehicleData = null;
+      
+      // First try using fleetAPI which has better fallback mechanisms
+      try {
+        const fleetResponse = await fleetAPI.getVehicles(includeInactive);
+        if (fleetResponse && fleetResponse.vehicles && fleetResponse.vehicles.length > 0) {
+          vehicleData = fleetResponse.vehicles;
+          console.log("VehicleSelection: Loaded vehicles using fleetAPI:", vehicleData.length);
         }
-      );
-
-      if (response?.vehicles && Array.isArray(response.vehicles)) {
-        const vehicleData = response.vehicles.map((v: any) => ({
-          id: v.vehicleId || v.id,
-          name: v.name || v.vehicleId || v.id
-        }));
-        setVehicles(vehicleData);
-        
-        // Auto-select first vehicle if none selected
-        if (!selectedVehicleId && vehicleData.length > 0) {
-          onVehicleSelect(vehicleData[0].id);
-        }
-      } else {
-        console.warn('Invalid vehicles data format:', response);
-        setError('Failed to load vehicles data');
+      } catch (fleetError) {
+        console.warn("VehicleSelection: Failed to load from fleetAPI:", fleetError);
       }
-    } catch (err) {
-      console.error('Error fetching vehicles:', err);
-      setError('Failed to load vehicles');
+      
+      // If fleetAPI fails, try the original getVehicleData method
+      if (!vehicleData) {
+        vehicleData = await getVehicleData(true, includeInactive);
+        console.log("VehicleSelection: Loaded vehicles using vehicleDataService");
+      }
+      
+      if (vehicleData && Array.isArray(vehicleData) && vehicleData.length > 0) {
+        console.log(`VehicleSelection: Loaded ${vehicleData.length} vehicles`);
+        setVehicles(vehicleData);
+      } else {
+        console.warn('VehicleSelection: No vehicle data returned or empty array');
+        setLoadError('No vehicles found');
+        toast.warning('No vehicle data found. Please check your connection.');
+      }
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+      setLoadError('Failed to load vehicles');
+      toast.error('Failed to load vehicle data');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
+  const handleVehicleChange = (value: string) => {
+    onVehicleSelect(value);
+  };
+
+  const handleRetry = () => {
+    loadVehicles();
+  };
+
   return (
-    <div className="relative w-full">
+    <div>
       <Select
         value={selectedVehicleId}
-        onValueChange={onVehicleSelect}
-        disabled={isLoading || vehicles.length === 0}
+        onValueChange={handleVehicleChange}
+        disabled={loading}
       >
-        <SelectTrigger className="w-full">
-          {isLoading ? (
-            <div className="flex items-center gap-2">
-              <Spinner className="h-4 w-4" />
+        <SelectTrigger>
+          {loading ? (
+            <div className="flex items-center">
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               <span>Loading vehicles...</span>
             </div>
           ) : (
-            <SelectValue placeholder="Select a vehicle" />
+            <SelectValue placeholder={placeholder} />
           )}
         </SelectTrigger>
         <SelectContent>
           {vehicles.length > 0 ? (
             vehicles.map((vehicle) => (
-              <SelectItem key={vehicle.id} value={vehicle.id}>
-                {vehicle.name}
+              <SelectItem 
+                key={vehicle.id || vehicle.vehicle_id} 
+                value={vehicle.vehicle_id || vehicle.id}
+              >
+                {vehicle.name || vehicle.label || vehicle.make + ' ' + vehicle.model || vehicle.vehicle_id || vehicle.id}
               </SelectItem>
             ))
           ) : (
             <SelectItem value="no-vehicles" disabled>
-              {error || "No vehicles available"}
+              {loadError || 'No vehicles available'}
             </SelectItem>
           )}
         </SelectContent>
       </Select>
+      
+      {loadError && (
+        <div className="flex justify-end mt-1">
+          <button 
+            onClick={handleRetry}
+            className="text-xs text-blue-500 hover:underline"
+            type="button"
+          >
+            Retry loading
+          </button>
+        </div>
+      )}
     </div>
   );
 };

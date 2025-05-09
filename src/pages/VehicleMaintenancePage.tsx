@@ -410,9 +410,7 @@ export default function VehicleMaintenancePage() {
                               {record.nextServiceDate && record.nextServiceDate !== 'null' && record.nextServiceDate !== '' ? formatDate(record.nextServiceDate) : 'N/A'}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">
-                            {record.odometer !== null && record.odometer !== undefined && record.odometer !== 0 ? record.odometer : "N/A"}
-                          </TableCell>
+                          <TableCell className="text-right">{record.odometer !== null && record.odometer !== undefined && record.odometer !== '' ? record.odometer : "N/A"}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button 
