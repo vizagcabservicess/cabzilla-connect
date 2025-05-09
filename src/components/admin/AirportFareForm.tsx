@@ -2,20 +2,7 @@
 import React from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-interface FareData {
-  vehicleId?: string;
-  vehicle_id?: string;
-  basePrice: number;
-  pricePerKm: number;
-  pickupPrice: number;
-  dropPrice: number;
-  tier1Price: number;
-  tier2Price: number;
-  tier3Price: number;
-  tier4Price: number;
-  extraKmCharge: number;
-}
+import { FareData } from '@/services/fareManagementService';
 
 interface AirportFareFormProps {
   fareData: FareData;
