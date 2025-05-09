@@ -5,7 +5,7 @@ import { format, parseISO } from "date-fns";
 import { ExpenseCategory, ExpenseEntry, ExpenseBudget, ExpenseSummary, ExpenseFilter } from "@/types/ledger";
 import axios from "axios";
 
-// API base URL
+// API base URL - use a relative path to ensure it works in all environments
 const API_BASE_URL = '/api/admin';
 
 // Default expense categories for fallback
@@ -22,11 +22,19 @@ const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
 // Generic error handler function
 const handleApiError = (error: any, fallbackMsg: string): string => {
   console.error(fallbackMsg, error);
+  
+  // Check if it's a network error
+  if (error.message === 'Network Error') {
+    return 'Network error. Please check your internet connection.';
+  }
+  
+  // Check for specific API error message
   if (error.response?.data?.message) {
     return error.response.data.message;
   } else if (error.message) {
     return error.message;
   }
+  
   return fallbackMsg;
 };
 
@@ -36,7 +44,16 @@ const handleApiError = (error: any, fallbackMsg: string): string => {
 const fetchExpenseCategories = async (): Promise<ExpenseCategory[]> => {
   try {
     console.log("Fetching expense categories...");
-    const response = await axios.get(`${API_BASE_URL}/expenses.php?action=categories`);
+    
+    // Add timestamp to prevent caching issues
+    const timestamp = new Date().getTime();
+    const response = await axios.get(`${API_BASE_URL}/expenses.php?action=categories&_t=${timestamp}`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
     
     if (response.data.status === 'success') {
       console.log("Categories fetched successfully:", response.data.data);
@@ -104,7 +121,9 @@ const prepareDateRangeParams = (dateRange?: DateRange) => {
 const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> => {
   try {
     console.log("Fetching expenses with filters:", filters);
-    let params: Record<string, any> = {};
+    let params: Record<string, any> = {
+      _t: new Date().getTime(), // Add timestamp to prevent caching
+    };
     
     if (filters) {
       // Add date range parameters
@@ -146,7 +165,14 @@ const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> =
       }
     }
     
-    const response = await axios.get(`${API_BASE_URL}/expenses.php`, { params });
+    const response = await axios.get(`${API_BASE_URL}/expenses.php`, { 
+      params,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
     
     if (response.data.status === 'success') {
       console.log("Expenses fetched successfully:", response.data.data);
@@ -181,7 +207,10 @@ const addExpense = async (expense: Omit<ExpenseEntry, 'id'>): Promise<ExpenseEnt
         : expense.billDate
     };
     
-    const response = await axios.post(`${API_BASE_URL}/expenses.php`, formattedExpense);
+    const response = await axios.post(`${API_BASE_URL}/expenses.php`, {
+      ...formattedExpense,
+      action: 'add_expense' // Explicitly specify action
+    });
     
     if (response.data.status === 'success') {
       toast.success(`Expense "${expense.description}" added successfully`);
@@ -273,10 +302,18 @@ const getExpenseSummary = async (dateRange?: DateRange): Promise<ExpenseSummary>
     console.log("Getting expense summary with dateRange:", dateRange);
     const params = {
       action: 'summary',
+      _t: new Date().getTime(), // Add timestamp to prevent caching
       ...prepareDateRangeParams(dateRange)
     };
     
-    const response = await axios.get(`${API_BASE_URL}/expenses.php`, { params });
+    const response = await axios.get(`${API_BASE_URL}/expenses.php`, { 
+      params,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
     
     if (response.data.status === 'success') {
       console.log("Summary fetched successfully:", response.data.data);

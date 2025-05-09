@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Expense Management API Endpoint
@@ -6,8 +5,6 @@
  */
 
 // Include necessary files
-require_once '../common/auth.php';
-require_once '../common/config.php';
 require_once '../utils/response.php';
 require_once '../utils/database.php';
 require_once '../common/db_helper.php';
@@ -16,6 +13,7 @@ require_once '../common/db_helper.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Content-Type: application/json");
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -23,21 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Verify JWT token for authentication (disable for debugging)
-try {
-    // Temporary disable for debugging - remove this comment once fixed
-    // $userId = validateToken();
-    $userId = 1; // Temporary default user ID for testing
-} catch (Exception $e) {
-    sendErrorResponse('Authentication failed: ' . $e->getMessage(), 401);
-    exit();
-}
-
 // Connect to database
 try {
-    $conn = getDbConnectionWithRetry();
+    $conn = getDbConnection();
     if (!$conn) {
-        throw new Exception('Failed to connect to database after multiple attempts');
+        throw new Exception('Database connection failed');
     }
 } catch (Exception $e) {
     sendErrorResponse('Database connection failed: ' . $e->getMessage(), 500);
@@ -100,7 +88,7 @@ function fetchExpenseCategories($conn) {
             }
             
             // Clear all results to allow new queries
-            while ($conn->next_result()) {
+            while ($conn->more_results() && $conn->next_result()) {
                 if ($res = $conn->store_result()) {
                     $res->free();
                 }
@@ -135,6 +123,32 @@ function fetchExpenseCategories($conn) {
  */
 function fetchExpenses($conn) {
     try {
+        // First check if the table exists
+        $tableExists = false;
+        $checkTable = $conn->query("SHOW TABLES LIKE 'financial_ledger'");
+        if ($checkTable && $checkTable->num_rows > 0) {
+            $tableExists = true;
+        }
+        
+        if (!$tableExists) {
+            // Try to create the table
+            $sql = file_get_contents(__DIR__ . '/../sql/expense_tables.sql');
+            
+            if (!$conn->multi_query($sql)) {
+                throw new Exception("Failed to create expense tables: " . $conn->error);
+            }
+            
+            // Clear all results to allow new queries
+            while ($conn->more_results() && $conn->next_result()) {
+                if ($res = $conn->store_result()) {
+                    $res->free();
+                }
+            }
+            
+            sendSuccessResponse([], 'Expense tables created successfully. No expenses found.');
+            return;
+        }
+        
         $params = [];
         $types = "";
         $whereConditions = ["type = 'expense'", "is_deleted = 0"];
@@ -203,32 +217,6 @@ function fetchExpenses($conn) {
             $types .= "d";
         }
         
-        // First check if the table exists
-        $tableExists = false;
-        $checkTable = $conn->query("SHOW TABLES LIKE 'financial_ledger'");
-        if ($checkTable && $checkTable->num_rows > 0) {
-            $tableExists = true;
-        }
-        
-        if (!$tableExists) {
-            // Try to create the table
-            $sql = file_get_contents(__DIR__ . '/../sql/expense_tables.sql');
-            
-            if (!$conn->multi_query($sql)) {
-                throw new Exception("Failed to create expense tables: " . $conn->error);
-            }
-            
-            // Clear all results to allow new queries
-            while ($conn->next_result()) {
-                if ($res = $conn->store_result()) {
-                    $res->free();
-                }
-            }
-            
-            sendSuccessResponse([], 'Expense tables created successfully. No expenses found.');
-            return;
-        }
-        
         // Construct the SQL query
         $sql = "SELECT * FROM financial_ledger 
                 WHERE " . implode(' AND ', $whereConditions) . "
@@ -284,23 +272,6 @@ function fetchExpenses($conn) {
  */
 function fetchExpenseSummary($conn) {
     try {
-        $params = [];
-        $types = "";
-        $whereConditions = ["type = 'expense'", "is_deleted = 0"];
-        
-        // Apply date range filter if provided
-        if (isset($_GET['from_date']) && $_GET['from_date']) {
-            $whereConditions[] = "date >= ?";
-            $params[] = $_GET['from_date'];
-            $types .= "s";
-        }
-        
-        if (isset($_GET['to_date']) && $_GET['to_date']) {
-            $whereConditions[] = "date <= ?";
-            $params[] = $_GET['to_date'];
-            $types .= "s";
-        }
-        
         // First check if the table exists
         $tableExists = false;
         $checkTable = $conn->query("SHOW TABLES LIKE 'financial_ledger'");
@@ -319,6 +290,23 @@ function fetchExpenseSummary($conn) {
             
             sendSuccessResponse($summary, 'No expense data available yet');
             return;
+        }
+        
+        $params = [];
+        $types = "";
+        $whereConditions = ["type = 'expense'", "is_deleted = 0"];
+        
+        // Apply date range filter if provided
+        if (isset($_GET['from_date']) && $_GET['from_date']) {
+            $whereConditions[] = "date >= ?";
+            $params[] = $_GET['from_date'];
+            $types .= "s";
+        }
+        
+        if (isset($_GET['to_date']) && $_GET['to_date']) {
+            $whereConditions[] = "date <= ?";
+            $params[] = $_GET['to_date'];
+            $types .= "s";
         }
         
         // Calculate total amount
@@ -502,7 +490,7 @@ function addExpenseCategory($conn, $data) {
             }
             
             // Clear all results to allow new queries
-            while ($conn->next_result()) {
+            while ($conn->more_results() && $conn->next_result()) {
                 if ($res = $conn->store_result()) {
                     $res->free();
                 }
@@ -597,7 +585,7 @@ function addExpense($conn, $data) {
             }
             
             // Clear all results to allow new queries
-            while ($conn->next_result()) {
+            while ($conn->more_results() && $conn->next_result()) {
                 if ($res = $conn->store_result()) {
                     $res->free();
                 }
@@ -643,7 +631,10 @@ function addExpense($conn, $data) {
             $notes, $status, $isRecurring, $recurringFrequency
         );
         
-        $stmt->execute();
+        $result = $stmt->execute();
+        if (!$result) {
+            throw new Exception("Execute failed: " . $stmt->error);
+        }
         
         if ($stmt->affected_rows > 0) {
             $expenseId = $stmt->insert_id;
@@ -864,4 +855,23 @@ function handleDeleteRequest($conn) {
     } catch (Exception $e) {
         sendErrorResponse('Error deleting expense: ' . $e->getMessage(), 400);
     }
+}
+
+/**
+ * Helper function to get database connection
+ */
+function getDbConnection() {
+    $host = getenv('DB_HOST') ?: 'localhost';
+    $username = getenv('DB_USER') ?: 'root';
+    $password = getenv('DB_PASSWORD') ?: '';
+    $database = getenv('DB_NAME') ?: 'cab_booking';
+    
+    $conn = new mysqli($host, $username, $password, $database);
+    
+    if ($conn->connect_error) {
+        throw new Exception("Connection failed: " . $conn->connect_error);
+    }
+    
+    $conn->set_charset("utf8mb4");
+    return $conn;
 }
