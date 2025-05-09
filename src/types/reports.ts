@@ -1,7 +1,7 @@
 // Report date range type
 export interface ReportDateRange {
   from: Date | undefined;
-  to: Date | undefined; // Making to optional to match DateRange from react-day-picker
+  to?: Date | undefined; // Making to optional to match DateRange from react-day-picker
 }
 
 // Base report filter parameters
