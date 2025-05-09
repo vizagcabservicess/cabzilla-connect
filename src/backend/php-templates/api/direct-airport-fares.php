@@ -1,4 +1,3 @@
-
 <?php
 // direct-airport-fares.php - Redirect to the admin endpoint for backward compatibility
 
@@ -74,90 +73,8 @@ $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 // Set debug mode for extra output
 $_SERVER['HTTP_X_DEBUG'] = 'true';
 
-// CRITICAL: Clear any output buffers to prevent HTML contamination
-while (ob_get_level()) {
-    ob_end_clean();
-}
+// Log that we're using direct include
+file_put_contents($logFile, "[$timestamp] Using direct include of admin endpoint\n", FILE_APPEND);
 
-// Instead of including the file directly, we'll make a direct API call to the admin endpoint
-// This prevents any PHP output buffering issues or HTML contamination
-$adminEndpointUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/api/admin/direct-airport-fares.php';
-if (!empty($_SERVER['QUERY_STRING'])) {
-    $adminEndpointUrl .= '?' . $_SERVER['QUERY_STRING'];
-}
-
-// Add a cache buster
-$adminEndpointUrl .= (strpos($adminEndpointUrl, '?') !== false ? '&' : '?') . '_t=' . time();
-
-file_put_contents($logFile, "[$timestamp] Making direct API call to: $adminEndpointUrl\n", FILE_APPEND);
-
-$options = [
-    'http' => [
-        'method' => 'GET',
-        'header' => [
-            'X-Force-Refresh: true',
-            'X-Admin-Mode: true',
-            'X-Debug: true',
-            'Accept: application/json',
-            'Cache-Control: no-cache, no-store, must-revalidate'
-        ]
-    ]
-];
-
-$context = stream_context_create($options);
-
-try {
-    $response = file_get_contents($adminEndpointUrl, false, $context);
-    
-    if ($response === false) {
-        throw new Exception("Failed to get response from admin endpoint");
-    }
-    
-    file_put_contents($logFile, "[$timestamp] Received response from admin endpoint. First 100 chars: " . substr($response, 0, 100) . "\n", FILE_APPEND);
-    
-    // Verify the response is valid JSON
-    $decoded = json_decode($response);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        file_put_contents($logFile, "[$timestamp] WARNING: Invalid JSON response received: " . json_last_error_msg() . "\n", FILE_APPEND);
-        
-        // Try to clean the response - remove any non-JSON content
-        $jsonStart = strpos($response, '{');
-        $jsonEnd = strrpos($response, '}');
-        
-        if ($jsonStart !== false && $jsonEnd !== false) {
-            $cleanedResponse = substr($response, $jsonStart, $jsonEnd - $jsonStart + 1);
-            file_put_contents($logFile, "[$timestamp] Attempting to clean response JSON. First 100 chars: " . substr($cleanedResponse, 0, 100) . "\n", FILE_APPEND);
-            
-            // Check if the cleaned response is valid JSON
-            $decodedCleaned = json_decode($cleanedResponse);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                file_put_contents($logFile, "[$timestamp] Successfully cleaned JSON response\n", FILE_APPEND);
-                $response = $cleanedResponse;
-            } else {
-                file_put_contents($logFile, "[$timestamp] Failed to clean JSON: " . json_last_error_msg() . "\n", FILE_APPEND);
-            }
-        }
-        
-        // If we still can't parse it, return a valid JSON error response
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $response = json_encode([
-                'status' => 'error',
-                'message' => 'Invalid response from airport fares endpoint',
-                'debug_info' => 'The endpoint returned invalid JSON format',
-                'timestamp' => time()
-            ]);
-        }
-    }
-    
-    // Return the response (either original or cleaned/error)
-    echo $response;
-} catch (Exception $e) {
-    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    
-    // Return a valid JSON error response
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Error fetching airport fares: ' . $e->getMessage(),
-        'timestamp' => time()
-    ]);
-}
+// DIRECTLY INCLUDE the admin endpoint instead of making an HTTP call
+require_once __DIR__ . '/admin/direct-airport-fares.php';

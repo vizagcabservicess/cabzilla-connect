@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Database utility functions
@@ -6,10 +5,10 @@
 
 // Connect to the MySQL database
 function connectToDatabase() {
-    $db_host = getenv('DB_HOST') ?: 'localhost';
-    $db_user = getenv('DB_USER') ?: 'vizagtaxiuser';
-    $db_pass = getenv('DB_PASS') ?: 'vizagtaxipassword';
-    $db_name = getenv('DB_NAME') ?: 'vizagtaxidb';
+    $db_host = 'localhost';
+    $db_user = 'u644605165_usr_be';
+    $db_pass = 'Vizag@1213';
+    $db_name = 'u644605165_db_be';
     
     // Create a new mysqli connection
     $mysqli = new mysqli($db_host, $db_user, $db_pass, $db_name);
