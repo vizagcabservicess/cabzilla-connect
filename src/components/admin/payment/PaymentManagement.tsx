@@ -29,7 +29,6 @@ export function PaymentManagement() {
   } = useQuery({
     queryKey: ['payments', filters, searchTerm],
     queryFn: () => paymentsAPI.getPayments({ ...filters, search: searchTerm }),
-    staleTime: 1000 * 60 * 5, // 5 minutes
   });
   
   // Handle search

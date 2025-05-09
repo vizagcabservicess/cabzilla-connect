@@ -1,72 +1,51 @@
 
 import axios from 'axios';
-import { format } from 'date-fns';
-import { 
-  Payment, 
-  PaymentFilterParams, 
-  PaymentReminder, 
-  PaymentSummary,
-  PaymentsResponse,
-  PaymentRemindersResponse
-} from '@/types/payment';
-import { getApiUrl, forceRefreshHeaders } from '@/config/api';
-import { safeFetch, getForcedRequestConfig } from '@/config/requestConfig';
+import { Payment, PaymentFilterParams, PaymentSummary, PaymentsResponse, PaymentRemindersResponse } from '@/types/payment';
+import { getApiUrl, defaultHeaders } from '@/config/api';
+
+// Base URL for payments API
+const PAYMENTS_API_URL = `${getApiUrl()}/admin/payments.php`;
 
 /**
- * Get all payments with optional filtering
+ * Get payments with optional filtering
  */
-export const getPayments = async (filters?: PaymentFilterParams): Promise<PaymentsResponse> => {
+const getPayments = async (filters?: PaymentFilterParams): Promise<PaymentsResponse> => {
   try {
-    // Prepare query params
-    const queryParams: Record<string, string> = {};
+    // Build query parameters
+    const params = new URLSearchParams();
     
-    if (filters?.dateRange?.from) {
-      queryParams.from_date = format(filters.dateRange.from, 'yyyy-MM-dd');
+    if (filters) {
+      if (filters.dateRange?.from) {
+        params.append('from_date', filters.dateRange.from.toISOString().split('T')[0]);
+        
+        if (filters.dateRange.to) {
+          params.append('to_date', filters.dateRange.to.toISOString().split('T')[0]);
+        }
+      }
       
-      if (filters.dateRange.to) {
-        queryParams.to_date = format(filters.dateRange.to, 'yyyy-MM-dd');
+      if (filters.paymentStatus) {
+        params.append('status', filters.paymentStatus);
+      }
+      
+      if (filters.paymentMethod) {
+        params.append('method', filters.paymentMethod);
+      }
+      
+      if (filters.customerId) {
+        params.append('customer_id', filters.customerId.toString());
+      }
+      
+      if (filters.search) {
+        params.append('search', filters.search);
       }
     }
     
-    if (filters?.paymentStatus) {
-      queryParams.status = filters.paymentStatus;
-    }
-    
-    if (filters?.paymentMethod) {
-      queryParams.method = filters.paymentMethod;
-    }
-    
-    if (filters?.customerId) {
-      queryParams.customer_id = String(filters.customerId);
-    }
-    
-    if (filters?.search) {
-      queryParams.search = filters.search;
-    }
-    
-    // Build query string
-    const queryString = Object.entries(queryParams)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-      .join('&');
-    
-    // Make request
-    const url = `${getApiUrl(`/api/admin/payments.php${queryString ? `?${queryString}` : ''}`)}`;
-    console.log('Fetching payments from:', url);
-    
-    const response = await axios.get(url, {
-      headers: {
-        ...forceRefreshHeaders,
-      },
+    const response = await axios.get(PAYMENTS_API_URL, { 
+      params,
+      headers: defaultHeaders
     });
     
-    if (response.data && response.data.status === 'success') {
-      return {
-        payments: response.data.data.payments || [],
-        summary: response.data.data.summary || undefined
-      };
-    } else {
-      throw new Error(response.data?.message || 'Failed to fetch payments');
-    }
+    return response.data;
   } catch (error) {
     console.error('Error fetching payments:', error);
     throw error;
@@ -76,34 +55,27 @@ export const getPayments = async (filters?: PaymentFilterParams): Promise<Paymen
 /**
  * Update payment status
  */
-export const updatePaymentStatus = async (
+const updatePaymentStatus = async (
   paymentId: number | string, 
-  status: string, 
+  status: string,
   amount?: number,
   paymentMethod?: string,
   notes?: string
 ): Promise<Payment> => {
   try {
-    const url = getApiUrl('/api/admin/payment-update.php');
+    const response = await axios.post(
+      `${getApiUrl()}/admin/payment-update.php`, 
+      {
+        payment_id: paymentId,
+        status,
+        amount,
+        payment_method: paymentMethod,
+        notes
+      },
+      { headers: defaultHeaders }
+    );
     
-    const response = await axios.post(url, {
-      payment_id: paymentId,
-      status,
-      amount,
-      payment_method: paymentMethod,
-      notes
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...forceRefreshHeaders
-      }
-    });
-    
-    if (response.data && response.data.status === 'success') {
-      return response.data.data;
-    } else {
-      throw new Error(response.data?.message || 'Failed to update payment status');
-    }
+    return response.data.payment;
   } catch (error) {
     console.error('Error updating payment status:', error);
     throw error;
@@ -111,75 +83,25 @@ export const updatePaymentStatus = async (
 };
 
 /**
- * Get payment reminders
- */
-export const getPaymentReminders = async (filters?: PaymentFilterParams): Promise<PaymentRemindersResponse> => {
-  try {
-    // Prepare query params
-    const queryParams: Record<string, string> = {};
-    
-    if (filters?.dateRange?.from) {
-      queryParams.from_date = format(filters.dateRange.from, 'yyyy-MM-dd');
-      
-      if (filters.dateRange.to) {
-        queryParams.to_date = format(filters.dateRange.to, 'yyyy-MM-dd');
-      }
-    }
-    
-    // Build query string
-    const queryString = Object.entries(queryParams)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-      .join('&');
-    
-    // Make request
-    const url = `${getApiUrl(`/api/admin/payment-reminders.php${queryString ? `?${queryString}` : ''}`)}`;
-    
-    const response = await axios.get(url, {
-      headers: {
-        ...forceRefreshHeaders,
-      },
-    });
-    
-    if (response.data && response.data.status === 'success') {
-      return {
-        reminders: response.data.data.reminders || []
-      };
-    } else {
-      throw new Error(response.data?.message || 'Failed to fetch payment reminders');
-    }
-  } catch (error) {
-    console.error('Error fetching payment reminders:', error);
-    throw error;
-  }
-};
-
-/**
  * Send payment reminder
  */
-export const sendPaymentReminder = async (
+const sendPaymentReminder = async (
   paymentId: number | string,
   reminderType: string,
   customMessage?: string
-): Promise<PaymentReminder> => {
+): Promise<{ success: boolean }> => {
   try {
-    const url = getApiUrl('/api/admin/send-payment-reminder.php');
+    const response = await axios.post(
+      `${getApiUrl()}/admin/send-payment-reminder.php`,
+      {
+        payment_id: paymentId,
+        reminder_type: reminderType,
+        custom_message: customMessage
+      },
+      { headers: defaultHeaders }
+    );
     
-    const response = await axios.post(url, {
-      payment_id: paymentId,
-      reminder_type: reminderType,
-      custom_message: customMessage
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...forceRefreshHeaders
-      }
-    });
-    
-    if (response.data && response.data.status === 'success') {
-      return response.data.data;
-    } else {
-      throw new Error(response.data?.message || 'Failed to send payment reminder');
-    }
+    return response.data;
   } catch (error) {
     console.error('Error sending payment reminder:', error);
     throw error;
@@ -187,42 +109,21 @@ export const sendPaymentReminder = async (
 };
 
 /**
- * Get payment summary
+ * Get payment reminders
  */
-export const getPaymentSummary = async (filters?: PaymentFilterParams): Promise<PaymentSummary> => {
+const getPaymentReminders = async (paymentId: number | string): Promise<PaymentRemindersResponse> => {
   try {
-    // Prepare query params
-    const queryParams: Record<string, string> = {};
-    
-    if (filters?.dateRange?.from) {
-      queryParams.from_date = format(filters.dateRange.from, 'yyyy-MM-dd');
-      
-      if (filters.dateRange.to) {
-        queryParams.to_date = format(filters.dateRange.to, 'yyyy-MM-dd');
+    const response = await axios.get(
+      `${getApiUrl()}/admin/payment-reminders.php`,
+      {
+        params: { payment_id: paymentId },
+        headers: defaultHeaders
       }
-    }
+    );
     
-    // Build query string
-    const queryString = Object.entries(queryParams)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-      .join('&');
-    
-    // Make request
-    const url = `${getApiUrl(`/api/admin/payment-summary.php${queryString ? `?${queryString}` : ''}`)}`;
-    
-    const response = await axios.get(url, {
-      headers: {
-        ...forceRefreshHeaders,
-      },
-    });
-    
-    if (response.data && response.data.status === 'success') {
-      return response.data.data;
-    } else {
-      throw new Error(response.data?.message || 'Failed to fetch payment summary');
-    }
+    return response.data;
   } catch (error) {
-    console.error('Error fetching payment summary:', error);
+    console.error('Error fetching payment reminders:', error);
     throw error;
   }
 };
@@ -230,9 +131,6 @@ export const getPaymentSummary = async (filters?: PaymentFilterParams): Promise<
 export const paymentsAPI = {
   getPayments,
   updatePaymentStatus,
-  getPaymentReminders,
   sendPaymentReminder,
-  getPaymentSummary
+  getPaymentReminders
 };
-
-export default paymentsAPI;

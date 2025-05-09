@@ -1,5 +1,4 @@
 
-
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
 import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
