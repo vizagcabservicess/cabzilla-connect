@@ -8,74 +8,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, parseISO } from 'date-fns';
-
-interface BookingsReportData {
-  date: string;
-  total_bookings: number;
-  completed_bookings: number;
-  cancelled_bookings: number;
-  confirmed_bookings: number;
-  assigned_bookings: number;
-  pending_bookings: number;
-}
+import { format } from 'date-fns';
+import { BookingsReportData, BookingsByDate } from '@/types/reports';
 
 interface ReportBookingsTableProps {
-  data: BookingsReportData[] | any;
+  data: BookingsReportData;
 }
 
 export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
-  // Handle case where data is not in the expected format
-  let reportData: BookingsReportData[] = [];
+  // Process data to ensure it's in the correct format
+  let dailyBookings: BookingsByDate[] = [];
   
-  if (Array.isArray(data)) {
-    reportData = data;
-  } else if (data && Array.isArray(data.dailyBookings)) {
-    // Try to extract daily bookings from API response
-    reportData = data.dailyBookings.map((item: any) => ({
-      date: item.date,
-      total_bookings: item.count || 0,
-      completed_bookings: 0,
-      cancelled_bookings: 0,
-      confirmed_bookings: 0,
-      assigned_bookings: 0,
-      pending_bookings: 0,
-    }));
-  } else if (data && typeof data === 'object') {
-    console.log('Received non-array booking data:', data);
-    // If data is a single summary object, create a single entry
-    reportData = [{
-      date: format(new Date(), 'yyyy-MM-dd'),
-      total_bookings: data.totalBookings || 0,
-      completed_bookings: data.bookingsByStatus?.completed || 0,
-      cancelled_bookings: data.bookingsByStatus?.cancelled || 0,
-      confirmed_bookings: data.bookingsByStatus?.confirmed || 0,
-      assigned_bookings: data.bookingsByStatus?.assigned || 0,
-      pending_bookings: data.bookingsByStatus?.pending || 0,
-    }];
+  if (data && Array.isArray(data.dailyBookings)) {
+    dailyBookings = data.dailyBookings;
+  } else if (Array.isArray(data)) {
+    // If data is passed directly as an array
+    dailyBookings = data as unknown as BookingsByDate[];
   }
-
-  // Now that we have the data in the correct format, calculate totals
-  const totals = reportData.reduce(
-    (acc, row) => {
-      acc.total_bookings += Number(row.total_bookings || 0);
-      acc.completed_bookings += Number(row.completed_bookings || 0);
-      acc.cancelled_bookings += Number(row.cancelled_bookings || 0);
-      acc.confirmed_bookings += Number(row.confirmed_bookings || 0);
-      acc.assigned_bookings += Number(row.assigned_bookings || 0);
-      acc.pending_bookings += Number(row.pending_bookings || 0);
-      return acc;
-    },
-    {
-      total_bookings: 0,
-      completed_bookings: 0,
-      cancelled_bookings: 0,
-      confirmed_bookings: 0,
-      assigned_bookings: 0,
-      pending_bookings: 0,
-    }
-  );
-
+  
+  // Calculate totals from the daily bookings
+  const totalBookings = dailyBookings.reduce((sum, item) => sum + (item.count || 0), 0);
+  
+  // Get status counts from data if available
+  const bookingsByStatus = data?.bookingsByStatus || {
+    completed: 0,
+    cancelled: 0,
+    confirmed: 0,
+    assigned: 0,
+    pending: 0
+  };
+  
   // Format date for display
   const formatReportDate = (dateStr: string) => {
     try {
@@ -86,7 +48,7 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
   };
 
   // If we have no data after processing, show an empty message
-  if (reportData.length === 0) {
+  if (dailyBookings.length === 0) {
     return (
       <div className="text-center p-6">
         <p className="text-muted-foreground">No booking data available for the selected period.</p>
@@ -101,7 +63,7 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead className="text-right">Total Bookings</TableHead>
               <TableHead className="text-right">Completed</TableHead>
               <TableHead className="text-right">Cancelled</TableHead>
               <TableHead className="text-right">Confirmed</TableHead>
@@ -110,25 +72,25 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {reportData.map((row, index) => (
+            {dailyBookings.map((row, index) => (
               <TableRow key={index}>
                 <TableCell className="font-medium">{formatReportDate(row.date)}</TableCell>
-                <TableCell className="text-right">{row.total_bookings}</TableCell>
-                <TableCell className="text-right">{row.completed_bookings}</TableCell>
-                <TableCell className="text-right">{row.cancelled_bookings}</TableCell>
-                <TableCell className="text-right">{row.confirmed_bookings}</TableCell>
-                <TableCell className="text-right">{row.assigned_bookings}</TableCell>
-                <TableCell className="text-right">{row.pending_bookings}</TableCell>
+                <TableCell className="text-right">{row.count || 0}</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">-</TableCell>
               </TableRow>
             ))}
             <TableRow className="bg-muted/50 font-medium">
               <TableCell>Totals</TableCell>
-              <TableCell className="text-right">{totals.total_bookings}</TableCell>
-              <TableCell className="text-right">{totals.completed_bookings}</TableCell>
-              <TableCell className="text-right">{totals.cancelled_bookings}</TableCell>
-              <TableCell className="text-right">{totals.confirmed_bookings}</TableCell>
-              <TableCell className="text-right">{totals.assigned_bookings}</TableCell>
-              <TableCell className="text-right">{totals.pending_bookings}</TableCell>
+              <TableCell className="text-right">{totalBookings}</TableCell>
+              <TableCell className="text-right">{bookingsByStatus.completed}</TableCell>
+              <TableCell className="text-right">{bookingsByStatus.cancelled}</TableCell>
+              <TableCell className="text-right">{bookingsByStatus.confirmed}</TableCell>
+              <TableCell className="text-right">{bookingsByStatus.assigned}</TableCell>
+              <TableCell className="text-right">{bookingsByStatus.pending}</TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -140,22 +102,22 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
           <div className="rounded-md border p-4">
             <div className="text-sm text-muted-foreground">Completion Rate</div>
             <div className="text-2xl font-bold">
-              {totals.total_bookings > 0
-                ? `${Math.round((totals.completed_bookings / totals.total_bookings) * 100)}%`
+              {totalBookings > 0
+                ? `${Math.round((bookingsByStatus.completed / totalBookings) * 100)}%`
                 : "0%"}
             </div>
           </div>
           <div className="rounded-md border p-4">
             <div className="text-sm text-muted-foreground">Cancellation Rate</div>
             <div className="text-2xl font-bold">
-              {totals.total_bookings > 0
-                ? `${Math.round((totals.cancelled_bookings / totals.total_bookings) * 100)}%`
+              {totalBookings > 0
+                ? `${Math.round((bookingsByStatus.cancelled / totalBookings) * 100)}%`
                 : "0%"}
             </div>
           </div>
           <div className="rounded-md border p-4">
             <div className="text-sm text-muted-foreground">Total Bookings</div>
-            <div className="text-2xl font-bold">{totals.total_bookings}</div>
+            <div className="text-2xl font-bold">{totalBookings}</div>
           </div>
         </div>
       </div>

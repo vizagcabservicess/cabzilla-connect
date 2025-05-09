@@ -16,7 +16,8 @@ function connectToDatabase() {
     
     // Check for connection errors
     if ($mysqli->connect_error) {
-        die("Database connection failed: " . $mysqli->connect_error);
+        error_log("Database connection failed: " . $mysqli->connect_error);
+        throw new Exception("Database connection failed: " . $mysqli->connect_error);
     }
     
     // Set character set to UTF-8
@@ -25,18 +26,12 @@ function connectToDatabase() {
     return $mysqli;
 }
 
-// Get a database connection with error handling
+// Get a database connection with error handling and retry mechanism
 function getDbConnection() {
     static $db = null;
     
     if ($db === null) {
         $db = connectToDatabase();
-        
-        // Set up error handling
-        if (!$db) {
-            error_log("Database connection failed");
-            return false;
-        }
     }
     
     // Check if connection is still alive
@@ -44,14 +39,35 @@ function getDbConnection() {
         // Try to reconnect
         $db->close();
         $db = connectToDatabase();
-        
-        if (!$db) {
-            error_log("Database reconnection failed");
-            return false;
-        }
     }
     
     return $db;
+}
+
+// Get a database connection with retry
+function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 1) {
+    $attempts = 0;
+    $lastException = null;
+    
+    while ($attempts < $maxRetries) {
+        try {
+            return getDbConnection();
+        } catch (Exception $e) {
+            $lastException = $e;
+            $attempts++;
+            error_log("Database connection attempt $attempts failed: " . $e->getMessage());
+            
+            if ($attempts < $maxRetries) {
+                // Wait before retrying
+                sleep($retryDelay);
+                // Increase delay for next attempt (exponential backoff)
+                $retryDelay *= 2;
+            }
+        }
+    }
+    
+    // All attempts failed, throw the last exception
+    throw $lastException ?: new Exception("Failed to connect to database after $maxRetries attempts");
 }
 
 // Format a date string for MySQL
@@ -108,4 +124,53 @@ function formatDateTimeForMySQL($datetime) {
 function escapeString($db, $string) {
     if ($string === null) return 'NULL';
     return "'" . $db->real_escape_string($string) . "'";
+}
+
+// Execute a parameterized query with proper error handling
+function executeQuery($conn, $sql, $params = [], $types = "") {
+    try {
+        $stmt = $conn->prepare($sql);
+        
+        if ($stmt === false) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
+        }
+        
+        // Only bind parameters if there are any
+        if (!empty($params) && !empty($types)) {
+            if (strlen($types) !== count($params)) {
+                $types = str_repeat("s", count($params));
+            }
+            
+            // Create a bind_param array with references
+            $bindParams = array($types);
+            foreach ($params as $key => $value) {
+                $bindParams[] = &$params[$key];
+            }
+            
+            // Call bind_param with the unpacked bindParams array
+            call_user_func_array(array($stmt, 'bind_param'), $bindParams);
+        }
+        
+        // Execute the statement
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to execute statement: " . $stmt->error);
+        }
+        
+        // Get the result and return it
+        $result = $stmt->get_result();
+        
+        // If there's no result (e.g., for INSERT, UPDATE), return the affected rows and insert ID
+        if ($result === false) {
+            return [
+                'affected_rows' => $stmt->affected_rows,
+                'insert_id' => $stmt->insert_id,
+                'success' => true
+            ];
+        }
+        
+        return $result;
+    } catch (Exception $e) {
+        error_log("Query execution error: " . $e->getMessage());
+        throw $e;
+    }
 }

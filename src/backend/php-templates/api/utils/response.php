@@ -1,3 +1,4 @@
+
 <?php
 /**
  * API response utility functions for standardized JSON responses
@@ -19,7 +20,11 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
     // Set CORS headers to ensure frontend can access the response
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Debug');
+    
+    // Set cache control headers
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     
     $response = [
         'status' => 'success',
@@ -46,7 +51,11 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $e
     // Set CORS headers to ensure frontend can access the response
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Debug');
+    
+    // Set cache control headers
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     
     $response = [
         'status' => 'error',
@@ -58,8 +67,3 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $e
     echo json_encode($response);
     exit();
 }
-
-// Helper function to execute a parameterized query
-// function executeQuery($conn, $sql, $params = [], $types = "") {
-//     ... (removed duplicate implementation)
-// }
