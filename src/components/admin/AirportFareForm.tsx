@@ -2,7 +2,20 @@
 import React from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FareData } from '@/services/fareManagementService';
+
+interface FareData {
+  vehicleId?: string;
+  vehicle_id?: string;
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
 
 interface AirportFareFormProps {
   fareData: FareData;
@@ -107,7 +120,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
+          <Label htmlFor="tier4Price">Tier 4 Price ({`>`} 30km) (₹)</Label>
           <Input
             id="tier4Price"
             name="tier4Price"
