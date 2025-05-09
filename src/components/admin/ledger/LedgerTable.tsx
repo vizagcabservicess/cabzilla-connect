@@ -11,8 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { format } from 'date-fns';
-import { ArrowUp, ArrowDown, Edit, Trash } from "lucide-react";
-import { LedgerEntry } from "@/services/api/ledgerAPI";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { ArrowUp, ArrowDown, Edit, Trash, CheckCircle } from "lucide-react";
+import { LedgerEntry, ledgerAPI } from "@/services/api/ledgerAPI";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
@@ -25,12 +26,15 @@ import {
 interface LedgerTableProps {
   data: LedgerEntry[];
   isLoading?: boolean;
+  onEntryUpdated?: () => void;
+  onEntryDeleted?: () => void;
 }
 
-export function LedgerTable({ data, isLoading = false }: LedgerTableProps) {
+export function LedgerTable({ data, isLoading = false, onEntryUpdated, onEntryDeleted }: LedgerTableProps) {
   const [sortField, setSortField] = useState<keyof LedgerEntry>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingEntry, setDeletingEntry] = useState<LedgerEntry | null>(null);
 
   // Format currency
   const formatCurrency = (amount: number | null | undefined) => {
@@ -87,18 +91,36 @@ export function LedgerTable({ data, isLoading = false }: LedgerTableProps) {
     toast.info(`Editing entry ${entry.id}`, {
       description: "Edit functionality will be available soon"
     });
+    if (onEntryUpdated) {
+      onEntryUpdated();
+    }
   };
 
-  const handleDelete = (entry: LedgerEntry) => {
-    toast.info(`Deleting entry ${entry.id}`, {
-      description: "Delete functionality will be available soon"
-    });
+  const handleDelete = async (entry: LedgerEntry) => {
+    try {
+      setDeletingEntry(null);
+      await ledgerAPI.deleteLedgerEntry(entry.id);
+      toast.success(`Entry ${entry.id} deleted successfully`);
+      if (onEntryDeleted) {
+        onEntryDeleted();
+      }
+    } catch (error) {
+      toast.error(`Failed to delete entry: ${error}`);
+    }
   };
 
-  const handleReconcile = (entry: LedgerEntry) => {
-    toast.success(`Entry ${entry.id} marked as reconciled`, {
-      description: "The entry has been marked as reconciled with your bank account."
-    });
+  const handleReconcile = async (entry: LedgerEntry) => {
+    try {
+      await ledgerAPI.updateLedgerEntry(entry.id, { status: 'reconciled' });
+      toast.success(`Entry ${entry.id} marked as reconciled`, {
+        description: "The entry has been marked as reconciled with your bank account."
+      });
+      if (onEntryUpdated) {
+        onEntryUpdated();
+      }
+    } catch (error) {
+      toast.error(`Failed to reconcile entry: ${error}`);
+    }
   };
 
   if (isLoading) {
@@ -198,6 +220,9 @@ export function LedgerTable({ data, isLoading = false }: LedgerTableProps) {
                     {entry.status === 'pending' && (
                       <Badge variant="outline" className="ml-2 text-amber-600 border-amber-200 bg-amber-50">Pending</Badge>
                     )}
+                    {entry.status === 'reconciled' && (
+                      <Badge variant="outline" className="ml-2 text-green-600 border-green-200 bg-green-50">Reconciled</Badge>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>{entry.category}</TableCell>
@@ -223,13 +248,34 @@ export function LedgerTable({ data, isLoading = false }: LedgerTableProps) {
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(entry)}>
-                        <Trash className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleReconcile(entry)}>
-                        Reconcile
-                      </DropdownMenuItem>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the ledger entry for {formatTableDate(entry.date)}: {entry.description}.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(entry)} className="bg-red-600 hover:bg-red-700">
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      {entry.status !== 'reconciled' && (
+                        <DropdownMenuItem onClick={() => handleReconcile(entry)}>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Reconcile
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -250,6 +296,24 @@ export function LedgerTable({ data, isLoading = false }: LedgerTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingEntry} onOpenChange={(open) => !open && setDeletingEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the ledger entry.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingEntry && handleDelete(deletingEntry)} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

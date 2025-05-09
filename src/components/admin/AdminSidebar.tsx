@@ -15,7 +15,8 @@ import {
   Fuel,
   Wrench,
   Book,
-  CircleDollarSign
+  CircleDollarSign,
+  Banknote  // Added for Payroll
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -36,6 +37,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
     { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
     { id: 'expenses', label: 'Expenses', icon: <CircleDollarSign size={20} />, path: '/admin/expenses' },
+    { id: 'payroll', label: 'Payroll', icon: <Banknote size={20} />, path: '/admin/payroll' },  // Added Payroll entry
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },

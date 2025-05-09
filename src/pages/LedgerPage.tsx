@@ -4,7 +4,7 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRange } from "react-day-picker";
 import { format } from 'date-fns';
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { 
   CategorySummary, 
   EntitySummary, 
@@ -39,8 +39,6 @@ export default function LedgerPage() {
   const [paymentMethodSummaries, setPaymentMethodSummaries] = useState<PaymentMethodSummary[]>([]);
   const [vehicleEmis, setVehicleEmis] = useState<VehicleEmi[]>([]);
   const [entitySummaries, setEntitySummaries] = useState<EntitySummary[]>([]);
-
-  const { toast } = useToast();
 
   // Convert the active tab to the corresponding filter type
   const getFilterTypeFromTab = (tab: string): LedgerFilter['type'] | 'all' => {
@@ -87,16 +85,12 @@ export default function LedgerPage() {
       
     } catch (error) {
       console.error("Error fetching ledger data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load ledger data. Please try again later.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load ledger data. Please try again later.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [activeTab, dateRange, toast]);
+  }, [activeTab, dateRange]);
   
   // Fetch EMI data
   const fetchEmiData = useCallback(async () => {
@@ -106,15 +100,11 @@ export default function LedgerPage() {
       setVehicleEmis(emis);
     } catch (error) {
       console.error("Error fetching EMI data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load EMI data. Please try again later.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load EMI data. Please try again later.");
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
   
   // Fetch entity data
   const fetchEntityData = useCallback(async () => {
@@ -124,15 +114,11 @@ export default function LedgerPage() {
       setEntitySummaries(entities);
     } catch (error) {
       console.error("Error fetching entity data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load entity data. Please try again later.",
-        variant: "destructive",
-      });
+      toast.error("Failed to load entity data. Please try again later.");
     } finally {
       setIsLoading(false);
     }
-  }, [entityType, toast]);
+  }, [entityType]);
 
   // Handle tab change
   const handleTabChange = (value: string) => {
@@ -153,6 +139,16 @@ export default function LedgerPage() {
     } else {
       fetchLedgerData(true);
     }
+  };
+
+  // Handle ledger entry updates
+  const handleEntryUpdated = () => {
+    fetchLedgerData(true);
+  };
+
+  // Handle ledger entry deletion
+  const handleEntryDeleted = () => {
+    fetchLedgerData(true);
   };
 
   // Define tabs configuration
@@ -236,7 +232,12 @@ export default function LedgerPage() {
             {/* All Transactions, Payments, Expenses */}
             {(activeTab === 'all' || activeTab === 'payments' || activeTab === 'expenses') && (
               <>
-                <LedgerTable data={ledgerEntries} isLoading={isLoading} />
+                <LedgerTable 
+                  data={ledgerEntries} 
+                  isLoading={isLoading} 
+                  onEntryUpdated={handleEntryUpdated}
+                  onEntryDeleted={handleEntryDeleted}
+                />
                 
                 {/* Charts only show when we have data and after loading */}
                 {!isLoading && ledgerEntries.length > 0 && (
