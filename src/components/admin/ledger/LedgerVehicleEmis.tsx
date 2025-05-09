@@ -17,6 +17,9 @@ interface LedgerVehicleEmisProps {
 export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerVehicleEmisProps) {
   const [processingIds, setProcessingIds] = useState<Set<string | number>>(new Set());
 
+  // Ensure data is an array
+  const safeData = Array.isArray(data) ? data : [];
+
   const formatCurrency = (amount: number): string => {
     return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
   };
@@ -86,12 +89,14 @@ export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerV
     );
   }
 
-  const overdueEmis = data.filter(emi => emi.status === 'overdue');
-  const pendingEmis = data.filter(emi => emi.status === 'pending');
-  const paidEmis = data.filter(emi => emi.status === 'paid');
+  // Safely filter the EMIs
+  const overdueEmis = safeData.filter(emi => emi.status === 'overdue');
+  const pendingEmis = safeData.filter(emi => emi.status === 'pending');
+  const paidEmis = safeData.filter(emi => emi.status === 'paid');
 
-  const totalAmount = data.reduce((sum, emi) => sum + emi.emiAmount, 0);
-  const pendingAmount = [...overdueEmis, ...pendingEmis].reduce((sum, emi) => sum + emi.emiAmount, 0);
+  // Calculate totals safely
+  const totalAmount = safeData.reduce((sum, emi) => sum + (emi.emiAmount || 0), 0);
+  const pendingAmount = [...overdueEmis, ...pendingEmis].reduce((sum, emi) => sum + (emi.emiAmount || 0), 0);
 
   return (
     <Card>
@@ -103,7 +108,7 @@ export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerV
         </div>
       </CardHeader>
       <CardContent>
-        {data.length === 0 ? (
+        {safeData.length === 0 ? (
           <div className="text-center p-6">
             <p className="text-muted-foreground">No EMIs found.</p>
           </div>

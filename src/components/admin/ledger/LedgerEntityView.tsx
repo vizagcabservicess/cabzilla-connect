@@ -60,10 +60,13 @@ export function LedgerEntityView({
     }
   };
 
-  // Calculate totals
-  const totalIncome = entitySummaries.reduce((sum, entity) => sum + entity.income, 0);
-  const totalExpenses = entitySummaries.reduce((sum, entity) => sum + entity.expense, 0);
-  const totalBalance = entitySummaries.reduce((sum, entity) => sum + entity.balance, 0);
+  // Ensure entitySummaries is an array before calculating totals
+  const safeEntitySummaries = Array.isArray(entitySummaries) ? entitySummaries : [];
+
+  // Calculate totals safely
+  const totalIncome = safeEntitySummaries.reduce((sum, entity) => sum + (entity.income || 0), 0);
+  const totalExpenses = safeEntitySummaries.reduce((sum, entity) => sum + (entity.expense || 0), 0);
+  const totalBalance = safeEntitySummaries.reduce((sum, entity) => sum + (entity.balance || 0), 0);
 
   return (
     <Card>
@@ -84,7 +87,7 @@ export function LedgerEntityView({
         </div>
       </CardHeader>
       <CardContent>
-        {entitySummaries.length === 0 ? (
+        {safeEntitySummaries.length === 0 ? (
           <div className="text-center p-6">
             <p className="text-muted-foreground">No {entityType} data available.</p>
           </div>
@@ -101,20 +104,20 @@ export function LedgerEntityView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entitySummaries.map((entity) => (
+                {safeEntitySummaries.map((entity) => (
                   <TableRow key={entity.id}>
                     <TableCell>{entity.id}</TableCell>
                     <TableCell className="font-medium">{entity.name}</TableCell>
                     <TableCell className="text-right text-green-600">
-                      {formatCurrency(entity.income)}
+                      {formatCurrency(entity.income || 0)}
                     </TableCell>
                     <TableCell className="text-right text-red-600">
-                      {formatCurrency(entity.expense)}
+                      {formatCurrency(entity.expense || 0)}
                     </TableCell>
                     <TableCell className={`text-right font-medium ${
-                      entity.balance >= 0 ? 'text-green-600' : 'text-red-600'
+                      (entity.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {formatCurrency(entity.balance)}
+                      {formatCurrency(entity.balance || 0)}
                     </TableCell>
                   </TableRow>
                 ))}

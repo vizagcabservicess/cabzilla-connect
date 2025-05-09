@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +31,7 @@ export default function LedgerPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [entityType, setEntityType] = useState<'vehicle' | 'driver' | 'customer' | 'project'>('vehicle');
   
-  // State for different data types
+  // State for different data types - initialize with empty arrays/null
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [ledgerSummary, setLedgerSummary] = useState<LedgerSummary | null>(null);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
@@ -71,8 +70,15 @@ export default function LedgerPage() {
         ledgerAPI.fetchLedgerSummary(filters)
       ]);
       
-      setLedgerEntries(entries);
-      setLedgerSummary(summary);
+      setLedgerEntries(entries || []);
+      setLedgerSummary(summary || {
+        totalIncome: 0,
+        totalExpenses: 0,
+        netBalance: 0,
+        cashAccepted: 0,
+        inBankAccount: 0,
+        pendingPayments: 0
+      });
       
       // Fetch category and payment method summaries
       const [categories, paymentMethods] = await Promise.all([
@@ -80,12 +86,16 @@ export default function LedgerPage() {
         ledgerAPI.fetchPaymentMethodSummaries(filters)
       ]);
       
-      setCategorySummaries(categories);
-      setPaymentMethodSummaries(paymentMethods);
+      setCategorySummaries(categories || []);
+      setPaymentMethodSummaries(paymentMethods || []);
       
     } catch (error) {
       console.error("Error fetching ledger data:", error);
       toast.error("Failed to load ledger data. Please try again later.");
+      // Set default empty values on error
+      setLedgerEntries([]);
+      setCategorySummaries([]);
+      setPaymentMethodSummaries([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -97,10 +107,12 @@ export default function LedgerPage() {
     try {
       setIsLoading(true);
       const emis = await ledgerAPI.fetchVehicleEmis();
-      setVehicleEmis(emis);
+      setVehicleEmis(emis || []);
     } catch (error) {
       console.error("Error fetching EMI data:", error);
       toast.error("Failed to load EMI data. Please try again later.");
+      // Set empty array on error
+      setVehicleEmis([]);
     } finally {
       setIsLoading(false);
     }
@@ -111,10 +123,12 @@ export default function LedgerPage() {
     try {
       setIsLoading(true);
       const entities = await ledgerAPI.fetchEntitySummaries(entityType);
-      setEntitySummaries(entities);
+      setEntitySummaries(entities || []);
     } catch (error) {
       console.error("Error fetching entity data:", error);
       toast.error("Failed to load entity data. Please try again later.");
+      // Set empty array on error
+      setEntitySummaries([]);
     } finally {
       setIsLoading(false);
     }
@@ -151,12 +165,12 @@ export default function LedgerPage() {
     fetchLedgerData(true);
   };
 
-  // Define tabs configuration
+  // Define tabs configuration with safe count calculations
   const tabs = [
-    { id: 'all', label: 'All Transactions', count: ledgerEntries?.length },
-    { id: 'payments', label: 'Payments', count: ledgerEntries?.filter(e => e.type === 'income')?.length },
-    { id: 'expenses', label: 'Expenses', count: ledgerEntries?.filter(e => e.type === 'expense')?.length },
-    { id: 'emis', label: 'Vehicle EMIs', count: vehicleEmis?.length },
+    { id: 'all', label: 'All Transactions', count: ledgerEntries?.length || 0 },
+    { id: 'payments', label: 'Payments', count: ledgerEntries?.filter(e => e.type === 'income')?.length || 0 },
+    { id: 'expenses', label: 'Expenses', count: ledgerEntries?.filter(e => e.type === 'expense')?.length || 0 },
+    { id: 'emis', label: 'Vehicle EMIs', count: vehicleEmis?.length || 0 },
     { id: 'entity', label: 'Entity-Specific' }
   ];
 
