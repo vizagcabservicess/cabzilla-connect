@@ -15,6 +15,11 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
     // Set content type header
     header('Content-Type: application/json');
     
+    // Set CORS headers to ensure frontend can access the response
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    
     $response = [
         'status' => 'success',
         'message' => $message,
@@ -37,6 +42,11 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $e
     // Set content type header
     header('Content-Type: application/json');
     
+    // Set CORS headers to ensure frontend can access the response
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    
     $response = [
         'status' => 'error',
         'message' => $message,
@@ -46,4 +56,36 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $e
     
     echo json_encode($response);
     exit();
+}
+
+// Helper function to execute a parameterized query
+function executeQuery($conn, $sql, $params = [], $types = "") {
+    // If no parameters, just run the query directly
+    if (empty($params)) {
+        $result = $conn->query($sql);
+        if (!$result) {
+            throw new Exception("Query failed: " . $conn->error);
+        }
+        return $result;
+    }
+    
+    // Prepare the statement
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
+    
+    // Bind parameters if there are any
+    if (!empty($params) && !empty($types)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    // Execute the statement
+    if (!$stmt->execute()) {
+        throw new Exception("Execute failed: " . $stmt->error);
+    }
+    
+    // Get the result
+    $result = $stmt->get_result();
+    return $result;
 }

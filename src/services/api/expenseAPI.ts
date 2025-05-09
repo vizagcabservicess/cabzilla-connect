@@ -19,21 +19,38 @@ const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
   { id: 'parties', name: 'Events', description: 'Team events and parties', color: '#EC4899' },
 ];
 
+// Generic error handler function
+const handleApiError = (error: any, fallbackMsg: string): string => {
+  console.error(fallbackMsg, error);
+  if (error.response?.data?.message) {
+    return error.response.data.message;
+  } else if (error.message) {
+    return error.message;
+  }
+  return fallbackMsg;
+};
+
 /**
  * Fetch all expense categories
  */
 const fetchExpenseCategories = async (): Promise<ExpenseCategory[]> => {
   try {
+    console.log("Fetching expense categories...");
     const response = await axios.get(`${API_BASE_URL}/expenses.php?action=categories`);
     
     if (response.data.status === 'success') {
+      console.log("Categories fetched successfully:", response.data.data);
       return response.data.data;
     } else {
-      throw new Error(response.data.message || 'Failed to fetch expense categories');
+      const errorMsg = response.data.message || 'Failed to fetch expense categories';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      return DEFAULT_EXPENSE_CATEGORIES;
     }
   } catch (error) {
-    console.error("Error fetching expense categories:", error);
-    toast.error("Failed to fetch expense categories. Using default categories.");
+    const errorMsg = handleApiError(error, "Failed to fetch expense categories");
+    toast.error(errorMsg + ". Using default categories.");
+    console.log("Returning default categories due to error");
     return DEFAULT_EXPENSE_CATEGORIES;
   }
 };
@@ -43,6 +60,7 @@ const fetchExpenseCategories = async (): Promise<ExpenseCategory[]> => {
  */
 const addExpenseCategory = async (category: Omit<ExpenseCategory, 'id'>): Promise<ExpenseCategory> => {
   try {
+    console.log("Adding expense category:", category);
     const response = await axios.post(`${API_BASE_URL}/expenses.php`, {
       action: 'add_category',
       ...category
@@ -52,12 +70,14 @@ const addExpenseCategory = async (category: Omit<ExpenseCategory, 'id'>): Promis
       toast.success(`Category "${category.name}" added successfully`);
       return response.data.data;
     } else {
-      throw new Error(response.data.message || 'Failed to add expense category');
+      const errorMsg = response.data.message || 'Failed to add expense category';
+      toast.error(errorMsg);
+      throw new Error(errorMsg);
     }
   } catch (error) {
-    console.error("Error adding expense category:", error);
-    toast.error("Failed to add expense category");
-    throw error;
+    const errorMsg = handleApiError(error, "Failed to add expense category");
+    toast.error(errorMsg);
+    throw new Error(errorMsg);
   }
 };
 
@@ -83,6 +103,7 @@ const prepareDateRangeParams = (dateRange?: DateRange) => {
  */
 const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> => {
   try {
+    console.log("Fetching expenses with filters:", filters);
     let params: Record<string, any> = {};
     
     if (filters) {
@@ -128,13 +149,18 @@ const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> =
     const response = await axios.get(`${API_BASE_URL}/expenses.php`, { params });
     
     if (response.data.status === 'success') {
-      return response.data.data;
+      console.log("Expenses fetched successfully:", response.data.data);
+      return response.data.data || [];
     } else {
-      throw new Error(response.data.message || 'Failed to fetch expenses');
+      const errorMsg = response.data.message || 'Failed to fetch expenses';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      return [];
     }
   } catch (error) {
-    console.error("Error fetching expenses:", error);
-    toast.error("Failed to fetch expenses");
+    const errorMsg = handleApiError(error, "Failed to fetch expenses");
+    toast.error(errorMsg);
+    console.error("Error details:", error);
     return [];
   }
 };
@@ -144,18 +170,33 @@ const fetchExpenses = async (filters?: ExpenseFilter): Promise<ExpenseEntry[]> =
  */
 const addExpense = async (expense: Omit<ExpenseEntry, 'id'>): Promise<ExpenseEntry> => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/expenses.php`, expense);
+    console.log("Adding expense:", expense);
+    
+    // Ensure date is formatted properly
+    const formattedExpense = {
+      ...expense,
+      date: typeof expense.date === 'object' ? format(expense.date as Date, 'yyyy-MM-dd') : expense.date,
+      billDate: expense.billDate && typeof expense.billDate === 'object' 
+        ? format(expense.billDate as Date, 'yyyy-MM-dd') 
+        : expense.billDate
+    };
+    
+    const response = await axios.post(`${API_BASE_URL}/expenses.php`, formattedExpense);
     
     if (response.data.status === 'success') {
       toast.success(`Expense "${expense.description}" added successfully`);
       return response.data.data;
     } else {
-      throw new Error(response.data.message || 'Failed to add expense');
+      const errorMsg = response.data.message || 'Failed to add expense';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      throw new Error(errorMsg);
     }
   } catch (error) {
-    console.error("Error adding expense:", error);
-    toast.error("Failed to add expense");
-    throw error;
+    const errorMsg = handleApiError(error, "Failed to add expense");
+    toast.error(errorMsg);
+    console.error("Error details:", error);
+    throw new Error(errorMsg);
   }
 };
 
@@ -164,21 +205,36 @@ const addExpense = async (expense: Omit<ExpenseEntry, 'id'>): Promise<ExpenseEnt
  */
 const updateExpense = async (id: string | number, expense: Partial<ExpenseEntry>): Promise<ExpenseEntry> => {
   try {
-    const response = await axios.put(`${API_BASE_URL}/expenses.php`, {
+    console.log("Updating expense:", id, expense);
+    
+    // Format dates if they're Date objects
+    const formattedExpense = {
+      ...expense,
       id,
-      ...expense
-    });
+      date: expense.date && typeof expense.date === 'object' 
+        ? format(expense.date as Date, 'yyyy-MM-dd') 
+        : expense.date,
+      billDate: expense.billDate && typeof expense.billDate === 'object' 
+        ? format(expense.billDate as Date, 'yyyy-MM-dd') 
+        : expense.billDate
+    };
+    
+    const response = await axios.put(`${API_BASE_URL}/expenses.php`, formattedExpense);
     
     if (response.data.status === 'success') {
       toast.success(`Expense "${expense.description}" updated successfully`);
       return response.data.data;
     } else {
-      throw new Error(response.data.message || 'Failed to update expense');
+      const errorMsg = response.data.message || 'Failed to update expense';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      throw new Error(errorMsg);
     }
   } catch (error) {
-    console.error("Error updating expense:", error);
-    toast.error("Failed to update expense");
-    throw error;
+    const errorMsg = handleApiError(error, "Failed to update expense");
+    toast.error(errorMsg);
+    console.error("Error details:", error);
+    throw new Error(errorMsg);
   }
 };
 
@@ -187,6 +243,7 @@ const updateExpense = async (id: string | number, expense: Partial<ExpenseEntry>
  */
 const deleteExpense = async (id: string | number): Promise<boolean> => {
   try {
+    console.log("Deleting expense:", id);
     const response = await axios.delete(`${API_BASE_URL}/expenses.php`, {
       params: { id }
     });
@@ -195,11 +252,15 @@ const deleteExpense = async (id: string | number): Promise<boolean> => {
       toast.success("Expense deleted successfully");
       return true;
     } else {
-      throw new Error(response.data.message || 'Failed to delete expense');
+      const errorMsg = response.data.message || 'Failed to delete expense';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      return false;
     }
   } catch (error) {
-    console.error("Error deleting expense:", error);
-    toast.error("Failed to delete expense");
+    const errorMsg = handleApiError(error, "Failed to delete expense");
+    toast.error(errorMsg);
+    console.error("Error details:", error);
     return false;
   }
 };
@@ -209,6 +270,7 @@ const deleteExpense = async (id: string | number): Promise<boolean> => {
  */
 const getExpenseSummary = async (dateRange?: DateRange): Promise<ExpenseSummary> => {
   try {
+    console.log("Getting expense summary with dateRange:", dateRange);
     const params = {
       action: 'summary',
       ...prepareDateRangeParams(dateRange)
@@ -217,13 +279,25 @@ const getExpenseSummary = async (dateRange?: DateRange): Promise<ExpenseSummary>
     const response = await axios.get(`${API_BASE_URL}/expenses.php`, { params });
     
     if (response.data.status === 'success') {
+      console.log("Summary fetched successfully:", response.data.data);
       return response.data.data;
     } else {
-      throw new Error(response.data.message || 'Failed to generate expense summary');
+      const errorMsg = response.data.message || 'Failed to generate expense summary';
+      console.error("API returned error:", errorMsg);
+      toast.error(errorMsg);
+      
+      // Return empty summary on error
+      return {
+        totalAmount: 0,
+        byCategory: [],
+        byMonth: [],
+        byPaymentMethod: [],
+      };
     }
   } catch (error) {
-    console.error("Error getting expense summary:", error);
-    toast.error("Failed to generate expense summary");
+    const errorMsg = handleApiError(error, "Failed to generate expense summary");
+    toast.error(errorMsg);
+    console.error("Error details:", error);
     
     // Return empty summary on error
     return {
