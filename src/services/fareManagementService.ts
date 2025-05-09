@@ -53,6 +53,8 @@ export const normalizeResponse = (response: any): FareData[] => {
   let fares: FareData[] = [];
 
   try {
+    console.log("Raw response to normalize:", JSON.stringify(response));
+    
     // Check for various response formats
     if (response?.fares) {
       if (Array.isArray(response.fares)) {
@@ -70,9 +72,30 @@ export const normalizeResponse = (response: any): FareData[] => {
       fares = response.data;
     }
     
+    // If still no fares found but we have vehicles array
+    if (fares.length === 0 && response?.vehicles && Array.isArray(response.vehicles)) {
+      fares = response.vehicles.map(vehicle => ({
+        vehicleId: vehicle.vehicleId || vehicle.id,
+        vehicle_id: vehicle.vehicleId || vehicle.id,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }));
+    }
+    
+    console.log(`Normalized ${fares.length} fares from response`);
+    
     // Normalize each fare object to ensure all properties exist
     return fares.map(fare => ({
       ...fare,
+      vehicleId: fare.vehicleId || fare.vehicle_id,
+      vehicle_id: fare.vehicleId || fare.vehicle_id,
       basePrice: parseNumericValue(fare.basePrice || fare.base_price),
       pricePerKm: parseNumericValue(fare.pricePerKm || fare.price_per_km),
       pickupPrice: parseNumericValue(fare.pickupPrice || fare.pickup_price),
@@ -114,42 +137,97 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
       }
     });
 
-    console.log('Airport fares API response:', response.data);
+    console.log('Airport fares API raw response:', response);
+    console.log('Airport fares API response data:', response.data);
     
     // Basic response validation
     if (!response.data) {
+      console.error('Empty response from airport fares API');
       throw new Error('Empty response from airport fares API');
     }
 
-    // If we have a success status or fares in response, proceed with normalization
-    if (response.data && (response.data.status === 'success' || 
-                         response.data.fares || 
-                         (response.data.data && response.data.data.fares) ||
-                         Array.isArray(response.data))) {
-      const normalizedFares = normalizeResponse(response.data);
+    // New improved response handling logic
+    let normalizedFares: FareData[] = [];
+    
+    try {
+      // Try to normalize with our standard function
+      normalizedFares = normalizeResponse(response.data);
       
-      if (!normalizedFares.length && vehicleId) {
-        // Create a default fare if nothing was returned but we have a vehicle ID
-        return [{
-          vehicleId,
-          vehicle_id: vehicleId,
-          basePrice: 0,
-          pricePerKm: 0,
-          pickupPrice: 0,
-          dropPrice: 0,
-          tier1Price: 0,
-          tier2Price: 0,
-          tier3Price: 0,
-          tier4Price: 0,
-          extraKmCharge: 0
-        }];
+      if (normalizedFares.length === 0) {
+        console.warn('Could not find standard fare format, checking for alternative formats');
+        
+        // Alternative format handling
+        if (typeof response.data === 'object') {
+          if (response.data.vehicles && Array.isArray(response.data.vehicles)) {
+            console.log('Found vehicles array in response');
+            // Extract from vehicles data
+            normalizedFares = response.data.vehicles.map((v: any) => ({
+              vehicleId: v.vehicleId || v.vehicle_id || v.id,
+              vehicle_id: v.vehicleId || v.vehicle_id || v.id,
+              basePrice: parseNumericValue(v.basePrice || v.base_price || 0),
+              pricePerKm: parseNumericValue(v.pricePerKm || v.price_per_km || 0),
+              pickupPrice: parseNumericValue(v.pickupPrice || v.pickup_price || 0),
+              dropPrice: parseNumericValue(v.dropPrice || v.drop_price || 0),
+              tier1Price: parseNumericValue(v.tier1Price || v.tier1_price || 0),
+              tier2Price: parseNumericValue(v.tier2Price || v.tier2_price || 0),
+              tier3Price: parseNumericValue(v.tier3Price || v.tier3_price || 0), 
+              tier4Price: parseNumericValue(v.tier4Price || v.tier4_price || 0),
+              extraKmCharge: parseNumericValue(v.extraKmCharge || v.extra_km_charge || 0)
+            }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during response normalization:', error);
+    }
+      
+    if (normalizedFares.length === 0 && vehicleId) {
+      // Create a default fare if nothing was returned but we have a vehicle ID
+      console.log('Creating default fare for vehicle:', vehicleId);
+      return [{
+        vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }];
+    }
+      
+    // Filter for requested vehicle if we have a specific ID
+    if (vehicleId && normalizedFares.length > 0) {
+      const vehicleSpecificFares = normalizedFares.filter(fare => 
+        (fare.vehicleId?.toString().toLowerCase() === vehicleId.toLowerCase()) || 
+        (fare.vehicle_id?.toString().toLowerCase() === vehicleId.toLowerCase())
+      );
+      
+      if (vehicleSpecificFares.length > 0) {
+        return vehicleSpecificFares;
       }
       
-      return normalizedFares;
-    } else {
-      console.error('Invalid airport fares response format:', response.data);
-      throw new Error('Invalid response format from airport fares API');
+      // If we couldn't find the specific vehicle in the normalized fares,
+      // create a default entry for it
+      return [{
+        vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }];
     }
+    
+    return normalizedFares;
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     if (vehicleId) {
